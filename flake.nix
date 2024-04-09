@@ -23,6 +23,8 @@
       url = "github:nix-community/nixvim/nixos-23.11";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+	hyprland.url = "github:hyprwm/Hyprland";
   };
 
   outputs = {
@@ -38,6 +40,19 @@
   in {
     # Available through 'nixos-rebuild --flake .#wsl'
     nixosConfigurations = {
+      virtualbox = nixpkgs.lib.nixosSystem {
+        specialArgs = {
+          inherit inputs outputs;
+          username = "nickolaj";
+          hostname = "virtualbox";
+        };
+        modules = [
+          nixos-wsl.nixosModules.wsl
+          vscode-server.nixosModules.default
+          ./nixos/configuration.nix
+          ./machines/virtualbox/configuration.nix
+        ];
+      };
       wsl = nixpkgs.lib.nixosSystem {
         specialArgs = {
           inherit inputs outputs;
@@ -48,7 +63,20 @@
           nixos-wsl.nixosModules.wsl
           vscode-server.nixosModules.default
           ./nixos/configuration.nix
-          ./nixos/machines/wsl.nix
+          ./machines/wsl/configuration.nix
+        ];
+      };
+      legion = nixpkgs.lib.nixosSystem {
+        specialArgs = {
+          inherit inputs outputs;
+          username = "nickolaj";
+          hostname = "legion";
+        };
+        modules = [
+          nixos-wsl.nixosModules.wsl
+          vscode-server.nixosModules.default
+          ./nixos/configuration.nix
+          ./machines/legion/configuration.nix
         ];
       };
     };

@@ -13,7 +13,7 @@
   };
 
   home-manager.users.${username}.imports = [
-    ../../home-manager/wsl.nix
+    ./home-manager.nix
   ];
 
   # Hacks to enable vscode
