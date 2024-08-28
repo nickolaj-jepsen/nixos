@@ -11,7 +11,7 @@
   programs.nixvim = {
     enable = true;
     
-    options = {
+    opts = {
       number = true;
       relativenumber = false;
       tabstop = 4;
@@ -75,20 +75,15 @@
 
       lsp = {
         enable = true;
-        servers.nil_ls.enable = true;
+        servers.nil-ls.enable = true;
       };
 
       lspkind = {
         enable = true;
       };
 
-      nvim-cmp = {
+      cmp = {
         enable = true;
-        sources = [{ name = "nvim_lsp"; }];
-        mappingPresets = [ "insert" ];
-        mapping = {
-          "<CR>" = "cmp.mapping.confirm({ select = true })";
-        };
       };
     };
   };

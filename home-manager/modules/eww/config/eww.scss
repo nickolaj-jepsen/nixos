@@ -1,0 +1,112 @@
+$anim: .2s cubic-bezier(0.4, 0.0, 0.2, 1);
+$anim-slow: .4s cubic-bezier(0.4, 0.0, 0.2, 1);
+
+$background: #1C1C1C;
+$background-alt: #2b2b2b;
+$foreground: #C5C5C5;
+$accent: #CF6A4C;
+
+
+* {
+    all: unset; //Unsets everything so you can style everything from scratch
+    font-family: Hack Nerd Regular;
+    color: $foreground;
+    font-size: 16px
+}
+
+.bar {
+    background-color: $background;
+    border-bottom: 2px solid $accent;
+    padding: 0 12px;
+}
+
+.workspace-entry {
+  border: 2px solid $foreground;
+  border-radius: 50%;
+  min-width: 10px;
+  min-height: 10px;
+  margin: 5px 5px;
+  transition: background-color $anim, opacity $anim, border $anim;
+  opacity: .2;
+
+  &.has-windows {
+    opacity: 1;
+  }
+
+  &.active {
+    opacity: 1;
+    background-color: $foreground;
+    border-color: $foreground
+  }
+}
+
+.datetime {
+  .time {
+    font-weight: bold;
+    margin-right: 15px;
+  }
+}
+
+.side-bar {
+  padding: 0 5px;
+  opacity: .4;
+  background-color: transparent;
+  transition: background-color $anim-slow, opacity $anim-slow, border $anim-slow;
+  border-bottom: 2px solid transparent;
+
+  &.active {
+    opacity: 1;
+    background-color: $background;
+    border-bottom: 2px solid $accent;
+  }
+
+  .workspace-entry {
+    margin: 5px 2px;
+  }
+
+  &.left-bar {
+    &.active {
+      border-left: 2px solid $accent;
+    }
+    border-left: 2px solid transparent;
+    border-bottom-left-radius: 12px;
+  }
+
+  &.right-bar {
+    &.active {
+      border-right: 2px solid $accent;
+    }
+    border-right: 2px solid transparent;
+    border-bottom-right-radius: 12px;
+  }
+}
+
+.scale {
+  trough {
+    background-color: $background-alt;
+    border-radius: 10px;
+    min-height: 5px;
+    min-width: 80px;
+
+    highlight {
+      background-color: $accent;
+      border-radius: 10px;
+    }
+  }
+}
+
+.music {
+  .music-control {
+    font-size: 10px;
+  }
+  .music-timer {
+    font-size: 12px;
+  }
+  .scale {
+    margin: 0 10px;
+  }
+  padding: 0 15px;
+  margin: 0 15px;
+  border-right: 2px solid #CF6A4C;
+  border-left: 2px solid #CF6A4C;
+}

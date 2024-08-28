@@ -1,29 +1,61 @@
 {
   pkgs,
+	config,
   ...
 }: {
+
+	nixpkgs.config.permittedInsecurePackages = [
+    "electron-25.9.0"  # Obsidian
+  ];
+
   home.packages = with pkgs; [ 
+		kitty
+		wofi
+		xfce.thunar
+		xterm
+		firefox
+		obsidian
+
+		# Dev
     nodejs_20
-	kitty
-	alacritty
-	wofi
-	vscode
-	xfce.thunar
-	xterm
-	foot
-	firefox
+		supabase-cli
+		vscode
+		jetbrains.pycharm-professional
+		jetbrains.rust-rover
+		sublime-merge
   ];
   programs.kitty = {
     enable = true;
   };
+
+	programs.vscode = {
+		enable = true;
+		enableUpdateCheck = true;
+		enableExtensionUpdateCheck = true;
+		extensions = with pkgs.vscode-extensions; [
+			github.copilot
+			ms-python.python
+			ms-vscode-remote.remote-ssh
+			# ms-vscode-remote.remote-ssh-edit
+		];
+		userSettings = {
+			"window.titleBarStyle" = "custom";
+			"remote.SSH.useLocalServer" = false;
+			"github.copilot.enable" = {
+				"*" = true;
+			};
+		};
+	};
+
   wayland.windowManager.hyprland = {
     enable = true;
     package = pkgs.hyprland;
     systemd.enable = true;
 		settings = {
 			"monitor" = ",preferred,auto,1";
+			"exec-once" = "eww daemon & eww open primary";
 
-				workspace = [
+			workspace = [
 				"1, monitor:eDP-1, default:true"
 				"2, monitor:eDP-1"
 				"3, monitor:eDP-1"
@@ -39,7 +71,7 @@
 				follow_mouse = "2"; # Cursor focus will be detached from keyboard focus. Clicking on a window will move keyboard focus to that window.
 
 				touchpad = {
-					natural_scroll = "no";
+					natural_scroll = true;
 				};
 
 				sensitivity = "0"; # -1.0 - 1.0, 0 means no modification.
@@ -50,9 +82,20 @@
 				gaps_in = 5;
 				gaps_out = 10;
 				border_size = 2;
-				#col.active_border = "rgb(cf6a4c)";
-				no_cursor_warps = true;
+				"col.inactive_border" = "rgb(2f2f2f)";
+				"col.active_border" = "rgb(cf6a4c)";
 				layout = "dwindle";
+			};
+
+			cursor = {
+				no_warps = true;
+			};
+
+			dwindle = {
+				pseudotile = true;
+				preserve_split = true;
+				force_split = 2;
+				use_active_for_splits = true;
 			};
 
 			misc = {
@@ -71,13 +114,18 @@
 			bind = [
 				"$mod, RETURN, exec, kitty"
 				"$mod, BACKSPACE, killactive"
-				"$mod, SPACE, exec, wofi"
+				"$mod, SPACE, exec, wofi --show drun"
 
 				"$mod, q, workspace, 1"
 				"$mod, w, workspace, 2"
 				"$mod, e, workspace, 3"
 				"$mod, r, workspace, 4"
 				"$mod, t, workspace, 5"
+				"SUPER_SHIFT, q, movetoworkspace, 1"
+				"SUPER_SHIFT, w, movetoworkspace, 2"
+				"SUPER_SHIFT, e, movetoworkspace, 3"
+				"SUPER_SHIFT, r, movetoworkspace, 4"
+				"SUPER_SHIFT, t, movetoworkspace, 5"
 
 				"$mod, left, movefocus, l"
 				"$mod, right, movefocus, r"

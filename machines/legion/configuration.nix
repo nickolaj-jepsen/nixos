@@ -8,6 +8,7 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ./nvidia.nix
     ];
 
   # Bootloader.
@@ -17,11 +18,19 @@
 
   environment.sessionVariables = {
     WLR_NO_HARDWARE_CURSORS = "1";
+    NIXOS_OZONE_WL = "1";
   };
 
   programs.hyprland.enable = true;
-  programs.hyprland.package = inputs.hyprland.packages.${pkgs.system}.hyprland;
   programs.hyprland.xwayland.enable = true;
+  
+	services.automatic-timezoned.enable = true;
+
+  virtualisation.docker.enable = true;
+
+  fonts.packages = with pkgs; [
+    (nerdfonts.override { fonts = [ "Hack" ]; })
+  ];
 
   home-manager.users.${username}.imports = [
     ./home-manager.nix
@@ -31,15 +40,13 @@
     pkgs.gtk3
   ];
 
-  hardware.opengl = {
-    enable = true;
-    driSupport = true;
-  };
-  
   networking.wireless.enable = true;
   networking.wireless.networks = {
     Brother = {
       psk = "fireproof";
+    };
+    "Drakenvej12-5G-1" = {
+      psk = "Eg9928nt.";
     };
   };
 }
