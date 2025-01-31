@@ -1,0 +1,37 @@
+@use "../../variables.scss" as *;
+
+.MediaDropdown {
+  .MediaCover {
+    border-radius: $radius;
+    margin-bottom: 5px;
+  }
+
+  .MediaArtist {
+    color: $fg-alt;
+  }
+
+  .MediaAlbum {
+    color: $fg-alt;
+    font-size: 12px;
+  }
+
+  .Slider {
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+
+  separator {
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+
+  .MediaOther {
+    margin-top: 10px;
+
+    button.active {
+      background-color: $accent;
+      border-color: $accent;
+      color: $bg;
+    }
+  }
+}

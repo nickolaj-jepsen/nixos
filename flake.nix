@@ -2,84 +2,52 @@
   description = "Your new nix config";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixos-generators = {
+      url = "github:nix-community/nixos-generators";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     home-manager = {
-      url = "github:nix-community/home-manager/release-24.05";
+      url = "github:nix-community/home-manager/release-24.11";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    nixos-wsl = {
-      url = "github:nix-community/nixos-wsl";
+    astal = {
+      url = "github:aylur/astal";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    vscode-server = {
-      url = "github:nix-community/nixos-vscode-server";
+    ags = {
+      url = "github:aylur/ags";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    nixvim = {
-      url = "github:nix-community/nixvim/nixos-24.05";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    hyprland.url = "github:hyprwm/Hyprland";
   };
 
   outputs = {
-    self,
     nixpkgs,
     nixpkgs-unstable,
+    nixos-generators,
     home-manager,
-    nixos-wsl,
-    vscode-server,
-    nixvim,
     ...
   } @ inputs: let
-    inherit (self) outputs;
+    system = "x86_64-linux";
+    stateVersion = "24.11";
+    pkgs = nixpkgs.legacyPackages.${system};
+    mkSystem = username: machine:
+      nixpkgs.lib.nixosSystem {
+        system = system;
+        specialArgs = {inherit inputs username machine stateVersion;};
+        modules = [
+          (import (./machines + "/${machine}"))
+          home-manager.nixosModules.home-manager
+          nixos-generators.nixosModules.all-formats
+        ];
+      };
   in {
     # Available through 'nixos-rebuild --flake .#wsl'
+    formatter.${system} = pkgs.alejandra;
     nixosConfigurations = {
-      virtualbox = nixpkgs.lib.nixosSystem {
-        specialArgs = {
-          inherit inputs outputs;
-          username = "nickolaj";
-          hostname = "virtualbox";
-        };
-        modules = [
-          nixos-wsl.nixosModules.wsl
-          vscode-server.nixosModules.default
-          ./nixos/configuration.nix
-          ./machines/virtualbox/configuration.nix
-        ];
-      };
-      wsl = nixpkgs.lib.nixosSystem {
-        specialArgs = {
-          inherit inputs outputs;
-          username = "nickolaj";
-          hostname = "wsl";
-        };
-        modules = [
-          nixos-wsl.nixosModules.wsl
-          vscode-server.nixosModules.default
-          ./nixos/configuration.nix
-          ./machines/wsl/configuration.nix
-        ];
-      };
-      legion = nixpkgs.lib.nixosSystem {
-        specialArgs = {
-          inherit inputs outputs;
-          username = "nickolaj";
-          hostname = "legion";
-        };
-        modules = [
-          nixos-wsl.nixosModules.wsl
-          vscode-server.nixosModules.default
-          ./nixos/configuration.nix
-          ./machines/legion/configuration.nix
-        ];
-      };
+      desktop = mkSystem "nickolaj" "desktop";
+      qemu = mkSystem "nickolaj" "qemu";
     };
   };
 }

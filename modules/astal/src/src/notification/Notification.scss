@@ -1,0 +1,47 @@
+@use "../variables.scss" as *;
+
+.Notification {
+  border-radius: $radius;
+  background-color: $bg;
+  margin: 10px;
+  padding: 15px;
+  border: 2px solid $accent;
+
+  &.low {
+    border: 2px solid $muted;
+    .app-name {
+      color: $muted;
+    }
+  }
+
+  &.critical {
+    border: 2px solid $error;
+    .app-name {
+      color: $error;
+    }
+  }
+
+  .app-name {
+    font-weight: bold;
+  }
+
+  .content {
+    .body {
+      color: $fg-alt;
+    }
+  }
+}
+
+.NotificationMenu {
+  border-radius: $radius;
+  background-color: $bg;
+  margin: 10px;
+  padding: 15px;
+  border: 2px solid $accent;
+
+  button.disabled {
+    background-color: $muted;
+    border-color: $muted;
+    color: $fg;
+  }
+}
