@@ -1,0 +1,28 @@
+@use "../../variables.scss" as *;
+
+@keyframes pulse {
+  0% {
+    background-color: $accent;
+  }
+  50% {
+    background-color: $bg-alt;
+  }
+  100% {
+    background-color: $accent;
+  }
+}
+
+.PlaybackDropdown {
+  .no-streams {
+    color: $muted;
+    font-size: 14px;
+  }
+}
+
+.Playback {
+  .recording {
+    background-color: $accent;
+    border-radius: $radius;
+    animation: pulse 1s 10;
+  }
+}

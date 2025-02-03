@@ -1,0 +1,62 @@
+@use "../../variables.scss" as *;
+
+.workspace {
+  all: unset; // unset default button styles
+  &:hover {
+    all: unset;
+  }
+
+  transition: opacity $transition;
+  opacity: 0.2;
+
+  &.focused {
+    opacity: 1;
+  }
+
+  &.add-left {
+    padding-left: 10px;
+  }
+
+  &.add-right {
+    padding-right: 10px;
+  }
+}
+
+calendar {
+  header {
+    padding-bottom: 10px;
+    border-bottom: 1px solid $bg-alt;
+  }
+  button {
+    margin-left: 2px;
+    margin-right: 2px;
+    padding: 3px;
+  }
+  grid {
+    padding-top: 10px;
+
+    label {
+      padding: 3px;
+    }
+
+    .today {
+      background-color: $accent;
+      color: $bg;
+      border-radius: 3px;
+      padding: 0;
+      margin: 3px;
+    }
+
+    .other-month {
+      color: $muted;
+    }
+
+    .day-name {
+      border-bottom: 1px solid $bg-alt;
+    }
+
+    .week-number {
+      border-right: 1px solid $bg-alt;
+    }
+  }
+}

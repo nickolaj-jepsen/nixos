@@ -1,0 +1,91 @@
+@use "../variables.scss" as *;
+
+.Bar {
+  color: $fg;
+  background-color: $bg;
+  border-bottom: 2px solid $accent;
+  font-size: $font-large;
+}
+
+.SecondaryBar {
+  color: $fg;
+  background-color: $bg;
+  font-size: $font-large;
+  transition:
+    opacity $transition,
+    border-color $transition;
+  &.left {
+    border-left: 2px solid $accent;
+    border-bottom: 2px solid $accent;
+    border-bottom-left-radius: $radius;
+  }
+  &.right {
+    border-right: 2px solid $accent;
+    border-bottom: 2px solid $accent;
+    border-bottom-right-radius: $radius;
+  }
+  &.top {
+    border-right: 2px solid $accent;
+    border-top: 2px solid $accent;
+    border-top-right-radius: $radius;
+  }
+  &.bottom {
+    border-right: 2px solid $accent;
+    border-bottom: 2px solid $accent;
+    border-bottom-right-radius: $radius;
+  }
+  &.inactive {
+    opacity: 0.7;
+    border-color: transparent;
+  }
+}
+
+.Time {
+  font-weight: bold;
+}
+
+.SysTray {
+  button {
+    all: unset;
+    &:hover {
+      all: unset;
+    }
+  }
+
+  .menu,
+  modelbutton {
+    background-color: $bg;
+    transition: background-color $transition;
+  }
+  modelbutton:hover {
+    background-color: $bg-alt;
+  }
+}
+
+.FocusedClient {
+  color: $accent;
+  padding: 0 5px;
+}
+
+.Slider {
+  highlight {
+    background-color: $accent;
+    border-radius: $radius;
+  }
+  trough {
+    background-color: $bg-alt;
+    border-radius: $radius;
+    min-height: 5px;
+    min-width: 80px;
+  }
+}
+
+.Right > * {
+  border-left: 2px solid $accent;
+  padding: 4px 15px;
+}
+
+.Left > * {
+  border-right: 2px solid $accent;
+  padding: 4px 15px;
+}

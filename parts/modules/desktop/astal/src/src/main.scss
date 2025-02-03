@@ -1,0 +1,51 @@
+@use "./variables" as *;
+@use "./bar/Bar.scss" as *;
+@use "./notification/Notification.scss" as *;
+@use "./bar/sections/Workspace.scss" as *;
+@use "./bar/sections/Dropdown.scss" as *;
+@use "./bar/sections/Media.scss" as *;
+@use "./bar/sections/Playback.scss" as *;
+
+// Global styles
+
+* {
+  all: unset; //Unsets everything so you can style everything from scratch
+  font-family: Hack;
+}
+
+separator {
+  background-color: $bg-alt;
+  min-height: 1px;
+}
+
+button {
+  transition: border-color $transition;
+  background-color: $bg-alt;
+  border-radius: $radius;
+  border: 2px solid $bg-alt;
+  padding: 5px;
+
+  &.small {
+    padding: 3px;
+  }
+
+  &.large {
+    padding: 7px 15px;
+  }
+
+  &:hover {
+    border: 2px solid $accent;
+  }
+}
+
+expander-widget {
+  title {
+    color: $fg;
+  }
+  expander {
+    -gtk-icon-source: -gtk-icontheme("pan-end-symbolic");
+    &:checked {
+      -gtk-icon-source: -gtk-icontheme("pan-down-symbolic");
+    }
+  }
+}
