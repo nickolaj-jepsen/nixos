@@ -1,7 +1,8 @@
-{config, ...}: {
+{username, ...}: {
   security.sudo.wheelNeedsPassword = false;
   nix.settings.trusted-users = [
     "root"
-    config.user.username
+    "@wheel"
+    username
   ];
 }

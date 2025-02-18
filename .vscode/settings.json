@@ -1,0 +1,9 @@
+{
+  "files.exclude": {
+    ".vscode": true,
+    "**/result": true
+  },
+  "search.exclude": {
+    "result": true
+  }
+}

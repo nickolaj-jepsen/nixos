@@ -1,17 +1,46 @@
 {pkgs, ...}: {
   config = {
     environment.systemPackages = with pkgs; [
-      curl
-      wget
-      file
-      git
-      htop
-      jq
-      ripgrep
-      tmux
-      whois
+      # Man pages
       man-pages
       man-pages-posix
+
+      # Networking
+      curl
+      wget
+      whois
+      rsync
+
+      # Shell
+      tmux
+      fzf
+
+      # Files
+      file
+      findutils
+      which
+      tree
+
+      # Text processing
+      ripgrep
+      jq
+      gnugrep
+      gawk
+      gnused
+
+      # Monitoring
+      htop
+      lshw
+
+      # Archive
+      zip
+      unzip
+      gzip
+      xz
+
+      # Nix
+      comma
+      nurl
     ];
   };
 }

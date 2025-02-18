@@ -1,3 +1,5 @@
+# export NIXPKGS_ALLOW_UNFREE := "1"
+
 [group('vm')]
 vm-build:
     git add .
@@ -45,12 +47,18 @@ repl:
     nix repl --show-trace ".#" nixpkgs
 
 [group('deploy')]
-deploy-gen-hw hostname target:
-    nix run github:nix-community/nixos-anywhere -- \
-        --flake .#{{ hostname }} \
-        --target-host {{ target }} \
-        --generate-hardware-config nixos-generate-config \
-        ./parts/hosts/{{ hostname }}/hardware-configuration.nix
+deploy-factor hostname target='':
+    #!/usr/bin/env -S bash -e
+    target="{{ target }}"
+    if [ -z "$target" ]; then
+        sudo nix run nixpkgs#nixos-facter -- -o parts/hosts/{{ hostname }}/facter.json
+    else
+        nix run github:nix-community/nixos-anywhere -- \
+            --flake .#{{ hostname }} \
+            --target-host {{ target }} \
+            --generate-hardware-config nixos-facter \
+            ./parts/hosts/{{ hostname }}/facter.json
+    fi
 
 tmp_dir := "/tmp/secrets/" + uuid()
 
@@ -58,49 +66,35 @@ tmp_dir := "/tmp/secrets/" + uuid()
 deploy hostname target:
     #!/usr/bin/env -S bash -e
     git add .
-    # username=$(nix eval --raw  .#nixosConfigurations.{{hostname}}.config.user.username)
 
+    trap "rm -rf {{ tmp_dir }}" EXIT
 
-    # Unencrypt boot secrets
-    install -d -m755 {{ tmp_dir }}/etc/ssh/
-    install -d -m755 {{ tmp_dir }}/run/agenix/
-    just secret-echo ./secrets/hashed-user-password > {{ tmp_dir }}/run/agenix/hashed-user-password
-    just secret-echo ./secrets/luks-password > {{ tmp_dir }}/luks-password
+    # Copy ssh key to decrypt agenix secrets
+    install -d -m755 {{ tmp_dir }}/etc/ssh
     just secret-echo ./secrets/hosts/{{ hostname }}/id_ed25519 > {{ tmp_dir }}/etc/ssh/ssh_host_ed25519_key
+    chmod 600 {{ tmp_dir }}/etc/ssh/ssh_host_ed25519_key
     cp ./secrets/hosts/{{ hostname }}/id_ed25519.pub {{ tmp_dir }}/etc/ssh/ssh_host_ed25519_key.pub
-    echo "Unencrypted files:"
-    find {{ tmp_dir }} -type f
-    read -n 1 -p "Did age decrypt the secrets correctly? [y/n]" yn
-    if [ "$yn" != "y" ]; then
-        rm -rf {{ tmp_dir }}
-        exit 0
-    fi
-    find {{ tmp_dir }} -type f -exec chmod 600 {} \;
-
 
     # Deploy
     nix run github:nix-community/nixos-anywhere -- \
         --flake .#{{ hostname }} \
-        --disk-encryption-keys /luks-password {{ tmp_dir }}/luks-password \
+        --disk-encryption-keys /luks-password <(just secret-echo ./secrets/luks-password) \
         --extra-files {{ tmp_dir }} \
         --target-host {{ target }}
 
-    # Clean up
-    echo "Cleaning secrets..."
-    rm -rf {{ tmp_dir }}
-
 [group('deploy')]
-deploy-switch hostname target:
+deploy-switch hostname target *ARGS:
     nix run nixpkgs#nixos-rebuild -- \
         --flake .#{{ hostname }} \
         --target-host {{ target }} \
         --use-remote-sudo \
-        --verbose \
-        switch
+        {{ ARGS }} switch
 
-identifier := "./secrets/yubikey-identity.age"
-_get_user host:
-    user := nix eval --raw  .#nixosConfigurations.{{host}}.config.user.username
+[group('deploy')]
+deploy-iso hostname:
+    nix build .#nixosConfigurations.{{ hostname }}.config.formats.install-iso
+
+identifier := "./secrets/yubikey-identity.pub"
 
 [group("secret")]
 secret-import path:
@@ -124,6 +118,7 @@ secret-edit name=default:
 secret-rekey:
     nix develop --quiet --command bash -c \
         "agenix rekey"
+    git add .
 
 [group('secret')]
 secret-new-ssh-key hostname $USER:

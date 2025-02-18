@@ -1,8 +1,8 @@
-{config, ...}: {
+_: {
   disko.devices = {
     disk = {
-      vdb = {
-        device = "/dev/nvme0n1";
+      main = {
+        device = "/dev/disk/by-id/nvme-SAMSUNG_MZVLB512HBJQ-000L2_S4DYNF0M893481";
         type = "disk";
         content = {
           type = "gpt";
@@ -28,8 +28,8 @@
               content = {
                 type = "luks";
                 name = "crypted";
-                # passwordFile = "/luks-password";
-                passwordFile = config.age.secrets.luks-password.path;
+                # Copied by deploy script, otherwise it will prompt for password
+                passwordFile = "/luks-password";
                 settings = {
                   allowDiscards = true;
                   bypassWorkqueues = true;

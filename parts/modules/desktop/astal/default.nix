@@ -1,13 +1,15 @@
 {
   inputs,
   pkgs,
+  lib,
+  config,
   ...
 }: let
-  packageName = "astal";
-
+  packageName = "fireproof-shell";
+  cfg = config.modules.astral;
   package = inputs.ags.lib.bundle {
     inherit pkgs;
-    src = ./src;
+    src = ./.;
     name = packageName;
     gtk4 = true;
     entry = "app.ts";
@@ -23,7 +25,28 @@
     ];
   };
 in {
-  user.home-manager = {
+  options = {
+    modules.astral.primaryMonitor = lib.mkOption {
+      type = lib.types.string;
+      default = "";
+      example = "M27Q";
+    };
+    modules.astral.notificationIgnores = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = ["/^Spotify/"];
+      example = ["/^Spotify/"];
+    };
+    modules.astral.trayIgnore = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = ["/spotify/"];
+      example = ["/spotify/"];
+    };
+  };
+
+  config = {
+  environment.systemPackages = [package inputs.ags.packages.${pkgs.system}.agsFull];
+
+  fireproof.home-manager = {
     systemd.user.services.astal = {
       Unit = {
         Description = "Astal";
@@ -36,6 +59,11 @@ in {
         Restart = "on-failure";
         KillMode = "mixed";
         Slice = "app-graphical.slice";
+        DefaultEnvironment = ''
+          ASTRAL_PRIMARY_MONITOR=${cfg.primaryMonitor}
+          ASTRAL_NOTIFICATION_IGNORE=${lib.concatStringsSep "," cfg.notificationIgnores}
+          ASTRAL_TRAY_IGNORE=${lib.concatStringsSep "," cfg.trayIgnore}
+          '';
       };
 
       Install = {
@@ -43,4 +71,5 @@ in {
       };
     };
   };
+};
 }

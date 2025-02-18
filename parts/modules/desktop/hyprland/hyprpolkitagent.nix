@@ -1,6 +1,10 @@
-{pkgs, ...}: {
+{
+  pkgs,
+  config,
+  ...
+}: {
   config = {
-    user.home-manager.systemd.user.services.hyprpolkitagent = {
+    fireproof.home-manager.systemd.user.services.hyprpolkitagent = {
       Unit = {
         Description = "Hyprland Polkit Authentication Agent";
       };

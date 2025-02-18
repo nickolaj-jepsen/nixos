@@ -1,30 +1,29 @@
-{
-  inputs,
-  config,
-  lib,
-  hostname,
-  ...
-}: {
+{inputs, ...}: {
+  imports = [inputs.agenix-rekey.flakeModule];
+
   perSystem = {
-    pkgs,
     config,
-    config',
+    system,
+    pkgs,
     ...
   }: {
-      agenix-rekey.nixosConfigurations = inputs.self.nixosConfigurations;
-    devShells.default = pkgs.mkShellNoCC {
+    # agenix-rekey.nixosConfigurations = self.nodes;
+    devShells.default = pkgs.mkShell {
+      inherit system;
 
-          
       packages = [
         pkgs.nix
         pkgs.nixos-rebuild
         pkgs.nixos-rebuild
         pkgs.nh
-        pkgs.just
+        pkgs.age
+        pkgs.rage
+        pkgs.age-plugin-yubikey
         config.agenix-rekey.package
-        config.agenix-rekey.agePackage
       ];
-      AGENIX_REKEY_ADD_TO_GIT = "true";
+      env.AGENIX_REKEY_ADD_TO_GIT = true;
     };
+
+    agenix-rekey.nixosConfigurations = inputs.self.nixosConfigurations; # (not technically needed, as it is already the default)
   };
 }

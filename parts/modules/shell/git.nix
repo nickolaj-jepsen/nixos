@@ -1,7 +1,19 @@
 {pkgs, ...}: {
-  config = {
-    environment.systemPackages = with pkgs; [
-      git
+  environment.systemPackages = with pkgs; [
+    git
+  ];
+
+  fireproof.home-manager.programs.git = {
+    enable = true;
+    userEmail = "nickolaj@fireproof.website";
+    userName = "Nickolaj Jepsen";
+    includes = [
+      {
+        condition = "hasconfig:remote.*.url:*Digital-Udvikling*";
+        contents = {
+          user.email = "nij@ao.dk";
+        };
+      }
     ];
   };
 }
