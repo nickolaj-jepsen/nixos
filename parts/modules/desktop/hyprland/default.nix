@@ -11,13 +11,6 @@ with lib; let
   };
 in {
   config = {
-    # assertions = [
-    #   {
-    #     message = "The terminal must be set to enable Hyprland";
-    #     assertion = config.defaults.terminal != null;
-    #   }
-    # ];
-
     programs.uwsm.enable = true;
     programs.hyprland = {
       enable = true;
@@ -137,7 +130,6 @@ in {
             "SUPER, RETURN, exec, ${getExe config.programs.uwsm.package} app -- ${cfg.default-apps.terminal}"
             "SUPER, BACKSPACE, killactive"
             "SUPER, SPACE, exec, ${getExe config.programs.uwsm.package} app -- walker"
-            # "SUPER SHIFT, SPACE, exec, uwsm app -- walker --modules applications"
             "SUPER, p, exec, ${getExe config.programs.uwsm.package} app -- loginctl lock-session"
             "SUPER, S, togglefloating"
             "SUPER, A, pseudo"
@@ -167,6 +159,10 @@ in {
             "SUPER SHIFT, l, workspace, r+1"
             "SUPER, tab, changegroupactive, f"
             "SUPER SHIFT, tab, changegroupactive, b"
+          ];
+          bindm = [
+            "SUPER, mouse:272, movewindow"
+            "SUPER, mouse:273, resizewindow"
           ];
           layerrule = [
             "noanim, gtk4-layer-shell"

@@ -19,8 +19,8 @@ in {
     users.users.${username} = {
       isNormalUser = true;
       extraGroups = ["wheel"];
-      initialPassword = "password";
-      #hashedPasswordFile = secrets.hashed-user-password.path;
+      # initialPassword = "password";
+      hashedPasswordFile = secrets.hashed-user-password.path;
     };
 
     home-manager = {
