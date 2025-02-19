@@ -62,8 +62,15 @@ deploy-factor hostname target='':
 
 tmp_dir := "/tmp/secrets/" + uuid()
 
+[group("deploy")]
+deploy hostname *ARGS:
+    nix run nixpkgs#nixos-rebuild -- \
+        --flake .#{{ hostname }} \
+        {{ ARGS }} switch
+
+
 [group('deploy')]
-deploy hostname target:
+deploy-remote hostname target:
     #!/usr/bin/env -S bash -e
     git add .
 

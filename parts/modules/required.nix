@@ -9,5 +9,6 @@
     ./base/default-apps.nix
     ./dev/just.nix
     ./hardware/usb.nix
+    ./hardware/yubikey.nix
   ];
 }

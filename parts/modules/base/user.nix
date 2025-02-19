@@ -9,16 +9,6 @@ with lib; let
   inherit (config.age) secrets;
 in {
   options.fireproof = {
-    username = lib.mkOption {
-      type = lib.types.str;
-      default = "nickolaj";
-      description = "The username of the user";
-    };
-    group = lib.mkOption {
-      type = lib.types.str;
-      default = "users";
-    };
-
     home-manager = lib.mkOption {
       type = options.home-manager.users.type.functor.wrapped;
     };
@@ -29,8 +19,8 @@ in {
     users.users.${username} = {
       isNormalUser = true;
       extraGroups = ["wheel"];
-      # initialPassword = "password";
-      hashedPasswordFile = secrets.hashed-user-password.path;
+      initialPassword = "password";
+      #hashedPasswordFile = secrets.hashed-user-password.path;
     };
 
     home-manager = {
