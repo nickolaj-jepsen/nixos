@@ -68,7 +68,6 @@ deploy hostname *ARGS:
         --flake .#{{ hostname }} \
         {{ ARGS }} switch
 
-
 [group('deploy')]
 deploy-remote hostname target:
     #!/usr/bin/env -S bash -e

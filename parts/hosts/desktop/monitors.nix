@@ -1,5 +1,4 @@
 _: {
-  # monitor=DP-1,1920x1080@60,2880x0,auto
   monitors = [
     {
       name = "DP-2";

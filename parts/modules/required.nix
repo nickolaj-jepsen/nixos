@@ -5,6 +5,8 @@
     ./base/security.nix
     ./base/secrets.nix
     ./base/boot.nix
+    ./base/ld.nix
+    ./base/time.nix
     ./base/ssh.nix
     ./base/default-apps.nix
     ./dev/just.nix

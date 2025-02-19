@@ -15,6 +15,7 @@
       shellInit = ''
 
         ${builtins.readFile ./theme.fish}
+        ${builtins.readFile ./k8s.fish}
 
       '';
       plugins = [

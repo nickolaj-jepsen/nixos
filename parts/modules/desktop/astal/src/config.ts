@@ -1,4 +1,4 @@
-import GLib from "gi://GLib"
+import GLib from "gi://GLib";
 
 type ignoreFn = (test: string) => boolean;
 
@@ -18,7 +18,7 @@ const envArray = (name: string): string[] => {
   const value = GLib.getenv(name);
   if (!value) return [];
   return value.split(",");
-}
+};
 
 const envIgnoreArray = (name: string): ignoreFn[] => {
   return envArray(name).map((r: string) => {
@@ -27,7 +27,7 @@ const envIgnoreArray = (name: string): ignoreFn[] => {
     }
     return (test: string) => test === r;
   });
-}
+};
 
 export default {
   monitor: {

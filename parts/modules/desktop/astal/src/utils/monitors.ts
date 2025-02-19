@@ -12,12 +12,13 @@ export const getMonitors = (): {
 } => {
   const scanFn = [
     // Monitor in config
-    (monitor: Gdk.Monitor) => config.monitor.main === monitor.get_model(),
+    (monitor: Gdk.Monitor) => config.monitor.main === monitor.get_connector(),
     // First monitor
     () => true,
   ];
 
   const monitors = App.get_monitors();
+  console.log("config.monitor.main", config.monitor.main);
   const main =
     scanFn.map((fn) => monitors.find(fn)).find((m) => m) || monitors[0];
   const secondary = monitors

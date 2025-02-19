@@ -5,6 +5,11 @@
   config,
   ...
 }: let
+  primaryMonitorName =
+    if builtins.length config.monitors > 0
+    then (builtins.elemAt config.monitors 0).name
+    else "";
+
   packageName = "fireproof-shell";
   cfg = config.modules.astral;
   package = inputs.ags.lib.bundle {
@@ -27,9 +32,9 @@
 in {
   options = {
     modules.astral.primaryMonitor = lib.mkOption {
-      type = lib.types.string;
-      default = "";
-      example = "M27Q";
+      type = lib.types.str;
+      default = primaryMonitorName;
+      example = "DP-1";
     };
     modules.astral.notificationIgnores = lib.mkOption {
       type = lib.types.listOf lib.types.str;
@@ -44,32 +49,32 @@ in {
   };
 
   config = {
-  environment.systemPackages = [package inputs.ags.packages.${pkgs.system}.agsFull];
+    environment.systemPackages = [package inputs.ags.packages.${pkgs.system}.agsFull];
 
-  fireproof.home-manager = {
-    systemd.user.services.astal = {
-      Unit = {
-        Description = "Astal";
-        Documentation = "https://github.com/Aylur/astal";
-        After = ["graphical-session.target"];
-      };
+    fireproof.home-manager = {
+      systemd.user.services.astal = {
+        Unit = {
+          Description = "Astal";
+          Documentation = "https://github.com/Aylur/astal";
+          After = ["graphical-session.target"];
+        };
 
-      Service = {
-        ExecStart = "${package}/bin/${packageName}";
-        Restart = "on-failure";
-        KillMode = "mixed";
-        Slice = "app-graphical.slice";
-        DefaultEnvironment = ''
-          ASTRAL_PRIMARY_MONITOR=${cfg.primaryMonitor}
-          ASTRAL_NOTIFICATION_IGNORE=${lib.concatStringsSep "," cfg.notificationIgnores}
-          ASTRAL_TRAY_IGNORE=${lib.concatStringsSep "," cfg.trayIgnore}
-          '';
-      };
+        Service = {
+          ExecStart = "${package}/bin/${packageName}";
+          Restart = "on-failure";
+          KillMode = "mixed";
+          Slice = "app-graphical.slice";
+          Environment = [
+            "ASTRAL_PRIMARY_MONITOR=${cfg.primaryMonitor}"
+            "ASTRAL_NOTIFICATION_IGNORE=${lib.concatStringsSep "," cfg.notificationIgnores}"
+            "ASTRAL_TRAY_IGNORE=${lib.concatStringsSep "," cfg.trayIgnore}"
+          ];
+        };
 
-      Install = {
-        WantedBy = ["graphical-session.target"];
+        Install = {
+          WantedBy = ["graphical-session.target"];
+        };
       };
     };
   };
-};
 }

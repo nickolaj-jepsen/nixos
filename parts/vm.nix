@@ -29,7 +29,7 @@ in {
             isNormalUser = true;
             extraGroups = ["wheel" "networkmanager" "libvirt" "kvm"];
           };
-          monitors = [{resolution="1920x1080";}];
+          monitors = [{resolution = "1920x1080";}];
           services.qemuGuest.enable = true;
           services.spice-vdagentd.enable = true;
         }

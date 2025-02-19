@@ -14,8 +14,8 @@
 
   mkFormatter = formatter: languages: {
     "[${lib.concatStringsSep "][" languages}]" = {
-      editor.defaultFormatter = formatter;
-      editor.formatOnSave = true;
+      "editor.defaultFormatter" = formatter;
+      "editor.formatOnSave" = true;
     };
   };
 in {
@@ -28,20 +28,28 @@ in {
       userSettings = lib.mkMerge [
         {
           # General
-          extensions.ignoreRecommendations = true;
+          "extensions.ignoreRecommendations" = true;
 
           # Remote
-          remote.SSH.useLocalServer = false;
+          "remote.SSH.useLocalServer" = false;
 
           # AI
-          github.copilot.editor.enableAutoCompletions = true;
-          github.copilot.enable."*" = true;
+          "github.copilot.editor.enableAutoCompletions" = true;
+          "github.copilot.enable" = {"*" = true;};
 
           # Theme
-          workbench.colorTheme = "Darcula Theme from IntelliJ";
+          "workbench.colorTheme" = "Darcula Theme from IntelliJ";
 
           # Keybindings
-          workbench.commandPalette.experimental.suggestCommands = true; # Emulates IntelliJ's "Search Everywhere"
+          "workbench.commandPalette.experimental.suggestCommands" = true; # Emulates IntelliJ's "Search Everywhere"
+
+          # nix-ide
+          "nix.enableLanguageServer" = true;
+          "nix.serverPath" = lib.getExe pkgs.nil;
+
+          "nix.serverSettings" = {
+            nil.formatting.command = ["nix" "fmt" "--" "--"];
+          };
         }
         (mkFormatter "esbenp.prettier-vscode" ["json" "jsonc" "markdown" "css" "scss" "typescript" "typescriptreact" "html" "yaml"])
         (mkFormatter "charliermarsh.ruff" ["python"])

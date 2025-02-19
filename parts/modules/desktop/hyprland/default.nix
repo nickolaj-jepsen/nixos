@@ -1,15 +1,27 @@
 {
   lib,
   config,
+  pkgs,
   ...
 }:
 with lib; let
   cfg = config.fireproof;
+  primaryMonitorName =
+    if builtins.length config.monitors > 0
+    then (builtins.elemAt config.monitors 0).name
+    else "";
+
+  
+
   mkKeyboard = name: {
     inherit name;
     kb_layout = "eu";
   };
 in {
+  imports = [
+    ./hyprpolkitagent.nix
+  ];
+
   config = {
     programs.uwsm.enable = true;
     programs.hyprland = {
@@ -29,6 +41,9 @@ in {
     };
 
     environment.sessionVariables.NIXOS_OZONE_WL = "1";
+    environment.systemPackages = with pkgs; [
+      hyprcursor
+    ];
 
     fireproof.home-manager = {
       wayland.windowManager.hyprland = {
@@ -37,6 +52,10 @@ in {
         systemd.enable = false; # Conficts with UWSM
 
         settings = {
+          env = [
+            "HYPRCURSOR_THEME,Adwaita"
+            "HYPRCURSOR_SIZE,24"
+          ];
           monitor =
             map (
               m: let
@@ -71,7 +90,27 @@ in {
             touchpad = {
               natural_scroll = false;
             };
+
+            sensitivity = 0;
+            accel_profile = "flat";
           };
+
+          workspace =
+            if primaryMonitorName != ""
+            then [
+              "1, monitor:${primaryMonitorName}, persistent:true, default:true"
+              "2, monitor:${primaryMonitorName}, persistent:true"
+              "3, monitor:${primaryMonitorName}, persistent:true"
+              "4, monitor:${primaryMonitorName}, persistent:true"
+              "5, monitor:${primaryMonitorName}, persistent:true"
+            ]
+            else [
+              "1, persistent:true, default:true"
+              "2, persistent:true"
+              "3, persistent:true"
+              "4, persistent:true"
+              "5, persistent:true"
+            ];
 
           # Names can be found with:
           # $ hyprctl devices -j | jq '.["keyboards"].[].name' -r | grep -vE "(system|consumer)-control"

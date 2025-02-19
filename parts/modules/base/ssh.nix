@@ -32,7 +32,8 @@ in {
           user = "nij";
           identityFile = "${config.age.secrets.ssh-key-ao.path}";
         };
-        "dev.ao,scw.ao".proxyJump = "bastion.ao";
+        "dev.ao".proxyJump = "bastion.ao";
+        "scw.ao".proxyJump = "bastion.ao";
         "clickhouse.ao".user = "ubuntu";
         "flex.ao" = {
           hostname = "192.168.2.5";
