@@ -41,6 +41,7 @@ with lib; let
               inputs.home-manager.nixosModules.home-manager
               inputs.agenix.nixosModules.default
               inputs.agenix-rekey.nixosModules.default
+              inputs.nix-index-database.nixosModules.nix-index
               inputs.nixos-facter-modules.nixosModules.facter
               ../modules/base/user.nix
               (mkSystemImports hostname)
