@@ -75,5 +75,15 @@ in {
         ../modules/devenv.nix
       ];
     };
+    work = mkSystem {
+      hostname = "work";
+      username = "nickolaj";
+      modules = [
+        ../modules/required.nix
+        ../modules/shell.nix
+        ../modules/graphical.nix
+        ../modules/devenv.nix
+      ];
+    };
   };
 }
