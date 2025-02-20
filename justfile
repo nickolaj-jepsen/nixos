@@ -1,10 +1,15 @@
 # export NIXPKGS_ALLOW_UNFREE := "1"
 
+nixcmd := "nix --experimental-features 'nix-command flakes'"
+
+@_default:
+    just --list
+
 [group('vm')]
 vm-build:
     git add .
     echo "Building VM..."
-    nix build .#vm
+    {{ nixcmd }} build .#vm
     echo "VM built."
     sudo chmod 777 result/nixos.qcow2
     echo "VM permissions set."
@@ -42,96 +47,119 @@ vm-destroy:
     virsh pool-destroy nixos
     virsh pool-undefine nixos
 
-[group('nix')]
-repl:
-    nix repl --show-trace ".#" nixpkgs
-
+[doc('Wrapper for nixos-facter')]
 [group('deploy')]
-deploy-factor hostname target='':
+factor hostname target='':
     #!/usr/bin/env -S bash -e
     target="{{ target }}"
     if [ -z "$target" ]; then
-        sudo nix run nixpkgs#nixos-facter -- -o parts/hosts/{{ hostname }}/facter.json
+        {{ nixcmd }} run nixpkgs#nixos-facter -- -o hosts/{{ hostname }}/facter.json
     else
-        nix run github:nix-community/nixos-anywhere -- \
+        {{ nixcmd }} run github:nix-community/nixos-anywhere -- \
             --flake .#{{ hostname }} \
             --target-host {{ target }} \
             --generate-hardware-config nixos-facter \
-            ./parts/hosts/{{ hostname }}/facter.json
+            ./hosts/{{ hostname }}/facter.json
     fi
 
-tmp_dir := "/tmp/secrets/" + uuid()
-
+[doc('Wrapper for nixos-rebuild switch')]
 [group("deploy")]
-deploy hostname *ARGS:
-    nix run nixpkgs#nixos-rebuild -- \
-        --flake .#{{ hostname }} \
-        {{ ARGS }} switch
+switch hostname target='':
+    #!/usr/bin/env -S bash -e
+    target="{{ target }}"
+    if [ -z "$target" ]; then
+        {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch --flake .#{{ hostname }} 
+    else
+        {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch \
+            --flake .#{{ hostname }} \
+            --target-host {{ target }} \
+            --use-remote-sudo
+    fi
 
+[doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
 deploy-remote hostname target:
     #!/usr/bin/env -S bash -e
     git add .
 
-    trap "rm -rf {{ tmp_dir }}" EXIT
+    temp=$(mktemp -d)
+    trap "rm -rf $temp" EXIT
 
-    # Copy ssh key to decrypt agenix secrets
-    install -d -m755 {{ tmp_dir }}/etc/ssh
-    just secret-echo ./secrets/hosts/{{ hostname }}/id_ed25519 > {{ tmp_dir }}/etc/ssh/ssh_host_ed25519_key
-    chmod 600 {{ tmp_dir }}/etc/ssh/ssh_host_ed25519_key
-    cp ./secrets/hosts/{{ hostname }}/id_ed25519.pub {{ tmp_dir }}/etc/ssh/ssh_host_ed25519_key.pub
+
+    install -d -m755 "$temp/etc/ssh"
+
+    # Copy ssh key to decrypt agenix secrets    
+    just age -d "./secrets/hosts/{{ hostname }}/id_ed25519.age" > "$temp/etc/ssh/ssh_host_ed25519_key"
+    chmod 600 "$temp/etc/ssh/ssh_host_ed25519_key"
+
+    cp "./secrets/hosts/{{ hostname }}/id_ed25519.pub" "$temp/etc/ssh/ssh_host_ed25519_key.pub"
 
     # Deploy
-    nix run github:nix-community/nixos-anywhere -- \
+    {{ nixcmd }} run github:nix-community/nixos-anywhere -- \
         --flake .#{{ hostname }} \
-        --disk-encryption-keys /luks-password <(just secret-echo ./secrets/luks-password) \
-        --extra-files {{ tmp_dir }} \
-        --target-host {{ target }}
+        --disk-encryption-keys /luks-password <(just age -d ./secrets/luks-password.age) \
+        --extra-files "$temp" \
+        --target-host "{{ target }}"
 
+[doc('A wrapper disko-install')]
 [group('deploy')]
-deploy-switch hostname target *ARGS:
-    nix run nixpkgs#nixos-rebuild -- \
-        --flake .#{{ hostname }} \
-        --target-host {{ target }} \
-        --use-remote-sudo \
-        {{ ARGS }} switch
+disko-install hostname disk="/dev/sda":
+    sudo {{ nixcmd }} run 'github:nix-community/disko/latest#disko-install' -- --flake .#{{ hostname }} --disk main {{ disk }}
 
+[doc('Build an install ISO for a host')]
 [group('deploy')]
-deploy-iso hostname:
-    nix build .#nixosConfigurations.{{ hostname }}.config.formats.install-iso
+iso hostname:
+    {{ nixcmd }} build .#nixosConfigurations.{{ hostname }}.config.formats.install-iso
 
-identifier := "./secrets/yubikey-identity.pub"
-
-[group("secret")]
-secret-import path:
-    #!/usr/bin/env bash
-    # load the file from the root system
-    cat {{ path }} | nix develop --quiet --command bash -c \
-        "rage -e -r -o secrets/{{ path }}.age -i {{ identifier }}"
-
+[doc('Runs (r)age with yubikey identity')]
 [group('secret')]
-secret-echo file:
-    nix develop --quiet --command bash -c \
-        "rage -d {{ file }}.age -i {{ identifier }}"
+age *ARGS="--help":
+    @{{ nixcmd }} shell nixpkgs#rage nixpkgs#age-plugin-yubikey --command rage {{ ARGS }} -i ./secrets/yubikey-identity.pub
 
-default := ""
-
+[doc('Decrypt a file to stdout')]
 [group('secret')]
-secret-edit name=default:
-    nix run .#agenix-rekey.x86_64-linux.edit {{ name }}
+decrypt file:
+    just age -d {{ file }}
 
+[doc('Edit an encrypted file in $EDITOR')]
+[group('secret')]
+secret-edit name:
+    {{ nixcmd }} run .#agenix-rekey.x86_64-linux.edit {{ name }}
+
+[doc('Rekey all secrets - needed when adding secrets/hosts')]
 [group('secret')]
 secret-rekey:
-    nix develop --quiet --command bash -c \
-        "agenix rekey"
-    git add .
+    {{ nixcmd }} run .#agenix-rekey.x86_64-linux.rekey
 
-[group('secret')]
-secret-new-ssh-key hostname $USER:
-    #!/usr/bin/env -S nix develop --quiet --command bash
+[doc("Sets up configuration + SSH keys for a new host")]
+new-host hostname username:
+    #!/usr/bin/env -S bash -e
+    temp=$(mktemp -d)
+    trap "rm -rf $temp" EXIT
 
-    mkdir -p secrets/hosts/{{ hostname }}
-    ssh-keygen -t ed25519 -f secrets/hosts/{{ hostname }}/id_ed25519 -C "${USER}@{{ hostname }}"
-    age-plugin-yubikey -e secrets/hosts/{{ hostname }}/id_ed25519 \
-        -o secrets/hosts/{{ hostname }}/id_ed25519.age
-    rm secrets/hosts/{{ hostname }}/id_ed25519
+    echo "Setting up folders"
+    mkdir -p "secrets/hosts/{{ hostname }}"
+    mkdir -p "hosts/{{ hostname }}"
+
+    echo "Generating SSH key for {{ username }}@{{ hostname }}"
+    ssh-keygen -q -t ed25519 -f "$temp/id_ed25519" -C "{{ username }}@{{ hostname }}" -N ""
+    cp "$temp/id_ed25519.pub" "secrets/hosts/{{ hostname }}/id_ed25519.pub"
+
+    echo "Encrypting SSH key"
+    just age -e "$temp/id_ed25519" -o "secrets/hosts/{{ hostname }}/id_ed25519.age"
+
+    echo "Remember to update ./hosts/default.nix eg:"
+
+    # Bold with no newline
+    cat <<EOF
+    {{ BOLD }}{{ hostname }} = mkSystem {
+      hostname = "{{ hostname }}";
+      username = "{{ username }}";
+      modules = [
+        ../modules/required.nix
+        ../modules/shell.nix
+        ../modules/graphical.nix
+        ../modules/devenv.nix
+      ];
+    };
+    EOF

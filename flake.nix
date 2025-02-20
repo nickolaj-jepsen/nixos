@@ -66,10 +66,10 @@
     flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [
         inputs.agenix-rekey.flakeModule
-        ./parts/devshell.nix
-        ./parts/vm.nix
-        ./parts/formatter.nix
-        ./parts/hosts
+        ./devshell.nix
+        ./vm.nix
+        ./formatter.nix
+        ./hosts
       ];
       systems = [
         "x86_64-linux"
