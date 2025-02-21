@@ -17,7 +17,7 @@ with lib; let
   };
   mkMouse = name: sensitivity: {
     inherit name;
-    sensitivity = sensitivity;
+    inherit sensitivity;
   };
 in {
   imports = [
@@ -123,15 +123,17 @@ in {
 
           # Names can be found with:
           # $ hyprctl devices -j | jq '.["keyboards"].[].name' -r | grep -vE "(system|consumer)-control"
-          device = [
-            # $ hyprctl devices -j | jq '.["mice"].[].name' -r
-            (mkMouse "logitech-usb-ps/2-optical-mouse" 0.2)
-          ] ++ map mkKeyboard [
-            "splitkb-kyria-rev1"
-            "zsa-technology-labs-inc-ergodox-ez-shine"
-            "mattia-dal-ben-redox_wireless"
-            "zsa-technology-labs-inc-ergodox-ez-shine-keyboard"
-          ];
+          device =
+            [
+              # $ hyprctl devices -j | jq '.["mice"].[].name' -r
+              (mkMouse "logitech-usb-ps/2-optical-mouse" 0.2)
+            ]
+            ++ map mkKeyboard [
+              "splitkb-kyria-rev1"
+              "zsa-technology-labs-inc-ergodox-ez-shine"
+              "mattia-dal-ben-redox_wireless"
+              "zsa-technology-labs-inc-ergodox-ez-shine-keyboard"
+            ];
 
           general = {
             gaps_in = 5;
