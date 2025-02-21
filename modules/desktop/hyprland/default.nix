@@ -34,7 +34,6 @@ in {
     };
 
     security.polkit.enable = true;
-    xdg.portal.enable = true;
     services.dbus.enable = true;
 
     hardware = {

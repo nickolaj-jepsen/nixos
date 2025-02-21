@@ -3,7 +3,6 @@
     ./apps/pycharm.nix
     ./apps/vscode.nix
     ./apps/sublime-merge.nix
-    ./apps/virtualbox.nix
     ./apps/ollama.nix
     ./dev/python.nix
     ./dev/javascript.nix

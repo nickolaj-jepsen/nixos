@@ -30,6 +30,7 @@
 
       # Monitoring
       htop
+      btop
       lshw
 
       # Archive
