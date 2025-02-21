@@ -38,6 +38,10 @@ in {
 
           # Social
           reddit-enhancement-suite
+
+          # Development
+          react-devtools
+          refined-github
         ];
 
         settings = {
