@@ -31,6 +31,13 @@
           default = 1.0;
         };
 
+        transform = lib.mkOption {
+          # https://wiki.hyprland.org/Configuring/Monitors/#rotating
+          type = lib.types.nullOr lib.types.int;
+          default = null;
+          example = 1; 
+        };
+
         enable = lib.mkOption {
           type = lib.types.bool;
           default = true;

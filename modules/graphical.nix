@@ -11,5 +11,6 @@
     ./apps/spotify.nix
     ./apps/firefox.nix
     ./apps/ghostty.nix
+    ./apps/slack.nix
   ];
 }

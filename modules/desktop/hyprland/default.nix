@@ -15,6 +15,10 @@ with lib; let
     inherit name;
     kb_layout = "eu";
   };
+  mkMouse = name: sensitivity: {
+    inherit name;
+    sensitivity = sensitivity;
+  };
 in {
   imports = [
     ./hyprpolkitagent.nix
@@ -74,7 +78,11 @@ in {
                   if m.position != null
                   then m.position
                   else "auto";
-              in "${name}, ${resolution}${refreshRate}, ${position}, 1"
+                transform =
+                  if m.transform != null
+                  then ", transform, ${builtins.toString m.transform}"
+                  else "";
+              in "${name}, ${resolution}${refreshRate}, ${position}, 1${transform}"
             )
             config.monitors;
 
@@ -115,9 +123,13 @@ in {
 
           # Names can be found with:
           # $ hyprctl devices -j | jq '.["keyboards"].[].name' -r | grep -vE "(system|consumer)-control"
-          device = map mkKeyboard [
+          device = [
+            # $ hyprctl devices -j | jq '.["mice"].[].name' -r
+            (mkMouse "logitech-usb-ps/2-optical-mouse" 0.2)
+          ] ++ map mkKeyboard [
             "splitkb-kyria-rev1"
             "zsa-technology-labs-inc-ergodox-ez-shine"
+            "mattia-dal-ben-redox_wireless"
             "zsa-technology-labs-inc-ergodox-ez-shine-keyboard"
           ];
 
