@@ -25,16 +25,16 @@ set -U fish_pager_color_progress brwhite --background=cyan
 set -U fish_pager_color_completion normal
 set -U fish_pager_color_description yellow --italics
 set -U fish_pager_color_selected_background --reverse
-set -U fish_pager_color_selected_description 
-set -U fish_pager_color_selected_completion 
-set -U fish_pager_color_secondary_completion 
-set -U fish_pager_color_secondary_background 
-set -U fish_color_keyword 
-set -U fish_pager_color_selected_prefix 
-set -U fish_pager_color_background 
-set -U fish_pager_color_secondary_prefix 
-set -U fish_pager_color_secondary_description 
-set -U fish_color_host_remote 
+set -U fish_pager_color_selected_description
+set -U fish_pager_color_selected_completion
+set -U fish_pager_color_secondary_completion
+set -U fish_pager_color_secondary_background
+set -U fish_color_keyword
+set -U fish_pager_color_selected_prefix
+set -U fish_pager_color_background
+set -U fish_pager_color_secondary_prefix
+set -U fish_pager_color_secondary_description
+set -U fish_color_host_remote
 set -U fish_color_option
 
 # Bobthefish config

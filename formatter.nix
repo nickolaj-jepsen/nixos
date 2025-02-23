@@ -1,4 +1,10 @@
-{inputs, ...}: {
+{
+  inputs,
+  lib,
+  ...
+}: let
+  mkExtensionIgnore = exts: "*.{${lib.concatStringsSep "," exts}}";
+in {
   imports = [inputs.treefmt-nix.flakeModule];
 
   perSystem = {config, ...}: {
@@ -10,8 +16,18 @@
         statix.enable = true;
         just.enable = true;
         prettier.enable = true;
+        fish_indent.enable = true;
       };
-      settings.global.excludes = ["*.{gitignore,svg}"];
+      settings.global.excludes = [
+        "result"
+        "*/node_modules/*"
+        (mkExtensionIgnore [
+            "gitignore"
+            "svg"
+            "age"
+            "pub"
+          ])
+      ];
     };
     formatter = config.treefmt.build.wrapper;
   };

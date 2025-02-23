@@ -1,9 +1,9 @@
-set __kube_verbs       get describe delete edit
-set __kube_verbs_short g   d        rm     e
-set __kube_resource       pods deployments services ingresses configmaps daemonsets statefulsets namespace namespace
-set __kube_resource_short p    d           s        i         c          ds         ss           n         ns
+set __kube_verbs get describe delete edit
+set __kube_verbs_short g d rm e
+set __kube_resource pods deployments services ingresses configmaps daemonsets statefulsets namespace namespace
+set __kube_resource_short p d s i c ds ss n ns
 
-function __echo_kubeexec;
+function __echo_kubeexec
     set _flag_namespace (kubectl config view --minify --output 'jsonpath={..namespace}')
     if test -z "$_flag_namespace"
         set _flag_namespace default
@@ -18,7 +18,7 @@ function __echo_kubeexec;
     echo "kubectl exec --namespace $_flag_namespace -it $POD --"
 end
 
-function __echo_kubemanage;
+function __echo_kubemanage
     set _flag_namespace (kubectl config view --minify --output 'jsonpath={..namespace}')
     if test -z "$_flag_namespace"
         set _flag_namespace default
