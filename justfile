@@ -47,13 +47,22 @@ vm-destroy:
     virsh pool-destroy nixos
     virsh pool-undefine nixos
 
+[doc("Build a flake output")]
+build target='':
+    @{{ nixcmd }} run nixpkgs#nix-output-monitor -- build {{ justfile_directory() }}#{{ target }}
+
+[doc('Build a nixos configuration')]
+[group('deploy')]
+build-system hostname:
+    @just build nixosConfigurations."{{ hostname }}".config.system.build.toplevel
+
 [doc('Wrapper for nixos-facter')]
 [group('deploy')]
-factor hostname target='':
+factor hostname=`hostname -s` target='':
     #!/usr/bin/env -S bash -e
     target="{{ target }}"
     if [ -z "$target" ]; then
-        {{ nixcmd }} run nixpkgs#nixos-facter -- -o hosts/{{ hostname }}/facter.json
+        sudo {{ nixcmd }} run nixpkgs#nixos-facter -- -o hosts/{{ hostname }}/facter.json
     else
         {{ nixcmd }} run github:nix-community/nixos-anywhere -- \
             --flake .#{{ hostname }} \
@@ -64,11 +73,11 @@ factor hostname target='':
 
 [doc('Wrapper for nixos-rebuild switch')]
 [group("deploy")]
-switch hostname target='':
+switch hostname=`hostname -s` target='': (build-system hostname)
     #!/usr/bin/env -S bash -e
     target="{{ target }}"
     if [ -z "$target" ]; then
-        {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch --flake .#{{ hostname }} 
+        sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch --fast --flake .#{{ hostname }} 
     else
         {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch \
             --flake .#{{ hostname }} \
@@ -78,7 +87,7 @@ switch hostname target='':
 
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
-deploy-remote hostname target:
+deploy-remote hostname target: (build-system hostname)
     #!/usr/bin/env -S bash -e
     git add .
 
@@ -103,7 +112,7 @@ deploy-remote hostname target:
 
 [doc('A wrapper disko-install')]
 [group('deploy')]
-disko-install hostname disk="/dev/sda":
+disko-install hostname disk: (build-system hostname)
     sudo {{ nixcmd }} run 'github:nix-community/disko/latest#disko-install' -- --flake .#{{ hostname }} --disk main {{ disk }}
 
 [doc('Build an install ISO for a host')]
@@ -163,3 +172,22 @@ new-host hostname username:
       ];
     };
     EOF
+
+[doc("Update flake.lock")]
+update:
+    {{ nixcmd }} flake update
+
+[doc("Run nix-tree")]
+[group("tools")]
+tree *ARGS=("--derivation .#nixosConfigurations." + shell("hostname -s") + ".config.system.build.toplevel"):
+    {{ nixcmd }} run github:utdemir/nix-tree -- {{ ARGS }}
+
+[doc("Run nix-diff between current system")]
+[group("tools")]
+diff: build
+    {{ nixcmd }} run nixpkgs#nvd -- diff /run/current-system {{ justfile_directory() }}/result
+
+[doc("Run nurl")]
+[group("tools")]
+nurl *ARGS="--help":
+    {{ nixcmd }} run nixpkgs#nurl -- {{ ARGS }}

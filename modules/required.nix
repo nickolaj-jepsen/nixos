@@ -9,6 +9,7 @@
     ./base/time.nix
     ./base/ssh.nix
     ./base/default-apps.nix
+    ./base/gc.nix
     ./dev/just.nix
     ./hardware/usb.nix
     ./hardware/yubikey.nix

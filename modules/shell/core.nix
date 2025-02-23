@@ -38,9 +38,6 @@
       unzip
       gzip
       xz
-
-      # Nix
-      nurl
     ];
   };
 }
