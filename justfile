@@ -5,48 +5,6 @@ nixcmd := "nix --experimental-features 'nix-command flakes'"
 @_default:
     just --list
 
-[group('vm')]
-vm-build:
-    git add .
-    echo "Building VM..."
-    {{ nixcmd }} build .#vm
-    echo "VM built."
-    sudo chmod 777 result/nixos.qcow2
-    echo "VM permissions set."
-
-[group('vm')]
-vm-reload:
-    echo "Reloading VM..."
-    virsh destroy nixos
-    virsh start nixos
-    echo "VM reloaded."
-
-[group('vm')]
-vm-switch: vm-build vm-reload
-
-[group('vm')]
-vm-init:
-    virsh pool-define-as nixos dir - - - - $HOME/.local/libvirt/images/nixos
-    virsh pool-build nixos
-    virsh pool-start nixos
-    virt-install  \
-        --name nixos \
-        --os-variant=nixos-24.05 \
-        --memory 8192 \
-        --vcpus=4,maxvcpus=8 \
-        --cpu host \
-        --disk result/nixos.qcow2 \
-        --network user \
-        --virt-type kvm \
-        --import \
-        --graphics spice
-
-[group('vm')]
-vm-destroy:
-    virsh destroy nixos
-    virsh pool-destroy nixos
-    virsh pool-undefine nixos
-
 [doc("Build a flake output")]
 build target='':
     @{{ nixcmd }} run nixpkgs#nix-output-monitor -- build {{ justfile_directory() }}#{{ target }}
