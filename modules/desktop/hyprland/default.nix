@@ -272,11 +272,22 @@ in {
             "noanim, gtk4-layer-shell"
           ];
           windowrulev2 = [
+            # Screenshots
             "float,class:^(com.gabm.satty)$"
             "dimaround,class:^(com.gabm.satty)$"
 
+            # Firefox
             "float,class:^(firefox)$,title:^(Picture-in-Picture)$"
             "float,class:^(firefox)$,title:^(Library)$"
+
+            # JetBrains
+            "center,class:^(jetbrains-.*)$,title:^$,floating:1"
+            "noinitialfocus,class:^(jetbrains-.*)$,title:^$,floating:1"
+            "noanim,class:^(jetbrains-.*)$,title:^$,floating:1"
+            
+            "center,class:^(jetbrains-.*)$,title:^(splash)$,floating:1"
+            "nofocus,class:^(jetbrains-.*)$,title:^(splash)$,floating:1"
+            "noborder,class:^(jetbrains-.*)$,title:^(splash)$,floating:1"
           ];
         };
       };
