@@ -1,6 +1,7 @@
 {
   lib,
   config,
+  inputs,
   pkgs,
   ...
 }:
@@ -10,6 +11,13 @@ with lib; let
     if builtins.length config.monitors > 0
     then (builtins.elemAt config.monitors 0).name
     else "";
+
+  hyprPkgs = {
+    hyprland = inputs.hyprland.packages.${pkgs.system}.hyprland;
+    xdg-desktop-portal-hyprland = inputs.hyprland.packages.${pkgs.system}.xdg-desktop-portal-hyprland;
+    mesa = inputs.hyprland.inputs.nixpkgs.legacyPackages.${pkgs.system}.mesa.drivers;
+    mesa32 = inputs.hyprland.inputs.nixpkgs.legacyPackages.${pkgs.system}.pkgsi686Linux.mesa.drivers;
+  };
 
   record_script = pkgs.writeShellScriptBin "record_script" ''
     DIR="$HOME/recordings"
@@ -56,6 +64,8 @@ in {
   config = {
     programs.uwsm.enable = true;
     programs.hyprland = {
+      package = hyprPkgs.hyprland;
+      portalPackage = hyprPkgs.xdg-desktop-portal-hyprland;
       enable = true;
       withUWSM = true;
       xwayland.enable = true;
@@ -68,6 +78,8 @@ in {
     hardware = {
       graphics = {
         enable = true;
+        package = hyprPkgs.mesa;
+        package32 = hyprPkgs.mesa32;
       };
     };
 
