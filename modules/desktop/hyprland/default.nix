@@ -21,7 +21,7 @@ with lib; let
 
   color = {
     bg = "rgb(1C1B1A)";
-    bg-alt = "rgb(282726)";
+    ui = "rgb(343331)";
     fg = "rgb(DAD8CE)";
     accent = "rgb(CF6A4C)";
     black = "rgb(100F0F)";
@@ -189,7 +189,7 @@ in {
             gaps_out = 10;
             border_size = 2;
             "col.active_border" = color.accent;
-            "col.inactive_border" = color.bg;
+            "col.inactive_border" = color.ui;
             layout = "dwindle";
           };
           cursor = {
@@ -198,6 +198,7 @@ in {
           misc = {
             focus_on_activate = true;
             disable_hyprland_logo = true;
+            background_color = color.bg;
             force_default_wallpaper = 0;
             middle_click_paste = false;
             font_family = "Hack Nerd Font";
@@ -208,6 +209,7 @@ in {
             rounding_power = 4;
             shadow = {
               enabled = true;
+              color = "rgba(1a1a1aee)";
             };
           };
           animations = {
@@ -228,6 +230,7 @@ in {
             use_active_for_splits = true;
           };
           group = {
+            auto_group = false;
             "col.border_inactive" = color.bg;
             "col.border_active" = color.accent;
             groupbar = {
@@ -236,7 +239,7 @@ in {
               gradients = false;
               height = 16;
               indicator_height = 2;
-              "col.inactive" = color.bg-alt;
+              "col.inactive" = color.ui;
               "col.active" = color.accent;
               "text_color" = color.fg;
             };
