@@ -6,13 +6,13 @@ nixcmd := "nix --experimental-features 'nix-command flakes'"
     just --list
 
 [doc("Build a flake output")]
-build target='':
-    @{{ nixcmd }} run nixpkgs#nix-output-monitor -- build {{ justfile_directory() }}#{{ target }}
+build target *ARGS="":
+    @{{ nixcmd }} run {{ARGS}} nixpkgs#nix-output-monitor -- build {{ justfile_directory() }}#{{ target }}
 
 [doc('Build a nixos configuration')]
 [group('deploy')]
-build-system hostname=`hostname -s`:
-    @just build nixosConfigurations."{{ hostname }}".config.system.build.toplevel
+build-system hostname=`hostname -s` *ARGS="":
+    @just build nixosConfigurations."{{ hostname }}".config.system.build.toplevel {{ ARGS }}
 
 [doc('Wrapper for nixos-facter')]
 [group('deploy')]
@@ -132,8 +132,8 @@ new-host hostname username:
     EOF
 
 [doc("Update flake.lock")]
-update:
-    {{ nixcmd }} flake update
+update input='':
+    {{ nixcmd }} flake update {{ input }}
 
 [doc("Run nix-tree")]
 [group("tools")]

@@ -20,10 +20,8 @@ in {
       };
       settings.global.excludes = [
         "result"
-        "*/node_modules/*"
         (mkExtensionIgnore [
           "gitignore"
-          "svg"
           "age"
           "pub"
         ])

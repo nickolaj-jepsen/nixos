@@ -43,6 +43,7 @@ with lib; let
               inputs.agenix-rekey.nixosModules.default
               inputs.nix-index-database.nixosModules.nix-index
               inputs.nixos-facter-modules.nixosModules.facter
+              inputs.fireproof-shell.nixosModules.default
               ../modules/base/user.nix
               (mkSystemImports hostname)
             ]

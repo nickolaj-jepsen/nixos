@@ -55,10 +55,8 @@
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
 
-    astal.url = "github:aylur/astal";
-    astal.inputs.nixpkgs.follows = "nixpkgs";
-    ags.url = "github:aylur/ags";
-    ags.inputs.nixpkgs.follows = "nixpkgs";
+    fireproof-shell.url = "github:nickolaj-jepsen/fireproof-shell";
+    fireproof-shell.inputs.nixpkgs.follows = "nixpkgs";
 
     walker.url = "github:abenz1267/walker";
     # walker.inputs.nixpkgs.follows = "nixpkgs";
