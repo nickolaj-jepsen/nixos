@@ -7,7 +7,7 @@ nixcmd := "nix --experimental-features 'nix-command flakes'"
 
 [doc("Build a flake output")]
 build target *ARGS="":
-    @{{ nixcmd }} run {{ARGS}} nixpkgs#nix-output-monitor -- build {{ justfile_directory() }}#{{ target }}
+    @{{ nixcmd }} run {{ ARGS }} nixpkgs#nix-output-monitor -- build {{ justfile_directory() }}#{{ target }}
 
 [doc('Build a nixos configuration')]
 [group('deploy')]

@@ -13,10 +13,19 @@ with lib; let
     else "";
 
   hyprPkgs = {
-    hyprland = inputs.hyprland.packages.${pkgs.system}.hyprland;
-    xdg-desktop-portal-hyprland = inputs.hyprland.packages.${pkgs.system}.xdg-desktop-portal-hyprland;
+    inherit (inputs.hyprland.packages.${pkgs.system}) hyprland;
+    inherit (inputs.hyprland.packages.${pkgs.system}) xdg-desktop-portal-hyprland;
     mesa = inputs.hyprland.inputs.nixpkgs.legacyPackages.${pkgs.system}.mesa.drivers;
     mesa32 = inputs.hyprland.inputs.nixpkgs.legacyPackages.${pkgs.system}.pkgsi686Linux.mesa.drivers;
+  };
+
+  color = {
+    bg = "rgb(1C1B1A)";
+    bg-alt = "rgb(282726)";
+    fg = "rgb(DAD8CE)";
+    accent = "rgb(CF6A4C)";
+    black = "rgb(100F0F)";
+    transparent = "rgba(00000000)";
   };
 
   record_script = pkgs.writeShellScriptBin "record_script" ''
@@ -179,8 +188,8 @@ in {
             gaps_in = 5;
             gaps_out = 10;
             border_size = 2;
-            "col.active_border" = "rgb(cf6a4c)";
-            "col.inactive_border" = "rgb(343331)";
+            "col.active_border" = color.accent;
+            "col.inactive_border" = color.bg;
             layout = "dwindle";
           };
           cursor = {
@@ -195,12 +204,10 @@ in {
           };
 
           decoration = {
-            rounding = 4;
+            rounding = 8;
+            rounding_power = 4;
             shadow = {
               enabled = true;
-              range = 4;
-              render_power = 3;
-              color = "rgba(1a1a1aee)";
             };
           };
           animations = {
@@ -220,6 +227,21 @@ in {
             force_split = 2;
             use_active_for_splits = true;
           };
+          group = {
+            "col.border_inactive" = color.bg;
+            "col.border_active" = color.accent;
+            groupbar = {
+              enabled = true;
+              font_size = 12;
+              gradients = false;
+              height = 16;
+              indicator_height = 2;
+              "col.inactive" = color.bg-alt;
+              "col.active" = color.accent;
+              "text_color" = color.fg;
+            };
+          };
+
           bind = [
             "SUPER, RETURN, exec, ${getExe config.programs.uwsm.package} app -- ${cfg.default-apps.terminal}"
             "SUPER, BACKSPACE, killactive"
@@ -284,7 +306,7 @@ in {
             "center,class:^(jetbrains-.*)$,title:^$,floating:1"
             "noinitialfocus,class:^(jetbrains-.*)$,title:^$,floating:1"
             "noanim,class:^(jetbrains-.*)$,title:^$,floating:1"
-            
+
             "center,class:^(jetbrains-.*)$,title:^(splash)$,floating:1"
             "nofocus,class:^(jetbrains-.*)$,title:^(splash)$,floating:1"
             "noborder,class:^(jetbrains-.*)$,title:^(splash)$,floating:1"

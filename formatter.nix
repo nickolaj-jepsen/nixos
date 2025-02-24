@@ -24,6 +24,7 @@ in {
           "gitignore"
           "age"
           "pub"
+          "svg"
         ])
       ];
     };
