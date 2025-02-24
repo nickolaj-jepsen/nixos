@@ -9,5 +9,6 @@
     ./dev/k8s.nix
     ./dev/docker.nix
     ./dev/tilt.nix
+    ./dev/postgres.nix
   ];
 }
