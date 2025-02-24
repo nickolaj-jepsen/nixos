@@ -11,7 +11,7 @@ build target='':
 
 [doc('Build a nixos configuration')]
 [group('deploy')]
-build-system hostname:
+build-system hostname=`hostname -s`:
     @just build nixosConfigurations."{{ hostname }}".config.system.build.toplevel
 
 [doc('Wrapper for nixos-facter')]
@@ -142,7 +142,7 @@ tree *ARGS=("--derivation .#nixosConfigurations." + shell("hostname -s") + ".con
 
 [doc("Run nix-diff between current system")]
 [group("tools")]
-diff: build
+diff hostname=`hostname -s`: (build-system hostname)
     {{ nixcmd }} run nixpkgs#nvd -- diff /run/current-system {{ justfile_directory() }}/result
 
 [doc("Run nurl")]
