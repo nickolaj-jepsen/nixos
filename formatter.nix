@@ -22,11 +22,11 @@ in {
         "result"
         "*/node_modules/*"
         (mkExtensionIgnore [
-            "gitignore"
-            "svg"
-            "age"
-            "pub"
-          ])
+          "gitignore"
+          "svg"
+          "age"
+          "pub"
+        ])
       ];
     };
     formatter = config.treefmt.build.wrapper;

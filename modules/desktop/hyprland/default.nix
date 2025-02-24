@@ -11,6 +11,34 @@ with lib; let
     then (builtins.elemAt config.monitors 0).name
     else "";
 
+  record_script = pkgs.writeShellScriptBin "record_script" ''
+    DIR="$HOME/recordings"
+    FILE="$DIR/$(date '+%Y-%m-%d_%H.%M.%S').mp4"
+
+    mkdir -p $DIR
+    if pgrep -f ${lib.getExe pkgs.wf-recorder} > /dev/null; then
+        pkill ${lib.getExe pkgs.wf-recorder}
+        ${pkgs.libnotify}/bin/notify-send "Recording Stopped" "Recording saved to $FILE"
+    else
+        # Stolen from grimblast
+        FULLSCREEN_WORKSPACES="$(hyprctl workspaces -j | jq -r 'map(select(.hasfullscreen) | .id)')"
+        WORKSPACES="$(hyprctl monitors -j | jq -r '[(foreach .[] as $monitor (0; if $monitor.specialWorkspace.name == "" then $monitor.activeWorkspace else $monitor.specialWorkspace end)).id]')"
+        WINDOWS="$(hyprctl clients -j | jq -r --argjson workspaces "$WORKSPACES" --argjson fullscreenWorkspaces "$FULLSCREEN_WORKSPACES" 'map((select(([.workspace.id] | inside($workspaces)) and ([.workspace.id] | inside($fullscreenWorkspaces) | not) or .fullscreen > 0)))')"
+
+        GEOMETRY=$(echo "$WINDOWS" | jq -r '.[] | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"' | ${lib.getExe pkgs.slurp})
+
+        # ${pkgs.libnotify}/bin/notify-send "Starting recording" "Recording in 3 seconds" -a "record_script" -t 1000
+        # sleep 1
+        # ${pkgs.libnotify}/bin/notify-send "Starting recording" "Recording in 2 seconds" -a "record_script"  -t 1000
+        # sleep 1
+        # ${pkgs.libnotify}/bin/notify-send "Starting recording" "Recording in 1 second" -t 1000
+        # sleep 1
+
+        ${pkgs.wf-recorder}/bin/wf-recorder --pixel-format yuv420p -f "$FILE" -t --geometry "$GEOMETRY" & disown
+        ${pkgs.wl-clipboard}/bin/wl-copy < "$FILE"
+    fi
+  '';
+
   mkKeyboard = name: {
     inherit name;
     kb_layout = "eu";
@@ -35,6 +63,7 @@ in {
 
     security.polkit.enable = true;
     services.dbus.enable = true;
+    services.systembus-notify.enable = true;
 
     hardware = {
       graphics = {
@@ -184,20 +213,27 @@ in {
             "SUPER, BACKSPACE, killactive"
             "SUPER, SPACE, exec, ${getExe config.programs.uwsm.package} app -- walker"
             "SUPER, p, exec, ${getExe config.programs.uwsm.package} app -- loginctl lock-session"
+
+            ", Print, exec, ${lib.getExe pkgs.grimblast} save area - | ${lib.getExe pkgs.satty} -f -"
+            "SHIFT, Print, exec, ${lib.getExe pkgs.grimblast} --freeze save area - | ${lib.getExe pkgs.satty} -f -"
+            "CTRL, Print, exec, ${lib.getExe record_script}"
+
             "SUPER, S, togglefloating"
             "SUPER, A, pseudo"
             "SUPER, D, fullscreen"
             "SUPER, BACKSLASH, togglesplit"
-            "SUPER, M, togglegroup"
+
             "SUPER, left, movefocus, l"
             "SUPER, right, movefocus, r"
             "SUPER, up, movefocus, u"
             "SUPER, down, movefocus, d"
+
             "SUPER, h, movefocus, l"
             "SUPER, l, movefocus, r"
             "SUPER, k, movefocus, u"
             "SUPER, j, movefocus, d"
             "SUPER, p, submap, preselect"
+
             "SUPER, q, workspace, 1"
             "SUPER, w, workspace, 2"
             "SUPER, e, workspace, 3"
@@ -208,8 +244,11 @@ in {
             "SUPER SHIFT, e, movetoworkspace, 3"
             "SUPER SHIFT, r, movetoworkspace, 4"
             "SUPER SHIFT, t, movetoworkspace, 5"
+
             "SUPER SHIFT, h, workspace, r-1"
             "SUPER SHIFT, l, workspace, r+1"
+
+            "SUPER, M, togglegroup"
             "SUPER, tab, changegroupactive, f"
             "SUPER SHIFT, tab, changegroupactive, b"
           ];
@@ -219,6 +258,13 @@ in {
           ];
           layerrule = [
             "noanim, gtk4-layer-shell"
+          ];
+          windowrulev2 = [
+            "float,class:^(com.gabm.satty)$"
+            "dimaround,class:^(com.gabm.satty)$"
+
+            "float,class:^(firefox)$,title:^(Picture-in-Picture)$"
+            "float,class:^(firefox)$,title:^(Library)$"
           ];
         };
       };
