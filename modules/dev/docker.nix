@@ -1,6 +1,7 @@
 {
   username,
   pkgs,
+  lib,
   ...
 }: {
   environment.systemPackages = [
@@ -8,7 +9,11 @@
     pkgs.docker-compose
   ];
 
-  virtualisation.docker.enable = true;
-  virtualisation.docker.storageDriver = "btrfs";
+  virtualisation.docker = {
+    enable = true;
+    enableOnBoot = lib.mkDefault false;
+    storageDriver = "btrfs";
+  };
+
   users.extraGroups.docker.members = [username];
 }
