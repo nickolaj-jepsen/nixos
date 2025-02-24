@@ -74,9 +74,6 @@
     agenix-rekey.url = "github:oddlama/agenix-rekey";
     agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
 
-    colmena.url = "github:zhaofengli/colmena";
-    colmena.inputs.nixpkgs.follows = "nixpkgs";
-
     nix-vscode-extensions.url = "github:nix-community/nix-vscode-extensions";
   };
 }
