@@ -7,10 +7,7 @@
 }:
 with lib; let
   cfg = config.fireproof;
-  primaryMonitorName =
-    if builtins.length config.monitors > 0
-    then (builtins.elemAt config.monitors 0).name
-    else "";
+  primaryMonitorName = (builtins.head config.monitors).name or "";
 
   hyprPkgs = {
     inherit (inputs.hyprland.packages.${pkgs.system}) hyprland;
