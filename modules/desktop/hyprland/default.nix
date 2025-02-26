@@ -301,6 +301,7 @@ in {
             # Firefox
             "float,class:^(firefox)$,title:^(Picture-in-Picture)$"
             "float,class:^(firefox)$,title:^(Library)$"
+            "float,class:^(firefox)$,title:^(Bitwarden Password Manager)$"
 
             # JetBrains
             "center,class:^(jetbrains-.*)$,title:^$,floating:1"

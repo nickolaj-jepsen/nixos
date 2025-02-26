@@ -29,13 +29,17 @@ in {
         "*" = {
           identityFile = "${config.age.secrets.ssh-key.path}";
         };
+        server = {
+          hostname = "x.nickolaj.com";
+          user = "server";
+        };
         # Work hostnames definded in ./networking.nix
         "*.ao" = {
           user = "nij";
           identityFile = "${config.age.secrets.ssh-key-ao.path}";
         };
-        "dev.ao".proxyJump = "bastion.ao";
-        "scw.ao".proxyJump = "bastion.ao";
+        "dev.ao".proxyJump = lib.mkDefault "bastion.ao";
+        "scw.ao".proxyJump = lib.mkDefault "dev.ao";
         "clickhouse.ao".user = "ubuntu";
         "flex.ao" = {
           hostname = "192.168.2.5";
