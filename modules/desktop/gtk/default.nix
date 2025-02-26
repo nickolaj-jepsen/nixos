@@ -3,7 +3,7 @@
     nautilus
     gnome-photos
   ];
-  
+
   services.gvfs.enable = true;
   programs.dconf.enable = true;
 

@@ -6,5 +6,7 @@
     ./shell/comma.nix
     ./shell/neovim.nix
     ./shell/zellij.nix
+    ./shell/zoxide.nix
+    ./shell/aider.nix
   ];
 }
