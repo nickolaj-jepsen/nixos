@@ -2,12 +2,15 @@
   environment.systemPackages = with pkgs; [
     nautilus
     gnome-photos
-    evince
-    nautilus-open-any-terminal
-    sushi
   ];
+  
   services.gvfs.enable = true;
   programs.dconf.enable = true;
+
+  services.gnome.sushi.enable = true;
+  programs.nautilus-open-any-terminal.enable = true;
+  programs.seahorse.enable = true;
+  programs.evince.enable = true;
 
   fireproof.home-manager = {
     home.pointerCursor = {
