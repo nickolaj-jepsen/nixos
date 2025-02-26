@@ -16,6 +16,7 @@
 
         ${builtins.readFile ./theme.fish}
         ${builtins.readFile ./k8s.fish}
+        ${builtins.readFile ./autocomplete.fish}
 
       '';
       plugins = [
