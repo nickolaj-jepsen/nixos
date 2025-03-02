@@ -7,6 +7,7 @@
     ./desktop/greetd.nix
     ./desktop/hyprland/default.nix
     ./desktop/gtk/default.nix
+    ./desktop/qt.nix
     ./apps/spotify.nix
     ./apps/firefox.nix
     ./apps/ghostty.nix

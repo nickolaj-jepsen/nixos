@@ -26,6 +26,10 @@
         name = "adw-gtk3-dark";
         package = pkgs.adw-gtk3;
       };
+      iconTheme = {
+        name = "Qogir-dark";
+        package = pkgs.qogir-icon-theme;
+      };
 
       gtk3.extraConfig = {gtk-application-prefer-dark-theme = true;};
       gtk3.extraCss = builtins.readFile ./theme.css;

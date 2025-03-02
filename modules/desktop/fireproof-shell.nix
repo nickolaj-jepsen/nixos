@@ -4,8 +4,8 @@
   pkgs,
   pkgsUnstable,
   ...
-}: let 
-fireproofPkgs = inputs.fireproof-shell.packages.${pkgs.system};
+}: let
+  fireproofPkgs = inputs.fireproof-shell.packages.${pkgs.system};
 in {
   environment.systemPackages = [
     fireproofPkgs.fireproof-shell
@@ -20,5 +20,5 @@ in {
     };
   };
 
-  fireproof.home-manager.wayland.windowManager.hyprland.settings.execr = [ "pkill .fireproof-shel; fireproof-shell" ];
+  fireproof.home-manager.wayland.windowManager.hyprland.settings.execr = ["pkill .fireproof-shel; fireproof-shell"];
 }
