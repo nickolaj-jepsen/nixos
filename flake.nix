@@ -58,9 +58,6 @@
     fireproof-shell.url = "github:nickolaj-jepsen/fireproof-shell";
     fireproof-shell.inputs.nixpkgs.follows = "nixpkgs";
 
-    walker.url = "github:abenz1267/walker";
-    # walker.inputs.nixpkgs.follows = "nixpkgs";
-
     hyprland.url = "github:hyprwm/Hyprland";
     # hyprland.inputs.nixpkgs.follows = "nixpkgs";
 

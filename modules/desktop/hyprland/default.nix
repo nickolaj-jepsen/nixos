@@ -245,7 +245,7 @@ in {
           bind = [
             "SUPER, RETURN, exec, ${getExe config.programs.uwsm.package} app -- ${cfg.default-apps.terminal}"
             "SUPER, BACKSPACE, killactive"
-            "SUPER, SPACE, exec, ${getExe config.programs.uwsm.package} app -- walker"
+            "SUPER, SPACE, exec, astal launcher"
             "SUPER, p, exec, ${getExe config.programs.uwsm.package} app -- loginctl lock-session"
 
             ", Print, exec, ${lib.getExe pkgs.grimblast} save area - | ${lib.getExe pkgs.satty} -f -"

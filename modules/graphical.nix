@@ -6,7 +6,6 @@
     ./desktop/fireproof-shell.nix
     ./desktop/greetd.nix
     ./desktop/hyprland/default.nix
-    ./desktop/walker/default.nix
     ./desktop/gtk/default.nix
     ./apps/spotify.nix
     ./apps/firefox.nix
