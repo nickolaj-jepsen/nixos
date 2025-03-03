@@ -3,6 +3,7 @@
     (pkgsUnstable.jetbrains.pycharm-professional.override {
       vmopts = ''
         -Dawt.toolkit.name=WLToolkit
+        -Xmx8G
       '';
     })
   ];
