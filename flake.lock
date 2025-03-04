@@ -197,11 +197,11 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1740954531,
-        "narHash": "sha256-+vF7qhkB3w4PReoafd5e+REkon4C+paKRoCNCUg46Sg=",
+        "lastModified": 1741112515,
+        "narHash": "sha256-UEMiUMp8UAJ7PG1FRPa6TEWRHGMs3SGgA1olHJBcRM4=",
         "owner": "nickolaj-jepsen",
         "repo": "fireproof-shell",
-        "rev": "10ccd26c819994993331393949d88dd680058831",
+        "rev": "221175c31b91832073c62bb90ed547fc006fb332",
         "type": "github"
       },
       "original": {
@@ -1014,11 +1014,11 @@
         "treefmt-nix": "treefmt-nix_3"
       },
       "locked": {
-        "lastModified": 1741075138,
-        "narHash": "sha256-lAErDUEuag1Jx/AU+QDh602B4sA4ZD2eiziL6DzcI84=",
+        "lastModified": 1741120322,
+        "narHash": "sha256-U8MPNPzY7zU9VqCRjNh2vq5AOg+f+5sz6cYU3knzBQo=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "27984718bf6c800ea2cb9f7823510d83db558c34",
+        "rev": "f7113a4be27771ad3fdf9528f0519c213765e851",
         "type": "github"
       },
       "original": {
@@ -1040,11 +1040,11 @@
         "systems": "systems_5"
       },
       "locked": {
-        "lastModified": 1740938036,
-        "narHash": "sha256-KDc+kDDX9s8c574sx7idXVYTJM2WZElAk9qbgxrCnSo=",
+        "lastModified": 1741120430,
+        "narHash": "sha256-n+Qeb9qU+olGrGcAPcpTccb0zUQscH69o58ncHg2Ufg=",
         "owner": "notashelf",
         "repo": "nvf",
-        "rev": "f24189f1d2a7730b7fe87164bae40c2d0be8d3c9",
+        "rev": "27978c7186b26e78c7765de4c093a816617f9f39",
         "type": "github"
       },
       "original": {
