@@ -6,10 +6,11 @@
   ...
 }: let
   # stable = inputs.nix-vscode-extensions.extensions.${pkgs.system}.vscode-marketplace-release;
-  vscode-extensions = inputs.nix-vscode-extensions.extensions.${pkgs.system};
+  nix-vscode-extensions = (inputs.nix-vscode-extensions.overlays.default pkgs pkgsUnstable);
+  # vscode-extensions =  nix-vscode-extensions.extensions.${pkgs.system};
   vscodePackage = pkgsUnstable.vscode;
-  vscodeMarketplace = (vscode-extensions.forVSCodeVersion vscodePackage.version).vscode-marketplace;
-  vscodeMarketplaceRelease = (vscode-extensions.forVSCodeVersion vscodePackage.version).vscode-marketplace-release;
+  vscodeMarketplace = nix-vscode-extensions.vscode-marketplace;
+  vscodeMarketplaceRelease = nix-vscode-extensions.vscode-marketplace-release;
   vscodePkgs = vscodeMarketplace // vscodeMarketplaceRelease; # Prefer release over pre-release
 
   mkFormatter = formatter: languages: {
@@ -32,6 +33,7 @@ in {
 
           # Remote
           "remote.SSH.useLocalServer" = false;
+          "remote.SSH.remotePlatform" = {"*" = "linux";};
 
           # AI
           "github.copilot.editor.enableAutoCompletions" = true;
