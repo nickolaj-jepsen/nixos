@@ -197,11 +197,11 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1741112515,
-        "narHash": "sha256-UEMiUMp8UAJ7PG1FRPa6TEWRHGMs3SGgA1olHJBcRM4=",
+        "lastModified": 1741217919,
+        "narHash": "sha256-ZN7qlqgTNCFccKGBWygSZ5MY73PYYkEEGzLqlnux2Ks=",
         "owner": "nickolaj-jepsen",
         "repo": "fireproof-shell",
-        "rev": "221175c31b91832073c62bb90ed547fc006fb332",
+        "rev": "60f68b4b5db5dd119b97f116b7da74fb55ac143a",
         "type": "github"
       },
       "original": {

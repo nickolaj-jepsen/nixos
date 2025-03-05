@@ -17,6 +17,8 @@ in {
     settings = {
       monitor.main = (builtins.head config.monitors).name or "";
       launcher.uwsm = true;
+      notification.ignore = ["/^Spotify/"];
+      tray.ignore = ["/spotify/"];
     };
   };
 
