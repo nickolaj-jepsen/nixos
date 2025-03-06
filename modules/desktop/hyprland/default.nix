@@ -246,6 +246,7 @@ in {
             "SUPER, RETURN, exec, ${getExe config.programs.uwsm.package} app -- ${cfg.default-apps.terminal}"
             "SUPER, BACKSPACE, killactive"
             "SUPER, SPACE, exec, astal launcher"
+            "SUPER, semicolon, exec, astal launcher .e"
             "SUPER, p, exec, ${getExe config.programs.uwsm.package} app -- loginctl lock-session"
 
             ", Print, exec, ${lib.getExe pkgs.grimblast} save area - | ${lib.getExe pkgs.satty} -f -"
