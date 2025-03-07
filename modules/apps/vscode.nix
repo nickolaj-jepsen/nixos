@@ -5,13 +5,9 @@
   lib,
   ...
 }: let
-  # stable = inputs.nix-vscode-extensions.extensions.${pkgs.system}.vscode-marketplace-release;
-  nix-vscode-extensions = (inputs.nix-vscode-extensions.overlays.default pkgs pkgsUnstable);
-  # vscode-extensions =  nix-vscode-extensions.extensions.${pkgs.system};
   vscodePackage = pkgsUnstable.vscode;
-  vscodeMarketplace = nix-vscode-extensions.vscode-marketplace;
-  vscodeMarketplaceRelease = nix-vscode-extensions.vscode-marketplace-release;
-  vscodePkgs = vscodeMarketplace // vscodeMarketplaceRelease; # Prefer release over pre-release
+  vscode-extensions = inputs.nix-vscode-extensions.extensions.${pkgs.system};
+  vscodePkgs = vscode-extensions.vscode-marketplace // vscode-extensions.vscode-marketplace-release; # Prefer release over pre-release
 
   mkFormatter = formatter: languages: {
     "[${lib.concatStringsSep "][" languages}]" = {
@@ -19,6 +15,9 @@
       "editor.formatOnSave" = true;
     };
   };
+
+  # I can't get nix-vscode-extensions to respect allowUnfree, so this is a workaround
+  allowUnfree = ext: ext.override {meta.license = [];};
 in {
   fireproof.home-manager = {
     programs.vscode = {
@@ -59,11 +58,11 @@ in {
       ];
       extensions = with vscodePkgs; [
         # Remote
-        ms-vscode-remote.remote-ssh
+        (allowUnfree ms-vscode-remote.remote-ssh)
 
         # AI
-        github.copilot
-        github.copilot-chat
+        (allowUnfree github.copilot)
+        (allowUnfree github.copilot-chat)
 
         # Python
         ms-pyright.pyright

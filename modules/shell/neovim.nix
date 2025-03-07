@@ -1,61 +1,61 @@
 _: {
   config = {
-  programs.neovim = {
-    enable = true;
-    vimAlias = true;
-    defaultEditor = true;
-  };
-
-  programs.nvf = {
-    enable = true;
-
-    settings.vim = {
-      viAlias = true;
+    programs.neovim = {
+      enable = true;
       vimAlias = true;
+      defaultEditor = true;
+    };
 
-      lineNumberMode = "number";
+    programs.nvf = {
+      enable = true;
 
-      lsp = {
-        enable = true;
-        lightbulb.enable = true;
-      };
+      settings.vim = {
+        viAlias = true;
+        vimAlias = true;
 
-      languages = {
-        enableLSP = true;
-        enableFormat = true;
-        enableTreesitter = true;
+        lineNumberMode = "number";
 
-        nix.enable = true;
-        markdown.enable = true;
-        rust.enable = true;
-        sql.enable = true;
-        ts.enable = true;
-        html.enable = true;
-        python.enable = true;
-      };
+        lsp = {
+          enable = true;
+          lightbulb.enable = true;
+        };
 
-      git.enable = true;
+        languages = {
+          enableLSP = true;
+          enableFormat = true;
+          enableTreesitter = true;
 
-      telescope.enable = true;
-      autopairs.nvim-autopairs.enable = true;
-      autocomplete.blink-cmp.enable = true;
-      statusline.lualine.enable = true;
+          nix.enable = true;
+          markdown.enable = true;
+          rust.enable = true;
+          sql.enable = true;
+          ts.enable = true;
+          html.enable = true;
+          python.enable = true;
+        };
 
-      utility = {
-        ccc.enable = false;
-        vim-wakatime.enable = false;
-        icon-picker.enable = false;
-        motion.leap.enable = true;
-      };
-      ui = {
-        borders.enable = true;
-        colorizer.enable = true;
-      };
+        git.enable = true;
 
-      binds = {
-        whichKey.enable = true;
+        telescope.enable = true;
+        autopairs.nvim-autopairs.enable = true;
+        autocomplete.blink-cmp.enable = true;
+        statusline.lualine.enable = true;
+
+        utility = {
+          ccc.enable = false;
+          vim-wakatime.enable = false;
+          icon-picker.enable = false;
+          motion.leap.enable = true;
+        };
+        ui = {
+          borders.enable = true;
+          colorizer.enable = true;
+        };
+
+        binds = {
+          whichKey.enable = true;
+        };
       };
     };
   };
-};
 }
