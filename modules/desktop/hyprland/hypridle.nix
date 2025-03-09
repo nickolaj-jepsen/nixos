@@ -2,13 +2,12 @@
   config,
   pkgs,
   ...
-}:
-let 
-sleep_cmd = "${config.programs.hyprland.package}/bin/hyprctl dispatch dpms off";
-wake_cmd = "${config.programs.hyprland.package}/bin/hyprctl dispatch dpms on";
-lock_cmd = "pidof ${pkgs.hyprlock}/bin/hyprlock || ${pkgs.hyprlock}/bin/hyprlock";
+}: let
+  sleep_cmd = "${config.programs.hyprland.package}/bin/hyprctl dispatch dpms off";
+  wake_cmd = "${config.programs.hyprland.package}/bin/hyprctl dispatch dpms on";
+  lock_cmd = "pidof ${pkgs.hyprlock}/bin/hyprlock || ${pkgs.hyprlock}/bin/hyprlock";
 in {
-  config = {    
+  config = {
     fireproof.home-manager.services.hypridle = {
       enable = true;
       settings = {

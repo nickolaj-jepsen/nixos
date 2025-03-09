@@ -67,7 +67,7 @@ deploy-remote hostname target:
         --flake .#{{ hostname }} \
         --disk-encryption-keys /luks-password <(just age -d ./secrets/luks-password.age) \
         --extra-files "$temp" \
-        --target-host "{{ target }}" {{ nix_output_monitor }}
+        --target-host "{{ target }}"
 
 [doc('A wrapper disko-install')]
 [group('deploy')]

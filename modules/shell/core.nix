@@ -1,5 +1,7 @@
 {pkgs, ...}: {
   config = {
+    environment.enableAllTerminfo = true;
+
     environment.systemPackages = with pkgs; [
       # Man pages
       man-pages
