@@ -2,6 +2,7 @@
   pkgsUnstable,
   pkgs,
   inputs,
+  config,
   lib,
   ...
 }: let
@@ -12,7 +13,6 @@
   mkFormatter = formatter: languages: {
     "[${lib.concatStringsSep "][" languages}]" = {
       "editor.defaultFormatter" = formatter;
-      "editor.formatOnSave" = true;
     };
   };
 
@@ -25,14 +25,27 @@ in {
       package = vscodePackage;
       enableUpdateCheck = true;
       enableExtensionUpdateCheck = true;
+      keybindings = [
+        {
+          "key" = "ctrl+shift+p";
+          "command" = "editor.action.formatDocument";
+        }
+      ];
       userSettings = lib.mkMerge [
         {
           # General
           "extensions.ignoreRecommendations" = true;
+          "telemetry.telemetryLevel" = "off";
+
+          # Editor
+          "editor.linkedEditing" = true;
+
+          # Files
+          "files.autoSave" = "afterDelay";
 
           # Remote
           "remote.SSH.useLocalServer" = false;
-          "remote.SSH.remotePlatform" = {"*" = "linux";};
+          "remote.SSH.remotePlatform" = lib.mapAttrs (_name: _value: "linux") config.fireproof.home-manager.programs.ssh.matchBlocks;
 
           # AI
           "github.copilot.editor.enableAutoCompletions" = true;
@@ -41,6 +54,7 @@ in {
           # Theme
           "workbench.colorTheme" = "Darcula Theme from IntelliJ";
           "window.titleBarStyle" = "custom";
+          "editor.fontFamily" = "'Hack Nerd Font', 'Hack', 'monospace', monospace";
 
           # Keybindings
           "workbench.commandPalette.experimental.suggestCommands" = true; # Emulates IntelliJ's "Search Everywhere"
@@ -48,7 +62,6 @@ in {
           # nix-ide
           "nix.enableLanguageServer" = true;
           "nix.serverPath" = lib.getExe pkgs.nil;
-
           "nix.serverSettings" = {
             nil.formatting.command = ["nix" "fmt" "--" "--"];
           };
@@ -63,6 +76,9 @@ in {
         # AI
         (allowUnfree github.copilot)
         (allowUnfree github.copilot-chat)
+
+        # Git(hub)
+        github.vscode-pull-request-github
 
         # Python
         ms-pyright.pyright
