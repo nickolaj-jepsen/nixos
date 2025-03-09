@@ -96,5 +96,13 @@ in {
         ../modules/devenv.nix
       ];
     };
+    homelab = mkSystem {
+      hostname = "homelab";
+      username = "nickolaj";
+      modules = [
+        ../modules/required.nix
+        ../modules/shell.nix
+      ];
+    };
   };
 }
