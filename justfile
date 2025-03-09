@@ -1,6 +1,7 @@
 # export NIXPKGS_ALLOW_UNFREE := "1"
 
 nixcmd := "nix --experimental-features 'nix-command flakes'"
+nix_output_monitor := "--log-format internal-json |& nix --experimental-features 'nix-command flakes' run nixpkgs#nix-output-monitor -- --json"
 
 @_default:
     just --list
@@ -31,21 +32,21 @@ factor hostname=`hostname -s` target='':
 
 [doc('Wrapper for nixos-rebuild switch')]
 [group("deploy")]
-switch hostname=`hostname -s` target='': (build-system hostname)
+switch hostname=`hostname -s` target='':
     #!/usr/bin/env -S bash -e
     target="{{ target }}"
     if [ -z "$target" ]; then
-        sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch --fast --flake .#{{ hostname }} 
+        sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch --fast --flake .#{{ hostname }} {{ nix_output_monitor }}
     else
         {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch \
             --flake .#{{ hostname }} \
             --target-host {{ target }} \
-            --use-remote-sudo
+            --use-remote-sudo {{ nix_output_monitor }}
     fi
 
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
-deploy-remote hostname target: (build-system hostname)
+deploy-remote hostname target:
     #!/usr/bin/env -S bash -e
     git add .
 
@@ -66,12 +67,12 @@ deploy-remote hostname target: (build-system hostname)
         --flake .#{{ hostname }} \
         --disk-encryption-keys /luks-password <(just age -d ./secrets/luks-password.age) \
         --extra-files "$temp" \
-        --target-host "{{ target }}"
+        --target-host "{{ target }}" {{ nix_output_monitor }}
 
 [doc('A wrapper disko-install')]
 [group('deploy')]
-disko-install hostname disk: (build-system hostname)
-    sudo {{ nixcmd }} run 'github:nix-community/disko/latest#disko-install' -- --flake .#{{ hostname }} --disk main {{ disk }}
+disko-install hostname disk:
+    sudo {{ nixcmd }} run 'github:nix-community/disko/latest#disko-install' -- --flake .#{{ hostname }} --disk main {{ disk }} {{ nix_output_monitor }}
 
 [doc('Build an install ISO for a host')]
 [group('deploy')]
