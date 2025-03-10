@@ -5,12 +5,14 @@
   ];
 
   services.gvfs.enable = true;
-  programs.dconf.enable = true;
+  programs = {
+    dconf.enable = true;
+    nautilus-open-any-terminal.enable = true;
+    seahorse.enable = true;
+    evince.enable = true;
+  };
 
   services.gnome.sushi.enable = true;
-  programs.nautilus-open-any-terminal.enable = true;
-  programs.seahorse.enable = true;
-  programs.evince.enable = true;
 
   fireproof.home-manager = {
     home.pointerCursor = {
