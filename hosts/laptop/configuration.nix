@@ -4,6 +4,10 @@
     enable = true;
   };
 
+  networking.networkmanager.enable = true;
+  users.users.nickolaj.extraGroups = [ "networkmanager" ];
+  programs.nm-applet.enable = true;
+
   # Load nvidia driver for Xorg and Wayland
   services.xserver.videoDrivers = ["nvidia"];
 
