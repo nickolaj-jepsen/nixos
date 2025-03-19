@@ -10,6 +10,7 @@
     ./desktop/qt.nix
     ./apps/spotify.nix
     ./apps/firefox.nix
+    ./apps/chromium.nix
     ./apps/ghostty.nix
     ./apps/slack.nix
     ./apps/obsidian.nix
