@@ -34,16 +34,30 @@ in {
           user = "server";
         };
         # Work hostnames definded in ./networking.nix
-        "*.ao" = {
+        "bastion.ao" = {
           user = "nij";
           identityFile = "${config.age.secrets.ssh-key-ao.path}";
         };
-        "dev.ao".proxyJump = lib.mkDefault "bastion.ao";
-        "scw.ao".proxyJump = lib.mkDefault "dev.ao";
-        "clickhouse.ao".user = "ubuntu";
+        "clickhouse.ao" = {
+          user = "ubuntu";
+          proxyJump = lib.mkDefault "bastion.ao";
+          identityFile = "${config.age.secrets.ssh-key-ao.path}";
+        };
         "flex.ao" = {
+          user = "nij";
           hostname = "192.168.2.5";
           proxyJump = "bastion.ao";
+          identityFile = "${config.age.secrets.ssh-key-ao.path}";
+        };
+        "scw.ao" = {
+          user = "nij";
+          proxyJump = lib.mkDefault "dev.ao";
+          identityFile = "${config.age.secrets.ssh-key-ao.path}";
+        };
+        "dev.ao" = {
+          user = "nij";
+          proxyJump = lib.mkDefault "bastion.ao";
+          identityFile = "${config.age.secrets.ssh-key-ao.path}";
         };
       };
     };
