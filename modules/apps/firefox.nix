@@ -30,6 +30,7 @@ in {
           ublock-origin
           clearurls
           libredirect
+          smartproxy
 
           # Security
           bitwarden
