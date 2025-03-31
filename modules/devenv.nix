@@ -10,5 +10,6 @@
     ./dev/docker.nix
     ./dev/tilt.nix
     ./dev/postgres.nix
+    ./dev/clickhouse.nix
   ];
 }
