@@ -56,6 +56,7 @@ in {
         };
         "dev.ao" = {
           user = "nij";
+          hostname = "192.168.2.28";
           proxyJump = lib.mkDefault "bastion.ao";
           identityFile = "${config.age.secrets.ssh-key-ao.path}";
         };
