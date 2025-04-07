@@ -1,4 +1,8 @@
-{pkgs, lib, ...}: {
+{
+  pkgs,
+  lib,
+  ...
+}: {
   environment.systemPackages = with pkgs; [
     git
     gh
@@ -16,7 +20,8 @@
       gpg.ssh.program = "op-ssh-sign";
       push.autosetupremote = "true";
       pull.rebase = "true";
-      rebase.autosqush = "true";
+      rebase.autosquash = "true";
+      rebase.autoStash = "true";
       rerere.enabled = true;
       init.defaultBranch = "main";
     };
