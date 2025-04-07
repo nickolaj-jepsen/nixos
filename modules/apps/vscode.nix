@@ -6,7 +6,16 @@
   lib,
   ...
 }: let
-  vscodePackage = pkgsUnstable.vscode;
+  vscodePackage = pkgsUnstable.vscode.overrideAttrs (_old: let
+    version = "1.99.0";
+  in {
+    src = pkgs.fetchurl {
+      name = "VSCode_${version}_linux-x64.tar.gz";
+      url = "https://update.code.visualstudio.com/${version}/linux-x64/stable";
+      sha256 = "sha256-ojUaCVrrQozw3CYkWEimAphMoxhEb3a+TffPV9VAurk=";
+    };
+  });
+
   vscode-extensions = inputs.nix-vscode-extensions.extensions.${pkgs.system};
   vscodePkgs = vscode-extensions.vscode-marketplace // vscode-extensions.vscode-marketplace-release; # Prefer release over pre-release
 
@@ -50,6 +59,10 @@ in {
           # AI
           "github.copilot.editor.enableAutoCompletions" = true;
           "github.copilot.enable" = {"*" = true;};
+          "chat.agent.enabled" = true;
+          "github.copilot.chat.agent.thinkingTool" = true;
+          "github.copilot.chat.codesearch.enabled" = true;
+          "github.copilot.nextEditSuggestions.enabled" = true;
 
           # Theme
           "workbench.colorTheme" = "Darcula Theme from IntelliJ";
