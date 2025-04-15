@@ -65,6 +65,8 @@ in {
   imports = [
     ./hyprpolkitagent.nix
     ./hyprpaper.nix
+    ./hyprlock.nix
+    ./hypridle.nix
   ];
 
   config = {
@@ -132,7 +134,10 @@ in {
             )
             config.monitors;
 
-          exec = ["systemctl --user start hyprpaper"];
+          exec = [
+            "systemctl --user start hyprpaper"
+            "systemctl --user start hypridle"
+          ];
 
           input = {
             # Most unknown keyboards will be of the DK layout, we set known keyboards to eu in `devices`
@@ -247,7 +252,7 @@ in {
             "SUPER, BACKSPACE, killactive"
             "SUPER, SPACE, exec, astal launcher"
             "SUPER, semicolon, exec, astal launcher .e"
-            "SUPER, p, exec, ${getExe config.programs.uwsm.package} app -- loginctl lock-session"
+            "SUPER, p, exec, ${getExe config.programs.uwsm.package} app -- ${pkgs.systemd}/bin/loginctl lock-session"
 
             ", Print, exec, ${lib.getExe pkgs.grimblast} save area - | ${lib.getExe pkgs.satty} -f -"
             "SHIFT, Print, exec, ${lib.getExe pkgs.grimblast} --freeze save area - | ${lib.getExe pkgs.satty} -f -"
