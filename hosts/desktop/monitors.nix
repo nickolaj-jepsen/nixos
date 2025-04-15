@@ -1,7 +1,7 @@
 _: {
   monitors = [
     {
-      name = "DP-2";
+      name = "DP-3";
       resolution = "2560x1440";
       refreshRate = 144;
       position = "2560x1080";
@@ -19,7 +19,7 @@ _: {
       position = "5120x1080";
     }
     {
-      name = "DP-3";
+      name = "DP-2";
       resolution = "1920x1080";
       refreshRate = 60;
       position = "2880x0";

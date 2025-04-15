@@ -40,7 +40,7 @@ in {
         };
         "clickhouse.ao" = {
           user = "ubuntu";
-          proxyJump = lib.mkDefault "bastion.ao";
+          hostname = "51.158.205.48";
           identityFile = "${config.age.secrets.ssh-key-ao.path}";
         };
         "flex.ao" = {

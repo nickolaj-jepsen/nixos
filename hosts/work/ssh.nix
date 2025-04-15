@@ -10,7 +10,6 @@
       hostname = "192.168.2.6";
     };
     "clickhouse.ao" = {
-      hostname = "51.158.205.48";
       proxyJump = "bastion.ao";
     };
     "server" = {
