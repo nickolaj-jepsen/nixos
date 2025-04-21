@@ -29,9 +29,9 @@ in {
         "*" = {
           identityFile = "${config.age.secrets.ssh-key.path}";
         };
-        server = {
+        homelab = {
           hostname = "x.nickolaj.com";
-          user = "server";
+          user = "nickolaj";
         };
         # Work hostnames definded in ./networking.nix
         "bastion.ao" = {
