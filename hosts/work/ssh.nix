@@ -12,7 +12,7 @@
     "clickhouse.ao" = {
       proxyJump = "bastion.ao";
     };
-    "server" = {
+    homelab = {
       proxyJump = "bastion.ao";
     };
   };
