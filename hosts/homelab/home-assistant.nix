@@ -5,7 +5,7 @@
   ...
 }: let
   mosquittoPort = 1883;
-  zigbee2mqttPort = 8080;
+  zigbee2mqttPort = 8180;
   homeAssistantPort = 8123;
 in {
   age.secrets = {
@@ -29,6 +29,11 @@ in {
   ];
 
   services = {
+    restic.backups.homelab.paths = [
+      config.services.zigbee2mqtt.dataDir
+      config.services.home-assistant.configDir
+    ];
+
     nginx.virtualHosts = {
       "zigbee.nickolaj.com" = {
         enableACME = true;

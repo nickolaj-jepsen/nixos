@@ -14,5 +14,7 @@ in {
   services.plex = {
     enable = true;
     openFirewall = true;
+    user = "media";
+    group = "media";
   };
 }

@@ -2,6 +2,8 @@ _: let
   dataDir = "/var/lib/flame";
   domain = "flame.nickolaj.com";
 in {
+  services.restic.backups.homelab.paths = [dataDir];
+
   services.nginx.virtualHosts."${domain}" = {
     enableACME = true;
     forceSSL = true;
