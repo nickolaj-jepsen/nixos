@@ -1,20 +1,13 @@
 {
   lib,
   config,
-  inputs,
   pkgs,
+  pkgsUnstable,
   ...
 }:
 with lib; let
   cfg = config.fireproof;
   primaryMonitorName = (builtins.head config.monitors).name or "";
-
-  hyprPkgs = {
-    inherit (inputs.hyprland.packages.${pkgs.system}) hyprland;
-    inherit (inputs.hyprland.packages.${pkgs.system}) xdg-desktop-portal-hyprland;
-    mesa = inputs.hyprland.inputs.nixpkgs.legacyPackages.${pkgs.system}.mesa.drivers;
-    mesa32 = inputs.hyprland.inputs.nixpkgs.legacyPackages.${pkgs.system}.pkgsi686Linux.mesa.drivers;
-  };
 
   color = {
     bg = "rgb(1C1B1A)";
@@ -72,8 +65,8 @@ in {
   config = {
     programs.uwsm.enable = true;
     programs.hyprland = {
-      package = hyprPkgs.hyprland;
-      portalPackage = hyprPkgs.xdg-desktop-portal-hyprland;
+      package = pkgsUnstable.hyprland;
+      portalPackage = pkgsUnstable.xdg-desktop-portal-hyprland;
       enable = true;
       withUWSM = true;
       xwayland.enable = true;
@@ -82,14 +75,6 @@ in {
     security.polkit.enable = true;
     services.dbus.enable = true;
     services.systembus-notify.enable = true;
-
-    hardware = {
-      graphics = {
-        enable = true;
-        package = hyprPkgs.mesa;
-        package32 = hyprPkgs.mesa32;
-      };
-    };
 
     environment.sessionVariables.NIXOS_OZONE_WL = "1";
     environment.systemPackages = with pkgs; [
