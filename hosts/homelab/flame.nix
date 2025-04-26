@@ -2,7 +2,10 @@ _: let
   dataDir = "/var/lib/flame";
   domain = "flame.nickolaj.com";
 in {
-  services.restic.backups.homelab.paths = [dataDir];
+  services.restic.backups.homelab = {
+    paths = [dataDir];
+    exclude = ["/var/lib/flame/db_backups"];
+  };
 
   services.nginx.virtualHosts."${domain}" = {
     enableACME = true;

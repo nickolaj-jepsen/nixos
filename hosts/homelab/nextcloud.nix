@@ -27,6 +27,9 @@
         adminpassFile = "${config.age.secrets.nextcloud-admin-pass.path}";
         dbtype = "pgsql";
       };
+      extraApps = {
+        inherit (config.services.nextcloud.package.packages.apps) sociallogin;
+      };
     };
   };
 }

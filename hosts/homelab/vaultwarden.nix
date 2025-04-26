@@ -11,7 +11,13 @@ in {
         ROCKET_PORT = 8222;
       };
     };
-    restic.backups.homelab.paths = ["/var/lib/vaultwarden"];
+    restic.backups.homelab = {
+      paths = ["/var/lib/vaultwarden"];
+      exclude = [
+        "/var/lib/vaultwarden/icon_cache"
+        "/var/lib/vaultwarden/tmp"
+      ];
+    };
 
     nginx.virtualHosts."${domain}" = {
       enableACME = true;

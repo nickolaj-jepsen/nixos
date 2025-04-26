@@ -12,18 +12,15 @@
     locations."/" = {
       proxyPass = "http://localhost:${toString port}";
     };
-    basicAuthFile = "${config.age.secrets.arr-basic-auth.path}";
+    locations."/api" = {
+      proxyPass = "http://localhost:${toString port}";
+      extraConfig = ''
+        auth_request off;
+      '';
+    };
   };
 in {
   # for linux ISOs
-  age.secrets = {
-    arr-basic-auth = {
-      rekeyFile = ../../secrets/hosts/homelab/basic-auth.age;
-      owner = config.services.nginx.user;
-      inherit (config.services.nginx) group;
-    };
-  };
-
   users.groups."${group}" = {
     members = [username];
   };
@@ -33,19 +30,37 @@ in {
   };
 
   services = {
+    oauth2-proxy.nginx.virtualHosts = {
+      "radarr.nickolaj.com".allowed_groups = ["arr"];
+      "sonarr.nickolaj.com".allowed_groups = ["arr"];
+      "prowlarr.nickolaj.com".allowed_groups = ["arr"];
+      "sabnzbd.nickolaj.com".allowed_groups = ["arr"];
+      "bazarr.nickolaj.com".allowed_groups = ["arr"];
+    };
     nginx.virtualHosts = {
       "radarr.nickolaj.com" = mkVirtualHost 7878;
       "sonarr.nickolaj.com" = mkVirtualHost 8989;
       "prowlarr.nickolaj.com" = mkVirtualHost 9696;
       "sabnzbd.nickolaj.com" = mkVirtualHost 8080;
+      "bazarr.nickolaj.com" = mkVirtualHost config.services.bazarr.listenPort;
     };
 
-    restic.backups.homelab.paths = [
-      "/var/lib/radarr"
-      "/var/lib/sonarr"
-      "/var/lib/prowlarr"
-      "/var/lib/sabnzbd"
-    ];
+    restic.backups.homelab = {
+      paths = [
+        "/var/lib/radarr"
+        "/var/lib/sonarr"
+        "/var/lib/prowlarr"
+        "/var/lib/sabnzbd"
+        "/var/lib/bazarr"
+      ];
+      exclude = [
+        # arrs logs and media cover
+        "/var/lib/*/.config/*/logs/"
+        "/var/lib/*/.config/*/MediaCover/"
+        "/var/lib/sabnzbd/Downloads/"
+        "/var/lib/sabnzbd/logs/"
+      ];
+    };
 
     sabnzbd = {
       inherit user group;
@@ -56,6 +71,10 @@ in {
       enable = true;
     };
     sonarr = {
+      inherit user group;
+      enable = true;
+    };
+    bazarr = {
       inherit user group;
       enable = true;
     };

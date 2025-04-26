@@ -3,7 +3,11 @@ _: {
 
   services.nginx = {
     enable = true;
+    recommendedTlsSettings = true;
+    recommendedOptimisation = true;
     recommendedProxySettings = true;
+    recommendedGzipSettings = true;
+    recommendedBrotliSettings = true;
   };
   security.acme = {
     acceptTerms = true;

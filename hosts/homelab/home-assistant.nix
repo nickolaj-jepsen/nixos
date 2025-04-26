@@ -14,11 +14,6 @@ in {
       owner = "zigbee2mqtt";
       group = "zigbee2mqtt";
     };
-    z2m-basic-auth = {
-      rekeyFile = ../../secrets/hosts/homelab/basic-auth.age;
-      owner = config.services.nginx.user;
-      inherit (config.services.nginx) group;
-    };
     mosquitto-zigbee2mqtt.rekeyFile = ../../secrets/hosts/homelab/mosquitto-zigbee2mqtt.age;
     mosquitto-sas.rekeyFile = ../../secrets/hosts/homelab/mosquitto-sas.age;
     mosquitto-ha.rekeyFile = ../../secrets/hosts/homelab/mosquitto-ha.age;
@@ -29,11 +24,17 @@ in {
   ];
 
   services = {
-    restic.backups.homelab.paths = [
-      config.services.zigbee2mqtt.dataDir
-      config.services.home-assistant.configDir
-    ];
+    restic.backups.homelab = {
+      paths = [
+        config.services.zigbee2mqtt.dataDir
+        config.services.home-assistant.configDir
+      ];
+      exclude = [
+        "/var/lib/zigbee2mqtt/log/"
+      ];
+    };
 
+    oauth2-proxy.nginx.virtualHosts."zigbee.nickolaj.com".allowed_groups = ["iot-admin"];
     nginx.virtualHosts = {
       "zigbee.nickolaj.com" = {
         enableACME = true;
@@ -42,7 +43,6 @@ in {
           proxyPass = "http://localhost:${toString zigbee2mqttPort}";
           proxyWebsockets = true;
         };
-        basicAuthFile = "${config.age.secrets.z2m-basic-auth.path}";
       };
       "ha.nickolaj.com" = {
         enableACME = true;
