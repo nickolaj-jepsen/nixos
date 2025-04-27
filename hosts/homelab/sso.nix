@@ -1,4 +1,8 @@
-{config, pkgsUnstable, ...}: let
+{
+  config,
+  pkgsUnstable,
+  ...
+}: let
   port = 9190;
   rootDomain = "nickolaj.com";
   zitadelDomain = "sso.${rootDomain}";
