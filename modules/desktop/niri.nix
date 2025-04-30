@@ -1,4 +1,18 @@
-{pkgsUnstable, ...}: {
+{pkgsUnstable, pkgs, lib, inputs, ...}:
+let
+  mesa-nixpkgs =
+    import
+      (fetchTarball {
+        url = "https://github.com/NixOS/nixpkgs/archive/d3c42f187194c26d9f0309a8ecc469d6c878ce33.tar.gz";
+        sha256 = "sha256:0bmnxsn9r4qfslg4mahsl9y9719ykifbazpxxn1fqf47zbbanxkh";
+      }
+      )
+      {
+        inherit (pkgs.stdenv.hostPlatform) system;
+        config = { };
+        overlays = [ ];
+      };
+in {
   # TODO: Move these to a separate module
   fireproof.home-manager.programs.waybar = {
     enable = true;
@@ -87,16 +101,14 @@
       #tray > .needs-attention {
           -gtk-icon-effect: highlight;
           background-color: #eb4d4b;
-      }
-      #tray > .active {
-          -gtk-icon-effect: highlight;
-          background-color: #eb4d4b;
       }'';
   };
 
   programs.niri = {
     enable = true;
-    package = pkgsUnstable.niri;
+    # package = (pkgsUnstable.niri.override { inherit (mesa-nixpkgs) libgbm; });
+    # package = pkgsUnstable.niri;
+    package = inputs.niri.packages."${pkgs.system}".niri-unstable;
   };
   fireproof.home-manager.programs.niri.settings = {
     prefer-no-csd = true;
@@ -127,6 +139,7 @@
     input = {
       focus-follows-mouse.enable = true;
       mouse.accel-profile = "flat";
+      keyboard.xkb.layout = "eu";
     };
     window-rules = [
       {
@@ -212,8 +225,9 @@
       "Mod+F".action.maximize-column = {};
       "Mod+Shift+F".action.fullscreen-window = {};
       "Mod+A".action.toggle-column-tabbed-display = {};
-      "Mod+C".action.center-column = {};
+      "Mod+D".action.toggle-overview = {};
       "Mod+S".action.toggle-window-floating = {};
+      "Mod+C".action.switch-preset-column-width = {};
 
       "Mod+Z".action.set-column-width = "-5%";
       "Mod+X".action.set-column-width = "+5%";

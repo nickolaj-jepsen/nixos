@@ -48,6 +48,10 @@ in {
 
           # Editor
           "editor.linkedEditing" = true;
+          "files.exclude" = {
+            "**/*.egg-info" = true;
+            "**/__pycache__" = true;
+          };
 
           # Files
           "files.autoSave" = "afterDelay";
@@ -58,7 +62,12 @@ in {
 
           # AI
           "github.copilot.editor.enableAutoCompletions" = true;
-          "github.copilot.enable" = {"*" = true;};
+          "github.copilot.enable" = {
+            "*" = true;
+            "plaintext" = true;
+            "markdown" = true;
+            "scminput" = true;
+          };
           "chat.agent.enabled" = true;
           "github.copilot.chat.agent.thinkingTool" = true;
           "github.copilot.chat.codesearch.enabled" = true;

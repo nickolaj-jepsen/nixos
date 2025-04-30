@@ -25,6 +25,8 @@ in {
     programs.ssh = {
       enable = true;
       forwardAgent = true;
+      serverAliveInterval = 60;
+      serverAliveCountMax = 10;
       matchBlocks = {
         "*" = {
           identityFile = "${config.age.secrets.ssh-key.path}";
