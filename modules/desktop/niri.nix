@@ -112,6 +112,7 @@ in {
   };
   fireproof.home-manager.programs.niri.settings = {
     prefer-no-csd = true;
+    clipboard.disable-primary = true;
     spawn-at-startup = [
       {command = ["systemctl" "--user" "start" "hypridle"];}
       {command = ["systemctl" "--user" "start" "hyprpaper"];}
@@ -137,7 +138,10 @@ in {
       };
     };
     input = {
-      focus-follows-mouse.enable = true;
+      focus-follows-mouse = {
+        enable = true;
+        max-scroll-amount = "0%";
+      };
       mouse.accel-profile = "flat";
       keyboard.xkb.layout = "eu";
     };
@@ -152,6 +156,25 @@ in {
         };
       }
     ];
+
+    workspaces = { 
+      "01" = {
+        open-on-output = "DP-3";
+      };
+      "02" = {
+        open-on-output = "DP-3";
+      };
+      "03" = {
+        open-on-output = "DP-3";
+      };
+      "04" = {
+        open-on-output = "DP-3";
+      };
+      "05" = {
+        open-on-output = "DP-3";
+      };
+    };
+
     binds = {
       "XF86AudioRaiseVolume" = {
         allow-when-locked = true;
@@ -224,13 +247,14 @@ in {
 
       "Mod+F".action.maximize-column = {};
       "Mod+Shift+F".action.fullscreen-window = {};
-      "Mod+A".action.toggle-column-tabbed-display = {};
-      "Mod+D".action.toggle-overview = {};
+      "Mod+M".action.toggle-column-tabbed-display = {};
+      "Mod+A".action.toggle-overview = {};
       "Mod+S".action.toggle-window-floating = {};
       "Mod+C".action.switch-preset-column-width = {};
 
       "Mod+Z".action.set-column-width = "-5%";
       "Mod+X".action.set-column-width = "+5%";
+      "Mod+Ctrl+X".action.expand-column-to-available-width = {};
       "Mod+Shift+Z".action.set-window-height = "-5%";
       "Mod+Shift+X".action.set-window-height = "+5%";
 
@@ -244,16 +268,16 @@ in {
       "Mod+Shift+WheelScrollRight".action.move-column-right = {};
       "Mod+Shift+WheelScrollLeft".action.move-column-left = {};
 
-      "Mod+q".action.focus-workspace = 1;
-      "Mod+w".action.focus-workspace = 2;
-      "Mod+e".action.focus-workspace = 3;
-      "Mod+r".action.focus-workspace = 4;
-      "Mod+t".action.focus-workspace = 5;
-      "Mod+Shift+q".action.move-column-to-workspace = 1;
-      "Mod+Shift+w".action.move-column-to-workspace = 2;
-      "Mod+Shift+e".action.move-column-to-workspace = 3;
-      "Mod+Shift+r".action.move-column-to-workspace = 4;
-      "Mod+Shift+t".action.move-column-to-workspace = 5;
+      "Mod+q".action.focus-workspace = "01";
+      "Mod+w".action.focus-workspace = "02";
+      "Mod+e".action.focus-workspace = "03";
+      "Mod+r".action.focus-workspace = "04";
+      "Mod+t".action.focus-workspace = "05";
+      "Mod+Shift+q".action.move-column-to-workspace = "01";
+      "Mod+Shift+w".action.move-column-to-workspace = "02";
+      "Mod+Shift+e".action.move-column-to-workspace = "03";
+      "Mod+Shift+r".action.move-column-to-workspace = "04";
+      "Mod+Shift+t".action.move-column-to-workspace = "05";
 
       "Mod+Comma".action.consume-or-expel-window-left = {};
       "Mod+Period".action.consume-or-expel-window-right = {};
