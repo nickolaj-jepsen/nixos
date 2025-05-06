@@ -1,8 +1,8 @@
-{...}: {
+_: {
   services.keyd = {
     enable = true;
     keyboards.default = {
-      ids = [ "*" ];
+      ids = ["*"];
       settings = {
         main = {
           # Bind mouse-foward to meta+middlemouse if held

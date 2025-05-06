@@ -1,18 +1,8 @@
-{pkgsUnstable, pkgs, lib, inputs, ...}:
-let
-  mesa-nixpkgs =
-    import
-      (fetchTarball {
-        url = "https://github.com/NixOS/nixpkgs/archive/d3c42f187194c26d9f0309a8ecc469d6c878ce33.tar.gz";
-        sha256 = "sha256:0bmnxsn9r4qfslg4mahsl9y9719ykifbazpxxn1fqf47zbbanxkh";
-      }
-      )
-      {
-        inherit (pkgs.stdenv.hostPlatform) system;
-        config = { };
-        overlays = [ ];
-      };
-in {
+{
+  pkgs,
+  inputs,
+  ...
+}: {
   # TODO: Move these to a separate module
   fireproof.home-manager.programs.waybar = {
     enable = true;
@@ -47,7 +37,7 @@ in {
         color: #DAD8CE;
         border-bottom: 2px solid #CF6A4C;
       }
-          
+        
       #workspaces button.focused {
         background: #CF6A4C;
         color: #1C1B1A;
@@ -157,7 +147,7 @@ in {
       }
     ];
 
-    workspaces = { 
+    workspaces = {
       "01" = {
         open-on-output = "DP-3";
       };
