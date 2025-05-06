@@ -44,7 +44,6 @@ with lib; let
               inputs.nix-index-database.nixosModules.nix-index
               inputs.nixos-facter-modules.nixosModules.facter
               inputs.fireproof-shell.nixosModules.default
-              inputs.nvf.nixosModules.default
               inputs.niri.nixosModules.niri
               ../modules/base/user.nix
               (mkSystemImports hostname)
