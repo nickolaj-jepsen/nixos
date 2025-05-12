@@ -1,12 +1,12 @@
 _: {
   services.keyd = {
     enable = true;
-    keyboards.default = {
-      ids = ["*"];
+    keyboards.mouse = {
+      ids = [
+        "046d:c051:4ae65a29"  # Work mouse
+      ];
       settings = {
         main = {
-          # Bind mouse-foward to meta+middlemouse if held
-          mouse2 = "timeout(mouse2, 150, M-middlemouse)";
           # Bind mouse-back to meta if held
           mouse1 = "overload(meta, mouse1)";
         };
