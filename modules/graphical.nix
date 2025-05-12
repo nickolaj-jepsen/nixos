@@ -18,5 +18,6 @@
     ./apps/slack.nix
     ./apps/obsidian.nix
     ./apps/claude.nix
+    ./apps/ferdium.nix
   ];
 }
