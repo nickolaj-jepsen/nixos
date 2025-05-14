@@ -75,5 +75,8 @@
 
     niri.url = "github:sodiboo/niri-flake";
     niri.inputs.nixpkgs.follows = "nixpkgs";
+
+    zwift.url = "github:netbrain/zwift";
+    zwift.inputs.nixpkgs.follows = "nixpkgs";
   };
 }

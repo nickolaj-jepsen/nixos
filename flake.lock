@@ -162,11 +162,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1746729224,
-        "narHash": "sha256-9R4sOLAK1w3Bq54H3XOJogdc7a6C2bLLmatOQ+5pf5w=",
+        "lastModified": 1747226316,
+        "narHash": "sha256-INBPqK9ogSvw5Q9HJ5H7KI83v6Jc3goAnXN3b2F+eMU=",
         "owner": "nix-community",
         "repo": "disko",
-        "rev": "85555d27ded84604ad6657ecca255a03fd878607",
+        "rev": "490c0d6bd151e33caa5b2cf0ae37758234e947f6",
         "type": "github"
       },
       "original": {
@@ -659,11 +659,11 @@
         "treefmt-nix": "treefmt-nix_3"
       },
       "locked": {
-        "lastModified": 1747196235,
-        "narHash": "sha256-41VHCKCevxL7Luqwc9A2r3DPTOz6Ky+nRkHp1eurtmA=",
+        "lastModified": 1747219899,
+        "narHash": "sha256-CsPGzZJVK3MvrVVkAqSNjUfwdxKUr4jTB2hr5W71WEU=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "2378adbb9ebb4654dc0d41786609839b6ad4a7ef",
+        "rev": "82093385149d108c8bcb4ab01ce6de548ee55f03",
         "type": "github"
       },
       "original": {
@@ -712,7 +712,8 @@
         "nixpkgs": "nixpkgs_3",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nur": "nur",
-        "treefmt-nix": "treefmt-nix_4"
+        "treefmt-nix": "treefmt-nix_4",
+        "zwift": "zwift"
       }
     },
     "systems": {
@@ -868,6 +869,26 @@
       "original": {
         "owner": "Supreeeme",
         "repo": "xwayland-satellite",
+        "type": "github"
+      }
+    },
+    "zwift": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1744348724,
+        "narHash": "sha256-mNiG88qTYAonaH8zlAN6NsMFuPtY/pD7knQHii4b9vY=",
+        "owner": "netbrain",
+        "repo": "zwift",
+        "rev": "3ed8b1a620eb23b09335812a28bd891c98f2bd24",
+        "type": "github"
+      },
+      "original": {
+        "owner": "netbrain",
+        "repo": "zwift",
         "type": "github"
       }
     }
