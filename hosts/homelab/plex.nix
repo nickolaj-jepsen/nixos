@@ -1,4 +1,4 @@
-_: let
+{pkgsUnstable, ...}: let
   domain = "plex.nickolaj.com";
 in {
   services.nginx.virtualHosts."${domain}" = {
@@ -13,6 +13,7 @@ in {
 
   services.plex = {
     enable = true;
+    package = pkgsUnstable.plex;
     openFirewall = true;
     user = "media";
     group = "media";

@@ -92,7 +92,6 @@ in {
 
   services.oauth2-proxy = {
     enable = true;
-    package = pkgsUnstable.oauth2-proxy;
     provider = "oidc";
     reverseProxy = true;
     redirectURL = "https://${oathproxyDomain}/oauth2/callback";
