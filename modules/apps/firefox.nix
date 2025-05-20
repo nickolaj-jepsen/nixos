@@ -25,7 +25,7 @@ in {
       enable = true;
       package = pkgsUnstable.firefox;
       profiles.default = {
-        extensions = with extensions; [
+        extensions.packages = with extensions; [
           # Privacy
           ublock-origin
           clearurls

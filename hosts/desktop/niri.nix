@@ -2,8 +2,8 @@ _: {
   fireproof.home-manager.programs.niri.settings.outputs = {
     "DP-3" = {
       position = {
-        x = 0;
-        y = 1080;
+        x = 1920;
+        y = 0;
       };
       mode = {
         refresh = 164.998;
@@ -13,8 +13,8 @@ _: {
     };
     "DP-1" = {
       position = {
-        x = 2560;
-        y = 1080;
+        x = 4480;
+        y = 0;
       };
       mode = {
         refresh = 165.000;
@@ -22,14 +22,16 @@ _: {
         height = 1440;
       };
     };
-    "DP-2" = {
+    "HDMI-A-1" = {
       position = {
-        x = (2560 - 1920) / 2;
+        x = 0;
         y = 0;
       };
-    };
-    "HDMI-A-1" = {
-      enable = false;
+      mode = {
+        refresh = 60.000;
+        width = 1920;
+        height = 1080;
+      };
     };
   };
 }

@@ -21,11 +21,6 @@ with lib; let
   }:
     withSystem system (
       {system, ...}: let
-        pkgs = import inputs.nixpkgs {
-          inherit system;
-          config.allowUnfree = true;
-        };
-
         pkgsUnstable = import inputs.nixpkgs-unstable {
           inherit system;
           config.allowUnfree = true;
@@ -33,7 +28,7 @@ with lib; let
       in
         inputs.nixpkgs.lib.nixosSystem {
           inherit system;
-          specialArgs = {inherit inputs hostname username pkgs pkgsUnstable;};
+          specialArgs = {inherit inputs hostname username pkgsUnstable;};
           modules =
             [
               inputs.disko.nixosModules.disko
@@ -48,6 +43,7 @@ with lib; let
               inputs.zwift.nixosModules.zwift
               ../modules/base/user.nix
               (mkSystemImports hostname)
+              { nixpkgs.config.allowUnfree = true; }
             ]
             ++ modules
             ++ (

@@ -10,7 +10,7 @@ with lib; let
 in {
   options.fireproof = {
     home-manager = lib.mkOption {
-      type = options.home-manager.users.type.functor.wrapped;
+      type = options.home-manager.users.type.nestedTypes.elemType;
     };
   };
   config = {
@@ -19,7 +19,6 @@ in {
     users.users.${username} = {
       isNormalUser = true;
       extraGroups = ["wheel"];
-      # initialPassword = "password";
       hashedPasswordFile = secrets.hashed-user-password.path;
     };
 

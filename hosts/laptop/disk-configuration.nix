@@ -14,13 +14,21 @@ _: {
             };
 
             ESP = {
-              size = "512M";
+              size = "1G";
               type = "EF00";
               content = {
                 type = "filesystem";
                 format = "vfat";
                 mountpoint = "/boot";
                 mountOptions = ["defaults"];
+              };
+            };
+            windows = {
+              size = "150G";
+              type = "0700"; # for Microsoft basic data
+              content = {
+                type = "filesystem";
+                format = "ntfs";
               };
             };
             luks = {

@@ -1,6 +1,5 @@
 {
   config,
-  pkgsUnstable,
   ...
 }: {
   hardware = {
@@ -13,7 +12,6 @@
       package = config.boot.kernelPackages.nvidiaPackages.beta;
     };
   };
-  boot.kernelPackages = pkgsUnstable.linuxPackages_6_14;
   services.xserver.videoDrivers = ["nvidia"];
 
   fireproof.home-manager.wayland.windowManager.hyprland.settings = {
