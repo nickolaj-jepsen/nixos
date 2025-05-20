@@ -46,7 +46,5 @@
       };
     };
   };
-  fireproof.default-apps = {
-    terminal = "ghostty";
-  };
+  fireproof.base.defaults.terminal = "ghostty";
 }

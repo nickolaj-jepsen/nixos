@@ -41,7 +41,8 @@ with lib; let
               inputs.fireproof-shell.nixosModules.default
               inputs.niri.nixosModules.niri
               inputs.zwift.nixosModules.zwift
-              ../modules/base/user.nix
+              ../modules/base
+              ../modules/programs
               (mkSystemImports hostname)
               { nixpkgs.config.allowUnfree = true; }
             ]
@@ -57,49 +58,35 @@ in {
     bootstrap = mkSystem {
       hostname = "bootstrap";
       username = "nixos";
-      modules = [
-        ../modules/required.nix
-        ../modules/shell.nix
-      ];
     };
 
     laptop = mkSystem {
       hostname = "laptop";
       username = "nickolaj";
       modules = [
-        ../modules/required.nix
-        ../modules/shell.nix
-        ../modules/graphical.nix
-        ../modules/devenv.nix
+        ../legacy_modules/graphical.nix
+        ../legacy_modules/devenv.nix
       ];
     };
     desktop = mkSystem {
       hostname = "desktop";
       username = "nickolaj";
       modules = [
-        ../modules/required.nix
-        ../modules/shell.nix
-        ../modules/graphical.nix
-        ../modules/devenv.nix
+        ../legacy_modules/graphical.nix
+        ../legacy_modules/devenv.nix
       ];
     };
     work = mkSystem {
       hostname = "work";
       username = "nickolaj";
       modules = [
-        ../modules/required.nix
-        ../modules/shell.nix
-        ../modules/graphical.nix
-        ../modules/devenv.nix
+        ../legacy_modules/graphical.nix
+        ../legacy_modules/devenv.nix
       ];
     };
     homelab = mkSystem {
       hostname = "homelab";
       username = "nickolaj";
-      modules = [
-        ../modules/required.nix
-        ../modules/shell.nix
-      ];
     };
   };
 }

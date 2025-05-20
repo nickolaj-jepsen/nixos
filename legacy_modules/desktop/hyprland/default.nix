@@ -233,7 +233,7 @@ in {
           };
 
           bind = [
-            "SUPER, RETURN, exec, ${getExe config.programs.uwsm.package} app -- ${cfg.default-apps.terminal}"
+            "SUPER, RETURN, exec, ${getExe config.programs.uwsm.package} app -- ${cfg.base.defaults.terminal}"
             "SUPER, BACKSPACE, killactive"
             "SUPER, SPACE, exec, astal launcher"
             "SUPER, semicolon, exec, astal launcher .e"
