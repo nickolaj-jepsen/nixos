@@ -12,5 +12,6 @@
     ./dev/postgres.nix
     ./dev/aider.nix
     ./dev/clickhouse.nix
+    ./dev/playwright.nix
   ];
 }
