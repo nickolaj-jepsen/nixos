@@ -17,6 +17,7 @@
         ${builtins.readFile ./theme.fish}
         ${builtins.readFile ./k8s.fish}
         ${builtins.readFile ./autocomplete.fish}
+        ${pkgs.nix-your-shell}/bin/nix-your-shell fish | source
 
       '';
       plugins = [
