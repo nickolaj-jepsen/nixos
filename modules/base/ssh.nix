@@ -62,6 +62,12 @@ in {
           proxyJump = lib.mkDefault "bastion.ao";
           identityFile = "${config.age.secrets.ssh-key-ao.path}";
         };
+        "staging.ao" = {
+          user = "staging";
+          hostname = "172.16.2.102";
+          proxyJump = lib.mkDefault "bastion.ao";
+          identityFile = "${config.age.secrets.ssh-key-ao.path}";
+        };
       };
     };
   };
