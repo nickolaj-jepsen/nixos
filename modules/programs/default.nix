@@ -9,5 +9,6 @@ _: {
     ./neovim.nix
     ./zellij.nix
     ./zoxide.nix
+    ./llm.nix
   ];
 }
