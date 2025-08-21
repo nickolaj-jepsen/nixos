@@ -1,4 +1,8 @@
-{pkgs, pkgsUnstable, ...}: {
+{
+  pkgs,
+  pkgsUnstable,
+  ...
+}: {
   environment.systemPackages = [
     pkgs.nodejs
     pkgsUnstable.pnpm

@@ -3,7 +3,7 @@ _: {
     enable = true;
     keyboards.mouse = {
       ids = [
-        "046d:c051:4ae65a29"  # Work mouse
+        "046d:c051:4ae65a29" # Work mouse
       ];
       settings = {
         main = {

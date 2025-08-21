@@ -44,7 +44,7 @@ with lib; let
               ../modules/base
               ../modules/programs
               (mkSystemImports hostname)
-              { nixpkgs.config.allowUnfree = true; }
+              {nixpkgs.config.allowUnfree = true;}
             ]
             ++ modules
             ++ (

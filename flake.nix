@@ -3,7 +3,6 @@
 
   outputs = {
     flake-parts,
-    nixpkgs,
     ...
   } @ inputs:
     flake-parts.lib.mkFlake {inherit inputs;} {
@@ -16,7 +15,6 @@
         "x86_64-linux"
         "aarch64-linux"
       ];
-
     };
 
   inputs = {

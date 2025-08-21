@@ -17,20 +17,26 @@
     };
   };
 
-  mkMcpStdio = {name, command, env ? {}}: let 
+  mkMcpStdio = {
+    name,
+    command,
+    env ? {},
+  }: let
     # If any of the envs values starts with ${input:...}, then we should create a new password input
     envValues = lib.attrValues env;
     inputEnvs = lib.filter (value: lib.hasPrefix "\${input:" value) envValues;
-    # Get the ids of the inputs 
+    # Get the ids of the inputs
     inputEnvsIds = lib.map (value: lib.substring 8 (lib.stringLength value - 9) value) inputEnvs;
   in {
     mcp = {
-      inputs = lib.map (value: {
-        "type" = "promptString";
-        "id" = value; # Assigning the name as the id
-        "description" = "Enter the password for ${value}";
-        "password" = true;
-      }) inputEnvsIds;
+      inputs =
+        lib.map (value: {
+          "type" = "promptString";
+          "id" = value; # Assigning the name as the id
+          "description" = "Enter the password for ${value}";
+          "password" = true;
+        })
+        inputEnvsIds;
       servers."${name}" = {
         "type" = "stdio";
         "command" = builtins.elemAt command 0;
@@ -39,7 +45,6 @@
       };
     };
   };
-
 
   # I can't get nix-vscode-extensions to respect allowUnfree, so this is a workaround
   allowUnfree = ext: ext.override {meta.license = [];};
@@ -108,8 +113,14 @@ in {
           }
           (mkFormatter "esbenp.prettier-vscode" ["json" "jsonc" "markdown" "css" "scss" "typescript" "typescriptreact" "html" "yaml"])
           (mkFormatter "charliermarsh.ruff" ["python"])
-          (mkMcpStdio {name = "linear"; command = ["npx" "mcp-remote" "https://mcp.linear.app/sse"];})
-          (mkMcpStdio {name = "sentry"; command = ["npx" "mcp-remote" "https://mcp.sentry.dev/sse"];})
+          (mkMcpStdio {
+            name = "linear";
+            command = ["npx" "mcp-remote" "https://mcp.linear.app/sse"];
+          })
+          (mkMcpStdio {
+            name = "sentry";
+            command = ["npx" "mcp-remote" "https://mcp.sentry.dev/sse"];
+          })
         ];
         extensions = with vscodePkgs; [
           # Remote

@@ -37,7 +37,7 @@
         color: #DAD8CE;
         border-bottom: 2px solid #CF6A4C;
       }
-        
+      
       #workspaces button.focused {
         background: #CF6A4C;
         color: #1C1B1A;
@@ -96,8 +96,6 @@
 
   programs.niri = {
     enable = true;
-    # package = (pkgsUnstable.niri.override { inherit (mesa-nixpkgs) libgbm; });
-    # package = pkgsUnstable.niri;
     package = inputs.niri.packages."${pkgs.system}".niri-unstable;
   };
   fireproof.home-manager.programs.niri.settings = {
@@ -149,19 +147,19 @@
 
     workspaces = {
       "01" = {
-        open-on-output = "DP-3";
+        open-on-output = "DP-5";
       };
       "02" = {
-        open-on-output = "DP-3";
+        open-on-output = "DP-5";
       };
       "03" = {
-        open-on-output = "DP-3";
+        open-on-output = "DP-5";
       };
       "04" = {
-        open-on-output = "DP-3";
+        open-on-output = "DP-5";
       };
       "05" = {
-        open-on-output = "DP-3";
+        open-on-output = "DP-5";
       };
     };
 

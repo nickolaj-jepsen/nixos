@@ -2,8 +2,7 @@
   username,
   config,
   ...
-}:
-let
+}: let
   inherit (config.age) secrets;
 in {
   config = {

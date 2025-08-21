@@ -1,5 +1,4 @@
-{pkgsUnstable, ...}:
-let 
+{pkgsUnstable, ...}: let
   pycharmPkg = pkgsUnstable.jetbrains.pycharm-professional.override {
     # -Dide.browser.jcef.enabled causes crashes on wayland
     vmopts = ''
@@ -11,7 +10,6 @@ let
   # pycharmWithPlugins = pkgsUnstable.jetbrains.plugins.addPlugins pycharmPkg [
   #   "github-copilot"
   # ];
-
 in {
   environment.systemPackages = [
     pycharmPkg

@@ -1,7 +1,4 @@
-{
-  config,
-  ...
-}: {
+{config, ...}: {
   age.secrets.hosts-private = {
     # Contains IP addresses that i have no business sharing
     rekeyFile = ../../secrets/hosts-private.age;
