@@ -11,6 +11,7 @@
     ./desktop/hyprland/default.nix
     ./desktop/gtk/default.nix
     ./desktop/qt.nix
+    ./desktop/screenshot.nix
     ./apps/spotify.nix
     ./apps/firefox.nix
     ./apps/chromium.nix
