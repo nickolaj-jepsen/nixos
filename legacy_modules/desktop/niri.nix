@@ -98,6 +98,12 @@ in {
       }'';
   };
 
+  xdg.portal = {
+    enable = true;
+    extraPortals = [pkgs.xdg-desktop-portal-gtk];
+    config.common.default = "gnome";
+    xdgOpenUsePortal = true;
+  };
   programs.niri = {
     enable = true;
     package = inputs.niri.packages."${pkgs.system}".niri-unstable;
@@ -111,6 +117,10 @@ in {
       {command = ["systemctl" "--user" "start" "mako"];}
       {command = ["systemctl" "--user" "start" "waybar"];}
     ];
+    environment = {
+      NIXOS_OZONE_WL = "1";
+      GDK_BACKEND = "wayland"; # Attempt to fix screen recording issue
+    };
     layout = {
       gaps = 10;
       focus-ring.enable = false;
