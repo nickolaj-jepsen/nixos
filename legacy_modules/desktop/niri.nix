@@ -306,6 +306,7 @@ in {
               inherit (monitor.resolution) width height;
               refresh = refreshRateFloat;
             };
+            focus-at-startup = monitor.name == primaryMonitorName;
             transform.rotation =
               if (monitor.transform != null)
               then monitor.transform * 90
