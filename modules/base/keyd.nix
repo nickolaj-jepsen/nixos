@@ -4,6 +4,7 @@ _: {
     keyboards.mouse = {
       ids = [
         "046d:c051:4ae65a29" # Work mouse
+        "046d:407f:ee6ee407" # Home mouse
       ];
       settings = {
         main = {
