@@ -101,16 +101,13 @@ in {
                   else "";
                 resolution =
                   if m.resolution != null
-                  then m.resolution
+                  then "${builtins.toString m.resolution.width}x${builtins.toString m.resolution.height}"
                   else "preferred";
                 refreshRate =
                   if m.refreshRate != null
                   then "@${builtins.toString m.refreshRate}"
                   else "";
-                position =
-                  if m.position != null
-                  then m.position
-                  else "auto";
+                position = "${builtins.toString m.position.x}x${builtins.toString m.position.y}";
                 transform =
                   if m.transform != null
                   then ", transform, ${builtins.toString m.transform}"

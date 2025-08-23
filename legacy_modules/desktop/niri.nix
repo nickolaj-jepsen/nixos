@@ -1,8 +1,12 @@
 {
   pkgs,
   inputs,
+  config,
+  lib,
   ...
-}: {
+}: let
+  primaryMonitorName = (builtins.head config.monitors).name or "";
+in {
   # TODO: Move these to a separate module
   fireproof.home-manager.programs.waybar = {
     enable = true;
@@ -145,21 +149,21 @@
       }
     ];
 
-    workspaces = {
+    workspaces = lib.mkIf (primaryMonitorName != "") {
       "01" = {
-        open-on-output = "DP-5";
+        open-on-output = primaryMonitorName;
       };
       "02" = {
-        open-on-output = "DP-5";
+        open-on-output = primaryMonitorName;
       };
       "03" = {
-        open-on-output = "DP-5";
+        open-on-output = primaryMonitorName;
       };
       "04" = {
-        open-on-output = "DP-5";
+        open-on-output = primaryMonitorName;
       };
       "05" = {
-        open-on-output = "DP-5";
+        open-on-output = primaryMonitorName;
       };
     };
 
@@ -280,5 +284,25 @@
       "Mod+Space".action.spawn = ["fuzzel"];
       "Mod+Backspace".action.close-window = {};
     };
+
+    outputs = lib.mkIf (config.monitors != []) (
+      lib.listToAttrs (map (monitor: let
+          refreshRateFloat = lib.mkIf (monitor.refreshRate != null) (builtins.fromJSON "${builtins.toString monitor.refreshRate}.0");
+        in {
+          inherit (monitor) name;
+          value = {
+            inherit (monitor) position;
+            mode = {
+              inherit (monitor.resolution) width height;
+              refresh = refreshRateFloat;
+            };
+            transform.rotation =
+              if (monitor.transform != null)
+              then monitor.transform * 90
+              else 0;
+          };
+        })
+        config.monitors)
+    );
   };
 }
