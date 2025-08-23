@@ -40,7 +40,6 @@ with lib; let
               inputs.nixos-facter-modules.nixosModules.facter
               inputs.fireproof-shell.nixosModules.default
               inputs.niri.nixosModules.niri
-              inputs.zwift.nixosModules.zwift
               ../modules/base
               ../modules/programs
               (mkSystemImports hostname)

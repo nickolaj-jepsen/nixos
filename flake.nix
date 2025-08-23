@@ -53,13 +53,7 @@
 
     nix-vscode-extensions.url = "github:nix-community/nix-vscode-extensions";
 
-    claude-desktop.url = "github:k3d3/claude-desktop-linux-flake";
-    claude-desktop.inputs.nixpkgs.follows = "nixpkgs";
-
     niri.url = "github:sodiboo/niri-flake";
     niri.inputs.nixpkgs.follows = "nixpkgs";
-
-    zwift.url = "github:netbrain/zwift";
-    zwift.inputs.nixpkgs.follows = "nixpkgs";
   };
 }
