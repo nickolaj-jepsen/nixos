@@ -5,6 +5,7 @@ _: {
     ./comma.nix
     ./core.nix
     ./git.nix
+    ./jujutsu.nix
     ./just.nix
     ./neovim.nix
     ./zellij.nix
