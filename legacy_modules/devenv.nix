@@ -13,5 +13,6 @@
     ./dev/aider.nix
     ./dev/clickhouse.nix
     ./dev/playwright.nix
+    ./dev/nats.nix
   ];
 }
