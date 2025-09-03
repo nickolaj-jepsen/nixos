@@ -10,6 +10,7 @@ _: {
     ./neovim.nix
     ./zellij.nix
     ./zoxide.nix
+    ./systemd-manager-tui.nix
     ./llm.nix
   ];
 }
