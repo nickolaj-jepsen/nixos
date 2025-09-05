@@ -1,4 +1,5 @@
 secrets/yubikey-identity.txt
+result
 
 # Avoid leaking ssh keys
 **/id_ed25519
