@@ -84,7 +84,6 @@ in {
             "remote.SSH.remotePlatform" = lib.mapAttrs (_name: _value: "linux") config.fireproof.home-manager.programs.ssh.matchBlocks;
 
             # AI
-            "github.copilot.editor.enableAutoCompletions" = true;
             "github.copilot.enable" = {
               "*" = true;
               "plaintext" = true;
@@ -95,6 +94,7 @@ in {
             "github.copilot.chat.agent.thinkingTool" = true;
             "github.copilot.chat.codesearch.enabled" = true;
             "github.copilot.nextEditSuggestions.enabled" = true;
+            "githubPullRequests.codingAgent.uiIntegration" = true;
 
             # Theme
             "workbench.colorTheme" = "Darcula Theme from IntelliJ";
@@ -113,14 +113,15 @@ in {
           }
           (mkFormatter "esbenp.prettier-vscode" ["json" "jsonc" "markdown" "css" "scss" "typescript" "typescriptreact" "html" "yaml"])
           (mkFormatter "charliermarsh.ruff" ["python"])
-          (mkMcpStdio {
-            name = "linear";
-            command = ["npx" "mcp-remote" "https://mcp.linear.app/sse"];
-          })
-          (mkMcpStdio {
-            name = "sentry";
-            command = ["npx" "mcp-remote" "https://mcp.sentry.dev/sse"];
-          })
+          # TODO: Enable when switching to 25.11
+          # (mkMcpStdio {
+          #   name = "linear";
+          #   command = ["npx" "mcp-remote" "https://mcp.linear.app/sse"];
+          # })
+          # (mkMcpStdio {
+          #   name = "sentry";
+          #   command = ["npx" "mcp-remote" "https://mcp.sentry.dev/sse"];
+          # })
         ];
         extensions = with vscodePkgs; [
           # Remote
