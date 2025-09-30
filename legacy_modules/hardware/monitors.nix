@@ -28,6 +28,12 @@
           example = 60;
         };
 
+        refreshRateNiri = lib.mkOption {
+          type = lib.types.nullOr lib.types.float;
+          default = null;
+          example = 60.0;
+        };
+
         position.x = lib.mkOption {
           type = lib.types.int;
           default = 0;

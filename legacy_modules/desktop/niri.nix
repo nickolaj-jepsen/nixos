@@ -296,15 +296,13 @@ in {
     };
 
     outputs = lib.mkIf (config.monitors != []) (
-      lib.listToAttrs (map (monitor: let
-          refreshRateFloat = lib.mkIf (monitor.refreshRate != null) (builtins.fromJSON "${builtins.toString monitor.refreshRate}.0");
-        in {
+      lib.listToAttrs (map (monitor:  {
           inherit (monitor) name;
           value = {
             inherit (monitor) position;
             mode = {
               inherit (monitor.resolution) width height;
-              refresh = refreshRateFloat;
+              refresh = monitor.refreshRateNiri or null;
             };
             focus-at-startup = monitor.name == primaryMonitorName;
             transform.rotation =
