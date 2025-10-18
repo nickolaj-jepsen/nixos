@@ -17,6 +17,13 @@ in {
     mosquitto-zigbee2mqtt.rekeyFile = ../../secrets/hosts/homelab/mosquitto-zigbee2mqtt.age;
     mosquitto-sas.rekeyFile = ../../secrets/hosts/homelab/mosquitto-sas.age;
     mosquitto-ha.rekeyFile = ../../secrets/hosts/homelab/mosquitto-ha.age;
+    hassSecrets = {
+      rekeyFile = ../../secrets/hosts/homelab/hass.yaml.age;
+      path = "${config.services.home-assistant.configDir}/secrets.yaml";
+      mode = "400";
+      owner = "hass";
+      group = "hass";
+    };
   };
 
   networking.firewall.allowedTCPPorts = [
@@ -56,8 +63,8 @@ in {
 
     home-assistant = {
       enable = true;
-      package = pkgsUnstable.home-assistant;
-      customComponents = with pkgsUnstable.home-assistant-custom-components; [
+      package = pkgs.home-assistant;
+      customComponents = with pkgs.home-assistant-custom-components; [
         adaptive_lighting
         sleep_as_android
         (pkgs.buildHomeAssistantComponent rec {
@@ -86,9 +93,9 @@ in {
       config = {
         homeassistant = {
           name = "Home";
-          latitude = "56.2";
-          longitude = "10.2";
-          elevation = "0";
+          latitude = "!secret latitude";
+          longitude = "!secret longitude";
+          elevation = "!secret elevation";
           unit_system = "metric";
           time_zone = "Europe/Copenhagen";
         };
@@ -102,7 +109,7 @@ in {
             "127.0.0.1"
             "::1"
           ];
-          base_url = "https://ha.nickolaj.com";
+          # base_url = "https://ha.nickolaj.com";
         };
 
         automation = "!include automations.yaml";
