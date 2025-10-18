@@ -92,7 +92,7 @@ decrypt file:
 [doc('Edit an encrypted file in $EDITOR')]
 [group('secret')]
 secret-edit name:
-    {{ nixcmd }} run .#agenix-rekey.x86_64-linux.edit {{ name }}
+    {{ nixcmd }} run .#agenix-rekey.x86_64-linux.edit-view edit {{ name }}
 
 [doc('Rekey all secrets - needed when adding secrets/hosts')]
 [group('secret')]
