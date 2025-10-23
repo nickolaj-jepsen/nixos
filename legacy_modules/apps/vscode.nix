@@ -95,6 +95,7 @@ in {
             "github.copilot.chat.codesearch.enabled" = true;
             "github.copilot.nextEditSuggestions.enabled" = true;
             "githubPullRequests.codingAgent.uiIntegration" = true;
+            "githubPullRequests.pullBranch" = "always";
 
             # Theme
             "workbench.colorTheme" = "Darcula Theme from IntelliJ";
@@ -110,6 +111,9 @@ in {
             "nix.serverSettings" = {
               nil.formatting.command = ["nix" "fmt" "--" "--"];
             };
+
+            # Other extensions
+            "biome.suggestInstallingGlobally" = false;
           }
           (mkFormatter "esbenp.prettier-vscode" ["json" "jsonc" "markdown" "css" "scss" "typescript" "typescriptreact" "html" "yaml"])
           (mkFormatter "charliermarsh.ruff" ["python"])
