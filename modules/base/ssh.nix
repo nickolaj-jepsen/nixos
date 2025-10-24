@@ -1,5 +1,6 @@
 {
   config,
+  pkgs,
   username,
   hostname,
   lib,
@@ -20,6 +21,7 @@ in {
     mode = "0600";
     owner = username;
   };
+  
   fireproof.home-manager = {
     home.file.".ssh/id_ed25519.pub".source = ../../secrets/hosts + ("/" + hostname) + "/id_ed25519.pub";
     programs.ssh = {
@@ -77,6 +79,22 @@ in {
     enable = true;
     settings.PasswordAuthentication = false;
     settings.KbdInteractiveAuthentication = false;
+  };
+
+  systemd.user.services."add-ssh-keys" = {
+    description = "Add SSH keys to ssh-agent";
+    after = [ "network.target" "ssh-agent.service" ];
+    requires = [ "ssh-agent.service" ];
+    wantedBy = [ "default.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStartPre=''
+       ${pkgs.coreutils}/bin/sleep 5
+      '';
+      ExecStart = ''
+        ${pkgs.openssh}/bin/ssh-add -q ${config.age.secrets.ssh-key-ao.path}
+      '';
+    };
   };
 
   users.users.${username}.openssh.authorizedKeys.keys = publicKeys;
