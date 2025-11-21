@@ -6,6 +6,6 @@
   environment.systemPackages = [
     pkgs.nodejs
     pkgsUnstable.pnpm
-    pkgsUnstable.turbo-unwrapped
+    pkgs.turbo-unwrapped
   ];
 }
