@@ -1,7 +1,4 @@
-{
-  pkgsUnstable,
-  ...
-}: {
+{pkgsUnstable, ...}: {
   environment.systemPackages = with pkgsUnstable; [
     jujutsu
     jjui

@@ -1,9 +1,5 @@
 # https://github.com/ChangeCaps/nixos-config/tree/0cec356abc0e46ca6ba27b3cf01cd51273bd4a69
-{
-  lib,
-  config,
-  ...
-}: {
+{lib, ...}: {
   options.monitors = lib.mkOption {
     type = lib.types.listOf (lib.types.submodule {
       options = {

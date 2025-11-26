@@ -21,7 +21,7 @@ in {
     mode = "0600";
     owner = username;
   };
-  
+
   fireproof.home-manager = {
     home.file.".ssh/id_ed25519.pub".source = ../../secrets/hosts + ("/" + hostname) + "/id_ed25519.pub";
     programs.ssh = {
@@ -55,6 +55,7 @@ in {
         };
         "scw.ao" = {
           user = "nij";
+          hostname = "51.15.81.1";
           proxyJump = lib.mkDefault "dev.ao";
           identityFile = "${config.age.secrets.ssh-key-ao.path}";
         };
@@ -83,13 +84,13 @@ in {
 
   systemd.user.services."add-ssh-keys" = {
     description = "Add SSH keys to ssh-agent";
-    after = [ "network.target" "ssh-agent.service" ];
-    requires = [ "ssh-agent.service" ];
-    wantedBy = [ "default.target" ];
+    after = ["network.target" "ssh-agent.service"];
+    requires = ["ssh-agent.service"];
+    wantedBy = ["default.target"];
     serviceConfig = {
       Type = "oneshot";
-      ExecStartPre=''
-       ${pkgs.coreutils}/bin/sleep 5
+      ExecStartPre = ''
+        ${pkgs.coreutils}/bin/sleep 5
       '';
       ExecStart = ''
         ${pkgs.openssh}/bin/ssh-add -q ${config.age.secrets.ssh-key-ao.path}

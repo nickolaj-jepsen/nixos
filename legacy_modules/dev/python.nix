@@ -6,8 +6,8 @@
   environment.systemPackages = [
     (pkgs.symlinkJoin {
       name = "uv";
-      paths = [ pkgsUnstable.uv ];
-      nativeBuildInputs = [ pkgs.makeWrapper ];
+      paths = [pkgsUnstable.uv];
+      nativeBuildInputs = [pkgs.makeWrapper];
       postBuild = ''
         wrapProgram $out/bin/uv \
           --run "export LD_LIBRARY_PATH=\$NIX_LD_LIBRARY_PATH"
