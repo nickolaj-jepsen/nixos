@@ -18,5 +18,6 @@ _: {
     ./usb.nix
     ./user.nix
     ./yubikey.nix
+    ./tailscale.nix
   ];
 }
