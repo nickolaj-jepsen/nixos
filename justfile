@@ -41,7 +41,7 @@ switch hostname=`hostname -s` target='':
         {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch \
             --flake .#{{ hostname }} \
             --target-host {{ target }} \
-            --use-remote-sudo {{ nix_output_monitor }}
+            --sudo {{ nix_output_monitor }}
     fi
 
 [doc('Use nixos-anywhere to deploy to a remote host')]

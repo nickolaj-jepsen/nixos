@@ -27,13 +27,14 @@ in {
     home.file.".ssh/id_ed25519.pub".source = ../../secrets/hosts + ("/" + hostname) + "/id_ed25519.pub";
     programs.ssh = {
       enable = true;
-      forwardAgent = true;
-      serverAliveInterval = 60;
-      serverAliveCountMax = 10;
+      enableDefaultConfig = false;
       matchBlocks =
         {
           "*" = {
             identityFile = "${config.age.secrets.ssh-key.path}";
+            forwardAgent = true;
+            serverAliveInterval = 60;
+            serverAliveCountMax = 10;
           };
           homelab = {
             hostname = "x.nickolaj.com";

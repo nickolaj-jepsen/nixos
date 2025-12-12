@@ -20,7 +20,7 @@ lib.mkIf config.fireproof.homelab.enable {
     };
 
     nextcloud = {
-      package = pkgs.nextcloud31;
+      package = pkgs.nextcloud32;
       enable = true;
       https = true;
       database.createLocally = true;

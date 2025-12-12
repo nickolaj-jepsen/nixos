@@ -44,7 +44,7 @@ in {
           color: #DAD8CE;
           border-bottom: 2px solid #CF6A4C;
         }
-              
+            
         #workspaces button.focused {
           background: #CF6A4C;
           color: #1C1B1A;
@@ -109,7 +109,7 @@ in {
     };
     programs.niri = {
       enable = true;
-      package = inputs.niri.packages."${pkgs.system}".niri-unstable;
+      package = inputs.niri.packages."${pkgs.stdenv.hostPlatform.system}".niri-unstable;
     };
     fireproof.home-manager.programs.niri.settings = {
       prefer-no-csd = true;
@@ -122,7 +122,7 @@ in {
       ];
       xwayland-satellite = {
         enable = true;
-        path = lib.getExe inputs.niri.packages."${pkgs.system}".xwayland-satellite-unstable;
+        path = lib.getExe inputs.niri.packages."${pkgs.stdenv.hostPlatform.system}".xwayland-satellite-unstable;
       };
       environment = {
         NIXOS_OZONE_WL = "1";

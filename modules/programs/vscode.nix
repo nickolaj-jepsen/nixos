@@ -9,7 +9,7 @@
 }: let
   vscodePackage = pkgsUnstable.vscode;
 
-  vscode-extensions = inputs.nix-vscode-extensions.extensions.${pkgs.system};
+  vscode-extensions = inputs.nix-vscode-extensions.extensions.${pkgs.stdenv.hostPlatform.system};
   vscodePkgs = vscode-extensions.vscode-marketplace // vscode-extensions.vscode-marketplace-release; # Prefer release over pre-release
 
   mkFormatter = formatter: languages: {

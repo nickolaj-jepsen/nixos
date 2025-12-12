@@ -7,7 +7,7 @@
   pkgs,
   ...
 }: let
-  nur = inputs.nur.legacyPackages.${pkgs.system};
+  nur = inputs.nur.legacyPackages.${pkgs.stdenv.hostPlatform.system};
   extensions = nur.repos.rycee.firefox-addons;
 in {
   config = lib.mkIf config.fireproof.desktop.enable {
