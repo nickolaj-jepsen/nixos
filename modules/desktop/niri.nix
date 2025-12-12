@@ -44,7 +44,7 @@ in {
           color: #DAD8CE;
           border-bottom: 2px solid #CF6A4C;
         }
-        
+              
         #workspaces button.focused {
           background: #CF6A4C;
           color: #1C1B1A;

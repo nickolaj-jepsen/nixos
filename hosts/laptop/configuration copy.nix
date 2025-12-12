@@ -1,3 +1,0 @@
-{
-  fireproof.desktop.enable = true;
-}

@@ -63,26 +63,14 @@ in {
     laptop = mkSystem {
       hostname = "laptop";
       username = "nickolaj";
-      modules = [
-        ../legacy_modules/graphical.nix
-        ../legacy_modules/devenv.nix
-      ];
     };
     desktop = mkSystem {
       hostname = "desktop";
       username = "nickolaj";
-      modules = [
-        ../legacy_modules/graphical.nix
-        ../legacy_modules/devenv.nix
-      ];
     };
     work = mkSystem {
       hostname = "work";
       username = "nickolaj";
-      modules = [
-        ../legacy_modules/graphical.nix
-        ../legacy_modules/devenv.nix
-      ];
     };
     homelab = mkSystem {
       hostname = "homelab";

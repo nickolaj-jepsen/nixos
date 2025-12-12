@@ -1,3 +1,4 @@
+# Enabled when: always
 {
   username,
   pkgs,

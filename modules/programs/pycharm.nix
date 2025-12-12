@@ -1,4 +1,10 @@
-{pkgsUnstable, ...}: let
+# Enabled when: desktop & dev
+{
+  config,
+  lib,
+  pkgsUnstable,
+  ...
+}: let
   pycharmPkg = pkgsUnstable.jetbrains.pycharm-professional.override {
     # -Dide.browser.jcef.enabled causes crashes on wayland
     vmopts = ''
@@ -11,7 +17,9 @@
   #   "github-copilot"
   # ];
 in {
-  environment.systemPackages = [
-    pycharmPkg
-  ];
+  config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+    environment.systemPackages = [
+      pycharmPkg
+    ];
+  };
 }

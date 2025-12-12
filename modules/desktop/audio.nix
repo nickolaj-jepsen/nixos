@@ -1,4 +1,8 @@
-{ lib, config, ... }: {
+{
+  lib,
+  config,
+  ...
+}: {
   config = lib.mkIf config.fireproof.desktop.enable {
     security.rtkit.enable = true;
     services.pipewire = {

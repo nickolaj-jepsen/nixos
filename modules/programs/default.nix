@@ -1,4 +1,9 @@
-_: {
+{lib, ...}: {
+  options.fireproof = {
+    work.enable = lib.mkEnableOption "Enable work-related applications and tools";
+    dev.enable = lib.mkEnableOption "Enable development tools and applications";
+  };
+
   imports = [
     ./fish/default.nix
     ./claude.nix
@@ -12,5 +17,29 @@ _: {
     ./zoxide.nix
     ./systemd-manager-tui.nix
     ./llm.nix
+
+    # Apps (migrated from legacy_modules/apps)
+    ./chromium.nix
+    ./ferdium.nix
+    ./firefox.nix
+    ./ghostty.nix
+    ./obsidian.nix
+    ./pycharm.nix
+    ./slack.nix
+    ./spotify.nix
+    ./sublime-merge.nix
+    ./vscode.nix
+    ./zed.nix
+
+    # Dev tools (migrated from legacy_modules/dev)
+    ./clickhouse.nix
+    ./docker.nix
+    ./javascript.nix
+    ./k8s.nix
+    ./nats.nix
+    ./playwright.nix
+    ./postgres.nix
+    ./python.nix
+    ./tilt.nix
   ];
 }

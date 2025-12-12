@@ -1,6 +1,8 @@
+# Enabled when: dev
 {
-  pkgs,
+  config,
   lib,
+  pkgs,
   pkgsUnstable,
   ...
 }: let
@@ -19,17 +21,19 @@
       '';
     };
 in {
-  environment.systemPackages = [
-    (mkWrapLDLibraryPath pkgsUnstable.uv)
-    (mkWrapLDLibraryPath pkgsUnstable.rye)
-    (mkWrapLDLibraryPath pkgs.python3)
-    (mkWrapLDLibraryPath pkgsUnstable.prek)
-  ];
-
-  # uv tool adds executable to $HOME/.local/bin, so add it to PATH
-  fireproof.home-manager = {
-    home.sessionPath = [
-      "$HOME/.local/bin"
+  config = lib.mkIf config.fireproof.dev.enable {
+    environment.systemPackages = [
+      (mkWrapLDLibraryPath pkgsUnstable.uv)
+      (mkWrapLDLibraryPath pkgsUnstable.rye)
+      (mkWrapLDLibraryPath pkgs.python3)
+      (mkWrapLDLibraryPath pkgsUnstable.prek)
     ];
+
+    # uv tool adds executable to $HOME/.local/bin, so add it to PATH
+    fireproof.home-manager = {
+      home.sessionPath = [
+        "$HOME/.local/bin"
+      ];
+    };
   };
 }
