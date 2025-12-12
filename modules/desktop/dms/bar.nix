@@ -1,4 +1,8 @@
-{config, ...}: let
+{
+  config,
+  lib,
+  ...
+}: let
   commonBarSettings = {
     enabled = true;
     position = 0;
@@ -74,18 +78,20 @@
     }
     // commonBarSettings;
 in {
-  fireproof.home-manager = {
-    programs.dankMaterialShell.default.settings = {
-      launcherLogoMode = "os";
-      launcherLogoContrast = 1;
-      launcherLogoSizeOffset = 3;
+  config = lib.mkIf config.fireproof.desktop.enable {
+    fireproof.home-manager = {
+      programs.dankMaterialShell.default.settings = {
+        launcherLogoMode = "os";
+        launcherLogoContrast = 1;
+        launcherLogoSizeOffset = 3;
 
-      centeringMode = "geometric";
+        centeringMode = "geometric";
 
-      runningAppsCurrentWorkspace = true;
-      runningAppsGroupByApp = true;
+        runningAppsCurrentWorkspace = true;
+        runningAppsGroupByApp = true;
 
-      barConfigs = [primaryBar secondaryBar];
+        barConfigs = [primaryBar secondaryBar];
+      };
     };
   };
 }

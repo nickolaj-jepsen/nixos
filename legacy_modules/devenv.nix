@@ -9,7 +9,6 @@
     ./dev/docker.nix
     ./dev/tilt.nix
     ./dev/postgres.nix
-    ./dev/aider.nix
     ./dev/clickhouse.nix
     ./dev/playwright.nix
     ./dev/nats.nix

@@ -42,6 +42,7 @@ with lib; let
               inputs.niri.nixosModules.niri
               ../modules/base
               ../modules/programs
+              ../modules/desktop
               (mkSystemImports hostname)
               {nixpkgs.config.allowUnfree = true;}
             ]
