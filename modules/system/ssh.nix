@@ -9,6 +9,7 @@
   # Load all public keys from ../../secrets/hosts/*/id_ed25519.pub
   allHosts = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ../../secrets/hosts));
   publicKeys = map (x: builtins.readFile (../../secrets/hosts + ("/" + x) + "/id_ed25519.pub")) allHosts;
+  workEnabled = config.fireproof.work.enable;
 in {
   age.secrets.ssh-key = {
     rekeyFile = ../../secrets/hosts + ("/" + hostname) + /id_ed25519.age;
@@ -16,7 +17,7 @@ in {
     mode = "0600";
     owner = username;
   };
-  age.secrets.ssh-key-ao = {
+  age.secrets.ssh-key-ao = lib.mkIf workEnabled {
     rekeyFile = ../../secrets/ssh-key-ao.age;
     mode = "0600";
     owner = username;
@@ -37,6 +38,7 @@ in {
           hostname = "x.nickolaj.com";
           user = "nickolaj";
         };
+      } // lib.optionalAttrs workEnabled {
         # Work hostnames definded in ./networking.nix
         "bastion.ao" = {
           user = "nij";
@@ -84,7 +86,7 @@ in {
     settings.KbdInteractiveAuthentication = false;
   };
 
-  systemd.user.services."add-ssh-keys" = {
+  systemd.user.services."add-ssh-keys" = lib.mkIf workEnabled {
     description = "Add SSH keys to ssh-agent";
     after = ["network.target" "ssh-agent.service"];
     requires = ["ssh-agent.service"];

@@ -1,5 +1,11 @@
-_: {
+{username, ...}: {
   nix.settings = {
+    trusted-users = [
+      "root"
+      "@wheel"
+      username
+    ];
+
     experimental-features = "nix-command flakes";
     substituters = [
       "https://hyprland.cachix.org"

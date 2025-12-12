@@ -41,6 +41,7 @@ with lib; let
               inputs.dankMaterialShell.nixosModules.dankMaterialShell
               inputs.niri.nixosModules.niri
               ../modules/base
+              ../modules/system
               ../modules/programs
               ../modules/desktop
               (mkSystemImports hostname)
