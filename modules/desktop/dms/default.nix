@@ -23,9 +23,10 @@
         enable = true;
 
         enableDynamicTheming = false;
-        enableClipboard = false;
         enableVPN = false;
         enableCalendarEvents = false;
+
+        systemd.enable = true;
 
         default.settings = {
           # General Settings
