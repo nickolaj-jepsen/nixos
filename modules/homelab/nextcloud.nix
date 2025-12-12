@@ -1,8 +1,10 @@
 {
   config,
   pkgs,
+  lib,
   ...
-}: {
+}:
+lib.mkIf config.fireproof.homelab.enable {
   age.secrets.nextcloud-admin-pass = {
     rekeyFile = ../../secrets/hosts/homelab/nextcloud-admin-pass.age;
     owner = "nextcloud";

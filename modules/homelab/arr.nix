@@ -1,8 +1,10 @@
 {
   config,
+  lib,
   username,
   ...
-}: let
+}:
+lib.mkIf config.fireproof.homelab.enable (let
   user = "media";
   group = "media";
 
@@ -80,4 +82,4 @@ in {
     };
     prowlarr.enable = true;
   };
-}
+})

@@ -1,8 +1,10 @@
 {
   config,
   hostname,
+  lib,
   ...
-}: let
+}:
+lib.mkIf config.fireproof.homelab.enable (let
   mkScrapeConfig = name: {
     job_name = name;
     static_configs = [
@@ -49,4 +51,4 @@ in {
       ];
     };
   };
-}
+})

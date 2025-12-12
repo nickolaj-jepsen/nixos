@@ -1,8 +1,10 @@
 {
   config,
   pkgsUnstable,
+  lib,
   ...
-}: let
+}:
+lib.mkIf config.fireproof.homelab.enable (let
   port = 9190;
   rootDomain = "nickolaj.com";
   zitadelDomain = "sso.${rootDomain}";
@@ -105,4 +107,4 @@ in {
       cookie-domain = ".${rootDomain}";
     };
   };
-}
+})

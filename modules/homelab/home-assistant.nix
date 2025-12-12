@@ -1,8 +1,10 @@
 {
   pkgs,
   config,
+  lib,
   ...
-}: let
+}:
+lib.mkIf config.fireproof.homelab.enable (let
   mosquittoPort = 1883;
   zigbee2mqttPort = 8180;
   homeAssistantPort = 8123;
@@ -65,7 +67,7 @@ in {
       package = pkgs.home-assistant;
       customComponents = with pkgs.home-assistant-custom-components; [
         adaptive_lighting
-        sleep_as_android
+        sleep_as_android_mqtt
         (pkgs.buildHomeAssistantComponent rec {
           owner = "Sian-Lee-SA";
           domain = "switch_manager";
@@ -183,4 +185,4 @@ in {
       };
     };
   };
-}
+})

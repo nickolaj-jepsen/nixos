@@ -30,50 +30,52 @@ in {
       forwardAgent = true;
       serverAliveInterval = 60;
       serverAliveCountMax = 10;
-      matchBlocks = {
-        "*" = {
-          identityFile = "${config.age.secrets.ssh-key.path}";
+      matchBlocks =
+        {
+          "*" = {
+            identityFile = "${config.age.secrets.ssh-key.path}";
+          };
+          homelab = {
+            hostname = "x.nickolaj.com";
+            user = "nickolaj";
+          };
+        }
+        // lib.optionalAttrs workEnabled {
+          # Work hostnames definded in ./networking.nix
+          "bastion.ao" = {
+            user = "nij";
+            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+          };
+          "clickhouse.ao" = {
+            user = "ubuntu";
+            hostname = "51.158.205.48";
+            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+          };
+          "flex.ao" = {
+            user = "nij";
+            hostname = "192.168.2.5";
+            proxyJump = "bastion.ao";
+            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+          };
+          "scw.ao" = {
+            user = "nij";
+            hostname = "51.15.81.1";
+            proxyJump = lib.mkDefault "dev.ao";
+            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+          };
+          "dev.ao" = {
+            user = "nij";
+            hostname = "192.168.2.28";
+            proxyJump = lib.mkDefault "bastion.ao";
+            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+          };
+          "staging.ao" = {
+            user = "staging";
+            hostname = "172.16.2.102";
+            proxyJump = lib.mkDefault "bastion.ao";
+            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+          };
         };
-        homelab = {
-          hostname = "x.nickolaj.com";
-          user = "nickolaj";
-        };
-      } // lib.optionalAttrs workEnabled {
-        # Work hostnames definded in ./networking.nix
-        "bastion.ao" = {
-          user = "nij";
-          identityFile = "${config.age.secrets.ssh-key-ao.path}";
-        };
-        "clickhouse.ao" = {
-          user = "ubuntu";
-          hostname = "51.158.205.48";
-          identityFile = "${config.age.secrets.ssh-key-ao.path}";
-        };
-        "flex.ao" = {
-          user = "nij";
-          hostname = "192.168.2.5";
-          proxyJump = "bastion.ao";
-          identityFile = "${config.age.secrets.ssh-key-ao.path}";
-        };
-        "scw.ao" = {
-          user = "nij";
-          hostname = "51.15.81.1";
-          proxyJump = lib.mkDefault "dev.ao";
-          identityFile = "${config.age.secrets.ssh-key-ao.path}";
-        };
-        "dev.ao" = {
-          user = "nij";
-          hostname = "192.168.2.28";
-          proxyJump = lib.mkDefault "bastion.ao";
-          identityFile = "${config.age.secrets.ssh-key-ao.path}";
-        };
-        "staging.ao" = {
-          user = "staging";
-          hostname = "172.16.2.102";
-          proxyJump = lib.mkDefault "bastion.ao";
-          identityFile = "${config.age.secrets.ssh-key-ao.path}";
-        };
-      };
     };
   };
 

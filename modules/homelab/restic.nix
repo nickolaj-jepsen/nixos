@@ -1,8 +1,10 @@
 {
   pkgs,
   config,
+  lib,
   ...
-}: {
+}:
+lib.mkIf config.fireproof.homelab.enable {
   environment.systemPackages = with pkgs; [
     restic
   ];

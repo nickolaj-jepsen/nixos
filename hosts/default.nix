@@ -44,6 +44,7 @@ with lib; let
               ../modules/system
               ../modules/programs
               ../modules/desktop
+              ../modules/homelab
               (mkSystemImports hostname)
               {nixpkgs.config.allowUnfree = true;}
             ]

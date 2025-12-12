@@ -1,4 +1,10 @@
-{pkgsUnstable, ...}: let
+{
+  config,
+  pkgsUnstable,
+  lib,
+  ...
+}:
+lib.mkIf config.fireproof.homelab.enable (let
   domain = "plex.nickolaj.com";
 in {
   services.nginx.virtualHosts."${domain}" = {
@@ -18,4 +24,4 @@ in {
     user = "media";
     group = "media";
   };
-}
+})

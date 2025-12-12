@@ -1,4 +1,9 @@
-{config, ...}: let
+{
+  config,
+  lib,
+  ...
+}:
+lib.mkIf config.fireproof.homelab.enable (let
   domain = "bitwarden.nickolaj.com";
 in {
   services = {
@@ -27,4 +32,4 @@ in {
       };
     };
   };
-}
+})

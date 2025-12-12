@@ -1,4 +1,9 @@
-_: let
+{
+  config,
+  lib,
+  ...
+}:
+lib.mkIf config.fireproof.homelab.enable (let
   dataDir = "/var/lib/flame";
   domain = "flame.nickolaj.com";
 in {
@@ -29,4 +34,4 @@ in {
       };
     };
   };
-}
+})

@@ -1,4 +1,9 @@
-_: {
+{
+  config,
+  lib,
+  ...
+}:
+lib.mkIf config.fireproof.homelab.enable {
   networking.firewall.allowedTCPPorts = [80 443];
 
   services.nginx = {
