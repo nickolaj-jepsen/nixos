@@ -3,14 +3,11 @@
     ./hardware/monitors.nix
     ./hardware/audio.nix
     ./desktop/fonts.nix
-    ./desktop/fireproof-shell.nix
     ./desktop/greetd.nix
     ./desktop/niri.nix
-    ./desktop/fuzzel.nix
-    ./desktop/mako.nix
-    ./desktop/hyprland/default.nix
     ./desktop/gtk/default.nix
     ./desktop/qt.nix
+    ./desktop/dms/default.nix
     ./desktop/screenshot.nix
     ./apps/spotify.nix
     ./apps/firefox.nix

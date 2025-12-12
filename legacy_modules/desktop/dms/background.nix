@@ -27,18 +27,31 @@
       cp *.svg *.png $out/share/backgrounds
     '';
   };
+  unknownPng = background + "/share/backgrounds/unknown.png";
+  geometryPng = background + "/share/backgrounds/geometry.png";
   pngs = [
-    (background + "/share/backgrounds/unknown.png")
-    (background + "/share/backgrounds/geometry.png")
+    unknownPng
+    geometryPng
   ];
 in {
   fireproof.home-manager = {
+    # Use hyprpaper as we can't currently set wallpapers through DMS
     services.hyprpaper = {
       enable = true;
       settings = {
         preload = pngs;
         wallpaper = [",${builtins.head pngs}"];
       };
+    };
+
+    programs.dankMaterialShell.default.settings = {
+      # Disables wallpaper management in DMS to avoid conflicts with Hyprpaper
+      screenPreferences.wallpaper = [];
+    };
+
+    programs.dankMaterialShell.default.session = {
+      # Attempt to set a default wallpaper on first run
+      wallpaperPath = unknownPng;
     };
   };
 }

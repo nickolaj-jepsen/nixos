@@ -8,6 +8,8 @@
   primaryMonitorName = (builtins.head config.monitors).name or "";
 in {
   # TODO: Move these to a separate module
+  programs.xwayland.enable = true;
+
   fireproof.home-manager.programs.waybar = {
     enable = true;
     systemd.enable = true;
@@ -41,7 +43,7 @@ in {
         color: #DAD8CE;
         border-bottom: 2px solid #CF6A4C;
       }
-        
+      
       #workspaces button.focused {
         background: #CF6A4C;
         color: #1C1B1A;
@@ -117,6 +119,10 @@ in {
       {command = ["systemctl" "--user" "start" "mako"];}
       {command = ["systemctl" "--user" "start" "waybar"];}
     ];
+    xwayland-satellite = {
+      enable = true;
+      path = lib.getExe inputs.niri.packages."${pkgs.system}".xwayland-satellite-unstable;
+    };
     environment = {
       NIXOS_OZONE_WL = "1";
       GDK_BACKEND = "wayland"; # Attempt to fix screen recording issue
@@ -180,39 +186,43 @@ in {
     binds = {
       "XF86AudioRaiseVolume" = {
         allow-when-locked = true;
-        action.spawn = [
-          "wpctl"
-          "set-volume"
-          "@DEFAULT_AUDIO_SINK@"
-          "0.1+"
-        ];
+        action.spawn = ["dms" "ipc" "audio" "increment" "3"];
       };
       "XF86AudioLowerVolume" = {
         allow-when-locked = true;
-        action.spawn = [
-          "wpctl"
-          "set-volume"
-          "@DEFAULT_AUDIO_SINK@"
-          "0.1-"
-        ];
+        action.spawn = ["dms" "ipc" "audio" "decrement" "3"];
       };
       "XF86AudioMute" = {
         allow-when-locked = true;
-        action.spawn = [
-          "wpctl"
-          "set-mute"
-          "@DEFAULT_AUDIO_SINK@"
-          "toggle"
-        ];
+        action.spawn = ["dms" "ipc" "audio" "mute"];
       };
       "XF86AudioMicMute" = {
         allow-when-locked = true;
-        action.spawn = [
-          "wpctl"
-          "set-mute"
-          "@DEFAULT_AUDIO_SOURCE@"
-          "toggle"
-        ];
+        action.spawn = ["dms" "ipc" "audio" "micmute"];
+      };
+      "XF86MonBrightnessUp" = {
+        allow-when-locked = true;
+        action.spawn = ["dms" "ipc" "brightness" "increment" "5"];
+      };
+      "XF86MonBrightnessDown" = {
+        allow-when-locked = true;
+        action.spawn = ["dms" "ipc" "brightness" "decrement" "5"];
+      };
+      "Mod+N" = {
+        action.spawn = ["dms" "ipc" "notifications" "toggle"];
+        hotkey-overlay.title = "Toggle Notification Center";
+      };
+      "Mod+V" = {
+        action.spawn = ["dms" "ipc" "clipboard" "toggle"];
+        hotkey-overlay.title = "Toggle Clipboard Manager";
+      };
+      "Mod+Space" = {
+        action.spawn = ["dms" "ipc" "spotlight" "toggle"];
+        hotkey-overlay.title = "Toggle Application Launcher";
+      };
+      "Mod+P" = {
+        action.spawn = ["dms" "ipc" "powermenu" "toggle"];
+        hotkey-overlay.title = "Toggle Power Menu";
       };
 
       "Mod+Left".action.focus-column-or-monitor-left = {};
@@ -291,7 +301,6 @@ in {
       "Mod+Slash".action.show-hotkey-overlay = {};
 
       "Mod+Return".action.spawn = ["ghostty"];
-      "Mod+Space".action.spawn = ["fuzzel"];
       "Mod+Backspace".action.close-window = {};
     };
 
