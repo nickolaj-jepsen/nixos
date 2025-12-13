@@ -40,6 +40,7 @@ with lib; let
               inputs.nixos-facter-modules.nixosModules.facter
               inputs.dankMaterialShell.nixosModules.dankMaterialShell
               inputs.niri.nixosModules.niri
+              inputs.determinate.nixosModules.default
               ../modules/base
               ../modules/system
               ../modules/programs
