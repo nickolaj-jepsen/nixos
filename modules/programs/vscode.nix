@@ -109,6 +109,7 @@ in {
                 "rg" = true;
                 "fd" = true;
                 "echo" = true;
+                "jq" = true;
                 "pwd" = true;
                 "wc" = true;
                 "which" = true;
