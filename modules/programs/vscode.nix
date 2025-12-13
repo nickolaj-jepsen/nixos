@@ -69,6 +69,9 @@ in {
               "github.copilot.nextEditSuggestions.enabled" = true;
               "githubPullRequests.codingAgent.uiIntegration" = true;
               "githubPullRequests.pullBranch" = "always";
+              "chat.tools.terminal.autoApprove" = {
+                "nix" = true;
+              };
 
               # Theme
               "workbench.colorTheme" = "Darcula Theme from IntelliJ";

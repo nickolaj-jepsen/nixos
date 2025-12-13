@@ -220,9 +220,9 @@ in {
             inherit (monitor) name;
             value = {
               inherit (monitor) position;
-              mode = {
+              mode = lib.mkIf (monitor.resolution.width != null && monitor.resolution.height != null) {
                 inherit (monitor.resolution) width height;
-                refresh = monitor.refreshRateNiri or null;
+                refresh = monitor.refreshRateNiri;
               };
               focus-at-startup = monitor.name == primaryMonitorName;
               transform.rotation =
