@@ -8,8 +8,8 @@
     position = 0;
 
     spacing = 0;
-    innerPadding = 0;
-    bottomGap = -5;
+    innerPadding = -4;
+    bottomGap = -9;
     transparency = 0;
     widgetTransparency = 1;
     squareCorners = true;
@@ -34,18 +34,28 @@
     popupGapsManual = 4;
     maximizeDetection = true;
   };
+
+  primaryMonitor = builtins.head config.monitors;
+  primaryX = primaryMonitor.position.x or 0;
+
+  # Partition secondary monitors into left and right based on their x position relative to primary
+  secondaryMonitors = builtins.tail config.monitors;
+  leftMonitors = builtins.filter (m: (m.position.x or 0) <= primaryX) secondaryMonitors;
+  rightMonitors = builtins.filter (m: (m.position.x or 0) > primaryX) secondaryMonitors;
+
   primaryBar =
     {
       id = "default";
       name = "Primary Bar";
       screenPreferences = [
         {
-          name = (builtins.head config.monitors).name or "";
+          name = primaryMonitor.name or "";
         }
       ];
       showOnLastDisplay = true;
       leftWidgets = [
         "launcherButton"
+        "clock"
         "workspaceSwitcher"
         "runningApps"
       ];
@@ -58,17 +68,33 @@
         "cpuUsage"
         "controlCenterButton"
         "notificationButton"
-        "clock"
       ];
     }
     // commonBarSettings;
-  secondaryBar =
+
+  leftSecondaryBar =
     {
-      id = "secondary";
-      name = "Secondary Bar";
+      id = "secondary-left";
+      name = "Secondary Bar (Left)";
       screenPreferences = builtins.map (monitor: {
         inherit (monitor) name;
-      }) (builtins.tail config.monitors);
+      }) leftMonitors;
+      showOnLastDisplay = false;
+      leftWidgets = [];
+      centerWidgets = [];
+      rightWidgets = [
+        "workspaceSwitcher"
+      ];
+    }
+    // commonBarSettings;
+
+  rightSecondaryBar =
+    {
+      id = "secondary-right";
+      name = "Secondary Bar (Right)";
+      screenPreferences = builtins.map (monitor: {
+        inherit (monitor) name;
+      }) rightMonitors;
       showOnLastDisplay = false;
       leftWidgets = [
         "workspaceSwitcher"
@@ -77,6 +103,11 @@
       rightWidgets = [];
     }
     // commonBarSettings;
+
+  # Only include secondary bars if they have monitors assigned
+  secondaryBars =
+    (lib.optional (leftMonitors != []) leftSecondaryBar)
+    ++ (lib.optional (rightMonitors != []) rightSecondaryBar);
 in {
   config = lib.mkIf config.fireproof.desktop.enable {
     fireproof.home-manager = {
@@ -90,7 +121,7 @@ in {
         runningAppsCurrentWorkspace = true;
         runningAppsGroupByApp = true;
 
-        barConfigs = [primaryBar secondaryBar];
+        barConfigs = [primaryBar] ++ secondaryBars;
       };
     };
   };
