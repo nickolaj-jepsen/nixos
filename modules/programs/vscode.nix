@@ -40,17 +40,46 @@ in {
               # General
               "extensions.ignoreRecommendations" = true;
               "telemetry.telemetryLevel" = "off";
+              "update.mode" = "none"; # Managed by Nix
 
               # Editor
               "editor.linkedEditing" = true;
-              "files.exclude" = {
-                "**/*.egg-info" = true;
-                "**/__pycache__" = true;
-              };
-              "workbench.editor.wrapTabs" = true;
+              "editor.formatOnPaste" = true;
+              "editor.bracketPairColorization.enabled" = true;
+              "editor.guides.bracketPairs" = "active";
+              "editor.smoothScrolling" = true;
+              "editor.cursorSmoothCaretAnimation" = "on";
+              "editor.stickyScroll.enabled" = true;
+              "editor.inlayHints.enabled" = "onUnlessPressed";
+              "editor.renderWhitespace" = "boundary";
 
               # Files
               "files.autoSave" = "afterDelay";
+              "files.trimTrailingWhitespace" = true;
+              "files.insertFinalNewline" = true;
+              "files.trimFinalNewlines" = true;
+              "files.exclude" = {
+                "**/*.egg-info" = true;
+                "**/__pycache__" = true;
+                "**/.git" = true;
+                "**/.DS_Store" = true;
+                "**/node_modules" = true;
+                "**/.direnv" = true;
+              };
+
+              # Workbench
+              "workbench.editor.wrapTabs" = true;
+              "workbench.startupEditor" = "none";
+              "workbench.tree.indent" = 16;
+              "workbench.editor.highlightModifiedTabs" = true;
+              "workbench.editor.limit.enabled" = true;
+              "workbench.editor.limit.value" = 10;
+              "workbench.editor.limit.perEditorGroup" = true;
+
+              # Terminal
+              "terminal.integrated.defaultProfile.linux" = "fish";
+              "terminal.integrated.smoothScrolling" = true;
+              "terminal.integrated.cursorBlinking" = true;
 
               # Remote
               "remote.SSH.useLocalServer" = false;
@@ -71,15 +100,53 @@ in {
               "githubPullRequests.pullBranch" = "always";
               "chat.tools.terminal.autoApprove" = {
                 "nix" = true;
+                "cat" = true;
+                "ls" = true;
+                "head" = true;
+                "tail" = true;
+                "find" = true;
+                "grep" = true;
+                "rg" = true;
+                "fd" = true;
+                "echo" = true;
+                "pwd" = true;
+                "wc" = true;
+                "which" = true;
+                "git status" = true;
+                "git log" = true;
+                "git diff" = true;
+                "git branch" = true;
+                "git show" = true;
+                "uv" = true;
+                "python" = true;
+                "pip" = true;
+                "npm" = true;
+                "npx" = true;
+                "pnpm" = true;
+                "yarn" = true;
+                "node" = true;
+                "cargo" = true;
+                "rustc" = true;
+                "go" = true;
+                "just" = true;
+                "make" = true;
               };
 
               # Theme
               "workbench.colorTheme" = "Darcula Theme from IntelliJ";
               "window.titleBarStyle" = "custom";
               "editor.fontFamily" = "'Hack Nerd Font', 'Hack', 'monospace', monospace";
+              "editor.fontSize" = 14;
+              "editor.lineHeight" = 1.5;
 
               # Keybindings
               "workbench.commandPalette.experimental.suggestCommands" = true; # Emulates IntelliJ's "Search Everywhere"
+
+              # Git
+              "git.autofetch" = true;
+              "git.confirmSync" = false;
+              "git.enableSmartCommit" = true;
+              "diffEditor.ignoreTrimWhitespace" = false;
 
               # nix-ide
               "nix.enableLanguageServer" = true;
@@ -87,6 +154,9 @@ in {
               "nix.serverSettings" = {
                 nil.formatting.command = ["nix" "fmt" "--" "--"];
               };
+
+              # Python
+              "python.analysis.autoImportCompletions" = true;
 
               # Other extensions
               "biome.suggestInstallingGlobally" = false;
