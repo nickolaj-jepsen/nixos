@@ -57,11 +57,6 @@ with lib; let
     );
 in {
   config.flake.nixosConfigurations = {
-    bootstrap = mkSystem {
-      hostname = "bootstrap";
-      username = "nixos";
-    };
-
     laptop = mkSystem {
       hostname = "laptop";
       username = "nickolaj";
@@ -76,6 +71,10 @@ in {
     };
     homelab = mkSystem {
       hostname = "homelab";
+      username = "nickolaj";
+    };
+    bootstrap = mkSystem {
+      hostname = "bootstrap";
       username = "nickolaj";
     };
   };

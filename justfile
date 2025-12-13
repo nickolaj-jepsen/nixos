@@ -79,6 +79,39 @@ disko-install hostname disk:
 iso hostname:
     {{ nixcmd }} build .#nixosConfigurations.{{ hostname }}.config.formats.install-iso
 
+[doc('Build the bootstrap ISO for USB installation')]
+[group('deploy')]
+bootstrap-iso:
+    @echo "Building bootstrap ISO..."
+    {{ nixcmd }} build .#nixosConfigurations.bootstrap.config.system.build.isoImage {{ nix_output_monitor }}
+    @echo "ISO built: $(ls -1 result/iso/*.iso)"
+
+[doc('Flash the bootstrap ISO to a USB drive')]
+[group('deploy')]
+bootstrap-flash device:
+    #!/usr/bin/env -S bash -e
+    if [ ! -b "{{ device }}" ]; then
+        echo "Error: {{ device }} is not a block device"
+        exit 1
+    fi
+    
+    # Build the ISO first if needed
+    if [ ! -d "result/iso" ]; then
+        just bootstrap-iso
+    fi
+    
+    iso_file=$(ls -1 result/iso/*.iso | head -1)
+    echo "Flashing $iso_file to {{ device }}..."
+    echo "WARNING: This will ERASE ALL DATA on {{ device }}"
+    read -p "Are you sure? (y/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        sudo dd if="$iso_file" of="{{ device }}" bs=4M status=progress oflag=sync
+        echo "Done! You can now boot from {{ device }}"
+    else
+        echo "Aborted"
+    fi
+
 [doc('Runs (r)age with yubikey identity')]
 [group('secret')]
 age *ARGS="--help":
