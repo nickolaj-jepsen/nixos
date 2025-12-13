@@ -121,6 +121,15 @@ just age -e <file> -o <output.age>
 
 ## Development
 
+### Development Shell
+
+A Nix development shell is available with useful tools for working on this configuration:
+
+```bash
+# Enter the development shell
+nix develop
+```
+
 ### Formatting
 
 Code is formatted using `treefmt-nix` with:

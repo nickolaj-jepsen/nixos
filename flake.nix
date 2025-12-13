@@ -6,6 +6,7 @@
       imports = [
         inputs.agenix-rekey.flakeModule
         ./formatter.nix
+        ./devshell.nix
         ./hosts
       ];
       systems = [
