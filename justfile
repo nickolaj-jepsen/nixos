@@ -94,12 +94,12 @@ bootstrap-flash device:
         echo "Error: {{ device }} is not a block device"
         exit 1
     fi
-    
+
     # Build the ISO first if needed
     if [ ! -d "result/iso" ]; then
         just bootstrap-iso
     fi
-    
+
     iso_file=$(ls -1 result/iso/*.iso | head -1)
     echo "Flashing $iso_file to {{ device }}..."
     echo "WARNING: This will ERASE ALL DATA on {{ device }}"

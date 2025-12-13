@@ -76,9 +76,11 @@
     {
       id = "secondary-left";
       name = "Secondary Bar (Left)";
-      screenPreferences = builtins.map (monitor: {
-        inherit (monitor) name;
-      }) leftMonitors;
+      screenPreferences =
+        builtins.map (monitor: {
+          inherit (monitor) name;
+        })
+        leftMonitors;
       showOnLastDisplay = false;
       leftWidgets = [];
       centerWidgets = [];
@@ -92,9 +94,11 @@
     {
       id = "secondary-right";
       name = "Secondary Bar (Right)";
-      screenPreferences = builtins.map (monitor: {
-        inherit (monitor) name;
-      }) rightMonitors;
+      screenPreferences =
+        builtins.map (monitor: {
+          inherit (monitor) name;
+        })
+        rightMonitors;
       showOnLastDisplay = false;
       leftWidgets = [
         "workspaceSwitcher"

@@ -51,14 +51,17 @@ just bootstrap-flash /dev/sdX
 ## Adding a New Host
 
 1. Run the new-host command:
+
    ```bash
    just new-host <hostname> <username>
    ```
+
    This creates:
    - `hosts/<hostname>/` directory
    - `secrets/hosts/<hostname>/` with SSH keys
 
 2. Add host configuration in `hosts/default.nix`:
+
    ```nix
    <hostname> = mkSystem {
      hostname = "<hostname>";
@@ -72,6 +75,7 @@ just bootstrap-flash /dev/sdX
    - Other host-specific modules as needed
 
 4. Generate hardware config:
+
    ```bash
    just factor <hostname>
    # Or for remote:
@@ -120,6 +124,7 @@ just age -e <file> -o <output.age>
 ### Formatting
 
 Code is formatted using `treefmt-nix` with:
+
 - **alejandra** - Nix formatter
 - **deadnix** - Remove unused Nix code
 - **statix** - Nix linter
