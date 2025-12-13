@@ -7,6 +7,7 @@
     ./arr.nix
     ./flame.nix
     ./home-assistant.nix
+    ./jellyfin.nix
     ./nextcloud.nix
     ./nginx.nix
     ./plex.nix
