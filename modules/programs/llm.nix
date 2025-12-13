@@ -1,10 +1,10 @@
 {
   pkgs,
   config,
-  username,
   pkgsUnstable,
   ...
 }: let
+  inherit (config.fireproof) username;
   llmConfig =
     if pkgs.stdenv.isDarwin
     then "Library/Application Support/io.datasette.llm"

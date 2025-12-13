@@ -2,10 +2,11 @@
 {
   config,
   lib,
-  username,
   pkgs,
   ...
-}: {
+}: let
+  inherit (config.fireproof) username;
+in {
   config = lib.mkIf config.fireproof.desktop.enable {
     environment.systemPackages = with pkgs; [
       spotify

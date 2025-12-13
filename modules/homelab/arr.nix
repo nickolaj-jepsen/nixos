@@ -1,10 +1,10 @@
 {
   config,
   lib,
-  username,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
+  inherit (config.fireproof) username;
   user = "media";
   group = "media";
 

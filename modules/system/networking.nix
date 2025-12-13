@@ -1,5 +1,5 @@
-{hostname, ...}: {
+{config, ...}: {
   networking = {
-    hostName = hostname;
+    hostName = config.fireproof.hostname;
   };
 }

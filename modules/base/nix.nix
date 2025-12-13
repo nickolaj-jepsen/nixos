@@ -1,9 +1,11 @@
-{username, ...}: {
+{config, ...}: {
+  nixpkgs.config.allowUnfree = true;
+
   nix.settings = {
     trusted-users = [
       "root"
       "@wheel"
-      username
+      config.fireproof.username
     ];
 
     experimental-features = "nix-command flakes";

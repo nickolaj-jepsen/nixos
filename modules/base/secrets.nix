@@ -1,4 +1,5 @@
-{hostname, ...}: let
+{config, ...}: let
+  inherit (config.fireproof) hostname;
   hostSecrets = ../../secrets/hosts + ("/" + hostname);
   publicKey = builtins.readFile (hostSecrets + "/id_ed25519.pub");
 in {

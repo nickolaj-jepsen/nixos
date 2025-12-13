@@ -1,21 +1,10 @@
 {
   inputs,
   withSystem,
-  lib,
   ...
-}:
-with lib; let
-  mkSystemImports = hostname: let
-    hostDirectory = ./. + ("/" + hostname);
-    nixFiles = filter (file: hasSuffix ".nix" file) (attrNames (builtins.readDir hostDirectory));
-    imports = map (file: ./. + ("/" + hostname + "/" + file)) nixFiles;
-  in {
-    inherit imports;
-  };
-
+}: let
   mkSystem = {
-    hostname,
-    username,
+    host,
     modules ? [],
     system ? "x86_64-linux",
   }:
@@ -28,7 +17,7 @@ with lib; let
       in
         inputs.nixpkgs.lib.nixosSystem {
           inherit system;
-          specialArgs = {inherit inputs hostname username pkgsUnstable;};
+          specialArgs = {inherit inputs pkgsUnstable;};
           modules =
             [
               inputs.disko.nixosModules.disko
@@ -46,37 +35,17 @@ with lib; let
               ../modules/programs
               ../modules/desktop
               ../modules/homelab
-              (mkSystemImports hostname)
-              {nixpkgs.config.allowUnfree = true;}
+              host
             ]
-            ++ modules
-            ++ (
-              lib.optional (builtins.pathExists ./${hostname}/facter.json)
-              {config.facter.reportPath = ./${hostname}/facter.json;}
-            );
+            ++ modules;
         }
     );
 in {
   config.flake.nixosConfigurations = {
-    laptop = mkSystem {
-      hostname = "laptop";
-      username = "nickolaj";
-    };
-    desktop = mkSystem {
-      hostname = "desktop";
-      username = "nickolaj";
-    };
-    work = mkSystem {
-      hostname = "work";
-      username = "nickolaj";
-    };
-    homelab = mkSystem {
-      hostname = "homelab";
-      username = "nickolaj";
-    };
-    bootstrap = mkSystem {
-      hostname = "bootstrap";
-      username = "nickolaj";
-    };
+    laptop = mkSystem {host = ./laptop;};
+    desktop = mkSystem {host = ./desktop;};
+    work = mkSystem {host = ./work;};
+    homelab = mkSystem {host = ./homelab;};
+    bootstrap = mkSystem {host = ./bootstrap;};
   };
 }

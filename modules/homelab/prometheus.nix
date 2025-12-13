@@ -1,10 +1,10 @@
 {
   config,
-  hostname,
   lib,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
+  inherit (config.fireproof) hostname;
   mkScrapeConfig = name: {
     job_name = name;
     static_configs = [

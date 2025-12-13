@@ -1,10 +1,12 @@
 # Enabled when: always
 {
-  username,
+  config,
   pkgs,
   lib,
   ...
-}: {
+}: let
+  inherit (config.fireproof) username;
+in {
   environment.systemPackages = [
     pkgs.docker
     pkgs.docker-compose

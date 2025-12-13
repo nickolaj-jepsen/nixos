@@ -1,8 +1,5 @@
-{
-  username,
-  config,
-  ...
-}: let
+{config, ...}: let
+  inherit (config.fireproof) username;
   inherit (config.age) secrets;
 in {
   config = {

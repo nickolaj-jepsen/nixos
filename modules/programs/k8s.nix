@@ -3,9 +3,10 @@
   config,
   lib,
   pkgs,
-  username,
   ...
-}: {
+}: let
+  inherit (config.fireproof) username;
+in {
   config = lib.mkIf config.fireproof.dev.enable {
     environment.systemPackages = [
       pkgs.kubectl

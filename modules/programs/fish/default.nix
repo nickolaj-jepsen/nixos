@@ -1,8 +1,10 @@
 {
-  username,
+  config,
   pkgs,
   ...
-}: {
+}: let
+  inherit (config.fireproof) username;
+in {
   config = {
     programs.fish.enable = true;
     users.users.${username}.shell = pkgs.fish;

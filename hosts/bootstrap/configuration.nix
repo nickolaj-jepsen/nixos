@@ -4,12 +4,6 @@
   inputs,
   ...
 }: {
-  # Minimal system without desktop or dev tools
-  fireproof.desktop.enable = false;
-  fireproof.dev.enable = false;
-  fireproof.work.enable = false;
-  fireproof.homelab.enable = false;
-
   # Use the nixos installation ISO as base
   imports = [
     "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"

@@ -1,9 +1,10 @@
 {
   config,
   lib,
-  username,
   ...
-}: {
+}: let
+  inherit (config.fireproof) username;
+in {
   config = lib.mkIf config.fireproof.desktop.enable {
     fireproof.home-manager = {
       home.file.".config/DankMaterialShell/colors.json".text = builtins.toJSON {

@@ -3,9 +3,6 @@
   lib,
   ...
 }: {
-  fireproof.dev.enable = true;
-  fireproof.homelab.enable = true;
-
   boot = {
     # Use grub as bootloader as it works better with mdadm
     loader.grub.enable = true;

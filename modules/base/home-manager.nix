@@ -1,10 +1,12 @@
 {
   lib,
+  config,
   options,
-  username,
   ...
 }:
-with lib; {
+with lib; let
+  inherit (config.fireproof) username;
+in {
   options.fireproof = {
     home-manager = lib.mkOption {
       type = options.home-manager.users.type.nestedTypes.elemType;

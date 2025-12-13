@@ -1,11 +1,11 @@
 {
   config,
   pkgs,
-  username,
-  hostname,
   lib,
   ...
 }: let
+  inherit (config.fireproof) username;
+  inherit (config.fireproof) hostname;
   # Load all public keys from ../../secrets/hosts/*/id_ed25519.pub
   allHosts = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ../../secrets/hosts));
   publicKeys = map (x: builtins.readFile (../../secrets/hosts + ("/" + x) + "/id_ed25519.pub")) allHosts;
