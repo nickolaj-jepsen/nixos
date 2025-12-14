@@ -122,13 +122,13 @@ in {
                         {
                           title = "Home-manager Search";
                           url = "https://home-manager-options.extranix.com";
-                          icon = "si:nixos";
+                          icon = "mdi:home";
                           same-tab = true;
                         }
                         {
                           title = "Noogle";
                           url = "https://noogle.dev";
-                          icon = "si:nixos";
+                          icon = "mdi:text-search";
                           same-tab = true;
                         }
                       ];
@@ -143,21 +143,15 @@ in {
                           same-tab = true;
                         }
                         {
-                          title = "Netflix";
-                          url = "https://netflix.com";
-                          icon = "si:netflix";
+                          title = "Twitch";
+                          url = "https://twitch.tv";
+                          icon = "si:twitch";
                           same-tab = true;
                         }
                         {
-                          title = "HBO Max";
-                          url = "https://play.max.com";
-                          icon = "si:hbo";
-                          same-tab = true;
-                        }
-                        {
-                          title = "Disney Plus";
-                          url = "https://disneyplus.com";
-                          icon = "mdi:castle";
+                          title = "DR TV";
+                          url = "https://dr.dk/tv";
+                          icon = "mdi:television";
                           same-tab = true;
                         }
                       ];
