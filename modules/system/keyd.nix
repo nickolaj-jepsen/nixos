@@ -1,6 +1,6 @@
-_: {
+{lib, ...}: {
   services.keyd = {
-    enable = true;
+    enable = lib.mkDefault true;
     keyboards.mouse = {
       ids = [
         "046d:c051:4ae65a29" # Work mouse

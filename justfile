@@ -56,7 +56,7 @@ deploy-remote hostname target:
 
     install -d -m755 "$temp/etc/ssh"
 
-    # Copy ssh key to decrypt agenix secrets    
+    # Copy ssh key to decrypt agenix secrets
     just age -d "./secrets/hosts/{{ hostname }}/id_ed25519.age" > "$temp/etc/ssh/ssh_host_ed25519_key"
     chmod 600 "$temp/etc/ssh/ssh_host_ed25519_key"
 
@@ -141,6 +141,14 @@ new-host hostname username:
     echo "Setting up folders"
     mkdir -p "secrets/hosts/{{ hostname }}"
     mkdir -p "hosts/{{ hostname }}"
+    cat > "hosts/{{ hostname }}/default.nix" <<'EOF'
+    {
+      config.fireproof.hostname = "{{ hostname }}";
+      config.fireproof.username = "{{ username }}";
+
+      imports = [];
+    }
+    EOF
 
     echo "Generating SSH key for {{ username }}@{{ hostname }}"
     ssh-keygen -q -t ed25519 -f "$temp/id_ed25519" -C "{{ username }}@{{ hostname }}" -N ""
@@ -153,16 +161,7 @@ new-host hostname username:
 
     # Bold with no newline
     cat <<EOF
-    {{ BOLD }}{{ hostname }} = mkSystem {
-      hostname = "{{ hostname }}";
-      username = "{{ username }}";
-      modules = [
-        ../modules/required.nix
-        ../modules/shell.nix
-        ../modules/graphical.nix
-        ../modules/devenv.nix
-      ];
-    };
+        {{ BOLD }}{{ hostname }} = mkSystem {host = ./{{ hostname }};};{{ NORMAL }}
     EOF
 
 [doc("Update flake.lock")]

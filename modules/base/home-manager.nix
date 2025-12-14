@@ -12,7 +12,7 @@ in {
       type = options.home-manager.users.type.nestedTypes.elemType;
     };
   };
-  config = {
+  config = rec {
     home-manager = {
       useUserPackages = true;
       useGlobalPkgs = true;
@@ -20,7 +20,7 @@ in {
     home-manager.users.${username} = mkAliasDefinitions options.fireproof.home-manager;
 
     # set the same version of home-manager as the system
-    fireproof.home-manager.home.stateVersion = "24.11";
-    system.stateVersion = "24.11";
+    system.stateVersion = lib.mkDefault "24.11";
+    fireproof.home-manager.home.stateVersion = system.stateVersion;
   };
 }

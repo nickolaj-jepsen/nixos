@@ -64,6 +64,5 @@
     nixos-facter
   ];
 
-  # System state version (use mkForce to override the default)
-  system.stateVersion = lib.mkForce "25.11";
+  system.stateVersion = "25.11";
 }

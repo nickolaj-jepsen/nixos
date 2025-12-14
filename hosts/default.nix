@@ -30,6 +30,7 @@
               inputs.dankMaterialShell.nixosModules.dankMaterialShell
               inputs.niri.nixosModules.niri
               inputs.determinate.nixosModules.default
+              inputs.nixos-wsl.nixosModules.default
               ../modules/base
               ../modules/system
               ../modules/programs
@@ -47,5 +48,6 @@ in {
     work = mkSystem {host = ./work;};
     homelab = mkSystem {host = ./homelab;};
     bootstrap = mkSystem {host = ./bootstrap;};
+    desktop-wsl = mkSystem {host = ./desktop-wsl;};
   };
 }
