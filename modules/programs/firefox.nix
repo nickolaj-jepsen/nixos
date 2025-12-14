@@ -58,7 +58,7 @@ in {
           ];
 
           settings = {
-            "browser.startup.homepage" = "https://flame.nickolaj.com";
+            "browser.startup.homepage" = "https://glance.nickolaj.com";
           };
         };
       };

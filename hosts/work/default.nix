@@ -1,4 +1,4 @@
-{
+{lib, ...}: {
   config = {
     fireproof = {
       hostname = "work";
@@ -8,6 +8,8 @@
       dev.enable = true;
     };
     facter.reportPath = ./facter.json;
+
+    fireproof.home-manager.programs.firefox.profiles.default.settings."browser.startup.homepage" = lib.mkForce "https://glance.nickolaj.com/work";
   };
 
   imports = [

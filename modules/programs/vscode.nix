@@ -47,7 +47,6 @@ in {
               "editor.formatOnPaste" = true;
               "editor.bracketPairColorization.enabled" = true;
               "editor.guides.bracketPairs" = "active";
-              "editor.smoothScrolling" = true;
               "editor.cursorSmoothCaretAnimation" = "on";
               "editor.stickyScroll.enabled" = true;
               "editor.inlayHints.enabled" = "onUnlessPressed";

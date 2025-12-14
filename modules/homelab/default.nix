@@ -5,7 +5,7 @@
 
   imports = [
     ./arr.nix
-    ./flame.nix
+    ./glance.nix
     ./home-assistant.nix
     ./jellyfin.nix
     ./nextcloud.nix
