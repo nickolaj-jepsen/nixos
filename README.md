@@ -57,16 +57,13 @@ just bootstrap-flash /dev/sdX
    ```
 
    This creates:
-   - `hosts/<hostname>/` directory
-   - `secrets/hosts/<hostname>/` with SSH keys
+   - `hosts/<hostname>/default.nix` file which you should edit
+   - `secrets/hosts/<hostname>/` directory with SSH keys
 
 2. Add host configuration in `hosts/default.nix`:
 
    ```nix
-   <hostname> = mkSystem {
-     hostname = "<hostname>";
-     username = "<username>";
-   };
+   <hostname> = mkSystem { host = .<hostname>; };
    ```
 
 3. Create required files in `hosts/<hostname>/`:
@@ -86,6 +83,37 @@ just bootstrap-flash /dev/sdX
    ```bash
    just secret-rekey
    ```
+
+> [!TIP]
+> If you upload the public key (`secrets/hosts/<hostname>/id_ed25519.pub`) to GitHub, you can pull & push directly from the new host.
+
+## Deploying
+
+### Nixos ISO install
+
+A simple way to install a new machine is to use the official [NixOS ISO](https://nixos.org/download/) to prepare a machine
+
+Copy the private SSH key for the new host to `/etc/ssh/ssh_host_ed25519_key`
+
+Enable flakes support in `/etc/nixos/configuration.nix`
+
+```nix
+{
+  nix = {
+    package = pkgs.nixFlakes;
+    extraOptions = ''
+      experimental-features = nix-command flakes
+    '';
+  };
+}
+```
+
+Then run:
+
+```bash
+$ nix develop
+$ just switch <hostname>
+```
 
 ## Secret Management
 

@@ -3,6 +3,8 @@
   lib,
   ...
 }: let
+  hasMonitors = config.monitors != [];
+
   commonBarSettings = {
     enabled = true;
     position = 0;
@@ -35,11 +37,17 @@
     maximizeDetection = true;
   };
 
-  primaryMonitor = builtins.head config.monitors;
+  primaryMonitor =
+    if hasMonitors
+    then builtins.head config.monitors
+    else {};
   primaryX = primaryMonitor.position.x or 0;
 
   # Partition secondary monitors into left and right based on their x position relative to primary
-  secondaryMonitors = builtins.tail config.monitors;
+  secondaryMonitors =
+    if hasMonitors
+    then builtins.tail config.monitors
+    else [];
   leftMonitors = builtins.filter (m: (m.position.x or 0) <= primaryX) secondaryMonitors;
   rightMonitors = builtins.filter (m: (m.position.x or 0) > primaryX) secondaryMonitors;
 

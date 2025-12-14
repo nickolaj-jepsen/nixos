@@ -5,10 +5,13 @@
   inputs,
   ...
 }: let
-  primaryMonitorName = (builtins.head config.monitors).name or "";
+  hasMonitors = config.monitors != [];
+  primaryMonitorName =
+    if hasMonitors
+    then (builtins.head config.monitors).name or ""
+    else "";
 in {
-  config = lib.mkIf config.fireproof.desktop.enable {
-    # TODO: Move these to a separate module
+  config = lib.mkIf config.fireproof.desktop.windowManager.enable {
     programs.xwayland.enable = true;
 
     xdg.portal = {

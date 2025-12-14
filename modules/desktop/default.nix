@@ -5,6 +5,11 @@
 }: {
   options.fireproof.desktop = {
     enable = lib.mkEnableOption "Enable desktop environment with niri, greetd, and all desktop features";
+    windowManager.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = config.fireproof.desktop.enable;
+      description = "Enable window manager (niri) and dank material shell (dms)";
+    };
   };
 
   imports = [
@@ -18,9 +23,4 @@
     ./gtk/default.nix
     ./dms/default.nix
   ];
-
-  config = lib.mkIf config.fireproof.desktop.enable {
-    # All desktop-related configuration is handled by the individual modules
-    # which check for fireproof.desktop.enable
-  };
 }

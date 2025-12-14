@@ -5,6 +5,7 @@ _: {
     ./boot.nix
     ./hosts.nix
     ./keyd.nix
+    ./wsl.nix
     ./ld.nix
     ./networking.nix
     ./security.nix

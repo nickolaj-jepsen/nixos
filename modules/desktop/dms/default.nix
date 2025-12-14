@@ -11,7 +11,7 @@
     ./bar.nix
   ];
 
-  config = lib.mkIf config.fireproof.desktop.enable {
+  config = lib.mkIf config.fireproof.desktop.windowManager.enable {
     systemd.user.services.niri-flake-polkit.enable = false;
 
     fireproof.home-manager = {
