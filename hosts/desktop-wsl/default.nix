@@ -19,5 +19,7 @@
     boot.loader.efi.canTouchEfiVariables = false;
   };
 
-  imports = [];
+  imports = [
+    ./ssh.nix
+  ];
 }
