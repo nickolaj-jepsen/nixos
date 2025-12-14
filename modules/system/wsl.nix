@@ -11,6 +11,7 @@
       defaultUser = config.fireproof.username;
       startMenuLaunchers = true;
       interop.includePath = false;
+      usbip.enable = true;
     };
 
     # WSL doesn't use a bootloader - disable systemd-boot

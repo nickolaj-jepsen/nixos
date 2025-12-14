@@ -3,6 +3,7 @@
 ## Architecture Overview
 
 This is a **NixOS flake-based configuration** managing multiple hosts (desktop, laptop, homelab, work, WSL) with:
+
 - **flake-parts** for modular flake organization
 - **home-manager** integrated via `fireproof.home-manager` option (not standalone)
 - **agenix + agenix-rekey** for YubiKey-based secret management
@@ -79,6 +80,7 @@ just new-host <hostname> <user>  # Bootstrap new host config
 ## Secret Management
 
 Secrets use **agenix-rekey** with YubiKey master identity:
+
 - Global secrets: `secrets/*.age`
 - Host-specific: `secrets/hosts/<hostname>/` (includes rekeyed secrets in `.rekey/`)
 - Reference secrets via `config.age.secrets.<name>.path`
@@ -117,7 +119,7 @@ services.myapp.environmentFile = config.age.secrets.my-secret.path;
 
 ### Adding a homelab service
 
-1. Create `modules/homelab/myservice.nix`  
+1. Create `modules/homelab/myservice.nix`
 2. Guard with `lib.mkIf config.fireproof.homelab.enable`
 3. Add nginx virtualHost for HTTPS proxy
 4. Import in `modules/homelab/default.nix`
