@@ -169,15 +169,15 @@ in {
                       same-tab = true;
                     }
                     {
-                      title = "Zigbee2MQTT";
-                      url = "https://zigbee.nickolaj.com";
-                      icon = "sh:zigbee2mqtt";
-                      same-tab = true;
-                    }
-                    {
                       title = "Nextcloud";
                       url = "https://nextcloud.nickolaj.com";
                       icon = "sh:nextcloud";
+                      same-tab = true;
+                    }
+                    {
+                      title = "Zigbee2MQTT";
+                      url = "https://zigbee.nickolaj.com";
+                      icon = "sh:zigbee2mqtt";
                       same-tab = true;
                     }
                     {
@@ -209,6 +209,12 @@ in {
                       title = "SABnzbd";
                       url = "https://sabnzbd.nickolaj.com";
                       icon = "sh:sabnzbd";
+                      same-tab = true;
+                    }
+                    {
+                      title = "Prowlarr";
+                      url = "https://prowlarr.nickolaj.com";
+                      icon = "sh:prowlarr";
                       same-tab = true;
                     }
                     {
