@@ -194,6 +194,12 @@ in {
                       same-tab = true;
                     }
                     {
+                      title = "Audiobookshelf";
+                      url = "https://audiobookshelf.nickolaj.com";
+                      icon = "sh:audiobookshelf";
+                      same-tab = true;
+                    }
+                    {
                       title = "Sonarr";
                       url = "https://sonarr.nickolaj.com";
                       icon = "sh:sonarr";
