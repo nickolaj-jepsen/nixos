@@ -8,6 +8,15 @@ lib.mkIf config.fireproof.homelab.enable (let
   domain = "glance.nickolaj.com";
   port = 8088;
 
+  glance-fork = pkgs.glance.overrideAttrs (oldAttrs: {
+    src = pkgs.fetchFromGitHub {
+      owner = "nickolaj-jepsen";
+      repo = "glance";
+      rev = "996d19a251c4d233f8091546ed0d22305b5e1641";
+      hash = "sha256-ZU9iswhgQPeMZeQmzgNhFBcO2TzWYrmIWPnKSAA0fFM=";
+    };
+  });
+
   customCss = pkgs.writeText "glance-custom.css" ''
     .bookmarks-group li > div {
       background-color: var(--color-background);
@@ -32,6 +41,7 @@ in {
 
   services.glance = {
     enable = true;
+    package = glance-fork;
     environmentFile = config.age.secrets.glance-env.path;
     settings = {
       server = {
