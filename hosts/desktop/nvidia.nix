@@ -11,15 +11,6 @@
   };
   services.xserver.videoDrivers = ["nvidia"];
 
-  fireproof.home-manager.wayland.windowManager.hyprland.settings = {
-    env = [
-      "LIBVA_DRIVER_NAME,nvidia"
-      "__GLX_VENDOR_LIBRARY_NAME,nvidia"
-      "NVD_BACKEND,direct"
-    ];
-
-    cursor.no_hardware_cursors = true;
-  };
   fireproof.home-manager.programs.niri.settings = {
     environment = {
       "LIBVA_DRIVER_NAME" = "nvidia";

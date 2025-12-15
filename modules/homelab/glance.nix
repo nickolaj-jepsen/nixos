@@ -237,7 +237,7 @@ in {
                     {
                       type = "hacker-news";
                       collapse-after = 10;
-                      limit = 20;
+                      limit = 30;
                     }
                     {
                       type = "rss";

@@ -29,6 +29,41 @@ in {
         profiles.default = {
           enableUpdateCheck = true;
           enableExtensionUpdateCheck = true;
+          userMcp = {
+            inputs = [
+              {
+                type = "promptString";
+                id = "context7-api-key";
+                description = "Context7 API Key";
+                password = true;
+              }
+            ];
+            servers = {
+              linear = {
+                url = "https://mcp.linear.app/mcp";
+                type = "http";
+              };
+              sentry = {
+                url = "https://mcp.sentry.dev/mcp";
+                type = "http";
+              };
+              figma = {
+                url = "https://mcp.figma.com/mcp";
+                type = "http";
+              };
+              context7 = {
+                type = "http";
+                url = "https://mcp.context7.com/mcp";
+                headers = {
+                  CONTEXT7_API_KEY = "\${input:context7-api-key}";
+                };
+              };
+              insight = {
+                url = "https://insight.mcp.aortl.net/mcp";
+                type = "http";
+              };
+            };
+          };
           keybindings = [
             {
               "key" = "ctrl+shift+p";

@@ -28,10 +28,7 @@ in {
       prefer-no-csd = true;
       clipboard.disable-primary = true;
       spawn-at-startup = [
-        {command = ["systemctl" "--user" "start" "hypridle"];}
         {command = ["systemctl" "--user" "start" "hyprpaper"];}
-        {command = ["systemctl" "--user" "start" "mako"];}
-        {command = ["systemctl" "--user" "start" "waybar"];}
       ];
       xwayland-satellite = {
         enable = true;
