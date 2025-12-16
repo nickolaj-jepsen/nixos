@@ -14,6 +14,7 @@
     ./plex.nix
     ./postgres.nix
     ./prometheus.nix
+    ./qbittorrent.nix
     ./restic.nix
     ./sso.nix
     ./vaultwarden.nix

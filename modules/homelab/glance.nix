@@ -12,7 +12,7 @@ lib.mkIf config.fireproof.homelab.enable (let
     src = pkgs.fetchFromGitHub {
       owner = "nickolaj-jepsen";
       repo = "glance";
-      rev = "996d19a251c4d233f8091546ed0d22305b5e1641";
+      rev = "7ea37f329e17908cdcc306f0fbb23a62e7c50584";
       hash = "sha256-ZU9iswhgQPeMZeQmzgNhFBcO2TzWYrmIWPnKSAA0fFM=";
     };
   });
@@ -231,6 +231,12 @@ in {
                       title = "Prowlarr";
                       url = "https://prowlarr.nickolaj.com";
                       icon = "sh:prowlarr";
+                      same-tab = true;
+                    }
+                    {
+                      title = "qBittorrent";
+                      url = "https://qbittorrent.nickolaj.com";
+                      icon = "sh:qbittorrent";
                       same-tab = true;
                     }
                     {
