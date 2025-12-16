@@ -5,31 +5,13 @@
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
-  inherit (config.fireproof) username;
-  user = "media";
-  group = "media";
-
   # VPN namespace configuration
-  vpnNamespace = "vpn";
-  vpnInterface = "wg0";
+  vpnNamespace = "qbittorrent-vpn";
+  vpnInterface = "qbt-wg0";
 
   # Ports
   webUiPort = 8082;
   torrentPort = 51413;
-
-  mkVirtualHost = port: {
-    enableACME = true;
-    forceSSL = true;
-    locations."/" = {
-      proxyPass = "http://localhost:${toString port}";
-      extraConfig = ''
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-      '';
-    };
-  };
 in {
   # Secrets for Mullvad WireGuard config
   # mullvad-wg.age should contain just the WireGuard config (not the Address line):
@@ -66,30 +48,11 @@ in {
         # Create network namespace if it doesn't exist
         ip netns add ${vpnNamespace} || true
 
-        # Create veth pair for communication between namespaces
-        ip link add veth-vpn type veth peer name veth-vpn-br || true
-        ip link set veth-vpn-br netns ${vpnNamespace} || true
-
-        # Configure host side
-        ip addr add 10.200.200.1/24 dev veth-vpn || true
-        ip link set veth-vpn up
-
-        # Configure namespace side
-        ip netns exec ${vpnNamespace} ip addr add 10.200.200.2/24 dev veth-vpn-br || true
-        ip netns exec ${vpnNamespace} ip link set veth-vpn-br up
+        # Set up loopback interface in namespace
         ip netns exec ${vpnNamespace} ip link set lo up
-
-        # Enable IP forwarding for the veth bridge
-        echo 1 > /proc/sys/net/ipv4/ip_forward
-        iptables -t nat -A POSTROUTING -s 10.200.200.0/24 -o veth-vpn -j MASQUERADE || true
-
-        # Allow traffic from namespace to host for web UI
-        iptables -A FORWARD -i veth-vpn -o veth-vpn -j ACCEPT || true
       '';
       ExecStop = pkgs.writeShellScript "destroy-vpn-netns" ''
-        ip link del veth-vpn || true
         ip netns del ${vpnNamespace} || true
-        iptables -t nat -D POSTROUTING -s 10.200.200.0/24 -o veth-vpn -j MASQUERADE || true
       '';
     };
   };
@@ -107,8 +70,12 @@ in {
       RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "setup-wg-vpn" ''
         set -ex
-        # Create WireGuard interface in namespace
-        ip link add ${vpnInterface} type wireguard || true
+        # Clean up any existing WireGuard interface first
+        ip link del ${vpnInterface} 2>/dev/null || true
+        ip netns exec ${vpnNamespace} ip link del ${vpnInterface} 2>/dev/null || true
+
+        # Create WireGuard interface
+        ip link add ${vpnInterface} type wireguard
         ip link set ${vpnInterface} netns ${vpnNamespace}
 
         # Configure WireGuard with Mullvad config
@@ -116,7 +83,7 @@ in {
 
         # Set the interface address from secret file
         WG_ADDR=$(cat ${config.age.secrets.mullvad-wg-address.path})
-        ip netns exec ${vpnNamespace} ip addr add "$WG_ADDR" dev ${vpnInterface} || true
+        ip netns exec ${vpnNamespace} ip addr add "$WG_ADDR" dev ${vpnInterface}
         ip netns exec ${vpnNamespace} ip link set ${vpnInterface} up
 
         # Route all traffic through WireGuard (default route)
@@ -134,25 +101,43 @@ in {
   };
 
   # qBittorrent service running inside the VPN namespace
+  services.qbittorrent = {
+    enable = true;
+    user = "media";
+    group = "media";
+    webuiPort = webUiPort;
+    torrentingPort = torrentPort;
+    serverConfig = {
+      LegalNotice.Accepted = true;
+      Preferences = {
+        WebUI = {
+          Address = "*";
+          Port = webUiPort;
+        };
+        Connection = {
+          PortRangeMin = torrentPort;
+        };
+        Downloads = {
+          SavePath = "/mnt/data/torrent";
+        };
+      };
+    };
+  };
+
+  # Override the qbittorrent service to run in VPN namespace
   systemd.services.qbittorrent = {
-    description = "qBittorrent-nox service";
-    documentation = ["man:qbittorrent-nox(1)"];
     after = [
       "network.target"
       "wg-${vpnNamespace}.service"
     ];
     requires = ["wg-${vpnNamespace}.service"];
-    wantedBy = ["multi-user.target"];
     serviceConfig = {
-      Type = "simple";
-      User = user;
-      Group = group;
-      StateDirectory = "qbittorrent";
       # Run in the VPN namespace
       NetworkNamespacePath = "/var/run/netns/${vpnNamespace}";
-      ExecStart = "${pkgs.qbittorrent-nox}/bin/qbittorrent-nox --webui-port=${toString webUiPort}";
-      Restart = "on-failure";
-      TimeoutStopSec = 1800;
+      # Bind mount the DNS config into the namespace
+      BindReadOnlyPaths = [
+        "/etc/netns/${vpnNamespace}/resolv.conf:/etc/resolv.conf"
+      ];
     };
   };
 
@@ -162,14 +147,15 @@ in {
     after = ["qbittorrent.service"];
     requires = ["qbittorrent.service"];
     wantedBy = ["multi-user.target"];
+    path = with pkgs; [iproute2 socat];
     serviceConfig = {
       Type = "simple";
       Restart = "on-failure";
-      ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${toString webUiPort},fork,reuseaddr EXEC:'${pkgs.iproute2}/bin/ip netns exec ${vpnNamespace} ${pkgs.socat}/bin/socat STDIO TCP\\:127.0.0.1\\:${toString webUiPort}'";
+      ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${toString webUiPort},fork,reuseaddr,bind=0.0.0.0 EXEC:'${pkgs.iproute2}/bin/ip netns exec ${vpnNamespace} ${pkgs.socat}/bin/socat STDIO TCP\\:127.0.0.1\\:${toString webUiPort}'";
     };
   };
 
-  # Firewall rules for torrent port (forwarded through VPN)
+  # Firewall rules
   networking.firewall.allowedTCPPorts = [webUiPort];
   networking.firewall.allowedUDPPorts = [torrentPort];
 
@@ -178,7 +164,19 @@ in {
       "qbittorrent.nickolaj.com".allowed_groups = ["arr"];
     };
     nginx.virtualHosts = {
-      "qbittorrent.nickolaj.com" = mkVirtualHost webUiPort;
+      "qbittorrent.nickolaj.com" = {
+        enableACME = true;
+        forceSSL = true;
+        locations."/" = {
+          proxyPass = "http://localhost:${toString webUiPort}";
+          extraConfig = ''
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+          '';
+        };
+      };
     };
 
     restic.backups.homelab.paths = [

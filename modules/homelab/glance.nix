@@ -12,8 +12,8 @@ lib.mkIf config.fireproof.homelab.enable (let
     src = pkgs.fetchFromGitHub {
       owner = "nickolaj-jepsen";
       repo = "glance";
-      rev = "7ea37f329e17908cdcc306f0fbb23a62e7c50584";
-      hash = "sha256-ZU9iswhgQPeMZeQmzgNhFBcO2TzWYrmIWPnKSAA0fFM=";
+      rev = "c490067f87186cac9084a76010a646119b7793e1";
+      hash = "sha256-zsanWSWO/gY4ZuYssdcoGKVw/Yk29qaF5Gn5XUYKQhk=";
     };
   });
 
