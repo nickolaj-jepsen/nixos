@@ -130,8 +130,10 @@ in {
               "github.copilot.chat.agent.thinkingTool" = true;
               "github.copilot.chat.codesearch.enabled" = true;
               "github.copilot.nextEditSuggestions.enabled" = true;
-              "githubPullRequests.codingAgent.uiIntegration" = true;
-              "githubPullRequests.pullBranch" = "always";
+              "github.copilot.chat.githubMcpServer.enabled" = true;
+              "chat.customAgentInSubagent.enabled" = true;
+              "inlineChat.enableV2" = true;
+
               "chat.tools.terminal.autoApprove" = {
                 "nix" = true;
                 "cat" = true;
@@ -182,6 +184,11 @@ in {
               "git.confirmSync" = false;
               "git.enableSmartCommit" = true;
               "diffEditor.ignoreTrimWhitespace" = false;
+              "scm.repositories.explorer" = true;
+
+              # GitHub
+              "githubPullRequests.codingAgent.uiIntegration" = true;
+              "githubPullRequests.pullBranch" = "always";
 
               # nix-ide
               "nix.enableLanguageServer" = true;
