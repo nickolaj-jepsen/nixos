@@ -15,5 +15,6 @@ _: {
     ./user.nix
     ./yubikey.nix
     ./tailscale.nix
+    ./battery.nix
   ];
 }

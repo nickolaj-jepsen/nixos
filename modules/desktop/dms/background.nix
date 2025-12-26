@@ -46,12 +46,12 @@ in {
         };
       };
 
-      programs.dankMaterialShell.default.settings = {
+      programs.dank-material-shell.default.settings = {
         # Disables wallpaper management in DMS to avoid conflicts with Hyprpaper
         screenPreferences.wallpaper = [];
       };
 
-      programs.dankMaterialShell.default.session = {
+      programs.dank-material-shell.default.session = {
         # Attempt to set a default wallpaper on first run
         wallpaperPath = unknownPng;
       };

@@ -16,10 +16,10 @@
 
     fireproof.home-manager = {
       imports = [
-        inputs.dankMaterialShell.homeModules.dankMaterialShell.default
+        inputs.dank-material-shell.homeModules.dank-material-shell
       ];
 
-      programs.dankMaterialShell = {
+      programs.dank-material-shell = {
         enable = true;
 
         enableDynamicTheming = false;

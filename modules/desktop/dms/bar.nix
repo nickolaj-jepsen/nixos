@@ -70,13 +70,14 @@
       centerWidgets = [
         "focusedWindow"
       ];
-      rightWidgets = [
-        "music"
-        "systemTray"
-        "cpuUsage"
-        "controlCenterButton"
-        "notificationButton"
-      ];
+      rightWidgets =
+        [
+          "music"
+          "systemTray"
+          "cpuUsage"
+          "controlCenterButton"
+        ]
+        ++ lib.optional config.fireproof.hardware.battery "battery" ++ ["notificationButton"];
     }
     // commonBarSettings;
 
@@ -123,7 +124,7 @@
 in {
   config = lib.mkIf config.fireproof.desktop.enable {
     fireproof.home-manager = {
-      programs.dankMaterialShell.default.settings = {
+      programs.dank-material-shell.default.settings = {
         launcherLogoMode = "os";
         launcherLogoContrast = 1;
         launcherLogoSizeOffset = 3;

@@ -6,6 +6,7 @@
       dev.enable = true;
       hostname = "laptop";
       username = "nickolaj";
+      hardware.battery = true;
     };
     facter.reportPath = ./facter.json;
   };

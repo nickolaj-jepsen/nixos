@@ -36,7 +36,7 @@ switch hostname=`hostname -s` target='':
     #!/usr/bin/env -S bash -e
     target="{{ target }}"
     if [ -z "$target" ]; then
-        sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch --show-trace --fast --flake .#{{ hostname }}
+        sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch --show-trace --flake .#{{ hostname }}
     else
         {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch \
             --flake .#{{ hostname }} \

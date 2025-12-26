@@ -8,7 +8,7 @@ lib.mkIf config.fireproof.homelab.enable (let
   domain = "glance.nickolaj.com";
   port = 8088;
 
-  glance-fork = pkgs.glance.overrideAttrs (oldAttrs: {
+  glance-fork = pkgs.glance.overrideAttrs (_oldAttrs: {
     src = pkgs.fetchFromGitHub {
       owner = "nickolaj-jepsen";
       repo = "glance";

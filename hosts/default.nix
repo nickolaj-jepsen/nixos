@@ -27,7 +27,7 @@
               inputs.agenix-rekey.nixosModules.default
               inputs.nix-index-database.nixosModules.nix-index
               inputs.nixos-facter-modules.nixosModules.facter
-              inputs.dankMaterialShell.nixosModules.dankMaterialShell
+              inputs.dank-material-shell.nixosModules.dank-material-shell
               inputs.niri.nixosModules.niri
               inputs.determinate.nixosModules.default
               inputs.nixos-wsl.nixosModules.default

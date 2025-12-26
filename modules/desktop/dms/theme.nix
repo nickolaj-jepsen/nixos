@@ -30,7 +30,7 @@ in {
         matugen_type = "scheme-expressive";
       };
 
-      programs.dankMaterialShell.default.settings = {
+      programs.dank-material-shell.default.settings = {
         # Color theme
         currentThemeName = "custom";
         customThemeFile = "/home/${username}/.config/DankMaterialShell/colors.json";
