@@ -18,6 +18,15 @@
           };
         };
       };
+      keyboards.default = {
+        ids = ["*"];
+        settings = {
+          main = {
+            # Rebind capslock to backspace for all keyboards
+            capslock = "backspace";
+          };
+        };
+      };
     };
   };
 }
