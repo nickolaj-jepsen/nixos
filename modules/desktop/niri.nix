@@ -113,11 +113,11 @@ in {
         };
         "XF86MonBrightnessUp" = {
           allow-when-locked = true;
-          action.spawn = ["dms" "ipc" "brightness" "increment" "5"];
+          action.spawn = ["dms" "ipc" "brightness" "increment" "5" ""];
         };
         "XF86MonBrightnessDown" = {
           allow-when-locked = true;
-          action.spawn = ["dms" "ipc" "brightness" "decrement" "5"];
+          action.spawn = ["dms" "ipc" "brightness" "decrement" "5" ""];
         };
         "Mod+N" = {
           action.spawn = ["dms" "ipc" "notifications" "toggle"];
