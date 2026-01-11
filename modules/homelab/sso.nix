@@ -46,7 +46,6 @@ in {
         name = "zitadel";
         ensureDBOwnership = true;
         ensureClauses.login = true;
-        ensureClauses.superuser = true;
       }
     ];
   };
@@ -100,6 +99,8 @@ in {
     validateURL = "https://${zitadelDomain}/oauth2/";
     oidcIssuerUrl = "https://${zitadelDomain}:443";
     keyFile = config.age.secrets.oauth2-proxy.path;
+    passBasicAuth = true;
+    setXauthrequest = true;
     nginx.domain = oathproxyDomain;
     email.domains = ["*"];
     extraConfig = {

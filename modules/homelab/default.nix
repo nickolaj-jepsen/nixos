@@ -6,6 +6,7 @@
   imports = [
     ./arr.nix
     ./audiobookshelf.nix
+    ./freshrss.nix
     ./glance.nix
     ./home-assistant.nix
     ./jellyfin.nix

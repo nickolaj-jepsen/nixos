@@ -210,6 +210,12 @@ in {
                       same-tab = true;
                     }
                     {
+                      title = "FreshRSS";
+                      url = "https://freshrss.nickolaj.com";
+                      icon = "sh:freshrss";
+                      same-tab = true;
+                    }
+                    {
                       title = "Sonarr";
                       url = "https://sonarr.nickolaj.com";
                       icon = "sh:sonarr";
