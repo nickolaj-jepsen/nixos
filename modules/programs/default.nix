@@ -6,6 +6,7 @@
 
   imports = [
     ./fish/default.nix
+    ./zsh/default.nix
     ./claude.nix
     ./comma.nix
     ./core.nix

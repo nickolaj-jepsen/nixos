@@ -1,0 +1,70 @@
+# Starship prompt configuration
+# https://starship.rs/config/
+"$schema" = 'https://starship.rs/config-schema.json'
+
+format = """
+$status\
+$directory\
+[](fg:prev_bg bg:color_bg) 
+"""
+right_format = """
+$cmd_duration\
+$time
+"""
+
+palette = 'fireproof'
+
+[palettes.fireproof]
+color_bg = '#1C1B1A'
+color_bg_alt = '#282726'
+color_fg = '#DAD8CE'
+color_fg_alt = '#B7B5AC'
+color_muted = '#878580'
+color_ui = '#343331'
+color_ui_alt = '#403E3C'
+color_black = '#100F0F'
+color_accent = '#CF6A4C'
+color_red = '#D14D41'
+color_red_alt = '#AF3029'
+color_orange = '#DA702C'
+color_orange_alt = '#BC5215'
+color_yellow = '#D0A215'
+color_yellow_alt = '#AD8301'
+color_green = '#879A39'
+color_green_alt = '#66800B'
+color_cyan = '#3AA99F'
+color_cyan_alt = '#24837B'
+color_blue = '#4385BE'
+color_blue_alt = '#205EA6'
+color_purple = '#8B7EC8'
+color_purple_alt = '#5E409D'
+color_magenta = '#CE5D97'
+color_magenta_alt = '#A02F6F'
+color_white = '#DAD8CE'
+color_white_alt = '#F2F0E5'
+
+[status]
+disabled = false
+symbol = "!"
+not_executable_symbol = "X"
+not_found_symbol = "?"
+sigint_symbol = "%"
+style = "bold bg:color_fg fg:color_red"
+format = "[ $symbol ]($style)[](fg:color_fg bg:color_black)"
+
+[directory]
+style = "bold fg:color_fg bg:color_black"
+format = "[ $path ]($style)"
+
+[cmd_duration]
+disabled = false
+format = "[$duration - ]($style)"
+style = "fg:color_muted"
+
+[time]
+disabled = false
+format = "[$time]($style)"
+style = "fg:color_muted"
+
+[line_break]
+disabled = false
