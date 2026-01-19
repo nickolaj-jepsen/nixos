@@ -134,6 +134,7 @@ in {
               "chat.customAgentInSubagent.enabled" = true;
               "inlineChat.enableV2" = true;
               "chat.viewSessions.orientation" = "vertical";
+              "chat.agent.maxRequests" = 100;
 
               "chat.tools.terminal.autoApprove" = {
                 "nix" = true;

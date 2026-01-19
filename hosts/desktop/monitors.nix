@@ -1,7 +1,7 @@
 _: {
   monitors = [
     {
-      name = "DP-3";
+      name = "DP-2";
       resolution = {
         width = 2560;
         height = 1440;
@@ -14,7 +14,7 @@ _: {
       };
     }
     {
-      name = "DP-2";
+      name = "DP-3";
       resolution = {
         width = 2560;
         height = 1440;

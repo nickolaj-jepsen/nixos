@@ -124,7 +124,7 @@
 in {
   config = lib.mkIf config.fireproof.desktop.enable {
     fireproof.home-manager = {
-      programs.dank-material-shell.default.settings = {
+      programs.dank-material-shell.settings = {
         launcherLogoMode = "os";
         launcherLogoContrast = 1;
         launcherLogoSizeOffset = 3;

@@ -131,6 +131,10 @@ in {
           action.spawn = ["dms" "ipc" "spotlight" "toggle"];
           hotkey-overlay.title = "Toggle Application Launcher";
         };
+        "Mod+Semicolon" = {
+          action.spawn = ["dms" "ipc" "spotlight" "toggleQuery" ":"];
+          hotkey-overlay.title = "Toggle Emoji Picker";
+        };
         "Mod+P" = {
           action.spawn = ["dms" "ipc" "powermenu" "toggle"];
           hotkey-overlay.title = "Toggle Power Menu";

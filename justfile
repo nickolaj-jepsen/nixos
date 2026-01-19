@@ -1,7 +1,6 @@
 # export NIXPKGS_ALLOW_UNFREE := "1"
 
 nixcmd := "nix --experimental-features 'nix-command flakes'"
-nix_output_monitor := "--log-format internal-json |& nix --experimental-features 'nix-command flakes' run nixpkgs#nix-output-monitor -- --json"
 
 @_default:
     just --list
@@ -41,7 +40,7 @@ switch hostname=`hostname -s` target='':
         {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch \
             --flake .#{{ hostname }} \
             --target-host {{ target }} \
-            --sudo {{ nix_output_monitor }}
+            --sudo
     fi
 
 [doc('Use nixos-anywhere to deploy to a remote host')]
@@ -72,7 +71,7 @@ deploy-remote hostname target:
 [doc('A wrapper disko-install')]
 [group('deploy')]
 disko-install hostname disk:
-    sudo {{ nixcmd }} run 'github:nix-community/disko/latest#disko-install' -- --flake .#{{ hostname }} --disk main {{ disk }} {{ nix_output_monitor }}
+    sudo {{ nixcmd }} run 'github:nix-community/disko/latest#disko-install' -- --flake .#{{ hostname }} --disk main {{ disk }}
 
 [doc('Build an install ISO for a host')]
 [group('deploy')]
@@ -83,7 +82,7 @@ iso hostname:
 [group('deploy')]
 bootstrap-iso:
     @echo "Building bootstrap ISO..."
-    {{ nixcmd }} build .#nixosConfigurations.bootstrap.config.system.build.isoImage {{ nix_output_monitor }}
+    {{ nixcmd }} build .#nixosConfigurations.bootstrap.config.system.build.isoImage
     @echo "ISO built: $(ls -1 result/iso/*.iso)"
 
 [doc('Flash the bootstrap ISO to a USB drive')]

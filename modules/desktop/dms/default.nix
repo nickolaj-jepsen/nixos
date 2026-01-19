@@ -2,13 +2,14 @@
   config,
   lib,
   inputs,
-  pkgs,
+  pkgsUnstable,
   ...
 }: {
   imports = [
     ./theme.nix
     ./background.nix
     ./bar.nix
+    ./plugins.nix
   ];
 
   config = lib.mkIf config.fireproof.desktop.windowManager.enable {
@@ -25,10 +26,11 @@
         enableDynamicTheming = false;
         enableVPN = false;
         enableCalendarEvents = false;
+        dgop.package = pkgsUnstable.dgop;  # not available in stable nixpkgs yet (25.11)
 
         systemd.enable = true;
 
-        default.settings = {
+        settings = {
           # General Settings
           weatherCoordinates = "56.1496278,10.2134046";
 
@@ -53,21 +55,6 @@
             "suspend"
           ];
           powerMenuDefaultAction = "lock";
-        };
-      };
-
-      systemd.user.services = {
-        # A hack to always serve fresh settings from default-settings.json
-        dms-clean-settings = {
-          Unit = {
-            Description = "Delete DankMaterialShell settings before dms starts";
-            Before = ["dms.service"];
-          };
-          Service = {
-            Type = "oneshot";
-            ExecStart = "${pkgs.coreutils}/bin/rm -f %h/.config/DankMaterialShell/settings.json";
-          };
-          Install.WantedBy = ["dms.service"];
         };
       };
     };

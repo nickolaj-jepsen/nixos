@@ -56,7 +56,7 @@ if type -q kubectl
 
     alias kns "kubectl config view --minify --output 'jsonpath={..namespace}'"
     abbr ksns "kubectl config set-context --current --namespace"
-    abbr ksc "kubectl config set-context"
+    abbr ksc "kubectl config use-context"
 
     abbr kexec --function __echo_kubeexec
     abbr kmanage --function __echo_kubemanage
