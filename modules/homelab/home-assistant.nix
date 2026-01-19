@@ -79,6 +79,36 @@ in {
             hash = "sha256-W9xO3JjnRKHk/dlXMA6y5nEJl/KsGzPvJoumGw+nohw=";
           };
         })
+        (pkgs.buildHomeAssistantComponent rec {
+          owner = "snicker";
+          domain = "zwift";
+          version = "v3.3.5";
+          src = pkgs.fetchFromGitHub {
+            inherit owner;
+            repo = "zwift_hass";
+            rev = version;
+            hash = "sha256-+lJ6Otp8lT+xVtjiQLSQrqT5cVinRTRPTzS+HB1AxB0=";
+          };
+          propagatedBuildInputs = [
+            (pkgs.python313.pkgs.buildPythonPackage rec {
+              pname = "zwift-client";
+              version = "0.2.0";
+              pyproject = true;
+              src = pkgs.fetchFromGitHub {
+                owner = "nickolaj-jepsen";
+                repo = "zwift-client";
+                rev = "882fb881f1271dc104fd0250cab4ceb6e3710a59";
+                hash = "sha256-4gOlWG+QVwODlIhiNH7rhiD0rzNv2WxY2ty9o/51eHU=";
+              };
+              doCheck = false;
+              propagatedBuildInputs = with pkgs.python313.pkgs; [
+                hatchling
+                requests
+                protobuf
+              ];
+            })
+          ];
+        })
       ];
       extraComponents = [
         "default_config"
@@ -110,8 +140,14 @@ in {
             "127.0.0.1"
             "::1"
           ];
-          # base_url = "https://ha.nickolaj.com";
         };
+        sensor = [
+          {
+            platform = "zwift";
+            username = "!secret zwift_username";
+            password = "!secret zwift_password";
+          }
+        ];
 
         automation = "!include automations.yaml";
         script = "!include scripts.yaml";

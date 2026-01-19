@@ -108,4 +108,9 @@ in {
       cookie-domain = ".${rootDomain}";
     };
   };
+
+  systemd.services.oauth2-proxy.serviceConfig = {
+    Restart = "always";
+    RestartSec = "5s";
+  };
 })

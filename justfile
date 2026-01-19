@@ -39,6 +39,7 @@ switch hostname=`hostname -s` target='':
     else
         {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch \
             --flake .#{{ hostname }} \
+            --use-substitutes \
             --target-host {{ target }} \
             --sudo
     fi
