@@ -61,5 +61,7 @@
     dank-material-shell.url = "github:AvengeMedia/DankMaterialShell";
     dank-material-shell.inputs.nixpkgs.follows = "nixpkgs";
     dank-material-shell.inputs.dgop.follows = "dgop";
+
+    opencode.url = "github:anomalyco/opencode";
   };
 }

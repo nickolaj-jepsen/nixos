@@ -133,6 +133,7 @@ in {
               "github.copilot.chat.githubMcpServer.enabled" = true;
               "chat.customAgentInSubagent.enabled" = true;
               "inlineChat.enableV2" = true;
+              "chat.viewSessions.orientation" = "vertical";
 
               "chat.tools.terminal.autoApprove" = {
                 "nix" = true;
