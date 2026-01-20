@@ -251,6 +251,18 @@ in {
                       icon = "sh:zitadel";
                       same-tab = true;
                     }
+                    {
+                      title = "Scrutiny";
+                      url = "https://scrutiny.nickolaj.com";
+                      icon = "sh:scrutiny";
+                      same-tab = true;
+                    }
+                    {
+                      title = "Grafana";
+                      url = "https://fireproof.grafana.net/a/grafana-setupguide-app/home";
+                      icon = "si:grafana";
+                      same-tab = true;
+                    }
                   ];
                 }
                 {

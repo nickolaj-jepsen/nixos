@@ -17,6 +17,8 @@
     ./prometheus.nix
     ./qbittorrent.nix
     ./restic.nix
+    ./scrutiny.nix
+    ./security.nix
     ./sso.nix
     ./vaultwarden.nix
   ];

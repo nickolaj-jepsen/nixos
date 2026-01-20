@@ -14,7 +14,7 @@ lib.mkIf config.fireproof.homelab.enable (let
         };
 
         targets = [
-          "${toString config.services.prometheus.exporters.${name}.listenAddress}:${toString config.services.prometheus.exporters.${name}.port}"
+          "127.0.0.1:${toString config.services.prometheus.exporters.${name}.port}"
         ];
       }
     ];
@@ -42,13 +42,25 @@ in {
 
     scrapeConfigs = [
       (mkScrapeConfig "node")
+      (mkScrapeConfig "nginx")
+      (mkScrapeConfig "postgres")
     ];
 
-    exporters.node = {
-      enable = true;
-      extraFlags = [
-        "--web.disable-exporter-metrics"
-      ];
+    exporters = {
+      node = {
+        enable = true;
+        extraFlags = [
+          "--web.disable-exporter-metrics"
+        ];
+      };
+      nginx = {
+        enable = true;
+        scrapeUri = "http://127.0.0.1:8070/metrics";
+      };
+      postgres = {
+        enable = true;
+        runAsLocalSuperUser = true;
+      };
     };
   };
 })
