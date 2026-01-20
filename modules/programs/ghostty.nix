@@ -4,7 +4,9 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  c = config.fireproof.theme.colors;
+in {
   config = lib.mkIf config.fireproof.desktop.enable {
     environment.systemPackages = with pkgs; [
       ghostty
@@ -22,29 +24,29 @@
         };
         themes = {
           fireproof = {
-            background = "1C1B1A";
-            cursor-color = "DAD8CE";
-            foreground = "DAD8CE";
+            background = c.bg;
+            cursor-color = c.fg;
+            foreground = c.fg;
             palette = [
-              "0=#100F0F"
-              "1=#AF3029"
-              "2=#66800B"
-              "3=#AD8301"
-              "4=#205EA6"
-              "5=#A02F6F"
-              "6=#24837B"
-              "7=#DAD8CE"
-              "8=#878580"
-              "9=#D14D41"
-              "10=#879A39"
-              "11=#D0A215"
-              "12=#4385BE"
-              "13=#CE5D97"
-              "14=#3AA99F"
-              "15=#F2F0E5"
+              "0=#${c.black}"
+              "1=#${c.redAlt}"
+              "2=#${c.greenAlt}"
+              "3=#${c.yellowAlt}"
+              "4=#${c.blueAlt}"
+              "5=#${c.magentaAlt}"
+              "6=#${c.cyanAlt}"
+              "7=#${c.fg}"
+              "8=#${c.muted}"
+              "9=#${c.red}"
+              "10=#${c.green}"
+              "11=#${c.yellow}"
+              "12=#${c.blue}"
+              "13=#${c.magenta}"
+              "14=#${c.cyan}"
+              "15=#${c.whiteAlt}"
             ];
-            selection-background = "403E3C";
-            selection-foreground = "DAD8CE";
+            selection-background = c.uiAlt;
+            selection-foreground = c.fg;
           };
         };
       };

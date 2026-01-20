@@ -19,7 +19,7 @@
     ./greetd.nix
     ./niri.nix
     ./qt.nix
-    ./gtk/default.nix
+    ./gtk.nix
     ./dms/default.nix
   ];
 }

@@ -4,29 +4,30 @@
   ...
 }: let
   inherit (config.fireproof) username;
+  c = config.fireproof.theme.colors;
 in {
   config = lib.mkIf config.fireproof.desktop.enable {
     fireproof.home-manager = {
       home.file.".config/DankMaterialShell/colors.json".text = builtins.toJSON {
         name = "custom";
-        primary = "#CF6A4C";
-        primaryText = "#F2F0E5";
-        primaryContainer = "#403E3C";
-        secondary = "#CE5D97";
-        surface = "#343331";
-        surfaceText = "#DAD8CE";
-        surfaceVariant = "#1C1B1A";
-        surfaceVariantText = "#B7B5AC";
-        surfaceTint = "#CF6A4C";
-        background = "#100F0F";
-        backgroundText = "#F2F0E5";
-        outline = "#878580";
-        surfaceContainer = "#1C1B1A";
-        surfaceContainerHigh = "#282726";
-        surfaceContainerHighest = "#403E3C";
-        error = "#D14D41";
-        warning = "#D0A215";
-        info = "#4385BE";
+        primary = "#${c.accent}";
+        primaryText = "#${c.whiteAlt}";
+        primaryContainer = "#${c.uiAlt}";
+        secondary = "#${c.magenta}";
+        surface = "#${c.ui}";
+        surfaceText = "#${c.fg}";
+        surfaceVariant = "#${c.bg}";
+        surfaceVariantText = "#${c.fgAlt}";
+        surfaceTint = "#${c.accent}";
+        background = "#${c.black}";
+        backgroundText = "#${c.whiteAlt}";
+        outline = "#${c.muted}";
+        surfaceContainer = "#${c.bg}";
+        surfaceContainerHigh = "#${c.bgAlt}";
+        surfaceContainerHighest = "#${c.uiAlt}";
+        error = "#${c.red}";
+        warning = "#${c.yellow}";
+        info = "#${c.blue}";
         matugen_type = "scheme-expressive";
       };
 

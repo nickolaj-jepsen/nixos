@@ -5,6 +5,7 @@
   inputs,
   ...
 }: let
+  c = config.fireproof.theme.colors;
   hasMonitors = config.monitors != [];
   primaryMonitorName =
     if hasMonitors
@@ -41,12 +42,12 @@ in {
       layout = {
         gaps = 10;
         focus-ring.enable = false;
-        insert-hint.display.color = "#CF6A4C";
+        insert-hint.display.color = "#${c.accent}";
         border = {
           enable = true;
           width = 2;
-          active.color = "#CF6A4C";
-          inactive.color = "#343331";
+          active.color = "#${c.accent}";
+          inactive.color = "#${c.ui}";
         };
         tab-indicator = {
           hide-when-single-tab = true;

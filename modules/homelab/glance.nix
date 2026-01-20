@@ -5,6 +5,7 @@
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
+  hsl = config.fireproof.theme.hsl;
   domain = "glance.nickolaj.com";
   port = 8088;
 
@@ -50,10 +51,10 @@ in {
         base-url = "https://${domain}";
       };
       theme = {
-        background-color = "30 4 11"; # #1C1B1A (HSL)
-        primary-color = "14 56 55"; # #CF6A4C accent (HSL)
-        positive-color = "72 59 38"; # #879A39 green (HSL)
-        negative-color = "5 64 54"; # #D14D41 red (HSL)
+        background-color = hsl.bg;
+        primary-color = hsl.accent;
+        positive-color = hsl.green;
+        negative-color = hsl.red;
         contrast-multiplier = 1.1;
         text-saturation-multiplier = 1.0;
         custom-css-file = "https://${domain}/custom.css";
