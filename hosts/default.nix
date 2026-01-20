@@ -36,6 +36,7 @@
               ../modules/programs
               ../modules/desktop
               ../modules/homelab
+              ../modules/scripts
               host
             ]
             ++ modules;
