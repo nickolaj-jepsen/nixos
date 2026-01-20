@@ -8,6 +8,8 @@
       type = lib.types.str;
       description = "The primary username for the machine";
     };
+    work.enable = lib.mkEnableOption "Enable work-related applications and tools";
+    dev.enable = lib.mkEnableOption "Enable development tools and applications";
     hardware = {
       battery = lib.mkOption {
         type = lib.types.bool;

@@ -1,8 +1,7 @@
 _: {
-  options.fireproof.base = {};
-
   imports = [
     ./boot.nix
+    ./hardware.nix
     ./hosts.nix
     ./keyd.nix
     ./wsl.nix

@@ -1,9 +1,4 @@
-{lib, ...}: {
-  options.fireproof = {
-    work.enable = lib.mkEnableOption "Enable work-related applications and tools";
-    dev.enable = lib.mkEnableOption "Enable development tools and applications";
-  };
-
+_: {
   imports = [
     ./fish/default.nix
     ./claude.nix

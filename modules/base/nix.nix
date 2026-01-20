@@ -1,4 +1,4 @@
-{config, ...}: {
+{config, pkgs, ...}: {
   nixpkgs.config.allowUnfree = true;
 
   nix.settings = {
@@ -8,7 +8,9 @@
       config.fireproof.username
     ];
 
-    experimental-features = "nix-command flakes";
+    experimental-features = ["nix-command" "flakes"];
+    warn-dirty = false;
+
     substituters = [
       "https://nix-community.cachix.org"
       "https://install.determinate.systems"
@@ -19,4 +21,7 @@
       "cache.flakehub.com-3:hJuILl5sVK4iKm86JzgdXW12Y2Hwd5G07qKtHTOcDCM="
     ];
   };
+
+  # Make 'nix repl' have all the nixpkgs available
+  environment.systemPackages = [pkgs.nixpkgs-fmt];
 }
