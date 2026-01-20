@@ -5,7 +5,7 @@
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
-  hsl = config.fireproof.theme.hsl;
+  inherit (config.fireproof.theme) hsl;
   domain = "glance.nickolaj.com";
   port = 8088;
 

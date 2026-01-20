@@ -26,7 +26,7 @@
         enableDynamicTheming = false;
         enableVPN = false;
         enableCalendarEvents = false;
-        dgop.package = pkgsUnstable.dgop;  # not available in stable nixpkgs yet (25.11)
+        dgop.package = pkgsUnstable.dgop; # not available in stable nixpkgs yet (25.11)
 
         systemd.enable = true;
 

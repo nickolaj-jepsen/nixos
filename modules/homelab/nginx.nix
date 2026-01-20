@@ -15,7 +15,12 @@ lib.mkIf config.fireproof.homelab.enable {
     recommendedBrotliSettings = true;
 
     virtualHosts."status.localhost" = {
-      listen = [{ addr = "127.0.0.1"; port = 8070; }];
+      listen = [
+        {
+          addr = "127.0.0.1";
+          port = 8070;
+        }
+      ];
       locations."/metrics" = {
         extraConfig = ''
           stub_status;
