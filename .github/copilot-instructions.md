@@ -1,130 +1,94 @@
-# NixOS Configuration - AI Assistant Instructions
+# NixOS Configuration - Copilot Instructions
 
 ## Architecture Overview
 
-This is a **NixOS flake-based configuration** managing multiple hosts (desktop, laptop, homelab, work, WSL) with:
+This is a **NixOS flake-based configuration** using flake-parts, managing multiple hosts (desktop, laptop, work, homelab, desktop-wsl, bootstrap). The configuration uses a custom module system under `fireproof.*` options.
 
-- **flake-parts** for modular flake organization
-- **home-manager** integrated via `fireproof.home-manager` option (not standalone)
-- **agenix + agenix-rekey** for YubiKey-based secret management
-- **disko** for declarative disk partitioning
+### Key Structural Patterns
 
-### Module Structure
+- **Host definitions**: `hosts/<hostname>/default.nix` sets `fireproof.hostname`, `fireproof.username`, and feature flags
+- **Module organization**: `modules/` contains themed directories (`base/`, `desktop/`, `programs/`, `homelab/`, `system/`, `scripts/`)
+- **Host configuration flow**: `hosts/default.nix` defines `mkSystem` which imports all module directories plus the specific host
 
-```
-modules/
-├── base/        # Core: fireproof options, secrets, home-manager integration
-├── desktop/     # Desktop environment (niri WM, greetd, audio, fonts)
-├── homelab/     # Self-hosted services (nginx, postgres, arr stack, etc.)
-├── programs/    # User applications (ghostty, neovim, vscode, etc.)
-└── system/      # System config (boot, networking, ssh, tailscale)
-```
+### The `fireproof` Options System
 
-### Host Configuration Pattern
-
-Each host in `hosts/<hostname>/` sets `fireproof.*` options to enable feature groups:
+All custom options live under `fireproof.*`. Key options:
 
 ```nix
-# hosts/desktop/default.nix
-config.fireproof = {
-  hostname = "desktop";
-  username = "nickolaj";
-  desktop.enable = true;   # Enables all desktop modules
-  work.enable = true;      # Enables work-related programs
-  dev.enable = true;       # Enables development tools
-};
-```
-
-### Key Pattern: Feature Modules with `lib.mkIf`
-
-Modules conditionally apply based on `fireproof.*` flags:
-
-```nix
-# Module pattern - check enabling flag first
-{config, lib, ...}: {
-  config = lib.mkIf config.fireproof.desktop.enable {
-    # Configuration only applied when desktop is enabled
-  };
-}
+fireproof.hostname = "desktop";          # Required per host
+fireproof.username = "nickolaj";         # Required per host
+fireproof.desktop.enable = true;         # Enables niri + desktop modules
+fireproof.homelab.enable = true;         # Enables server services
+fireproof.work.enable = true;            # Work-related tools
+fireproof.dev.enable = true;             # Development tools
 ```
 
 ### Home Manager Integration
 
-Use `fireproof.home-manager` instead of `home-manager.users.<user>`:
+Use `fireproof.home-manager` instead of `home-manager.users.<username>`:
 
 ```nix
-# Correct: Uses fireproof wrapper
-fireproof.home-manager = {
-  programs.ghostty.enable = true;
-};
+# Correct pattern (from modules/programs/ghostty.nix)
+fireproof.home-manager.programs.ghostty.enable = true;
 
-# Incorrect: Don't use directly
-home-manager.users.nickolaj = { ... };
+# NOT: home-manager.users.nickolaj.programs...
 ```
 
-## Developer Commands
+### Theme System
 
-All operations use **just** - run `just` for command list:
+Colors are defined in `modules/base/theme.nix` under `config.fireproof.theme.colors.*`. Access them as:
+
+```nix
+let c = config.fireproof.theme.colors;
+in {
+  background = c.bg;        # No # prefix in the option
+  border = "#${c.accent}";  # Add # when needed
+}
+```
+
+## Developer Workflow
+
+Use `just` for all operations:
 
 ```bash
-just switch              # Rebuild current host
-just switch homelab 10.0.0.11  # Deploy to remote host
-just build-system desktop      # Build without switching
-just diff                # Compare changes before switching
-
-just secret-edit <name>  # Edit encrypted secret
-just secret-rekey        # Rekey after adding hosts/secrets
-just new-host <hostname> <user>  # Bootstrap new host config
+just switch                # Rebuild current host
+just switch desktop <IP>   # Rebuild specific host
+just update nixpkgs        # Update single input
+just diff                  # Preview changes before switching
+nix fmt                    # Format with alejandra, deadnix, statix
 ```
 
 ## Secret Management
 
-Secrets use **agenix-rekey** with YubiKey master identity:
+Secrets use agenix + agenix-rekey with YubiKey master identity:
 
 - Global secrets: `secrets/*.age`
-- Host-specific: `secrets/hosts/<hostname>/` (includes rekeyed secrets in `.rekey/`)
-- Reference secrets via `config.age.secrets.<name>.path`
+- Per-host secrets: `secrets/hosts/<hostname>/`
+- Host keys are in `secrets/hosts/<hostname>/id_ed25519.{pub,age}`
+- Rekey after adding hosts/secrets: `just secret-rekey`
 
-```nix
-# Declaring a secret in a module
-age.secrets.my-secret.rekeyFile = ../../secrets/hosts/homelab/my-secret.age;
+## Adding New Features
 
-# Using the decrypted path
-services.myapp.environmentFile = config.age.secrets.my-secret.path;
-```
-
-## Code Style
-
-- **Formatter**: `nix fmt` (alejandra + deadnix + statix)
-- **nixpkgs-unstable**: Available as `pkgsUnstable` in module arguments
-- **Theme colors**: Flexoki palette defined in README.md - use consistent HSL/Hex values
+1. **New program**: Create `modules/programs/<name>.nix`, guard with `lib.mkIf config.fireproof.desktop.enable` or similar
+2. **New homelab service**: Create `modules/homelab/<name>.nix`, add to `modules/homelab/default.nix` imports
+3. **New host**: Run `just new-host <hostname> <username>`, then add to `hosts/default.nix`
 
 ## Common Patterns
 
-### Adding a new program module
-
-1. Create `modules/programs/myapp.nix`
-2. Guard with appropriate enable flag
-3. Import in `modules/programs/default.nix`
+### Conditional Module Loading
 
 ```nix
-# modules/programs/myapp.nix
-{config, lib, pkgs, ...}: {
-  config = lib.mkIf config.fireproof.dev.enable {
-    environment.systemPackages = [pkgs.myapp];
-    fireproof.home-manager.programs.myapp = { ... };
+{config, lib, ...}: {
+  config = lib.mkIf config.fireproof.desktop.enable {
+    # Desktop-only configuration
   };
 }
 ```
 
-### Adding a homelab service
+### Using Unstable Packages
 
-1. Create `modules/homelab/myservice.nix`
-2. Guard with `lib.mkIf config.fireproof.homelab.enable`
-3. Add nginx virtualHost for HTTPS proxy
-4. Import in `modules/homelab/default.nix`
-5. Update `glance.nix` for dashboard link
+`pkgsUnstable` is available via `specialArgs` when packages need bleeding-edge versions.
 
-### Hardware config
+### Hardware Config
 
-Use `just factor <hostname>` to generate `facter.json` for hardware detection (replaces nixos-generate-config).
+Use `facter.reportPath = ./facter.json;` in host config; generate with `just factor <hostname>`.
