@@ -1,0 +1,30 @@
+name: Update flake.lock
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every night at midnight
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: DeterminateSystems/update-flake-lock@main
+        id: update
+        with:
+          pr-title: "chore(flake): update flake.lock"
+          pr-labels: |
+            dependencies
+            automated
+      - name: Enable auto-merge
+        if: steps.update.outputs.pull-request-number != ''
+        run: gh pr merge --auto --rebase "${{ steps.update.outputs.pull-request-number }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
