@@ -8,7 +8,7 @@
     ./audiobookshelf.nix
     ./freshrss.nix
     ./glance.nix
-    ./home-assistant.nix
+    ./home-assistant
     ./jellyfin.nix
     ./nextcloud.nix
     ./nginx.nix
@@ -19,7 +19,7 @@
     ./restic.nix
     ./scrutiny.nix
     ./security.nix
-    ./sso.nix
+    ./sso
     ./vaultwarden.nix
   ];
 }

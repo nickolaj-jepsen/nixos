@@ -17,7 +17,7 @@
     ./audio.nix
     ./fonts.nix
     ./greetd.nix
-    ./niri.nix
+    ./niri
     ./qt.nix
     ./gtk.nix
     ./dms/default.nix
