@@ -1,6 +1,7 @@
 {
   pkgs,
   lib,
+  config,
   ...
 }: let
   makeScript = {
@@ -13,13 +14,23 @@
       text = builtins.readFile path;
     };
 in {
-  environment.systemPackages = [
-    (makeScript {
-      path = ./reboot-windows.bash;
+  environment.systemPackages =
+    [
+      (makeScript {
+        path = ./reboot-windows.bash;
+        runtimeInputs = with pkgs; [
+          jq
+          systemd # for bootctl and systemctl
+        ];
+      })
+    ]
+    ++ lib.optional config.fireproof.desktop.enable (makeScript {
+      path = ./screenshot.bash;
       runtimeInputs = with pkgs; [
-        jq
-        systemd # for bootctl and systemctl
+        slurp
+        grim
+        satty
+        wl-clipboard
       ];
-    })
-  ];
+    });
 }

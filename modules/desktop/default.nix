@@ -19,7 +19,6 @@
     ./greetd.nix
     ./niri.nix
     ./qt.nix
-    ./screenshot.nix
     ./gtk/default.nix
     ./dms/default.nix
   ];
