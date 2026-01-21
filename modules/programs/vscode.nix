@@ -169,6 +169,7 @@ in {
                 "go" = true;
                 "just" = true;
                 "make" = true;
+                "uniq" = true;
               };
 
               # Theme
