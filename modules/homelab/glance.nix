@@ -217,6 +217,12 @@ in {
                       same-tab = true;
                     }
                     {
+                      title = "Forgejo";
+                      url = "https://forgejo.nickolaj.com";
+                      icon = "sh:forgejo";
+                      same-tab = true;
+                    }
+                    {
                       title = "Sonarr";
                       url = "https://sonarr.nickolaj.com";
                       icon = "sh:sonarr";

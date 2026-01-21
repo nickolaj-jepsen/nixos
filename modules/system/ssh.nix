@@ -17,6 +17,11 @@ in {
     mode = "0600";
     owner = username;
   };
+  age.secrets.forgejo-ssh-key = {
+    rekeyFile = ../../secrets/forgejo-ssh-key.age;
+    mode = "0600";
+    owner = username;
+  };
   age.secrets.ssh-key-ao = lib.mkIf workEnabled {
     rekeyFile = ../../secrets/ssh-key-ao.age;
     mode = "0600";
@@ -39,6 +44,11 @@ in {
           homelab = {
             hostname = "x.nickolaj.com";
             user = "nickolaj";
+          };
+          "forgejo.nickolaj.com" = {
+            hostname = "forgejo.nickolaj.com";
+            user = "git";
+            identityFile = "${config.age.secrets.forgejo-ssh-key.path}";
           };
         }
         // lib.optionalAttrs workEnabled {

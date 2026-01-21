@@ -7,6 +7,7 @@
     ./arr.nix
     ./audiobookshelf.nix
     ./freshrss.nix
+    ./forgejo.nix
     ./glance.nix
     ./home-assistant
     ./jellyfin.nix

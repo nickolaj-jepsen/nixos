@@ -68,6 +68,7 @@ just secret-edit <path>    # Edit an encrypted secret
 ### Safety Boundaries
 
 **CRITICAL**: As an AI agent, you are **FORBIDDEN** from executing commands that permanently modify the system state or perform remote deployments.
+
 - **DO NOT** run `just switch` or `just boot`.
 - **DO NOT** run `just switch <hostname> <target>`.
 - Use `just test` or `just build-system` if you need to verify that a configuration builds successfully.
@@ -85,7 +86,7 @@ Secrets use agenix + agenix-rekey with YubiKey master identity:
 ## Adding New Features
 
 1. **New program**: Create `modules/programs/<name>.nix`, guard with `lib.mkIf config.fireproof.desktop.enable` or similar
-2. **New homelab service**: Create `modules/homelab/<name>.nix`, add to `modules/homelab/default.nix` imports
+2. **New homelab service**: Create `modules/homelab/<name>.nix`, add to `modules/homelab/default.nix` imports, and **add a link to the dashboard in `modules/homelab/glance.nix`**
 3. **New host**: Run `just new-host <hostname> <username>`, then add to `hosts/default.nix`
 
 ## Common Patterns
