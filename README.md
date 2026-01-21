@@ -9,33 +9,64 @@ All common tasks are managed via `just`. Run `just` to see available commands.
 ### System Operations
 
 ```bash
-# Rebuild and switch to new configuration (current host)
+# Rebuild and switch to new configuration
 just switch
 
-# Rebuild a specific host
+# Rebuild and switch a specific host
 just switch desktop
 
-# Update flake inputs
-just update
+# Try out configuration without making it permanent (reverts on reboot)
+just test
 
-# Update a specific input
-just update nixpkgs
+# Apply on next boot
+just boot
 
 # Build without switching
 just build-system
 
-# Compare changes before switching
+# Update flake inputs
+just update
+
+# Compare current system with configuration
 just diff
+
+# Format configuration files
+just fmt
+
+# Validate configuration (flake check)
+just check
+
+# Maintenance: Collect garbage and delete old generations
+just gc
 ```
 
 ### Remote Deployment
 
 ```bash
-# Deploy to a remote host
+# Deploy to a remote host (via nixos-rebuild --target-host)
 just switch hostname user@remote
 
-# Fresh install on a new machine
+# Fresh install on a new machine (via nixos-anywhere)
 just deploy-remote hostname user@remote
+
+# Generate hardware configuration for a remote host
+just factor hostname user@remote
+```
+
+### Tools & Debugging
+
+```bash
+# Open nix repl with flake loaded
+just repl
+
+# List system generations/history
+just history
+
+# Visualize dependency tree
+just tree
+
+# Build an install ISO for a specific host
+just iso hostname
 ```
 
 ### Bootstrap ISO
@@ -79,9 +110,9 @@ just bootstrap-flash /dev/sdX
    just factor <hostname> user@remote
    ```
 
-5. Rekey secrets:
+5. Deploy or Build:
    ```bash
-   just secret-rekey
+   just test <hostname>
    ```
 
 > [!TIP]

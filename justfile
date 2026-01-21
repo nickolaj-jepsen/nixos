@@ -6,6 +6,7 @@ nixcmd := "nix --experimental-features 'nix-command flakes'"
     just --list
 
 [doc("Build a flake output")]
+[group('tools')]
 build target *ARGS="":
     @{{ nixcmd }} run {{ ARGS }} nixpkgs#nix-output-monitor -- build {{ justfile_directory() }}#{{ target }}
 
@@ -19,6 +20,10 @@ build-system hostname=`hostname -s` *ARGS="":
 factor hostname=`hostname -s` target='':
     #!/usr/bin/env -S bash -e
     target="{{ target }}"
+    if [ ! -d "hosts/{{ hostname }}" ]; then
+        echo "Error: Host '{{ hostname }}' does not exist in ./hosts/"
+        exit 1
+    fi
     if [ -z "$target" ]; then
         sudo {{ nixcmd }} run nixpkgs#nixos-facter -- -o hosts/{{ hostname }}/facter.json
     else
@@ -31,18 +36,28 @@ factor hostname=`hostname -s` target='':
 
 [doc('Wrapper for nixos-rebuild switch')]
 [group("deploy")]
-switch hostname=`hostname -s` target='':
+switch hostname=`hostname -s` target='' *ARGS="":
     #!/usr/bin/env -S bash -e
     target="{{ target }}"
     if [ -z "$target" ]; then
-        sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch --show-trace --flake .#{{ hostname }}
+        sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch --show-trace --flake .#{{ hostname }} {{ ARGS }}
     else
         {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch \
             --flake .#{{ hostname }} \
             --use-substitutes \
             --target-host {{ target }} \
-            --sudo
+            --sudo {{ ARGS }}
     fi
+
+[doc('Wrapper for nixos-rebuild boot')]
+[group("deploy")]
+boot hostname=`hostname -s` *ARGS="":
+    sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- boot --show-trace --flake .#{{ hostname }} {{ ARGS }}
+
+[doc('Wrapper for nixos-rebuild test')]
+[group("deploy")]
+test hostname=`hostname -s` *ARGS="":
+    sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- test --show-trace --flake .#{{ hostname }} {{ ARGS }}
 
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
@@ -75,7 +90,7 @@ disko-install hostname disk:
     sudo {{ nixcmd }} run 'github:nix-community/disko/latest#disko-install' -- --flake .#{{ hostname }} --disk main {{ disk }}
 
 [doc('Build an install ISO for a host')]
-[group('deploy')]
+[group('tools')]
 iso hostname:
     {{ nixcmd }} build .#nixosConfigurations.{{ hostname }}.config.formats.install-iso
 
@@ -133,8 +148,14 @@ secret-rekey:
     {{ nixcmd }} run .#agenix-rekey.x86_64-linux.rekey
 
 [doc("Sets up configuration + SSH keys for a new host")]
+[group('maintenance')]
 new-host hostname username:
     #!/usr/bin/env -S bash -e
+    if [ -d "hosts/{{ hostname }}" ]; then
+        echo "Error: Host '{{ hostname }}' already exists."
+        exit 1
+    fi
+
     temp=$(mktemp -d)
     trap "rm -rf $temp" EXIT
 
@@ -157,16 +178,36 @@ new-host hostname username:
     echo "Encrypting SSH key"
     just age -e "$temp/id_ed25519" -o "secrets/hosts/{{ hostname }}/id_ed25519.age"
 
+    echo "Secret rekeying..."
+    just secret-rekey
+
     echo "Remember to update ./hosts/default.nix eg:"
 
     # Bold with no newline
     cat <<EOF
-        {{ BOLD }}{{ hostname }} = mkSystem {host = ./{{ hostname }};};{{ NORMAL }}
+    {{ BOLD }}{{ hostname }} = mkSystem {host = ./{{ hostname }};};{{ NORMAL }}
     EOF
 
 [doc("Update flake.lock")]
+[group('maintenance')]
 update input='':
     {{ nixcmd }} flake update {{ input }}
+
+[doc('Format all files using treefmt')]
+[group('maintenance')]
+fmt:
+    {{ nixcmd }} fmt
+
+[doc('Run flake check to validate configuration')]
+[group('maintenance')]
+check:
+    {{ nixcmd }} flake check
+
+[doc('Collect garbage and delete old generations')]
+[group('maintenance')]
+gc days='7':
+    sudo nix-collect-garbage --delete-older-than {{ days }}d
+    sudo nix-env -p /nix/var/nix/profiles/system --delete-older-than {{ days }}d
 
 [doc("Run nix-tree")]
 [group("tools")]
@@ -178,7 +219,22 @@ tree *ARGS=("--derivation .#nixosConfigurations." + shell("hostname -s") + ".con
 diff hostname=`hostname -s`: (build-system hostname)
     {{ nixcmd }} run nixpkgs#nvd -- diff /run/current-system {{ justfile_directory() }}/result
 
+[doc('List system generations')]
+[group('tools')]
+history:
+    sudo nix-env -p /nix/var/nix/profiles/system --list-generations
+
+[doc('Open nix repl with flake loaded')]
+[group('tools')]
+repl:
+    {{ nixcmd }} repl --expr 'builtins.getFlake "path:{{ justfile_directory() }}"'
+
 [doc("Run nurl")]
 [group("tools")]
 nurl *ARGS="--help":
     {{ nixcmd }} run nixpkgs#nurl -- {{ ARGS }}
+
+[doc('Remove build results and temporary files')]
+[group('tools')]
+clean:
+    rm -rf result result-*

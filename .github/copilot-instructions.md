@@ -53,10 +53,25 @@ Use `just` for all operations:
 ```bash
 just switch                # Rebuild current host
 just switch desktop <IP>   # Rebuild specific host
-just update nixpkgs        # Update single input
+just test                  # Apply changes temporarily (nixos-rebuild test)
+just boot                  # Apply changes on next boot
+just update                # Update flake.lock
 just diff                  # Preview changes before switching
-nix fmt                    # Format with alejandra, deadnix, statix
+just fmt                   # Format all files
+just gc                    # Collect garbage (delete older than 7d)
+just check                 # Validate configuration
+just repl                  # Open nix repl with flake loaded
+just factor                # Generate nixos-facter hardware config
+just secret-edit <path>    # Edit an encrypted secret
 ```
+
+### Safety Boundaries
+
+**CRITICAL**: As an AI agent, you are **FORBIDDEN** from executing commands that permanently modify the system state or perform remote deployments.
+- **DO NOT** run `just switch` or `just boot`.
+- **DO NOT** run `just switch <hostname> <target>`.
+- Use `just test` or `just build-system` if you need to verify that a configuration builds successfully.
+- **ALWAYS** run `just fmt` after modifying files and before finishing your task to ensure consistent code style.
 
 ## Secret Management
 
