@@ -1,7 +1,7 @@
 name: Update flake.lock
 on:
   schedule:
-    - cron: '0 0 * * *' # Every night at midnight
+    - cron: "0 0 * * *" # Every night at midnight
   workflow_dispatch: # Allow manual trigger
 
 jobs:
