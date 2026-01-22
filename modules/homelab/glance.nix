@@ -205,6 +205,12 @@ in {
                       same-tab = true;
                     }
                     {
+                      title = "Navidrome";
+                      url = "https://navidrome.nickolaj.com";
+                      icon = "sh:navidrome";
+                      same-tab = true;
+                    }
+                    {
                       title = "Audiobookshelf";
                       url = "https://audiobookshelf.nickolaj.com";
                       icon = "sh:audiobookshelf";
@@ -232,6 +238,12 @@ in {
                       title = "Radarr";
                       url = "https://radarr.nickolaj.com";
                       icon = "sh:radarr";
+                      same-tab = true;
+                    }
+                    {
+                      title = "Lidarr";
+                      url = "https://lidarr.nickolaj.com";
+                      icon = "sh:lidarr";
                       same-tab = true;
                     }
                     {

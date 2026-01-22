@@ -35,6 +35,7 @@ in {
     oauth2-proxy.nginx.virtualHosts = {
       "radarr.nickolaj.com".allowed_groups = ["arr"];
       "sonarr.nickolaj.com".allowed_groups = ["arr"];
+      "lidarr.nickolaj.com".allowed_groups = ["arr"];
       "prowlarr.nickolaj.com".allowed_groups = ["arr"];
       "sabnzbd.nickolaj.com".allowed_groups = ["arr"];
       "bazarr.nickolaj.com".allowed_groups = ["arr"];
@@ -42,6 +43,7 @@ in {
     nginx.virtualHosts = {
       "radarr.nickolaj.com" = mkVirtualHost 7878;
       "sonarr.nickolaj.com" = mkVirtualHost 8989;
+      "lidarr.nickolaj.com" = mkVirtualHost 8686;
       "prowlarr.nickolaj.com" = mkVirtualHost 9696;
       "sabnzbd.nickolaj.com" = mkVirtualHost 8080;
       "bazarr.nickolaj.com" = mkVirtualHost config.services.bazarr.listenPort;
@@ -51,6 +53,7 @@ in {
       paths = [
         "/var/lib/radarr"
         "/var/lib/sonarr"
+        "/var/lib/lidarr"
         "/var/lib/prowlarr"
         "/var/lib/sabnzbd"
         "/var/lib/bazarr"
@@ -73,6 +76,10 @@ in {
       enable = true;
     };
     sonarr = {
+      inherit user group;
+      enable = true;
+    };
+    lidarr = {
       inherit user group;
       enable = true;
     };

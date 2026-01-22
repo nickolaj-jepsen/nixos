@@ -12,6 +12,7 @@
     ./home-assistant
     ./jellyfin.nix
     ./nextcloud.nix
+    ./navidrome.nix
     ./nginx.nix
     ./plex.nix
     ./postgres.nix
