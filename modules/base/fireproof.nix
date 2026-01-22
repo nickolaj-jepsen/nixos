@@ -1,4 +1,8 @@
-{lib, ...}: {
+{
+  config,
+  lib,
+  ...
+}: {
   options.fireproof = {
     hostname = lib.mkOption {
       type = lib.types.str;
@@ -9,7 +13,24 @@
       description = "The primary username for the machine";
     };
     work.enable = lib.mkEnableOption "Enable work-related applications and tools";
-    dev.enable = lib.mkEnableOption "Enable development tools and applications";
+    dev = {
+      enable = lib.mkEnableOption "Enable development tools and applications";
+      intellij.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = config.fireproof.dev.enable;
+        description = "Enable IntelliJ-based IDEs";
+      };
+      clickhouse.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = config.fireproof.dev.enable;
+        description = "Enable Clickhouse";
+      };
+      playwright.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = config.fireproof.dev.enable;
+        description = "Enable Playwright";
+      };
+    };
     hardware = {
       battery = lib.mkOption {
         type = lib.types.bool;

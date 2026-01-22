@@ -45,6 +45,11 @@ in {
             hostname = "x.nickolaj.com";
             user = "nickolaj";
           };
+          minilab = {
+            hostname = "10.0.0.7";
+            user = "nickolaj";
+            proxyJump = "homelab";
+          };
           "forgejo.nickolaj.com" = {
             hostname = "forgejo.nickolaj.com";
             user = "git";

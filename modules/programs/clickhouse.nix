@@ -5,7 +5,7 @@
   pkgsUnstable,
   ...
 }: {
-  config = lib.mkIf config.fireproof.dev.enable {
+  config = lib.mkIf config.fireproof.dev.clickhouse.enable {
     environment.systemPackages = [
       pkgsUnstable.clickhouse
       pkgsUnstable.envsubst

@@ -5,7 +5,7 @@
   pkgsUnstable,
   ...
 }: {
-  config = lib.mkIf config.fireproof.desktop.enable {
+  config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.desktop.chromium.enable) {
     fireproof.home-manager.programs.chromium = {
       enable = true;
       package = pkgsUnstable.chromium;

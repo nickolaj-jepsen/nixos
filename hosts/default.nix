@@ -50,5 +50,6 @@ in {
     homelab = mkSystem {host = ./homelab;};
     bootstrap = mkSystem {host = ./bootstrap;};
     desktop-wsl = mkSystem {host = ./desktop-wsl;};
+    minilab = mkSystem {host = ./minilab;};
   };
 }

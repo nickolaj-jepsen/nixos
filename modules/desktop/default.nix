@@ -10,6 +10,16 @@
       default = config.fireproof.desktop.enable;
       description = "Enable window manager (niri) and dank material shell (dms)";
     };
+    chromium.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = config.fireproof.desktop.enable;
+      description = "Enable Chromium";
+    };
+    zed.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = config.fireproof.desktop.enable;
+      description = "Enable Zed editor";
+    };
   };
 
   imports = [

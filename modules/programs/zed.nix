@@ -5,7 +5,7 @@
   pkgsUnstable,
   ...
 }: {
-  config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+  config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.desktop.zed.enable) {
     fireproof.home-manager.programs.zed-editor = {
       enable = true;
       package = pkgsUnstable.zed-editor;
