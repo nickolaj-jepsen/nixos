@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 # Find windows entry id using bootctl
 WINDOWS_ID=$(bootctl list --json=short | jq -r '.[] | select(.title != null) | select(.title | ascii_downcase | contains("windows")) | .id' | head -n 1)

@@ -23,14 +23,41 @@ in {
           systemd # for bootctl and systemctl
         ];
       })
+      (makeScript {
+        path = ./port-kill.bash;
+        runtimeInputs = with pkgs; [
+          lsof
+          procps
+          coreutils
+        ];
+      })
+      (makeScript {
+        path = ./ssh-select.bash;
+        runtimeInputs = with pkgs; [
+          fzf
+          openssh
+          gawk
+          gnused
+          coreutils
+        ];
+      })
+      (makeScript {
+        path = ./kctx.bash;
+        runtimeInputs = with pkgs; [
+          kubectl
+          fzf
+        ];
+      })
     ]
-    ++ lib.optional config.fireproof.desktop.enable (makeScript {
-      path = ./screenshot.bash;
-      runtimeInputs = with pkgs; [
-        slurp
-        grim
-        satty
-        wl-clipboard
-      ];
-    });
+    ++ lib.optionals config.fireproof.desktop.enable [
+      (makeScript {
+        path = ./screenshot.bash;
+        runtimeInputs = with pkgs; [
+          slurp
+          grim
+          satty
+          wl-clipboard
+        ];
+      })
+    ];
 }

@@ -88,6 +88,7 @@ Secrets use agenix + agenix-rekey with YubiKey master identity:
 1. **New program**: Create `modules/programs/<name>.nix`, guard with `lib.mkIf config.fireproof.desktop.enable` or similar
 2. **New homelab service**: Create `modules/homelab/<name>.nix`, add to `modules/homelab/default.nix` imports, and **add a link to the dashboard in `modules/homelab/glance.nix`**
 3. **New host**: Run `just new-host <hostname> <username>`, then add to `hosts/default.nix`
+4. **New script**: Always include `set -euo pipefail` at the start of bash scripts.
 
 ## Common Patterns
 
