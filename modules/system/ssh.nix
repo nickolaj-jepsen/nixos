@@ -50,6 +50,11 @@ in {
             user = "nickolaj";
             proxyJump = "homelab";
           };
+          desktop = {
+            hostname = "10.0.0.20";
+            user = "nickolaj";
+            proxyJump = "homelab";
+          };
           "forgejo.nickolaj.com" = {
             hostname = "forgejo.nickolaj.com";
             user = "git";
