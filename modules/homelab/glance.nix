@@ -9,15 +9,6 @@ lib.mkIf config.fireproof.homelab.enable (let
   domain = "glance.nickolaj.com";
   port = 8088;
 
-  glance-fork = pkgs.glance.overrideAttrs (_oldAttrs: {
-    src = pkgs.fetchFromGitHub {
-      owner = "nickolaj-jepsen";
-      repo = "glance";
-      rev = "c490067f87186cac9084a76010a646119b7793e1";
-      hash = "sha256-zsanWSWO/gY4ZuYssdcoGKVw/Yk29qaF5Gn5XUYKQhk=";
-    };
-  });
-
   customCss = pkgs.writeText "glance-custom.css" ''
     .bookmarks-group li > div {
       background-color: var(--color-background);
@@ -42,7 +33,6 @@ in {
 
   services.glance = {
     enable = true;
-    package = glance-fork;
     environmentFile = config.age.secrets.glance-env.path;
     settings = {
       server = {
@@ -109,7 +99,7 @@ in {
                         }
                         {
                           title = "Reddit";
-                          url = "https://reddit.com";
+                          url = "https://old.reddit.com";
                           icon = "si:reddit";
                           same-tab = true;
                         }

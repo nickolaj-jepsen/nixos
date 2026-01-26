@@ -25,6 +25,7 @@ _: {
     ./sublime-merge.nix
     ./vscode.nix
     ./zed.nix
+    ./zen.nix
 
     # Dev tools (migrated from legacy_modules/dev)
     ./clickhouse.nix
