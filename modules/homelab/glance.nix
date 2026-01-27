@@ -201,6 +201,12 @@ in {
                       same-tab = true;
                     }
                     {
+                      title = "Mealie";
+                      url = "https://mealie.nickolaj.com";
+                      icon = "sh:mealie";
+                      same-tab = true;
+                    }
+                    {
                       title = "Audiobookshelf";
                       url = "https://audiobookshelf.nickolaj.com";
                       icon = "sh:audiobookshelf";

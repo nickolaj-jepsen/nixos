@@ -11,6 +11,7 @@
     ./glance.nix
     ./home-assistant
     ./jellyfin.nix
+    ./mealie.nix
     ./nextcloud.nix
     ./navidrome.nix
     ./nginx.nix
