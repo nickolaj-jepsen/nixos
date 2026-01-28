@@ -48,6 +48,15 @@ in {
           fzf
         ];
       })
+      (makeScript {
+        path = ./journalctl-select.bash;
+        runtimeInputs = with pkgs; [
+          fzf
+          systemd
+          gnused
+          coreutils
+        ];
+      })
     ]
     ++ lib.optionals config.fireproof.desktop.enable [
       (makeScript {

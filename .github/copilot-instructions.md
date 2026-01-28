@@ -59,7 +59,7 @@ just update                # Update flake.lock
 just diff                  # Preview changes before switching
 just fmt                   # Format all files
 just gc                    # Collect garbage (delete older than 7d)
-just check                 # Validate configuration
+just check                 # Validate configuration, quite slow, use sparingly
 just repl                  # Open nix repl with flake loaded
 just factor                # Generate nixos-facter hardware config
 just secret-edit <path>    # Edit an encrypted secret
