@@ -7,6 +7,7 @@
 }: {
   imports = [
     ./theme.nix
+    ./control-center.nix
     ./background.nix
     ./bar.nix
     ./plugins.nix
@@ -24,7 +25,7 @@
         enable = true;
 
         enableDynamicTheming = false;
-        enableVPN = false;
+        enableVPN = true;
         enableCalendarEvents = false;
         dgop.package = pkgsUnstable.dgop; # not available in stable nixpkgs yet (25.11)
 
