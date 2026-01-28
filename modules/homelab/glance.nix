@@ -267,6 +267,12 @@ in {
                       same-tab = true;
                     }
                     {
+                      title = "WireGuard";
+                      url = "https://wg.nickolaj.com";
+                      icon = "si:wireguard";
+                      same-tab = true;
+                    }
+                    {
                       title = "Scrutiny";
                       url = "https://scrutiny.nickolaj.com";
                       icon = "sh:scrutiny";

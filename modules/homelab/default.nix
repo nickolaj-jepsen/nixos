@@ -24,5 +24,6 @@
     ./security.nix
     ./sso
     ./vaultwarden.nix
+    ./wg-access-server.nix
   ];
 }
