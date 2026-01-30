@@ -55,7 +55,7 @@
           };
         };
       };
-      
+
       xdg.configFile."Code/User/prompts/global.toolsets.jsonc".text = builtins.toJSON {
         issues = {
           tools = ["linear"];
