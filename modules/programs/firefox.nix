@@ -3,12 +3,10 @@
   config,
   lib,
   pkgsUnstable,
-  inputs,
   pkgs,
   ...
 }: let
-  nur = inputs.nur.legacyPackages.${pkgs.stdenv.hostPlatform.system};
-  extensions = nur.repos.rycee.firefox-addons;
+  extensions = pkgs.nur.repos.rycee.firefox-addons;
 in {
   config = lib.mkIf config.fireproof.desktop.enable {
     programs.firefox = {

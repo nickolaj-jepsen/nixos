@@ -7,6 +7,7 @@ _: {
     ./gc.nix
     ./home-manager.nix
     ./nix.nix
+    ./overlays.nix
     ./secrets.nix
     ./theme.nix
   ];

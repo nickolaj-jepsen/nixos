@@ -2,7 +2,6 @@
   config,
   lib,
   pkgs,
-  inputs,
   ...
 }: let
   c = config.fireproof.theme.colors;
@@ -16,7 +15,7 @@ in {
       ];
       xwayland-satellite = {
         enable = true;
-        path = lib.getExe inputs.niri.packages."${pkgs.stdenv.hostPlatform.system}".xwayland-satellite-unstable;
+        path = lib.getExe pkgs.xwayland-satellite-unstable;
       };
       environment = {
         NIXOS_OZONE_WL = "1";
