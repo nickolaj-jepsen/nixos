@@ -23,7 +23,7 @@ _: {
     ./slack.nix
     ./spotify.nix
     ./sublime-merge.nix
-    ./vscode.nix
+    ./vscode
     ./zed.nix
     ./zen.nix
 
