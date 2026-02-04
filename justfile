@@ -234,6 +234,11 @@ repl:
 nurl *ARGS="--help":
     {{ nixcmd }} run nixpkgs#nurl -- {{ ARGS }}
 
+[doc("Show why a package is in the closure")]
+[group("tools")]
+why-depends package hostname=`hostname -s`:
+    {{ nixcmd }} why-depends --all .#nixosConfigurations.{{ hostname }}.config.system.build.toplevel nixpkgs#{{ package }}
+
 [doc('Remove build results and temporary files')]
 [group('tools')]
 clean:
