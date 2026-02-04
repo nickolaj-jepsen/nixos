@@ -7,6 +7,7 @@
       work.enable = true;
       dev.enable = true;
     };
+    programs.steam.enable = true;
 
     facter.reportPath = ./facter.json;
   };
