@@ -37,6 +37,6 @@ _: {
     ./postgres.nix
     ./python.nix
     ./tilt.nix
-    ./opencode.nix
+    ./agents.nix
   ];
 }
