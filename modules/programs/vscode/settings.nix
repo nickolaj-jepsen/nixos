@@ -76,16 +76,10 @@ in {
             "markdown" = true;
             "scminput" = true;
           };
-          "chat.agent.enabled" = true;
-          "github.copilot.chat.agent.thinkingTool" = true;
-          "github.copilot.chat.codesearch.enabled" = true;
-          "github.copilot.nextEditSuggestions.enabled" = true;
-          "github.copilot.chat.githubMcpServer.enabled" = true;
-          "chat.customAgentInSubagent.enabled" = true;
-          "inlineChat.enableV2" = true;
+          "github.copilot.chat.claudeAgent.enabled" = true;
+          "github.copilot.chat.copilotMemory.enabled" = true;
           "chat.viewSessions.orientation" = "vertical";
           "chat.agent.maxRequests" = 100;
-
           "chat.tools.terminal.autoApprove" = {
             "nix" = true;
             "cat" = true;

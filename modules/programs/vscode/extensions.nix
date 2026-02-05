@@ -19,7 +19,6 @@ in {
           ms-vscode-remote.remote-ssh
 
           # AI
-          github.copilot
           github.copilot-chat
 
           # Git(hub)
