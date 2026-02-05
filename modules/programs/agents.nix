@@ -8,6 +8,7 @@
     environment.systemPackages = with pkgsUnstable; [
       opencode
       github-copilot-cli
+      claude-code
     ];
   };
 }
