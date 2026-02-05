@@ -23,6 +23,7 @@
   };
 
   imports = [
+    ./clipboard.nix
     ./monitors.nix
     ./audio.nix
     ./fonts.nix
