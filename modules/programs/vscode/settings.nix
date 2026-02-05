@@ -136,6 +136,7 @@ in {
           "git.autofetch" = true;
           "git.confirmSync" = false;
           "git.enableSmartCommit" = true;
+          "git.blame.editorDecoration.enabled" = true;
           "diffEditor.ignoreTrimWhitespace" = false;
           "scm.repositories.explorer" = true;
 
