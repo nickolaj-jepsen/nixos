@@ -92,7 +92,11 @@ in {
         })
       ];
       extraComponents = [
+        "analytics"
         "default_config"
+        "isal"
+        "shopping_list"
+        "nextcloud"
         "met"
         "mqtt"
         "ffmpeg"
@@ -102,6 +106,8 @@ in {
         "unifi"
         "upnp"
         "homeassistant_hardware"
+        "mcp_server"
+        "mcp"
       ];
       config = {
         homeassistant = {
@@ -111,6 +117,7 @@ in {
           elevation = "!secret elevation";
           unit_system = "metric";
           time_zone = "Europe/Copenhagen";
+          external_url = "https://ha.nickolaj.com";
         };
         frontend = {
           themes = "!include_dir_merge_named themes";
