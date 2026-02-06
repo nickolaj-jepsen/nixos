@@ -20,6 +20,11 @@
       default = config.fireproof.desktop.enable;
       description = "Enable Zed editor";
     };
+    bambu-studio.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Enable Bambu Studio 3D printing slicer";
+    };
   };
 
   imports = [

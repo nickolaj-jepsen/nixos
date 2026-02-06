@@ -1,9 +1,10 @@
-{
+_: {
   config = {
     fireproof = {
       hostname = "desktop";
       username = "nickolaj";
       desktop.enable = true;
+      desktop.bambu-studio.enable = true;
       work.enable = true;
       dev.enable = true;
     };

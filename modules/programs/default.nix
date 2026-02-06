@@ -13,6 +13,7 @@ _: {
     ./llm.nix
 
     # Apps (migrated from legacy_modules/apps)
+    ./bambu-studio.nix
     ./chromium.nix
     ./ferdium.nix
     ./firefox.nix
