@@ -1,5 +1,6 @@
 {
   pkgs,
+  pkgsUnstable,
   config,
   lib,
   ...
@@ -30,10 +31,24 @@ in {
 
     services.home-assistant = {
       enable = true;
-      package = pkgs.home-assistant;
-      customComponents = with pkgs.home-assistant-custom-components; [
+      package = pkgsUnstable.home-assistant;
+      customComponents = with pkgsUnstable.home-assistant-custom-components; [
         adaptive_lighting
         sleep_as_android_mqtt
+        (pkgs.buildHomeAssistantComponent rec {
+          owner = "greghesp";
+          domain = "bambu_lab";
+          version = "v2.2.20";
+          src = pkgs.fetchFromGitHub {
+            inherit owner;
+            repo = "ha-bambulab";
+            rev = version;
+            hash = "sha256-lKKfPWWcri2OUM9nkdY2iltvIaoFhnUP4HGBGDUnEww=";
+          };
+          propagatedBuildInputs = with pkgs.python313.pkgs; [
+            beautifulsoup4
+          ];
+        })
         (pkgs.buildHomeAssistantComponent rec {
           owner = "Sian-Lee-SA";
           domain = "switch_manager";
@@ -80,6 +95,7 @@ in {
         "default_config"
         "met"
         "mqtt"
+        "ffmpeg"
         "esphome"
         "google"
         "spotify"
