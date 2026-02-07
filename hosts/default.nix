@@ -31,6 +31,7 @@
               inputs.niri.nixosModules.niri
               inputs.determinate.nixosModules.default
               inputs.nixos-wsl.nixosModules.default
+              inputs.self.nixosModules.overlays
               ../modules/base
               ../modules/system
               ../modules/programs

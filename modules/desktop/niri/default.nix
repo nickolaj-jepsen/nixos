@@ -21,7 +21,7 @@
     xdg.portal = {
       enable = true;
       extraPortals = [pkgs.xdg-desktop-portal-gtk];
-      config.common.default = "gnome";
+      config.common.default = "gtk";
       xdgOpenUsePortal = true;
     };
 

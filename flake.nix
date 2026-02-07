@@ -8,6 +8,7 @@
         ./formatter.nix
         ./devshell.nix
         ./hosts
+        ./overlays
       ];
       systems = [
         "x86_64-linux"
