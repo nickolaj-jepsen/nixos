@@ -71,5 +71,8 @@
 
     zen-browser.url = "github:0xc000022070/zen-browser-flake";
     zen-browser.inputs.nixpkgs.follows = "nixpkgs";
+
+    niri-dynamic-workspaces.url = "github:nickolaj-jepsen/niri-dynamic-workspaces";
+    niri-dynamic-workspaces.inputs.nixpkgs.follows = "nixpkgs";
   };
 }
