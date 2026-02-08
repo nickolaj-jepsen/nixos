@@ -47,6 +47,7 @@ in {
         mouse.accel-profile = "flat";
         keyboard.xkb.layout = "eu";
       };
+      debug.honor-xdg-activation-with-invalid-serial = true;
       window-rules = [
         {
           clip-to-geometry = true;

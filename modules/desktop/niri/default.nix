@@ -2,20 +2,16 @@
   config,
   lib,
   pkgs,
-  inputs,
   ...
 }: {
   imports = [
     ./settings.nix
     ./binds.nix
     ./outputs.nix
+    ./dynamic-workspaces.nix
   ];
 
   config = lib.mkIf config.fireproof.desktop.windowManager.enable {
-    home-manager.sharedModules = [
-      inputs.niri-dynamic-workspaces.homeModules.default
-    ];
-
     programs.xwayland.enable = true;
 
     xdg.portal = {
@@ -28,10 +24,6 @@
     programs.niri = {
       enable = true;
       package = pkgs.niri-unstable;
-    };
-
-    fireproof.home-manager.programs.niri-dynamic-workspaces = {
-      enable = true;
     };
   };
 }
