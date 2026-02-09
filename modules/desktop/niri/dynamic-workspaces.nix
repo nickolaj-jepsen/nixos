@@ -54,6 +54,23 @@ in {
             path = "/home/nickolaj/dev/devenv-tilt";
           };
         };
+
+        template = {
+          dev = {
+            programs = [
+              "code /home/nickolaj/dev/{{path}}"
+              "ghostty --working-directory=/home/nickolaj/dev/{{path}}"
+            ];
+            on_create = [
+              ''mkdir -p /home/nickolaj/dev/$NDW_VAR_PATH/''
+            ];
+            variables = {
+              path = {
+                name = "Path from dev folder";
+              };
+            };
+          };
+        };
       };
     };
   };
