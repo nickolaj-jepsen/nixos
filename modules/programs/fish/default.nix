@@ -19,6 +19,7 @@ in {
         ${builtins.readFile ./theme.fish}
         ${builtins.readFile ./k8s.fish}
         ${builtins.readFile ./autocomplete.fish}
+        ${builtins.readFile ./worktree.fish}
         ${pkgs.nix-your-shell}/bin/nix-your-shell fish | source
 
       '';
