@@ -11,6 +11,19 @@
   }: {
     inherit name programs;
   };
+
+  mkRemoteWorkspace = {
+    name,
+    host,
+    path,
+    shell ? "fish",
+  }: {
+    inherit name;
+    programs = [
+      "code --remote ssh-remote+${host} ${path}"
+      "ghostty -e ssh -t ${host} 'cd ${path} && exec ${shell} -l'"
+    ];
+  };
 in {
   config = lib.mkIf config.fireproof.desktop.windowManager.enable {
     home-manager.sharedModules = [
@@ -33,6 +46,10 @@ in {
             name = "flex";
             path = "/home/nickolaj/dev/devenv-tilt/projects/neoflex";
           };
+          u = mkWorkspace {
+            name = "imagine";
+            path = "/home/nickolaj/dev/devenv-tilt/projects/imagine";
+          };
           i = mkWorkspace {
             name = "insight";
             path = "/home/nickolaj/dev/devenv-tilt/projects/insight";
@@ -53,6 +70,11 @@ in {
             name = "devenv";
             path = "/home/nickolaj/dev/devenv-tilt";
           };
+          t = mkRemoteWorkspace {
+            name = "scw-tf";
+            host = "dev.ao";
+            path = "/home/nij/scw-tf";
+          };
         };
 
         template = {
@@ -67,6 +89,20 @@ in {
             variables = {
               path = {
                 name = "Path from dev folder";
+              };
+            };
+          };
+          remote = {
+            programs = [
+              "code --remote ssh-remote+{{host}} {{path}}"
+              "ghostty -e ssh -t {{host}} 'cd {{path}} && exec fish -l'"
+            ];
+            variables = {
+              host = {
+                name = "SSH host";
+              };
+              path = {
+                name = "Remote path";
               };
             };
           };
