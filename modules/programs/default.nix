@@ -38,5 +38,6 @@ _: {
     ./python.nix
     ./tilt.nix
     ./agents.nix
+    ./claude-code.nix
   ];
 }

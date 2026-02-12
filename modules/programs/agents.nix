@@ -1,5 +1,4 @@
 {
-  pkgs,
   pkgsUnstable,
   lib,
   config,
@@ -9,7 +8,6 @@
     environment.systemPackages = with pkgsUnstable; [
       opencode
       github-copilot-cli
-      pkgs.claude-code
     ];
   };
 }
