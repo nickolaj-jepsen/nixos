@@ -6,6 +6,7 @@
     ./fish-plugins.nix
     ./bambu-studio.nix
     ./home-assistant.nix
+    ./ghostty.nix
   ];
 
   flake.nixosModules.overlays = _: {
