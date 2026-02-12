@@ -11,6 +11,7 @@
     ./background.nix
     ./bar.nix
     ./plugins.nix
+    ./desktop-widgets.nix
   ];
 
   config = lib.mkIf config.fireproof.desktop.windowManager.enable {
@@ -32,6 +33,8 @@
         systemd.enable = true;
 
         settings = {
+          configVersion = 5;
+
           # General Settings
           weatherCoordinates = "56.1496278,10.2134046";
 
