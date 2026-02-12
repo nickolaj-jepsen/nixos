@@ -27,6 +27,15 @@ _: {
             gst_all_1.gst-plugins-good
             webkitgtk_4_1
           ];
+
+        extraInstallCommands = let
+          contents = pkgs.appimageTools.extractType2 {inherit pname version src;};
+        in ''
+          install -Dm444 ${contents}/BambuStudio.desktop $out/share/applications/BambuStudio.desktop
+          substituteInPlace $out/share/applications/BambuStudio.desktop \
+            --replace-warn 'Exec=BambuStudio' 'Exec=${name}'
+          cp -r ${contents}/usr/share/icons $out/share/
+        '';
       };
     };
   };
