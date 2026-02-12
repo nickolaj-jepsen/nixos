@@ -65,6 +65,7 @@
         "launcherButton"
         "clock"
         "workspaceSwitcher"
+        "dankActions:variant_ndw"
         "runningApps"
       ];
       centerWidgets = [
