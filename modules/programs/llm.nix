@@ -1,7 +1,6 @@
 {
   pkgs,
   config,
-  pkgsUnstable,
   ...
 }: let
   inherit (config.fireproof) username;
@@ -9,7 +8,7 @@
     if pkgs.stdenv.isDarwin
     then "Library/Application Support/io.datasette.llm"
     else ".config/io.datasette.llm";
-  pythonEnv = pkgsUnstable.python3.withPackages (pp:
+  pythonEnv = pkgs.python3.withPackages (pp:
     with pp; [
       llm
       llm-anthropic
