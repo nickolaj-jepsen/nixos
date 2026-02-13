@@ -116,13 +116,6 @@ in {
             "uniq" = true;
           };
 
-          # Theme
-          "workbench.colorTheme" = "Darcula Theme from IntelliJ";
-          "window.titleBarStyle" = "custom";
-          "editor.fontFamily" = "'Hack Nerd Font', 'Hack', 'monospace', monospace";
-          "editor.fontSize" = 14;
-          "editor.lineHeight" = 1.5;
-
           # Keybindings
           "workbench.commandPalette.experimental.suggestCommands" = true; # Emulates IntelliJ's "Search Everywhere"
 
@@ -147,6 +140,58 @@ in {
 
           # Python
           "python.analysis.autoImportCompletions" = true;
+
+          # Spell checking
+          "cSpell.language" = "en,da";
+          "cSpell.userWords" = [
+            "aonumber"
+            "aortl"
+            "billigvvs"
+            "bvvs"
+            "completvvs"
+            "costprice"
+            "currentpriceamount"
+            "customercenter"
+            "eannumber"
+            "enddate"
+            "groupid"
+            "growthbook"
+            "klaviyo"
+            "linksto"
+            "pricehub"
+            "productbox"
+            "productcard"
+            "productgroup"
+            "productid"
+            "productlist"
+            "productname"
+            "productnumber"
+            "rebatecode"
+            "salesprice"
+            "sortorder"
+            "ttag"
+            "unitcount"
+            "unitprice"
+            "vendornumber"
+            "vvskupp"
+            "vvseksperten"
+            "walley"
+            "claude"
+            "nixos"
+            "nickolaj"
+            "homelab"
+            "pkgs"
+          ];
+
+          # JSON
+          "json.schemaDownload.trustedDomains" = {
+            "https://schemastore.azurewebsites.net/" = true;
+            "https://raw.githubusercontent.com/" = true;
+            "https://www.schemastore.org/" = true;
+            "https://json.schemastore.org/" = true;
+            "https://json-schema.org/" = true;
+            "https://biomejs.dev" = true;
+          };
 
           # Other extensions
           "biome.suggestInstallingGlobally" = false;

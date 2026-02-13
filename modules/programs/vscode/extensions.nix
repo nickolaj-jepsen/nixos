@@ -40,6 +40,10 @@ in {
           nefrob.vscode-just-syntax
           redhat.vscode-yaml
 
+          # Spell checking
+          streetsidesoftware.code-spell-checker
+          streetsidesoftware.code-spell-checker-danish
+
           # Theme
           trinm1709.dracula-theme-from-intellij
 

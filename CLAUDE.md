@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Intrepetring tasks
+
+When you're asked to update a configuration, the user usually referes to update the config in this nixos configuration, eg claude-code config should be updated in modules/programs/claude-code.nix and vscode in /home/nickolaj/nixos/modules/programs/vscode
+
 ## Commands
 
 All operations use the `just` command runner. Run `just` to see all commands.
