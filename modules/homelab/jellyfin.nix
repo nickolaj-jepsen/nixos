@@ -18,6 +18,15 @@ in {
     };
   };
 
+  # Grant the media user access to GPU devices for hardware transcoding
+  users.users.media.extraGroups = ["video" "render"];
+
+  # Set VAAPI driver for Jellyfin's FFmpeg
+  systemd.services.jellyfin.environment = {
+    LIBVA_DRIVER_NAME = "nvidia";
+    NVD_BACKEND = "direct";
+  };
+
   services.jellyfin = {
     enable = true;
     openFirewall = true;
