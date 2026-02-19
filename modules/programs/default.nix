@@ -16,7 +16,7 @@ _: {
     ./bambu-studio.nix
     ./chromium.nix
     ./ferdium.nix
-    ./firefox.nix
+    ./firefox
     ./ghostty.nix
     ./obsidian.nix
     ./pycharm.nix
