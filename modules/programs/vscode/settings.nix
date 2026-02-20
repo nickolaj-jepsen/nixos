@@ -185,12 +185,12 @@ in {
 
           # JSON
           "json.schemaDownload.trustedDomains" = {
-            "https://schemastore.azurewebsites.net/" = true;
-            "https://raw.githubusercontent.com/" = true;
-            "https://www.schemastore.org/" = true;
-            "https://json.schemastore.org/" = true;
-            "https://json-schema.org/" = true;
             "https://biomejs.dev" = true;
+            "https://json-schema.org/" = true;
+            "https://json.schemastore.org/" = true;
+            "https://www.schemastore.org/" = true;
+            "https://raw.githubusercontent.com/" = true;
+            "https://schemastore.azurewebsites.net/" = true;
           };
 
           # Other extensions
