@@ -7,7 +7,7 @@ _: {
       src = pkgs.fetchFromGitHub {
         owner = "nickolaj-jepsen";
         repo = "zwift-client";
-        rev = "882fb881f1271dc104fd0250cab4ceb6e3710a59";
+        rev = "ea256d1782a09a2016e32deafb9a083ca674692e";
         hash = "sha256-4gOlWG+QVwODlIhiNH7rhiD0rzNv2WxY2ty9o/51eHU=";
       };
       doCheck = false;
@@ -37,12 +37,12 @@ _: {
         switch_manager = pkgs.buildHomeAssistantComponent rec {
           owner = "Sian-Lee-SA";
           domain = "switch_manager";
-          version = "v2.0.4b";
+          version = "v2.0.5";
           src = pkgs.fetchFromGitHub {
             inherit owner;
             repo = "Home-Assistant-Switch-Manager";
             rev = version;
-            hash = "sha256-W9xO3JjnRKHk/dlXMA6y5nEJl/KsGzPvJoumGw+nohw=";
+            hash = "sha256-r4jFwcFLBSvE3/nmZ1f+rvK08vMbmZrQZYWMwoewmVc=";
           };
         };
         zwift = pkgs.buildHomeAssistantComponent rec {

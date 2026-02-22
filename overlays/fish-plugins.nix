@@ -9,8 +9,8 @@ _: {
             src = pkgs.fetchFromGitHub {
               owner = "joehillen";
               repo = "to-fish";
-              rev = "52b151cfe67c00cb64d80ccc6dae398f20364938";
-              sha256 = "sha256-DfDsU/qY2XdYlkLISIOv02ggHfKEpb+YompNWWjs5/A=";
+              rev = "b94c2e5756b4646051fe64ad8cd36eda33405f8a";
+              sha256 = "sha256-jQGYFON13XhjX+Xrnd8kglco8xRJ9G7kkGmswtuEgZw=";
             };
           };
           theme-bobthefish = {
