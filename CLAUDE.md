@@ -106,6 +106,7 @@ in {
 - **New homelab service**: Create `modules/homelab/<name>.nix`, add to `modules/homelab/default.nix` imports, add dashboard link in `modules/homelab/glance.nix`
 - **New host**: Run `just new-host <hostname> <username>`, add to `hosts/default.nix`
 - **New script**: Use `pkgs.writeShellApplication`, include `set -euo pipefail`
+- **New overlay**: Create `overlays/<name>.nix`, add to `overlays/default.nix` imports, and add update instructions (if needed) in `.github/workflows/update-overlays.md` a [GitHub Agentic Workflows file](https://github.com/github/gh-aw). Then recompile: `gh aw compile update-overlays`
 
 ## Secrets
 
