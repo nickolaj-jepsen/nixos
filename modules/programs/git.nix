@@ -1,13 +1,24 @@
 {
   pkgs,
+  pkgsUnstable,
   lib,
   ...
 }: {
   environment.systemPackages = with pkgs; [
     git
-    gh
     pre-commit
   ];
+
+  fireproof.home-manager.programs.gh = {
+    enable = true;
+    package = pkgsUnstable.gh;
+    extensions = [
+      pkgs.gh-aw
+      pkgsUnstable.gh-poi
+      pkgsUnstable.gh-dash
+    ];
+    settings.git_protocol = "ssh";
+  };
 
   fireproof.home-manager.programs.delta = {
     enable = true;

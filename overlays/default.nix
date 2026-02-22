@@ -7,6 +7,7 @@
     ./bambu-studio.nix
     ./home-assistant.nix
     ./ghostty.nix
+    ./gh-aw.nix
   ];
 
   flake.nixosModules.overlays = _: {
