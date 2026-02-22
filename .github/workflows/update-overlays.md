@@ -18,6 +18,7 @@ network:
     - storage.googleapis.com
     - install.determinate.systems
     - cache.nixos.org
+    - pypi.org
 safe-outputs:
   create-pull-request:
     max: 1
