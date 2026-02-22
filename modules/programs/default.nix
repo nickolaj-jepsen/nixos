@@ -39,5 +39,6 @@ _: {
     ./tilt.nix
     ./agents.nix
     ./claude-code.nix
+    ./fnug.nix
   ];
 }

@@ -15,6 +15,7 @@
       inputs.nix-vscode-extensions.overlays.default
       inputs.nur.overlays.default
       inputs.niri.overlays.niri
+      inputs.fnug.overlays.default
       inputs.self.overlays.default
     ];
   };
