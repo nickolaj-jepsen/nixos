@@ -19,6 +19,7 @@ network:
     - install.determinate.systems
     - cache.nixos.org
     - python
+    - go
 safe-outputs:
   create-pull-request:
     max: 1
