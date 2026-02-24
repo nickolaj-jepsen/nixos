@@ -80,29 +80,27 @@ in {
         template = {
           dev = {
             programs = [
-              "code /home/nickolaj/dev/{{path}}"
+              "code {{path}}"
               "ghostty --working-directory=/home/nickolaj/dev/{{path}}"
-            ];
-            on_create = [
-              ''mkdir -p /home/nickolaj/dev/$NDW_VAR_PATH/''
             ];
             variables = {
               path = {
                 name = "Path from dev folder";
+                type = "dir";
+                dirs = [ "/home/nickolaj/dev/*" "/home/nickolaj/dev/devenv-tilt/projects/*" ];
               };
             };
           };
           remote = {
             programs = [
-              "code --remote ssh-remote+{{host}} {{path}}"
-              "ghostty -e ssh -t {{host}} 'cd {{path}} && exec fish -l'"
+              "code --remote ssh-remote+{{host}}"
+              "ghostty -e ssh -t {{host}}"
             ];
             variables = {
               host = {
                 name = "SSH host";
-              };
-              path = {
-                name = "Remote path";
+                type = "options";
+                options = [ "dev.ao" "homelab" "minilab" "desktop" "scw.ao" "staging.ao" "bastion.ao" ];
               };
             };
           };
