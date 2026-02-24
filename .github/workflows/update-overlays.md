@@ -108,9 +108,8 @@ For each component, check the latest GitHub release tag:
 ### 5. GitHub Agentic Workflows (`overlays/gh-aw.nix`)
 
 - **Latest version**: Check latest release of `github/gh-aw` on GitHub
-- **New source hash**: `nix-prefetch-url --unpack "https://github.com/github/gh-aw/archive/refs/tags/v<VERSION>.tar.gz"` → SRI
-- **New vendor hash**: This is a Go module — the vendor hash changes when dependencies change. To compute it, put a fake hash (e.g., `sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=`), attempt a build with `nix-build --expr '...'` using the unstable nixpkgs Go toolchain (needs Go >= 1.25), and extract the correct hash from the error message.
-- **Update fields**: `version`, `hash` (SRI format, source hash), and `vendorHash` (SRI format)
+- **New hash**: `nix-prefetch-url "https://github.com/github/gh-aw/releases/download/v<VERSION>/linux-amd64"` → SRI
+- **Update fields**: `version` (in both the attribute and the `url` string) and `sha256` (SRI format)
 
 ### 6. Neovim Plugins (`overlays/neovim-plugins.nix`)
 
