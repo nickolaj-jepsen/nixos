@@ -87,7 +87,7 @@ in {
               path = {
                 name = "Path from dev folder";
                 type = "dir";
-                dirs = [ "/home/nickolaj/dev/*" "/home/nickolaj/dev/devenv-tilt/projects/*" ];
+                dirs = ["/home/nickolaj/dev/*" "/home/nickolaj/dev/devenv-tilt/projects/*"];
               };
             };
           };
@@ -100,7 +100,7 @@ in {
               host = {
                 name = "SSH host";
                 type = "options";
-                options = [ "dev.ao" "homelab" "minilab" "desktop" "scw.ao" "staging.ao" "bastion.ao" ];
+                options = ["dev.ao" "homelab" "minilab" "desktop" "scw.ao" "staging.ao" "bastion.ao"];
               };
             };
           };
