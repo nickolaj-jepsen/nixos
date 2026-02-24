@@ -7,13 +7,13 @@
     overlayAttrs = {
       gh-aw = pkgsUnstable.buildGoModule rec {
         pname = "gh-aw";
-        version = "0.49.2";
+        version = "0.50.0";
 
         src = pkgsUnstable.fetchFromGitHub {
           owner = "github";
           repo = "gh-aw";
           tag = "v${version}";
-          hash = "sha256-JCuCiFSR3pOU4pwEJCMfnZ7u/6SS9z1qHt2mzFRq1Lc=";
+          hash = "sha256-WME109r2je3pf3sbjP+lIRtCXCNxNkd0T/UCfSUOxAI=";
         };
 
         vendorHash = "sha256-+ZHxdKuQDyJhWVykdC3LwuC7UT5ra6yoNmIkpI53k+E=";
