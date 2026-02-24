@@ -20,6 +20,7 @@ in {
       };
       settings.global.excludes = [
         "result"
+        ".github/workflows/*.lock.yml"
         (mkExtensionIgnore [
           "gitignore"
           "age"
