@@ -87,7 +87,7 @@ in {
               path = {
                 name = "Path from dev folder";
                 type = "dir";
-                dirs = ["/home/nickolaj/dev/*" "/home/nickolaj/dev/devenv-tilt/projects/*"];
+                dirs = ["/home/nickolaj/dev/" "/home/nickolaj/dev/devenv-tilt/projects/"];
               };
             };
           };
