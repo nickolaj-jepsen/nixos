@@ -81,7 +81,7 @@ in {
           dev = {
             programs = [
               "code {{path}}"
-              "ghostty --working-directory=/home/nickolaj/dev/{{path}}"
+              "ghostty --working-directory={{path}}"
             ];
             variables = {
               path = {
