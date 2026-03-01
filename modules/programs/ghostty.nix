@@ -21,6 +21,7 @@ in {
           font-size = 11;
           font-family = "Hack Nerd Font";
           window-inherit-font-size = false;
+          shell-integration-features = true;
         };
         themes = {
           fireproof = {
