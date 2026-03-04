@@ -70,9 +70,6 @@
     dms-plugin-registry.url = "github:AvengeMedia/dms-plugin-registry";
     dms-plugin-registry.inputs.nixpkgs.follows = "nixpkgs";
 
-    zen-browser.url = "github:0xc000022070/zen-browser-flake";
-    zen-browser.inputs.nixpkgs.follows = "nixpkgs";
-
     niri-dynamic-workspaces.url = "github:nickolaj-jepsen/niri-dynamic-workspaces";
     niri-dynamic-workspaces.inputs.nixpkgs.follows = "nixpkgs";
 
