@@ -6,7 +6,6 @@
       desktop = {
         enable = true;
         chromium.enable = false;
-        zed.enable = false;
       };
       dev = {
         enable = true;

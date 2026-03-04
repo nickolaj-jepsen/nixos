@@ -17,7 +17,7 @@
     };
     zed.enable = lib.mkOption {
       type = lib.types.bool;
-      default = config.fireproof.desktop.enable;
+      default = false;
       description = "Enable Zed editor";
     };
     bambu-studio.enable = lib.mkOption {
