@@ -121,6 +121,19 @@ in {
         };
 
         settings = {
+          hooks = {
+            Notification = [
+              {
+                matcher = "permission_prompt|idle_prompt";
+                hooks = [
+                  {
+                    type = "command";
+                    command = "printf '\\a' > /dev/tty";
+                  }
+                ];
+              }
+            ];
+          };
           permissions = {
             allow = [
               # Git
