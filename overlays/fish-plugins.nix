@@ -18,8 +18,8 @@ _: {
             src = pkgs.fetchFromGitHub {
               owner = "oh-my-fish";
               repo = "theme-bobthefish";
-              rev = "e3b4d4eafc23516e35f162686f08a42edf844e40";
-              hash = "sha256-cXOYvdn74H4rkMWSC7G6bT4wa9d3/3vRnKed2ixRnuA=";
+              rev = "c5efbe05aed81b201454c0ae1190ba91ea1970ac";
+              hash = "sha256-12Xd43vy6qQILV/Q5BeoGaul6DsQv5OloCPLXwR6KNU=";
             };
           };
         };
