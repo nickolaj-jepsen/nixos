@@ -1,5 +1,5 @@
 ---
-description: Check for updates to manually fetched overlay packages and create a PR
+description: Check for updates to manually fetched overlay packages and maintain the update PR
 on:
   schedule: daily
   workflow_dispatch:
@@ -22,13 +22,21 @@ network:
     - go
 safe-outputs:
   create-pull-request:
+    draft: false
     max: 1
+  update-pull-request:
+    target: "*"
+  push-to-pull-request-branch:
+    max: 1
+    target: "*"
+    title-prefix: "chore(overlays): "
+    labels: [dependencies, automated]
   noop:
 ---
 
 # Update Overlay Packages
 
-You are an AI agent that checks for updates to manually fetched packages in a NixOS configuration repository. If updates are found, create a single pull request with all changes.
+You are an AI agent that checks for updates to manually fetched packages in a NixOS configuration repository. If updates are found, keep a single pull request with all changes up to date.
 
 ## Setup
 
@@ -124,9 +132,27 @@ For each component, check the latest GitHub release tag:
 - Check latest commit on default branch
 - **Update fields**: `rev`, `version` (format `YYYY-MM-DD` of commit date), and `sha256` (SRI format)
 
-## Avoiding Duplicate PRs
+## Reusing the Existing PR
 
-Before making any changes, check if there is already an open PR with the title `chore(overlays): update packages`. If so, check out that existing branch (`chore/update-overlays`) and update it instead of creating a new PR. Use the `noop` output if the existing PR already contains all the latest updates.
+Always use the branch name `chore/update-overlays`.
+
+Before making any changes, check if there is already an open PR with head branch `chore/update-overlays`. If you cannot find one by branch, fall back to searching for the title `chore(overlays): update packages`.
+
+If an open PR already exists and you have new overlay updates:
+
+- Use `push_to_pull_request_branch` to push the new changes to that PR instead of creating a new PR.
+- Use `update_pull_request` to replace the PR body so it matches the latest set of updated packages.
+- Keep the PR title as `chore(overlays): update packages`.
+- Do **not** call `create_pull_request` for an existing PR.
+
+If no open PR exists and updates are needed, call `create_pull_request` with:
+
+- **Branch**: `chore/update-overlays`
+- **Title**: `chore(overlays): update packages`
+- **Draft**: `false`
+- **Labels**: `dependencies`, `automated`
+
+If the existing PR already contains all the latest updates, or if no files changed, use `noop`.
 
 ## Procedure
 
@@ -137,12 +163,13 @@ Before making any changes, check if there is already an open PR with the title `
    a. Compute the new hash with `nix-prefetch-url`
    b. Convert to the correct format (hex or SRI as noted above)
    c. Edit the file to update version/rev and hash
-5. If any files changed, create a pull request
+5. If any files changed, either update the existing overlay PR or create it if missing
 6. If nothing changed, use `noop` output
 
 ## Pull Request
 
 - **Title**: `chore(overlays): update packages`
 - **Branch**: `chore/update-overlays`
+- **Draft**: `false`
 - **Body**: List each updated package with old and new version/revision
 - **Labels**: `dependencies`, `automated`
