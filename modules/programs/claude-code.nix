@@ -121,6 +121,7 @@ in {
         };
 
         settings = {
+          voiceEnabled = true;
           hooks = {
             Notification = [
               {
