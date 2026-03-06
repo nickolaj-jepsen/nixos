@@ -7,9 +7,11 @@
 }: {
   config = lib.mkIf config.fireproof.dev.enable {
     environment.systemPackages =
-      (with pkgsUnstable; [
-        opencode
+      (with pkgs; [
         github-copilot-cli
+      ])
+      ++ (with pkgsUnstable; [
+        opencode
         beads
       ])
       ++ [

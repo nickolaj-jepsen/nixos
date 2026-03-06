@@ -2,6 +2,7 @@
   imports = [
     inputs.flake-parts.flakeModules.easyOverlay
     ./claude-code.nix
+    ./github-copilot-cli.nix
     ./neovim-plugins.nix
     ./fish-plugins.nix
     ./bambu-studio.nix
