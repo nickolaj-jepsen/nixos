@@ -7,10 +7,10 @@
   in {
     overlayAttrs = {
       github-copilot-cli = pkgsUnstable.github-copilot-cli.overrideAttrs (_oldAttrs: rec {
-        version = "0.0.422";
+        version = "1.0.2";
         src = pkgsUnstable.fetchurl {
           url = "https://registry.npmjs.org/@github/copilot/-/copilot-${version}.tgz";
-          sha256 = "0bd962f30f04e0d84f0d9b5652634d9fc7ca60a0912b3a348cfcc4996a427a55";
+          sha256 = "2466481823e4af12f75cf5e8961a37bceb6d876abd957133881cd984315be77b";
         };
         sourceRoot = "package";
         nativeBuildInputs = [pkgsUnstable.makeBinaryWrapper];
