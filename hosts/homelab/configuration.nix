@@ -8,6 +8,9 @@
     loader.grub.enable = true;
     loader.systemd-boot.enable = lib.mkForce false;
 
+    # Ensure NVIDIA kernel modules are loaded at boot for headless GPU transcoding
+    kernelModules = ["nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm"];
+
     # HACK: silence mdadm warning on missing MAILADDR or PROGRAM setting
     swraid.mdadmConf = ''
       PROGRAM ${pkgs.coreutils}/bin/true
@@ -26,7 +29,8 @@
   services.xserver.videoDrivers = ["nvidia"];
 
   hardware.nvidia = {
-    open = true;
+    open = false;
     modesetting.enable = true;
+    nvidiaPersistenced = true;
   };
 }
