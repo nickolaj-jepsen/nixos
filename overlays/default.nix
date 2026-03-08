@@ -9,7 +9,6 @@
     ./home-assistant.nix
     ./ghostty.nix
     ./gh-aw.nix
-    ./ralph-tui.nix
   ];
 
   flake.nixosModules.overlays = _: {

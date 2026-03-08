@@ -13,9 +13,6 @@
       ++ (with pkgsUnstable; [
         opencode
         beads
-      ])
-      ++ [
-        pkgs.ralph-tui
-      ];
+      ]);
   };
 }
