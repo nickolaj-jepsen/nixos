@@ -1,4 +1,15 @@
-_: let
+{
+  pkgs,
+  config,
+  ...
+}: let
+  inherit (config.fireproof) username;
+  grafanaMcpWrapper = pkgs.writeShellScript "grafana-mcp-wrapper" ''
+    set -euo pipefail
+    export $(grep -v '^#' ${config.age.secrets.grafana-mcp-env.path} | xargs)
+    exec ${pkgs.mcp-grafana}/bin/mcp-grafana "$@"
+  '';
+
   refactorGuidelines = ''
     - Remove any duplicate code by creating reusable functions or modules.
     - Ensure that the refactored code is well-tested by running existing tests and adding new tests if necessary to cover the changes.
@@ -28,6 +39,12 @@ _: let
   '';
 in {
   config = {
+    age.secrets.grafana-mcp-env = {
+      rekeyFile = ../../secrets/grafana-mcp-env.age;
+      mode = "0600";
+      owner = username;
+    };
+
     fireproof.home-manager = {
       programs.claude-code.memory.text = ''
         This is a NixOS system. Usually built from a flake based config in ~/nixos.
@@ -40,6 +57,12 @@ in {
 
       programs.claude-code = {
         enable = true;
+        mcpServers = {
+          grafana = {
+            command = toString grafanaMcpWrapper;
+            args = [];
+          };
+        };
         commands = {
           "commit" = ''
             ---
