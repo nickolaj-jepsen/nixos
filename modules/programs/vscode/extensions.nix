@@ -13,6 +13,7 @@ in {
     fireproof.home-manager = {
       programs.vscode = {
         enable = true;
+        mutableExtensionsDir = false;
         package = vscodePackage;
         profiles.default.extensions = with vscodePkgs; [
           # Remote
