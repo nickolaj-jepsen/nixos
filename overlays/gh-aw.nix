@@ -15,11 +15,11 @@ _: {
     overlayAttrs = {
       gh-aw = pkgs.stdenv.mkDerivation {
         pname = "gh-aw";
-        version = "0.57.2";
+        version = "0.58.1";
 
         src = pkgs.fetchurl {
-          url = "https://github.com/github/gh-aw/releases/download/v0.57.2/${platform}";
-          sha256 = "sha256-Tdd/e2HhpchPjPMuEbOi+EsgbEVUTdlsSMfsGAq39bo=";
+          url = "https://github.com/github/gh-aw/releases/download/v0.58.1/${platform}";
+          sha256 = "sha256-OCV7BaP8t8dBCTk9iKAa/Wfv0ZnFylfni221I1brW54=";
         };
 
         dontUnpack = true;
