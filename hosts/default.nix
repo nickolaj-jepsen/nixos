@@ -26,7 +26,6 @@
               inputs.nixos-facter-modules.nixosModules.facter
               inputs.dank-material-shell.nixosModules.dank-material-shell
               inputs.niri.nixosModules.niri
-              inputs.determinate.nixosModules.default
               inputs.nixos-wsl.nixosModules.default
               inputs.self.nixosModules.overlays
               ../modules/base
