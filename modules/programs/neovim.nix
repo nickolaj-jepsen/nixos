@@ -129,7 +129,31 @@
 
       # Treesitter for syntax highlighting
       {
-        plugin = nvim-treesitter.withAllGrammars;
+        plugin = nvim-treesitter.withPlugins (p:
+          with p; [
+            nix
+            bash
+            fish
+            lua
+            python
+            javascript
+            typescript
+            tsx
+            json
+            yaml
+            toml
+            markdown
+            markdown_inline
+            html
+            css
+            dockerfile
+            git_config
+            gitcommit
+            gitignore
+            regex
+            vim
+            vimdoc
+          ]);
         type = "lua";
         config = ''
           require("nvim-treesitter.configs").setup({
