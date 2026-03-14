@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  fpLib,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
@@ -50,15 +51,7 @@ in {
   };
   systemd.services.gitea-runner-default.serviceConfig.DynamicUser = lib.mkForce false;
 
-  services.postgresql = {
-    ensureDatabases = ["forgejo"];
-    ensureUsers = [
-      {
-        name = "forgejo";
-        ensureDBOwnership = true;
-      }
-    ];
-  };
+  services.postgresql = fpLib.mkPostgresDB {name = "forgejo";};
 
   services.restic.backups.homelab.paths = [
     config.services.forgejo.stateDir

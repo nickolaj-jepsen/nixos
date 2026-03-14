@@ -3,6 +3,8 @@
   withSystem,
   ...
 }: let
+  fpLib = import ../lib {inherit (inputs.nixpkgs) lib;};
+
   mkSystem = {
     host,
     modules ? [],
@@ -12,7 +14,7 @@
       {system, ...}:
         inputs.nixpkgs.lib.nixosSystem {
           inherit system;
-          specialArgs = {inherit inputs;};
+          specialArgs = {inherit inputs fpLib;};
           modules =
             [
               inputs.disko.nixosModules.disko

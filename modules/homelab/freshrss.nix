@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
@@ -20,15 +21,9 @@ in {
     defaultUser = "nickolaj1177@gmail.com";
   };
 
-  services.postgresql = {
-    ensureDatabases = ["freshrss"];
-    ensureUsers = [
-      {
-        name = "freshrss";
-        ensureDBOwnership = true;
-        ensureClauses.login = true;
-      }
-    ];
+  services.postgresql = fpLib.mkPostgresDB {
+    name = "freshrss";
+    login = true;
   };
 
   services.oauth2-proxy.nginx.virtualHosts = {

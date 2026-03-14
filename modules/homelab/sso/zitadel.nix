@@ -2,6 +2,7 @@
   config,
   pkgs,
   lib,
+  fpLib,
   ...
 }: let
   port = 9190;
@@ -25,15 +26,9 @@ in {
       };
     };
 
-    services.postgresql = {
-      ensureDatabases = ["zitadel"];
-      ensureUsers = [
-        {
-          name = "zitadel";
-          ensureDBOwnership = true;
-          ensureClauses.login = true;
-        }
-      ];
+    services.postgresql = fpLib.mkPostgresDB {
+      name = "zitadel";
+      login = true;
     };
 
     services.zitadel = {

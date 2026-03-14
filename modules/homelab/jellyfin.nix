@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
@@ -8,14 +9,10 @@ lib.mkIf config.fireproof.homelab.enable (let
 in {
   services.restic.backups.homelab.paths = [config.services.jellyfin.dataDir];
 
-  services.nginx.virtualHosts."${domain}" = {
-    forceSSL = true;
-    enableACME = true;
+  services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
+    port = 8096;
+    websockets = true;
     http2 = true;
-    locations."/" = {
-      proxyWebsockets = true;
-      proxyPass = "http://localhost:8096/";
-    };
   };
 
   # Grant the media user access to GPU devices for hardware transcoding

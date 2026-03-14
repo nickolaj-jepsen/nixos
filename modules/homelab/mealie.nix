@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  fpLib,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
@@ -48,14 +49,8 @@ in {
     credentialsFile = config.age.secrets.mealie-oidc-env.path;
   };
 
-  services.postgresql = {
-    ensureDatabases = ["mealie"];
-    ensureUsers = [
-      {
-        name = "mealie";
-        ensureDBOwnership = true;
-      }
-    ];
+  services.postgresql = fpLib.mkPostgresDB {
+    name = "mealie";
     authentication = lib.mkAfter ''
       # type  database  user    address       auth-method
       host    mealie    mealie  127.0.0.1/32  trust
@@ -68,11 +63,7 @@ in {
     "/var/lib/mealie"
   ];
 
-  services.nginx.virtualHosts."${domain}" = {
-    enableACME = true;
-    forceSSL = true;
-    locations."/" = {
-      proxyPass = "http://127.0.0.1:${toString port}";
-    };
+  services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
+    inherit port;
   };
 })

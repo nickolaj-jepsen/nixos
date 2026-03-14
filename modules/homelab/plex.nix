@@ -2,19 +2,16 @@
   config,
   pkgs,
   lib,
+  fpLib,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
   domain = "plex.nickolaj.com";
 in {
-  services.nginx.virtualHosts."${domain}" = {
-    forceSSL = true;
-    enableACME = true;
+  services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
+    port = 32400;
+    websockets = true;
     http2 = true;
-    locations."/" = {
-      proxyWebsockets = true;
-      proxyPass = "http://localhost:32400/";
-    };
   };
 
   services.plex = {

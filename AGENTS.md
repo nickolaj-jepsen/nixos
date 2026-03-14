@@ -31,6 +31,7 @@ This is a NixOS flake-based configuration managing 7 hosts with a custom `firepr
 ```
 hosts/                    # Per-host configs (desktop, laptop, work, homelab, etc.)
   └── default.nix        # mkSystem helper and host definitions
+lib/                      # Shared helpers (fpLib), available via specialArgs
 modules/
   ├── base/              # Core: fireproof options, theme, secrets, overlays
   ├── system/            # Boot, networking, SSH, hardware, security
@@ -93,6 +94,27 @@ in {
 ```nix
 {pkgs, ...}: {
   environment.systemPackages = [pkgs.unstable.somePackage];
+}
+```
+
+### Shared Helpers (`lib/`)
+
+`fpLib` is available via `specialArgs` and contains shared utility functions:
+
+```nix
+{fpLib, ...}: {
+  services.nginx.virtualHosts."example.com" = fpLib.mkVirtualHost {
+    port = 8080;
+    websockets = true;  # optional, default false
+    http2 = true;       # optional, default false
+    host = "127.0.0.1"; # optional, default "127.0.0.1"
+  };
+
+  services.postgresql = fpLib.mkPostgresDB {
+    name = "myservice";
+    login = true;              # optional, default false — adds ensureClauses.login
+    authentication = lib.mkAfter "..."; # optional, default null
+  };
 }
 ```
 

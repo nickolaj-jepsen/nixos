@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
@@ -9,14 +10,10 @@ lib.mkIf config.fireproof.homelab.enable (let
 in {
   services.restic.backups.homelab.paths = ["/var/lib/audiobookshelf"];
 
-  services.nginx.virtualHosts."${domain}" = {
-    forceSSL = true;
-    enableACME = true;
+  services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
+    inherit port;
+    websockets = true;
     http2 = true;
-    locations."/" = {
-      proxyWebsockets = true;
-      proxyPass = "http://localhost:${toString port}/";
-    };
   };
 
   services.audiobookshelf = {

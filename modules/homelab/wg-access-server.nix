@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }: let
   domain = "wg.nickolaj.com";
@@ -45,15 +46,9 @@ in {
       };
     };
 
-    services.postgresql = {
-      ensureDatabases = ["wgaccess"];
-      ensureUsers = [
-        {
-          name = "wgaccess";
-          ensureDBOwnership = true;
-          ensureClauses.login = true;
-        }
-      ];
+    services.postgresql = fpLib.mkPostgresDB {
+      name = "wgaccess";
+      login = true;
       authentication = lib.mkBefore ''
         # type  database  user      address       auth-method
         host    wgaccess  wgaccess  127.0.0.1/32  trust

@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable {
@@ -16,11 +17,7 @@ lib.mkIf config.fireproof.homelab.enable {
 
   services.oauth2-proxy.nginx.virtualHosts."scrutiny.nickolaj.com".allowed_groups = ["admin"];
 
-  services.nginx.virtualHosts."scrutiny.nickolaj.com" = {
-    enableACME = true;
-    forceSSL = true;
-    locations."/" = {
-      proxyPass = "http://localhost:8089";
-    };
+  services.nginx.virtualHosts."scrutiny.nickolaj.com" = fpLib.mkVirtualHost {
+    port = 8089;
   };
 }
