@@ -46,6 +46,9 @@ in {
     };
 
     fireproof.home-manager = {
+      # Mutes warning about installMethod
+      home.file.".local/bin/claude".source = "${pkgs.claude-code}/bin/claude";
+
       programs.claude-code.memory.text = ''
         This is a NixOS system. Usually built from a flake based config in ~/nixos.
         - The default shell is fish. Make sure to only use fish supported syntax.
