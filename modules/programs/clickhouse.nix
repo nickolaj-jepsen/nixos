@@ -2,13 +2,13 @@
 {
   config,
   lib,
-  pkgsUnstable,
+  pkgs,
   ...
 }: {
   config = lib.mkIf config.fireproof.dev.clickhouse.enable {
     environment.systemPackages = [
-      pkgsUnstable.clickhouse
-      pkgsUnstable.envsubst
+      pkgs.unstable.clickhouse
+      pkgs.unstable.envsubst
     ];
   };
 }

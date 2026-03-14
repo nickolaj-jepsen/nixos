@@ -3,13 +3,12 @@
   config,
   lib,
   pkgs,
-  pkgsUnstable,
   ...
 }: {
   config = lib.mkIf config.fireproof.dev.enable {
     environment.systemPackages = [
       pkgs.nodejs
-      pkgsUnstable.pnpm
+      pkgs.unstable.pnpm
       pkgs.turbo-unwrapped
     ];
   };

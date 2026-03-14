@@ -1,7 +1,7 @@
 {
   config,
   lib,
-  pkgsUnstable,
+  pkgs,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
@@ -35,7 +35,7 @@ in {
 
   services.navidrome = {
     enable = true;
-    package = pkgsUnstable.navidrome;
+    package = pkgs.unstable.navidrome;
     user = "media";
     group = "media";
     environmentFile = config.age.secrets.navidrome-env.path;

@@ -1,6 +1,5 @@
 {
   pkgs,
-  pkgsUnstable,
   lib,
   config,
   ...
@@ -10,7 +9,7 @@
       (with pkgs; [
         github-copilot-cli
       ])
-      ++ (with pkgsUnstable; [
+      ++ (with pkgs.unstable; [
         opencode
         beads
       ]);

@@ -17,6 +17,12 @@
       inputs.niri.overlays.niri
       inputs.fnug.overlays.default
       inputs.self.overlays.default
+      (final: _prev: {
+        unstable = import inputs.nixpkgs-unstable {
+          inherit (final) system;
+          config.allowUnfree = true;
+        };
+      })
     ];
   };
 }

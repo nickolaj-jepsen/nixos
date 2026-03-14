@@ -1,6 +1,5 @@
 {
   pkgs,
-  pkgsUnstable,
   lib,
   ...
 }: {
@@ -11,11 +10,11 @@
 
   fireproof.home-manager.programs.gh = {
     enable = true;
-    package = pkgsUnstable.gh;
+    package = pkgs.unstable.gh;
     extensions = [
       pkgs.gh-aw
-      pkgsUnstable.gh-poi
-      pkgsUnstable.gh-dash
+      pkgs.unstable.gh-poi
+      pkgs.unstable.gh-dash
     ];
     settings.git_protocol = "ssh";
   };

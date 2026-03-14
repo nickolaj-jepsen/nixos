@@ -1,5 +1,5 @@
-{pkgsUnstable, ...}: {
+{pkgs, ...}: {
   environment.systemPackages = [
-    pkgsUnstable.systemd-manager-tui
+    pkgs.unstable.systemd-manager-tui
   ];
 }

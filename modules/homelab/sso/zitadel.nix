@@ -1,6 +1,6 @@
 {
   config,
-  pkgsUnstable,
+  pkgs,
   lib,
   ...
 }: let
@@ -38,7 +38,7 @@ in {
 
     services.zitadel = {
       enable = true;
-      package = pkgsUnstable.zitadel;
+      package = pkgs.unstable.zitadel;
       masterKeyFile = config.age.secrets.zitadel-master.path;
       settings = {
         Port = port;

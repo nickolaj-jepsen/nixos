@@ -2,11 +2,11 @@
 {
   config,
   lib,
-  pkgsUnstable,
+  pkgs,
   ...
 }: {
   config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.intellij.enable) (let
-    pycharmPkg = pkgsUnstable.jetbrains.pycharm.override {
+    pycharmPkg = pkgs.unstable.jetbrains.pycharm.override {
       # -Dide.browser.jcef.enabled causes crashes on wayland
       vmopts = ''
         -Dide.browser.jcef.enabled=false

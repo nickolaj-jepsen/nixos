@@ -1,6 +1,5 @@
 {
   pkgs,
-  pkgsUnstable,
   config,
   lib,
   ...
@@ -31,8 +30,8 @@ in {
 
     services.home-assistant = {
       enable = true;
-      package = pkgsUnstable.home-assistant;
-      customComponents = with pkgsUnstable.home-assistant-custom-components; [
+      package = pkgs.unstable.home-assistant;
+      customComponents = with pkgs.unstable.home-assistant-custom-components; [
         adaptive_lighting
         sleep_as_android_mqtt
         pkgs.homeAssistantCustomComponents.bambu_lab

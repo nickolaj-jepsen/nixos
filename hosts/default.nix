@@ -9,15 +9,10 @@
     system ? "x86_64-linux",
   }:
     withSystem system (
-      {system, ...}: let
-        pkgsUnstable = import inputs.nixpkgs-unstable {
-          inherit system;
-          config.allowUnfree = true;
-        };
-      in
+      {system, ...}:
         inputs.nixpkgs.lib.nixosSystem {
           inherit system;
-          specialArgs = {inherit inputs pkgsUnstable;};
+          specialArgs = {inherit inputs;};
           modules =
             [
               inputs.disko.nixosModules.disko

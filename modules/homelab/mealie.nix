@@ -1,7 +1,7 @@
 {
   config,
   lib,
-  pkgsUnstable,
+  pkgs,
   ...
 }:
 lib.mkIf config.fireproof.homelab.enable (let
@@ -22,7 +22,7 @@ in {
   services.mealie = {
     enable = true;
     inherit port;
-    package = pkgsUnstable.mealie;
+    package = pkgs.unstable.mealie;
     settings = {
       # Base URL for Mealie
       BASE_URL = "https://${domain}";

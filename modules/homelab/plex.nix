@@ -1,6 +1,6 @@
 {
   config,
-  pkgsUnstable,
+  pkgs,
   lib,
   ...
 }:
@@ -19,7 +19,7 @@ in {
 
   services.plex = {
     enable = true;
-    package = pkgsUnstable.plex;
+    package = pkgs.unstable.plex;
     openFirewall = true;
     user = "media";
     group = "media";

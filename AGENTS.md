@@ -88,11 +88,11 @@ in {
 
 ### Unstable Packages
 
-`pkgsUnstable` is available via `specialArgs`:
+`pkgs.unstable` is available via an overlay on the `pkgs` set:
 
 ```nix
-{pkgsUnstable, ...}: {
-  environment.systemPackages = [pkgsUnstable.somePackage];
+{pkgs, ...}: {
+  environment.systemPackages = [pkgs.unstable.somePackage];
 }
 ```
 

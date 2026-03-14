@@ -2,7 +2,7 @@
   config,
   lib,
   inputs,
-  pkgsUnstable,
+  pkgs,
   ...
 }: {
   imports = [
@@ -28,7 +28,7 @@
         enableDynamicTheming = false;
         enableVPN = true;
         enableCalendarEvents = false;
-        dgop.package = pkgsUnstable.dgop; # not available in stable nixpkgs yet (25.11)
+        dgop.package = pkgs.unstable.dgop; # not available in stable nixpkgs yet (25.11)
 
         systemd.enable = true;
 

@@ -2,12 +2,12 @@
 {
   config,
   lib,
-  pkgsUnstable,
+  pkgs,
   ...
 }: {
   config = lib.mkIf config.fireproof.dev.enable {
     environment.systemPackages = [
-      pkgsUnstable.tilt
+      pkgs.unstable.tilt
     ];
   };
 }

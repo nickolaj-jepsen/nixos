@@ -1,11 +1,10 @@
 {
   config,
   lib,
-  pkgsUnstable,
   pkgs,
   ...
 }: let
-  vscodePackage = pkgsUnstable.vscode;
+  vscodePackage = pkgs.unstable.vscode;
 
   vscodePkgs = pkgs.vscode-marketplace // pkgs.vscode-marketplace-release; # Prefer release over pre-release
 in {

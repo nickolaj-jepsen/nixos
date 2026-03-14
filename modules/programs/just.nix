@@ -1,5 +1,5 @@
-{pkgsUnstable, ...}: {
+{pkgs, ...}: {
   environment.systemPackages = [
-    pkgsUnstable.just
+    pkgs.unstable.just
   ];
 }

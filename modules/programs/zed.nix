@@ -2,13 +2,13 @@
 {
   config,
   lib,
-  pkgsUnstable,
+  pkgs,
   ...
 }: {
   config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.desktop.zed.enable) {
     fireproof.home-manager.programs.zed-editor = {
       enable = true;
-      package = pkgsUnstable.zed-editor;
+      package = pkgs.unstable.zed-editor;
       extensions = [
         "basedpyright"
         "biome"

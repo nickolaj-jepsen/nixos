@@ -3,7 +3,6 @@
   config,
   lib,
   pkgs,
-  pkgsUnstable,
   ...
 }: let
   # Sets LD_LIBRARY_PATH for various python-based tools
@@ -23,10 +22,10 @@
 in {
   config = lib.mkIf config.fireproof.dev.enable {
     environment.systemPackages = [
-      (mkWrapLDLibraryPath pkgsUnstable.uv)
-      (mkWrapLDLibraryPath pkgsUnstable.rye)
+      (mkWrapLDLibraryPath pkgs.unstable.uv)
+      (mkWrapLDLibraryPath pkgs.unstable.rye)
       (mkWrapLDLibraryPath pkgs.python3)
-      (mkWrapLDLibraryPath pkgsUnstable.prek)
+      (mkWrapLDLibraryPath pkgs.unstable.prek)
     ];
 
     # uv tool adds executable to $HOME/.local/bin, so add it to PATH

@@ -2,12 +2,12 @@
 {
   config,
   lib,
-  pkgsUnstable,
+  pkgs,
   ...
 }: {
   config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.work.enable) {
     environment.systemPackages = [
-      pkgsUnstable.slack
+      pkgs.unstable.slack
     ];
   };
 }

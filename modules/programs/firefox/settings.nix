@@ -2,7 +2,7 @@
 {
   config,
   lib,
-  pkgsUnstable,
+  pkgs,
   ...
 }: let
   c = config.fireproof.theme.colors;
@@ -10,7 +10,7 @@ in {
   config = lib.mkIf config.fireproof.desktop.enable {
     programs.firefox = {
       enable = true;
-      package = pkgsUnstable.firefox;
+      package = pkgs.unstable.firefox;
     };
 
     xdg.mime.defaultApplications = {
@@ -23,7 +23,7 @@ in {
 
     fireproof.home-manager.programs.firefox = {
       enable = true;
-      package = pkgsUnstable.firefox;
+      package = pkgs.unstable.firefox;
 
       profiles.default.settings = {
         # Homepage
