@@ -24,7 +24,6 @@
       # Tools for plugins
       ripgrep # for telescope
       fd # for telescope
-      lazygit # for lazygit.nvim
       tree-sitter # for treesitter
     ];
 
@@ -35,7 +34,6 @@
 
       vim.opt.number = true
       vim.opt.mouse = "a"
-      vim.opt.showmode = false
       vim.opt.clipboard = "unnamedplus"
       vim.opt.breakindent = true
       vim.opt.undofile = true
@@ -57,76 +55,15 @@
       vim.opt.shiftwidth = 2
       vim.opt.expandtab = true
 
-      -- Clear search highlight on pressing <Esc>
-      vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<CR>")
+      -- PyCharm-style comment toggle (Ctrl+/)
+      vim.keymap.set("n", "<C-/>", "gcc", { remap = true, desc = "Toggle comment" })
+      vim.keymap.set("v", "<C-/>", "gc", { remap = true, desc = "Toggle comment" })
 
-      -- Diagnostic keymaps
-      vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, { desc = "Go to previous diagnostic" })
-      vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { desc = "Go to next diagnostic" })
-      vim.keymap.set("n", "<leader>e", vim.diagnostic.open_float, { desc = "Show diagnostic error" })
-      vim.keymap.set("n", "<leader>q", vim.diagnostic.setloclist, { desc = "Open diagnostic quickfix" })
-
-      -- Window navigation
-      vim.keymap.set("n", "<C-h>", "<C-w><C-h>", { desc = "Move to left window" })
-      vim.keymap.set("n", "<C-l>", "<C-w><C-l>", { desc = "Move to right window" })
-      vim.keymap.set("n", "<C-j>", "<C-w><C-j>", { desc = "Move to lower window" })
-      vim.keymap.set("n", "<C-k>", "<C-w><C-k>", { desc = "Move to upper window" })
-
-      -- Better indenting
-      vim.keymap.set("v", "<", "<gv")
-      vim.keymap.set("v", ">", ">gv")
+      -- Built-in colorscheme
+      vim.cmd.colorscheme("habamax")
     '';
 
     plugins = with pkgs.vimPlugins; [
-      # Colorscheme (JetBrains/Darcula theme)
-      {
-        plugin = darcula-nvim;
-        type = "lua";
-        config = ''
-          vim.cmd.colorscheme("darcula")
-        '';
-      }
-
-      # File explorer
-      {
-        plugin = neo-tree-nvim;
-        type = "lua";
-        config = ''
-          require("neo-tree").setup({
-            filesystem = {
-              follow_current_file = { enabled = true },
-              hijack_netrw_behavior = "open_current",
-            },
-          })
-          vim.keymap.set("n", "<leader>e", "<cmd>Neotree toggle<CR>", { desc = "Toggle file explorer" })
-        '';
-      }
-      nvim-web-devicons
-      plenary-nvim
-
-      # Fuzzy finder
-      {
-        plugin = telescope-nvim;
-        type = "lua";
-        config = ''
-          local telescope = require("telescope")
-          local builtin = require("telescope.builtin")
-          telescope.setup({
-            defaults = {
-              file_ignore_patterns = { "node_modules", ".git/", "__pycache__" },
-            },
-          })
-          vim.keymap.set("n", "<leader>ff", builtin.find_files, { desc = "Find files" })
-          vim.keymap.set("n", "<leader>fg", builtin.live_grep, { desc = "Live grep" })
-          vim.keymap.set("n", "<leader>fb", builtin.buffers, { desc = "Find buffers" })
-          vim.keymap.set("n", "<leader>fh", builtin.help_tags, { desc = "Help tags" })
-          vim.keymap.set("n", "<leader>fr", builtin.oldfiles, { desc = "Recent files" })
-          vim.keymap.set("n", "<leader>fd", builtin.diagnostics, { desc = "Diagnostics" })
-          vim.keymap.set("n", "<leader>fs", builtin.lsp_document_symbols, { desc = "Document symbols" })
-        '';
-      }
-      telescope-fzf-native-nvim
-
       # Treesitter for syntax highlighting
       {
         plugin = nvim-treesitter.withPlugins (p:
@@ -159,15 +96,159 @@
           require("nvim-treesitter.configs").setup({
             highlight = { enable = true },
             indent = { enable = true },
-            incremental_selection = {
-              enable = true,
-              keymaps = {
-                init_selection = "<C-space>",
-                node_incremental = "<C-space>",
-                scope_incremental = false,
-                node_decremental = "<bs>",
+          })
+        '';
+      }
+
+      # Fuzzy finder
+      {
+        plugin = telescope-nvim;
+        type = "lua";
+        config = ''
+          local telescope = require("telescope")
+          local builtin = require("telescope.builtin")
+          telescope.setup({
+            defaults = {
+              file_ignore_patterns = { "node_modules", ".git/", "__pycache__" },
+            },
+          })
+          vim.keymap.set("n", "<leader>ff", builtin.find_files, { desc = "Find files" })
+          vim.keymap.set("n", "<leader>fg", builtin.live_grep, { desc = "Live grep" })
+          vim.keymap.set("n", "<leader>fb", builtin.buffers, { desc = "Find buffers" })
+          vim.keymap.set("n", "<leader>fr", builtin.oldfiles, { desc = "Recent files" })
+          vim.keymap.set("n", "<leader>fa", builtin.commands, { desc = "Find action" })
+          vim.keymap.set("n", "<leader>fs", builtin.lsp_document_symbols, { desc = "Find symbol" })
+          vim.keymap.set("n", "<leader>fS", builtin.lsp_dynamic_workspace_symbols, { desc = "Find workspace symbol" })
+          vim.keymap.set("n", "<leader>fd", builtin.diagnostics, { desc = "Find diagnostics" })
+
+          -- PyCharm-style keybinds
+          vim.keymap.set("n", "<C-e>", builtin.oldfiles, { desc = "Recent files" })
+          vim.keymap.set("n", "<C-S-f>", builtin.live_grep, { desc = "Find in files" })
+        '';
+      }
+      telescope-fzf-native-nvim
+      plenary-nvim
+
+      # Project sidebar
+      {
+        plugin = neo-tree-nvim;
+        type = "lua";
+        config = ''
+          require("neo-tree").setup({
+            close_if_last_window = true,
+            filesystem = {
+              follow_current_file = { enabled = true },
+              use_libuv_file_watcher = true,
+              filtered_items = {
+                hide_dotfiles = false,
+                hide_gitignored = true,
               },
             },
+            window = {
+              width = 35,
+              mappings = {
+                ["<space>"] = "none",
+              },
+            },
+          })
+          vim.keymap.set("n", "<A-1>", "<cmd>Neotree toggle<cr>", { desc = "Toggle file tree" })
+          vim.keymap.set("n", "<leader>e", "<cmd>Neotree toggle<cr>", { desc = "Toggle file tree" })
+        '';
+      }
+      nvim-web-devicons
+      nui-nvim
+
+      # Tab bar
+      {
+        plugin = bufferline-nvim;
+        type = "lua";
+        config = ''
+          require("bufferline").setup({
+            options = {
+              diagnostics = "nvim_lsp",
+              show_close_icon = false,
+              show_buffer_close_icons = false,
+              separator_style = "thin",
+              always_show_bufferline = true,
+              offsets = {
+                { filetype = "neo-tree", text = "File Explorer", highlight = "Directory", separator = true },
+              },
+            },
+          })
+          vim.keymap.set("n", "<S-l>", "<cmd>BufferLineCycleNext<cr>", { desc = "Next tab" })
+          vim.keymap.set("n", "<S-h>", "<cmd>BufferLineCyclePrev<cr>", { desc = "Previous tab" })
+          vim.keymap.set("n", "<leader>bd", "<cmd>bdelete<cr>", { desc = "Close buffer" })
+          vim.keymap.set("n", "<C-w>", "<cmd>bdelete<cr>", { desc = "Close buffer" })
+        '';
+      }
+
+      # Git gutter + blame
+      {
+        plugin = gitsigns-nvim;
+        type = "lua";
+        config = ''
+          require("gitsigns").setup({
+            signs = {
+              add = { text = "│" },
+              change = { text = "│" },
+              delete = { text = "_" },
+              topdelete = { text = "‾" },
+              changedelete = { text = "~" },
+            },
+            on_attach = function(bufnr)
+              local gs = package.loaded.gitsigns
+              local map = function(mode, l, r, desc)
+                vim.keymap.set(mode, l, r, { buffer = bufnr, desc = desc })
+              end
+              map("n", "]h", gs.next_hunk, "Next hunk")
+              map("n", "[h", gs.prev_hunk, "Previous hunk")
+              map("n", "<leader>gp", gs.preview_hunk, "Preview hunk")
+              map("n", "<leader>gr", gs.reset_hunk, "Reset hunk")
+              map("n", "<leader>gb", gs.blame_line, "Blame line")
+              map("n", "<leader>gB", function() gs.blame_line({ full = true }) end, "Blame line (full)")
+              map("n", "<leader>gd", gs.diffthis, "Diff this")
+              map("n", "<leader>gt", gs.toggle_current_line_blame, "Toggle line blame")
+            end,
+          })
+        '';
+      }
+
+      # Auto bracket pairs
+      {
+        plugin = nvim-autopairs;
+        type = "lua";
+        config = ''
+          require("nvim-autopairs").setup({})
+          local cmp_autopairs = require("nvim-autopairs.completion.cmp")
+          local cmp = require("cmp")
+          cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
+        '';
+      }
+
+      # Surround editing
+      {
+        plugin = nvim-surround;
+        type = "lua";
+        config = ''
+          require("nvim-surround").setup({})
+        '';
+      }
+
+      # Key hint popup
+      {
+        plugin = which-key-nvim;
+        type = "lua";
+        config = ''
+          local wk = require("which-key")
+          wk.setup({
+            delay = 300,
+          })
+          wk.add({
+            { "<leader>f", group = "Find" },
+            { "<leader>g", group = "Git" },
+            { "<leader>b", group = "Buffer" },
+            { "<leader>c", group = "Code" },
+            { "<leader>r", group = "Refactor" },
           })
         '';
       }
@@ -192,6 +273,11 @@
               map("<leader>ca", vim.lsp.buf.code_action, "Code action")
               map("K", vim.lsp.buf.hover, "Hover documentation")
               map("gD", vim.lsp.buf.declaration, "Go to declaration")
+
+              -- PyCharm-style LSP keybinds
+              map("<F2>", vim.lsp.buf.rename, "Rename")
+              map("<A-CR>", vim.lsp.buf.code_action, "Code action")
+              map("<C-q>", vim.lsp.buf.hover, "Quick documentation")
             end,
           })
 
@@ -222,15 +308,8 @@
         type = "lua";
         config = ''
           local cmp = require("cmp")
-          local luasnip = require("luasnip")
-          luasnip.config.setup({})
 
           cmp.setup({
-            snippet = {
-              expand = function(args)
-                luasnip.lsp_expand(args.body)
-              end,
-            },
             completion = { completeopt = "menu,menuone,noinsert" },
             mapping = cmp.mapping.preset.insert({
               ["<C-n>"] = cmp.mapping.select_next_item(),
@@ -239,28 +318,9 @@
               ["<C-f>"] = cmp.mapping.scroll_docs(4),
               ["<C-y>"] = cmp.mapping.confirm({ select = true }),
               ["<C-Space>"] = cmp.mapping.complete({}),
-              ["<Tab>"] = cmp.mapping(function(fallback)
-                if cmp.visible() then
-                  cmp.select_next_item()
-                elseif luasnip.expand_or_locally_jumpable() then
-                  luasnip.expand_or_jump()
-                else
-                  fallback()
-                end
-              end, { "i", "s" }),
-              ["<S-Tab>"] = cmp.mapping(function(fallback)
-                if cmp.visible() then
-                  cmp.select_prev_item()
-                elseif luasnip.locally_jumpable(-1) then
-                  luasnip.jump(-1)
-                else
-                  fallback()
-                end
-              end, { "i", "s" }),
             }),
             sources = {
               { name = "nvim_lsp" },
-              { name = "luasnip" },
               { name = "buffer" },
               { name = "path" },
             },
@@ -270,9 +330,6 @@
       cmp-nvim-lsp
       cmp-buffer
       cmp-path
-      luasnip
-      cmp_luasnip
-      friendly-snippets
 
       # Formatting
       {
@@ -302,112 +359,6 @@
           vim.keymap.set({ "n", "v" }, "<leader>cf", function()
             require("conform").format({ async = true, lsp_fallback = true })
           end, { desc = "Format buffer" })
-        '';
-      }
-
-      # Git integration
-      {
-        plugin = gitsigns-nvim;
-        type = "lua";
-        config = ''
-          require("gitsigns").setup({
-            signs = {
-              add = { text = "▎" },
-              change = { text = "▎" },
-              delete = { text = "" },
-              topdelete = { text = "" },
-              changedelete = { text = "▎" },
-            },
-            on_attach = function(bufnr)
-              local gs = package.loaded.gitsigns
-              local function map(mode, l, r, opts)
-                opts = opts or {}
-                opts.buffer = bufnr
-                vim.keymap.set(mode, l, r, opts)
-              end
-              map("n", "]c", gs.next_hunk, { desc = "Next git hunk" })
-              map("n", "[c", gs.prev_hunk, { desc = "Previous git hunk" })
-              map("n", "<leader>hs", gs.stage_hunk, { desc = "Stage hunk" })
-              map("n", "<leader>hr", gs.reset_hunk, { desc = "Reset hunk" })
-              map("n", "<leader>hb", gs.blame_line, { desc = "Blame line" })
-              map("n", "<leader>hp", gs.preview_hunk, { desc = "Preview hunk" })
-            end,
-          })
-        '';
-      }
-
-      {
-        plugin = lazygit-nvim;
-        type = "lua";
-        config = ''
-          vim.keymap.set("n", "<leader>gg", "<cmd>LazyGit<CR>", { desc = "Open LazyGit" })
-        '';
-      }
-
-      # UI improvements
-      {
-        plugin = lualine-nvim;
-        type = "lua";
-        config = ''
-          require("lualine").setup({
-            options = {
-              theme = "auto",
-              component_separators = { left = "", right = "" },
-              section_separators = { left = "", right = "" },
-            },
-          })
-        '';
-      }
-
-      {
-        plugin = indent-blankline-nvim;
-        type = "lua";
-        config = ''
-          require("ibl").setup({
-            indent = { char = "│" },
-            scope = { enabled = true },
-          })
-        '';
-      }
-
-      {
-        plugin = which-key-nvim;
-        type = "lua";
-        config = ''
-          require("which-key").setup({})
-          require("which-key").add({
-            { "<leader>f", group = "Find" },
-            { "<leader>c", group = "Code" },
-            { "<leader>h", group = "Git Hunk" },
-            { "<leader>g", group = "Git" },
-          })
-        '';
-      }
-
-      # Autopairs
-      {
-        plugin = nvim-autopairs;
-        type = "lua";
-        config = ''
-          require("nvim-autopairs").setup({})
-        '';
-      }
-
-      # Comments
-      {
-        plugin = comment-nvim;
-        type = "lua";
-        config = ''
-          require("Comment").setup({})
-        '';
-      }
-
-      # Surround
-      {
-        plugin = nvim-surround;
-        type = "lua";
-        config = ''
-          require("nvim-surround").setup({})
         '';
       }
     ];
