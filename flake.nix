@@ -73,8 +73,6 @@
     niri-dynamic-workspaces.url = "github:nickolaj-jepsen/niri-dynamic-workspaces";
     niri-dynamic-workspaces.inputs.nixpkgs.follows = "nixpkgs";
 
-    ghostty.url = "github:ghostty-org/ghostty";
-
     fnug.url = "github:nickolaj-jepsen/fnug";
     fnug.inputs.nixpkgs.follows = "nixpkgs";
   };

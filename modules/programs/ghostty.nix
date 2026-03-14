@@ -2,14 +2,14 @@
 {
   config,
   lib,
-  pkgs,
+  pkgsUnstable,
   ...
 }: let
   c = config.fireproof.theme.colors;
 in {
   config = lib.mkIf config.fireproof.desktop.enable {
-    environment.systemPackages = with pkgs; [
-      ghostty
+    environment.systemPackages = [
+      pkgsUnstable.ghostty
     ];
     fireproof.home-manager = {
       programs.ghostty = {

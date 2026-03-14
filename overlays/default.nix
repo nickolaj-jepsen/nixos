@@ -7,7 +7,6 @@
     ./fish-plugins.nix
     ./bambu-studio.nix
     ./home-assistant.nix
-    ./ghostty.nix
     ./gh-aw.nix
   ];
 
