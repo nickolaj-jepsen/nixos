@@ -5,6 +5,12 @@
   pkgs,
   ...
 }: {
+  options.fireproof.desktop.zed.enable = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = "Enable Zed editor";
+  };
+
   config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.desktop.zed.enable) {
     fireproof.home-manager.programs.zed-editor = {
       enable = true;
