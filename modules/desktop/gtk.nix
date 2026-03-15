@@ -90,7 +90,6 @@
 in {
   config = lib.mkIf config.fireproof.desktop.enable {
     environment.systemPackages = [pkgs.nautilus];
-    fireproof.home-manager.home.packages = [pkgs.gnome-photos];
 
     services.gvfs.enable = true;
     programs = {

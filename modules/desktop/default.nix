@@ -21,6 +21,7 @@
     ./niri
     ./qt.nix
     ./gtk.nix
+    ./default-apps.nix
     ./dms/default.nix
   ];
 }
