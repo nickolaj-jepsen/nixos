@@ -4,13 +4,10 @@ _: {
     ./comma.nix
     ./core.nix
     ./git.nix
-    ./jujutsu.nix
     ./just.nix
     ./neovim.nix
     ./zellij.nix
     ./zoxide.nix
-    ./systemd-manager-tui.nix
-    ./llm.nix
 
     # Apps (migrated from legacy_modules/apps)
     ./bambu-studio.nix
@@ -24,7 +21,6 @@ _: {
     ./spotify.nix
     ./sublime-merge.nix
     ./vscode
-    ./zed.nix
 
     # Dev tools (migrated from legacy_modules/dev)
     ./clickhouse.nix

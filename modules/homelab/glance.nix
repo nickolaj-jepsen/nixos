@@ -201,27 +201,9 @@ in {
                       same-tab = true;
                     }
                     {
-                      title = "Mealie";
-                      url = "https://mealie.nickolaj.com";
-                      icon = "sh:mealie";
-                      same-tab = true;
-                    }
-                    {
                       title = "Audiobookshelf";
                       url = "https://audiobookshelf.nickolaj.com";
                       icon = "sh:audiobookshelf";
-                      same-tab = true;
-                    }
-                    {
-                      title = "FreshRSS";
-                      url = "https://freshrss.nickolaj.com";
-                      icon = "sh:freshrss";
-                      same-tab = true;
-                    }
-                    {
-                      title = "Forgejo";
-                      url = "https://forgejo.nickolaj.com";
-                      icon = "sh:forgejo";
                       same-tab = true;
                     }
                     {
@@ -264,18 +246,6 @@ in {
                       title = "Zitadel";
                       url = "https://sso.nickolaj.com";
                       icon = "sh:zitadel";
-                      same-tab = true;
-                    }
-                    {
-                      title = "WireGuard";
-                      url = "https://wg.nickolaj.com";
-                      icon = "si:wireguard";
-                      same-tab = true;
-                    }
-                    {
-                      title = "Scrutiny";
-                      url = "https://scrutiny.nickolaj.com";
-                      icon = "sh:scrutiny";
                       same-tab = true;
                     }
                     {

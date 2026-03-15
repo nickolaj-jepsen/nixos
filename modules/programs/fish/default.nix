@@ -24,7 +24,6 @@ in {
 
       '';
       plugins = [
-        pkgs.fishPlugins.to-fish
         {
           name = "bobthefish";
           inherit (pkgs.fishPlugins.bobthefish) src;

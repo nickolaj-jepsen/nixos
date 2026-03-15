@@ -3,7 +3,6 @@
     inputs.flake-parts.flakeModules.easyOverlay
     ./claude-code.nix
     ./github-copilot-cli.nix
-    ./fish-plugins.nix
     ./bambu-studio.nix
     ./home-assistant.nix
     ./gh-aw.nix

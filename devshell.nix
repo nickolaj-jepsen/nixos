@@ -23,7 +23,6 @@
 
         # Git
         git
-        jujutsu
       ];
 
       shellHook = ''

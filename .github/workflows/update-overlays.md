@@ -78,16 +78,7 @@ Read each overlay file first to determine the current version/revision, then che
 - **New hash**: Find the `Bambu_Studio_ubuntu-*.AppImage` asset in the release. Run `nix-prefetch-url <asset-url>` and convert to SRI
 - **Update fields**: `version`, `ubuntu_version` (extract from asset filename: `Bambu_Studio_ubuntu-<ubuntu_version>.AppImage`), and `sha256` (SRI format)
 
-### 3. Fish Plugins (`overlays/fish-plugins.nix`)
-
-For each plugin, check the latest commit on the default branch:
-
-**to-fish** (`joehillen/to-fish`):
-
-- **New hash**: `nix-prefetch-url --unpack "https://github.com/joehillen/to-fish/archive/<REV>.tar.gz"` → SRI
-- **Update fields**: `rev` and `sha256` (SRI format)
-
-### 4. Home Assistant Components (`overlays/home-assistant.nix`)
+### 3. Home Assistant Components (`overlays/home-assistant.nix`)
 
 For each component, check the latest GitHub release tag:
 

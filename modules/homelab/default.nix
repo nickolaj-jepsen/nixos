@@ -6,12 +6,9 @@
   imports = [
     ./arr.nix
     ./audiobookshelf.nix
-    ./freshrss.nix
-    ./forgejo.nix
     ./glance.nix
     ./home-assistant
     ./jellyfin.nix
-    ./mealie.nix
     ./nextcloud.nix
     ./navidrome.nix
     ./nginx.nix
@@ -20,10 +17,8 @@
     ./prometheus.nix
     ./qbittorrent.nix
     ./restic.nix
-    ./scrutiny.nix
     ./security.nix
     ./sso
     ./vaultwarden.nix
-    ./wg-access-server.nix
   ];
 }
