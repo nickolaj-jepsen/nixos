@@ -15,7 +15,7 @@
       '';
     };
   in {
-    environment.systemPackages = [
+    fireproof.home-manager.home.packages = [
       pycharmPkg
     ];
   });

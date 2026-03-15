@@ -5,7 +5,7 @@
   ...
 }: {
   config = lib.mkIf config.fireproof.dev.enable {
-    environment.systemPackages =
+    fireproof.home-manager.home.packages =
       (with pkgs; [
         github-copilot-cli
       ])

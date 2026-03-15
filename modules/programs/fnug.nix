@@ -6,6 +6,6 @@
   ...
 }: {
   config = lib.mkIf config.fireproof.dev.enable {
-    environment.systemPackages = [pkgs.fnug];
+    fireproof.home-manager.home.packages = [pkgs.fnug];
   };
 }

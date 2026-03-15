@@ -32,7 +32,7 @@ in {
     owner = username;
   };
 
-  environment.systemPackages = [
+  fireproof.home-manager.home.packages = [
     llmPkgWithPlugins
   ];
 

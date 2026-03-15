@@ -6,7 +6,7 @@
   ...
 }: {
   config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.work.enable) {
-    environment.systemPackages = [
+    fireproof.home-manager.home.packages = [
       pkgs.unstable.slack
     ];
   };

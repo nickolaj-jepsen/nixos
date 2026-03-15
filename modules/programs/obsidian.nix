@@ -6,7 +6,7 @@
   ...
 }: {
   config = lib.mkIf config.fireproof.desktop.enable {
-    environment.systemPackages = [
+    fireproof.home-manager.home.packages = [
       pkgs.unstable.obsidian
     ];
   };

@@ -1,5 +1,5 @@
 {pkgs, ...}: {
-  environment.systemPackages = [
+  fireproof.home-manager.home.packages = [
     pkgs.unstable.just
   ];
 }

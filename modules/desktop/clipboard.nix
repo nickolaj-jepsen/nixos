@@ -5,6 +5,6 @@
   ...
 }: {
   config = lib.mkIf config.fireproof.desktop.enable {
-    environment.systemPackages = [pkgs.wl-clipboard];
+    fireproof.home-manager.home.packages = [pkgs.wl-clipboard];
   };
 }

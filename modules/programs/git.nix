@@ -3,10 +3,7 @@
   lib,
   ...
 }: {
-  environment.systemPackages = with pkgs; [
-    git
-    pre-commit
-  ];
+  fireproof.home-manager.home.packages = [pkgs.pre-commit];
 
   fireproof.home-manager.programs.gh = {
     enable = true;

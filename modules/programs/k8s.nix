@@ -8,9 +8,7 @@
   inherit (config.fireproof) username;
 in {
   config = lib.mkIf config.fireproof.dev.enable {
-    environment.systemPackages = [
-      pkgs.kubectl
-    ];
+    fireproof.home-manager.home.packages = [pkgs.kubectl];
 
     age.secrets.k8s-ao-dev = {
       rekeyFile = ../../secrets/k8s/ao-dev.age;

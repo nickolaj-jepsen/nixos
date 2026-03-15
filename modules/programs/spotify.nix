@@ -8,9 +8,7 @@
   inherit (config.fireproof) username;
 in {
   config = lib.mkIf config.fireproof.desktop.enable {
-    environment.systemPackages = with pkgs; [
-      spotify
-    ];
+    fireproof.home-manager.home.packages = [pkgs.spotify];
 
     age.secrets.spotify-player = {
       rekeyFile = ../../secrets/spotify-player.age;

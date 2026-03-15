@@ -14,7 +14,7 @@
       text = builtins.readFile path;
     };
 in {
-  environment.systemPackages =
+  fireproof.home-manager.home.packages =
     [
       (makeScript {
         path = ./reboot-windows.bash;

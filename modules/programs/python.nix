@@ -21,7 +21,7 @@
     };
 in {
   config = lib.mkIf config.fireproof.dev.enable {
-    environment.systemPackages = [
+    fireproof.home-manager.home.packages = [
       (mkWrapLDLibraryPath pkgs.unstable.uv)
       (mkWrapLDLibraryPath pkgs.unstable.rye)
       (mkWrapLDLibraryPath pkgs.python3)

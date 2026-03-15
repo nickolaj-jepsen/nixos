@@ -28,6 +28,5 @@
     ];
   };
 
-  # Make 'nix repl' have all the nixpkgs available
-  environment.systemPackages = [pkgs.nixpkgs-fmt];
+  fireproof.home-manager.home.packages = [pkgs.nixpkgs-fmt];
 }

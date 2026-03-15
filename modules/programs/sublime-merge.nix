@@ -6,7 +6,7 @@
   ...
 }: {
   config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
-    environment.systemPackages = [
+    fireproof.home-manager.home.packages = [
       pkgs.unstable.sublime-merge
     ];
   };

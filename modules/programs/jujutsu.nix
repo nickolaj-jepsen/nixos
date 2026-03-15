@@ -1,16 +1,16 @@
 {pkgs, ...}: {
-  environment.systemPackages = with pkgs.unstable; [
-    jujutsu
-    jjui
-  ];
+  fireproof.home-manager = {
+    home.packages = [pkgs.unstable.jjui];
 
-  fireproof.home-manager.programs.jujutsu = {
-    enable = true;
+    programs.jujutsu = {
+      enable = true;
+      package = pkgs.unstable.jujutsu;
 
-    settings = {
-      user = {
-        email = "nickolaj@fireproof.website";
-        name = "Nickolaj Jepsen";
+      settings = {
+        user = {
+          email = "nickolaj@fireproof.website";
+          name = "Nickolaj Jepsen";
+        };
       };
     };
   };

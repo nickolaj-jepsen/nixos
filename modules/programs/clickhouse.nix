@@ -6,7 +6,7 @@
   ...
 }: {
   config = lib.mkIf config.fireproof.dev.clickhouse.enable {
-    environment.systemPackages = [
+    fireproof.home-manager.home.packages = [
       pkgs.unstable.clickhouse
       pkgs.unstable.envsubst
     ];

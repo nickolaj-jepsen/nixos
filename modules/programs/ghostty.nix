@@ -8,12 +8,10 @@
   c = config.fireproof.theme.colors;
 in {
   config = lib.mkIf config.fireproof.desktop.enable {
-    environment.systemPackages = [
-      pkgs.unstable.ghostty
-    ];
     fireproof.home-manager = {
       programs.ghostty = {
         enable = true;
+        package = pkgs.unstable.ghostty;
         enableFishIntegration = config.programs.fish.enable;
         settings = {
           window-decoration = false;

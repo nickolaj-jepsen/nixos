@@ -1,8 +1,4 @@
-{pkgs, ...}: {
-  environment.systemPackages = with pkgs; [
-    zellij
-  ];
-
+_: {
   fireproof.home-manager = {
     programs.zellij = {
       enable = true;
