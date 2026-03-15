@@ -25,7 +25,10 @@ in {
       '';
       plugins = [
         pkgs.fishPlugins.to-fish
-        pkgs.fishPlugins.theme-bobthefish
+        {
+          name = "bobthefish";
+          inherit (pkgs.fishPlugins.bobthefish) src;
+        }
       ];
     };
   };

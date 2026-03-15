@@ -87,11 +87,6 @@ For each plugin, check the latest commit on the default branch:
 - **New hash**: `nix-prefetch-url --unpack "https://github.com/joehillen/to-fish/archive/<REV>.tar.gz"` → SRI
 - **Update fields**: `rev` and `sha256` (SRI format)
 
-**theme-bobthefish** (`oh-my-fish/theme-bobthefish`):
-
-- **New hash**: `nix-prefetch-url --unpack "https://github.com/oh-my-fish/theme-bobthefish/archive/<REV>.tar.gz"` → SRI
-- **Update fields**: `rev` and `hash` (SRI format)
-
 ### 4. Home Assistant Components (`overlays/home-assistant.nix`)
 
 For each component, check the latest GitHub release tag:
