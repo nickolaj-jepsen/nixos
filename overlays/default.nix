@@ -4,6 +4,7 @@
     ./claude-code.nix
     ./github-copilot-cli.nix
     ./bambu-studio.nix
+    ./emdash.nix
     ./home-assistant.nix
     ./gh-aw.nix
   ];
