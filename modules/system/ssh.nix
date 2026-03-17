@@ -86,6 +86,10 @@ in {
             proxyJump = lib.mkDefault "bastion.ao";
             identityFile = "${config.age.secrets.ssh-key-ao.path}";
           };
+          "mac.ao" = {
+            user = "it";
+            hostname = "b2c-mac-mini";
+          };
         };
     };
   };
