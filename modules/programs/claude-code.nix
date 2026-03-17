@@ -46,8 +46,8 @@ in {
     };
 
     fireproof.home-manager = {
-      # Mutes warning about installMethod
-      home.file.".local/bin/claude".source = "${pkgs.claude-code}/bin/claude";
+      # Mutes warning about installMethod by placing the wrapped binary in ~/.local/bin
+      home.file.".local/bin/claude".source = "${config.home-manager.users.${username}.programs.claude-code.finalPackage}/bin/claude";
 
       programs.claude-code.memory.text = ''
         This is a NixOS system. Usually built from a flake based config in ~/nixos.
@@ -60,6 +60,7 @@ in {
 
       programs.claude-code = {
         enable = true;
+        package = pkgs.claude-code;
         mcpServers = {
           grafana = {
             command = toString grafanaMcpWrapper;
