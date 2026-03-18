@@ -32,6 +32,7 @@ in {
           # JavaScript
           dbaeumer.vscode-eslint
           esbenp.prettier-vscode
+          viijay-kr.react-ts-css
 
           # Nix
           jnoortheen.nix-ide
