@@ -18,12 +18,15 @@
         installPhase = ''
           runHook preInstall
 
-          install -d $out/libexec/copilot $out/bin
-          cp -r . $out/libexec/copilot
-          makeWrapper ${pkgsUnstable.nodejs_24}/bin/node $out/bin/copilot \
-            --add-flags "$out/libexec/copilot/npm-loader.js --no-auto-update"
+          install -d $out/lib/copilot $out/bin
+          cp -r . $out/lib/copilot
 
           runHook postInstall
+        '';
+        postInstall = ''
+          # Filename must explicitly be "copilot" for internal self-referencing
+          makeWrapper ${pkgsUnstable.nodejs_24}/bin/node $out/bin/copilot \
+            --add-flags "$out/lib/copilot/npm-loader.js --no-auto-update"
         '';
       });
     };
