@@ -24,6 +24,7 @@ safe-outputs:
   create-pull-request:
     draft: false
     max: 1
+    labels: [dependencies, automated]
   update-pull-request:
     target: "*"
   push-to-pull-request-branch:
