@@ -29,7 +29,6 @@ _: {
     ./javascript.nix
     ./k8s.nix
     ./nats.nix
-    ./playwright.nix
     ./postgres.nix
     ./python.nix
     ./tilt.nix
