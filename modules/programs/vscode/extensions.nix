@@ -25,6 +25,7 @@ in {
           github.vscode-pull-request-github
 
           # Python
+          meta.pyrefly
           ms-pyright.pyright
           ms-python.python
           charliermarsh.ruff
