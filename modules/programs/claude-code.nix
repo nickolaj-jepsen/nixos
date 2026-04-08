@@ -148,6 +148,7 @@ in {
         };
 
         settings = {
+          effortLevel = "high";
           voiceEnabled = true;
           hooks = {
             Notification = [
