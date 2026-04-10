@@ -140,6 +140,7 @@ in {
 
           # Python
           "python.analysis.autoImportCompletions" = true;
+          "python.languageServer" = "None";
 
           # Spell checking
           "cSpell.language" = "en,da";
