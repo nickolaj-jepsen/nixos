@@ -76,8 +76,9 @@ Read each overlay file first to determine the current version/revision, then che
 ### 2. BambuStudio (`overlays/bambu-studio.nix`)
 
 - **Latest version**: Check latest release of `bambulab/BambuStudio` on GitHub
-- **New hash**: Find the `Bambu_Studio_ubuntu-*.AppImage` asset in the release. Run `nix-prefetch-url <asset-url>` and convert to SRI
-- **Update fields**: `version`, `ubuntu_version` (extract from asset filename: `Bambu_Studio_ubuntu-<ubuntu_version>.AppImage`), and `sha256` (SRI format)
+- **New hash**: Find the `BambuStudio_ubuntu-*.AppImage` asset for Ubuntu 24.04 in the release. Run `nix-prefetch-url <asset-url>` and convert to SRI
+- **Update fields**: `version`, `ubuntu_version` (extract from asset filename: `BambuStudio_ubuntu-<ubuntu_version>.AppImage`), and `sha256` (SRI format)
+- **Note**: The URL template in the nix file must match the actual asset filename exactly — upstream has changed naming conventions in the past (e.g. `Bambu_Studio_` → `BambuStudio_`). Always verify the asset name from the release before updating.
 
 ### 3. Home Assistant Components (`overlays/home-assistant.nix`)
 
@@ -111,13 +112,6 @@ For each component, check the latest GitHub release tag:
 - **Latest version**: Fetch `https://registry.npmjs.org/@github/copilot` and read `dist-tags.latest`
 - **New hash**: `nix-prefetch-url "https://registry.npmjs.org/@github/copilot/-/copilot-<VERSION>.tgz"`
 - **Update fields**: `version` and `sha256` (hex format, no prefix)
-
-### 7. Neovim Plugins (`overlays/neovim-plugins.nix`)
-
-**darcula** (`doums/darcula`):
-
-- Check latest commit on default branch
-- **Update fields**: `rev`, `version` (format `YYYY-MM-DD` of commit date), and `sha256` (SRI format)
 
 ## Reusing the Existing PR
 

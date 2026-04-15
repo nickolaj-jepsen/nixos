@@ -4,12 +4,12 @@ _: {
       bambu-studio = pkgs.appimageTools.wrapType2 rec {
         name = "BambuStudio";
         pname = "bambu-studio";
-        version = "02.05.00.67";
-        ubuntu_version = "24.04_PR-9540";
+        version = "02.05.03.61";
+        ubuntu_version = "24.04-v02.05.03.61-20260414220857";
 
         src = pkgs.fetchurl {
-          url = "https://github.com/bambulab/BambuStudio/releases/download/v${version}/Bambu_Studio_ubuntu-${ubuntu_version}.AppImage";
-          sha256 = "sha256-3ubZblrsOJzz1p34QiiwiagKaB7nI8xDeadFWHBkWfg=";
+          url = "https://github.com/bambulab/BambuStudio/releases/download/v${version}/BambuStudio_ubuntu-${ubuntu_version}.AppImage";
+          sha256 = "sha256-6vy43pwZ1mLCteHBCkJIHzY/tzjmzEWh6aohY4l9yCY=";
         };
 
         profile = ''
