@@ -5,8 +5,7 @@
   ...
 }: let
   vscodePackage = pkgs.unstable.vscode;
-
-  vscodePkgs = pkgs.vscode-marketplace // pkgs.vscode-marketplace-release; # Prefer release over pre-release
+  marketplaceReleases = pkgs.vscode-marketplace-release;
 in {
   config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
     fireproof.home-manager = {
@@ -14,7 +13,7 @@ in {
         enable = true;
         mutableExtensionsDir = false;
         package = vscodePackage;
-        profiles.default.extensions = with vscodePkgs; [
+        profiles.default.extensions = with pkgs.unstable.vscode-extensions; [
           # Remote
           ms-vscode-remote.remote-ssh
 
@@ -25,7 +24,7 @@ in {
           github.vscode-pull-request-github
 
           # Python
-          meta.pyrefly
+          marketplaceReleases.meta.pyrefly
           ms-pyright.pyright
           ms-python.python
           charliermarsh.ruff
@@ -33,7 +32,7 @@ in {
           # JavaScript
           dbaeumer.vscode-eslint
           esbenp.prettier-vscode
-          viijay-kr.react-ts-css
+          marketplaceReleases.viijay-kr.react-ts-css
 
           # Nix
           jnoortheen.nix-ide
@@ -44,10 +43,10 @@ in {
 
           # Spell checking
           streetsidesoftware.code-spell-checker
-          streetsidesoftware.code-spell-checker-danish
+          marketplaceReleases.streetsidesoftware.code-spell-checker-danish
 
           # Theme
-          trinm1709.dracula-theme-from-intellij
+          marketplaceReleases.trinm1709.dracula-theme-from-intellij
 
           # Keybindings
           k--kato.intellij-idea-keybindings
