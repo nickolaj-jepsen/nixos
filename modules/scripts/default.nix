@@ -57,6 +57,17 @@ in {
           coreutils
         ];
       })
+      (makeScript {
+        path = ./ghpr.bash;
+        runtimeInputs = with pkgs; [
+          gh
+          fzf
+          util-linux # for column
+          gawk
+          less
+          coreutils
+        ];
+      })
     ]
     ++ lib.optionals config.fireproof.desktop.enable [
       (makeScript {
