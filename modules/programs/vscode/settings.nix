@@ -197,7 +197,7 @@ in {
           # Other extensions
           "biome.suggestInstallingGlobally" = false;
         }
-        (mkFormatter "esbenp.prettier-vscode" ["json" "jsonc" "markdown" "css" "scss" "typescript" "typescriptreact" "html" "yaml"])
+        (mkFormatter "oxc.oxc-vscode" ["json" "jsonc" "markdown" "css" "scss" "typescript" "typescriptreact" "html" "yaml"])
         (mkFormatter "charliermarsh.ruff" ["python"])
       ];
     };

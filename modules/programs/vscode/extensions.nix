@@ -33,7 +33,11 @@ in {
           # JavaScript
           dbaeumer.vscode-eslint
           esbenp.prettier-vscode
+          marketplaceReleases.oxc.oxc-vscode
           marketplaceReleases.viijay-kr.react-ts-css
+          marketplaceReleases.ms-playwright.playwright
+          marketplaceReleases.vitest.explorer
+          stylelint.vscode-stylelint
 
           # Nix
           jnoortheen.nix-ide
