@@ -6,6 +6,7 @@
       desktop.enable = true;
       work.enable = true;
       dev.enable = true;
+      claude-code.work.enable = true;
     };
     facter.reportPath = ./facter.json;
 

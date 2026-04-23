@@ -1,9 +1,14 @@
 {
   pkgs,
   config,
+  lib,
   ...
 }: let
   inherit (config.fireproof) username;
+  cfg = config.fireproof.claude-code;
+  hmLib = config.home-manager.users.${username}.lib;
+  homeDir = config.home-manager.users.${username}.home.homeDirectory;
+
   grafanaMcpWrapper = pkgs.writeShellScript "grafana-mcp-wrapper" ''
     set -euo pipefail
     export $(grep -v '^#' ${config.age.secrets.grafana-mcp-env.path} | xargs)
@@ -37,7 +42,26 @@
 
     If there are any uncommitted changes in the repo, focus on refactoring the current changes instead of the entire codebase.
   '';
+
+  claudeWorkWrapper = pkgs.writeShellApplication {
+    name = "claude-work";
+    runtimeInputs = [pkgs.claude-code];
+    text = ''
+      export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
+      mkdir -p "$CLAUDE_CONFIG_DIR"
+      exec claude "$@"
+    '';
+  };
+
+  workFiles = lib.mkIf cfg.work.enable {
+    ".claude-work/settings.json".source = hmLib.file.mkOutOfStoreSymlink "${homeDir}/.claude/settings.json";
+    ".claude-work/CLAUDE.md".source = hmLib.file.mkOutOfStoreSymlink "${homeDir}/.claude/CLAUDE.md";
+    ".claude-work/commands".source = hmLib.file.mkOutOfStoreSymlink "${homeDir}/.claude/commands";
+  };
 in {
+  options.fireproof.claude-code.work.enable =
+    lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
+
   config = {
     age.secrets.grafana-mcp-env = {
       rekeyFile = ../../secrets/grafana-mcp-env.age;
@@ -47,7 +71,14 @@ in {
 
     fireproof.home-manager = {
       # Mutes warning about installMethod by placing the wrapped binary in ~/.local/bin
-      home.file.".local/bin/claude".source = "${config.home-manager.users.${username}.programs.claude-code.finalPackage}/bin/claude";
+      home.file = lib.mkMerge [
+        {
+          ".local/bin/claude".source = "${config.home-manager.users.${username}.programs.claude-code.finalPackage}/bin/claude";
+        }
+        workFiles
+      ];
+
+      home.packages = lib.optional cfg.work.enable claudeWorkWrapper;
 
       programs.claude-code.memory.text = ''
         This is a NixOS system. Usually built from a flake based config in ~/nixos.

@@ -18,6 +18,7 @@ in {
           ms-vscode-remote.remote-ssh
 
           # AI
+          marketplaceReleases.anthropic.claude-code
           github.copilot-chat
 
           # Git(hub)
