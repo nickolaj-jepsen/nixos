@@ -181,6 +181,8 @@ in {
         settings = {
           effortLevel = "high";
           voiceEnabled = true;
+          useAutoModeDuringPlan = true;
+          skipAutoPermissionPrompt = true;
           hooks = {
             Notification = [
               {
