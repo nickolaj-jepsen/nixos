@@ -23,12 +23,12 @@ _: {
         bambu_lab = pkgs.buildHomeAssistantComponent rec {
           owner = "greghesp";
           domain = "bambu_lab";
-          version = "v2.2.22-beta2";
+          version = "v2.22-beta6";
           src = pkgs.fetchFromGitHub {
             inherit owner;
             repo = "ha-bambulab";
             rev = version;
-            hash = "sha256-kdk9u02ghHsoUa/lp1Wa0+G7uEfh6/dA/05JfG+CPbI=";
+            hash = "sha256-Qs5PKeBeArvZr+rJ18zf0Z8P7ljUaDuU0LTUxRKkZ7Q=";
           };
           propagatedBuildInputs = with pkgs.python313.pkgs; [
             beautifulsoup4
