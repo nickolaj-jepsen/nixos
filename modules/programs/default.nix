@@ -22,6 +22,7 @@ _: {
     ./spotify.nix
     ./sublime-merge.nix
     ./vscode
+    ./zed
 
     # Dev tools (migrated from legacy_modules/dev)
     ./clickhouse.nix
