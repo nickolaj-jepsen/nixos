@@ -21,10 +21,6 @@
           inherit (final.stdenv.hostPlatform) system;
           config.allowUnfree = true;
         };
-        master = import inputs.nixpkgs-master {
-          inherit (final.stdenv.hostPlatform) system;
-          config.allowUnfree = true;
-        };
       })
     ];
   };

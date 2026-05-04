@@ -7,7 +7,7 @@
   config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
     fireproof.home-manager.programs.zed-editor = {
       enable = true;
-      package = pkgs.master.zed-editor;
+      package = pkgs.unstable.zed-editor;
       installRemoteServer = true;
 
       extensions = [
