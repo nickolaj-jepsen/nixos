@@ -58,6 +58,10 @@ in {
             bottom-right = 8.0;
           };
         }
+        {
+          matches = [{app-id = "^net-runelite-client-RuneLite$";}];
+          open-floating = true;
+        }
       ];
     };
   };

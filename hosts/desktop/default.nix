@@ -1,4 +1,4 @@
-_: {
+{pkgs, ...}: {
   config = {
     fireproof = {
       hostname = "desktop";
@@ -9,6 +9,7 @@ _: {
       dev.enable = true;
     };
     programs.steam.enable = true;
+    fireproof.home-manager.home.packages = [pkgs.unstable.runelite];
 
     facter.reportPath = ./facter.json;
   };
