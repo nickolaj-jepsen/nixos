@@ -101,6 +101,10 @@ in {
             command = "${pkgs.nodejs}/bin/npx";
             args = ["-y" "snyk@latest" "mcp" "-t" "stdio"];
           };
+          metabase = {
+            type = "http";
+            url = "https://metabase.aortl.net/api/mcp";
+          };
         };
         commands = {
           "commit" = ''
