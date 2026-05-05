@@ -97,6 +97,10 @@ in {
             command = toString grafanaMcpWrapper;
             args = [];
           };
+          snyk = {
+            command = "${pkgs.nodejs}/bin/npx";
+            args = ["-y" "snyk@latest" "mcp" "-t" "stdio"];
+          };
         };
         commands = {
           "commit" = ''
