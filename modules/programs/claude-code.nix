@@ -187,7 +187,7 @@ in {
         };
 
         settings = {
-          effortLevel = "high";
+          effortLevel = "xhigh";
           voiceEnabled = true;
           useAutoModeDuringPlan = true;
           skipAutoPermissionPrompt = true;
