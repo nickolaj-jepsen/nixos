@@ -19,6 +19,7 @@
     ./audiobookshelf.nix
     ./glance
     ./home-assistant
+    ./immich.nix
     ./jellyfin.nix
     ./nextcloud.nix
     ./navidrome.nix
