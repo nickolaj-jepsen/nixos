@@ -29,6 +29,26 @@
         allow-when-locked = true;
         action.spawn = ["dms" "ipc" "brightness" "decrement" "5" ""];
       };
+      "XF86AudioPlay" = {
+        allow-when-locked = true;
+        action.spawn = ["dms" "ipc" "mpris" "playPause"];
+      };
+      "XF86AudioPause" = {
+        allow-when-locked = true;
+        action.spawn = ["dms" "ipc" "mpris" "playPause"];
+      };
+      "XF86AudioNext" = {
+        allow-when-locked = true;
+        action.spawn = ["dms" "ipc" "mpris" "next"];
+      };
+      "XF86AudioPrev" = {
+        allow-when-locked = true;
+        action.spawn = ["dms" "ipc" "mpris" "previous"];
+      };
+      "XF86AudioStop" = {
+        allow-when-locked = true;
+        action.spawn = ["dms" "ipc" "mpris" "stop"];
+      };
       "Mod+N" = {
         action.spawn = ["dms" "ipc" "notifications" "toggle"];
         hotkey-overlay.title = "Toggle Notification Center";
