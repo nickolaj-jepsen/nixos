@@ -5,6 +5,7 @@
       username = "nickolaj";
       desktop.enable = true;
       desktop.bambu-studio.enable = true;
+      desktop.snapcast.enable = true;
       work.enable = true;
       dev.enable = true;
     };

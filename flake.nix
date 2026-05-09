@@ -73,5 +73,8 @@
 
     fnug.url = "github:nickolaj-jepsen/fnug";
     fnug.inputs.nixpkgs.follows = "nixpkgs";
+
+    zero-x-cb-media.url = "github:nickolaj-jepsen/0xCB-media";
+    zero-x-cb-media.inputs.nixpkgs.follows = "nixpkgs";
   };
 }

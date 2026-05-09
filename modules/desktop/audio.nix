@@ -1,5 +1,6 @@
 {
   lib,
+  pkgs,
   config,
   ...
 }: {
@@ -11,5 +12,10 @@
       alsa.support32Bit = true;
       pulse.enable = true;
     };
+    environment.systemPackages = [
+      pkgs.pulseaudio # provides pactl
+      pkgs.wireplumber # provides wpctl
+      pkgs.alsa-utils # aplay/arecord
+    ];
   };
 }

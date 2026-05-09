@@ -16,6 +16,8 @@
     ./clipboard.nix
     ./monitors.nix
     ./audio.nix
+    ./snapcast.nix
+    ./0xcb-media.nix
     ./fonts.nix
     ./greetd.nix
     ./niri
