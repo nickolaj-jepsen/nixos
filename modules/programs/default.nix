@@ -3,6 +3,7 @@ _: {
     ./fish/default.nix
     ./comma.nix
     ./core.nix
+    ./direnv.nix
     ./git.nix
     ./just.nix
     ./neovim.nix

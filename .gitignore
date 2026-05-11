@@ -1,5 +1,6 @@
 secrets/yubikey-identity.txt
 result
+.direnv/
 
 # Avoid leaking ssh keys
 **/id_ed25519
