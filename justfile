@@ -207,7 +207,7 @@ check:
 [group('maintenance')]
 gc days='7':
     sudo nix-collect-garbage --delete-older-than {{ days }}d
-    sudo nix-env -p /nix/var/nix/profiles/system --delete-older-than {{ days }}d
+    sudo nix-env -p /nix/var/nix/profiles/system --delete-generations {{ days }}d
 
 [doc("Run nix-tree")]
 [group("tools")]
