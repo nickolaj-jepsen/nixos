@@ -29,6 +29,7 @@
         enableVPN = true;
         enableCalendarEvents = false;
         dgop.package = pkgs.unstable.dgop; # not available in stable nixpkgs yet (25.11)
+        quickshell.package = pkgs.unstable.quickshell; # dms 1.5-beta needs quickshell >= 0.3.0 for `pragma AppId`
 
         systemd.enable = true;
 
