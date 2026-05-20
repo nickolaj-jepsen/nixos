@@ -31,6 +31,7 @@ in {
           charliermarsh.ruff
 
           # JavaScript
+          astro-build.astro-vscode
           dbaeumer.vscode-eslint
           esbenp.prettier-vscode
           marketplaceReleases.oxc.oxc-vscode
@@ -38,6 +39,7 @@ in {
           marketplaceReleases.ms-playwright.playwright
           marketplaceReleases.vitest.explorer
           stylelint.vscode-stylelint
+          unifiedjs.vscode-mdx
 
           # Nix
           jnoortheen.nix-ide
