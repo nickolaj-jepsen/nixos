@@ -257,6 +257,9 @@ in {
           voiceEnabled = true;
           useAutoModeDuringPlan = true;
           skipAutoPermissionPrompt = true;
+          env = {
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
+          };
           hooks = {
             Notification = [
               {
