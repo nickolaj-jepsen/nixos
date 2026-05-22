@@ -19,10 +19,10 @@ in {
 
           # AI
           marketplaceReleases.anthropic.claude-code
-          github.copilot-chat
 
           # Git(hub)
           github.vscode-pull-request-github
+          github.vscode-github-actions
 
           # Python
           marketplaceReleases.meta.pyrefly
