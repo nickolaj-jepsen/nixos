@@ -77,7 +77,7 @@ in {
 
       home.packages = lib.optional cfg.work.enable claudeWorkWrapper;
 
-      programs.claude-code.memory.text = ''
+      programs.claude-code.context = ''
         This is a NixOS system. Usually built from a flake based config in ~/nixos.
         - The default shell is fish. Make sure to only use fish supported syntax.
         - If a command is not found, try [comma](https://github.com/nix-community/comma) before giving up, e.g. `, pstree`, `, ncdu .`

@@ -9,8 +9,8 @@ in {
     programs.fish.enable = true;
     users.users.${username}.shell = pkgs.fish;
 
-    # Fish enables generateCaches by default, which causes slow builds
-    documentation.man.generateCaches = false;
+    # Fish enables man cache generation by default, which causes slow builds
+    documentation.man.cache.enable = false;
 
     fireproof.home-manager.programs.fish = {
       enable = true;

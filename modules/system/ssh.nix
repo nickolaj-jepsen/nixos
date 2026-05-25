@@ -28,67 +28,67 @@ in {
     programs.ssh = {
       enable = true;
       enableDefaultConfig = false;
-      matchBlocks =
+      settings =
         {
           "*" = {
-            identityFile = "${config.age.secrets.ssh-key.path}";
-            forwardAgent = true;
-            serverAliveInterval = 60;
-            serverAliveCountMax = 10;
+            IdentityFile = "${config.age.secrets.ssh-key.path}";
+            ForwardAgent = true;
+            ServerAliveInterval = 60;
+            ServerAliveCountMax = 10;
           };
           homelab = {
-            hostname = "x.nickolaj.com";
-            user = "nickolaj";
+            HostName = "x.nickolaj.com";
+            User = "nickolaj";
           };
           minilab = {
-            hostname = "10.0.0.7";
-            user = "nickolaj";
-            proxyJump = "homelab";
+            HostName = "10.0.0.7";
+            User = "nickolaj";
+            ProxyJump = "homelab";
           };
           desktop = {
-            hostname = "10.0.0.20";
-            user = "nickolaj";
-            proxyJump = "homelab";
+            HostName = "10.0.0.20";
+            User = "nickolaj";
+            ProxyJump = "homelab";
           };
         }
         // lib.optionalAttrs workEnabled {
           # Work hostnames definded in ./networking.nix
           "bastion.ao" = {
-            user = "nij";
-            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+            User = "nij";
+            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
           };
           "clickhouse.ao" = {
-            user = "ubuntu";
-            hostname = "51.158.205.48";
-            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+            User = "ubuntu";
+            HostName = "51.158.205.48";
+            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
           };
           "flex.ao" = {
-            user = "nij";
-            hostname = "192.168.2.5";
-            proxyJump = "bastion.ao";
-            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+            User = "nij";
+            HostName = "192.168.2.5";
+            ProxyJump = "bastion.ao";
+            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
           };
           "scw.ao" = {
-            user = "nij";
-            hostname = "51.15.81.1";
-            proxyJump = lib.mkDefault "dev.ao";
-            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+            User = "nij";
+            HostName = "51.15.81.1";
+            ProxyJump = lib.mkDefault "dev.ao";
+            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
           };
           "dev.ao" = {
-            user = "nij";
-            hostname = "192.168.2.28";
-            proxyJump = lib.mkDefault "bastion.ao";
-            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+            User = "nij";
+            HostName = "192.168.2.28";
+            ProxyJump = lib.mkDefault "bastion.ao";
+            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
           };
           "staging.ao" = {
-            user = "staging";
-            hostname = "172.16.2.102";
-            proxyJump = lib.mkDefault "bastion.ao";
-            identityFile = "${config.age.secrets.ssh-key-ao.path}";
+            User = "staging";
+            HostName = "172.16.2.102";
+            ProxyJump = lib.mkDefault "bastion.ao";
+            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
           };
           "mac.ao" = {
-            user = "it";
-            hostname = "b2c-mac-mini";
+            User = "it";
+            HostName = "b2c-mac-mini";
           };
         };
     };

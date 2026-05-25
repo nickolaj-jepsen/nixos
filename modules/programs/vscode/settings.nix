@@ -67,7 +67,7 @@ in {
 
           # Remote
           "remote.SSH.useLocalServer" = false;
-          "remote.SSH.remotePlatform" = lib.mapAttrs (_name: _value: "linux") config.fireproof.home-manager.programs.ssh.matchBlocks;
+          "remote.SSH.remotePlatform" = lib.mapAttrs (_name: _value: "linux") config.fireproof.home-manager.programs.ssh.settings;
 
           # AI
           "github.copilot.enable" = {

@@ -4,12 +4,14 @@
     vimAlias = true;
     viAlias = true;
     defaultEditor = true;
+    withRuby = false;
+    withPython3 = false;
 
     extraPackages = with pkgs; [
       # LSP servers
       nil # Nix
       basedpyright # Python
-      nodePackages.typescript-language-server
+      typescript-language-server
       vscode-langservers-extracted # HTML, CSS, JSON, ESLint
       lua-language-server
       marksman # Markdown
@@ -18,7 +20,7 @@
       # Formatters & linters
       alejandra # Nix formatter
       stylua # Lua formatter
-      nodePackages.prettier
+      prettier
       ruff # Python linter/formatter
 
       # Tools for plugins
@@ -27,7 +29,7 @@
       tree-sitter # for treesitter
     ];
 
-    extraLuaConfig = ''
+    initLua = ''
       -- General settings
       vim.g.mapleader = " "
       vim.g.maplocalleader = " "

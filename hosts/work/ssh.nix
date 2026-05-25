@@ -1,19 +1,19 @@
 {lib, ...}: {
-  fireproof.home-manager.programs.ssh.matchBlocks = {
+  fireproof.home-manager.programs.ssh.settings = {
     "dev.ao" = {
-      proxyJump = lib.mkForce null;
+      ProxyJump = lib.mkForce null;
     };
     "flex.ao" = {
-      proxyJump = lib.mkForce null;
+      ProxyJump = lib.mkForce null;
     };
     "bastion.ao" = {
-      hostname = "192.168.2.6";
+      HostName = "192.168.2.6";
     };
     "clickhouse.ao" = {
-      proxyJump = "bastion.ao";
+      ProxyJump = "bastion.ao";
     };
     homelab = {
-      proxyJump = "bastion.ao";
+      ProxyJump = "bastion.ao";
     };
   };
 }
