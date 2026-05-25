@@ -22,16 +22,13 @@
     - If a 3rd party library could significantly simplify the code, suggest it to the user and wait for approval before adding it.
   '';
 
-  mkRefactorCommand = {
+  mkRefactorSkill = {
     lang,
-    tools,
     extra ? "",
   }: ''
     ---
-    name: refactor-${lang}
-    description: Refactor ${lang} code to improve readability, maintainability, or performance without changing its external behavior.
-    allowed-tools: Read, Write, Grep, Glob, Edit, ${tools}
-    disable-model-invocation: true
+    name: refactor-${lib.toLower lang}
+    description: Use when refactoring ${lang} code to improve readability, maintainability, or performance without changing its external behavior.
     ---
 
     When refactoring ${lang} code, consider the following best practices:
@@ -106,6 +103,49 @@ in {
             url = "https://metabase.aortl.net/api/mcp";
           };
         };
+        skills = {
+          "grill-me" = ''
+            ---
+            name: grill-me
+            description: Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan, get grilled on their design, or mentions "grill me".
+            ---
+
+            Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
+
+            Ask the questions one at a time.
+
+            If a question can be answered by exploring the codebase, explore the codebase instead.
+          '';
+
+          "refactor-python" = mkRefactorSkill {
+            lang = "Python";
+            extra = ''
+              - Follow PEP 8 style guidelines for Python code to ensure consistency and readability.
+              - Use type hints for function signatures.
+              - Prefer dataclasses or Pydantic over raw dicts for structured data.'';
+          };
+
+          "refactor-rust" = mkRefactorSkill {
+            lang = "Rust";
+            extra = ''
+              - Follow Rust's official style guidelines (rustfmt) to ensure consistency and readability.
+              - Prefer `impl` blocks over standalone functions where it improves API ergonomics.
+              - Use the `?` operator for error propagation instead of manual `match`/`unwrap`.
+              - Prefer iterators and combinators over manual loops where readability isn't hurt.'';
+          };
+
+          "refactor-typescript" = mkRefactorSkill {
+            lang = "TypeScript";
+            extra = ''
+              - Follow a consistent coding style and use a linter (e.g. ESLint) to enforce it.
+              - Avoid using the `any` type, and prefer more specific types to improve type safety and readability.
+              - Use async/await for asynchronous code to improve readability and maintainability, and avoid callback hell.
+              - Prefer `interface` over `type` for object shapes (better error messages, extendability).
+              - Use `const` assertions and discriminated unions over enums.
+              - Always prefer erasableSyntaxOnly-compatible TypeScript — avoid `enum`, `namespace`, parameter properties, and other non-erasable syntax.'';
+          };
+        };
+
         commands = {
           "commit" = ''
             ---
@@ -153,37 +193,6 @@ in {
 
             Before creating the PR, MAKE SURE to present you title and body to the user and ask for confirmation. If the user requests changes to the title or body, allow them to edit it before proceeding.
           '';
-
-          "refactor-python" = mkRefactorCommand {
-            lang = "Python";
-            tools = "Bash(uv sync), Bash(uv run:*)";
-            extra = ''
-              - Follow PEP 8 style guidelines for Python code to ensure consistency and readability.
-              - Use type hints for function signatures.
-              - Prefer dataclasses or Pydantic over raw dicts for structured data.'';
-          };
-
-          "refactor-rust" = mkRefactorCommand {
-            lang = "Rust";
-            tools = "Bash(cargo fmt), Bash(cargo clippy), Bash(cargo test)";
-            extra = ''
-              - Follow Rust's official style guidelines (rustfmt) to ensure consistency and readability.
-              - Prefer `impl` blocks over standalone functions where it improves API ergonomics.
-              - Use the `?` operator for error propagation instead of manual `match`/`unwrap`.
-              - Prefer iterators and combinators over manual loops where readability isn't hurt.'';
-          };
-
-          "refactor-typescript" = mkRefactorCommand {
-            lang = "TypeScript";
-            tools = "Bash(npm run fmt), Bash(npm run lint), Bash(npm test), Bash(pnpm run fmt), Bash(pnpm run lint), Bash(pnpm test)";
-            extra = ''
-              - Follow a consistent coding style and use a linter (e.g. ESLint) to enforce it.
-              - Avoid using the `any` type, and prefer more specific types to improve type safety and readability.
-              - Use async/await for asynchronous code to improve readability and maintainability, and avoid callback hell.
-              - Prefer `interface` over `type` for object shapes (better error messages, extendability).
-              - Use `const` assertions and discriminated unions over enums.
-              - Always prefer erasableSyntaxOnly-compatible TypeScript — avoid `enum`, `namespace`, parameter properties, and other non-erasable syntax.'';
-          };
 
           "handoff" = ''
             ---
