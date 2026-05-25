@@ -54,7 +54,7 @@ Verify with `nix --version`.
 
 Two hash formats are used in this repo:
 
-- **Hex format** (no prefix): `"e7e847383c466..."` — used in `claude-code.nix` and `github-copilot-cli.nix`
+- **Hex format** (no prefix): `"e7e847383c466..."` — used in `claude-code.nix`
 - **SRI format** (`sha256-` prefix): `"sha256-DfDsU/qY..."` — used everywhere else
 
 To compute hashes:
@@ -106,12 +106,6 @@ For each component, check the latest GitHub release tag:
 - **Latest version**: Check latest release of `github/gh-aw` on GitHub
 - **New hash**: `nix-prefetch-url "https://github.com/github/gh-aw/releases/download/v<VERSION>/linux-amd64"` → SRI
 - **Update fields**: `version` (in both the attribute and the `url` string) and `sha256` (SRI format)
-
-### 6. GitHub Copilot CLI (`overlays/github-copilot-cli.nix`)
-
-- **Latest version**: Fetch `https://registry.npmjs.org/@github/copilot` and read `dist-tags.latest`
-- **New hash**: `nix-prefetch-url "https://registry.npmjs.org/@github/copilot/-/copilot-<VERSION>.tgz"`
-- **Update fields**: `version` and `sha256` (hex format, no prefix)
 
 ## Reusing the Existing PR
 
