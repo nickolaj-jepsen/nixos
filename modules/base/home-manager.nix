@@ -3,24 +3,24 @@
   config,
   options,
   ...
-}:
-with lib; let
+}: let
   inherit (config.fireproof) username;
+  stateVersion = "24.11";
 in {
   options.fireproof = {
     home-manager = lib.mkOption {
       type = options.home-manager.users.type.nestedTypes.elemType;
     };
   };
-  config = rec {
+  config = {
     home-manager = {
       useUserPackages = true;
       useGlobalPkgs = true;
+      users.${username} = lib.mkAliasDefinitions options.fireproof.home-manager;
     };
-    home-manager.users.${username} = mkAliasDefinitions options.fireproof.home-manager;
 
     # set the same version of home-manager as the system
-    system.stateVersion = lib.mkDefault "24.11";
-    fireproof.home-manager.home.stateVersion = system.stateVersion;
+    system.stateVersion = lib.mkDefault stateVersion;
+    fireproof.home-manager.home.stateVersion = stateVersion;
   };
 }

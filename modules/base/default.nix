@@ -1,6 +1,4 @@
 _: {
-  options.fireproof.base = {};
-
   imports = [
     ./fireproof.nix
     ./defaults.nix
