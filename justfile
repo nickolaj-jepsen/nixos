@@ -8,7 +8,11 @@ nixcmd := "nix --experimental-features 'nix-command flakes'"
 [doc("Build a flake output")]
 [group('tools')]
 build target *ARGS="":
-    @{{ nixcmd }} run {{ ARGS }} nixpkgs#nix-output-monitor -- build {{ justfile_directory() }}#{{ target }}
+    @if command -v nom >/dev/null 2>&1; then \
+        nom build {{ justfile_directory() }}#{{ target }} {{ ARGS }}; \
+    else \
+        nix build {{ justfile_directory() }}#{{ target }} {{ ARGS }}; \
+    fi
 
 [doc('Build a nixos configuration')]
 [group('deploy')]
@@ -40,9 +44,9 @@ switch hostname=`hostname -s` target='' *ARGS="":
     #!/usr/bin/env -S bash -e
     target="{{ target }}"
     if [ -z "$target" ]; then
-        sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch --show-trace --flake .#{{ hostname }} {{ ARGS }}
+        sudo nixos-rebuild switch --flake .#{{ hostname }} {{ ARGS }}
     else
-        {{ nixcmd }} run nixpkgs#nixos-rebuild -- switch \
+        nixos-rebuild switch \
             --flake .#{{ hostname }} \
             --use-substitutes \
             --target-host {{ target }} \
@@ -52,12 +56,12 @@ switch hostname=`hostname -s` target='' *ARGS="":
 [doc('Wrapper for nixos-rebuild boot')]
 [group("deploy")]
 boot hostname=`hostname -s` *ARGS="":
-    sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- boot --show-trace --flake .#{{ hostname }} {{ ARGS }}
+    sudo nixos-rebuild boot --flake .#{{ hostname }} {{ ARGS }}
 
 [doc('Wrapper for nixos-rebuild test')]
 [group("deploy")]
 test hostname=`hostname -s` *ARGS="":
-    sudo {{ nixcmd }} run nixpkgs#nixos-rebuild -- test --show-trace --flake .#{{ hostname }} {{ ARGS }}
+    sudo nixos-rebuild test --flake .#{{ hostname }} {{ ARGS }}
 
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
@@ -130,7 +134,7 @@ bootstrap-flash device:
 [doc('Runs (r)age with yubikey identity')]
 [group('secret')]
 age *ARGS="--help":
-    @{{ nixcmd }} shell nixpkgs#rage nixpkgs#age-plugin-yubikey --command rage {{ ARGS }} -i ./secrets/yubikey-identity.pub
+    @rage {{ ARGS }} -i ./secrets/yubikey-identity.pub
 
 [doc('Decrypt a file to stdout')]
 [group('secret')]
@@ -208,16 +212,17 @@ check:
 gc days='7':
     sudo nix-collect-garbage --delete-older-than {{ days }}d
     sudo nix-env -p /nix/var/nix/profiles/system --delete-generations {{ days }}d
+    sudo nix-store --optimise
 
 [doc("Run nix-tree")]
 [group("tools")]
 tree *ARGS=("--derivation .#nixosConfigurations." + shell("hostname -s") + ".config.system.build.toplevel"):
-    {{ nixcmd }} run github:utdemir/nix-tree -- {{ ARGS }}
+    nix-tree {{ ARGS }}
 
 [doc("Run nix-diff between current system")]
 [group("tools")]
 diff hostname=`hostname -s`: (build-system hostname)
-    {{ nixcmd }} run nixpkgs#nvd -- diff /run/current-system {{ justfile_directory() }}/result
+    nvd diff /run/current-system {{ justfile_directory() }}/result
 
 [doc('List system generations')]
 [group('tools')]
@@ -232,7 +237,7 @@ repl:
 [doc("Run nurl")]
 [group("tools")]
 nurl *ARGS="--help":
-    {{ nixcmd }} run nixpkgs#nurl -- {{ ARGS }}
+    nurl {{ ARGS }}
 
 [doc("Show why a package is in the closure")]
 [group("tools")]

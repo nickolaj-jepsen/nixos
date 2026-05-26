@@ -35,6 +35,9 @@ in {
             ForwardAgent = true;
             ServerAliveInterval = 60;
             ServerAliveCountMax = 10;
+            ControlMaster = "auto";
+            ControlPath = "~/.ssh/control-%C";
+            ControlPersist = "10m";
           };
           homelab = {
             HostName = "x.nickolaj.com";

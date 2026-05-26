@@ -13,10 +13,14 @@
         nix-diff # Compare derivations
         nix-tree # Visualize dependencies
         nvd # Nix version diff
+        nix-output-monitor # Pretty `nix build` output for `just build`
+        nurl # Generate Nix fetcher calls from URLs
 
         # Secrets management
         inputs.agenix.packages.${system}.default
         age
+        rage # Used by `just age`
+        age-plugin-yubikey # YubiKey plugin discovered via PATH by rage
 
         # Deployment
         just

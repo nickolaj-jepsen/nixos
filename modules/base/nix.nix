@@ -11,6 +11,9 @@
     experimental-features = ["nix-command" "flakes"];
     warn-dirty = false;
 
+    download-buffer-size = 524288000;
+    max-substitution-jobs = 32;
+
     substituters = [
       "https://nix-community.cachix.org"
       "https://fnug.cachix.org"
