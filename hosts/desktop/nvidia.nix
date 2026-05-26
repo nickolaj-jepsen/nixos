@@ -1,4 +1,4 @@
-{config, ...}: {
+_: {
   hardware = {
     graphics = {
       enable = true;
@@ -6,7 +6,7 @@
     nvidia = {
       open = true;
       modesetting.enable = true;
-      package = config.boot.kernelPackages.nvidiaPackages.beta;
+      branch = "beta";
     };
   };
   services.xserver.videoDrivers = ["nvidia"];

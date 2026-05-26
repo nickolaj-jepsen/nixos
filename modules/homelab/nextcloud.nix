@@ -22,7 +22,7 @@ in {
       };
 
       nextcloud = {
-        package = pkgs.nextcloud32;
+        package = pkgs.nextcloud33;
         enable = true;
         https = true;
         database.createLocally = true;
