@@ -3,34 +3,35 @@
   pkgs,
   lib,
   ...
-}:
-lib.mkIf config.fireproof.homelab.enable {
-  age.secrets.nextcloud-admin-pass = {
-    rekeyFile = ../../secrets/hosts/homelab/nextcloud-admin-pass.age;
-    owner = "nextcloud";
-    group = "nextcloud";
-  };
-
-  services = {
-    restic.backups.homelab.paths = [config.services.nextcloud.home];
-
-    nginx.virtualHosts.${config.services.nextcloud.hostName} = {
-      forceSSL = true;
-      enableACME = true;
+}: {
+  config = lib.mkIf config.fireproof.homelab.enable {
+    age.secrets.nextcloud-admin-pass = {
+      rekeyFile = ../../secrets/hosts/homelab/nextcloud-admin-pass.age;
+      owner = "nextcloud";
+      group = "nextcloud";
     };
 
-    nextcloud = {
-      package = pkgs.nextcloud32;
-      enable = true;
-      https = true;
-      database.createLocally = true;
-      hostName = "nextcloud.nickolaj.com";
-      config = {
-        adminpassFile = "${config.age.secrets.nextcloud-admin-pass.path}";
-        dbtype = "pgsql";
+    services = {
+      restic.backups.homelab.paths = [config.services.nextcloud.home];
+
+      nginx.virtualHosts.${config.services.nextcloud.hostName} = {
+        forceSSL = true;
+        enableACME = true;
       };
-      extraApps = {
-        inherit (config.services.nextcloud.package.packages.apps) sociallogin;
+
+      nextcloud = {
+        package = pkgs.nextcloud32;
+        enable = true;
+        https = true;
+        database.createLocally = true;
+        hostName = "nextcloud.nickolaj.com";
+        config = {
+          adminpassFile = "${config.age.secrets.nextcloud-admin-pass.path}";
+          dbtype = "pgsql";
+        };
+        extraApps = {
+          inherit (config.services.nextcloud.package.packages.apps) sociallogin;
+        };
       };
     };
   };
