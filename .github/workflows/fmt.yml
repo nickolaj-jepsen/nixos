@@ -6,51 +6,80 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   fmt:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: DeterminateSystems/nix-installer-action@main
-
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: ./.github/actions/setup-nix
       - name: Check formatting
         run: nix fmt -- --fail-on-change
 
+  hosts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      list: ${{ steps.list.outputs.list }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: ./.github/actions/setup-nix
+      - id: list
+        name: Enumerate nixosConfigurations
+        # Exclude bootstrap-* hosts: those build installer ISOs and aren't worth
+        # the matrix slot on every PR. The real hosts are all that's needed for
+        # the build gate.
+        run: |
+          list=$(nix eval --json .#nixosConfigurations --apply builtins.attrNames \
+            | jq -c '[ .[] | select(startswith("bootstrap") | not) ]')
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "Matrix: $list"
+
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: ./.github/actions/setup-nix
         with:
-          extra-conf: |
-            extra-substituters = https://nix-community.cachix.org https://fnug.cachix.org https://niri.cachix.org https://0xcbmedia.cachix.org
-            extra-trusted-public-keys = nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs= fnug.cachix.org-1:SDUeF2nZSbSPOAMNJdYZdoVB+tHdB8UHHcqhEmizeNk= niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964= 0xcbmedia.cachix.org-1:u8PfgqbbO/hjnsA77TCxi5w7hh82dApsqJ4bAgg9Rmo=
-
+          attic-endpoint: https://attic.${{ secrets.HOMELAB_DOMAIN }}/
+          attic-cache: nixos
+          attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Run nix flake check
         run: nix flake check
 
-  build:
+  eval:
+    needs: hosts
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        host: [desktop, laptop, work, homelab, desktop-wsl, minilab]
+        host: ${{ fromJson(needs.hosts.outputs.list) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: ./.github/actions/setup-nix
+      - name: Evaluate ${{ matrix.host }}
+        run: nix eval --raw .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel.drvPath
 
-      - uses: DeterminateSystems/nix-installer-action@main
+  build:
+    needs: [hosts, fmt, check, eval]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJson(needs.hosts.outputs.list) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: ./.github/actions/setup-nix
         with:
-          extra-conf: |
-            extra-substituters = https://nix-community.cachix.org https://fnug.cachix.org https://niri.cachix.org https://0xcbmedia.cachix.org
-            extra-trusted-public-keys = nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs= fnug.cachix.org-1:SDUeF2nZSbSPOAMNJdYZdoVB+tHdB8UHHcqhEmizeNk= niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964= 0xcbmedia.cachix.org-1:u8PfgqbbO/hjnsA77TCxi5w7hh82dApsqJ4bAgg9Rmo=
-
-      - uses: ryanccn/attic-action@v0
-        with:
-          endpoint: https://attic.${{ secrets.HOMELAB_DOMAIN }}/
-          cache: nixos
-          token: ${{ secrets.ATTIC_TOKEN }}
-
+          attic-endpoint: https://attic.${{ secrets.HOMELAB_DOMAIN }}/
+          attic-cache: nixos
+          attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Build ${{ matrix.host }}
         run: nix build .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel
