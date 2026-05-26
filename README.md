@@ -69,82 +69,68 @@ just tree
 just iso hostname
 ```
 
-### Bootstrap ISO
+## Installing on a New Machine
 
-```bash
-# Build bootable USB installer
-just bootstrap-iso
+The recommended flow is a **host-specific bootstrap ISO**: an install image with the new host's pre-rekeyed SSH key and a copy of this flake baked in. The target boots the USB and runs `bootstrap-install` — no GitHub roundtrip, no manual rekeying on the target, no `nixos-anywhere` fragility.
 
-# Flash to USB drive
-just bootstrap-flash /dev/sdX
-```
-
-## Adding a New Host
-
-1. Run the new-host command:
+1. Create the host on your laptop (generates the SSH key, rekeys secrets with YubiKey):
 
    ```bash
    just new-host <hostname> <username>
    ```
 
-   This creates:
-   - `hosts/<hostname>/default.nix` file which you should edit
-   - `secrets/hosts/<hostname>/` directory with SSH keys
-
-2. Add host configuration in `hosts/default.nix`:
+   Creates `hosts/<hostname>/default.nix` and `secrets/hosts/<hostname>/`. Edit `hosts/<hostname>/default.nix` and add the entry to `hosts/default.nix`:
 
    ```nix
-   <hostname> = mkSystem { host = .<hostname>; };
+   <hostname> = mkSystem { host = ./<hostname>; };
    ```
 
-3. Create required files in `hosts/<hostname>/`:
-   - `configuration.nix` - Main host config
-   - `disk-configuration.nix` - Disk layout (for disko)
-   - Other host-specific modules as needed
+2. (Optional) Pre-populate `hosts/<hostname>/disk-configuration.nix` if you already know the disk layout — otherwise the installer will pick a template interactively. Templates live in `hosts/_templates/disko/`.
 
-4. Generate hardware config:
+3. Build a host-specific ISO (decrypts the SSH key via YubiKey, bakes it into the image):
 
    ```bash
-   just factor <hostname>
-   # Or for remote:
-   just factor <hostname> user@remote
+   just bootstrap-iso <hostname>
    ```
 
-5. Deploy or Build:
+4. Flash to USB:
+
    ```bash
-   just test <hostname>
+   just bootstrap-flash <hostname> /dev/sdX
+   ```
+
+5. Boot the USB on the target. After autologin, the MOTD shows the next steps:
+
+   ```bash
+   nmtui              # connect WiFi (skip if wired)
+   bootstrap-install  # interactive: picks disk, prompts for LUKS, installs
+   ```
+
+   The installer:
+   - Uses `hosts/<hostname>/disk-configuration.nix` if present, otherwise prompts to pick a template and substitutes the chosen disk.
+   - Regenerates `facter.json` if missing, prompts before overwriting an existing one.
+   - Prompts for the LUKS passphrase only if the disko config uses LUKS.
+   - Places the host SSH key on the target before activation so agenix can decrypt secrets (including the user password) during install.
+   - Copies the (possibly modified) flake into `~/<user>/nixos` on the installed system, so any live-generated configs show up as `git diff` after first boot.
+
+6. Reboot, then on the target:
+
+   ```bash
+   cd ~/nixos && git status   # review live-generated configs, commit if desired
    ```
 
 > [!TIP]
-> If you upload the public key (`secrets/hosts/<hostname>/id_ed25519.pub`) to GitHub, you can pull & push directly from the new host.
+> Upload the host pubkey (`secrets/hosts/<hostname>/id_ed25519.pub`) to GitHub to pull/push directly from the new host.
 
-## Deploying
+### Alternative: remote install via nixos-anywhere
 
-### Nixos ISO install
-
-A simple way to install a new machine is to use the official [NixOS ISO](https://nixos.org/download/) to prepare a machine
-
-Copy the private SSH key for the new host to `/etc/ssh/ssh_host_ed25519_key`
-
-Enable flakes support in `/etc/nixos/configuration.nix`
-
-```nix
-{
-  nix = {
-    package = pkgs.nixFlakes;
-    extraOptions = ''
-      experimental-features = nix-command flakes
-    '';
-  };
-}
-```
-
-Then run:
+If the target is already booted into a Linux environment with SSH access (cloud VM, recovery shell), you can install over the network instead:
 
 ```bash
-$ nix develop
-$ just switch <hostname>
+just deploy-remote <hostname> user@remote
 ```
+
+This uses `nixos-anywhere` and is convenient when it works, but is fragile on flaky networks or hosts that auto-reboot during kexec. Prefer the bootstrap ISO for physical machines.
 
 ## Secret Management
 

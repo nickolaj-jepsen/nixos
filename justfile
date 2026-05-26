@@ -98,26 +98,42 @@ disko-install hostname disk:
 iso hostname:
     {{ nixcmd }} build .#nixosConfigurations.{{ hostname }}.config.formats.install-iso
 
-[doc('Build the bootstrap ISO for USB installation')]
+[doc('Build a host-specific bootstrap ISO with the host SSH key + repo baked in')]
 [group('deploy')]
-bootstrap-iso:
-    @echo "Building bootstrap ISO..."
-    {{ nixcmd }} build .#nixosConfigurations.bootstrap.config.system.build.isoImage
-    @echo "ISO built: $(ls -1 result/iso/*.iso)"
+bootstrap-iso hostname:
+    #!/usr/bin/env -S bash -e
+    if [ ! -f "secrets/hosts/{{ hostname }}/id_ed25519.age" ]; then
+        echo "No host key for '{{ hostname }}'. Run: just new-host {{ hostname }} <username>"
+        exit 1
+    fi
+    if [ ! -d "hosts/{{ hostname }}" ]; then
+        echo "Host '{{ hostname }}' not in ./hosts/. Run: just new-host {{ hostname }} <username>"
+        exit 1
+    fi
 
-[doc('Flash the bootstrap ISO to a USB drive')]
+    temp=$(mktemp -d)
+    trap "rm -rf $temp" EXIT
+
+    echo "Decrypting host SSH key (touch YubiKey if prompted)..."
+    just age -d "secrets/hosts/{{ hostname }}/id_ed25519.age" > "$temp/id_ed25519"
+    chmod 600 "$temp/id_ed25519"
+    cp "secrets/hosts/{{ hostname }}/id_ed25519.pub" "$temp/id_ed25519.pub"
+
+    echo "Building bootstrap ISO for {{ hostname }}..."
+    just build "nixosConfigurations.bootstrap-{{ hostname }}.config.system.build.isoImage" \
+        --override-input bootstrap-payload "path:$temp"
+    echo "ISO built: $(ls -1 result/iso/*.iso)"
+
+[doc('Flash a host-specific bootstrap ISO to a USB drive')]
 [group('deploy')]
-bootstrap-flash device:
+bootstrap-flash hostname device:
     #!/usr/bin/env -S bash -e
     if [ ! -b "{{ device }}" ]; then
         echo "Error: {{ device }} is not a block device"
         exit 1
     fi
 
-    # Build the ISO first if needed
-    if [ ! -d "result/iso" ]; then
-        just bootstrap-iso
-    fi
+    just bootstrap-iso {{ hostname }}
 
     iso_file=$(ls -1 result/iso/*.iso | head -1)
     echo "Flashing $iso_file to {{ device }}..."

@@ -13,6 +13,11 @@
       description = "The primary username for the machine";
     };
     work.enable = lib.mkEnableOption "Enable work-related applications and tools";
+    bootstrap.targetHost = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "Hostname this bootstrap ISO targets. Empty string means the generic, non-host-specific bootstrap.";
+    };
     dev = {
       enable = lib.mkEnableOption "Enable development tools and applications";
       intellij.enable = lib.mkOption {

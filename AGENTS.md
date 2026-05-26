@@ -122,7 +122,8 @@ in {
 
 - **New program**: Create `modules/programs/<name>.nix`
 - **New homelab service**: Create `modules/homelab/<name>.nix`, add to `modules/homelab/default.nix` imports, add dashboard link in `modules/homelab/glance.nix`
-- **New host**: Run `just new-host <hostname> <username>`, add to `hosts/default.nix`
+- **New host**: Run `just new-host <hostname> <username>`, add to `hosts/default.nix`. To install on physical hardware, build a host-specific bootstrap ISO with `just bootstrap-iso <hostname>` and flash with `just bootstrap-flash <hostname> /dev/sdX` — the ISO bakes in the host SSH key + a copy of this flake, target boots and runs `bootstrap-install`.
+- **New disko template**: Add `hosts/_templates/disko/<name>.nix` with `device = "@@DISK@@";` as the sentinel. The bootstrap installer offers any template found here when no `disk-configuration.nix` exists yet.
 - **New script**: Use `pkgs.writeShellApplication`, include `set -euo pipefail`
 - **New overlay**: Create `overlays/<name>.nix`, add to `overlays/default.nix` imports, and add update instructions (if needed) in `.github/workflows/update-overlays.md` a [GitHub Agentic Workflows file](https://github.com/github/gh-aw). Then recompile: `gh aw compile update-overlays`
 

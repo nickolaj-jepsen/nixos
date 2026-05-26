@@ -53,6 +53,18 @@
         "type": "github"
       }
     },
+    "bootstrap-payload": {
+      "flake": false,
+      "locked": {
+        "path": "./hosts/bootstrap/empty-payload",
+        "type": "path"
+      },
+      "original": {
+        "path": "./hosts/bootstrap/empty-payload",
+        "type": "path"
+      },
+      "parent": []
+    },
     "dank-material-shell": {
       "inputs": {
         "flake-compat": "flake-compat_2",
@@ -804,6 +816,7 @@
       "inputs": {
         "agenix": "agenix",
         "agenix-rekey": "agenix-rekey",
+        "bootstrap-payload": "bootstrap-payload",
         "dank-material-shell": "dank-material-shell",
         "dgop": "dgop",
         "disko": "disko",

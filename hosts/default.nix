@@ -3,7 +3,8 @@
   withSystem,
   ...
 }: let
-  fpLib = import ../lib {inherit (inputs.nixpkgs) lib;};
+  inherit (inputs.nixpkgs) lib;
+  fpLib = import ../lib {inherit lib;};
 
   mkSystem = {
     host,
@@ -39,14 +40,29 @@
             ++ modules;
         }
     );
-in {
-  config.flake.nixosConfigurations = {
-    laptop = mkSystem {host = ./laptop;};
-    desktop = mkSystem {host = ./desktop;};
-    work = mkSystem {host = ./work;};
-    homelab = mkSystem {host = ./homelab;};
-    bootstrap = mkSystem {host = ./bootstrap;};
-    desktop-wsl = mkSystem {host = ./desktop-wsl;};
-    minilab = mkSystem {host = ./minilab;};
+
+  targets = {
+    laptop = ./laptop;
+    desktop = ./desktop;
+    work = ./work;
+    homelab = ./homelab;
+    desktop-wsl = ./desktop-wsl;
+    minilab = ./minilab;
   };
+
+  mkBootstrap = name:
+    mkSystem {
+      host = ./bootstrap;
+      modules = [
+        ./bootstrap/bake.nix
+        {fireproof.bootstrap.targetHost = name;}
+      ];
+    };
+in {
+  config.flake.nixosConfigurations =
+    (lib.mapAttrs (_: host: mkSystem {inherit host;}) targets)
+    // {
+      bootstrap = mkSystem {host = ./bootstrap;};
+    }
+    // (lib.mapAttrs' (name: _: lib.nameValuePair "bootstrap-${name}" (mkBootstrap name)) targets);
 }
