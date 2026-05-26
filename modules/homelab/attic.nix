@@ -11,7 +11,9 @@ in {
   config = lib.mkIf cfg.enable {
     age.secrets.atticd-env = {
       rekeyFile = ../../secrets/hosts/homelab/atticd-env.age;
-      owner = config.services.atticd.user;
+      # atticd uses systemd DynamicUser, so the "atticd" user does not exist
+      # at agenix activation time. systemd reads EnvironmentFile= as root
+      # before dropping privileges, so root:root 0400 (the default) works.
     };
 
     # Not behind oauth2-proxy: atticd has its own JWT auth and CI must reach

@@ -69,6 +69,7 @@ in {
       sabnzbd = {
         inherit user group;
         enable = true;
+        configFile = null;
       };
       radarr = {
         inherit user group;

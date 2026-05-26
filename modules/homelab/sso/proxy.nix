@@ -23,6 +23,7 @@ in {
       enable = true;
       provider = "oidc";
       reverseProxy = true;
+      trustedProxyIP = ["127.0.0.1" "::1"];
       redirectURL = "https://${oathproxyDomain}/oauth2/callback";
       validateURL = "https://${zitadelDomain}/oauth2/";
       oidcIssuerUrl = "https://${zitadelDomain}:443";
