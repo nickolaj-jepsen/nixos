@@ -25,6 +25,10 @@ in {
       enable = true;
       package = pkgs.unstable.firefox;
 
+      # TODO: migrate to XDG path "${config.xdg.configHome}/mozilla/firefox" —
+      # requires moving ~/.mozilla/firefox to ~/.config/mozilla/firefox first.
+      configPath = ".mozilla/firefox";
+
       profiles.default.settings = {
         # Homepage
         "browser.startup.homepage" = "https://glance.nickolaj.com";

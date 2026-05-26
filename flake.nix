@@ -27,7 +27,7 @@
 
     nixos-facter-modules.url = "github:numtide/nixos-facter-modules";
 
-    home-manager.url = "github:nix-community/home-manager";
+    home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
     nur.url = "github:nix-community/NUR";

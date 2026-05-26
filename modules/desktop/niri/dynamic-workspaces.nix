@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   inputs,
   ...
 }: let
@@ -32,6 +33,9 @@ in {
 
     fireproof.home-manager.programs.niri-dynamic-workspaces = {
       enable = true;
+      # Pass package explicitly to avoid upstream's `pkgs.system` warning
+      # (its default uses the deprecated alias). TODO: fix upstream and drop.
+      package = inputs.niri-dynamic-workspaces.packages.${pkgs.stdenv.hostPlatform.system}.default;
       settings = {
         workspace = {
           n = mkWorkspace {

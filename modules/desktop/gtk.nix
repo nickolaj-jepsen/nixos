@@ -123,6 +123,8 @@ in {
         gtk3.extraConfig = {gtk-application-prefer-dark-theme = true;};
         gtk3.extraCss = themeCss;
 
+        # adw-gtk3 only ships a GTK3 theme; GTK4 apps use libadwaita.
+        gtk4.theme = null;
         gtk4.extraConfig = {gtk-application-prefer-dark-theme = true;};
         gtk4.extraCss = themeCss;
       };

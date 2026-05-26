@@ -13,10 +13,10 @@
     withSystem system (
       {system, ...}:
         inputs.nixpkgs.lib.nixosSystem {
-          inherit system;
           specialArgs = {inherit inputs fpLib;};
           modules =
             [
+              {nixpkgs.hostPlatform = system;}
               inputs.disko.nixosModules.disko
               inputs.nixos-generators.nixosModules.all-formats
               inputs.home-manager.nixosModules.home-manager
