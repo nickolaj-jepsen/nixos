@@ -1,3 +1,7 @@
+# For the `--auto` merge below to actually wait for CI, the `build (<host>)`
+# checks from fmt.yml must be marked as required status checks on `main` in
+# the repo's branch protection settings. Otherwise this PR auto-merges
+# regardless of whether builds pass.
 name: Update flake.lock
 on:
   schedule:
