@@ -5,6 +5,13 @@ nixcmd := "nix --experimental-features 'nix-command flakes'"
 @_default:
     just --list
 
+[private]
+_confirm message:
+    #!/usr/bin/env -S bash -e
+    read -p "{{ message }} (y/N) " -n 1 -r
+    echo
+    [[ $REPLY =~ ^[Yy]$ ]] || { echo "Aborted"; exit 1; }
+
 [doc("Build a flake output")]
 [group('tools')]
 build target *ARGS="":
@@ -65,7 +72,7 @@ test hostname=`hostname -s` *ARGS="":
 
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
-deploy-remote hostname target:
+deploy-remote hostname target: (_confirm "Deploy " + hostname + " to " + target + "? This will FORMAT disks on the target.")
     #!/usr/bin/env -S bash -e
     git add .
 
@@ -126,7 +133,7 @@ bootstrap-iso hostname:
 
 [doc('Flash a host-specific bootstrap ISO to a USB drive')]
 [group('deploy')]
-bootstrap-flash hostname device:
+bootstrap-flash hostname device: (_confirm "Flash bootstrap ISO for " + hostname + " to " + device + "? This will ERASE ALL DATA on " + device + ".")
     #!/usr/bin/env -S bash -e
     if [ ! -b "{{ device }}" ]; then
         echo "Error: {{ device }} is not a block device"
@@ -137,15 +144,8 @@ bootstrap-flash hostname device:
 
     iso_file=$(ls -1 result/iso/*.iso | head -1)
     echo "Flashing $iso_file to {{ device }}..."
-    echo "WARNING: This will ERASE ALL DATA on {{ device }}"
-    read -p "Are you sure? (y/N) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        sudo dd if="$iso_file" of="{{ device }}" bs=4M status=progress oflag=sync
-        echo "Done! You can now boot from {{ device }}"
-    else
-        echo "Aborted"
-    fi
+    sudo dd if="$iso_file" of="{{ device }}" bs=4M status=progress oflag=sync
+    echo "Done! You can now boot from {{ device }}"
 
 [doc('Runs (r)age with yubikey identity')]
 [group('secret')]
@@ -225,7 +225,7 @@ check:
 
 [doc('Collect garbage and delete old generations')]
 [group('maintenance')]
-gc days='7':
+gc days='7': (_confirm "Delete generations and store paths older than " + days + " days?")
     sudo nix-collect-garbage --delete-older-than {{ days }}d
     sudo nix-env -p /nix/var/nix/profiles/system --delete-generations {{ days }}d
     sudo nix-store --optimise
