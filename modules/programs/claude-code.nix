@@ -9,12 +9,6 @@
   hmLib = config.home-manager.users.${username}.lib;
   homeDir = config.home-manager.users.${username}.home.homeDirectory;
 
-  grafanaMcpWrapper = pkgs.writeShellScript "grafana-mcp-wrapper" ''
-    set -euo pipefail
-    export $(grep -v '^#' ${config.age.secrets.grafana-mcp-env.path} | xargs)
-    exec ${pkgs.mcp-grafana}/bin/mcp-grafana "$@"
-  '';
-
   refactorGuidelines = ''
     - Remove any duplicate code by creating reusable functions or modules.
     - Ensure that the refactored code is well-tested by running existing tests and adding new tests if necessary to cover the changes.
@@ -60,12 +54,6 @@ in {
     lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
   config = {
-    age.secrets.grafana-mcp-env = {
-      rekeyFile = ../../secrets/grafana-mcp-env.age;
-      mode = "0600";
-      owner = username;
-    };
-
     fireproof.home-manager = {
       # Mutes warning about installMethod by placing the wrapped binary in ~/.local/bin
       home.file = lib.mkMerge [
@@ -90,12 +78,6 @@ in {
         enable = true;
         package = pkgs.claude-code;
         enableMcpIntegration = true;
-        mcpServers = {
-          grafana = {
-            command = toString grafanaMcpWrapper;
-            args = [];
-          };
-        };
         skills = {
           "grill-me" = ''
             ---
