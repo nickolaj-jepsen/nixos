@@ -38,5 +38,6 @@ _: {
     ./claude-code.nix
     ./emdash.nix
     ./fnug.nix
+    ./mcp.nix
   ];
 }
