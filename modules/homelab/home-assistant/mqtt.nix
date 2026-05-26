@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }: let
   cfg = config.fireproof.homelab;
@@ -27,13 +28,9 @@ in {
     };
 
     services.oauth2-proxy.nginx.virtualHosts."zigbee.${cfg.domain}".allowed_groups = ["iot-admin"];
-    services.nginx.virtualHosts."zigbee.${cfg.domain}" = {
-      enableACME = true;
-      forceSSL = true;
-      locations."/" = {
-        proxyPass = "http://localhost:${toString zigbee2mqttPort}";
-        proxyWebsockets = true;
-      };
+    services.nginx.virtualHosts."zigbee.${cfg.domain}" = fpLib.mkVirtualHost {
+      port = zigbee2mqttPort;
+      websockets = true;
     };
 
     services.mosquitto = {

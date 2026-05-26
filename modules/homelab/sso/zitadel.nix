@@ -14,16 +14,12 @@ in {
       owner = config.services.zitadel.user;
     };
 
-    services.nginx.virtualHosts."${zitadelDomain}" = {
-      enableACME = true;
-      forceSSL = true;
-      locations."/" = {
-        proxyPass = "http://127.0.0.1:${toString port}";
-        extraConfig = ''
-          grpc_pass grpc://127.0.0.1:${toString port};
-          grpc_set_header Host $host:$server_port;
-        '';
-      };
+    services.nginx.virtualHosts."${zitadelDomain}" = fpLib.mkVirtualHost {
+      inherit port;
+      extraConfig = ''
+        grpc_pass grpc://127.0.0.1:${toString port};
+        grpc_set_header Host $host:$server_port;
+      '';
     };
 
     services.postgresql = fpLib.mkPostgresDB {

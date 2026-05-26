@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  fpLib,
   ...
 }: let
   inherit (config.fireproof.theme) hsl;
@@ -597,13 +598,9 @@ in {
 
     services.oauth2-proxy.nginx.virtualHosts."${domain}".allowed_groups = ["default"];
 
-    services.nginx.virtualHosts."${domain}" = {
-      enableACME = true;
-      forceSSL = true;
-      locations."/" = {
-        proxyPass = "http://127.0.0.1:${toString port}";
-      };
-      locations."= /custom.css" = {
+    services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
+      inherit port;
+      extraLocations."= /custom.css" = {
         alias = customCss;
         extraConfig = ''
           add_header Content-Type text/css;

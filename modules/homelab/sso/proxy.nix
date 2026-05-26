@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }: let
   rootDomain = config.fireproof.homelab.domain;
@@ -13,13 +14,9 @@ in {
       owner = "oauth2-proxy";
     };
 
-    services.nginx.virtualHosts."${oathproxyDomain}" = {
-      enableACME = true;
-      forceSSL = true;
-      locations."/" = {
-        proxyWebsockets = true;
-        proxyPass = "http://127.0.0.1:4180";
-      };
+    services.nginx.virtualHosts."${oathproxyDomain}" = fpLib.mkVirtualHost {
+      port = 4180;
+      websockets = true;
     };
 
     services.oauth2-proxy = {

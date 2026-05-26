@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }: let
   cfg = config.fireproof.homelab;
@@ -25,12 +26,9 @@ in {
         ];
       };
 
-      nginx.virtualHosts."${domain}" = {
-        enableACME = true;
-        forceSSL = true;
-        locations."/" = {
-          proxyPass = "http://${toString config.services.vaultwarden.config.ROCKET_ADDRESS}:${toString config.services.vaultwarden.config.ROCKET_PORT}";
-        };
+      nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
+        host = config.services.vaultwarden.config.ROCKET_ADDRESS;
+        port = config.services.vaultwarden.config.ROCKET_PORT;
       };
     };
   };

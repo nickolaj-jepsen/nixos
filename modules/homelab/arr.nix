@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }: let
   inherit (config.fireproof) username;
@@ -8,19 +9,16 @@
   user = "media";
   group = "media";
 
-  mkVirtualHost = port: {
-    enableACME = true;
-    forceSSL = true;
-    locations."/" = {
-      proxyPass = "http://localhost:${toString port}";
+  mkArrVHost = port:
+    fpLib.mkVirtualHost {
+      inherit port;
+      extraLocations."/api" = {
+        proxyPass = "http://127.0.0.1:${toString port}";
+        extraConfig = ''
+          auth_request off;
+        '';
+      };
     };
-    locations."/api" = {
-      proxyPass = "http://localhost:${toString port}";
-      extraConfig = ''
-        auth_request off;
-      '';
-    };
-  };
 in {
   config = lib.mkIf config.fireproof.homelab.enable {
     # for linux ISOs
@@ -42,12 +40,12 @@ in {
         "bazarr.${cfg.domain}".allowed_groups = ["arr"];
       };
       nginx.virtualHosts = {
-        "radarr.${cfg.domain}" = mkVirtualHost 7878;
-        "sonarr.${cfg.domain}" = mkVirtualHost 8989;
-        "lidarr.${cfg.domain}" = mkVirtualHost 8686;
-        "prowlarr.${cfg.domain}" = mkVirtualHost 9696;
-        "sabnzbd.${cfg.domain}" = mkVirtualHost 8080;
-        "bazarr.${cfg.domain}" = mkVirtualHost config.services.bazarr.listenPort;
+        "radarr.${cfg.domain}" = mkArrVHost 7878;
+        "sonarr.${cfg.domain}" = mkArrVHost 8989;
+        "lidarr.${cfg.domain}" = mkArrVHost 8686;
+        "prowlarr.${cfg.domain}" = mkArrVHost 9696;
+        "sabnzbd.${cfg.domain}" = mkArrVHost 8080;
+        "bazarr.${cfg.domain}" = mkArrVHost config.services.bazarr.listenPort;
       };
 
       restic.backups.homelab = {

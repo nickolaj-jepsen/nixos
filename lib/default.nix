@@ -3,16 +3,23 @@
     port,
     host ? "127.0.0.1",
     websockets ? false,
-    http2 ? false,
+    http2 ? true,
+    extraConfig ? "",
+    extraLocations ? {},
   }: {
     forceSSL = true;
     enableACME = true;
     inherit http2;
-    locations."/" =
+    locations =
       {
-        proxyPass = "http://${host}:${toString port}/";
+        "/" =
+          {
+            proxyPass = "http://${host}:${toString port}/";
+          }
+          // lib.optionalAttrs websockets {proxyWebsockets = true;}
+          // lib.optionalAttrs (extraConfig != "") {inherit extraConfig;};
       }
-      // lib.optionalAttrs websockets {proxyWebsockets = true;};
+      // extraLocations;
   };
 
   mkPostgresDB = {

@@ -2,6 +2,7 @@
   pkgs,
   config,
   lib,
+  fpLib,
   ...
 }: let
   cfg = config.fireproof.homelab;
@@ -20,13 +21,9 @@ in {
       paths = [config.services.home-assistant.configDir];
     };
 
-    services.nginx.virtualHosts."ha.${cfg.domain}" = {
-      enableACME = true;
-      forceSSL = true;
-      locations."/" = {
-        proxyPass = "http://localhost:${toString homeAssistantPort}";
-        proxyWebsockets = true;
-      };
+    services.nginx.virtualHosts."ha.${cfg.domain}" = fpLib.mkVirtualHost {
+      port = homeAssistantPort;
+      websockets = true;
     };
 
     services.home-assistant = {
