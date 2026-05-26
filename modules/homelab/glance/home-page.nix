@@ -187,6 +187,13 @@
               same-tab = true;
             }
             {
+              title = "Attic";
+              url = "https://attic.${cfg.domain}";
+              icon = "sh:nix";
+              same-tab = true;
+              alt-status-codes = [404];
+            }
+            {
               title = "Zitadel";
               url = "https://sso.${cfg.domain}";
               icon = "sh:zitadel";

@@ -15,6 +15,7 @@
 
   imports = [
     ./arr.nix
+    ./attic.nix
     ./audiobookshelf.nix
     ./glance
     ./home-assistant
