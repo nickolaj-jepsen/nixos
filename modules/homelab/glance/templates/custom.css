@@ -1,0 +1,17 @@
+.bookmarks-group li > div {
+  background-color: var(--color-background);
+  margin-top: 5px;
+  border-radius: var(--border-radius);
+  transition: background-color 0.3s;
+  font-size: 1.2em;
+  padding-left: 5px;
+}
+
+.bookmarks-group li > div:has(a:hover) {
+  background-color: var(--color-widget-background-highlight);
+}
+
+.bookmarks-group li a {
+  padding: 10px 0;
+  width: 100%;
+}

@@ -16,7 +16,7 @@
   imports = [
     ./arr.nix
     ./audiobookshelf.nix
-    ./glance.nix
+    ./glance
     ./home-assistant
     ./jellyfin.nix
     ./nextcloud.nix
