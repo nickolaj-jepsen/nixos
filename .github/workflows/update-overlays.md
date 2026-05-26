@@ -84,10 +84,6 @@ Read each overlay file first to determine the current version/revision, then che
 
 For each component, check the latest GitHub release tag:
 
-**bambu_lab** (`greghesp/ha-bambulab`):
-
-- **Update fields**: `version` and `hash` (SRI format)
-
 **switch_manager** (`Sian-Lee-SA/Home-Assistant-Switch-Manager`):
 
 - **Update fields**: `version` and `hash` (SRI format)

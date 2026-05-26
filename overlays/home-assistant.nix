@@ -1,17 +1,17 @@
 _: {
   perSystem = {pkgs, ...}: let
-    zwift-client = pkgs.python313.pkgs.buildPythonPackage {
+    zwift-client = pkgs.python314.pkgs.buildPythonPackage {
       pname = "zwift-client";
       version = "0.2.0";
       pyproject = true;
       src = pkgs.fetchFromGitHub {
         owner = "nickolaj-jepsen";
         repo = "zwift-client";
-        rev = "ea256d1782a09a2016e32deafb9a083ca674692e";
-        hash = "sha256-4gOlWG+QVwODlIhiNH7rhiD0rzNv2WxY2ty9o/51eHU=";
+        rev = "fb8ec414ef8447b86881ce60da2bacb0c951d1b2";
+        hash = "sha256-c6v/D7JxF0xdg5YiHig6DZA2tcZdEUI2UIKZc22CDFY=";
       };
       doCheck = false;
-      propagatedBuildInputs = with pkgs.python313.pkgs; [
+      propagatedBuildInputs = with pkgs.python314.pkgs; [
         hatchling
         requests
         protobuf
@@ -20,20 +20,6 @@ _: {
   in {
     overlayAttrs = {
       homeAssistantCustomComponents = {
-        bambu_lab = pkgs.buildHomeAssistantComponent rec {
-          owner = "greghesp";
-          domain = "bambu_lab";
-          version = "v2.2.22";
-          src = pkgs.fetchFromGitHub {
-            inherit owner;
-            repo = "ha-bambulab";
-            rev = version;
-            hash = "sha256-JRJ+tfllDuMrtz+5VQL2l5nkhJQXRoNvsvFnrReSZHE=";
-          };
-          propagatedBuildInputs = with pkgs.python313.pkgs; [
-            beautifulsoup4
-          ];
-        };
         switch_manager = pkgs.buildHomeAssistantComponent rec {
           owner = "Sian-Lee-SA";
           domain = "switch_manager";

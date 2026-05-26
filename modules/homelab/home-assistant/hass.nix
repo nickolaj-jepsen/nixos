@@ -34,7 +34,6 @@ in {
       customComponents = with pkgs.unstable.home-assistant-custom-components; [
         adaptive_lighting
         sleep_as_android_mqtt
-        pkgs.homeAssistantCustomComponents.bambu_lab
         pkgs.homeAssistantCustomComponents.switch_manager
         pkgs.homeAssistantCustomComponents.zwift
       ];
