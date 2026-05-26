@@ -3,6 +3,7 @@
   lib,
   ...
 }: let
+  cfg = config.fireproof.homelab;
   mosquittoPort = 1883;
   zigbee2mqttPort = 8180;
 in {
@@ -25,8 +26,8 @@ in {
       exclude = ["/var/lib/zigbee2mqtt/log/"];
     };
 
-    services.oauth2-proxy.nginx.virtualHosts."zigbee.nickolaj.com".allowed_groups = ["iot-admin"];
-    services.nginx.virtualHosts."zigbee.nickolaj.com" = {
+    services.oauth2-proxy.nginx.virtualHosts."zigbee.${cfg.domain}".allowed_groups = ["iot-admin"];
+    services.nginx.virtualHosts."zigbee.${cfg.domain}" = {
       enableACME = true;
       forceSSL = true;
       locations."/" = {

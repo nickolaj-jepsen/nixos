@@ -5,7 +5,8 @@
   ...
 }: let
   inherit (config.fireproof.theme) hsl;
-  domain = "glance.nickolaj.com";
+  cfg = config.fireproof.homelab;
+  domain = "glance.${cfg.domain}";
   port = 8088;
 
   customCss = pkgs.writeText "glance-custom.css" ''
@@ -165,86 +166,86 @@ in {
                     sites = [
                       {
                         title = "Home Assistant";
-                        url = "https://ha.nickolaj.com";
+                        url = "https://ha.${cfg.domain}";
                         icon = "sh:home-assistant";
                         same-tab = true;
                       }
                       {
                         title = "Nextcloud";
-                        url = "https://nextcloud.nickolaj.com";
+                        url = "https://nextcloud.${cfg.domain}";
                         icon = "sh:nextcloud";
                         same-tab = true;
                       }
                       {
                         title = "Zigbee2MQTT";
-                        url = "https://zigbee.nickolaj.com";
+                        url = "https://zigbee.${cfg.domain}";
                         icon = "sh:zigbee2mqtt";
                         same-tab = true;
                       }
                       {
                         title = "Plex";
-                        url = "https://plex.nickolaj.com";
+                        url = "https://plex.${cfg.domain}";
                         icon = "sh:plex";
                         same-tab = true;
                         alt-status-codes = [401];
                       }
                       {
                         title = "Jellyfin";
-                        url = "https://jellyfin.nickolaj.com";
+                        url = "https://jellyfin.${cfg.domain}";
                         icon = "sh:jellyfin";
                         same-tab = true;
                       }
                       {
                         title = "Navidrome";
-                        url = "https://navidrome.nickolaj.com";
+                        url = "https://navidrome.${cfg.domain}";
                         icon = "sh:navidrome";
                         same-tab = true;
                       }
                       {
                         title = "Audiobookshelf";
-                        url = "https://audiobookshelf.nickolaj.com";
+                        url = "https://audiobookshelf.${cfg.domain}";
                         icon = "sh:audiobookshelf";
                         same-tab = true;
                       }
                       {
                         title = "Sonarr";
-                        url = "https://sonarr.nickolaj.com";
+                        url = "https://sonarr.${cfg.domain}";
                         icon = "sh:sonarr";
                         same-tab = true;
                       }
                       {
                         title = "Radarr";
-                        url = "https://radarr.nickolaj.com";
+                        url = "https://radarr.${cfg.domain}";
                         icon = "sh:radarr";
                         same-tab = true;
                       }
                       {
                         title = "Lidarr";
-                        url = "https://lidarr.nickolaj.com";
+                        url = "https://lidarr.${cfg.domain}";
                         icon = "sh:lidarr";
                         same-tab = true;
                       }
                       {
                         title = "SABnzbd";
-                        url = "https://sabnzbd.nickolaj.com";
+                        url = "https://sabnzbd.${cfg.domain}";
                         icon = "sh:sabnzbd";
                         same-tab = true;
                       }
                       {
                         title = "Prowlarr";
-                        url = "https://prowlarr.nickolaj.com";
+                        url = "https://prowlarr.${cfg.domain}";
                         icon = "sh:prowlarr";
                         same-tab = true;
                       }
                       {
                         title = "qBittorrent";
-                        url = "https://qbittorrent.nickolaj.com";
+                        url = "https://qbittorrent.${cfg.domain}";
                         icon = "sh:qbittorrent";
                         same-tab = true;
                       }
                       {
                         title = "Zitadel";
-                        url = "https://sso.nickolaj.com";
+                        url = "https://sso.${cfg.domain}";
                         icon = "sh:zitadel";
                         same-tab = true;
                       }

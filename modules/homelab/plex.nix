@@ -5,7 +5,8 @@
   fpLib,
   ...
 }: let
-  domain = "plex.nickolaj.com";
+  cfg = config.fireproof.homelab;
+  domain = "plex.${cfg.domain}";
 in {
   config = lib.mkIf config.fireproof.homelab.enable {
     services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {

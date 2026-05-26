@@ -6,7 +6,7 @@
   ...
 }: let
   port = 9190;
-  zitadelDomain = "sso.nickolaj.com";
+  zitadelDomain = "sso.${config.fireproof.homelab.domain}";
 in {
   config = lib.mkIf config.fireproof.homelab.enable {
     age.secrets.zitadel-master = {

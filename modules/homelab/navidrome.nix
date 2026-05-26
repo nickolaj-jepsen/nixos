@@ -4,7 +4,8 @@
   pkgs,
   ...
 }: let
-  domain = "navidrome.nickolaj.com";
+  cfg = config.fireproof.homelab;
+  domain = "navidrome.${cfg.domain}";
 in {
   config = lib.mkIf config.fireproof.homelab.enable {
     age.secrets.navidrome-env.rekeyFile = ../../secrets/hosts/homelab/navidrome-env.age;

@@ -4,6 +4,7 @@
   ...
 }: let
   inherit (config.fireproof) username;
+  cfg = config.fireproof.homelab;
   user = "media";
   group = "media";
 
@@ -33,20 +34,20 @@ in {
 
     services = {
       oauth2-proxy.nginx.virtualHosts = {
-        "radarr.nickolaj.com".allowed_groups = ["arr"];
-        "sonarr.nickolaj.com".allowed_groups = ["arr"];
-        "lidarr.nickolaj.com".allowed_groups = ["arr"];
-        "prowlarr.nickolaj.com".allowed_groups = ["arr"];
-        "sabnzbd.nickolaj.com".allowed_groups = ["arr"];
-        "bazarr.nickolaj.com".allowed_groups = ["arr"];
+        "radarr.${cfg.domain}".allowed_groups = ["arr"];
+        "sonarr.${cfg.domain}".allowed_groups = ["arr"];
+        "lidarr.${cfg.domain}".allowed_groups = ["arr"];
+        "prowlarr.${cfg.domain}".allowed_groups = ["arr"];
+        "sabnzbd.${cfg.domain}".allowed_groups = ["arr"];
+        "bazarr.${cfg.domain}".allowed_groups = ["arr"];
       };
       nginx.virtualHosts = {
-        "radarr.nickolaj.com" = mkVirtualHost 7878;
-        "sonarr.nickolaj.com" = mkVirtualHost 8989;
-        "lidarr.nickolaj.com" = mkVirtualHost 8686;
-        "prowlarr.nickolaj.com" = mkVirtualHost 9696;
-        "sabnzbd.nickolaj.com" = mkVirtualHost 8080;
-        "bazarr.nickolaj.com" = mkVirtualHost config.services.bazarr.listenPort;
+        "radarr.${cfg.domain}" = mkVirtualHost 7878;
+        "sonarr.${cfg.domain}" = mkVirtualHost 8989;
+        "lidarr.${cfg.domain}" = mkVirtualHost 8686;
+        "prowlarr.${cfg.domain}" = mkVirtualHost 9696;
+        "sabnzbd.${cfg.domain}" = mkVirtualHost 8080;
+        "bazarr.${cfg.domain}" = mkVirtualHost config.services.bazarr.listenPort;
       };
 
       restic.backups.homelab = {

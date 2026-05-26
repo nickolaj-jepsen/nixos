@@ -4,6 +4,7 @@
   pkgs,
   ...
 }: let
+  cfg = config.fireproof.homelab;
   # VPN namespace configuration
   vpnNamespace = "qbittorrent-vpn";
   vpnInterface = "qbt-wg0";
@@ -161,10 +162,10 @@ in {
 
     services = {
       oauth2-proxy.nginx.virtualHosts = {
-        "qbittorrent.nickolaj.com".allowed_groups = ["arr"];
+        "qbittorrent.${cfg.domain}".allowed_groups = ["arr"];
       };
       nginx.virtualHosts = {
-        "qbittorrent.nickolaj.com" = {
+        "qbittorrent.${cfg.domain}" = {
           enableACME = true;
           forceSSL = true;
           locations."/" = {

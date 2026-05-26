@@ -2,7 +2,9 @@
   config,
   lib,
   ...
-}: {
+}: let
+  cfg = config.fireproof.homelab;
+in {
   config = lib.mkIf config.fireproof.homelab.enable {
     networking.firewall.allowedTCPPorts = [80 443];
 
@@ -34,7 +36,7 @@
     };
     security.acme = {
       acceptTerms = true;
-      defaults.email = "nickolaj@fireproof.website";
+      defaults.email = cfg.acmeEmail;
     };
   };
 }

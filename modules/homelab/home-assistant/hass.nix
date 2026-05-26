@@ -4,6 +4,7 @@
   lib,
   ...
 }: let
+  cfg = config.fireproof.homelab;
   homeAssistantPort = 8123;
 in {
   config = lib.mkIf config.fireproof.homelab.enable {
@@ -19,7 +20,7 @@ in {
       paths = [config.services.home-assistant.configDir];
     };
 
-    services.nginx.virtualHosts."ha.nickolaj.com" = {
+    services.nginx.virtualHosts."ha.${cfg.domain}" = {
       enableACME = true;
       forceSSL = true;
       locations."/" = {
@@ -63,7 +64,7 @@ in {
           elevation = "!secret elevation";
           unit_system = "metric";
           time_zone = "Europe/Copenhagen";
-          external_url = "https://ha.nickolaj.com";
+          external_url = "https://ha.${cfg.domain}";
         };
         frontend = {
           themes = "!include_dir_merge_named themes";

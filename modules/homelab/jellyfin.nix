@@ -4,7 +4,8 @@
   fpLib,
   ...
 }: let
-  domain = "jellyfin.nickolaj.com";
+  cfg = config.fireproof.homelab;
+  domain = "jellyfin.${cfg.domain}";
 in {
   config = lib.mkIf config.fireproof.homelab.enable {
     services.restic.backups.homelab.paths = [config.services.jellyfin.dataDir];

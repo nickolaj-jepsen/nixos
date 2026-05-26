@@ -3,7 +3,7 @@
   lib,
   ...
 }: let
-  rootDomain = "nickolaj.com";
+  rootDomain = config.fireproof.homelab.domain;
   zitadelDomain = "sso.${rootDomain}";
   oathproxyDomain = "oauth2-proxy.${rootDomain}";
 in {

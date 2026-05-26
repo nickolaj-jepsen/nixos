@@ -3,7 +3,9 @@
   pkgs,
   lib,
   ...
-}: {
+}: let
+  cfg = config.fireproof.homelab;
+in {
   config = lib.mkIf config.fireproof.homelab.enable {
     age.secrets.nextcloud-admin-pass = {
       rekeyFile = ../../secrets/hosts/homelab/nextcloud-admin-pass.age;
@@ -24,7 +26,7 @@
         enable = true;
         https = true;
         database.createLocally = true;
-        hostName = "nextcloud.nickolaj.com";
+        hostName = "nextcloud.${cfg.domain}";
         config = {
           adminpassFile = "${config.age.secrets.nextcloud-admin-pass.path}";
           dbtype = "pgsql";

@@ -3,7 +3,8 @@
   lib,
   ...
 }: let
-  domain = "bitwarden.nickolaj.com";
+  cfg = config.fireproof.homelab;
+  domain = "bitwarden.${cfg.domain}";
 in {
   config = lib.mkIf config.fireproof.homelab.enable {
     services = {

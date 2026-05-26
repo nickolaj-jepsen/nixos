@@ -4,7 +4,8 @@
   fpLib,
   ...
 }: let
-  domain = "audiobookshelf.nickolaj.com";
+  cfg = config.fireproof.homelab;
+  domain = "audiobookshelf.${cfg.domain}";
   port = 8234;
 in {
   config = lib.mkIf config.fireproof.homelab.enable {
