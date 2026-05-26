@@ -14,8 +14,6 @@ in {
       owner = config.services.atticd.user;
     };
 
-    services.restic.backups.homelab.paths = ["/var/lib/atticd"];
-
     # Not behind oauth2-proxy: atticd has its own JWT auth and CI must reach
     # the push API with a bearer token, not a browser SSO flow.
     services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
@@ -47,8 +45,8 @@ in {
           max-size = 262144;
         };
         garbage-collection = {
-          interval = "7 days";
-          default-retention-period = "30 days";
+          interval = "2 days";
+          default-retention-period = "7 days";
         };
       };
     };
