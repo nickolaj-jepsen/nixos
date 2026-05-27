@@ -68,6 +68,19 @@ in {
           coreutils
         ];
       })
+      (makeScript {
+        path = ./claude-wt.bash;
+        runtimeInputs = with pkgs; [
+          git
+          fzf
+          util-linux # for column
+          gawk
+          gnused
+          gnugrep
+          findutils
+          coreutils
+        ];
+      })
     ]
     ++ lib.optionals config.fireproof.desktop.enable [
       (makeScript {
