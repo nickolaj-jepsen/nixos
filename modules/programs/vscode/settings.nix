@@ -36,6 +36,12 @@ in {
           "editor.stickyScroll.enabled" = true;
           "editor.inlayHints.enabled" = "onUnlessPressed";
           "editor.renderWhitespace" = "boundary";
+          "editor.suggestSelection" = "first";
+          "editor.unicodeHighlight.invisibleCharacters" = true;
+
+          # Problems panel
+          "problems.sortOrder" = "severity";
+          "problems.showCurrentInStatus" = true;
 
           # Files
           "files.autoSave" = "afterDelay";
@@ -49,6 +55,33 @@ in {
             "**/.DS_Store" = true;
             "**/node_modules" = true;
             "**/.direnv" = true;
+          };
+          "files.watcherExclude" = {
+            "**/.direnv/**" = true;
+            "**/node_modules/**" = true;
+            "**/result" = true;
+            "**/result-*" = true;
+          };
+
+          # Search
+          "search.useIgnoreFiles" = true;
+          "search.exclude" = {
+            "**/node_modules" = true;
+            "**/.direnv" = true;
+            "**/dist" = true;
+            "**/.next" = true;
+            "**/__pycache__" = true;
+            "**/*.lock" = true;
+          };
+
+          # Explorer
+          "explorer.confirmDragAndDrop" = false;
+          "explorer.fileNesting.enabled" = true;
+          "explorer.fileNesting.patterns" = {
+            "*.ts" = "\${capture}.js, \${capture}.test.ts, \${capture}.spec.ts";
+            "package.json" = "package-lock.json, pnpm-lock.yaml, yarn.lock, .npmrc, .nvmrc";
+            "tsconfig.json" = "tsconfig.*.json";
+            "flake.nix" = "flake.lock";
           };
 
           # Workbench
@@ -64,6 +97,8 @@ in {
           "terminal.integrated.defaultProfile.linux" = "fish";
           "terminal.integrated.smoothScrolling" = true;
           "terminal.integrated.cursorBlinking" = true;
+          "terminal.integrated.fontFamily" = "'Hack Nerd Font Mono', monospace";
+          "terminal.integrated.scrollback" = 10000;
 
           # Remote
           "remote.SSH.useLocalServer" = false;
@@ -124,7 +159,13 @@ in {
           "git.confirmSync" = false;
           "git.enableSmartCommit" = true;
           "git.blame.editorDecoration.enabled" = true;
+          "git.fetchOnPull" = true;
+          "git.pruneOnFetch" = true;
+          "git.confirmForcePush" = true;
+          "git.untrackedChanges" = "separate";
+          "git.openRepositoryInParentFolders" = "always";
           "diffEditor.ignoreTrimWhitespace" = false;
+          "diffEditor.experimental.showMoves" = true;
           "scm.repositories.explorer" = true;
 
           # GitHub
@@ -144,6 +185,7 @@ in {
 
           # Spell checking
           "cSpell.language" = "en,da";
+          "cSpell.diagnosticLevel" = "Hint";
           "cSpell.userWords" = [
             "aonumber"
             "aortl"
@@ -196,6 +238,17 @@ in {
 
           # Other extensions
           "biome.suggestInstallingGlobally" = false;
+
+          # Error Lens
+          "errorLens.messageBackgroundMode" = "none";
+          "errorLens.followCursor" = "allLines";
+          "errorLens.gutterIconsEnabled" = true;
+          "errorLens.fontStyleItalic" = true;
+          "errorLens.excludeBySource" = ["cSpell"];
+
+          # Direnv
+          "direnv.restart.automatic" = true;
+          "direnv.status.showOnStartup" = false;
         }
         (mkFormatter "oxc.oxc-vscode" ["json" "jsonc" "markdown" "css" "scss" "typescript" "typescriptreact" "html" "yaml"])
         (mkFormatter "charliermarsh.ruff" ["python"])

@@ -15,6 +15,7 @@ in {
       "editor.fontFamily" = "'Hack Nerd Font', 'Hack', 'monospace', monospace";
       "editor.fontSize" = 14;
       "editor.lineHeight" = 1.5;
+      "editor.fontLigatures" = false;
 
       # Workbench color overrides using Flexoki palette
       "workbench.colorCustomizations" = {

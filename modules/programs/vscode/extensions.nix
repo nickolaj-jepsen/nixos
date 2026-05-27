@@ -17,6 +17,10 @@ in {
           # Remote
           ms-vscode-remote.remote-ssh
 
+          # Editor
+          mkhl.direnv
+          usernamehw.errorlens
+
           # AI
           marketplaceReleases.anthropic.claude-code
 
@@ -47,6 +51,7 @@ in {
           # Other languages
           nefrob.vscode-just-syntax
           redhat.vscode-yaml
+          tamasfe.even-better-toml
 
           # Spell checking
           streetsidesoftware.code-spell-checker
