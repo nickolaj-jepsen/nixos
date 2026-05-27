@@ -36,7 +36,7 @@
 
   claudeWorkWrapper = pkgs.writeShellApplication {
     name = "claude-work";
-    runtimeInputs = [pkgs.claude-code];
+    runtimeInputs = [config.home-manager.users.${username}.programs.claude-code.finalPackage];
     text = ''
       export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
       mkdir -p "$CLAUDE_CONFIG_DIR"
@@ -48,6 +48,8 @@
     ".claude-work/settings.json".source = hmLib.file.mkOutOfStoreSymlink "${homeDir}/.claude/settings.json";
     ".claude-work/CLAUDE.md".source = hmLib.file.mkOutOfStoreSymlink "${homeDir}/.claude/CLAUDE.md";
     ".claude-work/commands".source = hmLib.file.mkOutOfStoreSymlink "${homeDir}/.claude/commands";
+    ".claude-work/skills".source = hmLib.file.mkOutOfStoreSymlink "${homeDir}/.claude/skills";
+    ".claude-work/plugins".source = hmLib.file.mkOutOfStoreSymlink "${homeDir}/.claude/plugins";
   };
 in {
   options.fireproof.claude-code.work.enable =
