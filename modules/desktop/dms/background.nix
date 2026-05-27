@@ -41,8 +41,14 @@ in {
       services.hyprpaper = {
         enable = true;
         settings = {
+          splash = false;
           preload = pngs;
-          wallpaper = [",${builtins.head pngs}"];
+          wallpaper = [
+            {
+              monitor = "*";
+              path = builtins.head pngs;
+            }
+          ];
         };
       };
 
