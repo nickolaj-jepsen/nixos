@@ -20,6 +20,7 @@ in {
         ${builtins.readFile ./k8s.fish}
         ${builtins.readFile ./autocomplete.fish}
         ${builtins.readFile ./worktree.fish}
+        ${builtins.readFile ./claude-wt.fish}
         ${pkgs.nix-your-shell}/bin/nix-your-shell fish | source
 
       '';
