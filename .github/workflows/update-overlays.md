@@ -33,6 +33,9 @@ safe-outputs:
     title-prefix: "chore(overlays): "
     labels: [dependencies, automated]
   noop:
+pre-agent-steps:
+  - name: Setup Nix
+    uses: ./.github/actions/setup-nix
 ---
 
 # Update Overlay Packages
@@ -41,14 +44,7 @@ You are an AI agent that checks for updates to manually fetched packages in a Ni
 
 ## Setup
 
-Before checking packages, install Nix to compute package hashes:
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install linux --no-confirm
-. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-```
-
-Verify with `nix --version`.
+Nix is pre-installed by the workflow's `pre-agent-steps`. Verify with `nix --version` before computing hashes.
 
 ## Hash Computation
 
@@ -127,15 +123,14 @@ If the existing PR already contains all the latest updates, or if no files chang
 
 ## Procedure
 
-1. Install Nix (see Setup)
-2. Read all overlay files to get current versions
-3. Check each package for updates using GitHub API and web-fetch
-4. For packages with updates available:
+1. Read all overlay files to get current versions
+2. Check each package for updates using GitHub API and web-fetch
+3. For packages with updates available:
    a. Compute the new hash with `nix-prefetch-url`
    b. Convert to the correct format (hex or SRI as noted above)
    c. Edit the file to update version/rev and hash
-5. If any files changed, either update the existing overlay PR or create it if missing
-6. If nothing changed, use `noop` output
+4. If any files changed, either update the existing overlay PR or create it if missing
+5. If nothing changed, use `noop` output
 
 ## Pull Request
 
