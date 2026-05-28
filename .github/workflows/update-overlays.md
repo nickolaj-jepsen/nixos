@@ -34,8 +34,14 @@ safe-outputs:
     labels: [dependencies, automated]
   noop:
 pre-agent-steps:
-  - name: Setup Nix
-    uses: ./.github/actions/setup-nix
+  - name: Install nix-portable for agent chroot
+    shell: bash
+    run: |
+      set -euo pipefail
+      sudo install -d /opt/nix-portable
+      sudo curl -fL --retry 3 -o /opt/nix-portable/nix-portable \
+        https://github.com/DavHau/nix-portable/releases/download/v012/nix-portable-x86_64
+      sudo chmod +x /opt/nix-portable/nix-portable
 ---
 
 # Update Overlay Packages
@@ -44,7 +50,9 @@ You are an AI agent that checks for updates to manually fetched packages in a Ni
 
 ## Setup
 
-Nix is pre-installed by the workflow's `pre-agent-steps`. Verify with `nix --version` before computing hashes.
+The agent chroot cannot see the host runner's `/nix`. Use the portable Nix binary mounted at `/opt/nix-portable/nix-portable` instead. It's invoked as `nix-portable <nix-command>` (e.g. `/opt/nix-portable/nix-portable nix-prefetch-url <url>`).
+
+Verify with `/opt/nix-portable/nix-portable nix --version` before computing hashes. The first call extracts the bundled store to `~/.nix-portable/` (one-time, ~10s).
 
 ## Hash Computation
 
@@ -53,11 +61,11 @@ Two hash formats are used in this repo:
 - **Hex format** (no prefix): `"e7e847383c466..."` — used in `claude-code.nix`
 - **SRI format** (`sha256-` prefix): `"sha256-DfDsU/qY..."` — used everywhere else
 
-To compute hashes:
+To compute hashes (prefix every command with `/opt/nix-portable/nix-portable`):
 
-- **For `fetchurl`** (direct file download): `nix-prefetch-url <url>` returns hex hash
-- **For `fetchFromGitHub`** (repo archive): `nix-prefetch-url --unpack "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"` returns hex hash
-- **Convert hex → SRI**: `nix hash to-sri --type sha256 <hex-hash>`
+- **For `fetchurl`** (direct file download): `/opt/nix-portable/nix-portable nix-prefetch-url <url>` returns hex hash
+- **For `fetchFromGitHub`** (repo archive): `/opt/nix-portable/nix-portable nix-prefetch-url --unpack "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"` returns hex hash
+- **Convert hex → SRI**: `/opt/nix-portable/nix-portable nix hash to-sri --type sha256 <hex-hash>`
 
 ## Packages to Check
 
