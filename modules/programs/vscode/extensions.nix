@@ -36,6 +36,7 @@ in {
 
           # JavaScript
           astro-build.astro-vscode
+          bradlc.vscode-tailwindcss
           dbaeumer.vscode-eslint
           esbenp.prettier-vscode
           marketplaceReleases.oxc.oxc-vscode
