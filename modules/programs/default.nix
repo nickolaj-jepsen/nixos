@@ -17,7 +17,6 @@ _: {
     ./firefox
     ./ghostty.nix
     ./obsidian.nix
-    ./remmina.nix
     ./pycharm.nix
     ./slack.nix
     ./spotify.nix
