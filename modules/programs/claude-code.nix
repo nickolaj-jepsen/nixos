@@ -69,10 +69,10 @@ in {
 
       programs.claude-code.context = ''
         This is a NixOS system. Usually built from a flake based config in ~/nixos.
-        - The default shell is fish. Make sure to only use fish supported syntax.
         - If a command is not found, try [comma](https://github.com/nix-community/comma) before giving up, e.g. `, pstree`, `, ncdu .`
-        - Pre-installed cli tools: git, gh, just, docker, kubectl, terraform, node, pnpm, ripgrep (rg), jq, curl, wget, tmux, tree, zip/unzip, uv, and more.
-        - Always use uv (https://docs.astral.sh/uv/) for Python work
+        - For python tooling, prefer uv over pip, but use the tool that's most commonly used in the repo.
+        - For nodejs, prefer pnpm over npm, but use the tool that's most commonly used in the repo.
+        - For git, even if the user asks to merge, use rebase over merge to keep history clean, unless the user explicitly says "use merge over rebase".
         - If you want to do a dev command, and you're in a project owned by the github.com/Digital-Udvikling org (see git remote), make sure to use the `ds` cli tool when applicable (check the `ds --help` to determine if you could use it)
       '';
 
