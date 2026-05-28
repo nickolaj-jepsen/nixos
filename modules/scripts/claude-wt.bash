@@ -11,6 +11,7 @@ set -euo pipefail
 #   apply [--dry-run] [<name>] Rebase the worktree's branch onto
 #                              origin/<default>, remove the worktree, leave the
 #                              branch in the main checkout.
+#   smerge [<name>]            Open the worktree in Sublime Merge.
 
 usage() {
     cat >&2 <<'EOF'
@@ -18,6 +19,7 @@ Usage:
   claude-wt list
   claude-wt clean [--dry-run] [<name>]
   claude-wt apply [--dry-run] [<name>]
+  claude-wt smerge [<name>]
 EOF
 }
 
@@ -400,6 +402,71 @@ cmd_apply() {
     : "${behind:-}" "${age_s:-}" "${safe_clean:-}"
 }
 
+cmd_smerge() {
+    local target=""
+    while (( $# > 0 )); do
+        case "$1" in
+            -*) die "unknown flag: $1" ;;
+            *)  target="$1"; shift ;;
+        esac
+    done
+
+    command -v smerge >/dev/null 2>&1 \
+        || die "sublime-merge ('smerge') not found on PATH"
+
+    local rows
+    rows=$(gather_worktrees "$MAIN_WT" "$DEFAULT_BRANCH")
+    [[ -n "$rows" ]] || die "no Claude worktrees under $MAIN_WT/.claude/worktrees"
+
+    if [[ -z "$target" ]]; then
+        local choices
+        choices=$(printf '%s\n' "$rows" \
+            | while IFS=$'\x1f' read -r n p r b s a beh lk age sc; do
+                if (( r == 1 )); then
+                    local b_disp="${b#refs/heads/}"
+                    [[ -n "$b_disp" ]] || b_disp="(detached)"
+                    printf '%s\t%s\t%s\t%s\t%s\n' \
+                        "$n" "$b_disp" "$s" \
+                        "$(format_vs "$a" "$beh")" "$(format_age "$age")"
+                fi
+                : "$p" "$lk" "$sc"
+            done)
+        if [[ -z "$choices" ]]; then
+            die "no registered worktrees to open"
+        fi
+        local picked
+        picked=$({ printf 'NAME\tBRANCH\tSTATE\tvs main\tAGE\n'; printf '%s\n' "$choices"; } \
+            | column -t -s $'\t' \
+            | fzf --prompt="smerge > " --header-lines=1 --layout=reverse --height=40%) \
+            || die "no selection"
+        target=$(awk '{print $1}' <<<"$picked")
+    fi
+
+    local found=""
+    local line
+    while IFS= read -r line; do
+        local n
+        n=$(awk -F$'\x1f' '{print $1}' <<<"$line")
+        if [[ "$n" == "$target" ]]; then
+            found="$line"
+            break
+        fi
+    done <<<"$rows"
+
+    [[ -n "$found" ]] || die "no worktree named '$target'"
+
+    local name path reg branch state ahead behind locked age_s safe_clean
+    IFS=$'\x1f' read -r name path reg branch state ahead behind locked age_s safe_clean <<<"$found"
+
+    (( reg == 1 )) || die "'$name' is an orphan — nothing to open"
+
+    info "opening $path in sublime-merge"
+    smerge "$path" </dev/null >/dev/null 2>&1 &
+    disown
+
+    : "${branch:-}" "${state:-}" "${ahead:-}" "${behind:-}" "${locked:-}" "${age_s:-}" "${safe_clean:-}"
+}
+
 # --- main -------------------------------------------------------------------
 
 if (( $# == 0 )); then
@@ -416,6 +483,7 @@ case "$verb" in
     list)            cmd_list "$@" ;;
     clean)           cmd_clean "$@" ;;
     apply)           cmd_apply "$@" ;;
+    smerge)          cmd_smerge "$@" ;;
     -h|--help|help)  usage ;;
     *)               usage; exit 1 ;;
 esac
