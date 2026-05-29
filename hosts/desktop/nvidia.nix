@@ -6,7 +6,7 @@ _: {
     nvidia = {
       open = true;
       modesetting.enable = true;
-      branch = "beta";
+      powerManagement.enable = true;
     };
   };
   services.xserver.videoDrivers = ["nvidia"];
