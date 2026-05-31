@@ -26,7 +26,6 @@
       # Tools for plugins
       ripgrep # for telescope
       fd # for telescope
-      tree-sitter # for treesitter
     ];
 
     initLua = ''
@@ -95,10 +94,33 @@
           ]);
         type = "lua";
         config = ''
-          require("nvim-treesitter.configs").setup({
-            highlight = { enable = true },
-            indent = { enable = true },
+          -- nvim-treesitter main branch: the old .configs.setup({ highlight, indent })
+          -- API was removed. Highlighting/indent are now enabled per-buffer via
+          -- Neovim's built-in treesitter. Parsers are provided by Nix (withPlugins),
+          -- so no :TSInstall is needed.
+          vim.api.nvim_create_autocmd("FileType", {
+            group = vim.api.nvim_create_augroup("treesitter-start", { clear = true }),
+            callback = function(args)
+              local buf = args.buf
+              local lang = vim.treesitter.language.get_lang(vim.bo[buf].filetype)
+              if lang and pcall(vim.treesitter.start, buf, lang) then
+                -- Treesitter-based indentation (experimental upstream)
+                vim.bo[buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+              end
+            end,
           })
+        '';
+      }
+
+      # mini.nvim: icons (modern nvim-web-devicons replacement) + autopairs.
+      # The icon mock must be registered before neo-tree/bufferline load.
+      {
+        plugin = mini-nvim;
+        type = "lua";
+        config = ''
+          require("mini.icons").setup({})
+          MiniIcons.mock_nvim_web_devicons()
+          require("mini.pairs").setup({})
         '';
       }
 
@@ -157,7 +179,6 @@
           vim.keymap.set("n", "<leader>e", "<cmd>Neotree toggle<cr>", { desc = "Toggle file tree" })
         '';
       }
-      nvim-web-devicons
       nui-nvim
 
       # Tab bar
@@ -212,18 +233,6 @@
               map("n", "<leader>gt", gs.toggle_current_line_blame, "Toggle line blame")
             end,
           })
-        '';
-      }
-
-      # Auto bracket pairs
-      {
-        plugin = nvim-autopairs;
-        type = "lua";
-        config = ''
-          require("nvim-autopairs").setup({})
-          local cmp_autopairs = require("nvim-autopairs.completion.cmp")
-          local cmp = require("cmp")
-          cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
         '';
       }
 
@@ -283,6 +292,11 @@
             end,
           })
 
+          -- Advertise blink.cmp's completion capabilities to every server.
+          vim.lsp.config("*", {
+            capabilities = require("blink.cmp").get_lsp_capabilities(),
+          })
+
           -- Configure LSP servers using vim.lsp.config (Neovim 0.11+)
           vim.lsp.config("nil_ls", {})
           vim.lsp.config("basedpyright", {})
@@ -304,34 +318,25 @@
         '';
       }
 
-      # Autocompletion
+      # Autocompletion (blink.cmp: single plugin, Rust matcher, built-in
+      # LSP/path/buffer/snippet sources + signature help).
       {
-        plugin = nvim-cmp;
+        plugin = blink-cmp;
         type = "lua";
         config = ''
-          local cmp = require("cmp")
-
-          cmp.setup({
-            completion = { completeopt = "menu,menuone,noinsert" },
-            mapping = cmp.mapping.preset.insert({
-              ["<C-n>"] = cmp.mapping.select_next_item(),
-              ["<C-p>"] = cmp.mapping.select_prev_item(),
-              ["<C-b>"] = cmp.mapping.scroll_docs(-4),
-              ["<C-f>"] = cmp.mapping.scroll_docs(4),
-              ["<C-y>"] = cmp.mapping.confirm({ select = true }),
-              ["<C-Space>"] = cmp.mapping.complete({}),
-            }),
-            sources = {
-              { name = "nvim_lsp" },
-              { name = "buffer" },
-              { name = "path" },
+          require("blink.cmp").setup({
+            -- Default preset keeps the familiar keys: <C-n>/<C-p> select,
+            -- <C-b>/<C-f> scroll docs, <C-y> accept, <C-Space> open, <C-e> hide.
+            keymap = { preset = "default" },
+            appearance = { nerd_font_variant = "normal" },
+            sources = { default = { "lsp", "path", "snippets", "buffer" } },
+            signature = { enabled = true },
+            completion = {
+              documentation = { auto_show = true, auto_show_delay_ms = 200 },
             },
           })
         '';
       }
-      cmp-nvim-lsp
-      cmp-buffer
-      cmp-path
 
       # Formatting
       {
