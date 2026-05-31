@@ -11,10 +11,10 @@
   in {
     overlayAttrs = {
       claude-code = pkgsUnstable.claude-code.overrideAttrs (oldAttrs: rec {
-        version = "2.1.157";
+        version = "2.1.158";
         src = pkgsUnstable.fetchurl {
           url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/${version}/linux-x64/claude";
-          sha256 = "3215501f8cfee9a70601c2fbc2c84e9d020e4e7148a0b8b8264f4d8c026bc64b";
+          sha256 = "dd27008acd42700bac5762652ec83ff604bf9ae0786d4dde55d57a6866017fbe";
         };
         nativeBuildInputs = (oldAttrs.nativeBuildInputs or []) ++ [pkgs.makeWrapper];
         postInstall =
