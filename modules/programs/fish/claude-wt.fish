@@ -10,9 +10,9 @@ end
 
 complete -c claude-wt -f
 
-complete -c claude-wt -n __fish_use_subcommand -a list   -d 'List Claude worktrees'
-complete -c claude-wt -n __fish_use_subcommand -a clean  -d 'Remove safely-removable worktrees'
-complete -c claude-wt -n __fish_use_subcommand -a apply  -d 'Rebase branch onto default and remove worktree'
+complete -c claude-wt -n __fish_use_subcommand -a list -d 'List Claude worktrees'
+complete -c claude-wt -n __fish_use_subcommand -a clean -d 'Remove safely-removable worktrees'
+complete -c claude-wt -n __fish_use_subcommand -a apply -d 'Rebase branch onto default and remove worktree'
 complete -c claude-wt -n __fish_use_subcommand -a smerge -d 'Open worktree in Sublime Merge'
 
 complete -c claude-wt -n '__fish_seen_subcommand_from clean' -l dry-run -d 'Show what would be removed'
