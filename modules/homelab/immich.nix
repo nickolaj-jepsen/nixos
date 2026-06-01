@@ -32,7 +32,6 @@ in {
     enable = true;
     host = "127.0.0.1";
     inherit port;
-    database.enableVectors = false;
     machine-learning.enable = true;
     accelerationDevices = [
       "/dev/nvidia0"
