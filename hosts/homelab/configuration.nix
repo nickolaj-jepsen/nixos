@@ -1,4 +1,5 @@
 {
+  config,
   pkgs,
   lib,
   ...
@@ -32,5 +33,8 @@
     open = false;
     modesetting.enable = true;
     nvidiaPersistenced = true;
+    # GTX 970 (Maxwell) is only supported by the 580.xx legacy branch;
+    # the default current driver drops Maxwell and ignores the GPU.
+    package = config.boot.kernelPackages.nvidiaPackages.legacy_580;
   };
 }
