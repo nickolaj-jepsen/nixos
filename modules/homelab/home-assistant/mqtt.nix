@@ -54,6 +54,16 @@ in {
       ];
     };
 
+    # zigbee2mqtt connects to mosquitto on localhost but the upstream module adds
+    # no ordering, and it shares zitadel's fragile profile (Restart=on-failure,
+    # StartLimitBurst=5/10s). Today it survives only because Zigbee coordinator
+    # init delays its MQTT connect past mosquitto startup; order it explicitly so
+    # a slow boot can't make it crash-loop into start-limit-hit. See sso/zitadel.nix.
+    systemd.services.zigbee2mqtt = {
+      after = ["mosquitto.service"];
+      requires = ["mosquitto.service"];
+    };
+
     services.zigbee2mqtt = {
       enable = true;
       settings = {

@@ -27,6 +27,24 @@ in {
       login = true;
     };
 
+    # The upstream zitadel module orders the unit only after basic.target (unlike
+    # every other DB consumer here, whose upstream modules order after
+    # postgresql.target), so on boot it races PostgreSQL and dies with SQLSTATE
+    # 57P03 ("database system is starting up"). After 5 fast retries it hits the
+    # start limit and gives up permanently, which cascades into oauth2-proxy (SSO
+    # down -> 502) and a 500 on every vhost behind it. postgresql.target is
+    # reached only after postgresql.service (Type=notify, i.e. accepting
+    # connections) AND postgresql-setup.service (which creates the zitadel db/user
+    # via mkPostgresDB), so it is the correct readiness barrier. RestartSec + a
+    # looser start limit are belt-and-suspenders for any other transient.
+    systemd.services.zitadel = {
+      after = ["postgresql.target"];
+      requires = ["postgresql.target"];
+      startLimitIntervalSec = 120;
+      startLimitBurst = 10;
+      serviceConfig.RestartSec = "5s";
+    };
+
     services.zitadel = {
       enable = true;
       package = pkgs.unstable.zitadel;
