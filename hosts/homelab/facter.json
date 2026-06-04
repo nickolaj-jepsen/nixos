@@ -2,6 +2,9 @@
   "version": 1,
   "system": "x86_64-linux",
   "virtualisation": "none",
+  "uefi": {
+    "supported": false
+  },
   "hardware": {
     "bios": {
       "apm_info": {
@@ -18,7 +21,7 @@
       "pnp": true,
       "pnp_id": 0,
       "lba_support": false,
-      "low_memory_size": 653312,
+      "low_memory_size": 646144,
       "smbios_version": 516
     },
     "bridge": [
@@ -74,24 +77,17 @@
         "model": "Intel PCI bridge",
         "sysfs_id": "/devices/pci0000:00/0000:00:1c.0",
         "sysfs_bus_id": "0000:00:1c.0",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 16,
-            "triggered": 0,
-            "enabled": true
-          }
-        ],
         "detail": {
           "function": 0,
           "command": 3,
           "header_type": 1,
           "secondary_bus": 2,
-          "irq": 16,
           "prog_if": 0
         },
         "driver": "pcieport",
+        "driver_module": "pcieportdrv",
         "drivers": ["pcieport"],
+        "driver_modules": ["pcieportdrv"],
         "module_alias": "pci:v00008086d00001C10sv00001458sd00005001bc06sc04i00"
       },
       {
@@ -146,7 +142,6 @@
           "command": 263,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 0,
           "prog_if": 0
         },
         "driver": "lpc_ich",
@@ -207,28 +202,21 @@
         "model": "Intel PCI bridge",
         "sysfs_id": "/devices/pci0000:00/0000:00:01.0",
         "sysfs_bus_id": "0000:00:01.0",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 24,
-            "triggered": 0,
-            "enabled": true
-          }
-        ],
         "detail": {
           "function": 0,
           "command": 1031,
           "header_type": 1,
           "secondary_bus": 1,
-          "irq": 24,
           "prog_if": 0
         },
         "driver": "pcieport",
+        "driver_module": "pcieportdrv",
         "drivers": ["pcieport"],
+        "driver_modules": ["pcieportdrv"],
         "module_alias": "pci:v00008086d00000101sv00001458sd00005000bc06sc04i00"
       },
       {
-        "index": 21,
+        "index": 20,
         "attached_to": 0,
         "class_list": ["pci", "bridge"],
         "bus_type": {
@@ -279,28 +267,21 @@
         "model": "Intel PCI bridge",
         "sysfs_id": "/devices/pci0000:00/0000:00:1c.3",
         "sysfs_bus_id": "0000:00:1c.3",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 19,
-            "triggered": 0,
-            "enabled": true
-          }
-        ],
         "detail": {
           "function": 3,
           "command": 1,
           "header_type": 1,
           "secondary_bus": 5,
-          "irq": 19,
           "prog_if": 1
         },
         "driver": "pcieport",
+        "driver_module": "pcieportdrv",
         "drivers": ["pcieport"],
+        "driver_modules": ["pcieportdrv"],
         "module_alias": "pci:v00008086d0000244Esv00001458sd00005001bc06sc04i01"
       },
       {
-        "index": 23,
+        "index": 22,
         "attached_to": 0,
         "class_list": ["pci", "bridge"],
         "bus_type": {
@@ -343,7 +324,6 @@
           "command": 6,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 0,
           "prog_if": 0
         },
         "driver": "snb_uncore",
@@ -353,7 +333,7 @@
         "module_alias": "pci:v00008086d00000100sv00000000sd00000000bc06sc00i00"
       },
       {
-        "index": 24,
+        "index": 23,
         "attached_to": 0,
         "class_list": ["pci", "bridge"],
         "bus_type": {
@@ -404,29 +384,22 @@
         "model": "Intel PCI bridge",
         "sysfs_id": "/devices/pci0000:00/0000:00:1c.1",
         "sysfs_bus_id": "0000:00:1c.1",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 17,
-            "triggered": 0,
-            "enabled": true
-          }
-        ],
         "detail": {
           "function": 1,
           "command": 6,
           "header_type": 1,
           "secondary_bus": 3,
-          "irq": 17,
           "prog_if": 0
         },
         "driver": "pcieport",
+        "driver_module": "pcieportdrv",
         "drivers": ["pcieport"],
+        "driver_modules": ["pcieportdrv"],
         "module_alias": "pci:v00008086d00001C12sv00001458sd00005001bc06sc04i00"
       },
       {
-        "index": 26,
-        "attached_to": 21,
+        "index": 25,
+        "attached_to": 20,
         "class_list": ["pci", "bridge"],
         "bus_type": {
           "hex": "0004",
@@ -475,26 +448,17 @@
         "model": "PCI bridge",
         "sysfs_id": "/devices/pci0000:00/0000:00:1c.3/0000:05:00.0",
         "sysfs_bus_id": "0000:05:00.0",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 11,
-            "triggered": 0,
-            "enabled": true
-          }
-        ],
         "detail": {
           "function": 0,
           "command": 3,
           "header_type": 1,
           "secondary_bus": 6,
-          "irq": 11,
           "prog_if": 1
         },
         "module_alias": "pci:v00001283d00008892sv00001458sd00005000bc06sc04i01"
       },
       {
-        "index": 31,
+        "index": 30,
         "attached_to": 0,
         "class_list": ["pci", "bridge"],
         "bus_type": {
@@ -545,24 +509,17 @@
         "model": "Intel PCI bridge",
         "sysfs_id": "/devices/pci0000:00/0000:00:1c.2",
         "sysfs_bus_id": "0000:00:1c.2",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 18,
-            "triggered": 0,
-            "enabled": true
-          }
-        ],
         "detail": {
           "function": 2,
           "command": 7,
           "header_type": 1,
           "secondary_bus": 4,
-          "irq": 18,
           "prog_if": 0
         },
         "driver": "pcieport",
+        "driver_module": "pcieportdrv",
         "drivers": ["pcieport"],
+        "driver_modules": ["pcieportdrv"],
         "module_alias": "pci:v00008086d00001C14sv00001458sd00005001bc06sc04i00"
       }
     ],
@@ -570,6 +527,7 @@
       {
         "architecture": "x86_64",
         "vendor_name": "GenuineIntel",
+        "model_name": "Intel(R) Core(TM) i7-2600 CPU @ 3.40GHz",
         "family": 6,
         "model": 42,
         "stepping": 7,
@@ -667,29 +625,32 @@
           "mds",
           "swapgs",
           "itlb_multihit",
-          "mmio_unknown"
+          "spectre_v2_user",
+          "vmscape"
         ],
-        "bogo": 6784.45,
+        "power_management": [""],
+        "bogo": 6820,
         "cache": 8192,
         "units": 16,
+        "page_size": 4096,
         "physical_id": 0,
         "siblings": 8,
         "cores": 4,
-        "fpu": true,
-        "fpu_exception": true,
+        "fpu": false,
+        "fpu_exception": false,
         "cpuid_level": 13,
         "write_protect": false,
         "clflush_size": 64,
         "cache_alignment": 64,
         "address_sizes": {
-          "physical": 36,
-          "virtual": 48
+          "physical": "0x24",
+          "virtual": "0x30"
         }
       }
     ],
     "disk": [
       {
-        "index": 33,
+        "index": 32,
         "attached_to": 13,
         "class_list": ["disk", "ide", "block_device"],
         "bus_type": {
@@ -698,8 +659,8 @@
           "value": 133
         },
         "slot": {
-          "bus": 1,
-          "number": 1
+          "bus": 3,
+          "number": 0
         },
         "base_class": {
           "hex": "0106",
@@ -729,29 +690,23 @@
         "serial": "5PKURKPF",
         "model": "WDC WD120EFBX-68",
         "sysfs_id": "/class/block/sdd",
-        "sysfs_bus_id": "1:0:1:0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:1f.2/ata2/host1/target1:0:1/1:0:1:0",
-        "unix_device_name": "/dev/sdd",
-        "unix_device_number": {
-          "type": 98,
-          "major": 8,
-          "minor": 48,
-          "range": 16
-        },
+        "sysfs_bus_id": "3:0:0:0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:1f.2/ata4/host3/target3:0:0/3:0:0:0",
         "unix_device_names": [
-          "/dev/disk/by-diskseq/14",
           "/dev/disk/by-id/ata-WDC_WD120EFBX-68B0EN0_5PKURKPF",
           "/dev/disk/by-id/wwn-0x5000cca291f5f884",
-          "/dev/disk/by-path/pci-0000:00:1f.2-ata-2.1",
+          "/dev/disk/by-path/pci-0000:00:1f.2-ata-4",
+          "/dev/disk/by-path/pci-0000:00:1f.2-ata-4.0",
           "/dev/sdd"
         ],
+        "rom_id": "0x80",
         "resources": [
           {
             "type": "disk_geo",
             "cylinders": 1458933,
             "heads": 255,
             "sectors": 63,
-            "size": 0,
+            "size": "0x0",
             "geo_type": "logical"
           },
           {
@@ -761,13 +716,13 @@
             "value_2": 512
           }
         ],
-        "driver": "ata_piix",
-        "driver_module": "ata_piix",
-        "drivers": ["ata_piix", "sd"],
-        "driver_modules": ["ata_piix", "sd_mod"]
+        "driver": "ahci",
+        "driver_module": "ahci",
+        "drivers": ["ahci", "sd"],
+        "driver_modules": ["ahci", "sd_mod"]
       },
       {
-        "index": 34,
+        "index": 33,
         "attached_to": 13,
         "class_list": ["disk", "ide", "block_device"],
         "bus_type": {
@@ -809,27 +764,21 @@
         "sysfs_id": "/class/block/sdb",
         "sysfs_bus_id": "0:0:0:0",
         "sysfs_device_link": "/devices/pci0000:00/0000:00:1f.2/ata1/host0/target0:0:0/0:0:0:0",
-        "unix_device_name": "/dev/sdb",
-        "unix_device_number": {
-          "type": 98,
-          "major": 8,
-          "minor": 16,
-          "range": 16
-        },
         "unix_device_names": [
-          "/dev/disk/by-diskseq/12",
           "/dev/disk/by-id/ata-WDC_WDS500G2B0A-00SM50_1827AD804249",
           "/dev/disk/by-id/wwn-0x5001b448b6f5c521",
+          "/dev/disk/by-path/pci-0000:00:1f.2-ata-1",
           "/dev/disk/by-path/pci-0000:00:1f.2-ata-1.0",
           "/dev/sdb"
         ],
+        "rom_id": "0x81",
         "resources": [
           {
             "type": "disk_geo",
             "cylinders": 60801,
             "heads": 255,
             "sectors": 63,
-            "size": 0,
+            "size": "0x0",
             "geo_type": "logical"
           },
           {
@@ -839,14 +788,14 @@
             "value_2": 512
           }
         ],
-        "driver": "ata_piix",
-        "driver_module": "ata_piix",
-        "drivers": ["ata_piix", "sd"],
-        "driver_modules": ["ata_piix", "sd_mod"]
+        "driver": "ahci",
+        "driver_module": "ahci",
+        "drivers": ["ahci", "sd"],
+        "driver_modules": ["ahci", "sd_mod"]
       },
       {
-        "index": 35,
-        "attached_to": 20,
+        "index": 34,
+        "attached_to": 13,
         "class_list": ["disk", "ide", "block_device"],
         "bus_type": {
           "hex": "0085",
@@ -854,7 +803,7 @@
           "value": 133
         },
         "slot": {
-          "bus": 2,
+          "bus": 4,
           "number": 0
         },
         "base_class": {
@@ -885,30 +834,23 @@
         "serial": "5PKVMK7F",
         "model": "WDC WD120EFBX-68",
         "sysfs_id": "/class/block/sde",
-        "sysfs_bus_id": "2:0:0:0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:1f.5/ata3/host2/target2:0:0/2:0:0:0",
-        "unix_device_name": "/dev/sde",
-        "unix_device_number": {
-          "type": 98,
-          "major": 8,
-          "minor": 64,
-          "range": 16
-        },
+        "sysfs_bus_id": "4:0:0:0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:1f.2/ata5/host4/target4:0:0/4:0:0:0",
         "unix_device_names": [
-          "/dev/disk/by-diskseq/15",
           "/dev/disk/by-id/ata-WDC_WD120EFBX-68B0EN0_5PKVMK7F",
           "/dev/disk/by-id/wwn-0x5000cca291f66192",
-          "/dev/disk/by-path/pci-0000:00:1f.5-ata-1",
-          "/dev/disk/by-path/pci-0000:00:1f.5-ata-1.0",
+          "/dev/disk/by-path/pci-0000:00:1f.2-ata-5",
+          "/dev/disk/by-path/pci-0000:00:1f.2-ata-5.0",
           "/dev/sde"
         ],
+        "rom_id": "0x82",
         "resources": [
           {
             "type": "disk_geo",
             "cylinders": 1458933,
             "heads": 255,
             "sectors": 63,
-            "size": 0,
+            "size": "0x0",
             "geo_type": "logical"
           },
           {
@@ -918,13 +860,13 @@
             "value_2": 512
           }
         ],
-        "driver": "ata_piix",
-        "driver_module": "ata_piix",
-        "drivers": ["ata_piix", "sd"],
-        "driver_modules": ["ata_piix", "sd_mod"]
+        "driver": "ahci",
+        "driver_module": "ahci",
+        "drivers": ["ahci", "sd"],
+        "driver_modules": ["ahci", "sd_mod"]
       },
       {
-        "index": 36,
+        "index": 35,
         "attached_to": 13,
         "class_list": ["disk", "ide", "block_device"],
         "bus_type": {
@@ -966,28 +908,21 @@
         "sysfs_id": "/class/block/sdc",
         "sysfs_bus_id": "1:0:0:0",
         "sysfs_device_link": "/devices/pci0000:00/0000:00:1f.2/ata2/host1/target1:0:0/1:0:0:0",
-        "unix_device_name": "/dev/sdc",
-        "unix_device_number": {
-          "type": 98,
-          "major": 8,
-          "minor": 32,
-          "range": 16
-        },
         "unix_device_names": [
-          "/dev/disk/by-diskseq/13",
           "/dev/disk/by-id/ata-WDC_WDS500G2B0A-00SM50_1908BB805114",
           "/dev/disk/by-id/wwn-0x5001b448b93b7980",
           "/dev/disk/by-path/pci-0000:00:1f.2-ata-2",
           "/dev/disk/by-path/pci-0000:00:1f.2-ata-2.0",
           "/dev/sdc"
         ],
+        "rom_id": "0x83",
         "resources": [
           {
             "type": "disk_geo",
             "cylinders": 60801,
             "heads": 255,
             "sectors": 63,
-            "size": 0,
+            "size": "0x0",
             "geo_type": "logical"
           },
           {
@@ -997,13 +932,13 @@
             "value_2": 512
           }
         ],
-        "driver": "ata_piix",
-        "driver_module": "ata_piix",
-        "drivers": ["ata_piix", "sd"],
-        "driver_modules": ["ata_piix", "sd_mod"]
+        "driver": "ahci",
+        "driver_module": "ahci",
+        "drivers": ["ahci", "sd"],
+        "driver_modules": ["ahci", "sd_mod"]
       },
       {
-        "index": 37,
+        "index": 36,
         "attached_to": 13,
         "class_list": ["disk", "ide", "block_device"],
         "bus_type": {
@@ -1012,8 +947,8 @@
           "value": 133
         },
         "slot": {
-          "bus": 0,
-          "number": 1
+          "bus": 2,
+          "number": 0
         },
         "base_class": {
           "hex": "0106",
@@ -1043,30 +978,23 @@
         "serial": "26N7K5N0F56D",
         "model": "TOSHIBA HDWE160",
         "sysfs_id": "/class/block/sda",
-        "sysfs_bus_id": "0:0:1:0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:1f.2/ata1/host0/target0:0:1/0:0:1:0",
-        "unix_device_name": "/dev/sda",
-        "unix_device_number": {
-          "type": 98,
-          "major": 8,
-          "minor": 0,
-          "range": 16
-        },
+        "sysfs_bus_id": "2:0:0:0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:1f.2/ata3/host2/target2:0:0/2:0:0:0",
         "unix_device_names": [
-          "/dev/disk/by-diskseq/11",
           "/dev/disk/by-id/ata-TOSHIBA_HDWE160_26N7K5N0F56D",
           "/dev/disk/by-id/wwn-0x50000396dba02a07",
-          "/dev/disk/by-path/pci-0000:00:1f.2-ata-1",
-          "/dev/disk/by-path/pci-0000:00:1f.2-ata-1.1",
+          "/dev/disk/by-path/pci-0000:00:1f.2-ata-3",
+          "/dev/disk/by-path/pci-0000:00:1f.2-ata-3.0",
           "/dev/sda"
         ],
+        "rom_id": "0x84",
         "resources": [
           {
             "type": "disk_geo",
             "cylinders": 729601,
             "heads": 255,
             "sectors": 63,
-            "size": 0,
+            "size": "0x0",
             "geo_type": "logical"
           },
           {
@@ -1076,10 +1004,10 @@
             "value_2": 512
           }
         ],
-        "driver": "ata_piix",
-        "driver_module": "ata_piix",
-        "drivers": ["ata_piix", "sd"],
-        "driver_modules": ["ata_piix", "sd_mod"]
+        "driver": "ahci",
+        "driver_module": "ahci",
+        "drivers": ["ahci", "sd"],
+        "driver_modules": ["ahci", "sd_mod"]
       }
     ],
     "graphics_card": [
@@ -1138,62 +1066,27 @@
         "resources": [
           {
             "type": "io",
-            "base": 57088,
+            "base": 61184,
             "range": 128,
             "enabled": true,
             "access": "read_write"
-          },
-          {
-            "type": "irq",
-            "base": 12,
-            "triggered": 0,
-            "enabled": true
-          },
-          {
-            "type": "mem",
-            "base": 3221225472,
-            "range": 268435456,
-            "enabled": true,
-            "access": "read_only",
-            "prefetch": "no"
-          },
-          {
-            "type": "mem",
-            "base": 3724541952,
-            "range": 33554432,
-            "enabled": true,
-            "access": "read_only",
-            "prefetch": "no"
-          },
-          {
-            "type": "mem",
-            "base": 4177526784,
-            "range": 16777216,
-            "enabled": true,
-            "access": "read_write",
-            "prefetch": "no"
-          },
-          {
-            "type": "mem",
-            "base": 786432,
-            "range": 131072,
-            "enabled": false,
-            "access": "read_write",
-            "prefetch": "no"
           }
         ],
         "detail": {
           "function": 0,
-          "command": 1027,
+          "command": 1031,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 12,
           "prog_if": 0
         },
+        "driver": "nvidia",
+        "driver_module": "nvidia",
+        "drivers": ["nvidia"],
+        "driver_modules": ["nvidia"],
         "module_alias": "pci:v000010DEd000013C2sv00001462sd00003160bc03sc00i00"
       },
       {
-        "index": 30,
+        "index": 29,
         "attached_to": 0,
         "class_list": ["graphics_card", "pci"],
         "bus_type": {
@@ -1246,28 +1139,6 @@
             "range": 64,
             "enabled": true,
             "access": "read_write"
-          },
-          {
-            "type": "irq",
-            "base": 28,
-            "triggered": 0,
-            "enabled": true
-          },
-          {
-            "type": "mem",
-            "base": 3758096384,
-            "range": 268435456,
-            "enabled": true,
-            "access": "read_only",
-            "prefetch": "no"
-          },
-          {
-            "type": "mem",
-            "base": 4219469824,
-            "range": 4194304,
-            "enabled": true,
-            "access": "read_write",
-            "prefetch": "no"
           }
         ],
         "detail": {
@@ -1275,7 +1146,6 @@
           "command": 1031,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 28,
           "prog_if": 0
         },
         "driver": "i915",
@@ -1287,8 +1157,8 @@
     ],
     "hub": [
       {
-        "index": 38,
-        "attached_to": 45,
+        "index": 40,
+        "attached_to": 46,
         "class_list": ["usb", "hub"],
         "bus_type": {
           "hex": "0086",
@@ -1353,11 +1223,13 @@
         },
         "hotplug": "usb",
         "driver": "hub",
+        "driver_module": "usbcore",
         "drivers": ["hub"],
+        "driver_modules": ["usbcore"],
         "module_alias": "usb:v8087p0024d0000dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 39,
+        "index": 41,
         "attached_to": 12,
         "class_list": ["usb", "hub"],
         "bus_type": {
@@ -1376,7 +1248,7 @@
         },
         "vendor": {
           "hex": "1d6b",
-          "name": "Linux 6.13.11 xhci-hcd",
+          "name": "Linux 6.18.34 xhci-hcd",
           "value": 7531
         },
         "device": {
@@ -1386,11 +1258,11 @@
         },
         "revision": {
           "hex": "0000",
-          "name": "6.13",
+          "name": "6.18",
           "value": 0
         },
         "serial": "0000:03:00.0",
-        "model": "Linux 6.13.11 xhci-hcd xHCI Host Controller",
+        "model": "Linux 6.18.34 xhci-hcd xHCI Host Controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:1c.1/0000:03:00.0/usb3/3-0:1.0",
         "sysfs_bus_id": "3-0:1.0",
         "resources": [
@@ -1431,11 +1303,13 @@
         },
         "hotplug": "usb",
         "driver": "hub",
+        "driver_module": "usbcore",
         "drivers": ["hub"],
-        "module_alias": "usb:v1D6Bp0002d0613dc09dsc00dp01ic09isc00ip00in00"
+        "driver_modules": ["usbcore"],
+        "module_alias": "usb:v1D6Bp0002d0618dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 41,
+        "index": 42,
         "attached_to": 12,
         "class_list": ["usb", "hub"],
         "bus_type": {
@@ -1454,7 +1328,7 @@
         },
         "vendor": {
           "hex": "1d6b",
-          "name": "Linux 6.13.11 xhci-hcd",
+          "name": "Linux 6.18.34 xhci-hcd",
           "value": 7531
         },
         "device": {
@@ -1464,11 +1338,11 @@
         },
         "revision": {
           "hex": "0000",
-          "name": "6.13",
+          "name": "6.18",
           "value": 0
         },
         "serial": "0000:03:00.0",
-        "model": "Linux 6.13.11 xhci-hcd xHCI Host Controller",
+        "model": "Linux 6.18.34 xhci-hcd xHCI Host Controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:1c.1/0000:03:00.0/usb4/4-0:1.0",
         "sysfs_bus_id": "4-0:1.0",
         "detail": {
@@ -1499,12 +1373,14 @@
         },
         "hotplug": "usb",
         "driver": "hub",
+        "driver_module": "usbcore",
         "drivers": ["hub"],
-        "module_alias": "usb:v1D6Bp0003d0613dc09dsc00dp03ic09isc00ip00in00"
+        "driver_modules": ["usbcore"],
+        "module_alias": "usb:v1D6Bp0003d0618dc09dsc00dp03ic09isc00ip00in00"
       },
       {
-        "index": 42,
-        "attached_to": 25,
+        "index": 44,
+        "attached_to": 24,
         "class_list": ["usb", "hub"],
         "bus_type": {
           "hex": "0086",
@@ -1522,7 +1398,7 @@
         },
         "vendor": {
           "hex": "1d6b",
-          "name": "Linux 6.13.11 ehci_hcd",
+          "name": "Linux 6.18.34 ehci_hcd",
           "value": 7531
         },
         "device": {
@@ -1532,11 +1408,11 @@
         },
         "revision": {
           "hex": "0000",
-          "name": "6.13",
+          "name": "6.18",
           "value": 0
         },
         "serial": "0000:00:1a.0",
-        "model": "Linux 6.13.11 ehci_hcd EHCI Host Controller",
+        "model": "Linux 6.18.34 ehci_hcd EHCI Host Controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:1a.0/usb1/1-0:1.0",
         "sysfs_bus_id": "1-0:1.0",
         "resources": [
@@ -1577,12 +1453,14 @@
         },
         "hotplug": "usb",
         "driver": "hub",
+        "driver_module": "usbcore",
         "drivers": ["hub"],
-        "module_alias": "usb:v1D6Bp0002d0613dc09dsc00dp00ic09isc00ip00in00"
+        "driver_modules": ["usbcore"],
+        "module_alias": "usb:v1D6Bp0002d0618dc09dsc00dp00ic09isc00ip00in00"
       },
       {
-        "index": 44,
-        "attached_to": 42,
+        "index": 45,
+        "attached_to": 44,
         "class_list": ["usb", "hub"],
         "bus_type": {
           "hex": "0086",
@@ -1647,12 +1525,14 @@
         },
         "hotplug": "usb",
         "driver": "hub",
+        "driver_module": "usbcore",
         "drivers": ["hub"],
+        "driver_modules": ["usbcore"],
         "module_alias": "usb:v8087p0024d0000dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 45,
-        "attached_to": 27,
+        "index": 46,
+        "attached_to": 26,
         "class_list": ["usb", "hub"],
         "bus_type": {
           "hex": "0086",
@@ -1670,7 +1550,7 @@
         },
         "vendor": {
           "hex": "1d6b",
-          "name": "Linux 6.13.11 ehci_hcd",
+          "name": "Linux 6.18.34 ehci_hcd",
           "value": 7531
         },
         "device": {
@@ -1680,11 +1560,11 @@
         },
         "revision": {
           "hex": "0000",
-          "name": "6.13",
+          "name": "6.18",
           "value": 0
         },
         "serial": "0000:00:1d.0",
-        "model": "Linux 6.13.11 ehci_hcd EHCI Host Controller",
+        "model": "Linux 6.18.34 ehci_hcd EHCI Host Controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:1d.0/usb2/2-0:1.0",
         "sysfs_bus_id": "2-0:1.0",
         "resources": [
@@ -1725,14 +1605,16 @@
         },
         "hotplug": "usb",
         "driver": "hub",
+        "driver_module": "usbcore",
         "drivers": ["hub"],
-        "module_alias": "usb:v1D6Bp0002d0613dc09dsc00dp00ic09isc00ip00in00"
+        "driver_modules": ["usbcore"],
+        "module_alias": "usb:v1D6Bp0002d0618dc09dsc00dp00ic09isc00ip00in00"
       }
     ],
     "keyboard": [
       {
-        "index": 43,
-        "attached_to": 44,
+        "index": 39,
+        "attached_to": 45,
         "class_list": ["keyboard", "usb"],
         "bus_type": {
           "hex": "0086",
@@ -1754,40 +1636,27 @@
           "value": 0
         },
         "vendor": {
-          "hex": "04b3",
-          "name": "IBM Corp.",
-          "value": 1203
+          "hex": "046d",
+          "name": "Logitech Inc.",
+          "value": 1133
         },
         "device": {
-          "hex": "3025",
-          "name": "USB NetVista Full Width Keyboard.",
-          "value": 12325
+          "hex": "c52b",
+          "name": "USB Receiver",
+          "value": 50475
         },
         "revision": {
           "hex": "0000",
-          "name": "1.09",
+          "name": "24.11",
           "value": 0
         },
-        "model": "IBM USB NetVista Full Width Keyboard.",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1a.0/usb1/1-1/1-1.6/1-1.6:1.0",
-        "sysfs_bus_id": "1-1.6:1.0",
-        "unix_device_name": "/dev/input/event0",
-        "unix_device_number": {
-          "type": 99,
-          "major": 13,
-          "minor": 64,
-          "range": 1
-        },
-        "unix_device_names": [
-          "/dev/input/by-id/usb-LITE-ON_Technology_USB_NetVista_Full_Width_Keyboard.-event-kbd",
-          "/dev/input/by-path/pci-0000:00:1a.0-usb-0:1.6:1.0-event-kbd",
-          "/dev/input/by-path/pci-0000:00:1a.0-usbv2-0:1.6:1.0-event-kbd",
-          "/dev/input/event0"
-        ],
+        "model": "Logitech USB Receiver",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1a.0/usb1/1-1/1-1.4/1-1.4:1.0",
+        "sysfs_bus_id": "1-1.4:1.0",
         "resources": [
           {
             "type": "baud",
-            "speed": 1500000,
+            "speed": 12000000,
             "bits": 0,
             "stop_bits": 0,
             "parity": 0,
@@ -1830,7 +1699,7 @@
           "xkb_rules": "xfree86",
           "xkb_model": "pc104"
         },
-        "module_alias": "usb:v04B3p3025d0109dc00dsc00dp00ic03isc01ip01in00"
+        "module_alias": "usb:v046DpC52Bd2411dc00dsc00dp00ic03isc01ip01in00"
       }
     ],
     "memory": [
@@ -1851,24 +1720,112 @@
         "model": "Main Memory",
         "resources": [
           {
-            "type": "mem",
-            "base": 0,
-            "range": 25116897280,
-            "enabled": true,
-            "access": "read_write",
-            "prefetch": "unknown"
-          },
-          {
             "type": "phys_mem",
             "range": 25769803776
           }
         ]
       }
     ],
+    "mouse": [
+      {
+        "index": 43,
+        "attached_to": 45,
+        "class_list": ["mouse", "usb"],
+        "bus_type": {
+          "hex": "0086",
+          "name": "USB",
+          "value": 134
+        },
+        "slot": {
+          "bus": 0,
+          "number": 0
+        },
+        "base_class": {
+          "hex": "0105",
+          "name": "Mouse",
+          "value": 261
+        },
+        "sub_class": {
+          "hex": "0003",
+          "name": "USB Mouse",
+          "value": 3
+        },
+        "vendor": {
+          "hex": "046d",
+          "name": "Logitech Inc.",
+          "value": 1133
+        },
+        "device": {
+          "hex": "c52b",
+          "name": "USB Receiver",
+          "value": 50475
+        },
+        "revision": {
+          "hex": "0000",
+          "name": "24.11",
+          "value": 0
+        },
+        "compat_vendor": "Unknown",
+        "compat_device": "Generic USB Mouse",
+        "model": "Logitech USB Receiver",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1a.0/usb1/1-1/1-1.4/1-1.4:1.1",
+        "sysfs_bus_id": "1-1.4:1.1",
+        "resources": [
+          {
+            "type": "baud",
+            "speed": 12000000,
+            "bits": 0,
+            "stop_bits": 0,
+            "parity": 0,
+            "handshake": 0
+          }
+        ],
+        "detail": {
+          "device_class": {
+            "hex": "0000",
+            "name": "per_interface",
+            "value": 0
+          },
+          "device_subclass": {
+            "hex": "0000",
+            "name": "per_interface",
+            "value": 0
+          },
+          "device_protocol": 0,
+          "interface_class": {
+            "hex": "0003",
+            "name": "hid",
+            "value": 3
+          },
+          "interface_subclass": {
+            "hex": "0001",
+            "name": "audio",
+            "value": 1
+          },
+          "interface_protocol": 2,
+          "interface_number": 1,
+          "interface_alternate_setting": 0
+        },
+        "hotplug": "usb",
+        "driver": "usbhid",
+        "driver_module": "usbhid",
+        "drivers": ["usbhid"],
+        "driver_modules": ["usbhid"],
+        "driver_info": {
+          "type": "mouse",
+          "db_entry_0": ["explorerps/2", "exps2"],
+          "xf86": "explorerps/2",
+          "gpm": "exps2",
+          "buttons": -1,
+          "wheels": -1
+        },
+        "module_alias": "usb:v046DpC52Bd2411dc00dsc00dp00ic03isc01ip02in01"
+      }
+    ],
     "network_controller": [
       {
-        "index": 29,
-        "attached_to": 31,
+        "index": 28,
+        "attached_to": 30,
         "class_list": ["network_controller", "pci"],
         "bus_type": {
           "hex": "0004",
@@ -1912,7 +1869,6 @@
         "model": "Ethernet controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:1c.2/0000:04:00.0",
         "sysfs_bus_id": "0000:04:00.0",
-        "unix_device_name": "enp4s0",
         "unix_device_names": ["enp4s0"],
         "resources": [
           {
@@ -1921,32 +1877,10 @@
           },
           {
             "type": "io",
-            "base": 60928,
+            "base": 56832,
             "range": 256,
             "enabled": true,
             "access": "read_write"
-          },
-          {
-            "type": "irq",
-            "base": 18,
-            "triggered": 0,
-            "enabled": true
-          },
-          {
-            "type": "mem",
-            "base": 4225728512,
-            "range": 16384,
-            "enabled": true,
-            "access": "read_only",
-            "prefetch": "no"
-          },
-          {
-            "type": "mem",
-            "base": 4225757184,
-            "range": 4096,
-            "enabled": true,
-            "access": "read_only",
-            "prefetch": "no"
           },
           {
             "type": "phwaddr",
@@ -1958,7 +1892,6 @@
           "command": 1031,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 18,
           "prog_if": 0
         },
         "driver": "r8169",
@@ -1970,8 +1903,8 @@
     ],
     "network_interface": [
       {
-        "index": 46,
-        "attached_to": 29,
+        "index": 48,
+        "attached_to": 28,
         "class_list": ["network_interface"],
         "base_class": {
           "hex": "0107",
@@ -1986,7 +1919,6 @@
         "model": "Ethernet network interface",
         "sysfs_id": "/class/net/enp4s0",
         "sysfs_device_link": "/devices/pci0000:00/0000:00:1c.2/0000:04:00.0",
-        "unix_device_name": "enp4s0",
         "unix_device_names": ["enp4s0"],
         "resources": [
           {
@@ -2004,7 +1936,7 @@
         "driver_modules": ["r8169"]
       },
       {
-        "index": 47,
+        "index": 49,
         "attached_to": 0,
         "class_list": ["network_interface"],
         "base_class": {
@@ -2019,7 +1951,6 @@
         },
         "model": "Loopback network interface",
         "sysfs_id": "/class/net/lo",
-        "unix_device_name": "lo",
         "unix_device_names": ["lo"]
       }
     ],
@@ -2071,28 +2002,11 @@
         "model": "Intel Communication controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:16.0",
         "sysfs_bus_id": "0000:00:16.0",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 26,
-            "triggered": 0,
-            "enabled": true
-          },
-          {
-            "type": "mem",
-            "base": 4227854336,
-            "range": 16,
-            "enabled": true,
-            "access": "read_write",
-            "prefetch": "no"
-          }
-        ],
         "detail": {
           "function": 0,
           "command": 1030,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 26,
           "prog_if": 0
         },
         "driver": "mei_me",
@@ -2102,7 +2016,7 @@
         "module_alias": "pci:v00008086d00001C3Asv00001458sd00001C3Abc07sc80i00"
       },
       {
-        "index": 22,
+        "index": 21,
         "attached_to": 0,
         "class_list": ["pci", "unknown"],
         "bus_type": {
@@ -2155,20 +2069,6 @@
             "range": 32,
             "enabled": true,
             "access": "read_write"
-          },
-          {
-            "type": "irq",
-            "base": 18,
-            "triggered": 0,
-            "enabled": true
-          },
-          {
-            "type": "mem",
-            "base": 4227842048,
-            "range": 256,
-            "enabled": true,
-            "access": "read_write",
-            "prefetch": "no"
           }
         ],
         "detail": {
@@ -2176,7 +2076,6 @@
           "command": 3,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 18,
           "prog_if": 0
         },
         "driver": "i801_smbus",
@@ -2233,28 +2132,11 @@
         "model": "Intel Multimedia controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:1b.0",
         "sysfs_bus_id": "0000:00:1b.0",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 29,
-            "triggered": 0,
-            "enabled": true
-          },
-          {
-            "type": "mem",
-            "base": 4227825664,
-            "range": 16384,
-            "enabled": true,
-            "access": "read_write",
-            "prefetch": "no"
-          }
-        ],
         "detail": {
           "function": 0,
           "command": 1030,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 29,
           "prog_if": 0
         },
         "driver": "snd_hda_intel",
@@ -2264,7 +2146,7 @@
         "module_alias": "pci:v00008086d00001C20sv00001458sd0000A002bc04sc03i00"
       },
       {
-        "index": 28,
+        "index": 27,
         "attached_to": 16,
         "class_list": ["sound", "pci"],
         "bus_type": {
@@ -2309,28 +2191,11 @@
         "model": "nVidia Multimedia controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:01.0/0000:01:00.1",
         "sysfs_bus_id": "0000:01:00.1",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 17,
-            "triggered": 0,
-            "enabled": true
-          },
-          {
-            "type": "mem",
-            "base": 4211064832,
-            "range": 16384,
-            "enabled": true,
-            "access": "read_write",
-            "prefetch": "no"
-          }
-        ],
         "detail": {
           "function": 1,
           "command": 6,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 17,
           "prog_if": 0
         },
         "driver": "snd_hda_intel",
@@ -2360,13 +2225,12 @@
           "value": 1
         },
         "sub_class": {
-          "hex": "0001",
-          "name": "IDE interface",
-          "value": 1
+          "hex": "0006",
+          "value": 6
         },
         "pci_interface": {
-          "hex": "008f",
-          "value": 143
+          "hex": "0001",
+          "value": 1
         },
         "vendor": {
           "hex": "8086",
@@ -2378,32 +2242,25 @@
           "value": 5208
         },
         "device": {
-          "hex": "1c00",
-          "value": 7168
+          "hex": "1c02",
+          "value": 7170
         },
         "sub_device": {
-          "hex": "b002",
-          "value": 45058
+          "hex": "b005",
+          "value": 45061
         },
         "revision": {
           "hex": "0005",
           "value": 5
         },
-        "model": "Intel IDE interface",
+        "model": "Intel Mass storage controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:1f.2",
         "sysfs_bus_id": "0000:00:1f.2",
         "resources": [
           {
             "type": "io",
-            "base": 63744,
-            "range": 16,
-            "enabled": true,
-            "access": "read_write"
-          },
-          {
-            "type": "io",
             "base": 64000,
-            "range": 16,
+            "range": 32,
             "enabled": true,
             "access": "read_write"
           },
@@ -2434,142 +2291,20 @@
             "range": 8,
             "enabled": true,
             "access": "read_write"
-          },
-          {
-            "type": "irq",
-            "base": 19,
-            "triggered": 0,
-            "enabled": true
           }
         ],
         "detail": {
           "function": 2,
-          "command": 7,
+          "command": 1031,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 19,
-          "prog_if": 143
+          "prog_if": 1
         },
-        "driver": "ata_piix",
-        "driver_module": "ata_piix",
-        "drivers": ["ata_piix"],
-        "driver_modules": ["ata_piix"],
-        "module_alias": "pci:v00008086d00001C00sv00001458sd0000B002bc01sc01i8F"
-      },
-      {
-        "index": 20,
-        "attached_to": 0,
-        "class_list": ["storage_controller", "pci"],
-        "bus_type": {
-          "hex": "0004",
-          "name": "PCI",
-          "value": 4
-        },
-        "slot": {
-          "bus": 0,
-          "number": 31
-        },
-        "base_class": {
-          "hex": "0001",
-          "name": "Mass storage controller",
-          "value": 1
-        },
-        "sub_class": {
-          "hex": "0001",
-          "name": "IDE interface",
-          "value": 1
-        },
-        "pci_interface": {
-          "hex": "0085",
-          "value": 133
-        },
-        "vendor": {
-          "hex": "8086",
-          "name": "Intel Corporation",
-          "value": 32902
-        },
-        "sub_vendor": {
-          "hex": "1458",
-          "value": 5208
-        },
-        "device": {
-          "hex": "1c08",
-          "value": 7176
-        },
-        "sub_device": {
-          "hex": "b002",
-          "value": 45058
-        },
-        "revision": {
-          "hex": "0005",
-          "value": 5
-        },
-        "model": "Intel IDE interface",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1f.5",
-        "sysfs_bus_id": "0000:00:1f.5",
-        "resources": [
-          {
-            "type": "io",
-            "base": 61952,
-            "range": 16,
-            "enabled": true,
-            "access": "read_write"
-          },
-          {
-            "type": "io",
-            "base": 62208,
-            "range": 16,
-            "enabled": true,
-            "access": "read_write"
-          },
-          {
-            "type": "io",
-            "base": 62464,
-            "range": 4,
-            "enabled": true,
-            "access": "read_write"
-          },
-          {
-            "type": "io",
-            "base": 62720,
-            "range": 8,
-            "enabled": true,
-            "access": "read_write"
-          },
-          {
-            "type": "io",
-            "base": 62976,
-            "range": 4,
-            "enabled": true,
-            "access": "read_write"
-          },
-          {
-            "type": "io",
-            "base": 63232,
-            "range": 8,
-            "enabled": true,
-            "access": "read_write"
-          },
-          {
-            "type": "irq",
-            "base": 19,
-            "triggered": 0,
-            "enabled": true
-          }
-        ],
-        "detail": {
-          "function": 5,
-          "command": 5,
-          "header_type": 0,
-          "secondary_bus": 0,
-          "irq": 19,
-          "prog_if": 133
-        },
-        "driver": "ata_piix",
-        "driver_module": "ata_piix",
-        "drivers": ["ata_piix"],
-        "driver_modules": ["ata_piix"],
-        "module_alias": "pci:v00008086d00001C08sv00001458sd0000B002bc01sc01i85"
+        "driver": "ahci",
+        "driver_module": "ahci",
+        "drivers": ["ahci"],
+        "driver_modules": ["ahci"],
+        "module_alias": "pci:v00008086d00001C02sv00001458sd0000B005bc01sc06i01"
       }
     ],
     "system": {
@@ -2577,7 +2312,7 @@
     },
     "unknown": [
       {
-        "index": 32,
+        "index": 31,
         "attached_to": 0,
         "class_list": ["unknown"],
         "base_class": {
@@ -2601,7 +2336,6 @@
           "value": 0
         },
         "model": "16550A",
-        "unix_device_name": "/dev/ttyS0",
         "unix_device_names": ["/dev/ttyS0"],
         "resources": [
           {
@@ -2610,20 +2344,14 @@
             "range": 0,
             "enabled": true,
             "access": "read_write"
-          },
-          {
-            "type": "irq",
-            "base": 4,
-            "triggered": 0,
-            "enabled": true
           }
         ]
       }
     ],
     "usb": [
       {
-        "index": 40,
-        "attached_to": 38,
+        "index": 37,
+        "attached_to": 40,
         "class_list": ["usb", "unknown"],
         "bus_type": {
           "hex": "0086",
@@ -2665,19 +2393,12 @@
         },
         "serial": "0001",
         "model": "Silicon Sonoff Zigbee 3.0 USB Dongle Plus",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1d.0/usb2/2-1/2-1.6/2-1.6:1.0",
-        "sysfs_bus_id": "2-1.6:1.0",
-        "unix_device_name": "/dev/ttyUSB0",
-        "unix_device_number": {
-          "type": 99,
-          "major": 188,
-          "minor": 0,
-          "range": 1
-        },
+        "sysfs_id": "/devices/pci0000:00/0000:00:1d.0/usb2/2-1/2-1.5/2-1.5:1.0",
+        "sysfs_bus_id": "2-1.5:1.0",
         "unix_device_names": [
           "/dev/serial/by-id/usb-Silicon_Labs_Sonoff_Zigbee_3.0_USB_Dongle_Plus_0001-if00-port0",
-          "/dev/serial/by-path/pci-0000:00:1d.0-usb-0:1.6:1.0-port0",
-          "/dev/serial/by-path/pci-0000:00:1d.0-usbv2-0:1.6:1.0-port0",
+          "/dev/serial/by-path/pci-0000:00:1d.0-usb-0:1.5:1.0-port0",
+          "/dev/serial/by-path/pci-0000:00:1d.0-usbv2-0:1.5:1.0-port0",
           "/dev/ttyUSB0"
         ],
         "resources": [
@@ -2720,14 +2441,98 @@
         "driver": "cp210x",
         "driver_module": "cp210x",
         "drivers": ["cp210x"],
-        "driver_modules": ["cp210x"],
+        "driver_modules": ["cp210x", "usbserial"],
         "module_alias": "usb:v10C4pEA60d0100dc00dsc00dp00icFFisc00ip00in00"
+      },
+      {
+        "index": 38,
+        "attached_to": 45,
+        "class_list": ["usb", "unknown"],
+        "bus_type": {
+          "hex": "0086",
+          "name": "USB",
+          "value": 134
+        },
+        "slot": {
+          "bus": 0,
+          "number": 0
+        },
+        "base_class": {
+          "hex": "0000",
+          "name": "Unclassified device",
+          "value": 0
+        },
+        "sub_class": {
+          "hex": "0000",
+          "name": "Unclassified device",
+          "value": 0
+        },
+        "vendor": {
+          "hex": "046d",
+          "name": "Logitech Inc.",
+          "value": 1133
+        },
+        "device": {
+          "hex": "c52b",
+          "name": "USB Receiver",
+          "value": 50475
+        },
+        "revision": {
+          "hex": "0000",
+          "name": "24.11",
+          "value": 0
+        },
+        "model": "Logitech USB Receiver",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1a.0/usb1/1-1/1-1.4/1-1.4:1.2",
+        "sysfs_bus_id": "1-1.4:1.2",
+        "resources": [
+          {
+            "type": "baud",
+            "speed": 12000000,
+            "bits": 0,
+            "stop_bits": 0,
+            "parity": 0,
+            "handshake": 0
+          }
+        ],
+        "detail": {
+          "device_class": {
+            "hex": "0000",
+            "name": "per_interface",
+            "value": 0
+          },
+          "device_subclass": {
+            "hex": "0000",
+            "name": "per_interface",
+            "value": 0
+          },
+          "device_protocol": 0,
+          "interface_class": {
+            "hex": "0003",
+            "name": "hid",
+            "value": 3
+          },
+          "interface_subclass": {
+            "hex": "0000",
+            "name": "per_interface",
+            "value": 0
+          },
+          "interface_protocol": 0,
+          "interface_number": 2,
+          "interface_alternate_setting": 0
+        },
+        "hotplug": "usb",
+        "driver": "usbhid",
+        "driver_module": "usbhid",
+        "drivers": ["usbhid"],
+        "driver_modules": ["usbhid"],
+        "module_alias": "usb:v046DpC52Bd2411dc00dsc00dp00ic03isc00ip00in02"
       }
     ],
     "usb_controller": [
       {
         "index": 12,
-        "attached_to": 24,
+        "attached_to": 23,
         "class_list": ["usb_controller", "pci"],
         "bus_type": {
           "hex": "0004",
@@ -2775,28 +2580,11 @@
         "model": "USB Controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:1c.1/0000:03:00.0",
         "sysfs_bus_id": "0000:03:00.0",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 25,
-            "triggered": 0,
-            "enabled": true
-          },
-          {
-            "type": "mem",
-            "base": 4226777088,
-            "range": 32768,
-            "enabled": true,
-            "access": "read_write",
-            "prefetch": "no"
-          }
-        ],
         "detail": {
           "function": 0,
           "command": 1030,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 25,
           "prog_if": 48
         },
         "driver": "xhci_hcd",
@@ -2806,7 +2594,7 @@
         "module_alias": "pci:v00001B6Fd00007023sv00001458sd00005007bc0Csc03i30"
       },
       {
-        "index": 25,
+        "index": 24,
         "attached_to": 0,
         "class_list": ["usb_controller", "pci"],
         "bus_type": {
@@ -2857,28 +2645,11 @@
         "model": "Intel USB Controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:1a.0",
         "sysfs_bus_id": "0000:00:1a.0",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 18,
-            "triggered": 0,
-            "enabled": true
-          },
-          {
-            "type": "mem",
-            "base": 4227850240,
-            "range": 1024,
-            "enabled": true,
-            "access": "read_write",
-            "prefetch": "no"
-          }
-        ],
         "detail": {
           "function": 0,
           "command": 6,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 18,
           "prog_if": 32
         },
         "driver": "ehci-pci",
@@ -2897,7 +2668,7 @@
         "module_alias": "pci:v00008086d00001C2Dsv00001458sd00005006bc0Csc03i20"
       },
       {
-        "index": 27,
+        "index": 26,
         "attached_to": 0,
         "class_list": ["usb_controller", "pci"],
         "bus_type": {
@@ -2948,28 +2719,11 @@
         "model": "Intel USB Controller",
         "sysfs_id": "/devices/pci0000:00/0000:00:1d.0",
         "sysfs_bus_id": "0000:00:1d.0",
-        "resources": [
-          {
-            "type": "irq",
-            "base": 23,
-            "triggered": 0,
-            "enabled": true
-          },
-          {
-            "type": "mem",
-            "base": 4227846144,
-            "range": 1024,
-            "enabled": true,
-            "access": "read_write",
-            "prefetch": "no"
-          }
-        ],
         "detail": {
           "function": 0,
           "command": 6,
           "header_type": 0,
           "secondary_bus": 0,
-          "irq": 23,
           "prog_if": 32
         },
         "driver": "ehci-pci",
@@ -3105,38 +2859,40 @@
         "sram_type_supported": ["Synchronous"]
       }
     ],
-    "chassis": {
-      "handle": 3,
-      "manufacturer": "Gigabyte Technology Co., Ltd.",
-      "version": "",
-      "chassis_type": {
-        "hex": "0003",
-        "name": "Desktop",
-        "value": 3
-      },
-      "lock_present": false,
-      "bootup_state": {
-        "hex": "0002",
-        "name": "Unknown",
-        "value": 2
-      },
-      "power_state": {
-        "hex": "0002",
-        "name": "Unknown",
-        "value": 2
-      },
-      "thermal_state": {
-        "hex": "0002",
-        "name": "Unknown",
-        "value": 2
-      },
-      "security_state": {
-        "hex": "0002",
-        "name": "Unknown",
-        "value": 2
-      },
-      "oem": "0x0"
-    },
+    "chassis": [
+      {
+        "handle": 3,
+        "manufacturer": "Gigabyte Technology Co., Ltd.",
+        "version": "",
+        "chassis_type": {
+          "hex": "0003",
+          "name": "Desktop",
+          "value": 3
+        },
+        "lock_present": false,
+        "bootup_state": {
+          "hex": "0002",
+          "name": "Unknown",
+          "value": 2
+        },
+        "power_state": {
+          "hex": "0002",
+          "name": "Unknown",
+          "value": 2
+        },
+        "thermal_state": {
+          "hex": "0002",
+          "name": "Unknown",
+          "value": 2
+        },
+        "security_state": {
+          "hex": "0002",
+          "name": "Unknown",
+          "value": 2
+        },
+        "oem": "0x0"
+      }
+    ],
     "language": [
       {
         "handle": 24,
@@ -3166,7 +2922,7 @@
           "name": "None",
           "value": 3
         },
-        "max_size": 33554432,
+        "max_size": "0x2000000",
         "error_handle": 65534,
         "slots": 4
       }
@@ -3175,8 +2931,8 @@
       {
         "handle": 30,
         "array_handle": 25,
-        "start_address": 0,
-        "end_address": 25769803776,
+        "start_address": "0x0",
+        "end_address": "0x600000000",
         "part_width": 1
       }
     ],
@@ -3287,8 +3043,8 @@
         "handle": 31,
         "memory_device_handle": 26,
         "array_map_handle": 30,
-        "start_address": 0,
-        "end_address": 4294967296,
+        "start_address": "0x0",
+        "end_address": "0x100000000",
         "row_position": 1,
         "interleave_position": 0,
         "interleave_depth": 0
@@ -3297,8 +3053,8 @@
         "handle": 32,
         "memory_device_handle": 27,
         "array_map_handle": 30,
-        "start_address": 4294967296,
-        "end_address": 8589934592,
+        "start_address": "0x100000000",
+        "end_address": "0x200000000",
         "row_position": 1,
         "interleave_position": 0,
         "interleave_depth": 0
@@ -3307,8 +3063,8 @@
         "handle": 33,
         "memory_device_handle": 28,
         "array_map_handle": 30,
-        "start_address": 8589934592,
-        "end_address": 17179869184,
+        "start_address": "0x200000000",
+        "end_address": "0x400000000",
         "row_position": 1,
         "interleave_position": 0,
         "interleave_depth": 0
@@ -3317,8 +3073,8 @@
         "handle": 34,
         "memory_device_handle": 29,
         "array_map_handle": 30,
-        "start_address": 17179869184,
-        "end_address": 25769803776,
+        "start_address": "0x400000000",
+        "end_address": "0x600000000",
         "row_position": 1,
         "interleave_position": 0,
         "interleave_depth": 0
