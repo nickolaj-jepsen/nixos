@@ -15,6 +15,7 @@ just build-system        # Build without switching
 just diff                # Preview changes vs current system
 just update              # Update flake.lock
 just fmt                 # Format all files (ALWAYS run before finishing)
+just docs                # Generate fireproof.* options reference -> docs/fireproof-options.md
 just check               # Full flake check (slow, use sparingly)
 just repl                # Open nix repl with flake loaded
 just why-depends <pkg>   # Show why a package is in the closure

@@ -67,7 +67,17 @@ just tree
 
 # Build an install ISO for a specific host
 just iso hostname
+
+# Generate the fireproof.* options reference (docs/fireproof-options.md)
+just docs
 ```
+
+## Options Reference
+
+This config exposes a custom `fireproof.*` options namespace. A generated
+Markdown reference — descriptions, types, defaults, and declaration links — is
+available at [docs/fireproof-options.md](docs/fireproof-options.md). Regenerate
+it with `just docs` after changing any option declarations.
 
 ## Installing on a New Machine
 

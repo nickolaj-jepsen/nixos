@@ -7,6 +7,7 @@
         inputs.agenix-rekey.flakeModule
         ./formatter.nix
         ./devshell.nix
+        ./docs.nix
         ./hosts
         ./overlays
       ];

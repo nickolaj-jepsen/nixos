@@ -105,6 +105,15 @@ disko-install hostname disk:
 iso hostname:
     {{ nixcmd }} build .#nixosConfigurations.{{ hostname }}.config.formats.install-iso
 
+[doc('Generate Markdown reference for the fireproof.* options into docs/')]
+[group('tools')]
+docs:
+    #!/usr/bin/env -S bash -e
+    mkdir -p docs
+    out=$({{ nixcmd }} build --no-link --print-out-paths .#fireproof-docs)
+    install -m 644 "$out" docs/fireproof-options.md
+    echo "Wrote docs/fireproof-options.md"
+
 [doc('Build a host-specific bootstrap ISO with the host SSH key + repo baked in')]
 [group('deploy')]
 bootstrap-iso hostname:
