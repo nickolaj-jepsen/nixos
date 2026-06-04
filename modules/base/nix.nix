@@ -14,6 +14,11 @@
     download-buffer-size = 524288000;
     max-substitution-jobs = 32;
 
+    # Global retry count (Nix has no per-substituter setting). Default is 5,
+    # which spams warnings when attic.${config.fireproof.homelab.domain} is down.
+    # 3 = two retries, then give up.
+    download-attempts = 3;
+
     substituters = [
       "https://attic.${config.fireproof.homelab.domain}/nixos"
       "https://nix-community.cachix.org"
