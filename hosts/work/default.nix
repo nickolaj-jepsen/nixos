@@ -7,6 +7,7 @@
       work.enable = true;
       dev.enable = true;
       claude-code.work.enable = true;
+      hardware.nvidia.enable = true;
     };
     facter.reportPath = ./facter.json;
 
@@ -18,7 +19,6 @@
     ./disk-configuration.nix
     ./monitors.nix
     ./networking.nix
-    ./nvidia.nix
     ./ssh.nix
   ];
 }

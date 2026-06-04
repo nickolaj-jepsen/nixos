@@ -37,6 +37,16 @@
       };
     };
     hardware = {
+      physical = lib.mkOption {
+        type = lib.types.bool;
+        default = !config.fireproof.wsl.enable;
+        description = "Whether this is a physical machine (not WSL/VM). Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub and journald caps.";
+      };
+      zram = lib.mkOption {
+        type = lib.types.bool;
+        default = config.fireproof.hardware.physical;
+        description = "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
+      };
       laptop = lib.mkEnableOption "Enable laptop-specific configurations and tools";
       battery = lib.mkOption {
         type = lib.types.bool;

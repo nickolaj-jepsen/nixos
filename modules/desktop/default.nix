@@ -21,6 +21,7 @@
     ./fonts.nix
     ./greetd.nix
     ./niri
+    ./nvidia.nix
     ./qt.nix
     ./gtk.nix
     ./default-apps.nix

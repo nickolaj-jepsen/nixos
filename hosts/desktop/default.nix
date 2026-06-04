@@ -8,6 +8,8 @@
       desktop.snapcast.enable = true;
       work.enable = true;
       dev.enable = true;
+      claude-code.work.enable = true;
+      hardware.nvidia.enable = true;
     };
     programs.steam.enable = true;
     fireproof.home-manager.home.packages = [pkgs.unstable.runelite];
@@ -20,7 +22,6 @@
     ./disk-configuration.nix
     ./monitors.nix
     ./networking.nix
-    ./nvidia.nix
     ./ssh.nix
   ];
 }

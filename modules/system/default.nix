@@ -1,9 +1,14 @@
 _: {
   imports = [
     ./boot.nix
+    ./btrfs-scrub.nix
     ./hardware.nix
     ./hosts.nix
+    ./journald.nix
     ./keyd.nix
+    ./smartd.nix
+    ./thermald.nix
+    ./zram.nix
     ./wsl.nix
     ./ld.nix
     ./networking.nix
