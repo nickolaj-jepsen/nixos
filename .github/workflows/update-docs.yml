@@ -1,0 +1,38 @@
+name: Update docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "modules/**"
+      - "lib/**"
+      - "hosts/**"
+      - "flake.nix"
+      - "flake.lock"
+  workflow_dispatch: # Allow manual trigger
+
+concurrency:
+  group: update-docs
+  cancel-in-progress: false
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: ./.github/actions/setup-nix
+      - name: Generate docs
+        run: |
+          out=$(nix build --no-link --print-out-paths .#fireproof-docs)
+          install -m 644 "$out" docs/fireproof-options.md
+      - name: Commit if changed
+        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
+        with:
+          commit_message: "docs: regenerate fireproof.* options reference"
+          file_pattern: docs/fireproof-options.md
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "41898282+github-actions[bot]@users.noreply.github.com"
+          commit_author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
