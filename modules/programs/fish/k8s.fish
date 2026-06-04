@@ -54,7 +54,11 @@ if type -q kubectl
     abbr kpf kubectl port-forward
     abbr kfp kubectl port-forward
 
-    alias kns "kubectl config view --minify --output 'jsonpath={..namespace}'"
+    # Function rather than an alias so history stays clean (shows `kns`, not the
+    # long kubectl), consistent with the abbr-over-alias discipline here.
+    function kns -d "Print the current kubectl namespace"
+        kubectl config view --minify --output 'jsonpath={..namespace}'
+    end
     abbr ksns "kubectl config set-context --current --namespace"
     abbr ksc "kubectl config use-context"
 

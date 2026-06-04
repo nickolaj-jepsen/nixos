@@ -25,6 +25,7 @@
     ./qt.nix
     ./gtk.nix
     ./default-apps.nix
+    ./recording.nix
     ./dms/default.nix
   ];
 }

@@ -35,7 +35,9 @@ in {
         warning = "#${c.yellow}";
         info = "#${c.blue}";
         success = "#${c.green}";
-        matugen_type = "scheme-expressive";
+        # matugen_type intentionally omitted: it only governs how matugen
+        # generates a scheme from a wallpaper, but enableDynamicTheming is off
+        # and this is a fixed Flexoki palette, so it would be a dead key.
       };
 
       programs.dank-material-shell.settings = {

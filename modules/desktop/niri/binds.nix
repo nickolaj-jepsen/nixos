@@ -94,6 +94,18 @@
         action.spawn = ["dms" "ipc" "lock" "lock"];
         hotkey-overlay.title = "Lock Screen";
       };
+      "Mod+Shift+B" = {
+        action.spawn = ["dms" "ipc" "night" "toggle"];
+        hotkey-overlay.title = "Toggle Night Mode (warm tint)";
+      };
+      "Mod+Ctrl+N" = {
+        action.spawn = ["dms" "ipc" "notifications" "toggleDoNotDisturb"];
+        hotkey-overlay.title = "Toggle Do Not Disturb";
+      };
+      "Mod+Shift+P" = {
+        action.spawn = ["dms" "ipc" "color-picker" "toggle"];
+        hotkey-overlay.title = "Toggle Color Picker";
+      };
 
       "Mod+Left".action.focus-column-or-monitor-left = {};
       "Mod+Down".action.focus-window-or-monitor-down = {};
@@ -164,6 +176,12 @@
       "Mod+Comma".action.consume-or-expel-window-left = {};
       "Mod+Period".action.consume-or-expel-window-right = {};
 
+      # Mod+Print: region grab annotated in satty (the packaged screenshot
+      # script). Built-in Print/Ctrl/Alt+Print stay for quick no-annotate grabs.
+      "Mod+Print" = {
+        action.spawn = ["screenshot"];
+        hotkey-overlay.title = "Screenshot region (annotate in satty)";
+      };
       "Print".action.screenshot = {};
       "Ctrl+Print".action.screenshot-screen = {};
       "Alt+Print".action.screenshot-window = {};

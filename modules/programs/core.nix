@@ -21,6 +21,14 @@
         jq.enable = true;
         htop.enable = true;
         man.enable = true;
+        # Interactive process monitor with a GPU panel (htop has none). On
+        # NVIDIA hosts nvidia.nix swaps in the NVML-linked build.
+        btop.enable = true;
+        # Example-first `tldr` pages; keep the cache fresh automatically.
+        tealdeer = {
+          enable = true;
+          settings.updates.auto_update = true;
+        };
       };
 
       home.packages = with pkgs; [

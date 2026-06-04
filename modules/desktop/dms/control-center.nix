@@ -71,7 +71,11 @@ lib.mkIf config.fireproof.desktop.enable {
           }
         ]
         # Restore the stock quick toggles dropped by overriding the default list.
-        # darkMode works everywhere; nightMode self-disables without gamma support.
+        # darkMode works everywhere. nightMode drives DMS's own gamma engine over
+        # wlr-gamma-control (which niri implements) — it is NOT a no-op. If it
+        # ever fails to tint, suspect NVIDIA multi-monitor gamma quirks (DMS
+        # issues #924/#2197), not a missing backend; do not add wlsunset/gammastep.
+        # Also bound to Mod+Shift+B in niri/binds.nix.
         ++ [
           {
             id = "darkMode";

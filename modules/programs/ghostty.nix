@@ -20,6 +20,22 @@ in {
           font-family = "Hack Nerd Font";
           window-inherit-font-size = false;
           shell-integration-features = true;
+          # Keyboard-first QoL: hide the pointer while typing; route selections
+          # to the system clipboard ("clipboard", not "true"/primary — niri has
+          # clipboard.disable-primary set, so primary is deliberately off).
+          mouse-hide-while-typing = true;
+          copy-on-select = "clipboard";
+          # niri clips windows to 8px rounded corners; pad the cell grid so
+          # glyphs don't touch the clipped edge, and extend the bg into the pad.
+          window-padding-x = 8;
+          window-padding-y = 4;
+          window-padding-balance = true;
+          window-padding-color = "extend";
+          # Calm, non-blinking cursor; bytes-based scrollback bumped for long
+          # build/log output in bare (non-muxed) windows.
+          cursor-style = "block";
+          cursor-style-blink = false;
+          scrollback-limit = 104857600; # 100 MiB
         };
         themes = {
           fireproof = {

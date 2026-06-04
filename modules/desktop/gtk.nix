@@ -130,7 +130,14 @@ in {
       };
       dconf = {
         enable = true;
-        settings."org/gnome/desktop/interface".color-scheme = "prefer-dark";
+        settings."org/gnome/desktop/interface" = {
+          color-scheme = "prefer-dark";
+          # libadwaita 1.6+/GNOME 47 reads a runtime accent from this key. It
+          # only accepts named accents (not arbitrary hex), so "orange" is the
+          # closest to coral; the @define-color CSS above remains authoritative
+          # for apps that honor it — this just covers settings-key-only apps.
+          accent-color = "orange";
+        };
       };
     };
   };

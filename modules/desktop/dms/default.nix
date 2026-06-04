@@ -42,6 +42,10 @@
           # Match the pinned DMS schema version (SettingsData.qml). Bumping from 5
           # avoids a per-start in-memory migration; note it also lets the bar's
           # shadow/elevation (barElevationEnabled, default true) take effect.
+          #
+          # MAINTENANCE: after `just update` bumps the dank-material-shell input,
+          # re-check the schema version in SettingsData.qml and re-pin here. A
+          # stale pin silently re-introduces a per-start migration (no error).
           configVersion = 11;
 
           # Lock Screen

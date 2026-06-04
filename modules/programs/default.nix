@@ -4,6 +4,7 @@ _: {
     ./comma.nix
     ./core.nix
     ./direnv.nix
+    ./modern-cli.nix
     ./git.nix
     ./just.nix
     ./neovim.nix
