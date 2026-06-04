@@ -9,6 +9,11 @@
     loader.grub.enable = true;
     loader.systemd-boot.enable = lib.mkForce false;
 
+    # Keep the AHCI driver in the initrd so the system still boots after
+    # switching the BIOS SATA mode from IDE (ata_piix) to AHCI. Device paths
+    # are by-id, so they stay stable across the switch.
+    initrd.availableKernelModules = ["ahci"];
+
     # Ensure NVIDIA kernel modules are loaded at boot for headless GPU transcoding
     kernelModules = ["nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm"];
 
@@ -17,6 +22,10 @@
       PROGRAM ${pkgs.coreutils}/bin/true
     '';
   };
+
+  # Monitor SMART health on the SSDs and spinning disks; log failures to the
+  # journal so a failing drive surfaces before it dies.
+  services.smartd.enable = true;
 
   # Enable OpenGL and NVIDIA VAAPI for hardware-accelerated transcoding
   hardware.graphics = {
