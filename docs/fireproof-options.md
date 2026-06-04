@@ -579,6 +579,41 @@ false
 
 
 
+## fireproof\.hardware\.gpuPciId
+
+
+
+PCI id of a discrete GPU to surface in DMS GPU widgets (bar gpuTemp +
+system-monitor GPU temperature)\. Must match the id dgop reports
+(` dgop gpu --json ` -> \.gpus\[]\.pciId), not the sysfs bus address\.
+null disables the GPU widgets\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"10de:2c05"
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.hardware\.laptop
 
 
@@ -811,38 +846,6 @@ string
 
 
 
-## fireproof\.storage\.constrained
-
-
-
-Whether to enable Tuning for hosts with a small or chronically near-full root disk (on-demand Nix store GC)\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.theme\.colors\.accent
 
 
@@ -868,6 +871,38 @@ string
 
 ```nix
 "CF6A4C"
+```
+
+*Declared by:*
+ - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+
+
+
+## fireproof\.theme\.colors\.accentContainer
+
+
+
+Dark container tone derived from accent
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"6B3528"
+```
+
+
+
+*Example:*
+
+```nix
+"6B3528"
 ```
 
 *Declared by:*
