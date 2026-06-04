@@ -33,11 +33,16 @@
 
         systemd.enable = true;
 
-        settings = {
-          configVersion = 5;
+        # weatherCoordinates is a session.json key (moved out of settings.json in
+        # the v5 migration), so it must live under `session`, not `settings`.
+        # weatherEnabled defaults true, so this is all that's needed for weather.
+        session.weatherCoordinates = "56.1496278,10.2134046";
 
-          # General Settings
-          weatherCoordinates = "56.1496278,10.2134046";
+        settings = {
+          # Match the pinned DMS schema version (SettingsData.qml). Bumping from 5
+          # avoids a per-start in-memory migration; note it also lets the bar's
+          # shadow/elevation (barElevationEnabled, default true) take effect.
+          configVersion = 11;
 
           # Lock Screen
           loginctlLockIntegration = true;

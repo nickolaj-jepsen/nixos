@@ -12,22 +12,29 @@ in {
         name = "custom";
         primary = "#${c.accent}";
         primaryText = "#${c.whiteAlt}";
-        primaryContainer = "#${c.uiAlt}";
+        # Coral-tinted container (was neutral gray uiAlt) so selection highlights
+        # and text-field selection read as a tonal sibling of primary.
+        primaryContainer = "#${c.accentContainer}";
         secondary = "#${c.magenta}";
-        surface = "#${c.ui}";
-        surfaceText = "#${c.fg}";
-        surfaceVariant = "#${c.bg}";
-        surfaceVariantText = "#${c.fgAlt}";
-        surfaceTint = "#${c.accent}";
+        # Surface tiers, ascending luminance (Material-3 lighten-on-elevation):
+        #   background < surface < container < containerHigh < containerHighest.
+        # surfaceVariant is the lightest tone so derived hover/pressed states
+        # lighten the surface they overlay rather than darkening it.
         background = "#${c.black}";
         backgroundText = "#${c.whiteAlt}";
-        outline = "#${c.muted}";
-        surfaceContainer = "#${c.bg}";
-        surfaceContainerHigh = "#${c.bgAlt}";
+        surface = "#${c.bg}";
+        surfaceText = "#${c.fg}";
+        surfaceContainer = "#${c.bgAlt}";
+        surfaceContainerHigh = "#${c.ui}";
         surfaceContainerHighest = "#${c.uiAlt}";
+        surfaceVariant = "#${c.uiAlt}";
+        surfaceVariantText = "#${c.fgAlt}";
+        surfaceTint = "#${c.accent}";
+        outline = "#${c.muted}";
         error = "#${c.red}";
         warning = "#${c.yellow}";
         info = "#${c.blue}";
+        success = "#${c.green}";
         matugen_type = "scheme-expressive";
       };
 
@@ -37,6 +44,11 @@ in {
         customThemeFile = "/home/${username}/.config/DankMaterialShell/colors.json";
         widgetBackgroundColor = "sth";
         widgetColorMode = "default";
+
+        # Stay dark regardless of the desktop portal's light/dark preference;
+        # colors.json only defines a dark palette, so a portal flip would
+        # otherwise render the dark colors in "light" mode.
+        syncModeWithPortal = false;
 
         # General
         cornerRadius = 8;

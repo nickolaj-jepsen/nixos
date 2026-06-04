@@ -1,13 +1,10 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }: let
-  hasMonitors = config.monitors != [];
-  primaryMonitorName =
-    if hasMonitors
-    then (builtins.head config.monitors).name or ""
-    else "";
+  primaryMonitorName = fpLib.primaryMonitorName config.monitors;
 in {
   config = lib.mkIf config.fireproof.desktop.windowManager.enable {
     fireproof.home-manager.programs.niri.settings = {
@@ -24,6 +21,7 @@ in {
             inherit (monitor) name;
             value = {
               inherit (monitor) position;
+              inherit (monitor) enable;
               mode = lib.mkIf (monitor.resolution.width != null && monitor.resolution.height != null) {
                 inherit (monitor.resolution) width height;
                 refresh = monitor.refreshRateNiri;

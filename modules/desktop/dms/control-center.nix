@@ -69,6 +69,20 @@ lib.mkIf config.fireproof.desktop.enable {
             enabled = true;
             width = 100;
           }
+        ]
+        # Restore the stock quick toggles dropped by overriding the default list.
+        # darkMode works everywhere; nightMode self-disables without gamma support.
+        ++ [
+          {
+            id = "darkMode";
+            enabled = true;
+            width = 50;
+          }
+          {
+            id = "nightMode";
+            enabled = true;
+            width = 50;
+          }
         ];
     };
   };

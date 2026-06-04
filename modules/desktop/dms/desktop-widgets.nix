@@ -1,25 +1,33 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }: let
-  hasMonitors = config.monitors != [];
-
-  primaryMonitor =
-    if hasMonitors
-    then builtins.head config.monitors
-    else {};
+  inherit (config) monitors;
+  primaryMonitor = fpLib.primaryMonitor monitors;
+  gpuPciId = config.fireproof.hardware.gpuPciId;
 
   widgetWidth = 320;
   widgetHeight = 480;
   padding = 16;
+  # Hand-tuned approximation of DMS's dynamic top-bar thickness. DMS computes the
+  # bar height internally (effectiveBarThickness in DankBarWindow.qml) from
+  # Theme.barHeight, widgetThickness and innerPadding — there is no settable
+  # bar-height key to derive this from. For this config it works out to ~32px.
   barHeight = 34;
 
-  # Calculate top-right position for a given monitor, below the bar
+  # Only place the widget on active monitors that declare a resolution (the
+  # schema allows a null resolution, which would abort evaluation otherwise).
+  positionableMonitors =
+    builtins.filter (m: m.enable && m.resolution.width != null) monitors;
+
+  # Top-right position, below the bar. x is in logical pixels (physical width
+  # divided by scale) to match how DMS clamps the saved coordinate.
   mkPosition = monitor: {
     width = widgetWidth;
     height = widgetHeight;
-    x = monitor.resolution.width - widgetWidth - padding;
+    x = (builtins.floor (monitor.resolution.width / monitor.scale)) - widgetWidth - padding;
     y = barHeight + padding;
   };
 
@@ -27,9 +35,9 @@
       inherit (monitor) name;
       value = mkPosition monitor;
     })
-    config.monitors);
+    positionableMonitors);
 in {
-  config = lib.mkIf (config.fireproof.desktop.enable && hasMonitors) {
+  config = lib.mkIf (config.fireproof.desktop.enable && primaryMonitor != {}) {
     fireproof.home-manager = {
       programs.dank-material-shell.settings = {
         desktopWidgetInstances = [
@@ -46,8 +54,12 @@ in {
               showCpu = true;
               showCpuGraph = true;
               showCpuTemp = true;
-              showGpuTemp = false;
-              gpuPciId = "";
+              # GPU temp needs a non-empty pciId — there is no first-GPU fallback.
+              showGpuTemp = gpuPciId != null;
+              gpuPciId =
+                if gpuPciId != null
+                then gpuPciId
+                else "";
               showMemory = true;
               showMemoryGraph = true;
               showNetwork = true;

@@ -54,6 +54,13 @@
           type = lib.types.bool;
           default = true;
         };
+
+        # Marks the primary monitor. When no entry is flagged, consumers fall
+        # back to the first (active) entry in list order. See fpLib.primaryMonitor.
+        primary = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+        };
       };
     });
     default = [];

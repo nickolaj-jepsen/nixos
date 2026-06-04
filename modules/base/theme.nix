@@ -30,6 +30,9 @@
 
       # Accent color
       accent = mkColorOption "CF6A4C" "Primary accent color";
+      # Dark, desaturated tonal sibling of accent, for Material-3 primaryContainer
+      # surfaces (selection highlights, text-field selection, active tiles).
+      accentContainer = mkColorOption "6B3528" "Dark container tone derived from accent";
 
       # Semantic colors
       red = mkColorOption "D14D41" "Red (errors, destructive)";

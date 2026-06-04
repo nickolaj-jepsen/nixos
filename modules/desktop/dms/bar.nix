@@ -1,9 +1,10 @@
 {
   config,
   lib,
+  fpLib,
   ...
 }: let
-  hasMonitors = config.monitors != [];
+  inherit (config) monitors;
 
   commonBarSettings = {
     enabled = true;
@@ -37,19 +38,20 @@
     maximizeDetection = true;
   };
 
-  primaryMonitor =
-    if hasMonitors
-    then builtins.head config.monitors
-    else {};
+  primaryMonitor = fpLib.primaryMonitor monitors;
   primaryX = primaryMonitor.position.x or 0;
 
-  # Partition secondary monitors into left and right based on their x position relative to primary
-  secondaryMonitors =
-    if hasMonitors
-    then builtins.tail config.monitors
-    else [];
-  leftMonitors = builtins.filter (m: (m.position.x or 0) <= primaryX) secondaryMonitors;
-  rightMonitors = builtins.filter (m: (m.position.x or 0) > primaryX) secondaryMonitors;
+  # Partition secondary monitors into left and right by x position relative to primary
+  secondaryMonitors = fpLib.secondaryMonitors monitors;
+  leftMonitors = builtins.filter (m: m.position.x <= primaryX) secondaryMonitors;
+  rightMonitors = builtins.filter (m: m.position.x > primaryX) secondaryMonitors;
+
+  # Extra system-monitor widgets for desktop-class hosts (the always-on desktop
+  # has bar room to spare; the laptop keeps a leaner bar). gpuTemp only appears
+  # when a discrete GPU id is configured (fireproof.hardware.gpuPciId).
+  sysmonWidgets =
+    lib.optional (config.fireproof.hardware.gpuPciId != null) "gpuTemp"
+    ++ lib.optionals (!config.fireproof.hardware.laptop) ["diskUsage" "network_speed_monitor"];
 
   primaryBar =
     {
@@ -76,9 +78,11 @@
           "music"
           "systemTray"
           "cpuUsage"
-          "controlCenterButton"
         ]
-        ++ lib.optional config.fireproof.hardware.battery "battery" ++ ["notificationButton"];
+        ++ sysmonWidgets
+        ++ ["controlCenterButton"]
+        ++ lib.optional config.fireproof.hardware.battery "battery"
+        ++ ["notificationButton"];
     }
     // commonBarSettings;
 

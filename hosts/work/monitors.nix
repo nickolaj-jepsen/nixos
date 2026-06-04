@@ -2,6 +2,7 @@ _: {
   monitors = [
     {
       name = "DP-5";
+      primary = true;
       resolution = {
         width = 1920;
         height = 1200;

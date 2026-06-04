@@ -69,6 +69,31 @@
         action.spawn = ["dms" "ipc" "powermenu" "toggle"];
         hotkey-overlay.title = "Toggle Power Menu";
       };
+      # Mod+D / Mod+Ctrl+D / Mod+Shift+D are taken by niri-dynamic-workspaces.
+      "Mod+B" = {
+        action.spawn = ["dms" "ipc" "dash" "toggle" ""];
+        hotkey-overlay.title = "Toggle Dashboard";
+      };
+      "Mod+Shift+N" = {
+        action.spawn = ["dms" "ipc" "notepad" "toggle"];
+        hotkey-overlay.title = "Toggle Notepad";
+      };
+      "Mod+Shift+Comma" = {
+        action.spawn = ["dms" "ipc" "settings" "focusOrToggle"];
+        hotkey-overlay.title = "Toggle DMS Settings";
+      };
+      "Mod+Shift+Escape" = {
+        action.spawn = ["dms" "ipc" "processlist" "focusOrToggle"];
+        hotkey-overlay.title = "Toggle Process List";
+      };
+      "Mod+Shift+I" = {
+        action.spawn = ["dms" "ipc" "inhibit" "toggle"];
+        hotkey-overlay.title = "Toggle Keep-Awake (Idle Inhibit)";
+      };
+      "Mod+Alt+L" = {
+        action.spawn = ["dms" "ipc" "lock" "lock"];
+        hotkey-overlay.title = "Lock Screen";
+      };
 
       "Mod+Left".action.focus-column-or-monitor-left = {};
       "Mod+Down".action.focus-window-or-monitor-down = {};

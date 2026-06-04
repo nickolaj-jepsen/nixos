@@ -48,6 +48,17 @@
         description = "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
       };
       laptop = lib.mkEnableOption "Enable laptop-specific configurations and tools";
+      gpuPciId = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "10de:2c05";
+        description = ''
+          PCI id of a discrete GPU to surface in DMS GPU widgets (bar gpuTemp +
+          system-monitor GPU temperature). Must match the id dgop reports
+          (`dgop gpu --json` -> .gpus[].pciId), not the sysfs bus address.
+          null disables the GPU widgets.
+        '';
+      };
       battery = lib.mkOption {
         type = lib.types.bool;
         default = config.fireproof.hardware.laptop;
