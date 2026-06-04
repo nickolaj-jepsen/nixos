@@ -129,6 +129,22 @@ The recommended flow is a **host-specific bootstrap ISO**: an install image with
    cd ~/nixos && git status   # review live-generated configs, commit if desired
    ```
 
+7. (Optional, LUKS hosts) Enroll the TPM2 for passwordless boot. This skips the
+   LUKS passphrase prompt in initrd (~5–7s faster boot). The systemd initrd
+   already ships TPM2 support, so no config change is needed — only this on-disk
+   enrollment:
+
+   ```bash
+   sudo systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=7 \
+     /dev/disk/by-partlabel/disk-main-luks
+   ```
+
+   > [!WARNING]
+   > Security trade-off: with Secure Boot disabled,
+   > a powered-off stolen *machine* boots straight in (a stolen *drive* is still
+   > protected). For a middle ground add `--tpm2-with-pin=yes` to require a short
+   > PIN. Roll back with `systemd-cryptenroll --wipe-slot=tpm2 <device>`.
+
 > [!TIP]
 > Upload the host pubkey (`secrets/hosts/<hostname>/id_ed25519.pub`) to GitHub to pull/push directly from the new host.
 
