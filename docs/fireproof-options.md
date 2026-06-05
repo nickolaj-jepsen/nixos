@@ -104,7 +104,7 @@ true
 ```
 
 *Declared by:*
- - [modules/desktop](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop)
+ - [modules/desktop/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/default.nix)
 
 
 
@@ -153,6 +153,30 @@ true
 
 *Declared by:*
  - [modules/programs/chromium\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/chromium.nix)
+
+
+
+## fireproof\.desktop\.google-chrome\.enable
+
+
+
+Enable Google Chrome
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/programs/google-chrome\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/google-chrome.nix)
 
 
 
@@ -423,7 +447,7 @@ true
 ```
 
 *Declared by:*
- - [modules/desktop](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop)
+ - [modules/desktop/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/default.nix)
 
 
 
@@ -778,7 +802,7 @@ true
 ```
 
 *Declared by:*
- - [modules/homelab](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab)
+ - [modules/homelab/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab/default.nix)
 
 
 
@@ -802,7 +826,7 @@ string
 ```
 
 *Declared by:*
- - [modules/homelab](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab)
+ - [modules/homelab/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab/default.nix)
 
 
 
@@ -826,7 +850,7 @@ string
 ```
 
 *Declared by:*
- - [modules/homelab](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab)
+ - [modules/homelab/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab/default.nix)
 
 
 
