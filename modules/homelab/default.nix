@@ -21,12 +21,12 @@
     ./home-assistant
     ./immich.nix
     ./jellyfin.nix
+    ./monitoring
     ./nextcloud.nix
     ./navidrome.nix
     ./nginx.nix
     ./plex.nix
     ./postgres.nix
-    ./prometheus.nix
     ./qbittorrent.nix
     ./restic.nix
     ./security.nix

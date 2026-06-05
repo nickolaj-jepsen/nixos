@@ -6,6 +6,7 @@ _: {
     ./hosts.nix
     ./journald.nix
     ./keyd.nix
+    ./monitoring.nix
     ./smartd.nix
     ./thermald.nix
     ./zram.nix

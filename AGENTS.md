@@ -57,6 +57,19 @@ fireproof.dev.enable = true;             # Dev tools
 fireproof.hardware.laptop = true;        # Laptop features
 ```
 
+### Fleet Monitoring (`fireproof.monitoring.*`)
+
+Options in `modules/system/monitoring.nix`; the hub lives in `modules/homelab/monitoring/`.
+
+- Every host runs a node-exporter agent (`agent.enable`, default true) reachable
+  only over Tailscale; the homelab hub scrapes the hosts in `monitoring.hosts`.
+- The hub (`server.enable`, default = `homelab.enable`) runs Prometheus (local
+  TSDB + retention, mirrored to Grafana Cloud as offsite backup), Grafana behind
+  SSO (dashboards as Nix in `monitoring/dashboards/`), Alertmanager and ntfy.
+- Add a Grafana dashboard: drop a `*.nix`/`*.json` in `monitoring/dashboards/`
+  and reference it from the `dashboards` list in `monitoring/grafana.nix`.
+- Add an alert: extend the rule groups in `monitoring/alerting.nix`.
+
 ### Home Manager
 
 Use `fireproof.home-manager` instead of `home-manager.users.<username>`:

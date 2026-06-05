@@ -201,8 +201,14 @@
             }
             {
               title = "Grafana";
-              url = "https://fireproof.grafana.net/a/grafana-setupguide-app/home";
+              url = "https://grafana.${cfg.domain}";
               icon = "si:grafana";
+              same-tab = true;
+            }
+            {
+              title = "ntfy";
+              url = "https://ntfy.${cfg.domain}";
+              icon = "sh:ntfy";
               same-tab = true;
             }
           ];
