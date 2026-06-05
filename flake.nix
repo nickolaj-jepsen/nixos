@@ -47,6 +47,11 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
 
+    # Recursively imports every `.nix` file under a directory (skipping any
+    # `_`-prefixed path), so module/host/overlay trees are auto-imported
+    # instead of maintained as hand-written `imports = [ … ]` lists.
+    import-tree.url = "github:vic/import-tree";
+
     agenix.url = "github:ryantm/agenix";
     agenix.inputs.nixpkgs.follows = "nixpkgs";
     agenix.inputs.home-manager.follows = "home-manager";

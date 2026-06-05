@@ -5,15 +5,6 @@
   pkgs,
   ...
 }: {
-  imports = [
-    ./theme.nix
-    ./control-center.nix
-    ./background.nix
-    ./bar.nix
-    ./plugins.nix
-    ./desktop-widgets.nix
-  ];
-
   config = lib.mkIf config.fireproof.desktop.windowManager.enable {
     systemd.user.services.niri-flake-polkit.enable = false;
 

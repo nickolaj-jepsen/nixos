@@ -13,12 +13,4 @@
 
     fireproof.home-manager.programs.firefox.profiles.default.settings."browser.startup.homepage" = lib.mkForce "https://glance.nickolaj.com/work";
   };
-
-  imports = [
-    ./bluetooth.nix
-    ./disk-configuration.nix
-    ./monitors.nix
-    ./networking.nix
-    ./ssh.nix
-  ];
 }

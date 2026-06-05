@@ -12,25 +12,4 @@
       description = "Contact email registered with the ACME provider.";
     };
   };
-
-  imports = [
-    ./arr.nix
-    ./attic.nix
-    ./audiobookshelf.nix
-    ./glance
-    ./home-assistant
-    ./immich.nix
-    ./jellyfin.nix
-    ./nextcloud.nix
-    ./navidrome.nix
-    ./nginx.nix
-    ./plex.nix
-    ./postgres.nix
-    ./prometheus.nix
-    ./qbittorrent.nix
-    ./restic.nix
-    ./security.nix
-    ./sso
-    ./vaultwarden.nix
-  ];
 }

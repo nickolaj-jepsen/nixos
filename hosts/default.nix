@@ -29,13 +29,11 @@
               inputs.niri.nixosModules.niri
               inputs.nixos-wsl.nixosModules.default
               inputs.self.nixosModules.overlays
-              ../modules/base
-              ../modules/system
-              ../modules/programs
-              ../modules/desktop
-              ../modules/homelab
-              ../modules/scripts
-              host
+              # Auto-import every module in the tree, plus the host's own
+              # directory (its default.nix and sibling files). Non-module helper
+              # files are skipped via a leading underscore (see import-tree).
+              (inputs.import-tree ../modules)
+              (inputs.import-tree host)
             ]
             ++ modules;
         }
@@ -54,7 +52,7 @@
     mkSystem {
       host = ./bootstrap;
       modules = [
-        ./bootstrap/bake.nix
+        ./bootstrap/_bake.nix
         {fireproof.bootstrap.targetHost = name;}
       ];
     };

@@ -10,11 +10,4 @@
     };
     facter.reportPath = ./facter.json;
   };
-
-  imports = [
-    ./configuration.nix
-    ./disk-configuration.nix
-    ./monitors.nix
-    ./ssh.nix
-  ];
 }

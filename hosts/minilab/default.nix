@@ -25,9 +25,4 @@
 
     facter.reportPath = ./facter.json;
   };
-
-  imports = [
-    ./disk-configuration.nix
-    ./monitors.nix
-  ];
 }
