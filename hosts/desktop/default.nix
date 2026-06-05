@@ -18,12 +18,4 @@
 
     facter.reportPath = ./facter.json;
   };
-
-  imports = [
-    ./boot.nix
-    ./disk-configuration.nix
-    ./monitors.nix
-    ./networking.nix
-    ./ssh.nix
-  ];
 }

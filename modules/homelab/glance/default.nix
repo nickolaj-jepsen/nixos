@@ -18,8 +18,8 @@
     my-pull-requests = builtins.readFile ./templates/my-pull-requests.tpl;
   };
 
-  homePage = import ./home-page.nix {inherit cfg;};
-  workPage = import ./work-page.nix {inherit templates;};
+  homePage = import ./_home-page.nix {inherit cfg;};
+  workPage = import ./_work-page.nix {inherit templates;};
 in {
   config = lib.mkIf config.fireproof.homelab.enable {
     age.secrets.glance-env.rekeyFile = ../../../secrets/hosts/homelab/glance-env.age;

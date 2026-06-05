@@ -8,10 +8,4 @@
     };
     facter.reportPath = ./facter.json;
   };
-
-  imports = [
-    ./configuration.nix
-    ./disks.nix
-    ./networking.nix
-  ];
 }

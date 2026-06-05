@@ -85,8 +85,13 @@ Secrets use agenix + agenix-rekey with YubiKey master identity:
 
 ## Adding New Features
 
-1. **New program**: Create `modules/programs/<name>.nix`, guard with `lib.mkIf config.fireproof.desktop.enable` or similar
-2. **New homelab service**: Create `modules/homelab/<name>.nix`, add to `modules/homelab/default.nix` imports, and **add a link to the dashboard in `modules/homelab/glance.nix`**
+Modules and overlays are **auto-imported** via `import-tree` (every `.nix` file
+under `modules/`, plus each host's own directory) — just create the file, there is
+no `imports = [ … ]` list to edit. Prefix non-module helper files with `_` so they
+are skipped.
+
+1. **New program**: Create `modules/programs/<name>.nix`, guard with `lib.mkIf config.fireproof.desktop.enable` or similar. Auto-imported.
+2. **New homelab service**: Create `modules/homelab/<name>.nix` (auto-imported), and **add a link to the dashboard in `modules/homelab/glance/_home-page.nix`**
 3. **New host**: Run `just new-host <hostname> <username>`, then add to `hosts/default.nix`
 4. **New script**: Always include `set -euo pipefail` at the start of bash scripts.
 

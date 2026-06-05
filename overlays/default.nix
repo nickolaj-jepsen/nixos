@@ -1,11 +1,12 @@
-{inputs, ...}: {
+{
+  inputs,
+  lib,
+  ...
+}: {
   imports = [
     inputs.flake-parts.flakeModules.easyOverlay
-    ./claude-code.nix
-    ./bambu-studio.nix
-    ./emdash.nix
-    ./home-assistant.nix
-    ./gh-aw.nix
+    # Auto-import every overlay module here, except this file itself.
+    (inputs.import-tree.filter (p: !lib.hasSuffix "/default.nix" (toString p)) ./.)
   ];
 
   flake.nixosModules.overlays = _: {

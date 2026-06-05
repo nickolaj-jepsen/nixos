@@ -4,13 +4,6 @@
   pkgs,
   ...
 }: {
-  imports = [
-    ./settings.nix
-    ./binds.nix
-    ./outputs.nix
-    ./dynamic-workspaces.nix
-  ];
-
   config = lib.mkIf config.fireproof.desktop.windowManager.enable {
     programs.xwayland.enable = true;
 

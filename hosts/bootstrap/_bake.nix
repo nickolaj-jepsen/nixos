@@ -41,7 +41,7 @@ in {
   assertions = [
     {
       assertion = config.fireproof.bootstrap.targetHost != "";
-      message = "hosts/bootstrap/bake.nix requires fireproof.bootstrap.targetHost to be set.";
+      message = "hosts/bootstrap/_bake.nix requires fireproof.bootstrap.targetHost to be set.";
     }
   ];
 

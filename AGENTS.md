@@ -43,6 +43,30 @@ modules/
 secrets/                  # agenix-encrypted secrets with YubiKey
 ```
 
+### Module Auto-Imports
+
+Modules are **auto-imported** — there are no hand-maintained `imports = [ … ]`
+lists. `hosts/default.nix` uses [`import-tree`](https://github.com/vic/import-tree)
+to recursively pull in:
+
+- every `.nix` file under `modules/` (for every host), and
+- every `.nix` file in the host's own directory (e.g. `hosts/desktop/`).
+
+So **dropping a `.nix` file into the tree is enough to wire it up** — no list to
+edit. Each module gates itself with `lib.mkIf config.fireproof.<feature>.enable`,
+so being imported everywhere is inert until enabled.
+
+Conventions:
+
+- **Non-module helper files** (functions called with `import ./x.nix {…}`, page
+  fragments, etc.) must be **prefixed with `_`** so import-tree skips them — e.g.
+  `modules/homelab/glance/_home-page.nix`, `hosts/bootstrap/_bake.nix`. Anything
+  under a `_`-prefixed path is ignored.
+- **Per-host files** live in that host's directory and are auto-imported only for
+  that host.
+- `default.nix` files are only needed when they hold real options/config; a
+  `default.nix` that only listed imports has been removed.
+
 ### Custom Options (`fireproof.*`)
 
 Defined in `modules/base/fireproof.nix`:
@@ -121,12 +145,16 @@ in {
 
 ## Adding Features
 
-- **New program**: Create `modules/programs/<name>.nix`
-- **New homelab service**: Create `modules/homelab/<name>.nix`, add to `modules/homelab/default.nix` imports, add dashboard link in `modules/homelab/glance.nix`
-- **New host**: Run `just new-host <hostname> <username>`, add to `hosts/default.nix`. To install on physical hardware, build a host-specific bootstrap ISO with `just bootstrap-iso <hostname>` and flash with `just bootstrap-flash <hostname> /dev/sdX` — the ISO bakes in the host SSH key + a copy of this flake, target boots and runs `bootstrap-install`.
+Modules, host files, and overlays are **auto-imported** (see "Module
+Auto-Imports") — just create the file in the right directory, no `imports` list to
+edit.
+
+- **New program**: Create `modules/programs/<name>.nix`. Auto-imported.
+- **New homelab service**: Create `modules/homelab/<name>.nix` (auto-imported), add dashboard link in `modules/homelab/glance/_home-page.nix`.
+- **New host**: Run `just new-host <hostname> <username>`, add to `hosts/default.nix`. Per-host files (`disk-configuration.nix`, `monitors.nix`, …) go in the host directory and are auto-imported. To install on physical hardware, build a host-specific bootstrap ISO with `just bootstrap-iso <hostname>` and flash with `just bootstrap-flash <hostname> /dev/sdX` — the ISO bakes in the host SSH key + a copy of this flake, target boots and runs `bootstrap-install`.
 - **New disko template**: Add `hosts/_templates/disko/<name>.nix` with `device = "@@DISK@@";` as the sentinel. The bootstrap installer offers any template found here when no `disk-configuration.nix` exists yet.
 - **New script**: Use `pkgs.writeShellApplication`, include `set -euo pipefail`
-- **New overlay**: Create `overlays/<name>.nix`, add to `overlays/default.nix` imports, and add update instructions (if needed) in `.github/workflows/update-overlays.md` a [GitHub Agentic Workflows file](https://github.com/github/gh-aw). Then recompile: `gh aw compile update-overlays`
+- **New overlay**: Create `overlays/<name>.nix` (auto-imported), and add update instructions (if needed) in `.github/workflows/update-overlays.md` a [GitHub Agentic Workflows file](https://github.com/github/gh-aw). Then recompile: `gh aw compile update-overlays`
 
 ## Secrets
 

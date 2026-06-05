@@ -11,21 +11,4 @@
       description = "Enable window manager (niri) and dank material shell (dms)";
     };
   };
-
-  imports = [
-    ./clipboard.nix
-    ./monitors.nix
-    ./audio.nix
-    ./snapcast.nix
-    ./0xcb-media.nix
-    ./fonts.nix
-    ./greetd.nix
-    ./niri
-    ./nvidia.nix
-    ./qt.nix
-    ./gtk.nix
-    ./default-apps.nix
-    ./recording.nix
-    ./dms/default.nix
-  ];
 }
