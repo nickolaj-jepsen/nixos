@@ -46,13 +46,6 @@
   leftMonitors = builtins.filter (m: m.position.x <= primaryX) secondaryMonitors;
   rightMonitors = builtins.filter (m: m.position.x > primaryX) secondaryMonitors;
 
-  # Extra system-monitor widgets for desktop-class hosts (the always-on desktop
-  # has bar room to spare; the laptop keeps a leaner bar). gpuTemp only appears
-  # when a discrete GPU id is configured (fireproof.hardware.gpuPciId).
-  sysmonWidgets =
-    lib.optional (config.fireproof.hardware.gpuPciId != null) "gpuTemp"
-    ++ lib.optionals (!config.fireproof.hardware.laptop) ["diskUsage" "network_speed_monitor"];
-
   primaryBar =
     {
       id = "default";
@@ -78,9 +71,9 @@
           "music"
           "systemTray"
           "cpuUsage"
+          "diskUsage"
+          "controlCenterButton"
         ]
-        ++ sysmonWidgets
-        ++ ["controlCenterButton"]
         ++ lib.optional config.fireproof.hardware.battery "battery"
         ++ ["notificationButton"];
     }

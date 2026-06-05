@@ -34,7 +34,6 @@ in {
       cursor = {
         theme = "Adwaita";
         size = 24;
-        hide-when-typing = true;
       };
       # Modest global slowdown + crisp window open/close; niri's signature
       # view-movement spring is left at its default.
@@ -63,9 +62,6 @@ in {
         gaps = 10;
         focus-ring.enable = false;
         insert-hint.display.color = "#${c.accent}";
-        # New windows open at 1/2; Mod+C cycles widths tuned to the 2560-wide mains.
-        empty-workspace-above-first = true;
-        default-column-width.proportion = 0.5;
         preset-column-widths = [
           {proportion = 0.33333;}
           {proportion = 0.5;}
