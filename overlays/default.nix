@@ -15,6 +15,7 @@
       inputs.nur.overlays.default
       inputs.niri.overlays.niri
       inputs.fnug.overlays.default
+      inputs.claude-desktop.overlays.default
       inputs.self.overlays.default
       (final: _prev: {
         unstable = import inputs.nixpkgs-unstable {
