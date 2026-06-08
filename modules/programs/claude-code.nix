@@ -68,12 +68,20 @@ in {
       home.packages = lib.optional cfg.work.enable claudeWorkWrapper;
 
       programs.claude-code.context = ''
-        This is a NixOS system. Usually built from a flake based config in ~/nixos.
-        - If a command is not found, try [comma](https://github.com/nix-community/comma) before giving up, e.g. `, pstree`, `, ncdu .`
-        - For python tooling, prefer uv over pip, but use the tool that's most commonly used in the repo.
-        - For nodejs, prefer pnpm over npm, but use the tool that's most commonly used in the repo.
-        - For git, even if the user asks to merge, use rebase over merge to keep history clean, unless the user explicitly says "use merge over rebase".
-        - If you want to do a dev command, and you're in a project owned by the github.com/Digital-Udvikling org (see git remote), make sure to use the `ds` cli tool when applicable (check the `ds --help` to determine if you could use it)
+        # Global preferences
+
+        ## Environment
+        - NixOS — declarative & immutable. Imperative installs (`apt`, `npm -g`, global `pip`) and `/etc` edits won't persist; system changes go through the flake at `~/nixos`. For a one-off tool, use [comma](https://github.com/nix-community/comma): `, pstree`, `, ncdu .`
+
+        ## Tooling
+        - Language toolchains — prefer uv (Python) and pnpm (Node), but defer to whatever the repo already uses.
+        - Git: rebase over merge — even if I ask to "merge" — unless I explicitly say "use merge over rebase".
+        - Digital-Udvikling repos (check git remote): use the `ds` CLI when applicable (run `ds --help` to see what it covers).
+
+        ## Code style
+        - Match the surrounding file's comment/docstring density — a comment that's never written can't go stale.
+        - When you do comment, explain the *why* (intent, a gotcha, a non-obvious choice or tradeoff); never restate what the code already says (`x += 1  # add one to x` is noise).
+        - Docstrings describe the function's own contract — what it does, params, returns, errors, invariants. Never document who calls it or where it's used ("used by the signup flow"); that belongs at the call site and goes stale in the definition. Guidance on *when* to call it is fine.
       '';
 
       programs.claude-code = {
