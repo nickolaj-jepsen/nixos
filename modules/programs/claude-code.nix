@@ -89,6 +89,11 @@ in {
         package = pkgs.claude-code;
         enableMcpIntegration = true;
         skills = {
+          # Source: https://tropes.fyi/tropes-md by ossama.is. The whole skill
+          # (frontmatter + catalog) lives in ./_tropes-md.md; import-tree skips
+          # _-prefixed files so it isn't picked up as a module.
+          "avoid-ai-tropes" = builtins.readFile ./_tropes-md.md;
+
           "grill-me" = ''
             ---
             name: grill-me
