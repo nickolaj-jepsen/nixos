@@ -141,7 +141,7 @@ The recommended flow is a **host-specific bootstrap ISO**: an install image with
 
    > [!WARNING]
    > Security trade-off: with Secure Boot disabled,
-   > a powered-off stolen *machine* boots straight in (a stolen *drive* is still
+   > a powered-off stolen _machine_ boots straight in (a stolen _drive_ is still
    > protected). For a middle ground add `--tpm2-with-pin=yes` to require a short
    > PIN. Roll back with `systemd-cryptenroll --wipe-slot=tpm2 <device>`.
 

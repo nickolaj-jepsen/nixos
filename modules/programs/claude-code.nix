@@ -79,9 +79,9 @@ in {
         - Digital-Udvikling repos (check git remote): use the `ds` CLI when applicable (run `ds --help` to see what it covers).
 
         ## Code style
-        - Match the surrounding file's comment/docstring density — a comment that's never written can't go stale.
-        - When you do comment, explain the *why* (intent, a gotcha, a non-obvious choice or tradeoff); never restate what the code already says (`x += 1  # add one to x` is noise).
-        - Docstrings describe the function's own contract — what it does, params, returns, errors, invariants. Never document who calls it or where it's used ("used by the signup flow"); that belongs at the call site and goes stale in the definition. Guidance on *when* to call it is fine.
+        - Comments earn their place. The code already states *what* it does — don't restate it. Comment only what a competent reader can't recover from the code: the load-bearing *why* (intent, a gotcha, a non-obvious tradeoff). If nothing qualifies, write no comment.
+        - Default to one line. Give the minimal why and stop; run past a line only when the rationale genuinely can't compress. Length is not thoroughness.
+        - Docstrings state the function's own contract — what it does, params, returns, errors, invariants — and nothing else. Don't restate the signature; don't document who calls it or where ("used by the signup flow") — that belongs at the call site and goes stale here. Guidance on *when* to call it is fine.
       '';
 
       programs.claude-code = {
@@ -93,6 +93,11 @@ in {
           # (frontmatter + catalog) lives in ./_tropes-md.md; import-tree skips
           # _-prefixed files so it isn't picked up as a module.
           "avoid-ai-tropes" = builtins.readFile ./_tropes-md.md;
+
+          # Post-generation cleanup pass — prunes comment/doc bloat to the
+          # minimal why. Examples live in the skill file, not in the always-loaded
+          # base context. Run manually (/prune-comments [scope]) after generating.
+          "prune-comments" = builtins.readFile ./_prune-comments.md;
 
           "grill-me" = ''
             ---
