@@ -9,31 +9,6 @@
   hmLib = config.home-manager.users.${username}.lib;
   homeDir = config.home-manager.users.${username}.home.homeDirectory;
 
-  refactorGuidelines = ''
-    - Remove any duplicate code by creating reusable functions or modules.
-    - Ensure that the refactored code is well-tested by running existing tests and adding new tests if necessary to cover the changes.
-    - Make sure that all tests makes sense, remove any redundant or irrelevant tests that do not add value.
-    - If a 3rd party library could significantly simplify the code, suggest it to the user and wait for approval before adding it.
-  '';
-
-  mkRefactorSkill = {
-    lang,
-    extra ? "",
-  }: ''
-    ---
-    name: refactor-${lib.toLower lang}
-    description: Use when refactoring ${lang} code to improve readability, maintainability, or performance without changing its external behavior.
-    ---
-
-    When refactoring ${lang} code, consider the following best practices:
-    ${extra}
-    ${refactorGuidelines}
-
-    Analyze the current ${lang} codebase to identify areas that could benefit from refactoring based on the above best practices. Then, apply appropriate refactoring techniques to improve the code while ensuring that its external behavior remains unchanged. After refactoring, run tests to verify that everything still works as expected.
-
-    If there are any uncommitted changes in the repo, focus on refactoring the current changes instead of the entire codebase.
-  '';
-
   claudeWorkWrapper = pkgs.writeShellApplication {
     name = "claude-work";
     runtimeInputs = [config.home-manager.users.${username}.programs.claude-code.finalPackage];
@@ -111,34 +86,6 @@ in {
 
             If a question can be answered by exploring the codebase, explore the codebase instead.
           '';
-
-          "refactor-python" = mkRefactorSkill {
-            lang = "Python";
-            extra = ''
-              - Follow PEP 8 style guidelines for Python code to ensure consistency and readability.
-              - Use type hints for function signatures.
-              - Prefer dataclasses or Pydantic over raw dicts for structured data.'';
-          };
-
-          "refactor-rust" = mkRefactorSkill {
-            lang = "Rust";
-            extra = ''
-              - Follow Rust's official style guidelines (rustfmt) to ensure consistency and readability.
-              - Prefer `impl` blocks over standalone functions where it improves API ergonomics.
-              - Use the `?` operator for error propagation instead of manual `match`/`unwrap`.
-              - Prefer iterators and combinators over manual loops where readability isn't hurt.'';
-          };
-
-          "refactor-typescript" = mkRefactorSkill {
-            lang = "TypeScript";
-            extra = ''
-              - Follow a consistent coding style and use a linter (e.g. ESLint) to enforce it.
-              - Avoid using the `any` type, and prefer more specific types to improve type safety and readability.
-              - Use async/await for asynchronous code to improve readability and maintainability, and avoid callback hell.
-              - Prefer `interface` over `type` for object shapes (better error messages, extendability).
-              - Use `const` assertions and discriminated unions over enums.
-              - Always prefer erasableSyntaxOnly-compatible TypeScript — avoid `enum`, `namespace`, parameter properties, and other non-erasable syntax.'';
-          };
         };
 
         commands = {
