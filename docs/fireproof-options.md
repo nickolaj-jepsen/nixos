@@ -72,7 +72,7 @@ true
 ```
 
 *Declared by:*
- - [modules/programs/claude-code\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/claude-code.nix)
+ - [modules/programs/claude-code/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/claude-code/default.nix)
 
 
 
