@@ -205,6 +205,12 @@
               icon = "si:grafana";
               same-tab = true;
             }
+            {
+              title = "Beszel";
+              url = "https://beszel.${cfg.domain}";
+              icon = "sh:beszel";
+              same-tab = true;
+            }
           ];
         }
         {
