@@ -7,7 +7,7 @@
   config = lib.mkIf config.fireproof.desktop.enable {
     fireproof.home-manager = {
       imports = [
-        inputs.dms-plugin-registry.modules.default
+        inputs.dms-plugin-registry.nixosModules.default
       ];
       programs.dank-material-shell.plugins = {
         emojiLauncher = {
