@@ -72,21 +72,9 @@ in {
           voiceEnabled = true;
           useAutoModeDuringPlan = true;
           skipAutoPermissionPrompt = true;
+          preferredNotifChannel = "terminal_bell";
           env = {
             CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
-          };
-          hooks = {
-            Notification = [
-              {
-                matcher = "permission_prompt|idle_prompt";
-                hooks = [
-                  {
-                    type = "command";
-                    command = "printf '\\a' > /dev/tty";
-                  }
-                ];
-              }
-            ];
           };
           permissions = {
             allow = [
