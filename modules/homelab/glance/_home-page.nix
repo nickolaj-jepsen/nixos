@@ -157,6 +157,12 @@
               same-tab = true;
             }
             {
+              title = "Shelfmark";
+              url = "https://shelfmark.${cfg.domain}";
+              icon = "sh:calibre-web-automated-book-downloader";
+              same-tab = true;
+            }
+            {
               title = "Sonarr";
               url = "https://sonarr.${cfg.domain}";
               icon = "sh:sonarr";
