@@ -8,9 +8,14 @@
   fpLib = import ../lib {inherit lib;};
 
   # The shared module tree, collected at the flake level as
-  # flake.modules.nixos.<name> (see flake.nix) and splatted into every host —
-  # replaces the former per-host `(inputs.import-tree ../modules)`.
+  # flake.modules.{nixos,homeManager}.<name> (see flake.nix) and splatted into
+  # every host — replaces the former per-host `(inputs.import-tree ../modules)`.
   sharedNixosModules = builtins.attrValues config.flake.modules.nixos;
+
+  # home-manager halves of the dendritic leaves, applied to the user's HM eval
+  # via sharedModules (alongside the legacy fireproof.home-manager alias during
+  # the cutover). extraSpecialArgs gives those halves inputs/fpLib.
+  sharedHomeModules = builtins.attrValues config.flake.modules.homeManager;
 
   mkSystem = {
     host,
@@ -35,6 +40,10 @@
               inputs.niri.nixosModules.niri
               inputs.nixos-wsl.nixosModules.default
               inputs.self.nixosModules.overlays
+              {
+                home-manager.sharedModules = sharedHomeModules;
+                home-manager.extraSpecialArgs = {inherit inputs fpLib;};
+              }
             ]
             ++ sharedNixosModules
             # The host's own directory (its default.nix and sibling files).
