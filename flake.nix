@@ -3,17 +3,25 @@
 
   outputs = {flake-parts, ...} @ inputs: let
     inherit (inputs.nixpkgs) lib;
-    # Register every module under ./modules as a flake.modules.nixos.<relpath>
-    # entry without editing the files, so moving import-tree up to the flake
-    # level stays behaviour-neutral. <relpath> is the path relative to
-    # ./modules with the `.nix` suffix dropped (unique by construction). The
-    # per-file dendritic conversion and the homeManager halves come later.
-    wrapNixos = path: {
-      flake.modules.nixos.${
-        lib.removeSuffix ".nix" (lib.removePrefix (toString ./modules + "/") (toString path))
-      } =
-        path;
-    };
+    # Migration shim for the dendritic cutover. A file under ./modules is either
+    # already dendritic — a self-declaring flake-parts module written as an
+    # attrset that sets `flake.*` (modules.{nixos,homeManager}.<name>,
+    # aspectTags.<name>) — in which case it passes through untouched; or it is a
+    # legacy NixOS module (a function, or an attrset without `flake`), in which
+    # case it is registered under flake.modules.nixos.<relpath> exactly as in P0.
+    # This lets leaves be converted in place, one at a time, each verifiable,
+    # until the whole tree is dendritic and this shim collapses to a plain
+    # `(import-tree ./modules)`.
+    wrapNixos = path: let
+      m = import path;
+    in
+      if builtins.isAttrs m && m ? flake
+      then m
+      else {
+        flake.modules.nixos.${
+          lib.removeSuffix ".nix" (lib.removePrefix (toString ./modules + "/") (toString path))
+        } = path;
+      };
   in
     flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [
