@@ -47,7 +47,7 @@ tiny leaf** (the few load-bearing flags) or **deleted** (vestigial flags with ze
 
 1. **Make `flake.bundles` pure adjacency.** In `aspects.nix`, change the option to
    `lib.types.lazyAttrsOf (lib.types.listOf lib.types.str)` and drop the `facts` field entirely.
-   `config.flake.bundles` shrinks to only the nodes that *compose* — every other aspect is a
+   `config.flake.bundles` shrinks to only the nodes that _compose_ — every other aspect is a
    pass-through name the closure carries via `or []`:
 
    ```nix
@@ -64,15 +64,15 @@ tiny leaf** (the few load-bearing flags) or **deleted** (vestigial flags with ze
    **delete the `facts` function**; keep `closure` + `selectedLeaves`.
 
 2. **Relocate the load-bearing capability flags** to tiny class-agnostic leaves. After the finish
-   plan these four are still read by *always-present* modules, so membership alone can't carry them
+   plan these four are still read by _always-present_ modules, so membership alone can't carry them
    (confirm the reader set per flag with `grep -rn 'fireproof\.<flag>' modules`):
 
-   | flag | read by (always-present) | setter |
-   | --- | --- | --- |
-   | `desktop.enable` | `scripts/default.nix`, `windowManager.enable` default | new `modules/desktop/enable.nix` |
-   | `work.enable` | `secrets/ssh.nix` (work secret/host bits) | new `modules/work/enable.nix` |
-   | `hardware.laptop` | `battery`/`wifi`/`dimmableBacklight` defaults, `control-center` | new `modules/laptop/enable.nix` |
-   | `wsl.enable` | `hardware.physical` default (`!wsl.enable`) | set inside existing `modules/wsl.nix` |
+   | flag              | read by (always-present)                                        | setter                                |
+   | ----------------- | --------------------------------------------------------------- | ------------------------------------- |
+   | `desktop.enable`  | `scripts/default.nix`, `windowManager.enable` default           | new `modules/desktop/enable.nix`      |
+   | `work.enable`     | `secrets/ssh.nix` (work secret/host bits)                       | new `modules/work/enable.nix`         |
+   | `hardware.laptop` | `battery`/`wifi`/`dimmableBacklight` defaults, `control-center` | new `modules/laptop/enable.nix`       |
+   | `wsl.enable`      | `hardware.physical` default (`!wsl.enable`)                     | set inside existing `modules/wsl.nix` |
 
    Each is dual-declared (so both evals see it) and folder-tagged into its aspect:
 
