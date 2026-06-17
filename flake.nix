@@ -22,6 +22,7 @@
         ./formatter.nix
         ./devshell.nix
         ./docs.nix
+        ./aspects.nix
         ./hosts
         ./overlays
         ((inputs.import-tree.map wrapNixos) ./modules)
