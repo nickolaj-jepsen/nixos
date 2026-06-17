@@ -1,15 +1,30 @@
 {
   description = "NixOS configuration";
 
-  outputs = {flake-parts, ...} @ inputs:
+  outputs = {flake-parts, ...} @ inputs: let
+    inherit (inputs.nixpkgs) lib;
+    # Register every module under ./modules as a flake.modules.nixos.<relpath>
+    # entry without editing the files, so moving import-tree up to the flake
+    # level stays behaviour-neutral. <relpath> is the path relative to
+    # ./modules with the `.nix` suffix dropped (unique by construction). The
+    # per-file dendritic conversion and the homeManager halves come later.
+    wrapNixos = path: {
+      flake.modules.nixos.${
+        lib.removeSuffix ".nix" (lib.removePrefix (toString ./modules + "/") (toString path))
+      } =
+        path;
+    };
+  in
     flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [
+        inputs.flake-parts.flakeModules.modules
         inputs.agenix-rekey.flakeModule
         ./formatter.nix
         ./devshell.nix
         ./docs.nix
         ./hosts
         ./overlays
+        ((inputs.import-tree.map wrapNixos) ./modules)
       ];
       systems = [
         "x86_64-linux"

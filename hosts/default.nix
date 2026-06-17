@@ -1,10 +1,16 @@
 {
   inputs,
   withSystem,
+  config,
   ...
 }: let
   inherit (inputs.nixpkgs) lib;
   fpLib = import ../lib {inherit lib;};
+
+  # The shared module tree, collected at the flake level as
+  # flake.modules.nixos.<name> (see flake.nix) and splatted into every host —
+  # replaces the former per-host `(inputs.import-tree ../modules)`.
+  sharedNixosModules = builtins.attrValues config.flake.modules.nixos;
 
   mkSystem = {
     host,
@@ -29,12 +35,11 @@
               inputs.niri.nixosModules.niri
               inputs.nixos-wsl.nixosModules.default
               inputs.self.nixosModules.overlays
-              # Auto-import every module in the tree, plus the host's own
-              # directory (its default.nix and sibling files). Non-module helper
-              # files are skipped via a leading underscore (see import-tree).
-              (inputs.import-tree ../modules)
-              (inputs.import-tree host)
             ]
+            ++ sharedNixosModules
+            # The host's own directory (its default.nix and sibling files).
+            # `_`-prefixed helper files are skipped (see import-tree).
+            ++ [(inputs.import-tree host)]
             ++ modules;
         }
     );
