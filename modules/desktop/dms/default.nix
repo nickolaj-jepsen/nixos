@@ -1,18 +1,28 @@
+# Aspect: windowManager
 {
-  config,
-  lib,
-  inputs,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.desktop.windowManager.enable {
-    systemd.user.services.niri-flake-polkit.enable = false;
+  flake.aspectTags.dms = ["windowManager"];
 
-    fireproof.home-manager = {
-      imports = [
-        inputs.dank-material-shell.homeModules.dank-material-shell
-      ];
+  flake.modules.nixos.dms = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.windowManager.enable {
+      systemd.user.services.niri-flake-polkit.enable = false;
+    };
+  };
 
+  flake.modules.homeManager.dms = {
+    config,
+    lib,
+    inputs,
+    pkgs,
+    ...
+  }: {
+    imports = [
+      inputs.dank-material-shell.homeModules.dank-material-shell
+    ];
+    config = lib.mkIf config.fireproof.desktop.windowManager.enable {
       programs.dank-material-shell = {
         enable = true;
 

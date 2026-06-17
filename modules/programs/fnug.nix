@@ -1,11 +1,14 @@
-# Enabled when: dev
+# Aspect: dev
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.dev.enable {
-    fireproof.home-manager.home.packages = [pkgs.fnug];
+  flake.aspectTags.fnug = ["dev"];
+  flake.modules.homeManager.fnug = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.dev.enable {
+      home.packages = [pkgs.fnug];
+    };
   };
 }

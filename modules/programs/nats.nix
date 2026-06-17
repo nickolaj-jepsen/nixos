@@ -1,13 +1,16 @@
-# Enabled when: dev
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.dev.enable {
-    fireproof.home-manager.home.packages = [
-      pkgs.unstable.natscli
-    ];
+  flake.aspectTags.nats = ["dev"];
+  # Aspect: dev
+  flake.modules.homeManager.nats = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.dev.enable {
+      home.packages = [
+        pkgs.unstable.natscli
+      ];
+    };
   };
 }

@@ -1,48 +1,51 @@
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
-    fireproof.home-manager.programs.zed-editor = {
-      enable = true;
-      package = pkgs.unstable.zed-editor;
-      installRemoteServer = true;
+  flake.aspectTags.zed-extensions = ["gui-dev"];
+  flake.modules.homeManager.zed-extensions = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+      programs.zed-editor = {
+        enable = true;
+        package = pkgs.unstable.zed-editor;
+        installRemoteServer = true;
 
-      extensions = [
-        # Languages
-        "nix"
-        "just"
-        "toml"
-        "basher"
+        extensions = [
+          # Languages
+          "nix"
+          "just"
+          "toml"
+          "basher"
 
-        # Python (matches the pyrefly + ruff setup from VSCode)
-        "pyrefly"
+          # Python (matches the pyrefly + ruff setup from VSCode)
+          "pyrefly"
 
-        # Icons (theme is defined locally in ./theme.nix)
-        "seti-icons"
+          # Icons (theme is defined locally in ./theme.nix)
+          "seti-icons"
 
-        # Spell / grammar check (replaces cSpell)
-        "harper"
-      ];
+          # Spell / grammar check (replaces cSpell)
+          "harper"
+        ];
 
-      extraPackages = with pkgs; [
-        # Nix
-        nil
+        extraPackages = with pkgs; [
+          # Nix
+          nil
 
-        # Python
-        ruff
-        unstable.basedpyright
+          # Python
+          ruff
+          unstable.basedpyright
 
-        # JS / TS / JSON / CSS / HTML
-        typescript-language-server
-        prettier
-        vscode-langservers-extracted
+          # JS / TS / JSON / CSS / HTML
+          typescript-language-server
+          prettier
+          vscode-langservers-extracted
 
-        # YAML
-        yaml-language-server
-      ];
+          # YAML
+          yaml-language-server
+        ];
+      };
     };
   };
 }

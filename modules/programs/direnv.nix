@@ -1,18 +1,21 @@
-_: {
-  fireproof.home-manager = {
-    programs.direnv = {
-      enable = true;
-      nix-direnv.enable = true;
-      config = {
-        global = {
-          hide_env_diff = true;
-          warn_timeout = "1m";
+{
+  flake.aspectTags.direnv = ["base"];
+  flake.modules.homeManager.direnv = _: {
+    config = {
+      programs.direnv = {
+        enable = true;
+        nix-direnv.enable = true;
+        config = {
+          global = {
+            hide_env_diff = true;
+            warn_timeout = "1m";
+          };
+          whitelist.prefix = ["/home/nickolaj/nixos"];
         };
-        whitelist.prefix = ["/home/nickolaj/nixos"];
       };
+      # Silence the per-load "direnv: loading…/export N vars" banner (complements
+      # hide_env_diff) so cd-ing into whitelisted dirs stays quiet.
+      home.sessionVariables.DIRENV_LOG_FORMAT = "";
     };
-    # Silence the per-load "direnv: loading…/export N vars" banner (complements
-    # hide_env_diff) so cd-ing into whitelisted dirs stays quiet.
-    home.sessionVariables.DIRENV_LOG_FORMAT = "";
   };
 }

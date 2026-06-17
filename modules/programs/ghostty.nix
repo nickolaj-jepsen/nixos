@@ -1,14 +1,26 @@
-# Enabled when: desktop
+# Aspect: desktop
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: let
-  c = config.fireproof.theme.colors;
-in {
-  config = lib.mkIf config.fireproof.desktop.enable {
-    fireproof.home-manager = {
+  flake.aspectTags.ghostty = ["desktop"];
+
+  flake.modules.nixos.ghostty = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
+      fireproof.base.defaults.terminal = "ghostty";
+    };
+  };
+
+  flake.modules.homeManager.ghostty = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: let
+    c = config.fireproof.theme.colors;
+  in {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.ghostty = {
         enable = true;
         package = pkgs.unstable.ghostty;
@@ -60,6 +72,5 @@ in {
         };
       };
     };
-    fireproof.base.defaults.terminal = "ghostty";
   };
 }

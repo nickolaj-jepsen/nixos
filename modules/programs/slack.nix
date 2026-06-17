@@ -1,13 +1,16 @@
-# Enabled when: desktop & work
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.work.enable) {
-    fireproof.home-manager.home.packages = [
-      pkgs.unstable.slack
-    ];
+  flake.aspectTags.slack = ["gui-work"];
+  # Aspect: gui-work
+  flake.modules.homeManager.slack = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.work.enable) {
+      home.packages = [
+        pkgs.unstable.slack
+      ];
+    };
   };
 }

@@ -1,5 +1,8 @@
-{pkgs, ...}: {
-  fireproof.home-manager.home.packages = [
-    pkgs.unstable.just
-  ];
+{
+  flake.aspectTags.just = ["base"];
+  flake.modules.homeManager.just = {pkgs, ...}: {
+    home.packages = [
+      pkgs.unstable.just
+    ];
+  };
 }

@@ -1,44 +1,47 @@
+# Aspect: desktop
 {
-  config,
-  lib,
-  fpLib,
-  ...
-}: let
-  inherit (config.fireproof) monitors;
-  primaryMonitor = fpLib.primaryMonitor monitors;
-  gpuPciId = config.fireproof.hardware.gpuPciId;
+  flake.aspectTags.dms-desktop-widgets = ["desktop"];
 
-  widgetWidth = 320;
-  widgetHeight = 480;
-  padding = 16;
-  # Hand-tuned approximation of DMS's dynamic top-bar thickness. DMS computes the
-  # bar height internally (effectiveBarThickness in DankBarWindow.qml) from
-  # Theme.barHeight, widgetThickness and innerPadding — there is no settable
-  # bar-height key to derive this from. For this config it works out to ~32px.
-  barHeight = 34;
+  flake.modules.homeManager.dms-desktop-widgets = {
+    config,
+    lib,
+    fpLib,
+    ...
+  }: let
+    inherit (config.fireproof) monitors;
+    primaryMonitor = fpLib.primaryMonitor monitors;
+    gpuPciId = config.fireproof.hardware.gpuPciId;
 
-  # Only place the widget on active monitors that declare a resolution (the
-  # schema allows a null resolution, which would abort evaluation otherwise).
-  positionableMonitors =
-    builtins.filter (m: m.enable && m.resolution.width != null) monitors;
+    widgetWidth = 320;
+    widgetHeight = 480;
+    padding = 16;
+    # Hand-tuned approximation of DMS's dynamic top-bar thickness. DMS computes the
+    # bar height internally (effectiveBarThickness in DankBarWindow.qml) from
+    # Theme.barHeight, widgetThickness and innerPadding — there is no settable
+    # bar-height key to derive this from. For this config it works out to ~32px.
+    barHeight = 34;
 
-  # Top-right position, below the bar. x is in logical pixels (physical width
-  # divided by scale) to match how DMS clamps the saved coordinate.
-  mkPosition = monitor: {
-    width = widgetWidth;
-    height = widgetHeight;
-    x = (builtins.floor (monitor.resolution.width / monitor.scale)) - widgetWidth - padding;
-    y = barHeight + padding;
-  };
+    # Only place the widget on active monitors that declare a resolution (the
+    # schema allows a null resolution, which would abort evaluation otherwise).
+    positionableMonitors =
+      builtins.filter (m: m.enable && m.resolution.width != null) monitors;
 
-  positions = lib.listToAttrs (map (monitor: {
-      inherit (monitor) name;
-      value = mkPosition monitor;
-    })
-    positionableMonitors);
-in {
-  config = lib.mkIf (config.fireproof.desktop.enable && primaryMonitor != {}) {
-    fireproof.home-manager = {
+    # Top-right position, below the bar. x is in logical pixels (physical width
+    # divided by scale) to match how DMS clamps the saved coordinate.
+    mkPosition = monitor: {
+      width = widgetWidth;
+      height = widgetHeight;
+      x = (builtins.floor (monitor.resolution.width / monitor.scale)) - widgetWidth - padding;
+      y = barHeight + padding;
+    };
+
+    positions = lib.listToAttrs (map (monitor: {
+        inherit (monitor) name;
+        value = mkPosition monitor;
+      })
+      positionableMonitors);
+  in {
+    config = lib.mkIf (config.fireproof.desktop.enable && primaryMonitor != {}) {
       programs.dank-material-shell.settings = {
         desktopWidgetInstances = [
           {

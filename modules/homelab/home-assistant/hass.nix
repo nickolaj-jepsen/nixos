@@ -1,90 +1,93 @@
 {
-  pkgs,
-  config,
-  lib,
-  fpLib,
-  ...
-}: let
-  cfg = config.fireproof.homelab;
-  homeAssistantPort = 8123;
-in {
-  config = lib.mkIf config.fireproof.homelab.enable {
-    age.secrets.hassSecrets = {
-      rekeyFile = ../../../secrets/hosts/homelab/hass.yaml.age;
-      path = "${config.services.home-assistant.configDir}/secrets.yaml";
-      mode = "400";
-      owner = "hass";
-      group = "hass";
-    };
+  flake.aspectTags.home-assistant-hass = ["homelab"];
+  flake.modules.nixos.home-assistant-hass = {
+    pkgs,
+    config,
+    lib,
+    fpLib,
+    ...
+  }: let
+    cfg = config.fireproof.homelab;
+    homeAssistantPort = 8123;
+  in {
+    config = lib.mkIf config.fireproof.homelab.enable {
+      age.secrets.hassSecrets = {
+        rekeyFile = ../../../secrets/hosts/homelab/hass.yaml.age;
+        path = "${config.services.home-assistant.configDir}/secrets.yaml";
+        mode = "400";
+        owner = "hass";
+        group = "hass";
+      };
 
-    services.restic.backups.homelab = {
-      paths = [config.services.home-assistant.configDir];
-    };
+      services.restic.backups.homelab = {
+        paths = [config.services.home-assistant.configDir];
+      };
 
-    services.nginx.virtualHosts."ha.${cfg.domain}" = fpLib.mkVirtualHost {
-      port = homeAssistantPort;
-      websockets = true;
-    };
+      services.nginx.virtualHosts."ha.${cfg.domain}" = fpLib.mkVirtualHost {
+        port = homeAssistantPort;
+        websockets = true;
+      };
 
-    services.home-assistant = {
-      enable = true;
-      package = pkgs.unstable.home-assistant;
-      customComponents = with pkgs.unstable.home-assistant-custom-components; [
-        adaptive_lighting
-        sleep_as_android_mqtt
-        pkgs.homeAssistantCustomComponents.switch_manager
-        pkgs.homeAssistantCustomComponents.zwift
-      ];
-      extraComponents = [
-        "analytics"
-        "default_config"
-        "isal"
-        "shopping_list"
-        "nextcloud"
-        "met"
-        "mqtt"
-        "ffmpeg"
-        "esphome"
-        "google"
-        "spotify"
-        "unifi"
-        "upnp"
-        "homeassistant_hardware"
-        "mcp_server"
-        "mcp"
-      ];
-      config = {
-        homeassistant = {
-          name = "Home";
-          latitude = "!secret latitude";
-          longitude = "!secret longitude";
-          elevation = "!secret elevation";
-          unit_system = "metric";
-          time_zone = "Europe/Copenhagen";
-          external_url = "https://ha.${cfg.domain}";
-        };
-        frontend = {
-          themes = "!include_dir_merge_named themes";
-        };
-        http = {
-          server_port = homeAssistantPort;
-          use_x_forwarded_for = true;
-          trusted_proxies = [
-            "127.0.0.1"
-            "::1"
-          ];
-        };
-        sensor = [
-          {
-            platform = "zwift";
-            username = "!secret zwift_username";
-            password = "!secret zwift_password";
-          }
+      services.home-assistant = {
+        enable = true;
+        package = pkgs.unstable.home-assistant;
+        customComponents = with pkgs.unstable.home-assistant-custom-components; [
+          adaptive_lighting
+          sleep_as_android_mqtt
+          pkgs.homeAssistantCustomComponents.switch_manager
+          pkgs.homeAssistantCustomComponents.zwift
         ];
+        extraComponents = [
+          "analytics"
+          "default_config"
+          "isal"
+          "shopping_list"
+          "nextcloud"
+          "met"
+          "mqtt"
+          "ffmpeg"
+          "esphome"
+          "google"
+          "spotify"
+          "unifi"
+          "upnp"
+          "homeassistant_hardware"
+          "mcp_server"
+          "mcp"
+        ];
+        config = {
+          homeassistant = {
+            name = "Home";
+            latitude = "!secret latitude";
+            longitude = "!secret longitude";
+            elevation = "!secret elevation";
+            unit_system = "metric";
+            time_zone = "Europe/Copenhagen";
+            external_url = "https://ha.${cfg.domain}";
+          };
+          frontend = {
+            themes = "!include_dir_merge_named themes";
+          };
+          http = {
+            server_port = homeAssistantPort;
+            use_x_forwarded_for = true;
+            trusted_proxies = [
+              "127.0.0.1"
+              "::1"
+            ];
+          };
+          sensor = [
+            {
+              platform = "zwift";
+              username = "!secret zwift_username";
+              password = "!secret zwift_password";
+            }
+          ];
 
-        automation = "!include automations.yaml";
-        script = "!include scripts.yaml";
-        scene = "!include scenes.yaml";
+          automation = "!include automations.yaml";
+          script = "!include scripts.yaml";
+          scene = "!include scenes.yaml";
+        };
       };
     };
   };

@@ -1,10 +1,13 @@
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.dev.enable {
-    fireproof.home-manager.home.packages = [pkgs.emdash];
+  flake.aspectTags.emdash = ["dev"];
+  flake.modules.homeManager.emdash = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.dev.enable {
+      home.packages = [pkgs.emdash];
+    };
   };
 }

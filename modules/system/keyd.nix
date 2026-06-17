@@ -1,29 +1,32 @@
 {
-  lib,
-  config,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.desktop.enable {
-    services.keyd = {
-      enable = lib.mkDefault true;
-      keyboards.mouse = {
-        ids = [
-          "046d:c051:4ae65a29" # Work mouse
-          "046d:407f:ee6ee407" # Home mouse
-        ];
-        settings = {
-          main = {
-            # Bind mouse-back to meta if held
-            mouse1 = "overload(meta, mouse1)";
+  flake.aspectTags.keyd = ["desktop"];
+  flake.modules.nixos.keyd = {
+    lib,
+    config,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
+      services.keyd = {
+        enable = lib.mkDefault true;
+        keyboards.mouse = {
+          ids = [
+            "046d:c051:4ae65a29" # Work mouse
+            "046d:407f:ee6ee407" # Home mouse
+          ];
+          settings = {
+            main = {
+              # Bind mouse-back to meta if held
+              mouse1 = "overload(meta, mouse1)";
+            };
           };
         };
-      };
-      keyboards.default = {
-        ids = ["*"];
-        settings = {
-          main = {
-            # Rebind capslock to backspace for all keyboards
-            capslock = "backspace";
+        keyboards.default = {
+          ids = ["*"];
+          settings = {
+            main = {
+              # Rebind capslock to backspace for all keyboards
+              capslock = "backspace";
+            };
           };
         };
       };

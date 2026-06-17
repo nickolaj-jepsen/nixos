@@ -1,15 +1,18 @@
-# Enabled when: dev
+# Aspect: dev
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.dev.enable {
-    fireproof.home-manager.home.packages = [
-      pkgs.nodejs
-      pkgs.unstable.pnpm
-      pkgs.turbo-unwrapped
-    ];
+  flake.aspectTags.javascript = ["dev"];
+  flake.modules.homeManager.javascript = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.dev.enable {
+      home.packages = [
+        pkgs.nodejs
+        pkgs.unstable.pnpm
+        pkgs.turbo-unwrapped
+      ];
+    };
   };
 }

@@ -1,13 +1,17 @@
-# Enabled when: desktop
+# Aspect: desktop
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.desktop.enable {
-    fireproof.home-manager.home.packages = [
-      pkgs.unstable.obsidian
-    ];
+  flake.aspectTags.obsidian = ["desktop"];
+
+  flake.modules.homeManager.obsidian = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
+      home.packages = [
+        pkgs.unstable.obsidian
+      ];
+    };
   };
 }

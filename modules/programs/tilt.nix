@@ -1,13 +1,16 @@
-# Enabled when: dev
+# Aspect: dev
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.dev.enable {
-    fireproof.home-manager.home.packages = [
-      pkgs.unstable.tilt
-    ];
+  flake.aspectTags.tilt = ["dev"];
+  flake.modules.homeManager.tilt = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.dev.enable {
+      home.packages = [
+        pkgs.unstable.tilt
+      ];
+    };
   };
 }

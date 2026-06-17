@@ -1,14 +1,16 @@
-# Enabled when: dev
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.dev.clickhouse.enable {
-    fireproof.home-manager.home.packages = [
-      pkgs.unstable.clickhouse
-      pkgs.unstable.envsubst
-    ];
+  flake.aspectTags.clickhouse = ["clickhouse"];
+  flake.modules.homeManager.clickhouse = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.dev.clickhouse.enable {
+      home.packages = [
+        pkgs.unstable.clickhouse
+        pkgs.unstable.envsubst
+      ];
+    };
   };
 }

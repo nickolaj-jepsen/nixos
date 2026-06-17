@@ -1,35 +1,38 @@
 {
-  config,
-  lib,
-  fpLib,
-  ...
-}: let
-  cfg = config.fireproof.homelab;
-  domain = "jellyfin.${cfg.domain}";
-in {
-  config = lib.mkIf config.fireproof.homelab.enable {
-    services.restic.backups.homelab.paths = [config.services.jellyfin.dataDir];
+  flake.aspectTags.jellyfin = ["homelab"];
+  flake.modules.nixos.jellyfin = {
+    config,
+    lib,
+    fpLib,
+    ...
+  }: let
+    cfg = config.fireproof.homelab;
+    domain = "jellyfin.${cfg.domain}";
+  in {
+    config = lib.mkIf config.fireproof.homelab.enable {
+      services.restic.backups.homelab.paths = [config.services.jellyfin.dataDir];
 
-    services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
-      port = 8096;
-      websockets = true;
-      http2 = true;
-    };
+      services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
+        port = 8096;
+        websockets = true;
+        http2 = true;
+      };
 
-    # Grant the media user access to GPU devices for hardware transcoding
-    users.users.media.extraGroups = ["video" "render"];
+      # Grant the media user access to GPU devices for hardware transcoding
+      users.users.media.extraGroups = ["video" "render"];
 
-    # Set VAAPI driver for Jellyfin's FFmpeg
-    systemd.services.jellyfin.environment = {
-      LIBVA_DRIVER_NAME = "nvidia";
-      NVD_BACKEND = "direct";
-    };
+      # Set VAAPI driver for Jellyfin's FFmpeg
+      systemd.services.jellyfin.environment = {
+        LIBVA_DRIVER_NAME = "nvidia";
+        NVD_BACKEND = "direct";
+      };
 
-    services.jellyfin = {
-      enable = true;
-      openFirewall = true;
-      user = "media";
-      group = "media";
+      services.jellyfin = {
+        enable = true;
+        openFirewall = true;
+        user = "media";
+        group = "media";
+      };
     };
   };
 }

@@ -1,19 +1,23 @@
-{pkgs, ...}: {
-  config = {
-    environment.enableAllTerminfo = true;
+{
+  flake.aspectTags.core = ["base"];
+  flake.modules.nixos.core = {pkgs, ...}: {
+    config = {
+      environment.enableAllTerminfo = true;
 
-    # Fundamental system utilities that should stay system-level
-    environment.systemPackages = with pkgs; [
-      file
-      findutils
-      which
-      gnugrep
-      gawk
-      gnused
-      lshw
-    ];
-
-    fireproof.home-manager = {
+      # Fundamental system utilities that should stay system-level
+      environment.systemPackages = with pkgs; [
+        file
+        findutils
+        which
+        gnugrep
+        gawk
+        gnused
+        lshw
+      ];
+    };
+  };
+  flake.modules.homeManager.core = {pkgs, ...}: {
+    config = {
       programs = {
         fzf.enable = true;
         tmux.enable = true;

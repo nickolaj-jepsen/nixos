@@ -1,10 +1,11 @@
 {
-  config,
-  lib,
-  ...
-}: {
-  config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
-    fireproof.home-manager = {
+  flake.aspectTags.vscode-mcp = ["gui-dev"];
+  flake.modules.homeManager.vscode-mcp = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.vscode.profiles.default.enableMcpIntegration = true;
 
       xdg.configFile."Code/User/prompts/global.toolsets.jsonc".text = builtins.toJSON {

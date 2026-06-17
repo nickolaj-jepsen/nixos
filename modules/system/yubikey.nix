@@ -1,3 +1,6 @@
-_: {
-  services.pcscd.enable = true;
+{
+  flake.aspectTags.yubikey = ["base"];
+  flake.modules.nixos.yubikey = _: {
+    services.pcscd.enable = true;
+  };
 }

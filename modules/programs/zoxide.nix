@@ -1,5 +1,10 @@
-_: {
-  fireproof.home-manager.programs.zoxide = {
-    enable = true;
+{
+  flake.aspectTags.zoxide = ["base"];
+  flake.modules.homeManager.zoxide = _: {
+    config = {
+      programs.zoxide = {
+        enable = true;
+      };
+    };
   };
 }
