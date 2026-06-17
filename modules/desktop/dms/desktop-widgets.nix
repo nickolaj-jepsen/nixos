@@ -4,7 +4,7 @@
   fpLib,
   ...
 }: let
-  inherit (config) monitors;
+  inherit (config.fireproof) monitors;
   primaryMonitor = fpLib.primaryMonitor monitors;
   gpuPciId = config.fireproof.hardware.gpuPciId;
 

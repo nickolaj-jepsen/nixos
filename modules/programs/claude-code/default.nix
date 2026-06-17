@@ -27,9 +27,6 @@
     ".claude-work/plugins".source = hmLib.file.mkOutOfStoreSymlink "${homeDir}/.claude/plugins";
   };
 in {
-  options.fireproof.claude-code.work.enable =
-    lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
-
   config = {
     fireproof.home-manager = {
       # Mutes warning about installMethod by placing the wrapped binary in ~/.local/bin

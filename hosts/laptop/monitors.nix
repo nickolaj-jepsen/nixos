@@ -1,5 +1,5 @@
 _: {
-  monitors = [
+  fireproof.monitors = [
     {
       name = "eDP-1";
       resolution = {

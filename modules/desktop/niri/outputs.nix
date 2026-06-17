@@ -4,7 +4,7 @@
   fpLib,
   ...
 }: let
-  primaryMonitorName = fpLib.primaryMonitorName config.monitors;
+  primaryMonitorName = fpLib.primaryMonitorName config.fireproof.monitors;
 in {
   config = lib.mkIf config.fireproof.desktop.windowManager.enable {
     fireproof.home-manager.programs.niri.settings = {
@@ -16,7 +16,7 @@ in {
         "05".open-on-output = primaryMonitorName;
       };
 
-      outputs = lib.mkIf (config.monitors != []) (
+      outputs = lib.mkIf (config.fireproof.monitors != []) (
         lib.listToAttrs (map (monitor: {
             inherit (monitor) name;
             value = {
@@ -33,7 +33,7 @@ in {
                 else 0;
             };
           })
-          config.monitors)
+          config.fireproof.monitors)
       );
     };
   };

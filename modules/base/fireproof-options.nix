@@ -62,7 +62,25 @@ let
           default = config.fireproof.desktop.enable;
           description = "Enable window manager (niri) and dank material shell (dms)";
         };
+        chromium.enable = lib.mkOption {
+          type = lib.types.bool;
+          default = config.fireproof.desktop.enable;
+          description = "Enable Chromium";
+        };
+        bambu-studio.enable = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Enable Bambu Studio 3D printing slicer";
+        };
+        google-chrome.enable = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Enable Google Chrome";
+        };
       };
+
+      claude-code.work.enable =
+        lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
       wsl.enable = lib.mkEnableOption "Enable WSL configuration";
 
@@ -78,6 +96,8 @@ let
           description = "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
         };
         laptop = lib.mkEnableOption "Enable laptop-specific configurations and tools";
+        nvidia.enable =
+          lib.mkEnableOption "NVIDIA GPU support (open kernel module + VA-API video offload)";
         gpuPciId = lib.mkOption {
           type = lib.types.nullOr lib.types.str;
           default = null;
@@ -110,6 +130,68 @@ let
         type = lib.types.str;
         default = "ghostty";
         description = "The terminal to use";
+      };
+
+      # Per-output display configuration, consumed by niri/outputs and the DMS
+      # bar/widgets. A cross-class fact (read by home-manager halves), set per
+      # host. See: https://github.com/ChangeCaps/nixos-config
+      monitors = lib.mkOption {
+        default = [];
+        description = "Per-output display configuration.";
+        type = lib.types.listOf (lib.types.submodule {
+          options = {
+            name = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              example = "DP-1";
+            };
+            resolution.width = lib.mkOption {
+              type = lib.types.nullOr lib.types.int;
+              default = null;
+            };
+            resolution.height = lib.mkOption {
+              type = lib.types.nullOr lib.types.int;
+              default = null;
+            };
+            refreshRate = lib.mkOption {
+              type = lib.types.nullOr lib.types.int;
+              default = null;
+              example = 60;
+            };
+            refreshRateNiri = lib.mkOption {
+              type = lib.types.nullOr lib.types.float;
+              default = null;
+              example = 60.0;
+            };
+            position.x = lib.mkOption {
+              type = lib.types.int;
+              default = 0;
+            };
+            position.y = lib.mkOption {
+              type = lib.types.int;
+              default = 0;
+            };
+            scale = lib.mkOption {
+              type = lib.types.float;
+              default = 1.0;
+            };
+            transform = lib.mkOption {
+              type = lib.types.nullOr lib.types.int;
+              default = null;
+              example = 1;
+            };
+            enable = lib.mkOption {
+              type = lib.types.bool;
+              default = true;
+            };
+            # Marks the primary monitor. When no entry is flagged, consumers fall
+            # back to the first (active) entry in list order. See fpLib.primaryMonitor.
+            primary = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+            };
+          };
+        });
       };
 
       theme = {

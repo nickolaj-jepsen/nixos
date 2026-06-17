@@ -4,9 +4,6 @@
   pkgs,
   ...
 }: {
-  options.fireproof.hardware.nvidia.enable =
-    lib.mkEnableOption "NVIDIA GPU support (open kernel module + VA-API video offload)";
-
   config = lib.mkIf config.fireproof.hardware.nvidia.enable {
     hardware.graphics = {
       enable = true;
