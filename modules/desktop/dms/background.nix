@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.dms-background = ["desktop"];
   flake.modules.homeManager.dms-background = {
     lib,
     pkgs,

@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.attic = ["homelab"];
   flake.modules.nixos.attic = {
     config,
     fpLib,

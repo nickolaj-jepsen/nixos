@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.qt = ["desktop"];
   flake.modules.nixos.qt = _: {
     config = {
       qt = {

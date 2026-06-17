@@ -1,13 +1,16 @@
 # Dendritic migration — finish plan (YubiKey + switch)
 
-Status: **branch `dendritic`, 14 commits, verified.** The migration is functionally
-complete and switchable — all 6 hosts build identical to the pre-migration baseline,
-and the four secret features still work via the `fireproof.home-manager` alias. This
-plan covers the remaining cleanup, which needs a physical YubiKey (`just secret-rekey`)
-and `just switch`, to reach the fully-clean end state (no alias, no shim).
+Status: **branch `dendritic`, verified.** The migration is functionally complete and
+switchable — all 6 hosts build identical to the pre-migration baseline, and the four
+secret features still work via the `fireproof.home-manager` alias. The tree has also
+been reorganised to **folder = aspect** (membership comes from the directory a leaf
+lives in; the `wrapAspect` stamper in `flake.nix` derives the tag; an explicit
+`flake.aspectTags` overrides). This plan covers the remaining cleanup, which needs a
+physical YubiKey (`just secret-rekey`) and `just switch`, to reach the fully-clean end
+state (no alias, no legacy `wrapAspect` arm).
 
-Order matters: **P-secrets → P-host-hm → P-alias → P-shim → P-switch**. Each phase is
-independently verifiable; commit after each.
+Order matters: **P-secrets → P-host-hm → P-alias → P-legacy-arm → P-switch**. Each
+phase is independently verifiable; commit after each.
 
 Verification helpers used below (already proven during the migration):
 
@@ -27,24 +30,24 @@ references `config.age.secrets.<name>.path`, which today only resolves because t
 embedded HM eval can see the NixOS `config.age`. Declaring those secrets HM-side makes
 the leaves `osConfig`-free (the last no-bridge gap) and lets the alias be deleted.
 
-**Canonical mechanism:** `git show ad5477e` — that commit migrated *exactly* these
+**Canonical mechanism:** `git show ad5477e` — that commit migrated _exactly_ these
 secrets (`spotify-player`, `k8s-ao-{dev,prod}`, `grafana-mcp-env`, the user half of
 `ssh-key{,-ao}`) to HM agenix-rekey. Reuse the secret declarations and the
 `inputs.agenix.homeManagerModules.default` + `inputs.agenix-rekey.homeManagerModules.default`
-wiring verbatim. The one adaptation: that branch *mirrored* `age.rekey` from `osConfig`;
+wiring verbatim. The one adaptation: that branch _mirrored_ `age.rekey` from `osConfig`;
 in the dendritic/no-bridge design the HM side computes it from the `hostname` fact instead
 (see below), so no osConfig read.
 
 Secrets to move (NixOS `age.secrets` → HM `age.secrets`):
 
-| Leaf | secrets | HM read site |
-| --- | --- | --- |
-| `system/ssh.nix` | `ssh-key`, `ssh-key-ao` (work) | `programs.ssh.settings.*.IdentityFile` |
-| `programs/k8s.nix` | `k8s-ao-dev`, `k8s-ao-prod` | `KUBECONFIG` sessionVariable |
-| `programs/mcp.nix` | `grafana-mcp-env` | env-file in a wrapper |
-| `programs/spotify.nix` | `spotify-player` | spotify-player config |
+| Leaf                   | secrets                        | HM read site                           |
+| ---------------------- | ------------------------------ | -------------------------------------- |
+| `system/ssh.nix`       | `ssh-key`, `ssh-key-ao` (work) | `programs.ssh.settings.*.IdentityFile` |
+| `programs/k8s.nix`     | `k8s-ao-dev`, `k8s-ao-prod`    | `KUBECONFIG` sessionVariable           |
+| `programs/mcp.nix`     | `grafana-mcp-env`              | env-file in a wrapper                  |
+| `programs/spotify.nix` | `spotify-player`               | spotify-player config                  |
 
-Key fact (from ad5477e): the user's `~/.ssh/id_ed25519` is the *same* private key as the
+Key fact (from ad5477e): the user's `~/.ssh/id_ed25519` is the _same_ private key as the
 host's `/etc/ssh/ssh_host_ed25519_key` (both rekeyed to the host pubkey from
 `secrets/hosts/<host>/id_ed25519.age`), and the rekeyed-secret store
 `secrets/hosts/<host>/.rekey/` is shared between the NixOS and HM contexts. So the existing
@@ -52,11 +55,11 @@ host's `/etc/ssh/ssh_host_ed25519_key` (both rekeyed to the host pubkey from
 
 ### Steps
 
-1. **Add an HM agenix-rekey base module** — `modules/base/hm-secrets.nix`, a dendritic
-   homeManager-only leaf tagged `["base"]`:
+1. **Add an HM agenix-rekey base module** — `modules/secrets/hm-secrets.nix`, a dendritic
+   homeManager-only leaf (folder `secrets/` ∈ `base.includes`, so no `aspectTags` line):
+
    ```nix
    {
-     flake.aspectTags.hm-secrets = ["base"];
      flake.modules.homeManager.hm-secrets = {config, ...}: {
        imports = [
          inputs.agenix.homeManagerModules.default        # via _module.args / specialArgs (inputs)
@@ -71,6 +74,7 @@ host's `/etc/ssh/ssh_host_ed25519_key` (both rekeyed to the host pubkey from
      };
    }
    ```
+
    - `inputs` reaches HM modules via `home-manager.extraSpecialArgs` (already set in the
      builder) — reference it there, or pass the two modules from the builder/mkHome instead
      of `imports` if `inputs` isn't in scope inside the leaf.
@@ -78,12 +82,14 @@ host's `/etc/ssh/ssh_host_ed25519_key` (both rekeyed to the host pubkey from
      decrypt at runtime. `/etc/ssh/ssh_host_ed25519_key` is root-only — confirm how ad5477e
      handled the runtime identity for the user (likely `~/.ssh/id_ed25519`, which is the same
      key). Match it.
+
 2. **Convert the four leaves** to dendritic homeManager leaves (like the others): declare
    `age.secrets.<name> = { rekeyFile = ../../secrets/...; }` in the HM half, read
-   `config.age.secrets.<name>.path` locally. For `ssh`, split the always-on base ssh from
-   the work-gated bits: tag `ssh` `["base"]`, gate the work secret/host config on the `work`
-   fact (`lib.mkIf config.fireproof.work.enable`). Remove their central `aspectTags` entries
-   from `aspects.nix`.
+   `config.age.secrets.<name>.path` locally. As each is converted, **move it into its aspect
+   folder** so the folder supplies the tag and its central `aspectTags` entry in `aspects.nix`
+   is deleted: `ssh` → `modules/secrets/ssh.nix` (always-on, ∈ base; gate the work secret/host
+   bits on the `work` fact via `lib.mkIf config.fireproof.work.enable`), `k8s`/`mcp` →
+   `modules/dev/`, `spotify` → `modules/desktop/`.
 3. **mkHome / portability-check:** add the two agenix HM modules + a placeholder
    `age.rekey.hostPubkey` (ad5477e used `age1qyqsz…3290gq`) so the standalone eval doesn't
    need a real host key. The portability-check will then also cover the secret leaves.
@@ -132,16 +138,20 @@ Verify: all 6 eval + package-set parity; portability-check builds. Commit.
 
 ---
 
-## P-shim — collapse the import-tree shim to plain import-tree
+## P-legacy-arm — drop the legacy arm of the wrapAspect stamper
 
-Once every file under `modules/` is dendritic (no legacy leaves left — confirm
-`config.flake.modules.nixos` has no path-style names like `"system/ssh"`):
+The `wrapAspect` stamper in `flake.nix` stays — it's how folder = aspect works. Only its
+**legacy arm** (the `else` branch that path-registers non-self-declaring files as
+`flake.modules.nixos.<relpath>`) and the central `aspectTags` block exist to keep the
+not-yet-migrated leaves alive. Once every file under `modules/` is dendritic (no legacy
+leaves left — confirm `config.flake.modules.nixos` has no path-style names like
+`"system/ssh"`):
 
-1. In `flake.nix`, replace `((inputs.import-tree.map wrapNixos) ./modules)` with
-   `(inputs.import-tree ./modules)` and delete the `wrapNixos` shim + the `lib` let-binding
-   it needed.
+1. In `flake.nix`, simplify `wrapAspect` to the folder-stamping branch only: drop the
+   `if builtins.isAttrs m && m ? flake then … else {flake.modules.nixos.${rel} = path;}`
+   and keep just `lib.recursiveUpdate folderTags m`.
 2. Remove the now-empty central `aspectTags` block in `aspects.nix` (all tags are
-   per-leaf now). Keep `flake.bundles` + the option declarations.
+   folder-derived or per-leaf overrides now). Keep `flake.bundles` + the option declarations.
 
 Verify: all 6 eval + package-set parity; `just check` (runs the portability-check +
 orphan checks). Commit.

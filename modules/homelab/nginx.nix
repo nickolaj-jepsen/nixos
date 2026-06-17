@@ -1,9 +1,5 @@
 {
-  flake.aspectTags.nginx = ["homelab"];
-  flake.modules.nixos.nginx = {
-    config,
-    ...
-  }: let
+  flake.modules.nixos.nginx = {config, ...}: let
     cfg = config.fireproof.homelab;
   in {
     config = {

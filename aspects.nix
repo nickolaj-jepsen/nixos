@@ -34,11 +34,23 @@
   # name in their flake.aspectTags. Opt-in features (chromium, bambu, …) are
   # bundles a host adds explicitly; the matching option defaults to off.
   config.flake.bundles = {
-    # always selected (the builder prepends "base" to every host); the
-    # foundational always-on leaves + the shared-options module tag here.
-    base.includes = [];
+    # always selected (the builder prepends "base" to every host). "base" is a
+    # composition node: it pulls in the always-on aspect folders. A leaf is
+    # always-on by living in one of these folders — or, rarely, by an explicit
+    # aspectTags=["base"] override when it can't move (e.g. homelab-options,
+    # which declares fireproof.homelab.* read on every host but lives in homelab/).
+    base.includes = ["nix" "system" "cli" "secrets" "scripts" "fireproof-options" "docker"];
 
-    # window manager + shell (membership target for niri/* and dms)
+    # always-on aspect folders (membership targets reached via base.includes)
+    nix.includes = [];
+    system.includes = [];
+    cli.includes = [];
+    secrets.includes = [];
+    scripts.includes = [];
+    fireproof-options.includes = [];
+    docker.includes = [];
+
+    # window manager + shell (membership target for windowManager/niri/* and dms/default)
     windowManager.includes = [];
 
     # the three top-level capabilities

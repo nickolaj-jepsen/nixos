@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.hosts = ["base"];
   flake.modules.nixos.hosts = {config, ...}: {
     age.secrets.hosts-private = {
       # Contains IP addresses that i have no business sharing

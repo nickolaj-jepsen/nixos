@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.homelab-security = ["homelab"];
   flake.modules.nixos.homelab-security = _: {
     config = {
       services.fail2ban = {

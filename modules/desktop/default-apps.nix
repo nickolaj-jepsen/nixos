@@ -1,9 +1,5 @@
 {
-  flake.aspectTags.default-apps = ["desktop"];
-  flake.modules.nixos.default-apps = {
-    pkgs,
-    ...
-  }: {
+  flake.modules.nixos.default-apps = {pkgs, ...}: {
     config = {
       environment.systemPackages = [
         pkgs.celluloid

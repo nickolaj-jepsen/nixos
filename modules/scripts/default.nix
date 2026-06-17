@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.scripts = ["base"];
   flake.modules.homeManager.scripts = {
     pkgs,
     lib,

@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.dms-control-center = ["desktop"];
   flake.modules.homeManager.dms-control-center = {
     config,
     lib,

@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.qbittorrent = ["homelab"];
   flake.modules.nixos.qbittorrent = {
     config,
     pkgs,

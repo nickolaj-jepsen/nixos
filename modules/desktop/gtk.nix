@@ -1,9 +1,5 @@
 {
-  flake.aspectTags.gtk = ["desktop"];
-  flake.modules.nixos.gtk = {
-    pkgs,
-    ...
-  }: {
+  flake.modules.nixos.gtk = {pkgs, ...}: {
     config = {
       environment.systemPackages = [pkgs.nautilus];
 

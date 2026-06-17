@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.arr = ["homelab"];
   flake.modules.nixos.arr = {
     config,
     fpLib,

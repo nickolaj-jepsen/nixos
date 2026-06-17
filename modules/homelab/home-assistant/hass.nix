@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.home-assistant-hass = ["homelab"];
   flake.modules.nixos.home-assistant-hass = {
     pkgs,
     config,

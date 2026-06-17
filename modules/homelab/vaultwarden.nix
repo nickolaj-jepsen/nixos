@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.vaultwarden = ["homelab"];
   flake.modules.nixos.vaultwarden = {
     config,
     fpLib,

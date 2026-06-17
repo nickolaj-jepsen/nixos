@@ -1,7 +1,4 @@
-# Aspect: desktop
 {
-  flake.aspectTags.dms-bar = ["desktop"];
-
   flake.modules.homeManager.dms-bar = {
     config,
     lib,

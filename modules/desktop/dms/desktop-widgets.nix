@@ -1,7 +1,4 @@
-# Aspect: desktop
 {
-  flake.aspectTags.dms-desktop-widgets = ["desktop"];
-
   flake.modules.homeManager.dms-desktop-widgets = {
     config,
     lib,

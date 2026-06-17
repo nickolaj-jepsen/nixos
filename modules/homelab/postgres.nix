@@ -1,9 +1,5 @@
 {
-  flake.aspectTags.postgres = ["homelab"];
-  flake.modules.nixos.postgres = {
-    config,
-    ...
-  }: {
+  flake.modules.nixos.postgres = {config, ...}: {
     config = {
       services = {
         restic.backups.homelab.paths = [config.services.postgresqlBackup.location];

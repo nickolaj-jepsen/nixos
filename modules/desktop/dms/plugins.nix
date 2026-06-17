@@ -1,11 +1,5 @@
-# Aspect: desktop
 {
-  flake.aspectTags.dms-plugins = ["desktop"];
-
-  flake.modules.homeManager.dms-plugins = {
-    inputs,
-    ...
-  }: {
+  flake.modules.homeManager.dms-plugins = {inputs, ...}: {
     imports = [
       inputs.dms-plugin-registry.nixosModules.default
     ];

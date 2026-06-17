@@ -3,26 +3,30 @@
 
   outputs = {flake-parts, ...} @ inputs: let
     inherit (inputs.nixpkgs) lib;
-    # Migration shim for the dendritic cutover. A file under ./modules is either
-    # already dendritic — a self-declaring flake-parts module written as an
-    # attrset that sets `flake.*` (modules.{nixos,homeManager}.<name>,
-    # aspectTags.<name>) — in which case it passes through untouched; or it is a
-    # legacy NixOS module (a function, or an attrset without `flake`), in which
-    # case it is registered under flake.modules.nixos.<relpath> exactly as in P0.
-    # This lets leaves be converted in place, one at a time, each verifiable,
-    # until the whole tree is dendritic and this shim collapses to a plain
-    # `(import-tree ./modules)`.
-    wrapNixos = path: let
+    # Folder-as-aspect stamper. A file under ./modules is either a self-declaring
+    # dendritic module (an attrset with `flake`) — for which the aspect is
+    # derived from where it lives (first path segment under ./modules, or the
+    # filename stem for a file placed directly in ./modules) and stamped onto
+    # `flake.aspectTags.<name>` for every module name the file declares. An
+    # explicit `flake.aspectTags` in the file WINS over the folder default
+    # (recursiveUpdate folder m), which is the override / multi-tag hatch (e.g.
+    # dms/default sitting in desktop/ but wanting windowManager). Or it is a
+    # legacy NixOS module (a function, or an attrset without `flake`), registered
+    # under flake.modules.nixos.<relpath> and tagged centrally in aspects.nix —
+    # the not-yet-migrated secret leaves (ssh/k8s/mcp/spotify) + the hm alias.
+    wrapAspect = path: let
       m = import path;
+      rel = lib.removeSuffix ".nix" (lib.removePrefix (toString ./modules + "/") (toString path));
+      aspect = lib.head (lib.splitString "/" rel);
+      names = lib.unique (
+        (lib.attrNames (m.flake.modules.nixos or {}))
+        ++ (lib.attrNames (m.flake.modules.homeManager or {}))
+      );
+      folderTags.flake.aspectTags = lib.genAttrs names (_: [aspect]);
     in
       if builtins.isAttrs m && m ? flake
-      then m
-      else {
-        flake.modules.nixos.${
-          lib.removeSuffix ".nix" (lib.removePrefix (toString ./modules + "/") (toString path))
-        } =
-          path;
-      };
+      then lib.recursiveUpdate folderTags m
+      else {flake.modules.nixos.${rel} = path;};
   in
     flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [
@@ -35,7 +39,7 @@
         ./portability-check.nix
         ./hosts
         ./overlays
-        ((inputs.import-tree.map wrapNixos) ./modules)
+        ((inputs.import-tree.map wrapAspect) ./modules)
       ];
       systems = [
         "x86_64-linux"

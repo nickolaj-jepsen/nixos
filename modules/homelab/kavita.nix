@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.kavita = ["homelab"];
   flake.modules.nixos.kavita = {
     config,
     lib,

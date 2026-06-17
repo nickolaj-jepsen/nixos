@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.jellyfin = ["homelab"];
   flake.modules.nixos.jellyfin = {
     config,
     fpLib,

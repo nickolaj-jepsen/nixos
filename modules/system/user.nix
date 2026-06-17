@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.user = ["base"];
   flake.modules.nixos.user = {config, ...}: let
     inherit (config.fireproof) username;
     inherit (config.age) secrets;

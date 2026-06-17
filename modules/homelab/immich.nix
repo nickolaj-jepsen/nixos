@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.immich = ["homelab"];
   flake.modules.nixos.immich = {
     config,
     lib,

@@ -1,9 +1,5 @@
 {
-  flake.aspectTags.fonts = ["desktop"];
-  flake.modules.nixos.fonts = {
-    pkgs,
-    ...
-  }: {
+  flake.modules.nixos.fonts = {pkgs, ...}: {
     config = {
       fonts.enableDefaultPackages = true;
       fonts.packages = with pkgs; [

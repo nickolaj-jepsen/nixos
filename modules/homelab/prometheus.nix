@@ -1,9 +1,5 @@
 {
-  flake.aspectTags.prometheus = ["homelab"];
-  flake.modules.nixos.prometheus = {
-    config,
-    ...
-  }: let
+  flake.modules.nixos.prometheus = {config, ...}: let
     inherit (config.fireproof) hostname;
     mkScrapeConfig = name: {
       job_name = name;

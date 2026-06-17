@@ -1,4 +1,5 @@
-# Aspect: windowManager
+# Override: lives in desktop/ but tags windowManager — this is the WM-shell
+# integration; the rest of dms/ is desktop chrome (folder-tagged desktop).
 {
   flake.aspectTags.dms = ["windowManager"];
 

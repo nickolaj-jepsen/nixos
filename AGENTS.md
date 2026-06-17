@@ -30,32 +30,48 @@ This is a NixOS flake-based configuration managing 7 hosts with a custom `firepr
 ### Structure
 
 ```
-hosts/                    # Per-host configs (desktop, laptop, work, homelab, etc.)
-  └── default.nix        # mkSystem helper and host definitions
-lib/                      # Shared helpers (fpLib), available via specialArgs
-modules/
-  ├── base/              # Core: fireproof options, theme, secrets, overlays
-  ├── system/            # Boot, networking, SSH, hardware, security
-  ├── programs/          # User applications and dev tools
-  ├── desktop/           # niri window manager, greetd, audio, fonts
-  ├── homelab/           # Server services (arr, jellyfin, nginx, etc.)
-  └── scripts/           # Utility shell scripts
+hosts/                    # Per-host configs; default.nix = mkSystem + host aspects/facts
+lib/                      # Shared helpers (fpLib) + the aspect resolver (aspects.nix)
+aspects.nix               # Bundle DAG (includes) + facts — the aspect registry
+modules/                  # ONE FOLDER PER ASPECT: the folder a file is in IS its membership
+  ├── <name>.nix          #   a file directly under modules/ = a single-leaf aspect
+  │                       #   (nvidia, wsl, docker, chromium, clickhouse, intellij, …)
+  ├── nix/ system/ cli/   #   always-on aspects (pulled in by base.includes)
+  │   secrets/ scripts/
+  ├── desktop/ windowManager/ dev/ gui-dev/ gui-work/   # capability aspects
+  ├── physical/ laptop/   #   hardware aspects
+  ├── homelab/            #   server services (arr, jellyfin, nginx, …)
+  └── base/ programs/     #   residual: legacy secret leaves (ssh/k8s/mcp/spotify) + hm alias
 secrets/                  # agenix-encrypted secrets with YubiKey
 ```
 
-### Modules are dendritic (`flake.modules`)
+### Modules are dendritic (`flake.modules`), folder = aspect
 
 Every `.nix` file under `modules/` is a **dendritic flake-parts module** that
-self-declares its outputs (not a bare NixOS module):
+self-declares its outputs (not a bare NixOS module). **The folder it lives in is
+its aspect** — there is no per-file membership tag:
 
 ```nix
-# modules/programs/foo.nix
+# modules/desktop/foo.nix  → aspect "desktop" (the folder); no tag line needed
 {
-  flake.aspectTags.foo = ["desktop"];                           # bundle membership
   flake.modules.nixos.foo = {config, pkgs, ...}: { … };         # nixos half (optional)
   flake.modules.homeManager.foo = {config, pkgs, ...}: { … };   # home-manager half (optional)
 }
 ```
+
+How membership is derived: the `wrapAspect` stamper in `flake.nix` reads each
+file's declared module **name(s)** out of `flake.modules.*` and stamps
+`flake.aspectTags.<name> = [<aspect>]`, where `<aspect>` is the **first path
+segment under `modules/`** (or the **filename stem** for a file placed directly in
+`modules/`). The module **name** is still hand-declared and must be **globally
+unique** (`flake.modules.<class>` is one flat namespace) — it's the join key the
+resolver selects on (e.g. `modules/dev/postgres.nix` is named `postgres-cli` so it
+doesn't collide with `modules/homelab/postgres.nix`'s `postgres`).
+
+**Override hatch:** an explicit `flake.aspectTags.<name> = [...]` in a file _wins_
+over the folder default — for the rare leaf whose membership differs from where it
+sits, or that wants multiple bundles. Two such cases exist: `desktop/dms/default`
+tags `windowManager`, and `homelab/default` (`homelab-options`) tags `base`.
 
 [`import-tree`](https://github.com/vic/import-tree) (at the flake level in
 `flake.nix`) auto-collects every such file — no hand-maintained `imports = [ … ]`.
@@ -70,12 +86,14 @@ Conventions:
   fragments): `modules/homelab/glance/_home-page.nix`, `hosts/<h>/_monitors.nix`.
 - **Per-host files** live in the host's directory (`hosts/<h>/`) and are imported
   only for that host (still plain NixOS modules).
-- The resolver is `lib/aspects.nix`; the bundle graph + tag options are in
-  `aspects.nix`; shared cross-class options in `modules/base/fireproof-options.nix`.
+- The resolver is `lib/aspects.nix`; the bundle graph + facts are in `aspects.nix`;
+  shared cross-class options in `modules/fireproof-options.nix`.
 
 > Migration note: a few leaves (`ssh`/`k8s`/`mcp`/`spotify`) are still legacy
-> NixOS modules wired through the `fireproof.home-manager` alias; a shim in
-> `flake.nix` wraps them until their secrets move to home-manager agenix-rekey.
+> NixOS modules wired through the `fireproof.home-manager` alias; they keep living
+> in `modules/{system,programs}/` and are tagged by path in `aspects.nix`'s central
+> `aspectTags` block (the `wrapAspect` legacy arm) until their secrets move to
+> home-manager agenix-rekey, at which point they become normal folder-tagged leaves.
 
 ### Aspects & options (`fireproof.*`)
 
@@ -87,9 +105,16 @@ A host selects **aspects** (bundles), not toggles. Bundles live in `aspects.nix`
 set, which the builder injects into BOTH the nixos and home-manager evals — no
 osConfig bridge. Inspect a host's resolution with **`just aspects <host>`**.
 
+`base` is prepended to every host and is a **composition node**: its `includes`
+pull in the always-on aspect folders (`nix system cli secrets scripts
+fireproof-options docker`). So a leaf is always-on by living in one of those
+folders. A folder name used as a membership target should be declared as a bundle
+in `flake.bundles` (an empty `includes = []` is fine) so the aspect registry stays
+complete.
+
 Shared, cross-class options (`fireproof.{hostname,username,theme,monitors,
 hardware.*,desktop.*,dev.*,…}`) are declared once in
-`modules/base/fireproof-options.nix` (emitted to both module classes).
+`modules/fireproof-options.nix` (emitted to both module classes).
 
 ### Home Manager
 
@@ -102,7 +127,7 @@ leaves still use it.
 
 ### Theme System
 
-Colors in `modules/base/fireproof-options.nix` as `config.fireproof.theme.colors.*`:
+Colors in `modules/fireproof-options.nix` as `config.fireproof.theme.colors.*`:
 
 ```nix
 let c = config.fireproof.theme.colors;
@@ -115,16 +140,19 @@ in {
 ### Membership, not mkIf
 
 A leaf applies when its aspect is selected — do **not** wrap it in
-`lib.mkIf <toggle>`. Tag it instead:
+`lib.mkIf <toggle>`. Put it in the right aspect folder instead:
 
 ```nix
+# modules/desktop/foo.nix → selected when the host's closure has "desktop"
 {
-  flake.aspectTags.foo = ["desktop"];   # selected when a host's closure has "desktop"
   flake.modules.nixos.foo = {pkgs, ...}: {
     environment.systemPackages = [pkgs.foo];
   };
 }
 ```
+
+To place a leaf in a different/extra bundle than its folder implies, either move
+the file, or add the override `flake.aspectTags.foo = ["windowManager"];`.
 
 Intra-module conditionals on _facts_ (e.g.
 `lib.optional config.fireproof.hardware.battery …`) are fine — those are
@@ -166,15 +194,17 @@ parameters, not membership.
 Leaf modules, host files, and overlays are **auto-imported** (see "Modules are
 dendritic") — create the file in the right directory, no `imports` list to edit.
 
-- **New program / feature (leaf)**: Create `modules/<area>/<name>.nix` as a
-  dendritic module — `flake.aspectTags.<name> = [ "<bundle>" ];` plus a
-  `flake.modules.nixos.<name>` and/or `flake.modules.homeManager.<name>` half (no
-  `mkIf` — membership gates it). Tag it into an existing bundle, or add a new
-  opt-in bundle in `aspects.nix`. For a homelab service also add a dashboard link
-  in `modules/homelab/glance/_home-page.nix`.
+- **New program / feature (leaf)**: Create the file **in the aspect folder that
+  is its membership** — `modules/<aspect>/<name>.nix`, or `modules/<name>.nix` for
+  a single-leaf aspect. Declare `flake.modules.nixos.<name>` and/or
+  `flake.modules.homeManager.<name>` (no `mkIf` — membership gates it); **no
+  `aspectTags` line** unless overriding the folder. Use an existing aspect folder,
+  or add a new bundle in `aspects.nix` for a new one. For a homelab service also
+  add a dashboard link in `modules/homelab/glance/_home-page.nix`.
 - **New aspect/bundle**: Add it to `flake.bundles` in `aspects.nix` (its
-  `includes` edges and any `facts` it sets); hosts select it in
-  `hosts/default.nix`.
+  `includes` edges and any `facts` it sets); create the matching `modules/<name>/`
+  folder; hosts select it in `hosts/default.nix`. (Always-on? add it to
+  `base.includes`.)
 - **New host**: Run `just new-host <hostname> <username>`, then add a
   `targets.<hostname> = { dir = ./<hostname>; aspects = [ … ]; facts = { … }; }`
   entry in `hosts/default.nix`. Per-host files (`disk-configuration.nix`,

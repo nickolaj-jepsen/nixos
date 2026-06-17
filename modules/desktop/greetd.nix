@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.greetd = ["desktop"];
   flake.modules.nixos.greetd = {
     config,
     lib,

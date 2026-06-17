@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.audiobookshelf = ["homelab"];
   flake.modules.nixos.audiobookshelf = {
     config,
     fpLib,

@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.navidrome = ["homelab"];
   flake.modules.nixos.navidrome = {
     config,
     pkgs,

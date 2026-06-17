@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.plex = ["homelab"];
   flake.modules.nixos.plex = {
     config,
     pkgs,

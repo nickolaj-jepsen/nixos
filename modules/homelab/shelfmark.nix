@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.shelfmark = ["homelab"];
   flake.modules.nixos.shelfmark = {
     config,
     lib,

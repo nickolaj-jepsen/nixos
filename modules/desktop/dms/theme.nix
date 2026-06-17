@@ -1,9 +1,5 @@
 {
-  flake.aspectTags.dms-theme = ["desktop"];
-  flake.modules.homeManager.dms-theme = {
-    config,
-    ...
-  }: let
+  flake.modules.homeManager.dms-theme = {config, ...}: let
     inherit (config.fireproof) username;
     c = config.fireproof.theme.colors;
   in {

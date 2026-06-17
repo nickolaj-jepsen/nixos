@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.restic = ["homelab"];
   flake.modules.nixos.restic = {
     pkgs,
     config,

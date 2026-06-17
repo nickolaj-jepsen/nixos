@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.sso-zitadel = ["homelab"];
   flake.modules.nixos.sso-zitadel = {
     config,
     pkgs,

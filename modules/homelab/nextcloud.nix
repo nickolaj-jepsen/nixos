@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.nextcloud = ["homelab"];
   flake.modules.nixos.nextcloud = {
     config,
     pkgs,

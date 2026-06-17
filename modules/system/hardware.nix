@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.hardware = ["base"];
   flake.modules.nixos.hardware = _: {
     services.fwupd.enable = true;
     hardware.enableRedistributableFirmware = true;

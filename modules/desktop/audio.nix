@@ -1,11 +1,5 @@
-# Aspect: desktop
 {
-  flake.aspectTags.audio = ["desktop"];
-
-  flake.modules.nixos.audio = {
-    pkgs,
-    ...
-  }: {
+  flake.modules.nixos.audio = {pkgs, ...}: {
     config = {
       security.rtkit.enable = true;
       services.pipewire = {

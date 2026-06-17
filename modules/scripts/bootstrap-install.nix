@@ -1,7 +1,5 @@
-# Aspect: base (gated on bootstrap.targetHost — only active on bootstrap variants)
+# Gated on bootstrap.targetHost — only active on bootstrap variants.
 {
-  flake.aspectTags.bootstrap-install = ["base"];
-
   flake.modules.nixos.bootstrap-install = {
     config,
     inputs,

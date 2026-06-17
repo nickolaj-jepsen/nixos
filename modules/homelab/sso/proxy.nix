@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.sso-proxy = ["homelab"];
   flake.modules.nixos.sso-proxy = {
     config,
     fpLib,

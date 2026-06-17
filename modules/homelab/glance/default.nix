@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.glance = ["homelab"];
   flake.modules.nixos.glance = {
     config,
     pkgs,

@@ -1,5 +1,4 @@
 {
-  flake.aspectTags.home-assistant-mqtt = ["homelab"];
   flake.modules.nixos.home-assistant-mqtt = {
     config,
     fpLib,
