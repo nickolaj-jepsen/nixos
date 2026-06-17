@@ -3,8 +3,6 @@
   lib,
   ...
 }: {
-  options.fireproof.wsl.enable = lib.mkEnableOption "Enable WSL configuration";
-
   config = lib.mkIf config.fireproof.wsl.enable {
     wsl = {
       enable = true;
