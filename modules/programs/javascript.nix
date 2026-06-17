@@ -2,12 +2,10 @@
 {
   flake.aspectTags.javascript = ["dev"];
   flake.modules.homeManager.javascript = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.dev.enable {
+    config = {
       home.packages = [
         pkgs.nodejs
         pkgs.unstable.pnpm

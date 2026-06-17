@@ -2,7 +2,6 @@
   flake.aspectTags.attic = ["homelab"];
   flake.modules.nixos.attic = {
     config,
-    lib,
     fpLib,
     ...
   }: let
@@ -10,7 +9,7 @@
     domain = "attic.${cfg.domain}";
     port = 8090;
   in {
-    config = lib.mkIf cfg.enable {
+    config = {
       age.secrets.atticd-env = {
         rekeyFile = ../../secrets/hosts/homelab/atticd-env.age;
         # atticd uses systemd DynamicUser, so the "atticd" user does not exist

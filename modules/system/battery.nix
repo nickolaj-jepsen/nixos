@@ -1,11 +1,7 @@
 {
   flake.aspectTags.battery = ["laptop"];
-  flake.modules.nixos.battery = {
-    config,
-    lib,
-    ...
-  }: {
-    config = lib.mkIf config.fireproof.hardware.battery {
+  flake.modules.nixos.battery = _: {
+    config = {
       services.upower.enable = true;
     };
   };

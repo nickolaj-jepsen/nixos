@@ -1,11 +1,7 @@
 {
   flake.aspectTags.zed-settings = ["gui-dev"];
-  flake.modules.homeManager.zed-settings = {
-    config,
-    lib,
-    ...
-  }: {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+  flake.modules.homeManager.zed-settings = _: {
+    config = {
       programs.zed-editor = {
         userSettings = {
           # General

@@ -2,7 +2,6 @@
   flake.aspectTags.arr = ["homelab"];
   flake.modules.nixos.arr = {
     config,
-    lib,
     fpLib,
     ...
   }: let
@@ -22,7 +21,7 @@
         };
       };
   in {
-    config = lib.mkIf config.fireproof.homelab.enable {
+    config = {
       # for linux ISOs
       users.groups."${group}" = {
         members = [username];

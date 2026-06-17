@@ -1,12 +1,10 @@
 {
   flake.aspectTags.default-apps = ["desktop"];
   flake.modules.nixos.default-apps = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       environment.systemPackages = [
         pkgs.celluloid
         pkgs.loupe

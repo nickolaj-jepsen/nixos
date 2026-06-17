@@ -2,7 +2,6 @@
   flake.aspectTags.glance = ["homelab"];
   flake.modules.nixos.glance = {
     config,
-    lib,
     pkgs,
     fpLib,
     ...
@@ -23,7 +22,7 @@
     homePage = import ./_home-page.nix {inherit cfg;};
     workPage = import ./_work-page.nix {inherit templates;};
   in {
-    config = lib.mkIf config.fireproof.homelab.enable {
+    config = {
       age.secrets.glance-env.rekeyFile = ../../../secrets/hosts/homelab/glance-env.age;
 
       services.glance = {

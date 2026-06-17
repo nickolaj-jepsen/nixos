@@ -2,7 +2,6 @@
   flake.aspectTags.sso-proxy = ["homelab"];
   flake.modules.nixos.sso-proxy = {
     config,
-    lib,
     fpLib,
     ...
   }: let
@@ -10,7 +9,7 @@
     zitadelDomain = "sso.${rootDomain}";
     oathproxyDomain = "oauth2-proxy.${rootDomain}";
   in {
-    config = lib.mkIf config.fireproof.homelab.enable {
+    config = {
       age.secrets.oauth2-proxy = {
         rekeyFile = ../../../secrets/hosts/homelab/oauth2-proxy-keyfile.age;
         owner = "oauth2-proxy";

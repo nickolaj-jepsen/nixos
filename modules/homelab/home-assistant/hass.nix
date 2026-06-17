@@ -3,14 +3,13 @@
   flake.modules.nixos.home-assistant-hass = {
     pkgs,
     config,
-    lib,
     fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;
     homeAssistantPort = 8123;
   in {
-    config = lib.mkIf config.fireproof.homelab.enable {
+    config = {
       age.secrets.hassSecrets = {
         rekeyFile = ../../../secrets/hosts/homelab/hass.yaml.age;
         path = "${config.services.home-assistant.configDir}/secrets.yaml";

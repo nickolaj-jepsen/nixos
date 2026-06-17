@@ -71,7 +71,7 @@
       };
     };
 
-    config = lib.mkIf cfg.enable {
+    config = {
       systemd.tmpfiles.rules = [
         "p ${fifo} 0666 root root - "
       ];

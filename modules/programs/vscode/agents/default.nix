@@ -1,11 +1,7 @@
 {
   flake.aspectTags.vscode-agents = ["gui-dev"];
-  flake.modules.homeManager.vscode-agents = {
-    config,
-    lib,
-    ...
-  }: {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+  flake.modules.homeManager.vscode-agents = _: {
+    config = {
       xdg.configFile."Code/User/prompts/taskmaster.agent.md".source = ./taskmaster.agent.md;
     };
   };

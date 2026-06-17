@@ -1,11 +1,7 @@
 {
   flake.aspectTags.niri-binds = ["windowManager"];
-  flake.modules.homeManager.niri-binds = {
-    config,
-    lib,
-    ...
-  }: {
-    config = lib.mkIf config.fireproof.desktop.windowManager.enable {
+  flake.modules.homeManager.niri-binds = _: {
+    config = {
       programs.niri.settings.binds = {
         "XF86AudioRaiseVolume" = {
           allow-when-locked = true;

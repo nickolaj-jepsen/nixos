@@ -1,15 +1,11 @@
 {
   flake.aspectTags.zram = ["physical"];
-  flake.modules.nixos.zram = {
-    config,
-    lib,
-    ...
-  }: {
+  flake.modules.nixos.zram = _: {
     # Compressed RAM swap. None of these hosts have disk swap, which leaves
     # systemd-oomd's PSI-based handling degraded ("No swap; memory pressure
     # usage will be degraded"). zram restores it and gives a pressure-relief
     # valve, writing nothing to disk (important where the root SSD is full).
-    config = lib.mkIf config.fireproof.hardware.zram {
+    config = {
       zramSwap = {
         enable = true;
         algorithm = "zstd";

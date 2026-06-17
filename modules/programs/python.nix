@@ -2,7 +2,6 @@
   flake.aspectTags.python = ["dev"];
   # Aspect: dev
   flake.modules.homeManager.python = {
-    config,
     lib,
     pkgs,
     ...
@@ -22,7 +21,7 @@
         '';
       };
   in {
-    config = lib.mkIf config.fireproof.dev.enable {
+    config = {
       home.packages = [
         (mkWrapLDLibraryPath pkgs.unstable.uv)
         (mkWrapLDLibraryPath pkgs.unstable.rye)

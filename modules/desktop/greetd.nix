@@ -12,7 +12,7 @@
         default = config.fireproof.desktop.enable;
       };
 
-    config = lib.mkIf config.fireproof.desktop.greeter.enable {
+    config = {
       services.greetd = {
         enable = true;
         settings = {

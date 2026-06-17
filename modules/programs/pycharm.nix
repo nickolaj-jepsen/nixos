@@ -2,12 +2,10 @@
   flake.aspectTags.pycharm = ["intellij"];
   # Aspect: intellij
   flake.modules.homeManager.pycharm = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.intellij.enable) (let
+    config = let
       pycharmPkg = pkgs.unstable.jetbrains.pycharm.override {
         # -Dide.browser.jcef.enabled causes crashes on wayland
         vmopts = ''
@@ -20,6 +18,6 @@
       home.packages = [
         pycharmPkg
       ];
-    });
+    };
   };
 }

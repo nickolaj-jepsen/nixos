@@ -2,12 +2,10 @@
 {
   flake.aspectTags.tilt = ["dev"];
   flake.modules.homeManager.tilt = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.dev.enable {
+    config = {
       home.packages = [
         pkgs.unstable.tilt
       ];

@@ -2,12 +2,10 @@
 {
   flake.aspectTags.fnug = ["dev"];
   flake.modules.homeManager.fnug = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.dev.enable {
+    config = {
       home.packages = [pkgs.fnug];
     };
   };

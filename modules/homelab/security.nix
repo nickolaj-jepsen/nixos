@@ -1,11 +1,7 @@
 {
   flake.aspectTags.homelab-security = ["homelab"];
-  flake.modules.nixos.homelab-security = {
-    config,
-    lib,
-    ...
-  }: {
-    config = lib.mkIf config.fireproof.homelab.enable {
+  flake.modules.nixos.homelab-security = _: {
+    config = {
       services.fail2ban = {
         enable = true;
         maxretry = 5;

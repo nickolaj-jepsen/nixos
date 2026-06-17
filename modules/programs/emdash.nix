@@ -1,12 +1,10 @@
 {
   flake.aspectTags.emdash = ["dev"];
   flake.modules.homeManager.emdash = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.dev.enable {
+    config = {
       home.packages = [pkgs.emdash];
     };
   };

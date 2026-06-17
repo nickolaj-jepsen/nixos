@@ -3,12 +3,10 @@
   flake.aspectTags.audio = ["desktop"];
 
   flake.modules.nixos.audio = {
-    lib,
     pkgs,
-    config,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       security.rtkit.enable = true;
       services.pipewire = {
         enable = true;

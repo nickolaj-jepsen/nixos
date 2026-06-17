@@ -2,13 +2,12 @@
   flake.aspectTags.dms-theme = ["desktop"];
   flake.modules.homeManager.dms-theme = {
     config,
-    lib,
     ...
   }: let
     inherit (config.fireproof) username;
     c = config.fireproof.theme.colors;
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       home.file.".config/DankMaterialShell/colors.json".text = builtins.toJSON {
         name = "custom";
         primary = "#${c.accent}";

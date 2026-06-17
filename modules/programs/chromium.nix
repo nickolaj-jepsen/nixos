@@ -1,12 +1,10 @@
 {
   flake.aspectTags.chromium = ["chromium"];
   flake.modules.homeManager.chromium = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.desktop.chromium.enable) {
+    config = {
       programs.chromium = {
         enable = true;
         package = pkgs.unstable.chromium;

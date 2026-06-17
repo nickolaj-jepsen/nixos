@@ -1,15 +1,13 @@
 {
   flake.aspectTags.vscode-extensions = ["gui-dev"];
   flake.modules.homeManager.vscode-extensions = {
-    config,
-    lib,
     pkgs,
     ...
   }: let
     vscodePackage = pkgs.unstable.vscode;
     marketplaceReleases = pkgs.vscode-marketplace-release;
   in {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+    config = {
       programs.vscode = {
         enable = true;
         mutableExtensionsDir = false;

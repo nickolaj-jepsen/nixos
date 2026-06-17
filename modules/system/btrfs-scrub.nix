@@ -17,7 +17,7 @@
     # Single-profile data means scrub DETECTS bit-rot (logged to the journal),
     # while DUP metadata self-heals. Auto-detected so each host scrubs only the
     # btrfs it actually has (homelab's ext4/mergerfs data is skipped).
-    config = lib.mkIf (config.fireproof.hardware.physical && scrubMounts != []) {
+    config = lib.mkIf (scrubMounts != []) {
       services.btrfs.autoScrub = {
         enable = true;
         interval = "monthly";

@@ -124,7 +124,7 @@
       (lib.optional (leftMonitors != []) leftSecondaryBar)
       ++ (lib.optional (rightMonitors != []) rightSecondaryBar);
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       programs.dank-material-shell.settings = {
         launcherLogoMode = "os";
         launcherLogoContrast = 1;

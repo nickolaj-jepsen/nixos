@@ -2,10 +2,9 @@
   flake.aspectTags.postgres = ["homelab"];
   flake.modules.nixos.postgres = {
     config,
-    lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.homelab.enable {
+    config = {
       services = {
         restic.backups.homelab.paths = [config.services.postgresqlBackup.location];
 

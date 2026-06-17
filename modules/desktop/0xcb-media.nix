@@ -28,7 +28,7 @@
       };
     };
 
-    config = lib.mkIf cfg.enable {
+    config = {
       services."0xcb-media-host" = {
         enable = true;
         inherit (cfg) serialDevice;

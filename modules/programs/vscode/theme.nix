@@ -2,12 +2,11 @@
   flake.aspectTags.vscode-theme = ["gui-dev"];
   flake.modules.homeManager.vscode-theme = {
     config,
-    lib,
     ...
   }: let
     c = config.fireproof.theme.colors;
   in {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+    config = {
       programs.vscode.profiles.default.userSettings = {
         # Keep Darcula for syntax highlighting
         "workbench.colorTheme" = "Darcula Theme from IntelliJ";

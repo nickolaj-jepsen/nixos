@@ -1,12 +1,10 @@
 {
   flake.aspectTags.gtk = ["desktop"];
   flake.modules.nixos.gtk = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       environment.systemPackages = [pkgs.nautilus];
 
       services.gvfs.enable = true;
@@ -22,7 +20,6 @@
   };
   flake.modules.homeManager.gtk = {
     config,
-    lib,
     pkgs,
     ...
   }: let
@@ -110,7 +107,7 @@
       @define-color destructive_color @red;
     '';
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       home.pointerCursor = {
         gtk.enable = true;
         name = "Adwaita";

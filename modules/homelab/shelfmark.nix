@@ -11,7 +11,7 @@
     port = 8084;
     library = "/mnt/data/books";
   in {
-    config = lib.mkIf cfg.enable {
+    config = {
       services.restic.backups.homelab.paths = [config.services.shelfmark.environment.CONFIG_DIR];
 
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {

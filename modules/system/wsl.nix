@@ -2,10 +2,9 @@
   flake.aspectTags.wsl = ["wsl"];
   flake.modules.nixos.wsl = {
     config,
-    lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.wsl.enable {
+    config = {
       wsl = {
         enable = true;
         defaultUser = config.fireproof.username;

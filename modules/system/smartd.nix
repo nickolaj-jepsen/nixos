@@ -1,11 +1,7 @@
 {
   flake.aspectTags.smartd = ["physical"];
-  flake.modules.nixos.smartd = {
-    config,
-    lib,
-    ...
-  }: {
-    config = lib.mkIf config.fireproof.hardware.physical {
+  flake.modules.nixos.smartd = _: {
+    config = {
       # Monitor all autodetected drives so degrading SMART attributes
       # (reallocated/pending sectors, SSD media-wearout, UDMA CRC errors)
       # raise an early warning before a disk actually fails.

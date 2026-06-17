@@ -1,14 +1,12 @@
 {
   flake.aspectTags.firefox-extensions = ["desktop"];
   flake.modules.homeManager.firefox-extensions = {
-    config,
-    lib,
     pkgs,
     ...
   }: let
     extensions = pkgs.nur.repos.rycee.firefox-addons;
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       programs.firefox.profiles.default = {
         extensions.packages = with extensions; [
           # Privacy

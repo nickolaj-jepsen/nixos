@@ -14,7 +14,7 @@
     tokenFile = "/var/lib/secrets/kavita-token";
     oidcSecretFile = "/var/lib/secrets/kavita-oidc-secret";
   in {
-    config = lib.mkIf cfg.enable {
+    config = {
       services.restic.backups.homelab.paths = [config.services.kavita.dataDir];
 
       # read the e-book/comic library provisioned by audiobookshelf.nix

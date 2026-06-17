@@ -2,7 +2,6 @@
   flake.aspectTags.home-assistant-mqtt = ["homelab"];
   flake.modules.nixos.home-assistant-mqtt = {
     config,
-    lib,
     fpLib,
     ...
   }: let
@@ -10,7 +9,7 @@
     mosquittoPort = 1883;
     zigbee2mqttPort = 8180;
   in {
-    config = lib.mkIf config.fireproof.homelab.enable {
+    config = {
       age.secrets = {
         "zigbee2mqtt-secret.yaml" = {
           rekeyFile = ../../../secrets/hosts/homelab/zigbee2mqtt-secret.yaml.age;

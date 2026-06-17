@@ -2,14 +2,13 @@
   flake.aspectTags.vaultwarden = ["homelab"];
   flake.modules.nixos.vaultwarden = {
     config,
-    lib,
     fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;
     domain = "bitwarden.${cfg.domain}";
   in {
-    config = lib.mkIf config.fireproof.homelab.enable {
+    config = {
       services = {
         vaultwarden = {
           enable = true;

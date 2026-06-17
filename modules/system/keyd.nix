@@ -2,10 +2,9 @@
   flake.aspectTags.keyd = ["desktop"];
   flake.modules.nixos.keyd = {
     lib,
-    config,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       services.keyd = {
         enable = lib.mkDefault true;
         keyboards.mouse = {

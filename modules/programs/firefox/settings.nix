@@ -2,12 +2,10 @@
 {
   flake.aspectTags.firefox-settings = ["desktop"];
   flake.modules.nixos.firefox-settings = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       programs.firefox = {
         enable = true;
         package = pkgs.unstable.firefox;
@@ -24,13 +22,12 @@
   };
   flake.modules.homeManager.firefox-settings = {
     config,
-    lib,
     pkgs,
     ...
   }: let
     c = config.fireproof.theme.colors;
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       programs.firefox = {
         enable = true;
         package = pkgs.unstable.firefox;

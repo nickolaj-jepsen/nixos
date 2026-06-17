@@ -2,25 +2,20 @@
 {
   flake.aspectTags.ghostty = ["desktop"];
 
-  flake.modules.nixos.ghostty = {
-    config,
-    lib,
-    ...
-  }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+  flake.modules.nixos.ghostty = _: {
+    config = {
       fireproof.base.defaults.terminal = "ghostty";
     };
   };
 
   flake.modules.homeManager.ghostty = {
     config,
-    lib,
     pkgs,
     ...
   }: let
     c = config.fireproof.theme.colors;
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       programs.ghostty = {
         enable = true;
         package = pkgs.unstable.ghostty;

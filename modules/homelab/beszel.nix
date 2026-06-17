@@ -2,7 +2,6 @@
   flake.aspectTags.beszel = ["homelab"];
   flake.modules.nixos.beszel = {
     config,
-    lib,
     fpLib,
     ...
   }: let
@@ -10,7 +9,7 @@
     domain = "beszel.${cfg.domain}";
     port = 8091;
   in {
-    config = lib.mkIf cfg.enable {
+    config = {
       services.restic.backups.homelab.paths = ["/var/lib/beszel-hub"];
 
       services.oauth2-proxy.nginx.virtualHosts."${domain}".allowed_groups = ["default"];

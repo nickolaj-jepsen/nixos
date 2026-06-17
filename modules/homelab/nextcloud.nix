@@ -3,12 +3,11 @@
   flake.modules.nixos.nextcloud = {
     config,
     pkgs,
-    lib,
     ...
   }: let
     cfg = config.fireproof.homelab;
   in {
-    config = lib.mkIf config.fireproof.homelab.enable {
+    config = {
       age.secrets.nextcloud-admin-pass = {
         rekeyFile = ../../secrets/hosts/homelab/nextcloud-admin-pass.age;
         owner = "nextcloud";

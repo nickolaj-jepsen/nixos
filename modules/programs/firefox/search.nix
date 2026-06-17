@@ -1,7 +1,6 @@
 {
   flake.aspectTags.firefox-search = ["desktop"];
   flake.modules.homeManager.firefox-search = {
-    config,
     lib,
     pkgs,
     ...
@@ -22,7 +21,7 @@
       }
       // lib.optionalAttrs (icon != null) {inherit icon;};
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = {
       programs.firefox.profiles.default.search = {
         default = "Kagi";
         privateDefault = "Kagi";

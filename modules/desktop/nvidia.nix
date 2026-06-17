@@ -3,12 +3,10 @@
   flake.aspectTags.nvidia = ["nvidia"];
 
   flake.modules.nixos.nvidia = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.hardware.nvidia.enable {
+    config = {
       hardware.graphics = {
         enable = true;
         # VA-API -> NVDEC bridge so Firefox/mpv can hardware-decode video.
@@ -54,12 +52,10 @@
   };
 
   flake.modules.homeManager.nvidia = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.hardware.nvidia.enable {
+    config = {
       programs.niri.settings.environment = {
         "LIBVA_DRIVER_NAME" = "nvidia";
         "__GLX_VENDOR_LIBRARY_NAME" = "nvidia";

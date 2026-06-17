@@ -1,12 +1,10 @@
 {
   flake.aspectTags.niri = ["windowManager"];
   flake.modules.nixos.niri = {
-    config,
-    lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.windowManager.enable {
+    config = {
       programs.xwayland.enable = true;
 
       xdg.portal = {
