@@ -34,6 +34,10 @@
   # name in their flake.aspectTags. Opt-in features (chromium, bambu, …) are
   # bundles a host adds explicitly; the matching option defaults to off.
   config.flake.bundles = {
+    # always selected (the builder prepends "base" to every host); the
+    # foundational always-on leaves + the shared-options module tag here.
+    base.includes = [];
+
     # window manager + shell (membership target for niri/* and dms)
     windowManager.includes = [];
 
@@ -72,11 +76,19 @@
     # host-set on the nixos side); membership target only
     snapcast.includes = [];
     oxcb-media.includes = [];
+  };
 
-    # homelab opt-in services, off on every host today (membership targets)
-    attic.includes = [];
-    beszel.includes = [];
-    kavita.includes = [];
-    shelfmark.includes = [];
+  # Membership tags for leaves not yet converted to self-declaring form: the
+  # shim registers these under their relative path, so they are tagged here by
+  # path. (ssh/k8s/mcp/spotify convert to HM agenix-rekey at the secrets step;
+  # the home-manager alias is deleted then too. bootstrap-install stays gated on
+  # bootstrap.targetHost.) Removed as each is converted.
+  config.flake.aspectTags = {
+    "system/ssh" = ["base"];
+    "programs/k8s" = ["dev"];
+    "programs/mcp" = ["dev"];
+    "programs/spotify" = ["desktop"];
+    "scripts/bootstrap-install" = ["base"];
+    "base/home-manager" = ["base"];
   };
 }

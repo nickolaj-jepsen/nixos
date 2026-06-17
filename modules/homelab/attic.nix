@@ -1,5 +1,5 @@
 {
-  flake.aspectTags.attic = ["attic"];
+  flake.aspectTags.attic = ["homelab"];
   flake.modules.nixos.attic = {
     config,
     lib,

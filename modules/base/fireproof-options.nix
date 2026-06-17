@@ -235,6 +235,7 @@ let
     };
   };
 in {
+  flake.aspectTags.fireproof-options = ["base"];
   flake.modules.nixos.fireproof-options = sharedOptions;
   flake.modules.homeManager.fireproof-options = sharedOptions;
 }

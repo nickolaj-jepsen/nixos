@@ -1,5 +1,5 @@
 {
-  flake.aspectTags.beszel = ["beszel"];
+  flake.aspectTags.beszel = ["homelab"];
   flake.modules.nixos.beszel = {
     config,
     lib,

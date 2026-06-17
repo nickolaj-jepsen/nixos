@@ -8,9 +8,11 @@
   fpLib = import ../lib {inherit lib;};
   aspectsLib = import ../lib/aspects.nix {inherit lib;};
 
-  # Shared dendritic module tree, collected at the flake level.
-  sharedNixosModules = builtins.attrValues config.flake.modules.nixos;
-  sharedHomeModules = builtins.attrValues config.flake.modules.homeManager;
+  # Pick the dendritic leaves selected by a host (membership: a leaf is selected
+  # when one of its aspectTags is in the resolved bundle closure), restricted to
+  # the names actually present in the given class.
+  pick = selectedNames: modset:
+    builtins.attrValues (lib.getAttrs (builtins.filter (n: modset ? ${n}) selectedNames) modset);
 
   # Resolve a host's aspects into the fireproof.* fact set its bundles provide
   # (host-specific facts win), then inject that set into BOTH the nixos and the
@@ -27,6 +29,9 @@
     withSystem system (
       {system, ...}: let
         resolvedFacts = aspectsLib.facts config.flake.bundles aspects facts;
+        selectedNames = aspectsLib.selectedLeaves config.flake.bundles config.flake.aspectTags (["base"] ++ aspects);
+        nixosLeaves = pick selectedNames config.flake.modules.nixos;
+        homeLeaves = pick selectedNames config.flake.modules.homeManager;
       in
         inputs.nixpkgs.lib.nixosSystem {
           specialArgs = {inherit inputs fpLib;};
@@ -46,11 +51,11 @@
               inputs.self.nixosModules.overlays
               {fireproof = resolvedFacts;}
               {
-                home-manager.sharedModules = sharedHomeModules ++ [{fireproof = resolvedFacts;}];
+                home-manager.sharedModules = homeLeaves ++ [{fireproof = resolvedFacts;}];
                 home-manager.extraSpecialArgs = {inherit inputs fpLib;};
               }
             ]
-            ++ sharedNixosModules
+            ++ nixosLeaves
             # The host's own directory (its default.nix and sibling files).
             # `_`-prefixed helper files are skipped (see import-tree).
             ++ [(inputs.import-tree dir)]

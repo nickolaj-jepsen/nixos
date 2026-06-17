@@ -1,6 +1,8 @@
 # Aspect: homelab — shared homelab facts (domain/email), read by the services.
 {
-  flake.aspectTags.homelab-options = ["homelab"];
+  # base, not homelab: base/nix.nix reads fireproof.homelab.domain (attic
+  # substituter) on every host, so these facts must be declared everywhere.
+  flake.aspectTags.homelab-options = ["base"];
 
   flake.modules.nixos.homelab-options = {lib, ...}: {
     options.fireproof.homelab = {
