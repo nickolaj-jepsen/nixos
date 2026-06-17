@@ -131,6 +131,15 @@
       ];
     };
 in {
+  # Resolved selection per host, for inspection via `just aspects <host>`.
+  config.flake.aspects =
+    lib.mapAttrs (_: host: {
+      inherit (host) aspects;
+      closure = aspectsLib.closure config.flake.bundles (["base"] ++ host.aspects);
+      leaves = aspectsLib.selectedLeaves config.flake.bundles config.flake.aspectTags (["base"] ++ host.aspects);
+    })
+    targets;
+
   config.flake.nixosConfigurations =
     (lib.mapAttrs (_: mkSystem) targets)
     // {

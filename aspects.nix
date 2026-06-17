@@ -88,7 +88,6 @@
     "programs/k8s" = ["dev"];
     "programs/mcp" = ["dev"];
     "programs/spotify" = ["desktop"];
-    "scripts/bootstrap-install" = ["base"];
     "base/home-manager" = ["base"];
   };
 }

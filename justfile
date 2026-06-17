@@ -249,6 +249,11 @@ tree *ARGS=("--derivation .#nixosConfigurations." + shell("hostname -s") + ".con
 diff hostname=`hostname -s`: (build-system hostname)
     nvd diff /run/current-system {{ justfile_directory() }}/result
 
+[doc('Show resolved aspects, bundle closure and selected leaves for a host')]
+[group('tools')]
+aspects hostname=`hostname -s`:
+    @{{ nixcmd }} eval .#aspects.{{ hostname }}
+
 [doc('List system generations')]
 [group('tools')]
 history:

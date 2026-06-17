@@ -43,56 +43,66 @@ modules/
 secrets/                  # agenix-encrypted secrets with YubiKey
 ```
 
-### Module Auto-Imports
+### Modules are dendritic (`flake.modules`)
 
-Modules are **auto-imported** — there are no hand-maintained `imports = [ … ]`
-lists. `hosts/default.nix` uses [`import-tree`](https://github.com/vic/import-tree)
-to recursively pull in:
+Every `.nix` file under `modules/` is a **dendritic flake-parts module** that
+self-declares its outputs (not a bare NixOS module):
 
-- every `.nix` file under `modules/` (for every host), and
-- every `.nix` file in the host's own directory (e.g. `hosts/desktop/`).
+```nix
+# modules/programs/foo.nix
+{
+  flake.aspectTags.foo = ["desktop"];                           # bundle membership
+  flake.modules.nixos.foo = {config, pkgs, ...}: { … };         # nixos half (optional)
+  flake.modules.homeManager.foo = {config, pkgs, ...}: { … };   # home-manager half (optional)
+}
+```
 
-So **dropping a `.nix` file into the tree is enough to wire it up** — no list to
-edit. Each module gates itself with `lib.mkIf config.fireproof.<feature>.enable`,
-so being imported everywhere is inert until enabled.
+[`import-tree`](https://github.com/vic/import-tree) (at the flake level in
+`flake.nix`) auto-collects every such file — no hand-maintained `imports = [ … ]`.
+The host builder (`hosts/default.nix`) then imports **only the leaves a host's
+aspects select** (membership), routing nixos halves into the system and
+homeManager halves into that user's home-manager. There is **no `mkIf <toggle>`
+gate** in a leaf — being selected is the gate.
 
 Conventions:
 
-- **Non-module helper files** (functions called with `import ./x.nix {…}`, page
-  fragments, etc.) must be **prefixed with `_`** so import-tree skips them — e.g.
-  `modules/homelab/glance/_home-page.nix`, `hosts/bootstrap/_bake.nix`. Anything
-  under a `_`-prefixed path is ignored.
-- **Per-host files** live in that host's directory and are auto-imported only for
-  that host.
-- `default.nix` files are only needed when they hold real options/config; a
-  `default.nix` that only listed imports has been removed.
+- **`_`-prefixed paths are skipped** by import-tree (helper files, page
+  fragments): `modules/homelab/glance/_home-page.nix`, `hosts/<h>/_monitors.nix`.
+- **Per-host files** live in the host's directory (`hosts/<h>/`) and are imported
+  only for that host (still plain NixOS modules).
+- The resolver is `lib/aspects.nix`; the bundle graph + tag options are in
+  `aspects.nix`; shared cross-class options in `modules/base/fireproof-options.nix`.
 
-### Custom Options (`fireproof.*`)
+> Migration note: a few leaves (`ssh`/`k8s`/`mcp`/`spotify`) are still legacy
+> NixOS modules wired through the `fireproof.home-manager` alias; a shim in
+> `flake.nix` wraps them until their secrets move to home-manager agenix-rekey.
 
-Defined in `modules/base/fireproof.nix`:
+### Aspects & options (`fireproof.*`)
 
-```nix
-fireproof.hostname = "desktop";          # Required
-fireproof.username = "nickolaj";         # Required
-fireproof.desktop.enable = true;         # Desktop environment (niri)
-fireproof.homelab.enable = true;         # Server services
-fireproof.work.enable = true;            # Work tools
-fireproof.dev.enable = true;             # Dev tools
-fireproof.hardware.laptop = true;        # Laptop features
-```
+A host selects **aspects** (bundles), not toggles. Bundles live in `aspects.nix`
+(`flake.bundles`): each names other bundles it `includes` and the `fireproof.*`
+**facts** it sets. A host lists its aspects + host-specific facts in
+`hosts/default.nix` (`targets.<host> = { dir; aspects; facts; }`). The resolver
+(`lib/aspects.nix`) turns aspects into (a) the selected-leaf set and (b) the fact
+set, which the builder injects into BOTH the nixos and home-manager evals — no
+osConfig bridge. Inspect a host's resolution with **`just aspects <host>`**.
+
+Shared, cross-class options (`fireproof.{hostname,username,theme,monitors,
+hardware.*,desktop.*,dev.*,…}`) are declared once in
+`modules/base/fireproof-options.nix` (emitted to both module classes).
 
 ### Home Manager
 
-Use `fireproof.home-manager` instead of `home-manager.users.<username>`:
-
-```nix
-fireproof.home-manager.programs.ghostty.enable = true;
-fireproof.home-manager.home.sessionVariables = {...};
-```
+Author a feature's home-manager half as `flake.modules.homeManager.<name>`,
+reading `config.fireproof.*` locally (facts are injected). It evaluates both
+embedded (per host) and standalone (`lib/mkHome.nix` /
+`homeConfigurations.portability-check`, with `osConfig = null`). The old
+`fireproof.home-manager` alias is deprecated — only the not-yet-migrated secret
+leaves still use it.
 
 ### Theme System
 
-Colors in `modules/base/theme.nix` as `config.fireproof.theme.colors.*`:
+Colors in `modules/base/fireproof-options.nix` as `config.fireproof.theme.colors.*`:
 
 ```nix
 let c = config.fireproof.theme.colors;
@@ -102,15 +112,23 @@ in {
 }
 ```
 
-### Conditional Modules
+### Membership, not mkIf
+
+A leaf applies when its aspect is selected — do **not** wrap it in
+`lib.mkIf <toggle>`. Tag it instead:
 
 ```nix
-{config, lib, ...}: {
-  config = lib.mkIf config.fireproof.desktop.enable {
-    # Desktop-only config
+{
+  flake.aspectTags.foo = ["desktop"];   # selected when a host's closure has "desktop"
+  flake.modules.nixos.foo = {pkgs, ...}: {
+    environment.systemPackages = [pkgs.foo];
   };
 }
 ```
+
+Intra-module conditionals on _facts_ (e.g.
+`lib.optional config.fireproof.hardware.battery …`) are fine — those are
+parameters, not membership.
 
 ### Unstable Packages
 
@@ -145,13 +163,25 @@ in {
 
 ## Adding Features
 
-Modules, host files, and overlays are **auto-imported** (see "Module
-Auto-Imports") — just create the file in the right directory, no `imports` list to
-edit.
+Leaf modules, host files, and overlays are **auto-imported** (see "Modules are
+dendritic") — create the file in the right directory, no `imports` list to edit.
 
-- **New program**: Create `modules/programs/<name>.nix`. Auto-imported.
-- **New homelab service**: Create `modules/homelab/<name>.nix` (auto-imported), add dashboard link in `modules/homelab/glance/_home-page.nix`.
-- **New host**: Run `just new-host <hostname> <username>`, add to `hosts/default.nix`. Per-host files (`disk-configuration.nix`, `monitors.nix`, …) go in the host directory and are auto-imported. To install on physical hardware, build a host-specific bootstrap ISO with `just bootstrap-iso <hostname>` and flash with `just bootstrap-flash <hostname> /dev/sdX` — the ISO bakes in the host SSH key + a copy of this flake, target boots and runs `bootstrap-install`.
+- **New program / feature (leaf)**: Create `modules/<area>/<name>.nix` as a
+  dendritic module — `flake.aspectTags.<name> = [ "<bundle>" ];` plus a
+  `flake.modules.nixos.<name>` and/or `flake.modules.homeManager.<name>` half (no
+  `mkIf` — membership gates it). Tag it into an existing bundle, or add a new
+  opt-in bundle in `aspects.nix`. For a homelab service also add a dashboard link
+  in `modules/homelab/glance/_home-page.nix`.
+- **New aspect/bundle**: Add it to `flake.bundles` in `aspects.nix` (its
+  `includes` edges and any `facts` it sets); hosts select it in
+  `hosts/default.nix`.
+- **New host**: Run `just new-host <hostname> <username>`, then add a
+  `targets.<hostname> = { dir = ./<hostname>; aspects = [ … ]; facts = { … }; }`
+  entry in `hosts/default.nix`. Per-host files (`disk-configuration.nix`,
+  `_monitors.nix`, …) go in the host directory. To install on physical hardware,
+  build a host-specific bootstrap ISO with `just bootstrap-iso <hostname>` and
+  flash with `just bootstrap-flash <hostname> /dev/sdX` — the ISO bakes in the
+  host SSH key + a copy of this flake, target boots and runs `bootstrap-install`.
 - **New disko template**: Add `hosts/_templates/disko/<name>.nix` with `device = "@@DISK@@";` as the sentinel. The bootstrap installer offers any template found here when no `disk-configuration.nix` exists yet.
 - **New script**: Use `pkgs.writeShellApplication`, include `set -euo pipefail`
 - **New overlay**: Create `overlays/<name>.nix` (auto-imported), and add update instructions (if needed) in `.github/workflows/update-overlays.md` a [GitHub Agentic Workflows file](https://github.com/github/gh-aw). Then recompile: `gh aw compile update-overlays`

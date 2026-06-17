@@ -55,10 +55,10 @@
 
     '';
 in {
-  # Use the nixos installation ISO as base
+  # Use the nixos installation ISO as base. (bootstrap-install is a dendritic
+  # leaf now, selected via the base aspect; gated on bootstrap.targetHost.)
   imports = [
     "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
-    ../../modules/scripts/bootstrap-install.nix
   ];
 
   users.motd = motd;
