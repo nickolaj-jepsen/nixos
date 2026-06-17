@@ -1,5 +1,6 @@
 ---
 description: Check for updates to manually fetched overlay packages and maintain the update PR
+strict: true
 on:
   schedule: daily
   workflow_dispatch:
@@ -7,6 +8,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+  copilot-requests: write
 tools:
   github:
     toolsets: [default]
@@ -30,8 +32,8 @@ safe-outputs:
   push-to-pull-request-branch:
     max: 1
     target: "*"
-    title-prefix: "chore(overlays): "
-    labels: [dependencies, automated]
+    required-title-prefix: "chore(overlays): "
+    required-labels: [dependencies, automated]
   noop:
 pre-agent-steps:
   - name: Install nix-portable for agent chroot
@@ -101,7 +103,7 @@ For each component, check the latest GitHub release tag:
 - Check latest commit on default branch (not releases)
 - **Update fields**: `rev` and `hash` (SRI format)
 
-### 5. GitHub Agentic Workflows (`overlays/gh-aw.nix`)
+### 4. GitHub Agentic Workflows (`overlays/gh-aw.nix`)
 
 - **Latest version**: Check latest release of `github/gh-aw` on GitHub
 - **New hash**: `nix-prefetch-url "https://github.com/github/gh-aw/releases/download/v<VERSION>/linux-amd64"` → SRI
