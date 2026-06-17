@@ -1,14 +1,7 @@
+# Selection (aspects + facts) lives in hosts/default.nix. This file holds only
+# work's nixos-specific settings.
 {lib, ...}: {
   config = {
-    fireproof = {
-      hostname = "work";
-      username = "nickolaj";
-      desktop.enable = true;
-      work.enable = true;
-      dev.enable = true;
-      claude-code.work.enable = true;
-      hardware.nvidia.enable = true;
-    };
     facter.reportPath = ./facter.json;
 
     # aarch64 emulation so this x86_64 host can cross-build the Raspberry Pi

@@ -6,7 +6,7 @@ Status: **planned, agreed shape.** This consolidates and **supersedes**
 old `hm-refactor` branch** (older `flake.{nixos,home}Modules` schema + hand-maintained
 `propagatedFireproof` mirror + explicit import list — all rejected below). Solved
 sub-problems from that branch (HM-side agenix-rekey wiring, the dummy-pubkey trick,
-`mkHome`, the secret-file moves) are reused as *mechanism*, not architecture.
+`mkHome`, the secret-file moves) are reused as _mechanism_, not architecture.
 
 The end state: every feature is a dendritic `flake.modules.{nixos,homeManager}` entry,
 selection is by **aspects** (membership replaces `*.enable` toggles), and **no
@@ -22,8 +22,8 @@ nix-darwin host drops onto with no rework.
 2. **Reduce complexity / avoid homebrew** — delete the `fireproof.home-manager` alias,
    the `feature` helper, and every cross-eval bridge/mirror. The only hand-rolled piece
    is a ~20-line aspect resolver (justified over a pre-1.0 solo dependency).
-3. **DX** — adding a module stays a *one-file* change; adding a host is *drop a
-   directory*, no central list to edit.
+3. **DX** — adding a module stays a _one-file_ change; adding a host is _drop a
+   directory_, no central list to edit.
 4. **Future-proofing** — standalone home-manager and nix-darwin become a few-line
    `mkHome`/`mkDarwin` call. Nothing in an HM half reads `osConfig`, proven continuously
    by a portability check.
@@ -32,26 +32,26 @@ nix-darwin host drops onto with no rework.
 
 - No real standalone or darwin host is **deployed** this migration (only the throwaway
   `portability-check`). The machinery to add one is built and proven.
-- No behaviour change is *intended*. Every host's system closure must match pre-migration
+- No behaviour change is _intended_. Every host's system closure must match pre-migration
   (verified by `just diff`); any latent quirk we surface (see Risks) is an explicit,
   separate keep-or-drop decision.
 
 ## Resolved decisions
 
-| #   | Decision                                                                                                  | Why                                                                                                             |
-| --- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 1   | Fresh on `main`; ignore the `hm-refactor` branch architecture.                                            | Its schema + mirror are exactly what this plan improves on.                                                    |
-| 2   | One migration ending with **aspects live and toggles deleted**.                                           | The user asked for both docs implemented together.                                                             |
-| 3   | **No `osConfig` bridge.** Facts resolved at the flake layer, pushed into both class-buckets.              | Community-cautioned-against; `osConfig == null` standalone. Aspects make facts flake-level-known, so it's moot. |
-| 4   | Official `flake.modules.{nixos,homeManager,darwin}.<name>` (flake-parts `modules` extra).                 | Standard, darwin-ready, `_class`-stamped. Not the hand-rolled `homeModules`.                                   |
-| 5   | **Plain dendritic authoring**, no `feature` helper. Options colocated per-half; ambient facts central.    | Aspects delete most per-feature cross-class options, so the helper's job evaporates. Least homebrew.           |
-| 6   | **Hand-rolled** transitive-closure resolver (~20 lines), data shaped like den's `includes`.               | `flake-aspects` dormant/solo, `den` pre-1.0; a 20-line closure isn't worth that dependency. Drop-in to den later. |
-| 7   | **Reverse-tags on leaves + small central bundle graph.**                                                  | One-file module adds (matches today's self-gating DX); bundle hierarchy still legible in one place.            |
-| 8   | Hardware capabilities stay **parameters** (facts); opt-out flips to **opt-in**.                           | dms branches on `hardware.battery` etc. inside the module; `includes` can't subtract.                          |
-| 9   | **Portability-check + `mkHome`**, no real standalone host deployed.                                       | Proves the no-bridge design; defers physical/darwin provisioning.                                              |
-| 10  | **Substrate incrementally, then one big cutover commit; no mirror ever.** Gate: per-host `just diff`.     | User chose clean end-history; nvd closure-diff makes a large commit trustworthy.                               |
-| 11  | User-scoped secrets (ssh, k8s, mcp, spotify) → **HM-side agenix-rekey**.                                  | Makes HM halves `osConfig`-free *and* standalone truly drop-in for secrets.                                    |
-| 12  | Hosts **auto-collected** via a `flake.hosts` option; no central `targets` list.                           | Drop-a-dir host adds; matches the module auto-import philosophy.                                               |
+| #   | Decision                                                                                               | Why                                                                                                               |
+| --- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| 1   | Fresh on `main`; ignore the `hm-refactor` branch architecture.                                         | Its schema + mirror are exactly what this plan improves on.                                                       |
+| 2   | One migration ending with **aspects live and toggles deleted**.                                        | The user asked for both docs implemented together.                                                                |
+| 3   | **No `osConfig` bridge.** Facts resolved at the flake layer, pushed into both class-buckets.           | Community-cautioned-against; `osConfig == null` standalone. Aspects make facts flake-level-known, so it's moot.   |
+| 4   | Official `flake.modules.{nixos,homeManager,darwin}.<name>` (flake-parts `modules` extra).              | Standard, darwin-ready, `_class`-stamped. Not the hand-rolled `homeModules`.                                      |
+| 5   | **Plain dendritic authoring**, no `feature` helper. Options colocated per-half; ambient facts central. | Aspects delete most per-feature cross-class options, so the helper's job evaporates. Least homebrew.              |
+| 6   | **Hand-rolled** transitive-closure resolver (~20 lines), data shaped like den's `includes`.            | `flake-aspects` dormant/solo, `den` pre-1.0; a 20-line closure isn't worth that dependency. Drop-in to den later. |
+| 7   | **Reverse-tags on leaves + small central bundle graph.**                                               | One-file module adds (matches today's self-gating DX); bundle hierarchy still legible in one place.               |
+| 8   | Hardware capabilities stay **parameters** (facts); opt-out flips to **opt-in**.                        | dms branches on `hardware.battery` etc. inside the module; `includes` can't subtract.                             |
+| 9   | **Portability-check + `mkHome`**, no real standalone host deployed.                                    | Proves the no-bridge design; defers physical/darwin provisioning.                                                 |
+| 10  | **Substrate incrementally, then one big cutover commit; no mirror ever.** Gate: per-host `just diff`.  | User chose clean end-history; nvd closure-diff makes a large commit trustworthy.                                  |
+| 11  | User-scoped secrets (ssh, k8s, mcp, spotify) → **HM-side agenix-rekey**.                               | Makes HM halves `osConfig`-free _and_ standalone truly drop-in for secrets.                                       |
+| 12  | Hosts **auto-collected** via a `flake.hosts` option; no central `targets` list.                        | Drop-a-dir host adds; matches the module auto-import philosophy.                                                  |
 
 ## End-state architecture
 
@@ -112,9 +112,9 @@ No helper, no alias:
   `monitors`, `secretsDir`) live in one `modules/base/fireproof-options.nix`, emitted to
   **both** classes (`flake.modules.nixos.fireproof-options` and
   `flake.modules.homeManager.fireproof-options` = the same options module). This is the
-  *only* place an option is declared into both evals, and it's declaration-once.
+  _only_ place an option is declared into both evals, and it's declaration-once.
 - **No `mkIf <toggle>` inside a leaf.** Presence in the resolved leaf set is the gate.
-  Intra-module conditionals on *facts* (e.g. `lib.optional config.fireproof.hardware.battery …`)
+  Intra-module conditionals on _facts_ (e.g. `lib.optional config.fireproof.hardware.battery …`)
   remain — those are parameters, not membership.
 
 ### Facts flow to home-manager without a bridge
@@ -240,7 +240,7 @@ Adding a host = drop `hosts/<h>/default.nix` (+ its hardware files). No central 
   `fireproof.*` directly. The pkgs/overlay set is factored out of `nixosSystem` and shared
   with `mkHome` (DRY).
 - **Portability-check:** `flake.homeConfigurations.portability-check = mkHome { username =
-  "check"; aspects = [ /* exercise the halves */ ]; }` with the dummy host-pubkey so
+"check"; aspects = [ /* exercise the halves */ ]; }` with the dummy host-pubkey so
   agenix-rekey evaluates. Built by `just check`. This is the only thing that proves no HM
   half secretly reads `osConfig`.
 
@@ -248,7 +248,7 @@ Adding a host = drop `hosts/<h>/default.nix` (+ its hardware files). No central 
 
 The four HM-read secrets move to HM-side agenix-rekey (mechanism lifted from the old
 branch): HM imports `agenix` + `agenix-rekey` homeManagerModules; `config.age.secrets.*`
-resolves *within* HM (osConfig-free). One-time `just secret-rekey` (YubiKey) at cutover;
+resolves _within_ HM (osConfig-free). One-time `just secret-rekey` (YubiKey) at cutover;
 the dummy all-zero host-pubkey lets the portability-check eval produce placeholder
 secrets. System-scoped secrets stay NixOS-side untouched.
 
@@ -256,14 +256,14 @@ secrets. System-scoped secrets stay NixOS-side untouched.
 
 Derived from the actual host configs (not the doc sketch). Effective selections:
 
-| Host        | Aspects                                          | Facts / host extras                                              |
-| ----------- | ------------------------------------------------ | --------------------------------------------------------------- |
-| desktop     | `workstation physical nvidia snapcast chromium`  | gpuPciId, monitors; steam, runelite, bambu-studio, claude-work  |
-| laptop      | `workstation laptop chromium`                    | monitors                                                        |
-| work        | `workstation physical nvidia chromium`           | monitors, claude-work; binfmt aarch64, firefox homepage         |
-| homelab     | `dev homelab physical`                           | headless                                                        |
-| minilab     | `desktop dev physical snapcast oxcb-media`        | snapcast turntable capture, monitors; **no** chromium, **no** gui-dev |
-| desktop-wsl | `dev work wsl`                                    | usbip autoAttach; stateVersion 25.11                            |
+| Host        | Aspects                                         | Facts / host extras                                                   |
+| ----------- | ----------------------------------------------- | --------------------------------------------------------------------- |
+| desktop     | `workstation physical nvidia snapcast chromium` | gpuPciId, monitors; steam, runelite, bambu-studio, claude-work        |
+| laptop      | `workstation laptop chromium`                   | monitors                                                              |
+| work        | `workstation physical nvidia chromium`          | monitors, claude-work; binfmt aarch64, firefox homepage               |
+| homelab     | `dev homelab physical`                          | headless                                                              |
+| minilab     | `desktop dev physical snapcast oxcb-media`      | snapcast turntable capture, monitors; **no** chromium, **no** gui-dev |
+| desktop-wsl | `dev work wsl`                                  | usbip autoAttach; stateVersion 25.11                                  |
 
 This corrects the original aspects-design sketch, which dropped `dev` from minilab and
 omitted per-host opt-ins (chromium/snapcast).

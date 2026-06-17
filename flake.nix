@@ -20,7 +20,8 @@
       else {
         flake.modules.nixos.${
           lib.removeSuffix ".nix" (lib.removePrefix (toString ./modules + "/") (toString path))
-        } = path;
+        } =
+          path;
       };
   in
     flake-parts.lib.mkFlake {inherit inputs;} {

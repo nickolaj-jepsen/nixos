@@ -1,6 +1,5 @@
 {lib, ...}: {
   options.fireproof.homelab = {
-    enable = lib.mkEnableOption "Enable homelab services (arr, nginx, postgres, prometheus, etc.)";
     domain = lib.mkOption {
       type = lib.types.str;
       default = "nickolaj.com";

@@ -27,4 +27,56 @@
     default = {};
     description = "Reverse membership: aspectTags.<leaf> lists the bundles the leaf belongs to.";
   };
+
+  # The bundle DAG. `includes` are edges to other bundles; `facts` are the
+  # fireproof.* values a selecting host gets (injected into both the nixos and
+  # home-manager evals — no osConfig bridge). Leaves attach by tagging a bundle
+  # name in their flake.aspectTags. Opt-in features (chromium, bambu, …) are
+  # bundles a host adds explicitly; the matching option defaults to off.
+  config.flake.bundles = {
+    # window manager + shell (membership target for niri/* and dms)
+    windowManager.includes = [];
+
+    # the three top-level capabilities
+    desktop = {
+      includes = ["windowManager"];
+      facts = {desktop.enable = true;};
+    };
+    dev.facts = {dev.enable = true;};
+    work.facts = {work.enable = true;};
+    homelab.facts = {homelab.enable = true;};
+
+    # hardware-shaped bundles
+    physical.includes = []; # btrfs-scrub/smartd/thermald/journald/zram tag here
+    laptop = {
+      includes = ["physical"];
+      facts = {hardware.laptop = true;}; # battery/wifi/dimmableBacklight follow
+    };
+    nvidia.facts = {hardware.nvidia.enable = true;};
+    wsl.facts = {wsl.enable = true;};
+
+    # intersections
+    gui-dev.includes = ["desktop" "dev"]; # vscode/zed/sublime editors tag here
+    gui-work.includes = ["desktop" "work"]; # slack/ferdium tag here
+    workstation.includes = ["gui-dev" "gui-work"];
+
+    # opt-in feature bundles (the matching fireproof option defaults to off)
+    chromium.facts = {desktop.chromium.enable = true;};
+    bambu.facts = {desktop.bambu-studio.enable = true;};
+    google-chrome.facts = {desktop.google-chrome.enable = true;};
+    claude-work.facts = {claude-code.work.enable = true;};
+    intellij.facts = {dev.intellij.enable = true;};
+    clickhouse.facts = {dev.clickhouse.enable = true;};
+
+    # nixos-only opt-in leaves (no shared fact; their parametric options stay
+    # host-set on the nixos side); membership target only
+    snapcast.includes = [];
+    oxcb-media.includes = [];
+
+    # homelab opt-in services, off on every host today (membership targets)
+    attic.includes = [];
+    beszel.includes = [];
+    kavita.includes = [];
+    shelfmark.includes = [];
+  };
 }

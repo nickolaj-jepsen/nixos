@@ -6,24 +6,28 @@
 }: let
   inherit (inputs.nixpkgs) lib;
   fpLib = import ../lib {inherit lib;};
+  aspectsLib = import ../lib/aspects.nix {inherit lib;};
 
-  # The shared module tree, collected at the flake level as
-  # flake.modules.{nixos,homeManager}.<name> (see flake.nix) and splatted into
-  # every host — replaces the former per-host `(inputs.import-tree ../modules)`.
+  # Shared dendritic module tree, collected at the flake level.
   sharedNixosModules = builtins.attrValues config.flake.modules.nixos;
-
-  # home-manager halves of the dendritic leaves, applied to the user's HM eval
-  # via sharedModules (alongside the legacy fireproof.home-manager alias during
-  # the cutover). extraSpecialArgs gives those halves inputs/fpLib.
   sharedHomeModules = builtins.attrValues config.flake.modules.homeManager;
 
+  # Resolve a host's aspects into the fireproof.* fact set its bundles provide
+  # (host-specific facts win), then inject that set into BOTH the nixos and the
+  # home-manager evals — the no-bridge fact flow. Leaves are still imported
+  # wholesale and self-gate via mkIf during the cutover; membership selection
+  # replaces that in the final step.
   mkSystem = {
-    host,
+    dir,
+    aspects ? [],
+    facts ? {},
     modules ? [],
     system ? "x86_64-linux",
   }:
     withSystem system (
-      {system, ...}:
+      {system, ...}: let
+        resolvedFacts = aspectsLib.facts config.flake.bundles aspects facts;
+      in
         inputs.nixpkgs.lib.nixosSystem {
           specialArgs = {inherit inputs fpLib;};
           modules =
@@ -40,31 +44,82 @@
               inputs.niri.nixosModules.niri
               inputs.nixos-wsl.nixosModules.default
               inputs.self.nixosModules.overlays
+              {fireproof = resolvedFacts;}
               {
-                home-manager.sharedModules = sharedHomeModules;
+                home-manager.sharedModules = sharedHomeModules ++ [{fireproof = resolvedFacts;}];
                 home-manager.extraSpecialArgs = {inherit inputs fpLib;};
               }
             ]
             ++ sharedNixosModules
             # The host's own directory (its default.nix and sibling files).
             # `_`-prefixed helper files are skipped (see import-tree).
-            ++ [(inputs.import-tree host)]
+            ++ [(inputs.import-tree dir)]
             ++ modules;
         }
     );
 
+  # Each host names the aspects it selects (resolved transitively into the
+  # fireproof.* facts above) plus host-specific facts. NIXOS-only host settings
+  # (steam, snapcast captures, binfmt, …) live in the host's own directory.
   targets = {
-    laptop = ./laptop;
-    desktop = ./desktop;
-    work = ./work;
-    homelab = ./homelab;
-    desktop-wsl = ./desktop-wsl;
-    minilab = ./minilab;
+    desktop = {
+      dir = ./desktop;
+      aspects = ["workstation" "physical" "nvidia" "chromium" "bambu" "intellij" "clickhouse" "claude-work" "snapcast"];
+      facts = {
+        hostname = "desktop";
+        username = "nickolaj";
+        hardware.gpuPciId = "10de:2c05";
+        monitors = import ./desktop/_monitors.nix;
+      };
+    };
+    laptop = {
+      dir = ./laptop;
+      aspects = ["workstation" "laptop" "chromium" "intellij" "clickhouse"];
+      facts = {
+        hostname = "laptop";
+        username = "nickolaj";
+        monitors = import ./laptop/_monitors.nix;
+      };
+    };
+    work = {
+      dir = ./work;
+      aspects = ["workstation" "physical" "nvidia" "chromium" "intellij" "clickhouse" "claude-work"];
+      facts = {
+        hostname = "work";
+        username = "nickolaj";
+        monitors = import ./work/_monitors.nix;
+      };
+    };
+    homelab = {
+      dir = ./homelab;
+      aspects = ["dev" "homelab" "physical" "clickhouse"];
+      facts = {
+        hostname = "homelab";
+        username = "nickolaj";
+      };
+    };
+    minilab = {
+      dir = ./minilab;
+      aspects = ["gui-dev" "physical" "snapcast" "oxcb-media"];
+      facts = {
+        hostname = "minilab";
+        username = "nickolaj";
+        monitors = import ./minilab/_monitors.nix;
+      };
+    };
+    desktop-wsl = {
+      dir = ./desktop-wsl;
+      aspects = ["dev" "work" "wsl" "clickhouse"];
+      facts = {
+        hostname = "desktop-wsl";
+        username = "nickolaj";
+      };
+    };
   };
 
   mkBootstrap = name:
     mkSystem {
-      host = ./bootstrap;
+      dir = ./bootstrap;
       modules = [
         ./bootstrap/_bake.nix
         {fireproof.bootstrap.targetHost = name;}
@@ -72,9 +127,9 @@
     };
 in {
   config.flake.nixosConfigurations =
-    (lib.mapAttrs (_: host: mkSystem {inherit host;}) targets)
+    (lib.mapAttrs (_: mkSystem) targets)
     // {
-      bootstrap = mkSystem {host = ./bootstrap;};
+      bootstrap = mkSystem {dir = ./bootstrap;};
     }
     // (lib.mapAttrs' (name: _: lib.nameValuePair "bootstrap-${name}" (mkBootstrap name)) targets);
 }

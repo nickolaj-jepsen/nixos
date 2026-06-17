@@ -1,11 +1,6 @@
+# Selection (aspects + facts) lives in hosts/default.nix.
 {
   config = {
-    fireproof = {
-      hostname = "homelab";
-      username = "nickolaj";
-      dev.enable = true;
-      homelab.enable = true;
-    };
     facter.reportPath = ./facter.json;
   };
 }

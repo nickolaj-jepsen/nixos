@@ -30,6 +30,8 @@ let
 
       work.enable = lib.mkEnableOption "Enable work-related applications and tools";
 
+      homelab.enable = lib.mkEnableOption "Enable homelab services (arr, nginx, postgres, prometheus, etc.)";
+
       bootstrap.targetHost = lib.mkOption {
         type = lib.types.str;
         default = "";
@@ -38,21 +40,11 @@ let
 
       dev = {
         enable = lib.mkEnableOption "Enable development tools and applications";
-        intellij.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.dev.enable;
-          description = "Enable IntelliJ-based IDEs";
-        };
-        clickhouse.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.dev.enable;
-          description = "Enable Clickhouse";
-        };
-        playwright.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.dev.enable;
-          description = "Enable Playwright";
-        };
+        # Opt-in (default false): selected via the matching aspect bundle, so a
+        # dev host that wants the lighter toolset (minilab) simply omits them.
+        intellij.enable = lib.mkEnableOption "IntelliJ-based IDEs";
+        clickhouse.enable = lib.mkEnableOption "Clickhouse";
+        playwright.enable = lib.mkEnableOption "Playwright";
       };
 
       desktop = {
@@ -64,8 +56,8 @@ let
         };
         chromium.enable = lib.mkOption {
           type = lib.types.bool;
-          default = config.fireproof.desktop.enable;
-          description = "Enable Chromium";
+          default = false;
+          description = "Enable Chromium (opt-in via the chromium aspect).";
         };
         bambu-studio.enable = lib.mkOption {
           type = lib.types.bool;
