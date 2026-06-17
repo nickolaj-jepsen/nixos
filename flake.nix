@@ -32,6 +32,7 @@
         ./devshell.nix
         ./docs.nix
         ./aspects.nix
+        ./portability-check.nix
         ./hosts
         ./overlays
         ((inputs.import-tree.map wrapNixos) ./modules)
