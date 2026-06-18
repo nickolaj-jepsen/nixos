@@ -11,7 +11,6 @@
     imports = [inputs.zero-x-cb-media.nixosModules.default];
 
     options.fireproof.desktop.oxcbMedia = {
-      enable = lib.mkEnableOption "0xCB-media host daemon (bridges MPRIS + PipeWire to the 0xCB-1337 macropad over USB CDC ACM)";
       serialDevice = lib.mkOption {
         type = lib.types.str;
         default = "/dev/ttyACM0";

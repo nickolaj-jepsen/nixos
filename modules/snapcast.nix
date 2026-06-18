@@ -29,7 +29,6 @@
     cfg.captures);
   in {
     options.fireproof.desktop.snapcast = {
-      enable = lib.mkEnableOption "Snapcast audio streaming server";
       sinkName = lib.mkOption {
         type = lib.types.str;
         readOnly = true;
