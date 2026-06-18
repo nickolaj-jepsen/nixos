@@ -19,9 +19,7 @@
   extraModules ? [],
 }: let
   selectedNames = aspectsLib.selectedLeaves flake.bundles flake.aspectTags (["base"] ++ aspects);
-  homeLeaves =
-    builtins.attrValues
-    (lib.getAttrs (builtins.filter (n: flake.modules.homeManager ? ${n}) selectedNames) flake.modules.homeManager);
+  homeLeaves = aspectsLib.pick selectedNames flake.modules.homeManager;
   resolvedFacts = facts // {inherit username;};
   pkgs = import inputs.nixpkgs {
     inherit system;

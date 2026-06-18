@@ -178,14 +178,6 @@ let
           magenta = mkColorOption "CE5D97" "Magenta";
           magentaAlt = mkColorOption "A02F6F" "Dark magenta";
         };
-
-        # HSL variants for tools that need them (like Glance)
-        hsl = {
-          bg = mkColorOption "30 4 11" "Background in HSL";
-          accent = mkColorOption "14 56 55" "Accent in HSL";
-          green = mkColorOption "72 59 38" "Green in HSL";
-          red = mkColorOption "5 64 54" "Red in HSL";
-        };
       };
     };
   };

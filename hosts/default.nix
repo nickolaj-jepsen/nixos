@@ -8,11 +8,11 @@
   fpLib = import ../lib {inherit lib;};
   aspectsLib = import ../lib/aspects.nix {inherit lib;};
 
-  # Pick the dendritic leaves selected by a host (membership: a leaf is selected
-  # when one of its aspectTags is in the resolved bundle closure), restricted to
-  # the names actually present in the given class.
-  pick = selectedNames: modset:
-    builtins.attrValues (lib.getAttrs (builtins.filter (n: modset ? ${n}) selectedNames) modset);
+  # Selection graph + reverse-tags, each guarded once at first use: a cycle in the
+  # bundle DAG and a duplicate leaf name (flat-namespace collision) are otherwise
+  # silent. `seq` forces the guard before handing back the value it protects.
+  bundles = builtins.seq (aspectsLib.assertAcyclic config.flake.bundles) config.flake.bundles;
+  aspectTags = builtins.seq (aspectsLib.assertUniqueNames config.flake.aspectTags) config.flake.aspectTags;
 
   # Collect a host directory into module buckets. Every top-level `.nix` file
   # (skipping `_`-prefixed helpers) must be a CARD: an attrset over
@@ -58,9 +58,9 @@
   }:
     withSystem system (
       {system, ...}: let
-        selectedNames = aspectsLib.selectedLeaves config.flake.bundles config.flake.aspectTags (["base"] ++ aspects);
-        nixosLeaves = pick selectedNames config.flake.modules.nixos;
-        homeLeaves = pick selectedNames config.flake.modules.homeManager;
+        selectedNames = aspectsLib.selectedLeaves bundles aspectTags (["base"] ++ aspects);
+        nixosLeaves = aspectsLib.pick selectedNames config.flake.modules.nixos;
+        homeLeaves = aspectsLib.pick selectedNames config.flake.modules.homeManager;
       in
         inputs.nixpkgs.lib.nixosSystem {
           specialArgs = {inherit inputs fpLib;};
@@ -144,8 +144,8 @@ in {
     asp = (collect (hostDir name)).aspects;
   in {
     aspects = asp;
-    closure = aspectsLib.closure config.flake.bundles (["base"] ++ asp);
-    leaves = aspectsLib.selectedLeaves config.flake.bundles config.flake.aspectTags (["base"] ++ asp);
+    closure = aspectsLib.closure bundles (["base"] ++ asp);
+    leaves = aspectsLib.selectedLeaves bundles aspectTags (["base"] ++ asp);
   });
 
   config.flake.nixosConfigurations =

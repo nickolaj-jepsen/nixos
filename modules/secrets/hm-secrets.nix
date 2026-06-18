@@ -8,31 +8,22 @@
   flake.modules.homeManager.hm-secrets = {
     config,
     inputs,
+    fpLib,
     ...
-  }: let
-    inherit (config.fireproof) hostname;
-    hostSecrets = ../../secrets/hosts + ("/" + hostname);
-    publicKey = builtins.readFile (hostSecrets + "/id_ed25519.pub");
-  in {
+  }: {
     imports = [
       inputs.agenix.homeManagerModules.default
       inputs.agenix-rekey.homeManagerModules.default
     ];
 
+    # Runtime decryption uses ~/.ssh/id_ed25519 (the host key, placed there
+    # user-readable by the nixos `ssh-key` secret) so HM activation — run as the
+    # user — can read it. The `.rekey-hm` store keeps this node's blobs from being
+    # cleaned by the nixos node's rekey; see fpLib.mkAgenixRekey.
     age.identityPaths = ["${config.home.homeDirectory}/.ssh/id_ed25519"];
-    age.rekey = {
-      storageMode = "local";
-      hostPubkey = publicKey;
-      masterIdentities = [{identity = ../../secrets/yubikey-identity.pub;}];
-      extraEncryptionPubkeys = [
-        "age1pzrfw28f8qvsk9g8p2stundf4ph466jut0g6q47sse76zljtqy9q2w32zr" # Backup key (bitwarden)
-      ];
-      # Distinct from the nixos store (.rekey): `agenix rekey` cleans each node's
-      # localStorageDir of files not belonging to that node, so the nixos and
-      # home-manager nodes for one host MUST NOT share a dir or they delete each
-      # other's secrets. Same hostPubkey, so the encrypted blobs are identical.
-      localStorageDir = hostSecrets + /.rekey-hm;
-      generatedSecretsDir = hostSecrets;
+    age.rekey = fpLib.mkAgenixRekey {
+      inherit (config.fireproof) hostname;
+      store = ".rekey-hm";
     };
   };
 }

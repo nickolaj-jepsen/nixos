@@ -5,7 +5,11 @@
     fpLib,
     ...
   }: let
-    inherit (config.fireproof.theme) hsl;
+    c = config.fireproof.theme.colors;
+    # Glance wants HSL; derive it from the hex palette so there's one source.
+    hsl = builtins.mapAttrs (_: fpLib.hexToHsl) {
+      inherit (c) bg accent green red;
+    };
     cfg = config.fireproof.homelab;
     domain = "glance.${cfg.domain}";
     port = 8088;
