@@ -193,9 +193,10 @@ new-host hostname username:
     mkdir -p "hosts/{{ hostname }}"
     cat > "hosts/{{ hostname }}/host.nix" <<'EOF'
     # {{ hostname }}'s host card: the aspects it selects + its facts. The presence
-    # of this file is what makes hosts/{{ hostname }}/ a discovered host. Add
-    # nixos-specific settings as sibling .nix files (auto-collected), and any
-    # host-specific home-manager tweaks under a `homeManager` bucket here.
+    # of this file is what makes hosts/{{ hostname }}/ a discovered host. Every
+    # host file is a card {aspects?, shared?, nixos?, homeManager?}: add
+    # nixos-specific settings under `nixos` here or in sibling cards (e.g.
+    # system.nix), and host-specific home-manager tweaks under `homeManager`.
     {
       aspects = [];
 

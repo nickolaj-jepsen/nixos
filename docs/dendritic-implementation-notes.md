@@ -13,6 +13,16 @@ authoritative _how-to-author_ reference is `AGENTS.md`; this is the _why_ and th
 > All 6 hosts + the standalone portability-check build; P-legacy-arm is byte-identical drvPaths
 > to P-alias. What's left is operational: `just diff`/`just test`/`just switch` per host (P-switch).
 > `dendritic-finish-plan.md` is now historical; trust the code + `AGENTS.md` + this file.
+>
+> **Update (2026-06-18, follow-ons):** two further refactors landed on `dendritic` after this
+> status, both proven by `toplevel.drvPath` parity. (1) _Host cards + facts collapse_
+> (`docs/host-cards-plan.md`): the `facts` resolver and the central `targets` registry are
+> **gone** — hosts are discovered `host.nix` cards; a "fact" is a `fireproof.*` value set in a
+> card's `shared` or an aspect-tagged setter leaf. (2) _Uniform host modules_: **every** file in
+> a `hosts/<h>/` dir is now a card `{aspects?, shared?, nixos?, homeManager?}` (the collector
+> asserts it — bare modules throw), `default.nix`→`system.nix`, `_monitors.nix`→`monitors.nix`
+> card, and the duplicated networkd two-liner is an aspect. The "Current host aspects" and "Dead
+> options" lists below are **pre-collapse and stale** — trust `just aspects <host>` + `AGENTS.md`.
 
 ## The load-bearing decisions (don't relitigate without reading these)
 

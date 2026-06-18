@@ -82,10 +82,12 @@ gate** in a leaf — being selected is the gate.
 
 Conventions:
 
-- **`_`-prefixed paths are skipped** by import-tree (helper files, page
-  fragments): `modules/homelab/glance/_home-page.nix`, `hosts/<h>/_monitors.nix`.
+- **`_`-prefixed paths are skipped** by import-tree and by the host collector
+  (helper files, page fragments): `modules/homelab/glance/_home-page.nix`,
+  `hosts/bootstrap/_bake.nix`.
 - **Per-host files** live in the host's directory (`hosts/<h>/`) and are imported
-  only for that host (still plain NixOS modules).
+  only for that host. Each is a **card** — same shape as `host.nix` — with its
+  NixOS config in a `nixos` bucket (see "Aspects & host cards").
 - The resolver is `lib/aspects.nix`; the bundle graph is in `aspects.nix`;
   shared cross-class options in `modules/fireproof-options.nix`.
 
@@ -98,6 +100,17 @@ home-manager evals (the no-bridge fact flow — no osConfig); `homeManager` is t
 host's HM tweaks. The fleet is **discovered** — any `hosts/<name>/` directory
 containing a `host.nix` is a host (`hosts/default.nix`); there is no central
 registry. Inspect a host's resolution with **`just aspects <host>`**.
+
+**Every** `.nix` file in a host dir is a card of that same shape `{ aspects?;
+shared?; nixos?; homeManager?; }` — not just `host.nix`. The collector
+(`hosts/default.nix`) asserts it: a bare NixOS module (a function, or an attrset
+with any other top-level key) throws, pointing you at the `nixos` bucket. That
+`nixos` bucket is the per-host analog of a dendritic leaf's
+`flake.modules.nixos.<name>`. Buckets are merged across all cards in the dir, so
+config/aspects/HM can live in `host.nix` or any sibling — e.g. `system.nix`
+(nixos-only settings), `monitors.nix` (`shared.fireproof.monitors`), or an
+aspect co-located with its config (minilab's `snapcast.nix` carries both
+`aspects = ["snapcast"]` and the capture config).
 
 An aspect carries **no data** — it is a pure membership tag. A "fact" is just a
 `fireproof.*` option value set in a `shared` card or an aspect-tagged setter leaf
@@ -211,8 +224,9 @@ dendritic") — create the file in the right directory, no `imports` list to edi
 - **New host**: Run `just new-host <hostname> <username>` — it drops a
   `hosts/<hostname>/host.nix` card; edit its `aspects` (and `shared`/`homeManager`)
   to taste. The host is **discovered automatically** (the `host.nix` is the marker);
-  no `hosts/default.nix` edit. Per-host files (`disk-configuration.nix`,
-  `_monitors.nix`, nixos-only `default.nix`, …) go in the host directory. To install
+  no `hosts/default.nix` edit. Per-host files (`system.nix`,
+  `disk-configuration.nix`, `monitors.nix`, …) go in the host directory as
+  **cards** — NixOS config under a `nixos` bucket. To install
   on physical hardware,
   build a host-specific bootstrap ISO with `just bootstrap-iso <hostname>` and
   flash with `just bootstrap-flash <hostname> /dev/sdX` — the ISO bakes in the
