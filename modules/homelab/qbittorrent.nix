@@ -1,6 +1,7 @@
 {
   flake.modules.nixos.qbittorrent = {
     config,
+    lib,
     pkgs,
     fpLib,
     ...
@@ -14,7 +15,7 @@
     webUiPort = 8082;
     torrentPort = 51413;
   in {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       # Secrets for Mullvad WireGuard config
       # mullvad-wg.age should contain just the WireGuard config (not the Address line):
       #   [Interface]

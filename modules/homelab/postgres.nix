@@ -1,6 +1,10 @@
 {
-  flake.modules.nixos.postgres = {config, ...}: {
-    config = {
+  flake.modules.nixos.postgres = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.homelab.enable {
       services = {
         restic.backups.homelab.paths = [config.services.postgresqlBackup.location];
 

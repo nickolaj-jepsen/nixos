@@ -1,6 +1,7 @@
 {
   flake.modules.nixos.glance = {
     config,
+    lib,
     pkgs,
     fpLib,
     ...
@@ -25,7 +26,7 @@
     homePage = import ./_home-page.nix {inherit cfg;};
     workPage = import ./_work-page.nix {inherit templates;};
   in {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       age.secrets.glance-env.rekeyFile = ../../../secrets/hosts/homelab/glance-env.age;
 
       services.glance = {

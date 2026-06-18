@@ -6,34 +6,26 @@
 }: let
   inherit (inputs.nixpkgs) lib;
   fpLib = import ../lib {inherit lib;};
-  aspectsLib = import ../lib/aspects.nix {inherit lib;};
   mkHome = import ../lib/mkHome.nix {
-    inherit inputs lib fpLib aspectsLib;
+    inherit inputs lib fpLib;
     inherit (config) flake;
   };
 
   # Host classes the builder routes; a card's `class` (default "nixos") picks the
   # instantiator and the flake output it lands in. Adding "darwin" later is: a
-  # value here, a buildDarwin, a darwinConfigurations emit, and the
-  # flake.modules.darwin name union in wrapAspect (so darwin leaves get tagged).
+  # value here, a buildDarwin, and a darwinConfigurations emit.
   validClasses = ["nixos" "home"];
-
-  # Selection graph + reverse-tags, each guarded once at first use: a cycle in the
-  # bundle DAG and a duplicate leaf name (flat-namespace collision) are otherwise
-  # silent. `seq` forces the guard before handing back the value it protects.
-  bundles = builtins.seq (aspectsLib.assertAcyclic config.flake.bundles) config.flake.bundles;
-  aspectTags = builtins.seq (aspectsLib.assertUniqueNames config.flake.aspectTags) config.flake.aspectTags;
 
   # Collect a host directory into module buckets. Every top-level `.nix` file
   # (skipping `_`-prefixed helpers) must be a CARD: an attrset over
-  # {class, aspects, shared, nixos, homeManager}, the same shape as host.nix. A
-  # bare NixOS module — a function, or an attrset carrying any other key — is
-  # rejected loudly; its body belongs in the `nixos` bucket. Buckets are
-  # concatenated across every card in the dir, so any file may contribute
-  # aspects/facts/HM, not just host.nix. `class` is the one scalar (routes the
-  # whole host). Host dirs are flat, so a shallow readDir suffices.
+  # {class, shared, nixos, homeManager}, the same shape as host.nix. A bare NixOS
+  # module — a function, or an attrset carrying any other key — is rejected loudly;
+  # its body belongs in the `nixos` bucket. Buckets are concatenated across every
+  # card in the dir, so any file may contribute facts/HM, not just host.nix.
+  # `class` is the one scalar (routes the whole host). Host dirs are flat, so a
+  # shallow readDir suffices.
   collect = dir: let
-    cardKeys = ["class" "aspects" "shared" "nixos" "homeManager"];
+    cardKeys = ["class" "shared" "nixos" "homeManager"];
     names =
       lib.filter
       (n: lib.hasSuffix ".nix" n && !(lib.hasPrefix "_" n))
@@ -65,18 +57,18 @@
       else lib.head vals;
   in {
     inherit class;
-    aspects = lib.concatMap (c: c.aspects or []) cards;
     shared = lib.catAttrs "shared" cards;
     nixos = lib.catAttrs "nixos" cards;
     homeManager = lib.catAttrs "homeManager" cards;
   };
 
-  # Assemble a NixOS system from resolved buckets. `shared` modules set fireproof.*
-  # in BOTH evals (the no-bridge fact flow); the home-manager user is read from the
-  # resulting config.fireproof.username. Aspects select the dendritic leaves by
-  # membership; NIXOS-only host settings live as plain modules in the host dir.
+  # Assemble a NixOS system from resolved buckets. Every dendritic leaf is imported
+  # into every host and self-gates with `lib.mkIf config.fireproof.<feature>.enable`;
+  # the host's `shared` card flips those toggles. `shared` modules set fireproof.* in
+  # BOTH evals (the no-bridge fact flow); the home-manager user is read from the
+  # resulting config.fireproof.username. NIXOS-only host settings live as plain
+  # modules in the host dir.
   mkNixos = {
-    aspects ? [],
     shared ? [],
     nixosModules ? [],
     homeManagerModules ? [],
@@ -84,9 +76,8 @@
   }:
     withSystem system (
       {system, ...}: let
-        selectedNames = aspectsLib.selectedLeaves bundles aspectTags (["base"] ++ aspects);
-        nixosLeaves = aspectsLib.pick selectedNames config.flake.modules.nixos;
-        homeLeaves = aspectsLib.pick selectedNames config.flake.modules.homeManager;
+        nixosLeaves = builtins.attrValues config.flake.modules.nixos;
+        homeLeaves = builtins.attrValues config.flake.modules.homeManager;
       in
         inputs.nixpkgs.lib.nixosSystem {
           specialArgs = {inherit inputs fpLib;};
@@ -134,7 +125,7 @@
     c = collect dir;
   in
     mkNixos {
-      inherit (c) aspects shared;
+      inherit (c) shared;
       nixosModules = c.nixos;
       homeManagerModules = c.homeManager;
     };
@@ -148,7 +139,6 @@
   in
     assert lib.assertMsg (c.nixos == []) "${toString dir}: a home-class host has no NixOS eval — move `nixos` config to `homeManager`/`shared`";
       mkHome {
-        inherit (c) aspects;
         extraModules = c.shared ++ c.homeManager;
       };
 
@@ -167,15 +157,6 @@ in {
   # bootstrap-<host> ISOs over. Home-class hosts have no install ISO, so they are
   # excluded here.
   config.flake.hostNames = nixosHosts;
-
-  # Resolved selection per host (every class), for inspection via `just aspects <host>`.
-  config.flake.aspects = lib.genAttrs discovered (name: let
-    asp = (collect (hostDir name)).aspects;
-  in {
-    aspects = asp;
-    closure = aspectsLib.closure bundles (["base"] ++ asp);
-    leaves = aspectsLib.selectedLeaves bundles aspectTags (["base"] ++ asp);
-  });
 
   config.flake.nixosConfigurations =
     lib.genAttrs nixosHosts (name: buildHost (hostDir name));

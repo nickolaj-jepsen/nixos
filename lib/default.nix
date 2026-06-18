@@ -67,8 +67,8 @@ in {
     }
     // lib.optionalAttrs (authentication != null) {inherit authentication;};
 
-  # agenix-rekey policy shared by the nixos (modules/secrets/secrets.nix) and
-  # home-manager (hm-secrets.nix) halves; only `store` differs. The split exists
+  # agenix-rekey policy shared by the nixos (modules/base/secrets.nix) and
+  # home-manager (modules/base/hm-secrets.nix) halves; only `store` differs. The split exists
   # because `agenix rekey` deletes files a node doesn't own in its localStorageDir,
   # so the two nodes of one host must not share a dir (".rekey" vs ".rekey-hm").
   # Same hostPubkey, so the encrypted blobs are interchangeable.

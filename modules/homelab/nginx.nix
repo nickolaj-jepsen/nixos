@@ -1,8 +1,12 @@
 {
-  flake.modules.nixos.nginx = {config, ...}: let
+  flake.modules.nixos.nginx = {
+    config,
+    lib,
+    ...
+  }: let
     cfg = config.fireproof.homelab;
   in {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       networking.firewall.allowedTCPPorts = [80 443];
 
       services.nginx = {

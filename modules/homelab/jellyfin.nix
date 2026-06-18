@@ -1,13 +1,14 @@
 {
   flake.modules.nixos.jellyfin = {
     config,
+    lib,
     fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;
     domain = "jellyfin.${cfg.domain}";
   in {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       services.restic.backups.homelab.paths = [config.services.jellyfin.dataDir];
 
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {

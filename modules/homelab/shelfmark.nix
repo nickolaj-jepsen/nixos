@@ -10,7 +10,7 @@
     port = 8084;
     library = "/mnt/data/books";
   in {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       services.restic.backups.homelab.paths = [config.services.shelfmark.environment.CONFIG_DIR];
 
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {

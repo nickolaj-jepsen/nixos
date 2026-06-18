@@ -1,6 +1,11 @@
 {
-  flake.modules.nixos.niri = {pkgs, ...}: {
-    config = {
+  flake.modules.nixos.niri = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.xwayland.enable = true;
 
       xdg.portal = {

@@ -1,6 +1,11 @@
 {
-  flake.modules.nixos.default-apps = {pkgs, ...}: {
-    config = {
+  flake.modules.nixos.default-apps = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
       environment.systemPackages = [
         pkgs.celluloid
         pkgs.loupe

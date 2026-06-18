@@ -1,6 +1,7 @@
 {
   flake.modules.nixos.sso-zitadel = {
     config,
+    lib,
     pkgs,
     fpLib,
     ...
@@ -8,7 +9,7 @@
     port = 9190;
     zitadelDomain = "sso.${config.fireproof.homelab.domain}";
   in {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       age.secrets.zitadel-master = {
         rekeyFile = ../../../secrets/hosts/homelab/zitadel-master.age;
         owner = config.services.zitadel.user;

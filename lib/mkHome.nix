@@ -1,23 +1,21 @@
-# Build a standalone home-manager configuration from the dendritic homeManager
-# leaves a set of aspects selects — the same leaves and facts the embedded path
-# uses, but with no NixOS eval (osConfig = null). Consumed by buildHome
-# (hosts/default.nix) for class = "home" hosts; the dev-ao CI check builds the
-# resulting homeConfigurations entry so a home-manager half that starts reading
-# osConfig (or a non-shared option) fails `just check`, not just a future deploy.
+# Build a standalone home-manager configuration from ALL dendritic homeManager
+# leaves — each self-gates with lib.mkIf config.fireproof.<feature>.enable, flipped
+# by the host card's `shared` facts — the same leaves the embedded path uses, but
+# with no NixOS eval (osConfig = null). Consumed by buildHome (hosts/default.nix)
+# for class = "home" hosts; the dev-ao CI check builds the resulting
+# homeConfigurations entry so a home-manager half that starts reading osConfig (or a
+# non-shared option) fails `just check`, not just a future deploy.
 {
   inputs,
   lib,
   fpLib,
-  aspectsLib,
   flake, # = config.flake
 }: {
-  aspects ? [],
   system ? "x86_64-linux",
   stateVersion ? "24.11",
   extraModules ? [], # the host card's `shared` (facts) + `homeManager` (tweaks)
 }: let
-  selectedNames = aspectsLib.selectedLeaves flake.bundles flake.aspectTags (["base"] ++ aspects);
-  homeLeaves = aspectsLib.pick selectedNames flake.modules.homeManager;
+  homeLeaves = builtins.attrValues flake.modules.homeManager;
   pkgs = import inputs.nixpkgs {
     inherit system;
     config.allowUnfree = true;

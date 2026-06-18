@@ -4,8 +4,12 @@
   # wlroots CLI recorders lean on VAAPI, which is weak on NVIDIA). The NixOS
   # module also generates the setcap'd gsr-kms-server wrapper needed for
   # promptless capture.
-  flake.modules.nixos.recording = _: {
-    config = {
+  flake.modules.nixos.recording = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.gpu-screen-recorder.enable = true;
     };
   };

@@ -1,6 +1,11 @@
 {
-  flake.modules.nixos.audio = {pkgs, ...}: {
-    config = {
+  flake.modules.nixos.audio = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
       security.rtkit.enable = true;
       services.pipewire = {
         enable = true;

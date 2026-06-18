@@ -1,27 +1,7 @@
 {
   description = "NixOS configuration";
 
-  outputs = {flake-parts, ...} @ inputs: let
-    inherit (inputs.nixpkgs) lib;
-    # Folder-as-aspect stamper. Every file under ./modules is a self-declaring
-    # dendritic module (an attrset with `flake`); its aspect is derived from where
-    # it lives (first path segment under ./modules, or the filename stem for a file
-    # placed directly in ./modules) and stamped onto `flake.aspectTags.<name>` for
-    # every module name the file declares. The folder is authoritative: folderTags
-    # is merged last (recursiveUpdate m folderTags), so a leaf can't override its
-    # own tag — change membership by moving the file, never by hand.
-    wrapAspect = path: let
-      m = import path;
-      rel = lib.removeSuffix ".nix" (lib.removePrefix (toString ./modules + "/") (toString path));
-      aspect = lib.head (lib.splitString "/" rel);
-      names = lib.unique (
-        (lib.attrNames (m.flake.modules.nixos or {}))
-        ++ (lib.attrNames (m.flake.modules.homeManager or {}))
-      );
-      folderTags.flake.aspectTags = lib.genAttrs names (_: [aspect]);
-    in
-      lib.recursiveUpdate m folderTags;
-  in
+  outputs = {flake-parts, ...} @ inputs:
     flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [
         inputs.flake-parts.flakeModules.modules
@@ -29,12 +9,14 @@
         ./formatter.nix
         ./devshell.nix
         ./docs.nix
-        ./aspects.nix
         ./home-check.nix
         ./hosts
         ./installer
         ./overlays
-        ((inputs.import-tree.map wrapAspect) ./modules)
+        # Every file under ./modules is a self-declaring dendritic module that sets
+        # flake.modules.{nixos,homeManager}.<name>. import-tree auto-collects them
+        # all; each leaf self-gates with lib.mkIf config.fireproof.<feature>.enable.
+        (inputs.import-tree ./modules)
       ];
       systems = [
         "x86_64-linux"

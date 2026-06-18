@@ -2,9 +2,10 @@
   flake.modules.nixos.restic = {
     pkgs,
     config,
+    lib,
     ...
   }: {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       environment.systemPackages = with pkgs; [
         restic
       ];

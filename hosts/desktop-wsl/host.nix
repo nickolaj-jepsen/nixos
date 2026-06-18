@@ -1,9 +1,11 @@
 {
-  aspects = ["dev" "work" "wsl" "clickhouse"];
-
   shared = {
     fireproof.hostname = "desktop-wsl";
     fireproof.username = "nickolaj";
+
+    fireproof.dev.enable = true;
+    fireproof.work.enable = true;
+    fireproof.wsl.enable = true;
   };
 
   homeManager = {lib, ...}: {

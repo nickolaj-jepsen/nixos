@@ -1,6 +1,6 @@
 ## Intrepetring tasks
 
-When you're asked to update a configuration, the user usually referes to update the config in this nixos configuration, eg claude-code config should be updated in modules/cli/claude-code and vscode in /home/nickolaj/nixos/modules/gui-dev/vscode
+When you're asked to update a configuration, the user usually referes to update the config in this nixos configuration, eg claude-code config should be updated in modules/programs/claude-code and vscode in /home/nickolaj/nixos/modules/programs/vscode
 
 ## Commands
 
@@ -27,93 +27,123 @@ just why-depends <pkg>   # Show why a package is in the closure
 
 ## Architecture
 
-This is a NixOS flake-based configuration managing 6 hosts with a custom `fireproof.*` options namespace.
+This is a NixOS flake-based configuration managing 7 hosts (6 NixOS + 1 standalone home-manager, `dev-ao`) with a custom `fireproof.*` options namespace.
 
 ### Structure
 
 ```
-hosts/                    # Per-host configs; <h>/host.nix = aspect+fact card; default.nix = builder + discovery
-lib/                      # Shared helpers (fpLib) + the aspect resolver (aspects.nix)
-aspects.nix               # Bundle DAG (pure adjacency) — the composition graph
-modules/                  # ONE FOLDER PER ASPECT: the folder a file is in IS its membership
-  ├── <name>.nix          #   a file directly under modules/ = a single-leaf aspect
-  │                       #   (nvidia, wsl, docker, chromium, clickhouse, intellij, …)
-  ├── nix/ system/ cli/   #   always-on aspects (pulled in by base.includes)
-  │   secrets/ scripts/
-  ├── desktop/ dev/ gui-dev/ gui-work/   # capability aspects (desktop = niri + dms + apps)
-  ├── physical/ laptop/   #   hardware aspects
-  └── homelab/            #   server services (arr, jellyfin, nginx, …)
+hosts/                    # Per-host configs; <h>/host.nix = toggle+fact card; default.nix = builder + discovery
+lib/                      # Shared helpers (fpLib) + mkHome.nix (standalone home-manager builder)
+modules/                  # Feature leaves; each self-gates on a fireproof.* option (nested + cascading)
+  ├── base/               #   always-on: fireproof.nix + theme.nix (central option decls),
+  │                       #   nix, gc, secrets, hm-secrets
+  ├── system/             #   host/OS leaves: boot, networking, user, ssh, yubikey, wsl, keyd,
+  │                       #   + hardware hygiene (smartd, thermald, zram, journald, btrfs-scrub, battery, networkd)
+  ├── desktop/            #   niri + dms + greetd + desktop apps; nvidia, snapcast, 0xcb-media
+  ├── programs/           #   CLI + GUI programs (claude-code, vscode, zed, firefox, git, fish, …)
+  ├── homelab/            #   server services (arr, jellyfin, nginx, …)
+  └── scripts/            #   writeShellApplication helpers (always-on)
 installer/                # Installer ISO builder — owns nixosConfigurations.bootstrap{,-<host>}
                           #   (not a host: a self-contained corner, direct nixosSystem build)
 secrets/                  # agenix-encrypted secrets with YubiKey
                           #   <host>/.rekey = nixos secrets, <host>/.rekey-hm = HM secrets
 ```
 
-### Modules are dendritic (`flake.modules`), folder = aspect
+### Modules are dendritic (`flake.modules`), gated by toggles
 
 Every `.nix` file under `modules/` is a **dendritic flake-parts module** that
-self-declares its outputs (not a bare NixOS module). **The folder it lives in is
-its aspect** — there is no per-file membership tag:
+self-declares its outputs (not a bare NixOS module).
+[`import-tree`](https://github.com/vic/import-tree) (at the flake level in
+`flake.nix`) auto-collects **every** such file into
+`flake.modules.{nixos,homeManager}.<name>` — no hand-maintained `imports = [ … ]`.
+
+The host builder (`hosts/default.nix`) imports **every** leaf into **every** host
+(routing nixos halves into the system, homeManager halves into that user's
+home-manager). A leaf applies only when its **toggle** is on, so each feature leaf
+**self-gates** its `config` with `lib.mkIf config.fireproof.<feature>.enable`:
 
 ```nix
-# modules/desktop/foo.nix  → aspect "desktop" (the folder); no tag line needed
+# modules/desktop/foo.nix
 {
-  flake.modules.nixos.foo = {config, pkgs, ...}: { … };         # nixos half (optional)
-  flake.modules.homeManager.foo = {config, pkgs, ...}: { … };   # home-manager half (optional)
+  flake.modules.nixos.foo = {config, lib, pkgs, ...}: {
+    config = lib.mkIf config.fireproof.desktop.enable {
+      environment.systemPackages = [pkgs.foo];
+    };
+  };
+  flake.modules.homeManager.foo = {config, lib, ...}: {
+    config = lib.mkIf config.fireproof.desktop.enable { … };   # gate BOTH halves
+  };
 }
 ```
 
-How membership is derived: the `wrapAspect` stamper in `flake.nix` reads each
-file's declared module **name(s)** out of `flake.modules.*` and stamps
-`flake.aspectTags.<name> = [<aspect>]`, where `<aspect>` is the **first path
-segment under `modules/`** (or the **filename stem** for a file placed directly in
-`modules/`). The module **name** is still hand-declared and must be **globally
-unique** (`flake.modules.<class>` is one flat namespace) — it's the join key the
-resolver selects on (e.g. `modules/dev/postgres.nix` is named `postgres-cli` so it
-doesn't collide with `modules/homelab/postgres.nix`'s `postgres`).
+The **folder** a leaf lives in is just organization — it has no semantic effect;
+the gate is whatever `fireproof.*` option the leaf's `mkIf` reads. By convention a
+folder clusters leaves that share a gate: `desktop/*` gate `desktop.enable` (or a
+`desktop.<sub>.enable` child), `homelab/*` gate `homelab.enable`, `programs/*` gate
+the relevant capability (`desktop.enable && dev.enable` for the GUI IDEs,
+`dev.<tool>.enable` for CLI dev tools, `desktop.<app>.enable` for desktop apps). The
+always-on leaves — `base/*`, `scripts/*`, and the baseline `programs/*` (git, fish,
+neovim, docker, …) and `system/*` (boot, networking, user, …) — are **ungated**; the
+hardware-hygiene `system/*` leaves gate `hardware.physical`/`hardware.zram`, and
+`system/battery.nix` gates `hardware.battery`.
 
-The folder is authoritative — there is **no override hatch**. `wrapAspect` merges
-the folder tag last (`recursiveUpdate m folderTags`), so a hand-written
-`flake.aspectTags` in a leaf is inert; membership changes by **moving the file**.
+### Options are nested + cascading
 
-[`import-tree`](https://github.com/vic/import-tree) (at the flake level in
-`flake.nix`) auto-collects every such file — no hand-maintained `imports = [ … ]`.
-The host builder (`hosts/default.nix`) then imports **only the leaves a host's
-aspects select** (membership), routing nixos halves into the system and
-homeManager halves into that user's home-manager. There is **no `mkIf <toggle>`
-gate** in a leaf — being selected is the gate.
+`fireproof.*` options nest and **cascade**: a child enable defaults to its parent,
+so a host sets the parent toggle and only overrides exceptions. `desktop.{windowManager,
+greeter,chromium}.enable` default to `desktop.enable`; `dev.{intellij,clickhouse,
+playwright}.enable` default to `dev.enable`; `hardware.physical` defaults to
+`!wsl.enable`, `hardware.zram` to `hardware.physical`, and `hardware.{battery,wifi,
+dimmableBacklight}` to `hardware.laptop`. Opt-in extras (`desktop.{bambu-studio,
+google-chrome,snapcast,oxcbMedia}.enable`, `hardware.nvidia.enable`) default **off**.
+So minilab — a desktop host that skips chromium and the IDEs — sets
+`desktop.enable = true` then overrides `desktop.chromium.enable = false` and
+`dev.{intellij,clickhouse,playwright}.enable = false`. This cascade IS the lightweight
+composition layer (no separate bundle/aspect system). All these options are declared
+centrally in `modules/base/fireproof.nix` (theme in `modules/base/theme.nix`), emitted
+to both module classes.
 
-Conventions:
+The module **name** (`flake.modules.<class>.<name>`) must be **globally unique** —
+it is one flat namespace, so a duplicate silently deep-merges (e.g.
+`modules/dev/postgres.nix` is named `postgres-cli` to avoid colliding with
+`modules/homelab/postgres.nix`'s `postgres`).
 
+Gotchas:
+
+- **`lib.mkIf` gates `config` ONLY.** Never put `imports` or `options` inside the
+  `mkIf` — they must stay at the top level (siblings of `config`). A leaf that
+  `imports` a third-party module (e.g. `modules/desktop/dms/default.nix`,
+  `modules/desktop/0xcb-media.nix`) imports it on **every** host; only its `config`
+  is toggle-gated, so such modules must be inert when their feature is disabled.
 - **`_`-prefixed paths are skipped** by import-tree and by the host collector
   (helper files, page fragments): `modules/homelab/glance/_home-page.nix`,
   `modules/homelab/glance/_work-page.nix`.
 - **Per-host files** live in the host's directory (`hosts/<h>/`) and are imported
   only for that host. Each is a **card** — same shape as `host.nix` — with its
-  NixOS config in a `nixos` bucket (see "Aspects & host cards").
-- The resolver is `lib/aspects.nix`; the bundle graph is in `aspects.nix`;
-  shared cross-class options in `modules/fireproof-options.nix`.
+  NixOS config in a `nixos` bucket (see "Host cards").
+- Shared cross-class options live in `modules/base/fireproof.nix` (theme in
+  `modules/base/theme.nix`).
 
-### Aspects & host cards (`fireproof.*`)
+### Host cards (`fireproof.*`)
 
-A host selects **aspects** (membership tags), not toggles, via a
-`hosts/<host>/host.nix` **card**: `{ aspects = [ … ]; shared = { fireproof.* … };
-homeManager = { … }; }`. `shared` is a module merged into BOTH the nixos and the
-home-manager evals (the no-bridge fact flow — no osConfig); `homeManager` is the
-host's HM tweaks. The fleet is **discovered** — any `hosts/<name>/` directory
-containing a `host.nix` is a host (`hosts/default.nix`); there is no central
-registry. Inspect a host's resolution with **`just aspects <host>`**.
+A host enables **toggles**, not aspects, via a `hosts/<host>/host.nix` **card**:
+`{ shared = { fireproof.<feature>.enable = true; … }; homeManager = { … }; }`.
+`shared` is a module merged into BOTH the nixos and the home-manager evals (the
+no-bridge fact flow — no osConfig), so a toggle set there is visible to both
+classes; `homeManager` is the host's HM tweaks. The fleet is **discovered** — any
+`hosts/<name>/` directory containing a `host.nix` is a host (`hosts/default.nix`);
+there is no central registry.
 
-**Every** `.nix` file in a host dir is a card of that same shape `{ class?;
-aspects?; shared?; nixos?; homeManager?; }` — not just `host.nix`. The collector
-(`hosts/default.nix`) asserts it: a bare NixOS module (a function, or an attrset
-with any other top-level key) throws, pointing you at the `nixos` bucket. That
-`nixos` bucket is the per-host analog of a dendritic leaf's
-`flake.modules.nixos.<name>`. Buckets are merged across all cards in the dir, so
-config/aspects/HM can live in `host.nix` or any sibling — e.g. `system.nix`
-(nixos-only settings), `monitors.nix` (`shared.fireproof.monitors`), or an
-aspect co-located with its config (minilab's `snapcast.nix` carries both
-`aspects = ["snapcast"]` and the capture config).
+**Every** `.nix` file in a host dir is a card of the shape `{ class?; shared?;
+nixos?; homeManager?; }` — not just `host.nix`. The collector (`hosts/default.nix`)
+asserts it: a bare NixOS module (a function, or an attrset with any other top-level
+key) throws, pointing you at the `nixos` bucket. That `nixos` bucket is the
+per-host analog of a dendritic leaf's `flake.modules.nixos.<name>`. Buckets are
+merged across all cards in the dir, so config/facts/HM can live in `host.nix` or
+any sibling — e.g. `system.nix` (nixos-only settings), `monitors.nix`
+(`shared.fireproof.monitors`), or a feature co-located with its config (minilab's
+`snapcast.nix` carries both `shared.fireproof.desktop.snapcast.enable = true` and the
+capture config in its `nixos` bucket).
 
 A host's **class** is the one scalar a card may carry: `class = "nixos"` (the
 default) or `class = "home"`. It is read pre-eval and routes the WHOLE host —
@@ -123,26 +153,22 @@ into `homeConfigurations.<h>`, with their `nixos` bucket asserted empty. The
 routable set lives in `validClasses` (`hosts/default.nix`) — a typo throws;
 adding `darwin` later is a value there + a `buildDarwin` + a `darwinConfigurations`
 emit. `config.flake.hostNames` (the installer's bootstrap fan-out) is the **nixos**
-hosts only, while `just aspects <h>` covers every class. Example:
-`hosts/dev-ao/host.nix` is a headless home-manager-only host (`class = "home"`).
+hosts only. Example: `hosts/dev-ao/host.nix` is a headless home-manager-only host
+(`class = "home"`).
 
-An aspect carries **no data** — it is a pure membership tag. A "fact" is just a
-`fireproof.*` option value set in a `shared` card or an aspect-tagged setter leaf
-(e.g. `modules/desktop/enable.nix` sets `fireproof.desktop.enable` for the desktop
-aspect); the module system merges those with real precedence.
+A "fact" is just a `fireproof.*` option value set in a `shared` card — the toggle
+`fireproof.<feature>.enable = true` IS the fact that gates the feature's leaves;
+the module system merges these with real precedence. **Every toggle must be
+declared in both module classes** (it is, in `modules/base/fireproof.nix`, emitted
+to both): a toggle set via `shared` reaches both evals, so a class-only declaration
+would throw on an undeclared option in the other eval. The cascade defaults (see
+"Options are nested + cascading") are the composition layer — a host sets the parent
+toggles and overrides exceptions, rather than listing every leaf.
 
-Bundles in `aspects.nix` (`flake.bundles`) are **pure adjacency** (`name -> [the
-bundles it pulls in]`). Only **composing** nodes appear there (`base`, `laptop`,
-`gui-dev`, `gui-work`, `workstation`); every other aspect — including `desktop`
-(now a leaf aspect: niri + dms + apps, the whole graphical session) — is a
-pass-through name the closure carries via `or []`, so a leaf-only aspect needs **no
-bundle entry**. `base` is prepended to every host and pulls in the always-on aspect
-folders (`nix system cli secrets scripts fireproof-options docker`), so a leaf is
-always-on by living in one of those folders.
-
-Shared, cross-class options (`fireproof.{hostname,username,theme,monitors,
-hardware.*,desktop.*,…}`) are declared once in `modules/fireproof-options.nix`
-(emitted to both module classes).
+Shared, cross-class options (`fireproof.{hostname,username,monitors,hardware.*,
+desktop.*,dev.*,…}` plus the feature `*.enable` toggles) are declared once in
+`modules/base/fireproof.nix` (theme palette in `modules/base/theme.nix`), both
+emitted to both module classes.
 
 ### Home Manager
 
@@ -155,13 +181,13 @@ guard: `home-check.nix` builds `homeConfigurations.dev-ao.activationPackage` in
 `just check`, so an HM half that starts reading `osConfig` (or a non-shared
 option) fails CI, not just a future deploy. For embedded (nixos) hosts the host
 builder (`hosts/default.nix`) defines `home-manager.users.<user>` (the user read
-from `config.fireproof.username`) and routes the selected homeManager leaves —
-plus the host card's `shared` and `homeManager` buckets — into its
-`sharedModules`. There is no `fireproof.home-manager` alias.
+from `config.fireproof.username`) and routes **all** homeManager leaves (each
+self-gates via `lib.mkIf`) — plus the host card's `shared` and `homeManager`
+buckets — into its `sharedModules`. There is no `fireproof.home-manager` alias.
 
 ### Theme System
 
-Colors in `modules/fireproof-options.nix` as `config.fireproof.theme.colors.*`:
+Colors in `modules/base/theme.nix` as `config.fireproof.theme.colors.*`:
 
 ```nix
 let c = config.fireproof.theme.colors;
@@ -171,26 +197,30 @@ in {
 }
 ```
 
-### Membership, not mkIf
+### Gate every feature leaf with mkIf
 
-A leaf applies when its aspect is selected — do **not** wrap it in
-`lib.mkIf <toggle>`. Put it in the right aspect folder instead:
+A leaf is imported into every host, so it must **gate its own `config`** with
+`lib.mkIf config.fireproof.<feature>.enable` — otherwise it applies everywhere:
 
 ```nix
-# modules/desktop/foo.nix → selected when the host's closure has "desktop"
+# modules/desktop/foo.nix → active only where fireproof.desktop.enable is true
 {
-  flake.modules.nixos.foo = {pkgs, ...}: {
-    environment.systemPackages = [pkgs.foo];
+  flake.modules.nixos.foo = {config, lib, pkgs, ...}: {
+    config = lib.mkIf config.fireproof.desktop.enable {
+      environment.systemPackages = [pkgs.foo];
+    };
   };
 }
 ```
 
-To change a leaf's aspect, **move the file** to the right folder — the folder is the
-sole source of membership; there is no `aspectTags` override.
+Gate **both** halves of a dual-class leaf on the same toggle. Keep `options` and
+`imports` OUTSIDE the `mkIf` (it gates `config` only). The always-on leaves
+(`base/*`, `scripts/*`, and the baseline `programs/*` and `system/*`) are the
+exception — they apply unconditionally, so no gate.
 
-Intra-module conditionals on `fireproof.*` option values (e.g.
-`lib.optional config.fireproof.hardware.battery …`) are fine — those are
-parameters, not membership.
+Intra-module conditionals on other `fireproof.*` values (e.g.
+`lib.optional config.fireproof.hardware.battery …`) nest fine inside the feature
+gate — those are parameters.
 
 ### Unstable Packages
 
@@ -228,21 +258,23 @@ parameters, not membership.
 Leaf modules, host files, and overlays are **auto-imported** (see "Modules are
 dendritic") — create the file in the right directory, no `imports` list to edit.
 
-- **New program / feature (leaf)**: Create the file **in the aspect folder that
-  is its membership** — `modules/<aspect>/<name>.nix`, or `modules/<name>.nix` for
-  a single-leaf aspect. Declare `flake.modules.nixos.<name>` and/or
-  `flake.modules.homeManager.<name>` (no `mkIf` — membership gates it); **no
-  `aspectTags` line** unless overriding the folder. Use an existing aspect folder,
-  or add a new bundle in `aspects.nix` for a new one. For a homelab service also
-  add a dashboard link in `modules/homelab/glance/_home-page.nix`.
-- **New aspect/bundle**: Create the matching `modules/<name>/` folder; a leaf-only
-  aspect needs **no `aspects.nix` entry** (it's a pass-through, resolved via `or
-[]`). Add a `flake.bundles.<name> = [ … ]` entry in `aspects.nix` only if the
-  aspect **composes** other bundles (edges). Always-on? add it to `base`'s edge
-  list. Hosts select it by listing it in their `host.nix` card's `aspects`.
+- **New program / feature (leaf)**: Create the file under the relevant folder —
+  `modules/<group>/<name>.nix` (`programs/` for apps, `desktop/` for desktop bits,
+  `system/` for OS/hardware, `homelab/` for services). Declare
+  `flake.modules.nixos.<name>` and/or `flake.modules.homeManager.<name>`, gating each
+  half's `config` with `lib.mkIf config.fireproof.<feature>.enable` (reuse the
+  capability gate, e.g. `desktop.enable`, or a nested child). For a **new** toggle,
+  add a `fireproof.<feature>.enable = lib.mkEnableOption "…";` (or a cascading
+  `lib.mkOption { default = config.fireproof.<parent>.enable; }`) to
+  `modules/base/fireproof.nix` (declared in both classes automatically), and enable
+  it per host via `shared.fireproof.<feature>.enable = true`. For a homelab service
+  also add a dashboard link in `modules/homelab/glance/_home-page.nix`.
+- **New always-on leaf**: Put it in `base/`, `scripts/`, or as an ungated
+  `programs/`/`system/` leaf and leave it ungated — those apply to every host.
 - **New host**: Run `just new-host <hostname> <username>` — it drops a
-  `hosts/<hostname>/host.nix` card; edit its `aspects` (and `shared`/`homeManager`)
-  to taste. The host is **discovered automatically** (the `host.nix` is the marker);
+  `hosts/<hostname>/host.nix` card; enable features via
+  `shared.fireproof.<feature>.enable = true` (and add `homeManager` tweaks) to
+  taste. The host is **discovered automatically** (the `host.nix` is the marker);
   no `hosts/default.nix` edit. Per-host files (`system.nix`,
   `disk-configuration.nix`, `monitors.nix`, …) go in the host directory as
   **cards** — NixOS config under a `nixos` bucket. To install
@@ -267,10 +299,10 @@ Two rekey stores per host, because `agenix rekey` deletes any file in a node's
 `localStorageDir` that the node doesn't own — so the nixos and home-manager nodes
 of one host **must not share a dir**:
 
-- **`secrets/hosts/<h>/.rekey/`** — nixos secrets (`modules/secrets/secrets.nix`):
+- **`secrets/hosts/<h>/.rekey/`** — nixos secrets (`modules/base/secrets.nix`):
   `age.secrets.*` declared in a `flake.modules.nixos.*` half, decrypted by root.
 - **`secrets/hosts/<h>/.rekey-hm/`** — home-manager secrets
-  (`modules/secrets/hm-secrets.nix`): `age.secrets.*` declared in a
+  (`modules/base/hm-secrets.nix`): `age.secrets.*` declared in a
   `flake.modules.homeManager.*` half, decrypted during HM activation (as the user)
   via `~/.ssh/id_ed25519`. The `ssh-key` secret stays nixos-side because it _is_
   that identity (it can't decrypt itself). Both stores use the same `hostPubkey`,

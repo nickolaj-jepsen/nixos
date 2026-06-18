@@ -1,5 +1,9 @@
 {
-  flake.modules.nixos.prometheus = {config, ...}: let
+  flake.modules.nixos.prometheus = {
+    config,
+    lib,
+    ...
+  }: let
     inherit (config.fireproof) hostname;
     mkScrapeConfig = name: {
       job_name = name;
@@ -16,7 +20,7 @@
       ];
     };
   in {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       age.secrets.grafana-cloud-prometheus-api-key = {
         rekeyFile = ../../secrets/grafana-cloud-prometheus.age;
         owner = "prometheus";

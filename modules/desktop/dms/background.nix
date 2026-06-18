@@ -1,5 +1,6 @@
 {
   flake.modules.homeManager.dms-background = {
+    config,
     lib,
     pkgs,
     ...
@@ -35,7 +36,7 @@
       geometryPng
     ];
   in {
-    config = {
+    config = lib.mkIf config.fireproof.desktop.enable {
       # Use hyprpaper as we can't currently set wallpapers through DMS
       services.hyprpaper = {
         enable = true;

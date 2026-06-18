@@ -1,6 +1,7 @@
 {
   flake.modules.nixos.audiobookshelf = {
     config,
+    lib,
     fpLib,
     ...
   }: let
@@ -8,7 +9,7 @@
     domain = "audiobookshelf.${cfg.domain}";
     port = 8234;
   in {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       services.restic.backups.homelab.paths = ["/var/lib/audiobookshelf"];
 
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {

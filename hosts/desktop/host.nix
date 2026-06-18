@@ -1,10 +1,17 @@
 {
-  aspects = ["workstation" "physical" "nvidia" "chromium" "bambu" "intellij" "clickhouse" "claude-work" "snapcast" "networkd"];
-
   shared = {
     fireproof.hostname = "desktop";
     fireproof.username = "nickolaj";
     fireproof.hardware.gpuPciId = "10de:2c05";
+
+    fireproof.desktop.enable = true;
+    fireproof.desktop.bambu-studio.enable = true;
+    fireproof.desktop.snapcast.enable = true;
+    fireproof.dev.enable = true;
+    fireproof.work.enable = true;
+    fireproof.hardware.nvidia.enable = true;
+    fireproof.claude-code.work.enable = true;
+    fireproof.networkd.enable = true;
   };
 
   homeManager = {

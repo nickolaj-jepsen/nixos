@@ -1,6 +1,10 @@
 {
-  flake.modules.nixos.qt = _: {
-    config = {
+  flake.modules.nixos.qt = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
       qt = {
         enable = true;
         platformTheme = "gnome";

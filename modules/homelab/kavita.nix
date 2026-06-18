@@ -13,7 +13,7 @@
     tokenFile = "/var/lib/secrets/kavita-token";
     oidcSecretFile = "/var/lib/secrets/kavita-oidc-secret";
   in {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       services.restic.backups.homelab.paths = [config.services.kavita.dataDir];
 
       # read the e-book/comic library provisioned by audiobookshelf.nix

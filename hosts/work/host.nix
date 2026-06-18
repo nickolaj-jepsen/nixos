@@ -1,9 +1,14 @@
 {
-  aspects = ["workstation" "physical" "nvidia" "chromium" "intellij" "clickhouse" "claude-work" "networkd"];
-
   shared = {
     fireproof.hostname = "work";
     fireproof.username = "nickolaj";
+
+    fireproof.desktop.enable = true;
+    fireproof.dev.enable = true;
+    fireproof.work.enable = true;
+    fireproof.hardware.nvidia.enable = true;
+    fireproof.claude-code.work.enable = true;
+    fireproof.networkd.enable = true;
   };
 
   homeManager = {lib, ...}: {

@@ -211,17 +211,19 @@ new-host hostname username:
     mkdir -p "secrets/hosts/{{ hostname }}"
     mkdir -p "hosts/{{ hostname }}"
     cat > "hosts/{{ hostname }}/host.nix" <<'EOF'
-    # {{ hostname }}'s host card: the aspects it selects + its facts. The presence
-    # of this file is what makes hosts/{{ hostname }}/ a discovered host. Every
-    # host file is a card {aspects?, shared?, nixos?, homeManager?}: add
-    # nixos-specific settings under `nixos` here or in sibling cards (e.g.
-    # system.nix), and host-specific home-manager tweaks under `homeManager`.
+    # {{ hostname }}'s host card: the feature toggles it enables + its facts. The
+    # presence of this file is what makes hosts/{{ hostname }}/ a discovered host.
+    # Every host file is a card {shared?, nixos?, homeManager?}: enable features via
+    # `shared.fireproof.<feature>.enable = true`, add nixos-specific settings under
+    # `nixos` here or in sibling cards (e.g. system.nix), and host-specific
+    # home-manager tweaks under `homeManager`.
     {
-      aspects = [];
-
       shared = {
         fireproof.hostname = "{{ hostname }}";
         fireproof.username = "{{ username }}";
+        # Enable features, e.g.:
+        # fireproof.desktop.enable = true;
+        # fireproof.dev.enable = true;
       };
     }
     EOF
@@ -237,7 +239,7 @@ new-host hostname username:
     just secret-rekey
 
     echo "Host '{{ hostname }}' created and discovered automatically (no hosts/default.nix edit needed)."
-    echo "Edit hosts/{{ hostname }}/host.nix to choose its aspects — see aspects.nix for the bundle graph."
+    echo "Edit hosts/{{ hostname }}/host.nix to enable features via fireproof.*.enable — see modules/base/fireproof.nix."
 
 [doc("Update flake.lock")]
 [group('maintenance')]
@@ -270,11 +272,6 @@ tree *ARGS=("--derivation .#nixosConfigurations." + shell("hostname -s") + ".con
 [group("tools")]
 diff hostname=`hostname -s`: (build-system hostname)
     nvd diff /run/current-system {{ justfile_directory() }}/result
-
-[doc('Show resolved aspects, bundle closure and selected leaves for a host')]
-[group('tools')]
-aspects hostname=`hostname -s`:
-    @{{ nixcmd }} eval .#aspects.{{ hostname }}
 
 [doc('List system generations')]
 [group('tools')]

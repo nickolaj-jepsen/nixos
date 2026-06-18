@@ -1,6 +1,10 @@
 {
-  flake.modules.nixos.homelab-security = _: {
-    config = {
+  flake.modules.nixos.homelab-security = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.homelab.enable {
       services.fail2ban = {
         enable = true;
         maxretry = 5;

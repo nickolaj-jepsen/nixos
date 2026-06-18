@@ -1,11 +1,17 @@
 {
-  flake.modules.nixos.dms = _: {
-    config = {
+  flake.modules.nixos.dms = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
       systemd.user.services.niri-flake-polkit.enable = false;
     };
   };
 
   flake.modules.homeManager.dms = {
+    config,
+    lib,
     inputs,
     pkgs,
     ...
@@ -13,7 +19,7 @@
     imports = [
       inputs.dank-material-shell.homeModules.dank-material-shell
     ];
-    config = {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.dank-material-shell = {
         enable = true;
 

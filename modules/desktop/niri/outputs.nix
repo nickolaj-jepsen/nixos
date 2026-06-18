@@ -7,7 +7,7 @@
   }: let
     primaryMonitorName = fpLib.primaryMonitorName config.fireproof.monitors;
   in {
-    config = {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.niri.settings = {
         workspaces = lib.mkIf (primaryMonitorName != "") {
           "01".open-on-output = primaryMonitorName;

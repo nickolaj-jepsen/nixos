@@ -1,6 +1,7 @@
 {
   flake.modules.nixos.plex = {
     config,
+    lib,
     pkgs,
     fpLib,
     ...
@@ -8,7 +9,7 @@
     cfg = config.fireproof.homelab;
     domain = "plex.${cfg.domain}";
   in {
-    config = {
+    config = lib.mkIf config.fireproof.homelab.enable {
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
         port = 32400;
         websockets = true;

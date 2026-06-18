@@ -1,9 +1,12 @@
 {
-  aspects = ["workstation" "laptop" "chromium" "intellij" "clickhouse"];
-
   shared = {
     fireproof.hostname = "laptop";
     fireproof.username = "nickolaj";
+
+    fireproof.desktop.enable = true;
+    fireproof.dev.enable = true;
+    fireproof.work.enable = true;
+    fireproof.hardware.laptop = true;
   };
 
   homeManager = {lib, ...}: {

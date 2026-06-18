@@ -1,5 +1,7 @@
 {
   flake.modules.homeManager.niri-dynamic-workspaces = {
+    config,
+    lib,
     pkgs,
     inputs,
     ...
@@ -28,7 +30,7 @@
     imports = [
       inputs.niri-dynamic-workspaces.homeModules.default
     ];
-    config = {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.niri-dynamic-workspaces = {
         enable = true;
         # Pass package explicitly to avoid upstream's `pkgs.system` warning

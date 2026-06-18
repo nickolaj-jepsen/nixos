@@ -7,12 +7,14 @@
 {
   class = "home";
 
-  # Headless: CLI tooling only (no desktop/gui aspect, so nothing pulls a GUI).
-  aspects = ["dev" "work" "clickhouse" "claude-work"];
-
+  # Headless: CLI tooling only — no desktop/gui-* toggles, so nothing pulls a GUI.
   shared = {
     fireproof.hostname = "dev-ao";
     fireproof.username = "nij";
+
+    fireproof.dev.enable = true;
+    fireproof.work.enable = true;
+    fireproof.claude-code.work.enable = true;
   };
 
   # The dev server decrypts HM secrets with its existing RSA key at ~/.ssh/id_rsa,
