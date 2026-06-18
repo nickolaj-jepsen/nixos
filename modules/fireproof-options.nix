@@ -30,66 +30,19 @@ let
 
       work.enable = lib.mkEnableOption "Enable work-related applications and tools";
 
-      homelab.enable = lib.mkEnableOption "Enable homelab services (arr, nginx, postgres, prometheus, etc.)";
-
       bootstrap.targetHost = lib.mkOption {
         type = lib.types.str;
         default = "";
         description = "Hostname this bootstrap ISO targets. Empty string means the generic, non-host-specific bootstrap.";
       };
 
-      dev = {
-        enable = lib.mkEnableOption "Enable development tools and applications";
-        # Opt-in (default false): selected via the matching aspect bundle, so a
-        # dev host that wants the lighter toolset (minilab) simply omits them.
-        intellij.enable = lib.mkEnableOption "IntelliJ-based IDEs";
-        clickhouse.enable = lib.mkEnableOption "Clickhouse";
-        playwright.enable = lib.mkEnableOption "Playwright";
-      };
-
-      desktop = {
-        enable = lib.mkEnableOption "Enable desktop environment with niri, greetd, and all desktop features";
-        windowManager.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.desktop.enable;
-          description = "Enable window manager (niri) and dank material shell (dms)";
-        };
-        chromium.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = "Enable Chromium (opt-in via the chromium aspect).";
-        };
-        bambu-studio.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = "Enable Bambu Studio 3D printing slicer";
-        };
-        google-chrome.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = "Enable Google Chrome";
-        };
-      };
+      desktop.enable = lib.mkEnableOption "Enable desktop environment with niri, greetd, and all desktop features";
 
       claude-code.work.enable =
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
-      wsl.enable = lib.mkEnableOption "Enable WSL configuration";
-
       hardware = {
-        physical = lib.mkOption {
-          type = lib.types.bool;
-          default = !config.fireproof.wsl.enable;
-          description = "Whether this is a physical machine (not WSL/VM). Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub and journald caps.";
-        };
-        zram = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.hardware.physical;
-          description = "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
-        };
         laptop = lib.mkEnableOption "Enable laptop-specific configurations and tools";
-        nvidia.enable =
-          lib.mkEnableOption "NVIDIA GPU support (open kernel module + VA-API video offload)";
         gpuPciId = lib.mkOption {
           type = lib.types.nullOr lib.types.str;
           default = null;

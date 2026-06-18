@@ -14,11 +14,10 @@
   pick = selectedNames: modset:
     builtins.attrValues (lib.getAttrs (builtins.filter (n: modset ? ${n}) selectedNames) modset);
 
-  # Resolve a host's aspects into the fireproof.* fact set its bundles provide
-  # (host-specific facts win), then inject that set into BOTH the nixos and the
-  # home-manager evals — the no-bridge fact flow. Leaves are still imported
-  # wholesale and self-gate via mkIf during the cutover; membership selection
-  # replaces that in the final step.
+  # A host's facts are just its own fireproof.* values, injected verbatim into
+  # BOTH the nixos and the home-manager evals (the no-bridge fact flow). Aspects
+  # that used to carry facts now contribute them via membership-selected setter
+  # leaves; the module system merges everything with real precedence.
   mkSystem = {
     dir,
     aspects ? [],
@@ -32,7 +31,7 @@
   }:
     withSystem system (
       {system, ...}: let
-        resolvedFacts = aspectsLib.facts config.flake.bundles aspects facts;
+        resolvedFacts = facts;
         selectedNames = aspectsLib.selectedLeaves config.flake.bundles config.flake.aspectTags (["base"] ++ aspects);
         nixosLeaves = pick selectedNames config.flake.modules.nixos;
         homeLeaves = pick selectedNames config.flake.modules.homeManager;

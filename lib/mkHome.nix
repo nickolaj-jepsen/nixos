@@ -22,7 +22,7 @@
   homeLeaves =
     builtins.attrValues
     (lib.getAttrs (builtins.filter (n: flake.modules.homeManager ? ${n}) selectedNames) flake.modules.homeManager);
-  resolvedFacts = aspectsLib.facts flake.bundles aspects (facts // {inherit username;});
+  resolvedFacts = facts // {inherit username;};
   pkgs = import inputs.nixpkgs {
     inherit system;
     config.allowUnfree = true;
