@@ -122,30 +122,24 @@
         ];
     };
 
-  # name -> host directory. (Reduced from the old targets registry; replaced by
-  # marker-file discovery in the next step.)
-  targets = {
-    desktop = ./desktop;
-    laptop = ./laptop;
-    work = ./work;
-    homelab = ./homelab;
-    minilab = ./minilab;
-    desktop-wsl = ./desktop-wsl;
-  };
+  # A host is any hosts/<name>/ directory containing a host.nix card. bootstrap/
+  # (no card) and _templates/ are excluded for free — the fleet is discovered,
+  # not enumerated.
+  hostDir = name: ./. + "/${name}";
+  isHost = name: type: type == "directory" && builtins.pathExists (hostDir name + "/host.nix");
+  hostNames = lib.attrNames (lib.filterAttrs isHost (builtins.readDir ./.));
 in {
   # Resolved selection per host, for inspection via `just aspects <host>`.
-  config.flake.aspects =
-    lib.mapAttrs (_: dir: let
-      asp = (collect dir).aspects;
-    in {
-      aspects = asp;
-      closure = aspectsLib.closure config.flake.bundles (["base"] ++ asp);
-      leaves = aspectsLib.selectedLeaves config.flake.bundles config.flake.aspectTags (["base"] ++ asp);
-    })
-    targets;
+  config.flake.aspects = lib.genAttrs hostNames (name: let
+    asp = (collect (hostDir name)).aspects;
+  in {
+    aspects = asp;
+    closure = aspectsLib.closure config.flake.bundles (["base"] ++ asp);
+    leaves = aspectsLib.selectedLeaves config.flake.bundles config.flake.aspectTags (["base"] ++ asp);
+  });
 
   config.flake.nixosConfigurations =
-    (lib.mapAttrs (_: buildHost) targets)
+    lib.genAttrs hostNames (name: buildHost (hostDir name))
     // {bootstrap = buildBootstrap null;}
-    // (lib.mapAttrs' (name: _: lib.nameValuePair "bootstrap-${name}" (buildBootstrap name)) targets);
+    // lib.listToAttrs (map (n: lib.nameValuePair "bootstrap-${n}" (buildBootstrap n)) hostNames);
 }

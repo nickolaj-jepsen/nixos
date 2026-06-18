@@ -30,9 +30,9 @@ This is a NixOS flake-based configuration managing 7 hosts with a custom `firepr
 ### Structure
 
 ```
-hosts/                    # Per-host configs; default.nix = mkSystem + host aspects/facts
+hosts/                    # Per-host configs; <h>/host.nix = aspect+fact card; default.nix = builder + discovery
 lib/                      # Shared helpers (fpLib) + the aspect resolver (aspects.nix)
-aspects.nix               # Bundle DAG (includes) + facts — the aspect registry
+aspects.nix               # Bundle DAG (pure adjacency) — the composition graph
 modules/                  # ONE FOLDER PER ASPECT: the folder a file is in IS its membership
   ├── <name>.nix          #   a file directly under modules/ = a single-leaf aspect
   │                       #   (nvidia, wsl, docker, chromium, clickhouse, intellij, …)
@@ -86,29 +86,35 @@ Conventions:
   fragments): `modules/homelab/glance/_home-page.nix`, `hosts/<h>/_monitors.nix`.
 - **Per-host files** live in the host's directory (`hosts/<h>/`) and are imported
   only for that host (still plain NixOS modules).
-- The resolver is `lib/aspects.nix`; the bundle graph + facts are in `aspects.nix`;
+- The resolver is `lib/aspects.nix`; the bundle graph is in `aspects.nix`;
   shared cross-class options in `modules/fireproof-options.nix`.
 
-### Aspects & options (`fireproof.*`)
+### Aspects & host cards (`fireproof.*`)
 
-A host selects **aspects** (bundles), not toggles. Bundles live in `aspects.nix`
-(`flake.bundles`): each names other bundles it `includes` and the `fireproof.*`
-**facts** it sets. A host lists its aspects + host-specific facts in
-`hosts/default.nix` (`targets.<host> = { dir; aspects; facts; }`). The resolver
-(`lib/aspects.nix`) turns aspects into (a) the selected-leaf set and (b) the fact
-set, which the builder injects into BOTH the nixos and home-manager evals — no
-osConfig bridge. Inspect a host's resolution with **`just aspects <host>`**.
+A host selects **aspects** (membership tags), not toggles, via a
+`hosts/<host>/host.nix` **card**: `{ aspects = [ … ]; shared = { fireproof.* … };
+homeManager = { … }; }`. `shared` is a module merged into BOTH the nixos and the
+home-manager evals (the no-bridge fact flow — no osConfig); `homeManager` is the
+host's HM tweaks. The fleet is **discovered** — any `hosts/<name>/` directory
+containing a `host.nix` is a host (`hosts/default.nix`); there is no central
+registry. Inspect a host's resolution with **`just aspects <host>`**.
 
-`base` is prepended to every host and is a **composition node**: its `includes`
-pull in the always-on aspect folders (`nix system cli secrets scripts
-fireproof-options docker`). So a leaf is always-on by living in one of those
-folders. A folder name used as a membership target should be declared as a bundle
-in `flake.bundles` (an empty `includes = []` is fine) so the aspect registry stays
-complete.
+An aspect carries **no data** — it is a pure membership tag. A "fact" is just a
+`fireproof.*` option value set in a `shared` card or an aspect-tagged setter leaf
+(e.g. `modules/desktop/enable.nix` sets `fireproof.desktop.enable` for the desktop
+aspect); the module system merges those with real precedence.
+
+Bundles in `aspects.nix` (`flake.bundles`) are **pure adjacency** (`name -> [the
+bundles it pulls in]`). Only **composing** nodes appear there (`base`, `desktop`,
+`laptop`, `gui-dev`, `gui-work`, `workstation`); every other aspect is a
+pass-through name the closure carries via `or []`, so a leaf-only aspect needs **no
+bundle entry**. `base` is prepended to every host and pulls in the always-on aspect
+folders (`nix system cli secrets scripts fireproof-options docker`), so a leaf is
+always-on by living in one of those folders.
 
 Shared, cross-class options (`fireproof.{hostname,username,theme,monitors,
-hardware.*,desktop.*,dev.*,…}`) are declared once in
-`modules/fireproof-options.nix` (emitted to both module classes).
+hardware.*,desktop.*,…}`) are declared once in `modules/fireproof-options.nix`
+(emitted to both module classes).
 
 ### Home Manager
 
@@ -116,9 +122,10 @@ Author a feature's home-manager half as `flake.modules.homeManager.<name>`,
 reading `config.fireproof.*` locally (facts are injected). It evaluates both
 embedded (per host) and standalone (`lib/mkHome.nix` /
 `homeConfigurations.portability-check`, with `osConfig = null`). The host builder
-(`hosts/default.nix`) defines `home-manager.users.<user>` and routes the selected
-homeManager leaves — plus any per-host `homeModules` (e.g. `hosts/<h>/_home.nix`) —
-into its `sharedModules`. There is no `fireproof.home-manager` alias.
+(`hosts/default.nix`) defines `home-manager.users.<user>` (the user read from
+`config.fireproof.username`) and routes the selected homeManager leaves — plus the
+host card's `shared` and `homeManager` buckets — into its `sharedModules`. There is
+no `fireproof.home-manager` alias.
 
 ### Theme System
 
@@ -149,7 +156,7 @@ A leaf applies when its aspect is selected — do **not** wrap it in
 To place a leaf in a different/extra bundle than its folder implies, either move
 the file, or add the override `flake.aspectTags.foo = ["windowManager"];`.
 
-Intra-module conditionals on _facts_ (e.g.
+Intra-module conditionals on `fireproof.*` option values (e.g.
 `lib.optional config.fireproof.hardware.battery …`) are fine — those are
 parameters, not membership.
 
@@ -196,14 +203,17 @@ dendritic") — create the file in the right directory, no `imports` list to edi
   `aspectTags` line** unless overriding the folder. Use an existing aspect folder,
   or add a new bundle in `aspects.nix` for a new one. For a homelab service also
   add a dashboard link in `modules/homelab/glance/_home-page.nix`.
-- **New aspect/bundle**: Add it to `flake.bundles` in `aspects.nix` (its
-  `includes` edges and any `facts` it sets); create the matching `modules/<name>/`
-  folder; hosts select it in `hosts/default.nix`. (Always-on? add it to
-  `base.includes`.)
-- **New host**: Run `just new-host <hostname> <username>`, then add a
-  `targets.<hostname> = { dir = ./<hostname>; aspects = [ … ]; facts = { … }; }`
-  entry in `hosts/default.nix`. Per-host files (`disk-configuration.nix`,
-  `_monitors.nix`, …) go in the host directory. To install on physical hardware,
+- **New aspect/bundle**: Create the matching `modules/<name>/` folder; a leaf-only
+  aspect needs **no `aspects.nix` entry** (it's a pass-through, resolved via `or
+[]`). Add a `flake.bundles.<name> = [ … ]` entry in `aspects.nix` only if the
+  aspect **composes** other bundles (edges). Always-on? add it to `base`'s edge
+  list. Hosts select it by listing it in their `host.nix` card's `aspects`.
+- **New host**: Run `just new-host <hostname> <username>` — it drops a
+  `hosts/<hostname>/host.nix` card; edit its `aspects` (and `shared`/`homeManager`)
+  to taste. The host is **discovered automatically** (the `host.nix` is the marker);
+  no `hosts/default.nix` edit. Per-host files (`disk-configuration.nix`,
+  `_monitors.nix`, nixos-only `default.nix`, …) go in the host directory. To install
+  on physical hardware,
   build a host-specific bootstrap ISO with `just bootstrap-iso <hostname>` and
   flash with `just bootstrap-flash <hostname> /dev/sdX` — the ISO bakes in the
   host SSH key + a copy of this flake, target boots and runs `bootstrap-install`.

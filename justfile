@@ -191,12 +191,18 @@ new-host hostname username:
     echo "Setting up folders"
     mkdir -p "secrets/hosts/{{ hostname }}"
     mkdir -p "hosts/{{ hostname }}"
-    cat > "hosts/{{ hostname }}/default.nix" <<'EOF'
+    cat > "hosts/{{ hostname }}/host.nix" <<'EOF'
+    # {{ hostname }}'s host card: the aspects it selects + its facts. The presence
+    # of this file is what makes hosts/{{ hostname }}/ a discovered host. Add
+    # nixos-specific settings as sibling .nix files (auto-collected), and any
+    # host-specific home-manager tweaks under a `homeManager` bucket here.
     {
-      config.fireproof.hostname = "{{ hostname }}";
-      config.fireproof.username = "{{ username }}";
+      aspects = [];
 
-      imports = [];
+      shared = {
+        fireproof.hostname = "{{ hostname }}";
+        fireproof.username = "{{ username }}";
+      };
     }
     EOF
 
@@ -210,12 +216,8 @@ new-host hostname username:
     echo "Secret rekeying..."
     just secret-rekey
 
-    echo "Remember to update ./hosts/default.nix eg:"
-
-    # Bold with no newline
-    cat <<EOF
-    {{ BOLD }}{{ hostname }} = mkSystem {host = ./{{ hostname }};};{{ NORMAL }}
-    EOF
+    echo "Host '{{ hostname }}' created and discovered automatically (no hosts/default.nix edit needed)."
+    echo "Edit hosts/{{ hostname }}/host.nix to choose its aspects — see aspects.nix for the bundle graph."
 
 [doc("Update flake.lock")]
 [group('maintenance')]
