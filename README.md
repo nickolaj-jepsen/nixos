@@ -89,11 +89,7 @@ The recommended flow is a **host-specific bootstrap ISO**: an install image with
    just new-host <hostname> <username>
    ```
 
-   Creates `hosts/<hostname>/default.nix` and `secrets/hosts/<hostname>/`. Edit `hosts/<hostname>/default.nix` and add the entry to `hosts/default.nix`:
-
-   ```nix
-   <hostname> = mkSystem { host = ./<hostname>; };
-   ```
+   Creates `hosts/<hostname>/host.nix` (a card) and `secrets/hosts/<hostname>/`. Edit the card to enable features via `shared.fireproof.<feature>.enable = true` (and add `homeManager` tweaks). The host is discovered automatically — there is no `hosts/default.nix` registry to edit.
 
 2. (Optional) Pre-populate `hosts/<hostname>/disk-configuration.nix` if you already know the disk layout — otherwise the installer will pick a template interactively. Templates live in `hosts/_templates/disko/`.
 
@@ -171,7 +167,8 @@ secrets/
 └── hosts/<hostname>/
     ├── id_ed25519.pub      # Host public key
     ├── id_ed25519.age      # Host private key (encrypted)
-    └── .rekey/             # Rekeyed secrets for this host
+    ├── .rekey/             # Rekeyed nixos (root) secrets
+    └── .rekey-hm/          # Rekeyed home-manager (user) secrets
 ```
 
 ### Commands

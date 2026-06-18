@@ -1,52 +1,4 @@
-## fireproof\.base\.defaults\.terminal
-
-The terminal to use
-
-
-
-*Type:*
-string
-
-
-
-*Default:*
-
-```nix
-"ghostty"
-```
-
-*Declared by:*
- - [modules/base/defaults\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/defaults.nix)
-
-
-
-## fireproof\.bootstrap\.targetHost
-
-
-
-Hostname this bootstrap ISO targets\. Empty string means the generic, non-host-specific bootstrap\.
-
-
-
-*Type:*
-string
-
-
-
-*Default:*
-
-```nix
-""
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.claude-code\.work\.enable
-
-
 
 Whether to enable claude-work wrapper sharing the personal claude-code config via ~/\.claude-work\.
 
@@ -72,7 +24,7 @@ true
 ```
 
 *Declared by:*
- - [modules/programs/claude-code/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/claude-code/default.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -80,7 +32,7 @@ true
 
 
 
-Whether to enable Enable desktop environment with niri, greetd, and all desktop features\.
+Whether to enable desktop environment with niri, greetd, and all desktop features\.
 
 
 
@@ -104,7 +56,7 @@ true
 ```
 
 *Declared by:*
- - [modules/desktop/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/default.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -128,7 +80,7 @@ false
 ```
 
 *Declared by:*
- - [modules/programs/bambu-studio\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/bambu-studio.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -136,7 +88,7 @@ false
 
 
 
-Enable Chromium
+Enable the Chromium browser
 
 
 
@@ -152,7 +104,7 @@ true
 ```
 
 *Declared by:*
- - [modules/programs/chromium\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/chromium.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -176,39 +128,7 @@ false
 ```
 
 *Declared by:*
- - [modules/programs/google-chrome\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/google-chrome.nix)
-
-
-
-## fireproof\.desktop\.greeter\.enable
-
-
-
-Whether to enable greeter\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/desktop/greetd\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/greetd.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -240,7 +160,7 @@ true
 ```
 
 *Declared by:*
- - [modules/desktop/0xcb-media\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/0xcb-media.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -328,7 +248,7 @@ true
 ```
 
 *Declared by:*
- - [modules/desktop/snapcast\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/snapcast.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -427,35 +347,11 @@ string *(read only)*
 
 
 
-## fireproof\.desktop\.windowManager\.enable
-
-
-
-Enable window manager (niri) and dank material shell (dms)
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/desktop/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/default.nix)
-
-
-
 ## fireproof\.dev\.enable
 
 
 
-Whether to enable Enable development tools and applications\.
+Whether to enable development tools and applications\.
 
 
 
@@ -642,7 +538,7 @@ null
 
 
 
-Whether to enable Enable laptop-specific configurations and tools\.
+Whether to enable laptop-specific configurations and tools\.
 
 
 
@@ -698,7 +594,7 @@ true
 ```
 
 *Declared by:*
- - [modules/desktop/nvidia\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/nvidia.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -778,7 +674,7 @@ true
 
 
 
-Whether to enable Enable homelab services (arr, nginx, postgres, prometheus, etc\.)\.
+Whether to enable homelab server services (arr, jellyfin, nginx, …)\.
 
 
 
@@ -802,7 +698,7 @@ true
 ```
 
 *Declared by:*
- - [modules/homelab/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab/default.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -826,7 +722,7 @@ string
 ```
 
 *Declared by:*
- - [modules/homelab/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab/default.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -850,7 +746,7 @@ string
 ```
 
 *Declared by:*
- - [modules/homelab/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab/default.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -864,6 +760,326 @@ The hostname of the machine
 
 *Type:*
 string
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors
+
+
+
+Per-output display configuration\.
+
+
+
+*Type:*
+list of (submodule)
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors\.\*\.enable
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors\.\*\.name
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"DP-1"
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors\.\*\.position\.x
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+signed integer
+
+
+
+*Default:*
+
+```nix
+0
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors\.\*\.position\.y
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+signed integer
+
+
+
+*Default:*
+
+```nix
+0
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors\.\*\.primary
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors\.\*\.refreshRateNiri
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or floating point number
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+60.0
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors\.\*\.resolution\.height
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or signed integer
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors\.\*\.resolution\.width
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or signed integer
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors\.\*\.scale
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+floating point number
+
+
+
+*Default:*
+
+```nix
+1.0
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.monitors\.\*\.transform
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or signed integer
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+1
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.networkd\.enable
+
+
+
+Whether to enable systemd-networkd wired networking\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
@@ -1766,134 +1982,6 @@ string
 
 
 
-## fireproof\.theme\.hsl\.accent
-
-
-
-Accent in HSL
-
-
-
-*Type:*
-string
-
-
-
-*Default:*
-
-```nix
-"14 56 55"
-```
-
-
-
-*Example:*
-
-```nix
-"14 56 55"
-```
-
-*Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
-
-
-
-## fireproof\.theme\.hsl\.bg
-
-
-
-Background in HSL
-
-
-
-*Type:*
-string
-
-
-
-*Default:*
-
-```nix
-"30 4 11"
-```
-
-
-
-*Example:*
-
-```nix
-"30 4 11"
-```
-
-*Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
-
-
-
-## fireproof\.theme\.hsl\.green
-
-
-
-Green in HSL
-
-
-
-*Type:*
-string
-
-
-
-*Default:*
-
-```nix
-"72 59 38"
-```
-
-
-
-*Example:*
-
-```nix
-"72 59 38"
-```
-
-*Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
-
-
-
-## fireproof\.theme\.hsl\.red
-
-
-
-Red in HSL
-
-
-
-*Type:*
-string
-
-
-
-*Default:*
-
-```nix
-"5 64 54"
-```
-
-
-
-*Example:*
-
-```nix
-"5 64 54"
-```
-
-*Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
-
-
-
 ## fireproof\.username
 
 
@@ -1905,6 +1993,14 @@ The primary username for the machine
 *Type:*
 string
 
+
+
+*Default:*
+
+```nix
+"nickolaj"
+```
+
 *Declared by:*
  - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
@@ -1914,7 +2010,7 @@ string
 
 
 
-Whether to enable Enable work-related applications and tools\.
+Whether to enable work-related applications and tools\.
 
 
 
@@ -1946,7 +2042,7 @@ true
 
 
 
-Whether to enable Enable WSL configuration\.
+Whether to enable WSL configuration\.
 
 
 
@@ -1970,6 +2066,6 @@ true
 ```
 
 *Declared by:*
- - [modules/system/wsl\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/system/wsl.nix)
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 

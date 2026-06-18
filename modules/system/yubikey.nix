@@ -1,3 +1,5 @@
-_: {
-  services.pcscd.enable = true;
+{
+  flake.modules.nixos.yubikey = _: {
+    services.pcscd.enable = true;
+  };
 }

@@ -29,7 +29,7 @@
           title = "Applications";
           groups = [
             {
-              title = "Comunication";
+              title = "Communication";
               links = [
                 {
                   title = "Outlook";

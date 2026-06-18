@@ -1,8 +1,8 @@
-{config, ...}: let
-  inherit (config.fireproof) username;
-  inherit (config.age) secrets;
-in {
-  config = {
+{
+  flake.modules.nixos.user = {config, ...}: let
+    inherit (config.fireproof) username;
+    inherit (config.age) secrets;
+  in {
     age.secrets.hashed-user-password.rekeyFile = ../../secrets/hashed-user-password.age;
 
     users.users.${username} = {

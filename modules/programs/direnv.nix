@@ -1,5 +1,5 @@
-_: {
-  fireproof.home-manager = {
+{
+  flake.modules.homeManager.direnv = {config, ...}: {
     programs.direnv = {
       enable = true;
       nix-direnv.enable = true;
@@ -8,7 +8,7 @@ _: {
           hide_env_diff = true;
           warn_timeout = "1m";
         };
-        whitelist.prefix = ["/home/nickolaj/nixos"];
+        whitelist.prefix = ["${config.home.homeDirectory}/nixos"];
       };
     };
     # Silence the per-load "direnv: loading…/export N vars" banner (complements

@@ -56,11 +56,11 @@
     "bootstrap-payload": {
       "flake": false,
       "locked": {
-        "path": "./hosts/bootstrap/empty-payload",
+        "path": "./installer/empty-payload",
         "type": "path"
       },
       "original": {
-        "path": "./hosts/bootstrap/empty-payload",
+        "path": "./installer/empty-payload",
         "type": "path"
       },
       "parent": []

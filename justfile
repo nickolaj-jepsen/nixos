@@ -70,6 +70,25 @@ boot hostname=`hostname -s` *ARGS="":
 test hostname=`hostname -s` *ARGS="":
     sudo nixos-rebuild test --flake .#{{ hostname }} {{ ARGS }}
 
+[doc('Build a home-manager host (class = "home") activation package')]
+[group("deploy")]
+home-build hostname *ARGS="":
+    @just build homeConfigurations."{{ hostname }}".activationPackage {{ ARGS }}
+
+[doc('Activate a home-manager host: locally (run ON the host as its user), or push to a remote target over ssh')]
+[group("deploy")]
+home-switch hostname target='':
+    #!/usr/bin/env -S bash -e
+    target="{{ target }}"
+    out=$({{ nixcmd }} build --no-link --print-out-paths \
+        "{{ justfile_directory() }}#homeConfigurations.{{ hostname }}.activationPackage")
+    if [ -z "$target" ]; then
+        "$out/activate"
+    else
+        {{ nixcmd }} copy --to "ssh://$target" "$out"
+        ssh "$target" "$out/activate"
+    fi
+
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
 deploy-remote hostname target: (_confirm "Deploy " + hostname + " to " + target + "? This will FORMAT disks on the target.")
@@ -191,12 +210,21 @@ new-host hostname username:
     echo "Setting up folders"
     mkdir -p "secrets/hosts/{{ hostname }}"
     mkdir -p "hosts/{{ hostname }}"
-    cat > "hosts/{{ hostname }}/default.nix" <<'EOF'
+    cat > "hosts/{{ hostname }}/host.nix" <<'EOF'
+    # {{ hostname }}'s host card: the feature toggles it enables + its facts. The
+    # presence of this file is what makes hosts/{{ hostname }}/ a discovered host.
+    # Every host file is a card {shared?, nixos?, homeManager?}: enable features via
+    # `shared.fireproof.<feature>.enable = true`, add nixos-specific settings under
+    # `nixos` here or in sibling cards (e.g. system.nix), and host-specific
+    # home-manager tweaks under `homeManager`.
     {
-      config.fireproof.hostname = "{{ hostname }}";
-      config.fireproof.username = "{{ username }}";
-
-      imports = [];
+      shared = {
+        fireproof.hostname = "{{ hostname }}";
+        fireproof.username = "{{ username }}";
+        # Enable features, e.g.:
+        # fireproof.desktop.enable = true;
+        # fireproof.dev.enable = true;
+      };
     }
     EOF
 
@@ -210,12 +238,8 @@ new-host hostname username:
     echo "Secret rekeying..."
     just secret-rekey
 
-    echo "Remember to update ./hosts/default.nix eg:"
-
-    # Bold with no newline
-    cat <<EOF
-    {{ BOLD }}{{ hostname }} = mkSystem {host = ./{{ hostname }};};{{ NORMAL }}
-    EOF
+    echo "Host '{{ hostname }}' created and discovered automatically (no hosts/default.nix edit needed)."
+    echo "Edit hosts/{{ hostname }}/host.nix to enable features via fireproof.*.enable — see modules/base/fireproof.nix."
 
 [doc("Update flake.lock")]
 [group('maintenance')]

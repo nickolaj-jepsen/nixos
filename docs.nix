@@ -19,10 +19,7 @@
     storePrefix = toString inputs.self;
 
     optionsDoc = pkgs.nixosOptionsDoc {
-      # Document the `fireproof` subtree, minus `fireproof.home-manager` — that
-      # is a passthrough wrapper exposing the entire upstream home-manager/niri
-      # option set, not our own options.
-      options.fireproof = removeAttrs eval.options.fireproof ["home-manager"];
+      options.fireproof = eval.options.fireproof;
       warningsAreErrors = false;
       transformOptions = opt:
         opt
@@ -30,7 +27,10 @@
           declarations =
             map (
               decl: let
-                rel = lib.removePrefix "/" (lib.removePrefix storePrefix (toString decl));
+                # Dendritic decls stringify as "<path>, via option <name>"; keep
+                # the path so the GitHub link resolves.
+                path = lib.head (lib.splitString ", via option " (toString decl));
+                rel = lib.removePrefix "/" (lib.removePrefix storePrefix path);
               in {
                 name = rel;
                 url = "${repoUrl}/${rel}";

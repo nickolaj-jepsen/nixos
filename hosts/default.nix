@@ -1,18 +1,65 @@
 {
   inputs,
   withSystem,
+  config,
   ...
 }: let
   inherit (inputs.nixpkgs) lib;
   fpLib = import ../lib {inherit lib;};
+  mkHome = import ../lib/mkHome.nix {
+    inherit inputs lib fpLib;
+    inherit (config) flake;
+  };
 
-  mkSystem = {
-    host,
-    modules ? [],
+  validClasses = ["nixos" "home"];
+
+  collect = dir: let
+    cardKeys = ["class" "shared" "nixos" "homeManager"];
+    names =
+      lib.filter
+      (n: lib.hasSuffix ".nix" n && !(lib.hasPrefix "_" n))
+      (lib.attrNames (lib.filterAttrs (_: t: t == "regular") (builtins.readDir dir)));
+    load = n: let
+      path = dir + "/${n}";
+      card = import path;
+      stray = lib.subtractLists cardKeys (lib.attrNames card);
+    in
+      if !(builtins.isAttrs card)
+      then throw "${toString path}: host files must be cards (an attrset over {${lib.concatStringsSep ", " cardKeys}}), not a module — wrap the body in a `nixos = { … };` bucket"
+      else if stray != []
+      then throw "${toString path}: unknown host-card key(s) [${lib.concatStringsSep " " stray}] — allowed {${lib.concatStringsSep ", " cardKeys}}; put NixOS config under `nixos`"
+      else card;
+    cards = map load names;
+    # class is read pre-eval (before the module system runs), so it routes the whole host.
+    class = let
+      vals = lib.unique (map (c: c.class) (lib.filter (c: c ? class) cards));
+    in
+      if vals == []
+      then "nixos"
+      else if lib.length vals > 1
+      then throw "${toString dir}: conflicting `class` values across cards: ${lib.concatStringsSep ", " vals}"
+      else if !(lib.elem (lib.head vals) validClasses)
+      then throw "${toString dir}: unknown host class \"${lib.head vals}\" — known: ${lib.concatStringsSep ", " validClasses}"
+      else lib.head vals;
+  in {
+    inherit class;
+    shared = lib.catAttrs "shared" cards;
+    nixos = lib.catAttrs "nixos" cards;
+    homeManager = lib.catAttrs "homeManager" cards;
+  };
+
+  # `shared` sets fireproof.* in BOTH evals (the no-bridge fact flow); HM user read from resulting config.fireproof.username.
+  mkNixos = {
+    shared ? [],
+    nixosModules ? [],
+    homeManagerModules ? [],
     system ? "x86_64-linux",
   }:
     withSystem system (
-      {system, ...}:
+      {system, ...}: let
+        nixosLeaves = builtins.attrValues config.flake.modules.nixos;
+        homeLeaves = builtins.attrValues config.flake.modules.homeManager;
+      in
         inputs.nixpkgs.lib.nixosSystem {
           specialArgs = {inherit inputs fpLib;};
           modules =
@@ -29,38 +76,61 @@
               inputs.niri.nixosModules.niri
               inputs.nixos-wsl.nixosModules.default
               inputs.self.nixosModules.overlays
-              # Auto-import every module in the tree, plus the host's own
-              # directory (its default.nix and sibling files). Non-module helper
-              # files are skipped via a leading underscore (see import-tree).
-              (inputs.import-tree ../modules)
-              (inputs.import-tree host)
+              ({config, ...}: {
+                # mkDefault on both stateVersions so a host (e.g. desktop-wsl) can bump system.stateVersion.
+                home-manager = {
+                  useUserPackages = true;
+                  useGlobalPkgs = true;
+                  extraSpecialArgs = {inherit inputs fpLib;};
+                  sharedModules =
+                    homeLeaves
+                    ++ homeManagerModules
+                    ++ shared
+                    ++ [{home.stateVersion = lib.mkDefault "24.11";}];
+                  users.${config.fireproof.username} = {};
+                };
+                system.stateVersion = lib.mkDefault "24.11";
+              })
             ]
-            ++ modules;
+            ++ shared
+            ++ nixosLeaves
+            ++ nixosModules;
         }
     );
 
-  targets = {
-    laptop = ./laptop;
-    desktop = ./desktop;
-    work = ./work;
-    homelab = ./homelab;
-    desktop-wsl = ./desktop-wsl;
-    minilab = ./minilab;
-  };
-
-  mkBootstrap = name:
-    mkSystem {
-      host = ./bootstrap;
-      modules = [
-        ./bootstrap/_bake.nix
-        {fireproof.bootstrap.targetHost = name;}
-      ];
+  buildHost = dir: let
+    c = collect dir;
+  in
+    mkNixos {
+      inherit (c) shared;
+      nixosModules = c.nixos;
+      homeManagerModules = c.homeManager;
     };
+
+  # home-class host: no NixOS eval, so a `nixos` bucket has nowhere to apply (loud error).
+  buildHome = dir: let
+    c = collect dir;
+  in
+    assert lib.assertMsg (c.nixos == []) "${toString dir}: a home-class host has no NixOS eval — move `nixos` config to `homeManager`/`shared`";
+      mkHome {
+        extraModules = c.shared ++ c.homeManager;
+      };
+
+  # A host is any hosts/<name>/ dir containing a host.nix card; _templates/ (no card) excluded for free.
+  hostDir = name: ./. + "/${name}";
+  isHost = name: type: type == "directory" && builtins.pathExists (hostDir name + "/host.nix");
+  discovered = lib.attrNames (lib.filterAttrs isHost (builtins.readDir ./.));
+
+  hostClassOf = name: (collect (hostDir name)).class;
+  nixosHosts = lib.filter (n: hostClassOf n == "nixos") discovered;
+  homeHosts = lib.filter (n: hostClassOf n == "home") discovered;
 in {
+  # nixos-class only: home-class hosts have no install ISO for installer/ to fan out over.
+  config.flake.hostNames = nixosHosts;
+
   config.flake.nixosConfigurations =
-    (lib.mapAttrs (_: host: mkSystem {inherit host;}) targets)
-    // {
-      bootstrap = mkSystem {host = ./bootstrap;};
-    }
-    // (lib.mapAttrs' (name: _: lib.nameValuePair "bootstrap-${name}" (mkBootstrap name)) targets);
+    lib.genAttrs nixosHosts (name: buildHost (hostDir name));
+
+  config.flake.homeConfigurations =
+    lib.genAttrs homeHosts (name: buildHome (hostDir name));
 }

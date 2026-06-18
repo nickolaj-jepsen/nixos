@@ -1,5 +1,5 @@
-_: {
-  monitors = [
+{
+  shared.fireproof.monitors = [
     {
       name = "DP-5";
       primary = true;

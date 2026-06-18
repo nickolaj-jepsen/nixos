@@ -1,45 +1,43 @@
 {
-  config,
-  lib,
-  inputs,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.desktop.windowManager.enable {
-    systemd.user.services.niri-flake-polkit.enable = false;
+  flake.modules.nixos.dms = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
+      systemd.user.services.niri-flake-polkit.enable = false;
+    };
+  };
 
-    fireproof.home-manager = {
-      imports = [
-        inputs.dank-material-shell.homeModules.dank-material-shell
-      ];
-
+  flake.modules.homeManager.dms = {
+    config,
+    lib,
+    inputs,
+    pkgs,
+    ...
+  }: {
+    imports = [
+      inputs.dank-material-shell.homeModules.dank-material-shell
+    ];
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.dank-material-shell = {
         enable = true;
 
         enableDynamicTheming = false;
         enableVPN = true;
         enableCalendarEvents = false;
-        dgop.package = pkgs.unstable.dgop; # not available in stable nixpkgs yet (26.05)
+        dgop.package = pkgs.unstable.dgop; # not in stable nixpkgs (26.05) yet
         quickshell.package = pkgs.unstable.quickshell; # dms 1.5-beta needs quickshell >= 0.3.0 for `pragma AppId`
 
         systemd.enable = true;
 
-        # weatherCoordinates is a session.json key (moved out of settings.json in
-        # the v5 migration), so it must live under `session`, not `settings`.
-        # weatherEnabled defaults true, so this is all that's needed for weather.
+        # weatherCoordinates is a session.json key, so it must live under `session`, not `settings`.
         session.weatherCoordinates = "56.1496278,10.2134046";
 
         settings = {
-          # Match the pinned DMS schema version (SettingsData.qml). Bumping from 5
-          # avoids a per-start in-memory migration; note it also lets the bar's
-          # shadow/elevation (barElevationEnabled, default true) take effect.
-          #
-          # MAINTENANCE: after `just update` bumps the dank-material-shell input,
-          # re-check the schema version in SettingsData.qml and re-pin here. A
-          # stale pin silently re-introduces a per-start migration (no error).
+          # Must match SettingsData.qml schema version, else a per-start migration runs silently; re-pin after `just update`.
           configVersion = 11;
 
-          # Lock Screen
           loginctlLockIntegration = true;
           fadeToLockEnabled = true;
           fadeToLockGracePeriod = 5;
@@ -51,7 +49,6 @@
           batteryLockTimeout = 300;
           batterySuspendTimeout = 1800;
 
-          # Power Menu
           powerMenuActions = [
             "reboot"
             "logout"

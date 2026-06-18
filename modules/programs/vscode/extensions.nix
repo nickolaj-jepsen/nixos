@@ -1,14 +1,14 @@
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: let
-  vscodePackage = pkgs.unstable.vscode;
-  marketplaceReleases = pkgs.vscode-marketplace-release;
-in {
-  config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
-    fireproof.home-manager = {
+  flake.modules.homeManager.vscode-extensions = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: let
+    vscodePackage = pkgs.unstable.vscode;
+    marketplaceReleases = pkgs.vscode-marketplace-release;
+  in {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.vscode = {
         enable = true;
         mutableExtensionsDir = false;

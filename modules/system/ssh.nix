@@ -1,37 +1,59 @@
+# ssh-key (nixos-side) IS ~/.ssh/id_ed25519, the runtime identity HM agenix uses to decrypt every other user secret, so it must stay root-placed (can't decrypt itself).
 {
-  config,
-  pkgs,
-  lib,
-  ...
-}: let
-  inherit (config.fireproof) username;
-  inherit (config.fireproof) hostname;
-  # Load all public keys from ../../secrets/hosts/*/id_ed25519.pub
-  allHosts = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ../../secrets/hosts));
-  publicKeys = map (x: builtins.readFile (../../secrets/hosts + ("/" + x) + "/id_ed25519.pub")) allHosts;
-  workEnabled = config.fireproof.work.enable;
-in {
-  age.secrets.ssh-key = {
-    rekeyFile = ../../secrets/hosts + ("/" + hostname) + /id_ed25519.age;
-    path = "/home/" + username + "/.ssh/id_ed25519";
-    mode = "0600";
-    owner = username;
-  };
-  age.secrets.ssh-key-ao = lib.mkIf workEnabled {
-    rekeyFile = ../../secrets/ssh-key-ao.age;
-    mode = "0600";
-    owner = username;
+  flake.modules.nixos.ssh = {
+    config,
+    lib,
+    ...
+  }: let
+    inherit (config.fireproof) username hostname;
+    allHosts = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ../../secrets/hosts));
+    publicKeys = map (x: builtins.readFile (../../secrets/hosts + ("/" + x) + "/id_ed25519.pub")) allHosts;
+  in {
+    age.secrets.ssh-key = {
+      rekeyFile = ../../secrets/hosts + ("/" + hostname) + /id_ed25519.age;
+      path = "/home/" + username + "/.ssh/id_ed25519";
+      mode = "0600";
+      owner = username;
+    };
+
+    programs.ssh.startAgent = true;
+    services.gnome.gcr-ssh-agent.enable = false;
+
+    services.openssh = {
+      enable = true;
+      settings.PasswordAuthentication = false;
+      settings.KbdInteractiveAuthentication = false;
+    };
+
+    users.users.${username}.openssh.authorizedKeys.keys = publicKeys;
   };
 
-  fireproof.home-manager = {
+  flake.modules.homeManager.ssh = {
+    config,
+    pkgs,
+    lib,
+    ...
+  }: let
+    inherit (config.fireproof) hostname;
+    workEnabled = config.fireproof.work.enable;
+    identityFile = "${config.home.homeDirectory}/.ssh/id_ed25519";
+  in {
+    # Explicit absolute path: ~/.ssh/config and the systemd ExecStart below don't reliably expand ${XDG_RUNTIME_DIR}.
+    age.secrets.ssh-key-ao = lib.mkIf workEnabled {
+      rekeyFile = ../../secrets/ssh-key-ao.age;
+      path = "${config.home.homeDirectory}/.ssh/id_ed25519_ao";
+      mode = "0600";
+    };
+
     home.file.".ssh/id_ed25519.pub".source = ../../secrets/hosts + ("/" + hostname) + "/id_ed25519.pub";
+
     programs.ssh = {
       enable = true;
       enableDefaultConfig = false;
       settings =
         {
           "*" = {
-            IdentityFile = "${config.age.secrets.ssh-key.path}";
+            IdentityFile = identityFile;
             ForwardAgent = true;
             ServerAliveInterval = 60;
             ServerAliveCountMax = 10;
@@ -55,9 +77,9 @@ in {
           };
         }
         // lib.optionalAttrs workEnabled {
-          # Work hostnames definded in ./networking.nix
           "bastion.ao" = {
             User = "nij";
+            HostName = lib.mkDefault "62.199.221.53";
             IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
           };
           "clickhouse.ao" = {
@@ -95,32 +117,19 @@ in {
           };
         };
     };
-  };
 
-  programs.ssh.startAgent = true;
-  services.gnome.gcr-ssh-agent.enable = false;
-
-  services.openssh = {
-    enable = true;
-    settings.PasswordAuthentication = false;
-    settings.KbdInteractiveAuthentication = false;
-  };
-
-  systemd.user.services."add-ssh-keys" = lib.mkIf workEnabled {
-    description = "Add SSH keys to ssh-agent";
-    after = ["network.target" "ssh-agent.service"];
-    requires = ["ssh-agent.service"];
-    wantedBy = ["default.target"];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStartPre = ''
-        ${pkgs.coreutils}/bin/sleep 5
-      '';
-      ExecStart = ''
-        ${pkgs.openssh}/bin/ssh-add -q ${config.age.secrets.ssh-key-ao.path}
-      '';
+    systemd.user.services."add-ssh-keys" = lib.mkIf workEnabled {
+      Unit = {
+        Description = "Add SSH keys to ssh-agent";
+        After = ["network.target" "ssh-agent.service"];
+        Requires = ["ssh-agent.service"];
+      };
+      Service = {
+        Type = "oneshot";
+        ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+        ExecStart = "${pkgs.openssh}/bin/ssh-add -q ${config.age.secrets.ssh-key-ao.path}";
+      };
+      Install.WantedBy = ["default.target"];
     };
   };
-
-  users.users.${username}.openssh.authorizedKeys.keys = publicKeys;
 }

@@ -1,11 +1,12 @@
-# Enabled when: dev
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.dev.enable {
-    fireproof.home-manager.home.packages = [pkgs.fnug];
+  flake.modules.homeManager.fnug = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.dev.enable {
+      home.packages = [pkgs.fnug];
+    };
   };
 }

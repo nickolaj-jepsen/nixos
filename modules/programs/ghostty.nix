@@ -1,14 +1,13 @@
-# Enabled when: desktop
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: let
-  c = config.fireproof.theme.colors;
-in {
-  config = lib.mkIf config.fireproof.desktop.enable {
-    fireproof.home-manager = {
+  flake.modules.homeManager.ghostty = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: let
+    c = config.fireproof.theme.colors;
+  in {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.ghostty = {
         enable = true;
         package = pkgs.unstable.ghostty;
@@ -60,6 +59,5 @@ in {
         };
       };
     };
-    fireproof.base.defaults.terminal = "ghostty";
   };
 }

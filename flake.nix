@@ -4,12 +4,19 @@
   outputs = {flake-parts, ...} @ inputs:
     flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [
+        inputs.flake-parts.flakeModules.modules
         inputs.agenix-rekey.flakeModule
         ./formatter.nix
         ./devshell.nix
         ./docs.nix
+        ./home-check.nix
         ./hosts
+        ./installer
         ./overlays
+        # Every file under ./modules is a self-declaring dendritic module that sets
+        # flake.modules.{nixos,homeManager}.<name>. import-tree auto-collects them
+        # all; each leaf self-gates with lib.mkIf config.fireproof.<feature>.enable.
+        (inputs.import-tree ./modules)
       ];
       systems = [
         "x86_64-linux"
@@ -86,7 +93,7 @@
     # Overridden at build time by `just bootstrap-iso <host>` to inject the
     # decrypted host SSH key into a host-specific bootstrap ISO. The default
     # points at an empty directory so the flake evaluates without any override.
-    bootstrap-payload.url = "path:./hosts/bootstrap/empty-payload";
+    bootstrap-payload.url = "path:./installer/empty-payload";
     bootstrap-payload.flake = false;
   };
 }

@@ -1,13 +1,14 @@
-# Enabled when: dev
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
-  config = lib.mkIf config.fireproof.dev.enable {
-    fireproof.home-manager.home.packages = [
-      pkgs.postgresql
-    ];
+  flake.modules.homeManager.postgres-cli = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.dev.enable {
+      home.packages = [
+        pkgs.postgresql
+      ];
+    };
   };
 }
