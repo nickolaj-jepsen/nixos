@@ -105,10 +105,6 @@
               bottom-right = 8.0;
             };
           }
-          {
-            matches = [{app-id = "^net-runelite-client-RuneLite$";}];
-            open-floating = true;
-          }
           # Floating windows (Mod+S) get a soft drop shadow so the state reads at
           # a glance against the otherwise flat Flexoki theme.
           {

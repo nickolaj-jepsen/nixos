@@ -7,6 +7,8 @@
   }: {
     config = lib.mkIf config.fireproof.desktop.enable {
       security.rtkit.enable = true;
+      # NixOS auto-enables speechd on graphical hosts; no screen-reader use here, so drop it and its mbrola/espeak voice closure (~760 MiB).
+      services.speechd.enable = false;
       services.pipewire = {
         enable = true;
         alsa.enable = true;
