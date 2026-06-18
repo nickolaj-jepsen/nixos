@@ -38,7 +38,7 @@ modules/                  # ONE FOLDER PER ASPECT: the folder a file is in IS it
   │                       #   (nvidia, wsl, docker, chromium, clickhouse, intellij, …)
   ├── nix/ system/ cli/   #   always-on aspects (pulled in by base.includes)
   │   secrets/ scripts/
-  ├── desktop/ windowManager/ dev/ gui-dev/ gui-work/   # capability aspects
+  ├── desktop/ dev/ gui-dev/ gui-work/   # capability aspects (desktop = niri + dms + apps)
   ├── physical/ laptop/   #   hardware aspects
   └── homelab/            #   server services (arr, jellyfin, nginx, …)
 secrets/                  # agenix-encrypted secrets with YubiKey
@@ -68,10 +68,9 @@ unique** (`flake.modules.<class>` is one flat namespace) — it's the join key t
 resolver selects on (e.g. `modules/dev/postgres.nix` is named `postgres-cli` so it
 doesn't collide with `modules/homelab/postgres.nix`'s `postgres`).
 
-**Override hatch:** an explicit `flake.aspectTags.<name> = [...]` in a file _wins_
-over the folder default — for the rare leaf whose membership differs from where it
-sits, or that wants multiple bundles. Two such cases exist: `desktop/dms/default`
-tags `windowManager`, and `homelab/default` (`homelab-options`) tags `base`.
+The folder is authoritative — there is **no override hatch**. `wrapAspect` merges
+the folder tag last (`recursiveUpdate m folderTags`), so a hand-written
+`flake.aspectTags` in a leaf is inert; membership changes by **moving the file**.
 
 [`import-tree`](https://github.com/vic/import-tree) (at the flake level in
 `flake.nix`) auto-collects every such file — no hand-maintained `imports = [ … ]`.
@@ -118,8 +117,9 @@ An aspect carries **no data** — it is a pure membership tag. A "fact" is just 
 aspect); the module system merges those with real precedence.
 
 Bundles in `aspects.nix` (`flake.bundles`) are **pure adjacency** (`name -> [the
-bundles it pulls in]`). Only **composing** nodes appear there (`base`, `desktop`,
-`laptop`, `gui-dev`, `gui-work`, `workstation`); every other aspect is a
+bundles it pulls in]`). Only **composing** nodes appear there (`base`, `laptop`,
+`gui-dev`, `gui-work`, `workstation`); every other aspect — including `desktop`
+(now a leaf aspect: niri + dms + apps, the whole graphical session) — is a
 pass-through name the closure carries via `or []`, so a leaf-only aspect needs **no
 bundle entry**. `base` is prepended to every host and pulls in the always-on aspect
 folders (`nix system cli secrets scripts fireproof-options docker`), so a leaf is
@@ -166,8 +166,8 @@ A leaf applies when its aspect is selected — do **not** wrap it in
 }
 ```
 
-To place a leaf in a different/extra bundle than its folder implies, either move
-the file, or add the override `flake.aspectTags.foo = ["windowManager"];`.
+To change a leaf's aspect, **move the file** to the right folder — the folder is the
+sole source of membership; there is no `aspectTags` override.
 
 Intra-module conditionals on `fireproof.*` option values (e.g.
 `lib.optional config.fireproof.hardware.battery …`) are fine — those are

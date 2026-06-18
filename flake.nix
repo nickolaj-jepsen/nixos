@@ -7,10 +7,9 @@
     # dendritic module (an attrset with `flake`); its aspect is derived from where
     # it lives (first path segment under ./modules, or the filename stem for a file
     # placed directly in ./modules) and stamped onto `flake.aspectTags.<name>` for
-    # every module name the file declares. An explicit `flake.aspectTags` in the
-    # file WINS over the folder default (recursiveUpdate folder m), which is the
-    # override / multi-tag hatch (e.g. dms/default sitting in desktop/ but wanting
-    # windowManager).
+    # every module name the file declares. The folder is authoritative: folderTags
+    # is merged last (recursiveUpdate m folderTags), so a leaf can't override its
+    # own tag — change membership by moving the file, never by hand.
     wrapAspect = path: let
       m = import path;
       rel = lib.removeSuffix ".nix" (lib.removePrefix (toString ./modules + "/") (toString path));
@@ -21,7 +20,7 @@
       );
       folderTags.flake.aspectTags = lib.genAttrs names (_: [aspect]);
     in
-      lib.recursiveUpdate folderTags m;
+      lib.recursiveUpdate m folderTags;
   in
     flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [

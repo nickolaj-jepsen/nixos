@@ -16,7 +16,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/defaults\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/defaults.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -40,7 +40,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -72,7 +72,7 @@ true
 ```
 
 *Declared by:*
- - [modules/programs/claude-code/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/claude-code/default.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -104,79 +104,7 @@ true
 ```
 
 *Declared by:*
- - [modules/desktop/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/default.nix)
-
-
-
-## fireproof\.desktop\.bambu-studio\.enable
-
-
-
-Enable Bambu Studio 3D printing slicer
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-*Declared by:*
- - [modules/programs/bambu-studio\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/bambu-studio.nix)
-
-
-
-## fireproof\.desktop\.chromium\.enable
-
-
-
-Enable Chromium
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/programs/chromium\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/chromium.nix)
-
-
-
-## fireproof\.desktop\.google-chrome\.enable
-
-
-
-Enable Google Chrome
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-*Declared by:*
- - [modules/programs/google-chrome\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/programs/google-chrome.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -208,127 +136,7 @@ true
 ```
 
 *Declared by:*
- - [modules/desktop/greetd\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/greetd.nix)
-
-
-
-## fireproof\.desktop\.oxcbMedia\.enable
-
-
-
-Whether to enable 0xCB-media host daemon (bridges MPRIS + PipeWire to the 0xCB-1337 macropad over USB CDC ACM)\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/desktop/0xcb-media\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/0xcb-media.nix)
-
-
-
-## fireproof\.desktop\.oxcbMedia\.mprisPlayer
-
-
-
-Pin the daemon to a specific MPRIS player\. Null lets the daemon pick automatically\.
-
-
-
-*Type:*
-null or string
-
-
-
-*Default:*
-
-```nix
-null
-```
-
-
-
-*Example:*
-
-```nix
-"org.mpris.MediaPlayer2.spotify"
-```
-
-*Declared by:*
- - [modules/desktop/0xcb-media\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/0xcb-media.nix)
-
-
-
-## fireproof\.desktop\.oxcbMedia\.serialDevice
-
-
-
-CDC ACM serial device the macropad enumerates as\.
-
-
-
-*Type:*
-string
-
-
-
-*Default:*
-
-```nix
-"/dev/ttyACM0"
-```
-
-*Declared by:*
- - [modules/desktop/0xcb-media\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/0xcb-media.nix)
-
-
-
-## fireproof\.desktop\.snapcast\.enable
-
-
-
-Whether to enable Snapcast audio streaming server\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/desktop/snapcast\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/snapcast.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.greetd](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.greetd)
 
 
 
@@ -354,7 +162,7 @@ attribute set of (submodule)
 ```
 
 *Declared by:*
- - [modules/desktop/snapcast\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/snapcast.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.snapcast](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.snapcast)
 
 
 
@@ -380,7 +188,7 @@ null
 ```
 
 *Declared by:*
- - [modules/desktop/snapcast\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/snapcast.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.snapcast](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.snapcast)
 
 
 
@@ -397,7 +205,7 @@ PipeWire ` node.target ` of the source to capture from
 string
 
 *Declared by:*
- - [modules/desktop/snapcast\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/snapcast.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.snapcast](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.snapcast)
 
 
 
@@ -423,135 +231,7 @@ string *(read only)*
 ```
 
 *Declared by:*
- - [modules/desktop/snapcast\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/snapcast.nix)
-
-
-
-## fireproof\.desktop\.windowManager\.enable
-
-
-
-Enable window manager (niri) and dank material shell (dms)
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/desktop/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/default.nix)
-
-
-
-## fireproof\.dev\.enable
-
-
-
-Whether to enable Enable development tools and applications\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.dev\.clickhouse\.enable
-
-
-
-Enable Clickhouse
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.dev\.intellij\.enable
-
-
-
-Enable IntelliJ-based IDEs
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.dev\.playwright\.enable
-
-
-
-Enable Playwright
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.snapcast](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.snapcast)
 
 
 
@@ -575,7 +255,7 @@ false
 ```
 
 *Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -599,7 +279,7 @@ false
 ```
 
 *Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -634,7 +314,7 @@ null
 ```
 
 *Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -666,63 +346,7 @@ true
 ```
 
 *Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.hardware\.nvidia\.enable
-
-
-
-Whether to enable NVIDIA GPU support (open kernel module + VA-API video offload)\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/desktop/nvidia\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/nvidia.nix)
-
-
-
-## fireproof\.hardware\.physical
-
-
-
-Whether this is a physical machine (not WSL/VM)\. Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub and journald caps\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -746,63 +370,7 @@ false
 ```
 
 *Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.hardware\.zram
-
-
-
-Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.homelab\.enable
-
-
-
-Whether to enable Enable homelab services (arr, nginx, postgres, prometheus, etc\.)\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/homelab/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab/default.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -826,7 +394,7 @@ string
 ```
 
 *Declared by:*
- - [modules/homelab/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab/default.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -850,7 +418,7 @@ string
 ```
 
 *Declared by:*
- - [modules/homelab/default\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/homelab/default.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -866,7 +434,327 @@ The hostname of the machine
 string
 
 *Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors
+
+
+
+Per-output display configuration\.
+
+
+
+*Type:*
+list of (submodule)
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.enable
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.name
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"DP-1"
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.position\.x
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+signed integer
+
+
+
+*Default:*
+
+```nix
+0
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.position\.y
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+signed integer
+
+
+
+*Default:*
+
+```nix
+0
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.primary
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.refreshRate
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or signed integer
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+60
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.refreshRateNiri
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or floating point number
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+60.0
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.resolution\.height
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or signed integer
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.resolution\.width
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or signed integer
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.scale
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+floating point number
+
+
+
+*Default:*
+
+```nix
+1.0
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
+
+
+
+## fireproof\.monitors\.\*\.transform
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+null or signed integer
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+1
+```
+
+*Declared by:*
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -898,7 +786,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -930,7 +818,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -962,7 +850,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -994,7 +882,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1026,7 +914,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1058,7 +946,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1090,7 +978,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1122,7 +1010,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1154,7 +1042,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1186,7 +1074,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1218,7 +1106,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1250,7 +1138,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1282,7 +1170,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1314,7 +1202,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1346,7 +1234,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1378,7 +1266,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1410,7 +1298,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1442,7 +1330,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1474,7 +1362,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1506,7 +1394,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1538,7 +1426,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1570,7 +1458,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1602,7 +1490,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1634,7 +1522,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1666,7 +1554,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1698,7 +1586,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1730,7 +1618,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1762,7 +1650,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1794,7 +1682,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1826,7 +1714,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1858,7 +1746,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1890,7 +1778,7 @@ string
 ```
 
 *Declared by:*
- - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1906,7 +1794,7 @@ The primary username for the machine
 string
 
 *Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 
 
@@ -1938,38 +1826,6 @@ true
 ```
 
 *Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.wsl\.enable
-
-
-
-Whether to enable Enable WSL configuration\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/system/wsl\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/system/wsl.nix)
+ - [flake\.nix, via option flake\.modules\.nixos\.fireproof-options](https://github.com/nickolaj-jepsen/nixos/blob/main/flake.nix, via option flake.modules.nixos.fireproof-options)
 
 

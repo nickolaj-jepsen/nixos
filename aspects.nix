@@ -19,14 +19,13 @@
   # The bundle DAG: each entry lists the bundles it pulls in (the edges). Leaves
   # attach by tagging a bundle name in their flake.aspectTags (stamped from their
   # folder by wrapAspect in flake.nix). Only composing nodes appear here; every
-  # other aspect (nix, dev, work, nvidia, chromium, snapcast, …) is a pass-through
+  # other aspect (nix, dev, work, desktop, nvidia, chromium, snapcast, …) is a pass-through
   # name the closure carries via `or []`, selected directly by a host or pulled in
   # as an edge below. `base` MUST stay — the builder prepends it to every host and
   # the always-on aspect folders ride in on its edges.
   config.flake.bundles = {
     base = ["nix" "system" "cli" "secrets" "scripts" "fireproof-options" "docker"];
 
-    desktop = ["windowManager"];
     laptop = ["physical"];
 
     gui-dev = ["desktop" "dev"];

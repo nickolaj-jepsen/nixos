@@ -41,6 +41,19 @@ let
       claude-code.work.enable =
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
+      homelab = {
+        domain = lib.mkOption {
+          type = lib.types.str;
+          default = "nickolaj.com";
+          description = "Root domain used for homelab service hostnames.";
+        };
+        acmeEmail = lib.mkOption {
+          type = lib.types.str;
+          default = "nickolaj@fireproof.website";
+          description = "Contact email registered with the ACME provider.";
+        };
+      };
+
       hardware = {
         laptop = lib.mkEnableOption "Enable laptop-specific configurations and tools";
         gpuPciId = lib.mkOption {
