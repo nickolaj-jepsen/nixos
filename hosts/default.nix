@@ -14,25 +14,35 @@
   pick = selectedNames: modset:
     builtins.attrValues (lib.getAttrs (builtins.filter (n: modset ? ${n}) selectedNames) modset);
 
-  # Collect a host directory into module buckets. Each top-level `.nix` file
-  # (skipping `_`-prefixed helpers) is imported and classified: a file exposing
-  # any of aspects/shared/nixos/homeManager is a host "card"; anything else is a
-  # plain nixos module imported by value. Host dirs are flat, so a shallow readDir
-  # matches the import-tree this replaces.
+  # Collect a host directory into module buckets. Every top-level `.nix` file
+  # (skipping `_`-prefixed helpers) must be a CARD: an attrset over
+  # {aspects, shared, nixos, homeManager}, the same shape as host.nix. A bare
+  # NixOS module — a function, or an attrset carrying any other key — is rejected
+  # loudly; its body belongs in the `nixos` bucket. Buckets are concatenated
+  # across every card in the dir, so any file may contribute aspects/facts/HM,
+  # not just host.nix. Host dirs are flat, so a shallow readDir suffices.
   collect = dir: let
+    cardKeys = ["aspects" "shared" "nixos" "homeManager"];
     names =
       lib.filter
       (n: lib.hasSuffix ".nix" n && !(lib.hasPrefix "_" n))
       (lib.attrNames (lib.filterAttrs (_: t: t == "regular") (builtins.readDir dir)));
-    files = map (n: import (dir + "/${n}")) names;
-    isCard = f: builtins.isAttrs f && (f ? aspects || f ? shared || f ? nixos || f ? homeManager);
-    cards = lib.filter isCard files;
-    plain = lib.filter (f: !(isCard f)) files;
+    load = n: let
+      path = dir + "/${n}";
+      card = import path;
+      stray = lib.subtractLists cardKeys (lib.attrNames card);
+    in
+      if !(builtins.isAttrs card)
+      then throw "${toString path}: host files must be cards (an attrset over {${lib.concatStringsSep ", " cardKeys}}), not a module — wrap the body in a `nixos = { … };` bucket"
+      else if stray != []
+      then throw "${toString path}: unknown host-card key(s) [${lib.concatStringsSep " " stray}] — allowed {${lib.concatStringsSep ", " cardKeys}}; put NixOS config under `nixos`"
+      else card;
+    cards = map load names;
   in {
     aspects = lib.concatMap (c: c.aspects or []) cards;
-    shared = map (c: c.shared) (lib.filter (c: c ? shared) cards);
-    nixos = (map (c: c.nixos) (lib.filter (c: c ? nixos) cards)) ++ plain;
-    homeManager = map (c: c.homeManager) (lib.filter (c: c ? homeManager) cards);
+    shared = lib.catAttrs "shared" cards;
+    nixos = lib.catAttrs "nixos" cards;
+    homeManager = lib.catAttrs "homeManager" cards;
   };
 
   # Assemble a NixOS system from resolved buckets. `shared` modules set fireproof.*

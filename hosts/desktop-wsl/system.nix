@@ -1,8 +1,7 @@
-# Selection (aspects + facts) lives in hosts/default.nix.
+# desktop-wsl's NixOS-only settings (auto-collected card).
 {
-  config = {
+  nixos = {
     wsl.usbip.autoAttach = ["1-9"];
-
     system.stateVersion = "25.11";
   };
 }

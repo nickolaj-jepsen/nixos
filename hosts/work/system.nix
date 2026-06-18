@@ -1,7 +1,6 @@
-# Selection (aspects + facts) lives in hosts/default.nix. This file holds only
-# work's nixos-specific settings; host-specific HM bits live in ./_home.nix.
-_: {
-  config = {
+# work's NixOS-only settings (auto-collected card).
+{
+  nixos = {
     facter.reportPath = ./facter.json;
 
     # aarch64 emulation so this x86_64 host can cross-build the Raspberry Pi
