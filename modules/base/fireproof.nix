@@ -71,6 +71,17 @@ let
         };
       };
 
+      neovim.full.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = config.fireproof.dev.enable;
+        description = ''
+          Layer the heavy neovim language support (pyrefly/TS/web LSPs + their
+          tree-sitter grammars, nixd) on top of the always-on lean baseline.
+          Defaults to dev.enable; the phone overrides it off to keep its
+          on-device aarch64 build small. See docs/phone-aarch64-cache.md.
+        '';
+      };
+
       networkd.enable = lib.mkEnableOption "systemd-networkd wired networking";
       wsl.enable = lib.mkEnableOption "WSL configuration";
 

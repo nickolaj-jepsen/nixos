@@ -22,6 +22,11 @@
     fireproof.dev.clickhouse.enable = false;
     fireproof.dev.playwright.enable = false;
     fireproof.dev.intellij.enable = false;
+
+    # Lean neovim: baseline editor only (nil + lua-ls, cheap grammars). Skips the
+    # heavy LSPs/grammars that crawl when compiled on-device under proot.
+    # docs/phone-aarch64-cache.md.
+    fireproof.neovim.full.enable = false;
   };
 
   # The fleet's claude-code overlay pins an x86-64 prebuilt binary (overlayAttrs
