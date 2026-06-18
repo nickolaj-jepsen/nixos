@@ -1,6 +1,6 @@
 ## Intrepetring tasks
 
-When you're asked to update a configuration, the user usually referes to update the config in this nixos configuration, eg claude-code config should be updated in modules/programs/claude-code.nix and vscode in /home/nickolaj/nixos/modules/programs/vscode
+When you're asked to update a configuration, the user usually referes to update the config in this nixos configuration, eg claude-code config should be updated in modules/cli/claude-code and vscode in /home/nickolaj/nixos/modules/gui-dev/vscode
 
 ## Commands
 
@@ -40,9 +40,9 @@ modules/                  # ONE FOLDER PER ASPECT: the folder a file is in IS it
   │   secrets/ scripts/
   ├── desktop/ windowManager/ dev/ gui-dev/ gui-work/   # capability aspects
   ├── physical/ laptop/   #   hardware aspects
-  ├── homelab/            #   server services (arr, jellyfin, nginx, …)
-  └── base/ programs/     #   residual: legacy secret leaves (ssh/k8s/mcp/spotify) + hm alias
+  └── homelab/            #   server services (arr, jellyfin, nginx, …)
 secrets/                  # agenix-encrypted secrets with YubiKey
+                          #   <host>/.rekey = nixos secrets, <host>/.rekey-hm = HM secrets
 ```
 
 ### Modules are dendritic (`flake.modules`), folder = aspect
@@ -89,12 +89,6 @@ Conventions:
 - The resolver is `lib/aspects.nix`; the bundle graph + facts are in `aspects.nix`;
   shared cross-class options in `modules/fireproof-options.nix`.
 
-> Migration note: a few leaves (`ssh`/`k8s`/`mcp`/`spotify`) are still legacy
-> NixOS modules wired through the `fireproof.home-manager` alias; they keep living
-> in `modules/{system,programs}/` and are tagged by path in `aspects.nix`'s central
-> `aspectTags` block (the `wrapAspect` legacy arm) until their secrets move to
-> home-manager agenix-rekey, at which point they become normal folder-tagged leaves.
-
 ### Aspects & options (`fireproof.*`)
 
 A host selects **aspects** (bundles), not toggles. Bundles live in `aspects.nix`
@@ -121,9 +115,10 @@ hardware.*,desktop.*,dev.*,…}`) are declared once in
 Author a feature's home-manager half as `flake.modules.homeManager.<name>`,
 reading `config.fireproof.*` locally (facts are injected). It evaluates both
 embedded (per host) and standalone (`lib/mkHome.nix` /
-`homeConfigurations.portability-check`, with `osConfig = null`). The old
-`fireproof.home-manager` alias is deprecated — only the not-yet-migrated secret
-leaves still use it.
+`homeConfigurations.portability-check`, with `osConfig = null`). The host builder
+(`hosts/default.nix`) defines `home-manager.users.<user>` and routes the selected
+homeManager leaves — plus any per-host `homeModules` (e.g. `hosts/<h>/_home.nix`) —
+into its `sharedModules`. There is no `fireproof.home-manager` alias.
 
 ### Theme System
 
@@ -218,12 +213,25 @@ dendritic") — create the file in the right directory, no `imports` list to edi
 
 ## Secrets
 
-Managed with agenix + YubiKey. Host keys in `secrets/hosts/<hostname>/id_ed25519.{pub,age}`.
+Managed with agenix-rekey + YubiKey. Host keys in `secrets/hosts/<hostname>/id_ed25519.{pub,age}`.
 
 ```bash
 just secret-edit <name>  # Edit encrypted secret
-just secret-rekey        # Rekey after adding hosts
+just secret-rekey        # Rekey after adding hosts/secrets (touch YubiKey)
 ```
+
+Two rekey stores per host, because `agenix rekey` deletes any file in a node's
+`localStorageDir` that the node doesn't own — so the nixos and home-manager nodes
+of one host **must not share a dir**:
+
+- **`secrets/hosts/<h>/.rekey/`** — nixos secrets (`modules/secrets/secrets.nix`):
+  `age.secrets.*` declared in a `flake.modules.nixos.*` half, decrypted by root.
+- **`secrets/hosts/<h>/.rekey-hm/`** — home-manager secrets
+  (`modules/secrets/hm-secrets.nix`): `age.secrets.*` declared in a
+  `flake.modules.homeManager.*` half, decrypted during HM activation (as the user)
+  via `~/.ssh/id_ed25519`. The `ssh-key` secret stays nixos-side because it _is_
+  that identity (it can't decrypt itself). Both stores use the same `hostPubkey`,
+  so the encrypted blobs are interchangeable.
 
 ## Maintaining This File
 

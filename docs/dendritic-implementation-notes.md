@@ -7,11 +7,12 @@ touching the aspects/dendritic machinery — the load-bearing decisions, the got
 cost real time to find, and the verification method that proved each step safe. The
 authoritative _how-to-author_ reference is `AGENTS.md`; this is the _why_ and the _traps_.
 
-> Status (2026-06-18, branch `dendritic`): the migration is **functionally complete and
-> switchable** — all 6 hosts build identical to the pre-migration baseline. The tree is on
-> the **folder = aspect** model (commit `4d4d92d`). What's left is the YubiKey finish
-> (`dendritic-finish-plan.md`) + `just switch`. The plan doc is now partly historical; trust
-> the code + `AGENTS.md` + this file where they disagree with the plan's sketch.
+> Status (2026-06-18, branch `dendritic`): the migration is **complete**. The four secret
+> leaves (ssh/k8s/mcp/spotify) are home-manager agenix-rekey leaves, the `fireproof.home-manager`
+> alias and the `wrapAspect` legacy arm are deleted, and the tree is fully folder = aspect.
+> All 6 hosts + the standalone portability-check build; P-legacy-arm is byte-identical drvPaths
+> to P-alias. What's left is operational: `just diff`/`just test`/`just switch` per host (P-switch).
+> `dendritic-finish-plan.md` is now historical; trust the code + `AGENTS.md` + this file.
 
 ## The load-bearing decisions (don't relitigate without reading these)
 
@@ -70,6 +71,16 @@ authoritative _how-to-author_ reference is `AGENTS.md`; this is the _why_ and th
    There is no orphan check yet (recommended follow-up: add one to `just check` that flags any
    aspect folder unreachable from a host). Mistrust "it built fine" for _additions_; confirm
    the leaf shows up in `just aspects <host>`.
+7. **HM and nixos secrets can't share a `localStorageDir`.** `agenix rekey` rekeys each node's
+   secrets into its `localStorageDir`, then **deletes every other file there** (per-node orphan
+   cleanup, `apps/rekey.nix`). A host's nixos node (`nixos:<h>`) and home-manager node
+   (`host-nixos:<h>-user-<u>`) are _separate_ nodes, so if both point at
+   `secrets/hosts/<h>/.rekey/` they wipe each other's blobs — whichever runs last wins, leaving
+   the other's secrets unrekeyed. Fix (in `hm-secrets.nix`): HM secrets use a distinct
+   `.rekey-hm/`. The finish-plan's "shared store" assumption was wrong; eval/build pass either
+   way (rekeyed files are read at activation, not build), so this only shows up after an actual
+   `just secret-rekey`. Same `hostPubkey` ⇒ the blobs are byte-identical, so a botched run is
+   recoverable by `git mv`-ing them between the two dirs (no re-rekey needed).
 
 ## Verification method (use this for every change — it's what made the migration safe)
 
