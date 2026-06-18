@@ -8,7 +8,6 @@
     fireproof.hostname = "desktop";
     fireproof.username = "nickolaj";
     fireproof.hardware.gpuPciId = "10de:2c05";
-    fireproof.monitors = import ./_monitors.nix;
   };
 
   homeManager = {

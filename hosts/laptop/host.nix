@@ -5,7 +5,6 @@
   shared = {
     fireproof.hostname = "laptop";
     fireproof.username = "nickolaj";
-    fireproof.monitors = import ./_monitors.nix;
   };
 
   homeManager = {lib, ...}: {

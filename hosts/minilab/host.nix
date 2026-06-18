@@ -6,6 +6,5 @@
   shared = {
     fireproof.hostname = "minilab";
     fireproof.username = "nickolaj";
-    fireproof.monitors = import ./_monitors.nix;
   };
 }
