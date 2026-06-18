@@ -168,6 +168,23 @@
           };
         };
 
+        # flash.nvim: modern easymotion. s jump, S treesitter, r/R remote
+        # (operator/visual), <c-s> toggle — nvf's defaults. Baseline (pure Lua,
+        # lands on the phone too).
+        utility.motion.flash-nvim.enable = true;
+
+        # More editing UX (baseline, phone-safe).
+        ui.illuminate.enable = true; # highlight other uses of the word under cursor
+        visuals.rainbow-delimiters.enable = true;
+        notes.todo-comments = {
+          enable = true;
+          # No telescope/trouble here, so drop those binds; <leader>tdq (quickfix) stays.
+          mappings = {
+            telescope = null;
+            trouble = null;
+          };
+        };
+
         tabline.nvimBufferline = {
           enable = true;
           setupOpts.options = {
@@ -194,8 +211,20 @@
 
         mini = {
           pairs.enable = true;
-          surround.enable = true;
           icons.enable = true;
+          # gs* prefix so flash.nvim owns bare s/S (mini.surround defaults to an s prefix).
+          surround = {
+            enable = true;
+            setupOpts.mappings = {
+              add = "gsa";
+              delete = "gsd";
+              replace = "gsr";
+              find = "gsf";
+              find_left = "gsF";
+              highlight = "gsh";
+              update_n_lines = "gsn";
+            };
+          };
         };
 
         statusline.lualine = {
