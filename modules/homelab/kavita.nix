@@ -30,11 +30,7 @@
         settings = {
           Port = port;
           IpAddresses = "127.0.0.1";
-          # Only Authority/ClientId/Secret/CustomScopes live in appsettings.json; the
-          # behavioural toggles (provision accounts, role sync, disable-password, …)
-          # are set in Kavita's web UI and persisted in its DB. The module rewrites
-          # appsettings.json on every restart, so these must come from Nix or a switch
-          # wipes them. @OIDC_SECRET@ is spliced from oidcSecretFile in preStart below.
+          # Module rewrites appsettings.json every restart, so OIDC config must come from Nix or a switch wipes it.
           OpenIdConnectSettings = {
             Authority = "https://sso.${cfg.domain}";
             ClientId = "377132054418096139";
@@ -44,8 +40,7 @@
         };
       };
 
-      # Splice the OIDC client secret in without it ever entering the nix store —
-      # same pattern the upstream module uses for tokenKeyFile (@TOKEN@).
+      # Splice OIDC secret in at runtime so it never enters the nix store.
       systemd.services.kavita = {
         serviceConfig.LoadCredential = ["oidc-secret:${oidcSecretFile}"];
         preStart = lib.mkAfter ''

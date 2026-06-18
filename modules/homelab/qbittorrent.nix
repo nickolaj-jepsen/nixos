@@ -7,37 +7,25 @@
     ...
   }: let
     cfg = config.fireproof.homelab;
-    # VPN namespace configuration
     vpnNamespace = "qbittorrent-vpn";
     vpnInterface = "qbt-wg0";
 
-    # Ports
     webUiPort = 8082;
     torrentPort = 51413;
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
-      # Secrets for Mullvad WireGuard config
-      # mullvad-wg.age should contain just the WireGuard config (not the Address line):
-      #   [Interface]
-      #   PrivateKey = <your-private-key>
-      #
-      #   [Peer]
-      #   PublicKey = <mullvad-server-pubkey>
-      #   AllowedIPs = 0.0.0.0/0
-      #   Endpoint = <server>:51820
+      # mullvad-wg.age is the WireGuard config minus the Address line (set separately below)
       age.secrets.mullvad-wg = {
         rekeyFile = ../../secrets/hosts/homelab/mullvad-wg.age;
         mode = "400";
       };
 
-      # mullvad-wg-address.age should contain just the IP address assigned by Mullvad, e.g.:
-      #   10.66.123.45/32
+      # mullvad-wg-address.age is just the Mullvad-assigned IP (e.g. 10.66.123.45/32)
       age.secrets.mullvad-wg-address = {
         rekeyFile = ../../secrets/hosts/homelab/mullvad-wg-address.age;
         mode = "444";
       };
 
-      # Create the VPN network namespace and WireGuard interface
       systemd.services."netns-${vpnNamespace}" = {
         description = "VPN Network Namespace";
         before = ["qbittorrent.service"];
@@ -60,7 +48,6 @@
         };
       };
 
-      # WireGuard interface inside the VPN namespace
       systemd.services."wg-${vpnNamespace}" = {
         description = "WireGuard VPN in namespace";
         after = ["netns-${vpnNamespace}.service"];
@@ -103,7 +90,6 @@
         };
       };
 
-      # qBittorrent service running inside the VPN namespace
       services.qbittorrent = {
         enable = true;
         user = "media";
@@ -127,7 +113,6 @@
         };
       };
 
-      # Override the qbittorrent service to run in VPN namespace
       systemd.services.qbittorrent = {
         after = [
           "network.target"
@@ -135,16 +120,13 @@
         ];
         requires = ["wg-${vpnNamespace}.service"];
         serviceConfig = {
-          # Run in the VPN namespace
           NetworkNamespacePath = "/var/run/netns/${vpnNamespace}";
-          # Bind mount the DNS config into the namespace
           BindReadOnlyPaths = [
             "/etc/netns/${vpnNamespace}/resolv.conf:/etc/resolv.conf"
           ];
         };
       };
 
-      # Port forwarding from host to namespace for web UI access
       systemd.services.qbittorrent-port-forward = {
         description = "Port forward for qBittorrent Web UI";
         after = ["qbittorrent.service"];
@@ -158,7 +140,6 @@
         };
       };
 
-      # Firewall rules
       networking.firewall.allowedTCPPorts = [webUiPort];
       networking.firewall.allowedUDPPorts = [torrentPort];
 

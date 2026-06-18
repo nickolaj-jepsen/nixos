@@ -1,13 +1,7 @@
 {lib}: let
-  # Monitor helpers, shared by the desktop modules (bar, desktop-widgets, niri
-  # outputs). `config.monitors` is the list of submodules from
-  # modules/desktop/monitors.nix. All helpers tolerate an empty list.
-  # Monitors that aren't explicitly disabled (`enable = false`).
   activeMonitors = monitors: builtins.filter (m: m.enable) monitors;
 
-  # The primary monitor: the entry flagged `primary = true`, else the first
-  # active entry in list order. Returns {} when there are no active monitors,
-  # so callers should guard with `primaryMonitor monitors != {}`.
+  # Returns {} when no active monitors; guard with `primaryMonitor monitors != {}`.
   primaryMonitor = monitors: let
     active = activeMonitors monitors;
   in
@@ -17,7 +11,6 @@
 
   primaryMonitorName = monitors: (primaryMonitor monitors).name or "";
 
-  # Active monitors excluding the primary one.
   secondaryMonitors = monitors: let
     primary = primaryMonitor monitors;
   in
@@ -67,11 +60,7 @@ in {
     }
     // lib.optionalAttrs (authentication != null) {inherit authentication;};
 
-  # agenix-rekey policy shared by the nixos (modules/base/secrets.nix) and
-  # home-manager (modules/base/hm-secrets.nix) halves; only `store` differs. The split exists
-  # because `agenix rekey` deletes files a node doesn't own in its localStorageDir,
-  # so the two nodes of one host must not share a dir (".rekey" vs ".rekey-hm").
-  # Same hostPubkey, so the encrypted blobs are interchangeable.
+  # Split store (.rekey/.rekey-hm): `agenix rekey` deletes files a node doesn't own in its localStorageDir, so the host's two nodes must not share a dir.
   mkAgenixRekey = {
     hostname,
     store,
@@ -88,9 +77,7 @@ in {
     generatedSecretsDir = hostSecrets;
   };
 
-  # Convert a hex color ("1C1B1A", optional leading "#") to the "H S L" string
-  # (hue 0-360, saturation/lightness 0-100, rounded) that Glance's theme expects.
-  # Single source of truth: derives from theme.colors instead of a parallel block.
+  # Hex color -> "H S L" string (hue 0-360, sat/light 0-100, rounded) that Glance's theme expects.
   hexToHsl = hexInput: let
     hex = lib.removePrefix "#" hexInput;
     digit = c:

@@ -1,10 +1,4 @@
-# Shared fireproof.* option declarations, emitted to BOTH the nixos and the
-# home-manager module classes so either eval can read them locally — this is
-# what removes the need for an osConfig bridge. Only the cross-class subset
-# lives here; feature-local, single-class options stay colocated in their leaf.
-#
-# Dendritic self-declaring module: the import-tree shim passes it through
-# because it sets `flake.*` directly (see flake.nix).
+# Cross-class fireproof.* options, emitted to both nixos and home-manager so either eval reads them locally (no osConfig bridge).
 let
   sharedOptions = {
     config,
@@ -24,10 +18,6 @@ let
 
       work.enable = lib.mkEnableOption "work-related applications and tools";
 
-      # Desktop capability + its opt-in sub-features: chromium cascades off
-      # desktop.enable; the rest default off (bambu-studio, google-chrome,
-      # snapcast, oxcbMedia). The matching leaf also declares the non-enable
-      # knobs (snapcast.captures, oxcbMedia.*).
       desktop = {
         enable = lib.mkEnableOption "desktop environment with niri, greetd, and all desktop features";
         chromium.enable = lib.mkOption {
@@ -52,7 +42,6 @@ let
       claude-code.work.enable =
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
-      # Development capability; its IDE/tooling sub-features cascade off dev.enable.
       dev = {
         enable = lib.mkEnableOption "development tools and applications";
         intellij.enable = lib.mkOption {
@@ -72,8 +61,6 @@ let
         };
       };
 
-      # systemd-networkd wired networking — a dendritic-branch deviation from
-      # main, kept intentionally.
       networkd.enable = lib.mkEnableOption "systemd-networkd wired networking";
       wsl.enable = lib.mkEnableOption "WSL configuration";
 
@@ -132,9 +119,7 @@ let
         };
       };
 
-      # Per-output display configuration, consumed by niri/outputs and the DMS
-      # bar/widgets. A cross-class fact (read by home-manager halves), set per
-      # host. See: https://github.com/ChangeCaps/nixos-config
+      # Cross-class fact read by home-manager halves. See: https://github.com/ChangeCaps/nixos-config
       monitors = lib.mkOption {
         default = [];
         description = "Per-output display configuration.";
@@ -179,8 +164,7 @@ let
               type = lib.types.bool;
               default = true;
             };
-            # Marks the primary monitor. When no entry is flagged, consumers fall
-            # back to the first (active) entry in list order. See fpLib.primaryMonitor.
+            # When unset on every entry, consumers fall back to the first active entry (fpLib.primaryMonitor).
             primary = lib.mkOption {
               type = lib.types.bool;
               default = false;

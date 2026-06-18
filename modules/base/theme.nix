@@ -1,8 +1,4 @@
-# Centralized theme configuration (Flexoki-inspired)
-# See: https://stephango.com/flexoki
-#
-# Emitted to BOTH module classes (like base/fireproof.nix) so home-manager
-# halves can read config.fireproof.theme.colors.* without an osConfig bridge.
+# Flexoki-inspired (https://stephango.com/flexoki); emitted to both classes so HM can read colors without an osConfig bridge.
 let
   themeOptions = {lib, ...}: let
     mkColorOption = default: description:
@@ -13,29 +9,23 @@ let
       };
   in {
     options.fireproof.theme.colors = {
-      # Background colors
       bg = mkColorOption "1C1B1A" "Primary background color";
       bgAlt = mkColorOption "282726" "Alternative background color";
 
-      # Foreground colors
       fg = mkColorOption "DAD8CE" "Primary foreground/text color";
       fgAlt = mkColorOption "B7B5AC" "Alternative foreground color";
 
-      # UI colors
       muted = mkColorOption "878580" "Muted/disabled text color";
       ui = mkColorOption "343331" "UI element background";
       uiAlt = mkColorOption "403E3C" "Alternative UI element background";
 
-      # Base colors
       black = mkColorOption "100F0F" "Black (darkest)";
       white = mkColorOption "DAD8CE" "White (same as fg)";
       whiteAlt = mkColorOption "F2F0E5" "Bright white";
 
-      # Accent color
       accent = mkColorOption "CF6A4C" "Primary accent color";
       accentContainer = mkColorOption "6B3528" "Dark container tone derived from accent";
 
-      # Semantic colors
       red = mkColorOption "D14D41" "Red (errors, destructive)";
       redAlt = mkColorOption "AF3029" "Dark red";
       orange = mkColorOption "DA702C" "Orange (warnings)";

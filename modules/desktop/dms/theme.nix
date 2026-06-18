@@ -12,14 +12,10 @@
         name = "custom";
         primary = "#${c.accent}";
         primaryText = "#${c.whiteAlt}";
-        # Coral-tinted container (was neutral gray uiAlt) so selection highlights
-        # and text-field selection read as a tonal sibling of primary.
+        # coral container so selection reads as a tonal sibling of primary, not neutral gray
         primaryContainer = "#${c.accentContainer}";
         secondary = "#${c.magenta}";
-        # Surface tiers, ascending luminance (Material-3 lighten-on-elevation):
-        #   background < surface < container < containerHigh < containerHighest.
-        # surfaceVariant is the lightest tone so derived hover/pressed states
-        # lighten the surface they overlay rather than darkening it.
+        # surfaceVariant is the lightest tone so hover/pressed states lighten rather than darken
         background = "#${c.black}";
         backgroundText = "#${c.whiteAlt}";
         surface = "#${c.bg}";
@@ -35,26 +31,19 @@
         warning = "#${c.yellow}";
         info = "#${c.blue}";
         success = "#${c.green}";
-        # matugen_type intentionally omitted: it only governs how matugen
-        # generates a scheme from a wallpaper, but enableDynamicTheming is off
-        # and this is a fixed Flexoki palette, so it would be a dead key.
+        # matugen_type omitted: dead key with dynamic theming off / fixed palette
       };
 
       programs.dank-material-shell.settings = {
-        # Color theme
         currentThemeName = "custom";
         customThemeFile = "/home/${username}/.config/DankMaterialShell/colors.json";
         widgetColorMode = "default";
 
-        # Stay dark regardless of the desktop portal's light/dark preference;
-        # colors.json only defines a dark palette, so a portal flip would
-        # otherwise render the dark colors in "light" mode.
+        # colors.json is dark-only; a portal light/dark flip would mislabel the dark colors as "light"
         syncModeWithPortal = false;
 
-        # General
         cornerRadius = 8;
 
-        # Font
         fontFamily = "Inter Variable";
         monoFontFamily = "Hack Nerd Font Mono";
         fontWeight = 400;

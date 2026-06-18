@@ -12,19 +12,14 @@
     widgetWidth = 320;
     widgetHeight = 480;
     padding = 16;
-    # Hand-tuned approximation of DMS's dynamic top-bar thickness. DMS computes the
-    # bar height internally (effectiveBarThickness in DankBarWindow.qml) from
-    # Theme.barHeight, widgetThickness and innerPadding — there is no settable
-    # bar-height key to derive this from. For this config it works out to ~32px.
+    # DMS derives its bar thickness internally (no settable key); hand-tuned to match.
     barHeight = 34;
 
-    # Only place the widget on active monitors that declare a resolution (the
-    # schema allows a null resolution, which would abort evaluation otherwise).
+    # Filter null resolutions (schema allows null) — would abort evaluation otherwise.
     positionableMonitors =
       builtins.filter (m: m.enable && m.resolution.width != null) monitors;
 
-    # Top-right position, below the bar. x is in logical pixels (physical width
-    # divided by scale) to match how DMS clamps the saved coordinate.
+    # x in logical pixels (physical / scale) to match how DMS clamps the saved coord.
     mkPosition = monitor: {
       width = widgetWidth;
       height = widgetHeight;

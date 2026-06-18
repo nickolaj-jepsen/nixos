@@ -23,9 +23,7 @@
         enable = true;
         host = "127.0.0.1";
         inherit port;
-        # oauth2-proxy is the gate; trust the email it injects (nginx overwrites
-        # any client-supplied X-Email, and the hub only listens on loopback) so
-        # Beszel skips its own login and auto-provisions the SSO user.
+        # oauth2-proxy is the gate; trust its X-Email (nginx strips client-supplied, hub is loopback-only) to skip Beszel login and auto-provision the SSO user.
         environment = {
           TRUSTED_AUTH_HEADER = "X-Email";
           USER_CREATION = "true";

@@ -15,28 +15,22 @@
 
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
         inherit port;
-        websockets = true; # live download-queue status updates
+        websockets = true;
       };
 
-      # Acquisition tool, same class as the *arr stack — gate it behind SSO rather
-      # than relying on Shelfmark's own auth (which is unset until configured in-app).
+      # Gate behind SSO: Shelfmark's own auth is unset until configured in-app.
       services.oauth2-proxy.nginx.virtualHosts."${domain}".allowed_groups = ["arr"];
 
       services.shelfmark = {
         enable = true;
         environment = {
-          FLASK_HOST = "127.0.0.1"; # only nginx reaches it
+          FLASK_HOST = "127.0.0.1";
           FLASK_PORT = port;
-          INGEST_DIR = library; # land downloads in the library Kavita/Audiobookshelf scan
+          INGEST_DIR = library;
         };
       };
 
-      # /mnt/data is a mergerfs FUSE mount, which only honours the caller's *primary*
-      # gid — supplementary groups don't grant access. So, like every other media
-      # service here (arr, audiobookshelf), run as media:media rather than under the
-      # upstream unit's DynamicUser. ReadWritePaths re-opens the library through
-      # ProtectSystem=strict; UMask 0022 keeps downloads world-readable so Kavita and
-      # Audiobookshelf can read them.
+      # mergerfs FUSE honours only the caller's primary gid, so run as media:media (not DynamicUser); UMask 0022 keeps downloads world-readable for Kavita/Audiobookshelf.
       systemd.services.shelfmark.serviceConfig = {
         DynamicUser = lib.mkForce false;
         User = "media";

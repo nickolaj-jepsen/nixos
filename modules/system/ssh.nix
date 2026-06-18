@@ -1,13 +1,4 @@
-# SSH, split across both module classes.
-#
-# nixos half: the `ssh-key` secret IS ~/.ssh/id_ed25519 — the host key in the
-# user's home, decrypted by root (it can read /etc/ssh/ssh_host_ed25519_key) and
-# left user-readable. It is the runtime identity that HM agenix uses to decrypt
-# every other user secret, so it must stay root-placed (it can't decrypt itself).
-# Plus sshd + authorized keys.
-#
-# home-manager half: the user ssh config + the work key (ssh-key-ao), which is a
-# user secret decrypted HM-side via ~/.ssh/id_ed25519 (see secrets/hm-secrets.nix).
+# ssh-key (nixos-side) IS ~/.ssh/id_ed25519, the runtime identity HM agenix uses to decrypt every other user secret, so it must stay root-placed (can't decrypt itself).
 {
   flake.modules.nixos.ssh = {
     config,
@@ -15,7 +6,6 @@
     ...
   }: let
     inherit (config.fireproof) username hostname;
-    # authorized_keys for this user = every host's public key.
     allHosts = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ../../secrets/hosts));
     publicKeys = map (x: builtins.readFile (../../secrets/hosts + ("/" + x) + "/id_ed25519.pub")) allHosts;
   in {
@@ -48,9 +38,7 @@
     workEnabled = config.fireproof.work.enable;
     identityFile = "${config.home.homeDirectory}/.ssh/id_ed25519";
   in {
-    # Explicit absolute path (not the XDG_RUNTIME_DIR default): this path lands in
-    # ~/.ssh/config and a systemd ExecStart, neither of which reliably expands
-    # ${XDG_RUNTIME_DIR}. The file is a symlink into the runtime tmpfs.
+    # Explicit absolute path: ~/.ssh/config and the systemd ExecStart below don't reliably expand ${XDG_RUNTIME_DIR}.
     age.secrets.ssh-key-ao = lib.mkIf workEnabled {
       rekeyFile = ../../secrets/ssh-key-ao.age;
       path = "${config.home.homeDirectory}/.ssh/id_ed25519_ao";
@@ -89,7 +77,6 @@
           };
         }
         // lib.optionalAttrs workEnabled {
-          # Work hostnames definded in ./networking.nix
           "bastion.ao" = {
             User = "nij";
             HostName = lib.mkDefault "62.199.221.53";

@@ -15,14 +15,11 @@
       download-buffer-size = 524288000;
       max-substitution-jobs = 32;
 
-      # Free Nix store space on-demand mid-build before hitting ENOSPC,
-      # independent of the periodic age-based GC in gc.nix.
-      min-free = 3221225472; # start freeing when < 3 GB free
-      max-free = 8589934592; # stop after ~8 GB freed
+      # Free store mid-build before ENOSPC, independent of gc.nix age-based GC.
+      min-free = 3221225472;
+      max-free = 8589934592;
 
-      # Global retry count (Nix has no per-substituter setting). Default is 5,
-      # which spams warnings when attic.${config.fireproof.homelab.domain} is down.
-      # 3 = two retries, then give up.
+      # Global only (Nix has no per-substituter retry); default 5 spams warnings when attic is down.
       download-attempts = 3;
 
       substituters = [

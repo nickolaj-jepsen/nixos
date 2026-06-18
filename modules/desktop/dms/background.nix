@@ -37,7 +37,7 @@
     ];
   in {
     config = lib.mkIf config.fireproof.desktop.enable {
-      # Use hyprpaper as we can't currently set wallpapers through DMS
+      # hyprpaper: DMS can't set wallpapers yet
       services.hyprpaper = {
         enable = true;
         settings = {
@@ -53,12 +53,11 @@
       };
 
       programs.dank-material-shell.settings = {
-        # Disables wallpaper management in DMS to avoid conflicts with Hyprpaper
+        # disable DMS wallpaper mgmt to avoid conflicting with hyprpaper
         screenPreferences.wallpaper = [];
       };
 
       programs.dank-material-shell.session = {
-        # Attempt to set a default wallpaper on first run
         wallpaperPath = unknownPng;
       };
     };

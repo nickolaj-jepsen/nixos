@@ -12,13 +12,10 @@
     config = lib.mkIf config.fireproof.homelab.enable {
       age.secrets.atticd-env = {
         rekeyFile = ../../secrets/hosts/homelab/atticd-env.age;
-        # atticd uses systemd DynamicUser, so the "atticd" user does not exist
-        # at agenix activation time. systemd reads EnvironmentFile= as root
-        # before dropping privileges, so root:root 0400 (the default) works.
+        # DynamicUser: atticd user absent at agenix time; root reads EnvironmentFile before dropping privs, so default root:root 0400 works.
       };
 
-      # Not behind oauth2-proxy: atticd has its own JWT auth and CI must reach
-      # the push API with a bearer token, not a browser SSO flow.
+      # No oauth2-proxy: atticd has its own JWT auth and CI pushes with a bearer token, not browser SSO.
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
         inherit port;
         extraConfig = ''

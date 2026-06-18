@@ -5,9 +5,7 @@
     ...
   }: {
     config = lib.mkIf config.fireproof.hardware.physical {
-      # Bound the journal's on-disk growth. mkDefault so individual hosts (e.g.
-      # the homelab server, which wants more history) can raise SystemMaxUse with
-      # a plain assignment.
+      # mkDefault so a host wanting more history can raise SystemMaxUse with a plain assignment.
       services.journald.extraConfig = lib.mkDefault ''
         SystemMaxUse=2G
         SystemMaxFileSize=128M
