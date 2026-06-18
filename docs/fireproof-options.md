@@ -1102,6 +1102,33 @@ null
 
 
 
+## fireproof\.neovim\.full\.enable
+
+
+
+Layer the heavy neovim language support (pyrefly/TS/web LSPs + their
+tree-sitter grammars, nixd) on top of the always-on lean baseline\.
+Defaults to dev\.enable; the phone overrides it off to keep its
+on-device aarch64 build small\. See docs/phone-aarch64-cache\.md\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.networkd\.enable
 
 
