@@ -16,7 +16,8 @@
       owner = username;
     };
 
-    programs.ssh.startAgent = true;
+    # ssh-agent now lives in the home-manager half (services.ssh-agent) so it
+    # covers standalone home hosts too; keep gcr from hijacking SSH_AUTH_SOCK.
     services.gnome.gcr-ssh-agent.enable = false;
 
     services.openssh = {
@@ -118,6 +119,11 @@
         };
     };
 
+    # The agent itself (was NixOS programs.ssh.startAgent) — ungated so every
+    # host/user gets one, including the standalone home host. Same %t/ssh-agent
+    # socket; sets home.sessionVariables.SSH_AUTH_SOCK for shells.
+    services.ssh-agent.enable = true;
+
     systemd.user.services."add-ssh-keys" = lib.mkIf workEnabled {
       Unit = {
         Description = "Add SSH keys to ssh-agent";
@@ -126,6 +132,9 @@
       };
       Service = {
         Type = "oneshot";
+        # The systemd user manager doesn't inherit home.sessionVariables, so point
+        # ssh-add at the agent socket explicitly.
+        Environment = ["SSH_AUTH_SOCK=%t/ssh-agent"];
         ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
         ExecStart = "${pkgs.openssh}/bin/ssh-add -q ${config.age.secrets.ssh-key-ao.path}";
       };
