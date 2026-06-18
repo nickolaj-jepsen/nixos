@@ -1,8 +1,8 @@
 # Pure aspect resolver: a small transitive-closure over the bundle DAG plus leaf
 # selection by reverse-tags. Deliberately shaped like den's `includes` model
 # (https://github.com/denful/den) so it can be swapped for `den` later without
-# touching callers. Bundles are pure adjacency (name -> [names]); a "fact" is no
-# longer a thing here — it's a fireproof.* option set in a module.
+# touching callers. Bundles are pure adjacency (name -> [names]); a "fact" is just
+# a fireproof.* option set in a module.
 {lib}: rec {
   # Transitive closure of `selected` aspect names over the bundles' edges.
   # `selected` and every edge entry name a *bundle*; leaves attach via

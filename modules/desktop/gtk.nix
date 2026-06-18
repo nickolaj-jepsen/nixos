@@ -21,7 +21,6 @@
   }: let
     c = config.fireproof.theme.colors;
 
-    # Generate GTK CSS from centralized theme
     themeCss = ''
       @define-color bg #${c.bg};
       @define-color bg-alt #${c.bgAlt};

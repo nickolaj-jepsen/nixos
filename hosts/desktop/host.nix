@@ -1,6 +1,3 @@
-# desktop's host card: the aspects it selects, its facts (shared into both evals),
-# and its host-specific home-manager tweaks. NixOS-only settings live in
-# auto-collected sibling cards (system.nix, boot.nix, …).
 {
   aspects = ["workstation" "physical" "nvidia" "chromium" "bambu" "intellij" "clickhouse" "claude-work" "snapcast" "networkd"];
 

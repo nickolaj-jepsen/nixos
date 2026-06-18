@@ -1,4 +1,3 @@
-# desktop-wsl's host card.
 {
   aspects = ["dev" "work" "wsl" "clickhouse"];
 

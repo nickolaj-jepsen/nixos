@@ -1,4 +1,3 @@
-# desktop's monitor layout, set as the `monitors` fact (shared into both evals).
 {
   shared.fireproof.monitors = [
     {

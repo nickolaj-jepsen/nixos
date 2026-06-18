@@ -33,7 +33,6 @@
     workstation = ["gui-dev" "gui-work"];
   };
 
-  # No central aspectTags: every leaf is folder-tagged by wrapAspect (flake.nix),
-  # or carries its own flake.aspectTags override. The option above accumulates
-  # those per-file stamps.
+  # No central aspectTags: every leaf is folder-tagged by wrapAspect (flake.nix);
+  # the option above accumulates those per-file stamps.
 }

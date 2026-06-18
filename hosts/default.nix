@@ -79,10 +79,10 @@
               inputs.nixos-wsl.nixosModules.default
               inputs.self.nixosModules.overlays
               ({config, ...}: {
-                # Home-manager wiring that used to live in the fireproof.home-manager
-                # alias module: define the user (so the shared modules have someone
-                # to apply to), share system pkgs/state, and pin both stateVersions
-                # (mkDefault so a host — e.g. desktop-wsl — can bump system.stateVersion).
+                # Home-manager wiring: define the user (so the shared modules have
+                # someone to apply to), share system pkgs/state, and pin both
+                # stateVersions (mkDefault so a host — e.g. desktop-wsl — can bump
+                # system.stateVersion).
                 home-manager = {
                   useUserPackages = true;
                   useGlobalPkgs = true;

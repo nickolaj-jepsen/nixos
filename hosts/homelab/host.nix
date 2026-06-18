@@ -1,4 +1,3 @@
-# homelab's host card.
 {
   aspects = ["dev" "homelab" "physical" "clickhouse" "networkd"];
 

@@ -1,4 +1,3 @@
-# laptop's host card.
 {
   aspects = ["workstation" "laptop" "chromium" "intellij" "clickhouse"];
 

@@ -1,6 +1,5 @@
 {
   nixos = _: {
-    # Enable OpenGL
     hardware.graphics = {
       enable = true;
     };
@@ -8,7 +7,6 @@
     networking.networkmanager.enable = true;
     users.users.nickolaj.extraGroups = ["networkmanager"];
 
-    # Load nvidia driver for Xorg and Wayland
     services.xserver.videoDrivers = ["nvidia"];
 
     hardware.nvidia = {

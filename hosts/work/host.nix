@@ -1,4 +1,3 @@
-# work's host card.
 {
   aspects = ["workstation" "physical" "nvidia" "chromium" "intellij" "clickhouse" "claude-work" "networkd"];
 

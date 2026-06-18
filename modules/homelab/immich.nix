@@ -1,6 +1,4 @@
 {
-  # Membership-gated: this leaf lives in the homelab aspect folder, so it is only
-  # imported when a host selects homelab — no fireproof.homelab.enable mkIf needed.
   flake.modules.nixos.immich = let
     domain = "immich.nickolaj.com";
     port = 2283;

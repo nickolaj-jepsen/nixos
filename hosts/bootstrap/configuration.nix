@@ -57,7 +57,7 @@
       '';
   in {
     # Use the nixos installation ISO as base. (bootstrap-install is a dendritic
-    # leaf now, selected via the base aspect; gated on bootstrap.targetHost.)
+    # leaf selected via the base aspect, gated on bootstrap.targetHost.)
     imports = [
       "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
     ];
@@ -84,7 +84,6 @@
       initialPassword = lib.mkForce "nixos";
     };
 
-    # Networking
     networking.networkmanager.enable = true;
     networking.wireless.enable = lib.mkForce false; # Conflicts with networkmanager
 
