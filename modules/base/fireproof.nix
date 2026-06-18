@@ -59,6 +59,16 @@ let
           default = config.fireproof.dev.enable;
           description = "Enable Playwright";
         };
+        k8s.enable = lib.mkOption {
+          type = lib.types.bool;
+          default = config.fireproof.dev.enable;
+          description = "Enable kubectl and the AO kube configs";
+        };
+        mcp.enable = lib.mkOption {
+          type = lib.types.bool;
+          default = config.fireproof.dev.enable;
+          description = "Enable MCP servers (incl. the grafana env-wrapper secret)";
+        };
       };
 
       networkd.enable = lib.mkEnableOption "systemd-networkd wired networking";

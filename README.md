@@ -79,6 +79,9 @@ Markdown reference — descriptions, types, defaults, and declaration links — 
 available at [docs/fireproof-options.md](docs/fireproof-options.md). Regenerate
 it with `just docs` after changing any option declarations.
 
+The Android (nix-on-droid) `phone` host has its own guide:
+[docs/android.md](docs/android.md).
+
 ## Installing on a New Machine
 
 The recommended flow is a **host-specific bootstrap ISO**: an install image with the new host's pre-rekeyed SSH key and a copy of this flake baked in. The target boots the USB and runs `bootstrap-install` — no GitHub roundtrip, no manual rekeying on the target, no `nixos-anywhere` fragility.

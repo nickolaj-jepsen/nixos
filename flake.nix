@@ -38,6 +38,12 @@
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
+    # No release-26.05 branch exists; master tracks unstable but follows our
+    # pins, so the phone shares the 26.05 fleet's nixpkgs/home-manager.
+    nix-on-droid.url = "github:nix-community/nix-on-droid/master";
+    nix-on-droid.inputs.nixpkgs.follows = "nixpkgs";
+    nix-on-droid.inputs.home-manager.follows = "home-manager";
+
     nur.url = "github:nix-community/NUR";
     nur.inputs.nixpkgs.follows = "nixpkgs";
     nur.inputs.flake-parts.follows = "flake-parts";

@@ -11,10 +11,10 @@
     inherit (config) flake;
   };
 
-  validClasses = ["nixos" "home"];
+  validClasses = ["nixos" "home" "droid"];
 
   collect = dir: let
-    cardKeys = ["class" "shared" "nixos" "homeManager"];
+    cardKeys = ["class" "shared" "nixos" "homeManager" "droid"];
     names =
       lib.filter
       (n: lib.hasSuffix ".nix" n && !(lib.hasPrefix "_" n))
@@ -46,6 +46,7 @@
     shared = lib.catAttrs "shared" cards;
     nixos = lib.catAttrs "nixos" cards;
     homeManager = lib.catAttrs "homeManager" cards;
+    droid = lib.catAttrs "droid" cards;
   };
 
   # `shared` sets fireproof.* in BOTH evals (the no-bridge fact flow); HM user read from resulting config.fireproof.username.
@@ -98,6 +99,53 @@
         }
     );
 
+  # droid host: nix-on-droid (aarch64, no systemd) with the homeManager leaves
+  # routed into its embedded home-manager. `shared` facts + `homeManager` tweaks
+  # feed the HM eval (where fireproof.* is declared); `droid` feeds the n-o-d
+  # system eval. n-o-d forces home.username/homeDirectory from config.user.*, so
+  # (unlike mkHome) we set neither here.
+  mkDroid = {
+    shared ? [],
+    homeManagerModules ? [],
+    droidModules ? [],
+    system ? "aarch64-linux",
+  }: let
+    homeLeaves = builtins.attrValues config.flake.modules.homeManager;
+    pkgs = import inputs.nixpkgs {
+      inherit system;
+      config.allowUnfree = true;
+      overlays = [inputs.nix-on-droid.overlays.default] ++ config.flake.lib.overlays;
+    };
+  in
+    inputs.nix-on-droid.lib.nixOnDroidConfiguration {
+      inherit pkgs;
+      extraSpecialArgs = {inherit inputs fpLib;};
+      home-manager-path = inputs.home-manager.outPath;
+      modules =
+        droidModules
+        ++ [
+          {
+            home-manager = {
+              useGlobalPkgs = true;
+              backupFileExtension = "hm-bak";
+              extraSpecialArgs = {inherit inputs fpLib;};
+              config.imports =
+                homeLeaves
+                ++ shared
+                ++ homeManagerModules
+                ++ [
+                  # Standalone HM (as in mkHome) must import niri's HM module so the
+                  # niri leaves' inert, desktop-gated `programs.niri.*` definitions
+                  # have declared options; pin the package to match the embedded path.
+                  inputs.niri.homeModules.niri
+                  ({pkgs, ...}: {programs.niri.package = lib.mkDefault pkgs.niri-unstable;})
+                  {home.stateVersion = lib.mkDefault "24.05";}
+                ];
+            };
+          }
+        ];
+    };
+
   buildHost = dir: let
     c = collect dir;
   in
@@ -116,6 +164,17 @@
         extraModules = c.shared ++ c.homeManager;
       };
 
+  # droid-class host: nix-on-droid eval only, so a `nixos` bucket has nowhere to apply (loud error).
+  buildDroid = dir: let
+    c = collect dir;
+  in
+    assert lib.assertMsg (c.nixos == []) "${toString dir}: a droid-class host has no NixOS eval — move `nixos` config to `droid`/`homeManager`/`shared`";
+      mkDroid {
+        inherit (c) shared;
+        homeManagerModules = c.homeManager;
+        droidModules = c.droid;
+      };
+
   # A host is any hosts/<name>/ dir containing a host.nix card; _templates/ (no card) excluded for free.
   hostDir = name: ./. + "/${name}";
   isHost = name: type: type == "directory" && builtins.pathExists (hostDir name + "/host.nix");
@@ -124,8 +183,9 @@
   hostClassOf = name: (collect (hostDir name)).class;
   nixosHosts = lib.filter (n: hostClassOf n == "nixos") discovered;
   homeHosts = lib.filter (n: hostClassOf n == "home") discovered;
+  droidHosts = lib.filter (n: hostClassOf n == "droid") discovered;
 in {
-  # nixos-class only: home-class hosts have no install ISO for installer/ to fan out over.
+  # nixos-class only: home/droid-class hosts have no install ISO for installer/ to fan out over.
   config.flake.hostNames = nixosHosts;
 
   config.flake.nixosConfigurations =
@@ -133,4 +193,7 @@ in {
 
   config.flake.homeConfigurations =
     lib.genAttrs homeHosts (name: buildHome (hostDir name));
+
+  config.flake.nixOnDroidConfigurations =
+    lib.genAttrs droidHosts (name: buildDroid (hostDir name));
 }

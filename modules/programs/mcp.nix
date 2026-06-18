@@ -13,7 +13,7 @@
       exec ${pkgs.mcp-grafana}/bin/mcp-grafana "$@"
     '';
   in {
-    config = lib.mkIf config.fireproof.dev.enable {
+    config = lib.mkIf config.fireproof.dev.mcp.enable {
       age.secrets.grafana-mcp-env = {
         rekeyFile = ../../secrets/grafana-mcp-env.age;
         mode = "0600";

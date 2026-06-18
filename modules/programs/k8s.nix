@@ -9,7 +9,7 @@
   }: let
     inherit (config.home) homeDirectory;
   in {
-    config = lib.mkIf config.fireproof.dev.enable {
+    config = lib.mkIf config.fireproof.dev.k8s.enable {
       home.packages = [pkgs.kubectl];
 
       age.secrets.k8s-ao-dev = {
