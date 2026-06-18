@@ -180,8 +180,7 @@
               nil.formatting.command = ["nix" "fmt" "--" "--"];
             };
 
-            # Python
-            "python.analysis.autoImportCompletions" = true;
+            # Python — pyrefly is the type-checker/LSP; keep ms-python's own server off.
             "python.languageServer" = "None";
 
             # Spell checking

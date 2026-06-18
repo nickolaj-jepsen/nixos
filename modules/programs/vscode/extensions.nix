@@ -30,7 +30,6 @@
 
           # Python
           marketplaceReleases.meta.pyrefly
-          ms-pyright.pyright
           ms-python.python
           charliermarsh.ruff
 

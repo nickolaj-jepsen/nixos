@@ -34,7 +34,7 @@
 
           # Python
           ruff
-          unstable.basedpyright
+          pyrefly
 
           # JS / TS / JSON / CSS / HTML
           typescript-language-server

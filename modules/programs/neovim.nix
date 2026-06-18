@@ -11,7 +11,7 @@
       extraPackages = with pkgs; [
         # LSP servers
         nil # Nix
-        basedpyright # Python
+        pyrefly # Python
         typescript-language-server
         vscode-langservers-extracted # HTML, CSS, JSON, ESLint
         lua-language-server
@@ -300,7 +300,7 @@
 
             -- Configure LSP servers using vim.lsp.config (Neovim 0.11+)
             vim.lsp.config("nil_ls", {})
-            vim.lsp.config("basedpyright", {})
+            vim.lsp.config("pyrefly", {})
             vim.lsp.config("ts_ls", {})
             vim.lsp.config("lua_ls", {
               settings = {
@@ -315,7 +315,7 @@
             vim.lsp.config("marksman", {})
 
             -- Enable the configured LSP servers
-            vim.lsp.enable({ "nil_ls", "basedpyright", "ts_ls", "lua_ls", "jsonls", "yamlls", "marksman" })
+            vim.lsp.enable({ "nil_ls", "pyrefly", "ts_ls", "lua_ls", "jsonls", "yamlls", "marksman" })
           '';
         }
 

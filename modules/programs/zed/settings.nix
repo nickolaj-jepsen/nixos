@@ -118,7 +118,7 @@
           # Languages
           languages = {
             Python = {
-              language_servers = ["pyrefly" "ruff" "basedpyright" "!pylsp"];
+              language_servers = ["pyrefly" "ruff" "!pylsp"];
               format_on_save = "on";
               formatter.language_server.name = "ruff";
             };
@@ -171,7 +171,6 @@
 
           # Auto-installed extensions (Zed-side; Nix-managed list lives in extensions.nix)
           auto_install_extensions = {
-            basedpyright = true;
             basher = true;
             biome = true;
             "css-modules-kit" = true;

@@ -14,6 +14,7 @@
     fireproof.username = "nij";
 
     fireproof.dev.enable = true;
+    fireproof.dev.clickhouse.enable = false; # headless server: no need for the clickhouse client
     fireproof.work.enable = true;
     fireproof.claude-code.work.enable = true;
   };
