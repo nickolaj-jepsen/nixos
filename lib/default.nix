@@ -23,7 +23,7 @@
   in
     builtins.filter (m: m != primary) (activeMonitors monitors);
 in {
-  inherit activeMonitors primaryMonitor primaryMonitorName secondaryMonitors;
+  inherit primaryMonitor primaryMonitorName secondaryMonitors;
 
   mkVirtualHost = {
     port,

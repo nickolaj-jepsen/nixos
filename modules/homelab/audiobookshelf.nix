@@ -15,7 +15,6 @@
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
         inherit port;
         websockets = true;
-        http2 = true;
       };
 
       services.audiobookshelf = {

@@ -38,7 +38,7 @@
       })
       positionableMonitors);
   in {
-    config = lib.mkIf config.fireproof.desktop.enable (lib.mkIf (primaryMonitor != {}) {
+    config = lib.mkIf (config.fireproof.desktop.enable && primaryMonitor != {}) {
       programs.dank-material-shell.settings = {
         desktopWidgetInstances = [
           {
@@ -80,6 +80,6 @@
           }
         ];
       };
-    });
+    };
   };
 }

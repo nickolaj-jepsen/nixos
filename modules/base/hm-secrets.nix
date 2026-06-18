@@ -1,5 +1,5 @@
 # Home-manager agenix-rekey base (always-on; folder secrets/ ∈ base.includes).
-# Mirrors modules/secrets/secrets.nix on the home-manager side so user secrets
+# Mirrors the nixos secrets half on the home-manager side so user secrets
 # decrypt during HM activation with no osConfig bridge: the rekey identity comes
 # from the `hostname` FACT, and runtime decryption uses ~/.ssh/id_ed25519 — the
 # same host key (root places it via the nixos `ssh-key` secret) but user-readable,

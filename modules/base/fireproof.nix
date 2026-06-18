@@ -18,27 +18,18 @@ let
       };
       username = lib.mkOption {
         type = lib.types.str;
+        default = "nickolaj";
         description = "The primary username for the machine";
       };
 
-      work.enable = lib.mkEnableOption "Enable work-related applications and tools";
+      work.enable = lib.mkEnableOption "work-related applications and tools";
 
-      # Desktop aspect + its opt-in sub-features. Child enables cascade off
-      # desktop.enable (window manager, greeter, chromium) or default off
-      # (bambu-studio, google-chrome, snapcast, oxcbMedia). The matching leaf
-      # also declares the non-enable knobs (snapcast.captures, oxcbMedia.*).
+      # Desktop capability + its opt-in sub-features: chromium cascades off
+      # desktop.enable; the rest default off (bambu-studio, google-chrome,
+      # snapcast, oxcbMedia). The matching leaf also declares the non-enable
+      # knobs (snapcast.captures, oxcbMedia.*).
       desktop = {
-        enable = lib.mkEnableOption "Enable desktop environment with niri, greetd, and all desktop features";
-        windowManager.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.desktop.enable;
-          description = "Enable window manager (niri) and dank material shell (dms)";
-        };
-        greeter.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.desktop.enable;
-          description = "Enable the greetd display manager";
-        };
+        enable = lib.mkEnableOption "desktop environment with niri, greetd, and all desktop features";
         chromium.enable = lib.mkOption {
           type = lib.types.bool;
           default = config.fireproof.desktop.enable;
@@ -61,9 +52,9 @@ let
       claude-code.work.enable =
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
-      # Development aspect; its IDE/tooling sub-features cascade off dev.enable.
+      # Development capability; its IDE/tooling sub-features cascade off dev.enable.
       dev = {
-        enable = lib.mkEnableOption "Enable development tools and applications";
+        enable = lib.mkEnableOption "development tools and applications";
         intellij.enable = lib.mkOption {
           type = lib.types.bool;
           default = config.fireproof.dev.enable;
@@ -84,7 +75,7 @@ let
       # systemd-networkd wired networking — a dendritic-branch deviation from
       # main, kept intentionally.
       networkd.enable = lib.mkEnableOption "systemd-networkd wired networking";
-      wsl.enable = lib.mkEnableOption "Enable WSL configuration";
+      wsl.enable = lib.mkEnableOption "WSL configuration";
 
       homelab = {
         enable = lib.mkEnableOption "homelab server services (arr, jellyfin, nginx, …)";
@@ -112,7 +103,7 @@ let
           description = "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
         };
         nvidia.enable = lib.mkEnableOption "NVIDIA GPU support (open kernel module + VA-API video offload)";
-        laptop = lib.mkEnableOption "Enable laptop-specific configurations and tools";
+        laptop = lib.mkEnableOption "laptop-specific configurations and tools";
         gpuPciId = lib.mkOption {
           type = lib.types.nullOr lib.types.str;
           default = null;

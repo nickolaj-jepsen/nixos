@@ -13,7 +13,6 @@
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
         port = 32400;
         websockets = true;
-        http2 = true;
       };
 
       services.plex = {

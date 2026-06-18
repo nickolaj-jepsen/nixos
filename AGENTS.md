@@ -90,8 +90,8 @@ hardware-hygiene `system/*` leaves gate `hardware.physical`/`hardware.zram`, and
 ### Options are nested + cascading
 
 `fireproof.*` options nest and **cascade**: a child enable defaults to its parent,
-so a host sets the parent toggle and only overrides exceptions. `desktop.{windowManager,
-greeter,chromium}.enable` default to `desktop.enable`; `dev.{intellij,clickhouse,
+so a host sets the parent toggle and only overrides exceptions. `desktop.chromium.enable`
+defaults to `desktop.enable`; `dev.{intellij,clickhouse,
 playwright}.enable` default to `dev.enable`; `hardware.physical` defaults to
 `!wsl.enable`, `hardware.zram` to `hardware.physical`, and `hardware.{battery,wifi,
 dimmableBacklight}` to `hardware.laptop`. Opt-in extras (`desktop.{bambu-studio,
@@ -310,7 +310,7 @@ of one host **must not share a dir**:
 
 ## Maintaining This File
 
-Update CLAUDE.md when making changes relevant to AI agents, such as:
+Update this file (AGENTS.md — CLAUDE.md just `@`-includes it) when making changes relevant to AI agents, such as:
 
 - New just commands or workflows
 - Changes to the module structure or `fireproof.*` options

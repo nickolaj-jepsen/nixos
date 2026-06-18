@@ -1,9 +1,5 @@
 {
-  flake.modules.homeManager.zoxide = _: {
-    config = {
-      programs.zoxide = {
-        enable = true;
-      };
-    };
+  flake.modules.homeManager.zoxide = {
+    programs.zoxide.enable = true;
   };
 }

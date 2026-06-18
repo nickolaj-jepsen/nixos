@@ -3,7 +3,6 @@
 {
   shared = {
     fireproof.hostname = "minilab";
-    fireproof.username = "nickolaj";
 
     fireproof.desktop.enable = true;
     fireproof.desktop.chromium.enable = false;

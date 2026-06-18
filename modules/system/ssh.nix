@@ -92,6 +92,7 @@
           # Work hostnames definded in ./networking.nix
           "bastion.ao" = {
             User = "nij";
+            HostName = lib.mkDefault "62.199.221.53";
             IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
           };
           "clickhouse.ao" = {

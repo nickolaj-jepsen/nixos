@@ -131,7 +131,7 @@
     };
 
   # A home-class host (class = "home"): no NixOS eval, just the standalone
-  # home-manager leaves its aspects select. The card's `shared` (facts) and
+  # home-manager leaves its toggles select. The card's `shared` (facts) and
   # `homeManager` (tweaks) buckets feed the eval as modules; a `nixos` bucket has
   # nowhere to apply, so it's a loud error.
   buildHome = dir: let

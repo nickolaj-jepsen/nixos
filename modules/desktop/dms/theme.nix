@@ -44,7 +44,6 @@
         # Color theme
         currentThemeName = "custom";
         customThemeFile = "/home/${username}/.config/DankMaterialShell/colors.json";
-        widgetBackgroundColor = "sth";
         widgetColorMode = "default";
 
         # Stay dark regardless of the desktop portal's light/dark preference;

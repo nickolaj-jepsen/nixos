@@ -14,7 +14,6 @@
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
         port = 8096;
         websockets = true;
-        http2 = true;
       };
 
       # Grant the media user access to GPU devices for hardware transcoding

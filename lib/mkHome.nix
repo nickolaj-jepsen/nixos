@@ -12,7 +12,6 @@
   flake, # = config.flake
 }: {
   system ? "x86_64-linux",
-  stateVersion ? "24.11",
   extraModules ? [], # the host card's `shared` (facts) + `homeManager` (tweaks)
 }: let
   homeLeaves = builtins.attrValues flake.modules.homeManager;
@@ -40,7 +39,7 @@ in
           # (via extraModules), so a home host needs no pre-eval username arg.
           home.username = lib.mkDefault config.fireproof.username;
           home.homeDirectory = lib.mkDefault "/home/${config.fireproof.username}";
-          home.stateVersion = lib.mkDefault stateVersion;
+          home.stateVersion = lib.mkDefault "24.11";
         })
       ]
       ++ extraModules;

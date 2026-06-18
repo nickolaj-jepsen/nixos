@@ -1,5 +1,5 @@
 {
-  nixos = _: {
+  nixos = {
     hardware.graphics = {
       enable = true;
     };

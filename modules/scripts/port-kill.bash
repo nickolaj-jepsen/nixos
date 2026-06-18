@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORT=$1
+PORT=${1:-}
 if [ -z "$PORT" ]; then
     echo "Usage: port-kill <port>"
     exit 1
