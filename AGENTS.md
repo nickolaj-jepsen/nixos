@@ -25,7 +25,7 @@ just why-depends <pkg>   # Show why a package is in the closure
 
 ## Architecture
 
-This is a NixOS flake-based configuration managing 7 hosts with a custom `fireproof.*` options namespace.
+This is a NixOS flake-based configuration managing 6 hosts with a custom `fireproof.*` options namespace.
 
 ### Structure
 
@@ -41,6 +41,8 @@ modules/                  # ONE FOLDER PER ASPECT: the folder a file is in IS it
   ├── desktop/ dev/ gui-dev/ gui-work/   # capability aspects (desktop = niri + dms + apps)
   ├── physical/ laptop/   #   hardware aspects
   └── homelab/            #   server services (arr, jellyfin, nginx, …)
+installer/                # Installer ISO builder — owns nixosConfigurations.bootstrap{,-<host>}
+                          #   (not a host: a self-contained corner, direct nixosSystem build)
 secrets/                  # agenix-encrypted secrets with YubiKey
                           #   <host>/.rekey = nixos secrets, <host>/.rekey-hm = HM secrets
 ```
@@ -83,7 +85,7 @@ Conventions:
 
 - **`_`-prefixed paths are skipped** by import-tree and by the host collector
   (helper files, page fragments): `modules/homelab/glance/_home-page.nix`,
-  `hosts/bootstrap/_bake.nix`.
+  `modules/homelab/glance/_work-page.nix`.
 - **Per-host files** live in the host's directory (`hosts/<h>/`) and are imported
   only for that host. Each is a **card** — same shape as `host.nix` — with its
   NixOS config in a `nixos` bucket (see "Aspects & host cards").

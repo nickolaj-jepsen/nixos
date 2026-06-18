@@ -7,7 +7,7 @@
 }: let
   payload = inputs.bootstrap-payload;
 
-  flakeSrc = pkgs.runCommand "flake-src-${config.fireproof.bootstrap.targetHost}" {} ''
+  flakeSrc = pkgs.runCommand "flake-src-${config.installer.targetHost}" {} ''
     mkdir -p $out
     cp -r ${
       lib.cleanSourceWith {
@@ -40,8 +40,8 @@ in {
   # eval time so `nix flake check` still succeeds without an override.
   assertions = [
     {
-      assertion = config.fireproof.bootstrap.targetHost != "";
-      message = "hosts/bootstrap/_bake.nix requires fireproof.bootstrap.targetHost to be set.";
+      assertion = config.installer.targetHost != "";
+      message = "installer/bake.nix requires installer.targetHost to be set.";
     }
   ];
 
@@ -51,7 +51,7 @@ in {
       mode = "0600";
     };
     "iso-bootstrap/ssh/id_ed25519.pub".source = "${payload}/id_ed25519.pub";
-    "iso-bootstrap/target-host".text = config.fireproof.bootstrap.targetHost;
+    "iso-bootstrap/target-host".text = config.installer.targetHost;
     "iso-bootstrap/nixos".source = flakeSrc;
   };
 }

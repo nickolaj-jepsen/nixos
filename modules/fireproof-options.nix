@@ -30,12 +30,6 @@ let
 
       work.enable = lib.mkEnableOption "Enable work-related applications and tools";
 
-      bootstrap.targetHost = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        description = "Hostname this bootstrap ISO targets. Empty string means the generic, non-host-specific bootstrap.";
-      };
-
       desktop.enable = lib.mkEnableOption "Enable desktop environment with niri, greetd, and all desktop features";
 
       claude-code.work.enable =

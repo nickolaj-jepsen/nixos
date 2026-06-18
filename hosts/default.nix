@@ -113,32 +113,16 @@
       homeManagerModules = c.homeManager;
     };
 
-  # The bootstrap installer image. Its facts are passed as a `shared` module so they
-  # reach the home-manager eval too (hm-secrets reads fireproof.hostname there).
-  # name == null is the generic ISO; a host name adds the source-baking _bake leaf
-  # plus the targetHost string it stamps into the image.
-  bootstrapFacts = {
-    hostname = "bootstrap";
-    username = "nickolaj";
-  };
-  buildBootstrap = name:
-    mkNixos {
-      shared = [{fireproof = bootstrapFacts;}];
-      nixosModules =
-        (collect ./bootstrap).nixos
-        ++ lib.optionals (name != null) [
-          ./bootstrap/_bake.nix
-          {fireproof.bootstrap.targetHost = name;}
-        ];
-    };
-
-  # A host is any hosts/<name>/ directory containing a host.nix card. bootstrap/
-  # (no card) and _templates/ are excluded for free — the fleet is discovered,
-  # not enumerated.
+  # A host is any hosts/<name>/ directory containing a host.nix card. _templates/
+  # (no card) is excluded for free — the fleet is discovered, not enumerated. The
+  # installer ISOs live in ../installer and consume the hostNames below.
   hostDir = name: ./. + "/${name}";
   isHost = name: type: type == "directory" && builtins.pathExists (hostDir name + "/host.nix");
   hostNames = lib.attrNames (lib.filterAttrs isHost (builtins.readDir ./.));
 in {
+  # The discovered fleet, exposed for installer/ to fan out bootstrap-<host> over.
+  config.flake.hostNames = hostNames;
+
   # Resolved selection per host, for inspection via `just aspects <host>`.
   config.flake.aspects = lib.genAttrs hostNames (name: let
     asp = (collect (hostDir name)).aspects;
@@ -149,7 +133,5 @@ in {
   });
 
   config.flake.nixosConfigurations =
-    lib.genAttrs hostNames (name: buildHost (hostDir name))
-    // {bootstrap = buildBootstrap null;}
-    // lib.listToAttrs (map (n: lib.nameValuePair "bootstrap-${n}" (buildBootstrap n)) hostNames);
+    lib.genAttrs hostNames (name: buildHost (hostDir name));
 }

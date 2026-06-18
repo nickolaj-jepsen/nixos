@@ -32,6 +32,7 @@
         ./aspects.nix
         ./portability-check.nix
         ./hosts
+        ./installer
         ./overlays
         ((inputs.import-tree.map wrapAspect) ./modules)
       ];
@@ -110,7 +111,7 @@
     # Overridden at build time by `just bootstrap-iso <host>` to inject the
     # decrypted host SSH key into a host-specific bootstrap ISO. The default
     # points at an empty directory so the flake evaluates without any override.
-    bootstrap-payload.url = "path:./hosts/bootstrap/empty-payload";
+    bootstrap-payload.url = "path:./installer/empty-payload";
     bootstrap-payload.flake = false;
   };
 }
