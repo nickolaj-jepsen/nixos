@@ -16,6 +16,10 @@
   };
   homeCfg = mkHome {
     username = "check";
+    # Borrow a real host's key dir so the secret leaves (ssh/k8s/mcp/spotify)
+    # resolve their rekeyed files and the standalone eval builds. osConfig is
+    # still null, so this keeps catching any home-manager half that reads it.
+    facts = {hostname = "desktop";};
     aspects = ["workstation" "physical" "clickhouse" "chromium"];
   };
 in {
@@ -24,7 +28,13 @@ in {
   # Build it in `just check` (nix flake check) so a home-manager half that
   # starts reading osConfig fails CI, not just a future standalone host.
   perSystem = {system, ...}:
-    lib.optionalAttrs (system == "x86_64-linux") {
+    {
+      # Keep this standalone config out of the rekey set so `just secret-rekey`
+      # never re-rekeys it (the real per-host secrets are auto-collected from
+      # nixosConfigurations).
+      agenix-rekey.homeConfigurations = lib.mkForce {};
+    }
+    // lib.optionalAttrs (system == "x86_64-linux") {
       checks.portability-check = homeCfg.activationPackage;
     };
 }

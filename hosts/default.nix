@@ -122,9 +122,18 @@
     };
   };
 
+  # Facts for the bootstrap installer image. Passed through the facts mechanism
+  # (not set nixos-side in hosts/bootstrap/) so they reach the home-manager eval
+  # too — hm-secrets reads fireproof.hostname there.
+  bootstrapFacts = {
+    hostname = "bootstrap";
+    username = "nickolaj";
+  };
+
   mkBootstrap = name:
     mkSystem {
       dir = ./bootstrap;
+      facts = bootstrapFacts;
       modules = [
         ./bootstrap/_bake.nix
         {fireproof.bootstrap.targetHost = name;}
@@ -143,7 +152,10 @@ in {
   config.flake.nixosConfigurations =
     (lib.mapAttrs (_: mkSystem) targets)
     // {
-      bootstrap = mkSystem {dir = ./bootstrap;};
+      bootstrap = mkSystem {
+        dir = ./bootstrap;
+        facts = bootstrapFacts;
+      };
     }
     // (lib.mapAttrs' (name: _: lib.nameValuePair "bootstrap-${name}" (mkBootstrap name)) targets);
 }

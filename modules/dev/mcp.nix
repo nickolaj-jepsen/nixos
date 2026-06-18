@@ -1,25 +1,23 @@
+# MCP servers, incl. a grafana wrapper that sources its env from a secret.
+# Home-manager half only: the secret decrypts HM-side (see secrets/hm-secrets.nix).
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}: let
-  inherit (config.fireproof) username;
-
-  grafanaMcpWrapper = pkgs.writeShellScript "grafana-mcp-wrapper" ''
-    set -euo pipefail
-    export $(grep -v '^#' ${config.age.secrets.grafana-mcp-env.path} | xargs)
-    exec ${pkgs.mcp-grafana}/bin/mcp-grafana "$@"
-  '';
-in {
-  config = lib.mkIf config.fireproof.dev.enable {
+  flake.modules.homeManager.mcp = {
+    config,
+    pkgs,
+    ...
+  }: let
+    grafanaMcpWrapper = pkgs.writeShellScript "grafana-mcp-wrapper" ''
+      set -euo pipefail
+      export $(grep -v '^#' ${config.age.secrets.grafana-mcp-env.path} | xargs)
+      exec ${pkgs.mcp-grafana}/bin/mcp-grafana "$@"
+    '';
+  in {
     age.secrets.grafana-mcp-env = {
       rekeyFile = ../../secrets/grafana-mcp-env.age;
       mode = "0600";
-      owner = username;
     };
 
-    fireproof.home-manager.programs.mcp = {
+    programs.mcp = {
       enable = true;
       servers = {
         linear.url = "https://mcp.linear.app/mcp";

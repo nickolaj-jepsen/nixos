@@ -92,14 +92,10 @@
 
   # Membership tags for leaves not yet converted to self-declaring form: the
   # shim registers these under their relative path, so they are tagged here by
-  # path. (ssh/k8s/mcp/spotify convert to HM agenix-rekey at the secrets step;
-  # the home-manager alias is deleted then too. bootstrap-install stays gated on
-  # bootstrap.targetHost.) Removed as each is converted.
+  # path. (ssh/k8s/mcp/spotify now convert to HM agenix-rekey — folder-tagged.
+  # Only the home-manager alias remains; deleted at P-alias.) Removed as each is
+  # converted.
   config.flake.aspectTags = {
-    "system/ssh" = ["base"];
-    "programs/k8s" = ["dev"];
-    "programs/mcp" = ["dev"];
-    "programs/spotify" = ["desktop"];
     "base/home-manager" = ["base"];
   };
 }
