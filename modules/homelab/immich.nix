@@ -1,6 +1,6 @@
 {
-  flake.modules.nixos.immich = let
-    domain = "immich.nickolaj.com";
+  flake.modules.nixos.immich = {config, ...}: let
+    domain = "immich.${config.fireproof.homelab.domain}";
     port = 2283;
   in {
     services.restic.backups.homelab.paths = ["/var/lib/immich"];

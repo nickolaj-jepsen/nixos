@@ -84,12 +84,6 @@ let
         };
       };
 
-      base.defaults.terminal = lib.mkOption {
-        type = lib.types.str;
-        default = "ghostty";
-        description = "The terminal to use";
-      };
-
       # Per-output display configuration, consumed by niri/outputs and the DMS
       # bar/widgets. A cross-class fact (read by home-manager halves), set per
       # host. See: https://github.com/ChangeCaps/nixos-config
@@ -110,11 +104,6 @@ let
             resolution.height = lib.mkOption {
               type = lib.types.nullOr lib.types.int;
               default = null;
-            };
-            refreshRate = lib.mkOption {
-              type = lib.types.nullOr lib.types.int;
-              default = null;
-              example = 60;
             };
             refreshRateNiri = lib.mkOption {
               type = lib.types.nullOr lib.types.float;

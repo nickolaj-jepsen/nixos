@@ -1,10 +1,4 @@
 {
-  flake.modules.nixos.ghostty = _: {
-    config = {
-      fireproof.base.defaults.terminal = "ghostty";
-    };
-  };
-
   flake.modules.homeManager.ghostty = {
     config,
     pkgs,

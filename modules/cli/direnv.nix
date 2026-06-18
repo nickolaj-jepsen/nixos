@@ -1,5 +1,5 @@
 {
-  flake.modules.homeManager.direnv = _: {
+  flake.modules.homeManager.direnv = {config, ...}: {
     config = {
       programs.direnv = {
         enable = true;
@@ -9,7 +9,7 @@
             hide_env_diff = true;
             warn_timeout = "1m";
           };
-          whitelist.prefix = ["/home/nickolaj/nixos"];
+          whitelist.prefix = ["${config.home.homeDirectory}/nixos"];
         };
       };
       # Silence the per-load "direnv: loading…/export N vars" banner (complements
