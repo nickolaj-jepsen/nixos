@@ -9,6 +9,7 @@
         ./devshell.nix
         ./docs.nix
         ./hosts
+        ./nix-on-droid
         ./overlays
       ];
       systems = [
@@ -37,6 +38,13 @@
 
     nixos-wsl.url = "github:nix-community/NixOS-WSL/main";
     nixos-wsl.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Nix (package manager + home-manager) running on Android in a Termux-like
+    # userspace. NOT NixOS — see nix-on-droid/README.md. No release branch tracks
+    # nixpkgs 26.05 yet, so we follow master (pinned via flake.lock).
+    nix-on-droid.url = "github:nix-community/nix-on-droid";
+    nix-on-droid.inputs.nixpkgs.follows = "nixpkgs";
+    nix-on-droid.inputs.home-manager.follows = "home-manager";
 
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
