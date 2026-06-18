@@ -102,7 +102,12 @@
     # Overridden at build time by `just bootstrap-iso <host>` to inject the
     # decrypted host SSH key into a host-specific bootstrap ISO. The default
     # points at an empty directory so the flake evaluates without any override.
-    bootstrap-payload.url = "path:./installer/empty-payload";
+    # `?narHash=` pins this relative path to an *immutable* lock: without it the
+    # lock is "mutable" and immutable consumers of this flake reject it (e.g.
+    # `nix-on-droid switch --flake github:…#phone` → "lock file contains mutable
+    # lock"). Recompute via `nix hash path ./installer/empty-payload` if that
+    # directory's contents ever change.
+    bootstrap-payload.url = "path:./installer/empty-payload?narHash=sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=";
     bootstrap-payload.flake = false;
   };
 }

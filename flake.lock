@@ -56,10 +56,12 @@
     "bootstrap-payload": {
       "flake": false,
       "locked": {
+        "narHash": "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
         "path": "./installer/empty-payload",
         "type": "path"
       },
       "original": {
+        "narHash": "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
         "path": "./installer/empty-payload",
         "type": "path"
       },
