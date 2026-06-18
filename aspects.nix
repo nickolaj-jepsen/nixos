@@ -90,7 +90,7 @@
     oxcb-media.includes = [];
   };
 
-  # Every leaf is now folder-tagged (or carries its own flake.aspectTags
-  # override), so there are no path-registered legacy leaves left to tag here.
-  config.flake.aspectTags = {};
+  # No central aspectTags: every leaf is folder-tagged by wrapAspect (flake.nix),
+  # or carries its own flake.aspectTags override. The option itself is declared
+  # above and accumulates those per-file stamps.
 }

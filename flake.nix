@@ -3,17 +3,14 @@
 
   outputs = {flake-parts, ...} @ inputs: let
     inherit (inputs.nixpkgs) lib;
-    # Folder-as-aspect stamper. A file under ./modules is either a self-declaring
-    # dendritic module (an attrset with `flake`) — for which the aspect is
-    # derived from where it lives (first path segment under ./modules, or the
-    # filename stem for a file placed directly in ./modules) and stamped onto
-    # `flake.aspectTags.<name>` for every module name the file declares. An
-    # explicit `flake.aspectTags` in the file WINS over the folder default
-    # (recursiveUpdate folder m), which is the override / multi-tag hatch (e.g.
-    # dms/default sitting in desktop/ but wanting windowManager). Or it is a
-    # legacy NixOS module (a function, or an attrset without `flake`), registered
-    # under flake.modules.nixos.<relpath> and tagged centrally in aspects.nix —
-    # the not-yet-migrated secret leaves (ssh/k8s/mcp/spotify) + the hm alias.
+    # Folder-as-aspect stamper. Every file under ./modules is a self-declaring
+    # dendritic module (an attrset with `flake`); its aspect is derived from where
+    # it lives (first path segment under ./modules, or the filename stem for a file
+    # placed directly in ./modules) and stamped onto `flake.aspectTags.<name>` for
+    # every module name the file declares. An explicit `flake.aspectTags` in the
+    # file WINS over the folder default (recursiveUpdate folder m), which is the
+    # override / multi-tag hatch (e.g. dms/default sitting in desktop/ but wanting
+    # windowManager).
     wrapAspect = path: let
       m = import path;
       rel = lib.removeSuffix ".nix" (lib.removePrefix (toString ./modules + "/") (toString path));
@@ -24,9 +21,7 @@
       );
       folderTags.flake.aspectTags = lib.genAttrs names (_: [aspect]);
     in
-      if builtins.isAttrs m && m ? flake
-      then lib.recursiveUpdate folderTags m
-      else {flake.modules.nixos.${rel} = path;};
+      lib.recursiveUpdate folderTags m;
   in
     flake-parts.lib.mkFlake {inherit inputs;} {
       imports = [
