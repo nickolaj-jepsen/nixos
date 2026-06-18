@@ -1,6 +1,6 @@
 # homelab's host card.
 {
-  aspects = ["dev" "homelab" "physical" "clickhouse"];
+  aspects = ["dev" "homelab" "physical" "clickhouse" "networkd"];
 
   shared = {
     fireproof.hostname = "homelab";

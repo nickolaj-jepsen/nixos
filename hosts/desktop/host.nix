@@ -2,7 +2,7 @@
 # and its host-specific home-manager tweaks. NixOS-only settings live in the
 # auto-collected default.nix sibling.
 {
-  aspects = ["workstation" "physical" "nvidia" "chromium" "bambu" "intellij" "clickhouse" "claude-work" "snapcast"];
+  aspects = ["workstation" "physical" "nvidia" "chromium" "bambu" "intellij" "clickhouse" "claude-work" "snapcast" "networkd"];
 
   shared = {
     fireproof.hostname = "desktop";
