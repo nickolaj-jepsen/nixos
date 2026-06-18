@@ -30,7 +30,7 @@
         ./devshell.nix
         ./docs.nix
         ./aspects.nix
-        ./portability-check.nix
+        ./home-check.nix
         ./hosts
         ./installer
         ./overlays

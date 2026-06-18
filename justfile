@@ -70,6 +70,25 @@ boot hostname=`hostname -s` *ARGS="":
 test hostname=`hostname -s` *ARGS="":
     sudo nixos-rebuild test --flake .#{{ hostname }} {{ ARGS }}
 
+[doc('Build a home-manager host (class = "home") activation package')]
+[group("deploy")]
+home-build hostname *ARGS="":
+    @just build homeConfigurations."{{ hostname }}".activationPackage {{ ARGS }}
+
+[doc('Activate a home-manager host: locally (run ON the host as its user), or push to a remote target over ssh')]
+[group("deploy")]
+home-switch hostname target='':
+    #!/usr/bin/env -S bash -e
+    target="{{ target }}"
+    out=$({{ nixcmd }} build --no-link --print-out-paths \
+        "{{ justfile_directory() }}#homeConfigurations.{{ hostname }}.activationPackage")
+    if [ -z "$target" ]; then
+        "$out/activate"
+    else
+        {{ nixcmd }} copy --to "ssh://$target" "$out"
+        ssh "$target" "$out/activate"
+    fi
+
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
 deploy-remote hostname target: (_confirm "Deploy " + hostname + " to " + target + "? This will FORMAT disks on the target.")

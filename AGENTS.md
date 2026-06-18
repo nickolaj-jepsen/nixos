@@ -12,6 +12,8 @@ just switch desktop      # Rebuild specific host
 just test                # Apply temporarily (reverts on reboot)
 just boot                # Apply on next boot
 just build-system        # Build without switching
+just home-build <h>      # Build a home-manager (class="home") host, e.g. dev-ao
+just home-switch <h>     # Activate it on the host; push to remote: home-switch dev-ao nij@dev.ao
 just diff                # Preview changes vs current system
 just update              # Update flake.lock
 just fmt                 # Format all files (ALWAYS run before finishing)
@@ -102,8 +104,8 @@ host's HM tweaks. The fleet is **discovered** — any `hosts/<name>/` directory
 containing a `host.nix` is a host (`hosts/default.nix`); there is no central
 registry. Inspect a host's resolution with **`just aspects <host>`**.
 
-**Every** `.nix` file in a host dir is a card of that same shape `{ aspects?;
-shared?; nixos?; homeManager?; }` — not just `host.nix`. The collector
+**Every** `.nix` file in a host dir is a card of that same shape `{ class?;
+aspects?; shared?; nixos?; homeManager?; }` — not just `host.nix`. The collector
 (`hosts/default.nix`) asserts it: a bare NixOS module (a function, or an attrset
 with any other top-level key) throws, pointing you at the `nixos` bucket. That
 `nixos` bucket is the per-host analog of a dendritic leaf's
@@ -112,6 +114,17 @@ config/aspects/HM can live in `host.nix` or any sibling — e.g. `system.nix`
 (nixos-only settings), `monitors.nix` (`shared.fireproof.monitors`), or an
 aspect co-located with its config (minilab's `snapcast.nix` carries both
 `aspects = ["snapcast"]` and the capture config).
+
+A host's **class** is the one scalar a card may carry: `class = "nixos"` (the
+default) or `class = "home"`. It is read pre-eval and routes the WHOLE host —
+`nixos` hosts build via `nixpkgs.lib.nixosSystem` into `nixosConfigurations.<h>`;
+`home` hosts build via `lib/mkHome.nix` (standalone home-manager, no NixOS eval)
+into `homeConfigurations.<h>`, with their `nixos` bucket asserted empty. The
+routable set lives in `validClasses` (`hosts/default.nix`) — a typo throws;
+adding `darwin` later is a value there + a `buildDarwin` + a `darwinConfigurations`
+emit. `config.flake.hostNames` (the installer's bootstrap fan-out) is the **nixos**
+hosts only, while `just aspects <h>` covers every class. Example:
+`hosts/dev-ao/host.nix` is a headless home-manager-only host (`class = "home"`).
 
 An aspect carries **no data** — it is a pure membership tag. A "fact" is just a
 `fireproof.*` option value set in a `shared` card or an aspect-tagged setter leaf
@@ -135,12 +148,16 @@ hardware.*,desktop.*,…}`) are declared once in `modules/fireproof-options.nix`
 
 Author a feature's home-manager half as `flake.modules.homeManager.<name>`,
 reading `config.fireproof.*` locally (facts are injected). It evaluates both
-embedded (per host) and standalone (`lib/mkHome.nix` /
-`homeConfigurations.portability-check`, with `osConfig = null`). The host builder
-(`hosts/default.nix`) defines `home-manager.users.<user>` (the user read from
-`config.fireproof.username`) and routes the selected homeManager leaves — plus the
-host card's `shared` and `homeManager` buckets — into its `sharedModules`. There is
-no `fireproof.home-manager` alias.
+embedded (per host, via the NixOS home-manager module) and standalone
+(`lib/mkHome.nix`, `osConfig = null`) — the standalone path is how a
+`class = "home"` host builds. The `dev-ao` home host doubles as the standalone-HM
+guard: `home-check.nix` builds `homeConfigurations.dev-ao.activationPackage` in
+`just check`, so an HM half that starts reading `osConfig` (or a non-shared
+option) fails CI, not just a future deploy. For embedded (nixos) hosts the host
+builder (`hosts/default.nix`) defines `home-manager.users.<user>` (the user read
+from `config.fireproof.username`) and routes the selected homeManager leaves —
+plus the host card's `shared` and `homeManager` buckets — into its
+`sharedModules`. There is no `fireproof.home-manager` alias.
 
 ### Theme System
 
