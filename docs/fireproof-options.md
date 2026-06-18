@@ -427,6 +427,54 @@ true
 
 
 
+## fireproof\.dev\.k8s\.enable
+
+
+
+Enable kubectl and the AO kube configs
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.mcp\.enable
+
+
+
+Enable MCP servers (incl\. the grafana env-wrapper secret)
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.dev\.playwright\.enable
 
 
