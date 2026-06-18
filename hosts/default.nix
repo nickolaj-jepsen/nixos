@@ -24,6 +24,10 @@
     aspects ? [],
     facts ? {},
     modules ? [],
+    # Host-specific home-manager modules, merged into the user's HM eval next to
+    # the selected homeLeaves. Replaces the fireproof.home-manager alias for the
+    # few per-host HM tweaks (runelite, ssh overrides, firefox homepage).
+    homeModules ? [],
     system ? "x86_64-linux",
   }:
     withSystem system (
@@ -51,7 +55,7 @@
               inputs.self.nixosModules.overlays
               {fireproof = resolvedFacts;}
               {
-                home-manager.sharedModules = homeLeaves ++ [{fireproof = resolvedFacts;}];
+                home-manager.sharedModules = homeLeaves ++ homeModules ++ [{fireproof = resolvedFacts;}];
                 home-manager.extraSpecialArgs = {inherit inputs fpLib;};
               }
             ]
@@ -76,6 +80,7 @@
         hardware.gpuPciId = "10de:2c05";
         monitors = import ./desktop/_monitors.nix;
       };
+      homeModules = [./desktop/_home.nix];
     };
     laptop = {
       dir = ./laptop;
@@ -85,6 +90,7 @@
         username = "nickolaj";
         monitors = import ./laptop/_monitors.nix;
       };
+      homeModules = [./laptop/_home.nix];
     };
     work = {
       dir = ./work;
@@ -94,6 +100,7 @@
         username = "nickolaj";
         monitors = import ./work/_monitors.nix;
       };
+      homeModules = [./work/_home.nix];
     };
     homelab = {
       dir = ./homelab;
@@ -119,6 +126,7 @@
         hostname = "desktop-wsl";
         username = "nickolaj";
       };
+      homeModules = [./desktop-wsl/_home.nix];
     };
   };
 

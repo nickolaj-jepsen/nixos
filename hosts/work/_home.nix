@@ -1,5 +1,10 @@
+# work's host-specific home-manager bits (wired via targets.work.homeModules in
+# hosts/default.nix). Merges into the user's HM eval alongside the selected leaves.
 {lib, ...}: {
-  fireproof.home-manager.programs.ssh.settings = {
+  programs.firefox.profiles.default.settings."browser.startup.homepage" =
+    lib.mkForce "https://glance.nickolaj.com/work";
+
+  programs.ssh.settings = {
     "dev.ao" = {
       ProxyJump = lib.mkForce null;
     };
