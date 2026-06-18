@@ -14,24 +14,40 @@
   pick = selectedNames: modset:
     builtins.attrValues (lib.getAttrs (builtins.filter (n: modset ? ${n}) selectedNames) modset);
 
-  # A host's facts are just its own fireproof.* values, injected verbatim into
-  # BOTH the nixos and the home-manager evals (the no-bridge fact flow). Aspects
-  # that used to carry facts now contribute them via membership-selected setter
-  # leaves; the module system merges everything with real precedence.
-  mkSystem = {
-    dir,
+  # Collect a host directory into module buckets. Each top-level `.nix` file
+  # (skipping `_`-prefixed helpers) is imported and classified: a file exposing
+  # any of aspects/shared/nixos/homeManager is a host "card"; anything else is a
+  # plain nixos module imported by value. Host dirs are flat, so a shallow readDir
+  # matches the import-tree this replaces.
+  collect = dir: let
+    names =
+      lib.filter
+      (n: lib.hasSuffix ".nix" n && !(lib.hasPrefix "_" n))
+      (lib.attrNames (lib.filterAttrs (_: t: t == "regular") (builtins.readDir dir)));
+    files = map (n: import (dir + "/${n}")) names;
+    isCard = f: builtins.isAttrs f && (f ? aspects || f ? shared || f ? nixos || f ? homeManager);
+    cards = lib.filter isCard files;
+    plain = lib.filter (f: !(isCard f)) files;
+  in {
+    aspects = lib.concatMap (c: c.aspects or []) cards;
+    shared = map (c: c.shared) (lib.filter (c: c ? shared) cards);
+    nixos = (map (c: c.nixos) (lib.filter (c: c ? nixos) cards)) ++ plain;
+    homeManager = map (c: c.homeManager) (lib.filter (c: c ? homeManager) cards);
+  };
+
+  # Assemble a NixOS system from resolved buckets. `shared` modules set fireproof.*
+  # in BOTH evals (the no-bridge fact flow); the home-manager user is read from the
+  # resulting config.fireproof.username. Aspects select the dendritic leaves by
+  # membership; NIXOS-only host settings live as plain modules in the host dir.
+  mkNixos = {
     aspects ? [],
-    facts ? {},
-    modules ? [],
-    # Host-specific home-manager modules, merged into the user's HM eval next to
-    # the selected homeLeaves. Replaces the fireproof.home-manager alias for the
-    # few per-host HM tweaks (runelite, ssh overrides, firefox homepage).
-    homeModules ? [],
+    shared ? [],
+    nixosModules ? [],
+    homeManagerModules ? [],
     system ? "x86_64-linux",
   }:
     withSystem system (
       {system, ...}: let
-        resolvedFacts = facts;
         selectedNames = aspectsLib.selectedLeaves config.flake.bundles config.flake.aspectTags (["base"] ++ aspects);
         nixosLeaves = pick selectedNames config.flake.modules.nixos;
         homeLeaves = pick selectedNames config.flake.modules.homeManager;
@@ -52,8 +68,7 @@
               inputs.niri.nixosModules.niri
               inputs.nixos-wsl.nixosModules.default
               inputs.self.nixosModules.overlays
-              {fireproof = resolvedFacts;}
-              {
+              ({config, ...}: {
                 # Home-manager wiring that used to live in the fireproof.home-manager
                 # alias module: define the user (so the shared modules have someone
                 # to apply to), share system pkgs/state, and pin both stateVersions
@@ -64,121 +79,73 @@
                   extraSpecialArgs = {inherit inputs fpLib;};
                   sharedModules =
                     homeLeaves
-                    ++ homeModules
-                    ++ [
-                      {fireproof = resolvedFacts;}
-                      {home.stateVersion = lib.mkDefault "24.11";}
-                    ];
-                  users.${resolvedFacts.username} = {};
+                    ++ homeManagerModules
+                    ++ shared
+                    ++ [{home.stateVersion = lib.mkDefault "24.11";}];
+                  users.${config.fireproof.username} = {};
                 };
                 system.stateVersion = lib.mkDefault "24.11";
-              }
+              })
             ]
+            ++ shared
             ++ nixosLeaves
-            # The host's own directory (its default.nix and sibling files).
-            # `_`-prefixed helper files are skipped (see import-tree).
-            ++ [(inputs.import-tree dir)]
-            ++ modules;
+            ++ nixosModules;
         }
     );
 
-  # Each host names the aspects it selects (resolved transitively into the
-  # fireproof.* facts above) plus host-specific facts. NIXOS-only host settings
-  # (steam, snapcast captures, binfmt, …) live in the host's own directory.
-  targets = {
-    desktop = {
-      dir = ./desktop;
-      aspects = ["workstation" "physical" "nvidia" "chromium" "bambu" "intellij" "clickhouse" "claude-work" "snapcast"];
-      facts = {
-        hostname = "desktop";
-        username = "nickolaj";
-        hardware.gpuPciId = "10de:2c05";
-        monitors = import ./desktop/_monitors.nix;
-      };
-      homeModules = [./desktop/_home.nix];
+  # Build a host from its directory: collect its card(s) + sibling nixos modules.
+  buildHost = dir: let
+    c = collect dir;
+  in
+    mkNixos {
+      inherit (c) aspects shared;
+      nixosModules = c.nixos;
+      homeManagerModules = c.homeManager;
     };
-    laptop = {
-      dir = ./laptop;
-      aspects = ["workstation" "laptop" "chromium" "intellij" "clickhouse"];
-      facts = {
-        hostname = "laptop";
-        username = "nickolaj";
-        monitors = import ./laptop/_monitors.nix;
-      };
-      homeModules = [./laptop/_home.nix];
-    };
-    work = {
-      dir = ./work;
-      aspects = ["workstation" "physical" "nvidia" "chromium" "intellij" "clickhouse" "claude-work"];
-      facts = {
-        hostname = "work";
-        username = "nickolaj";
-        monitors = import ./work/_monitors.nix;
-      };
-      homeModules = [./work/_home.nix];
-    };
-    homelab = {
-      dir = ./homelab;
-      aspects = ["dev" "homelab" "physical" "clickhouse"];
-      facts = {
-        hostname = "homelab";
-        username = "nickolaj";
-      };
-    };
-    minilab = {
-      dir = ./minilab;
-      aspects = ["gui-dev" "physical" "snapcast" "oxcb-media"];
-      facts = {
-        hostname = "minilab";
-        username = "nickolaj";
-        monitors = import ./minilab/_monitors.nix;
-      };
-    };
-    desktop-wsl = {
-      dir = ./desktop-wsl;
-      aspects = ["dev" "work" "wsl" "clickhouse"];
-      facts = {
-        hostname = "desktop-wsl";
-        username = "nickolaj";
-      };
-      homeModules = [./desktop-wsl/_home.nix];
-    };
-  };
 
-  # Facts for the bootstrap installer image. Passed through the facts mechanism
-  # (not set nixos-side in hosts/bootstrap/) so they reach the home-manager eval
-  # too — hm-secrets reads fireproof.hostname there.
+  # The bootstrap installer image. Its facts are passed as a `shared` module so they
+  # reach the home-manager eval too (hm-secrets reads fireproof.hostname there).
+  # name == null is the generic ISO; a host name adds the source-baking _bake leaf
+  # plus the targetHost string it stamps into the image.
   bootstrapFacts = {
     hostname = "bootstrap";
     username = "nickolaj";
   };
-
-  mkBootstrap = name:
-    mkSystem {
-      dir = ./bootstrap;
-      facts = bootstrapFacts;
-      modules = [
-        ./bootstrap/_bake.nix
-        {fireproof.bootstrap.targetHost = name;}
-      ];
+  buildBootstrap = name:
+    mkNixos {
+      shared = [{fireproof = bootstrapFacts;}];
+      nixosModules =
+        (collect ./bootstrap).nixos
+        ++ lib.optionals (name != null) [
+          ./bootstrap/_bake.nix
+          {fireproof.bootstrap.targetHost = name;}
+        ];
     };
+
+  # name -> host directory. (Reduced from the old targets registry; replaced by
+  # marker-file discovery in the next step.)
+  targets = {
+    desktop = ./desktop;
+    laptop = ./laptop;
+    work = ./work;
+    homelab = ./homelab;
+    minilab = ./minilab;
+    desktop-wsl = ./desktop-wsl;
+  };
 in {
   # Resolved selection per host, for inspection via `just aspects <host>`.
   config.flake.aspects =
-    lib.mapAttrs (_: host: {
-      inherit (host) aspects;
-      closure = aspectsLib.closure config.flake.bundles (["base"] ++ host.aspects);
-      leaves = aspectsLib.selectedLeaves config.flake.bundles config.flake.aspectTags (["base"] ++ host.aspects);
+    lib.mapAttrs (_: dir: let
+      asp = (collect dir).aspects;
+    in {
+      aspects = asp;
+      closure = aspectsLib.closure config.flake.bundles (["base"] ++ asp);
+      leaves = aspectsLib.selectedLeaves config.flake.bundles config.flake.aspectTags (["base"] ++ asp);
     })
     targets;
 
   config.flake.nixosConfigurations =
-    (lib.mapAttrs (_: mkSystem) targets)
-    // {
-      bootstrap = mkSystem {
-        dir = ./bootstrap;
-        facts = bootstrapFacts;
-      };
-    }
-    // (lib.mapAttrs' (name: _: lib.nameValuePair "bootstrap-${name}" (mkBootstrap name)) targets);
+    (lib.mapAttrs (_: buildHost) targets)
+    // {bootstrap = buildBootstrap null;}
+    // (lib.mapAttrs' (name: _: lib.nameValuePair "bootstrap-${name}" (buildBootstrap name)) targets);
 }
