@@ -55,8 +55,24 @@
               inputs.self.nixosModules.overlays
               {fireproof = resolvedFacts;}
               {
-                home-manager.sharedModules = homeLeaves ++ homeModules ++ [{fireproof = resolvedFacts;}];
-                home-manager.extraSpecialArgs = {inherit inputs fpLib;};
+                # Home-manager wiring that used to live in the fireproof.home-manager
+                # alias module: define the user (so the shared modules have someone
+                # to apply to), share system pkgs/state, and pin both stateVersions
+                # (mkDefault so a host — e.g. desktop-wsl — can bump system.stateVersion).
+                home-manager = {
+                  useUserPackages = true;
+                  useGlobalPkgs = true;
+                  extraSpecialArgs = {inherit inputs fpLib;};
+                  sharedModules =
+                    homeLeaves
+                    ++ homeModules
+                    ++ [
+                      {fireproof = resolvedFacts;}
+                      {home.stateVersion = lib.mkDefault "24.11";}
+                    ];
+                  users.${resolvedFacts.username} = {};
+                };
+                system.stateVersion = lib.mkDefault "24.11";
               }
             ]
             ++ nixosLeaves

@@ -90,12 +90,7 @@
     oxcb-media.includes = [];
   };
 
-  # Membership tags for leaves not yet converted to self-declaring form: the
-  # shim registers these under their relative path, so they are tagged here by
-  # path. (ssh/k8s/mcp/spotify now convert to HM agenix-rekey — folder-tagged.
-  # Only the home-manager alias remains; deleted at P-alias.) Removed as each is
-  # converted.
-  config.flake.aspectTags = {
-    "base/home-manager" = ["base"];
-  };
+  # Every leaf is now folder-tagged (or carries its own flake.aspectTags
+  # override), so there are no path-registered legacy leaves left to tag here.
+  config.flake.aspectTags = {};
 }
