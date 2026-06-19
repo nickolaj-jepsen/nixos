@@ -82,6 +82,27 @@
           formatOnSave = true;
         };
 
+        # nvf defaults diagnostics to underline-only; surface them with signs +
+        # current-line virtual_lines (needs nvim >=0.11; we ship 0.12).
+        diagnostics = {
+          enable = true;
+          config = {
+            severity_sort = true;
+            update_in_insert = false;
+            underline = true;
+            signs.text = lib.generators.mkLuaInline ''
+              {
+                [vim.diagnostic.severity.ERROR] = " ",
+                [vim.diagnostic.severity.WARN]  = " ",
+                [vim.diagnostic.severity.INFO]  = " ",
+                [vim.diagnostic.severity.HINT]  = "󰌶 ",
+              }
+            '';
+            virtual_lines = {current_line = true;};
+            virtual_text = false;
+          };
+        };
+
         languages = {
           enableTreesitter = true;
           enableFormat = true;
@@ -136,11 +157,17 @@
           regex
         ];
 
+        # Sticky header pinning the enclosing fn/class while scrolling. Cheap (reuses
+        # parsed grammars) but only earns its keep in the full-tier languages.
+        treesitter.context.enable = full;
+
         autocomplete.blink-cmp = {
           enable = true;
           friendly-snippets.enable = true;
           setupOpts = {
-            keymap.preset = "default";
+            # "enter" accepts on <CR> (matches the PyCharm/VSCode aliases below);
+            # mini.pairs still gets <CR> when the menu is closed.
+            keymap.preset = "enter";
             appearance.nerd_font_variant = "normal";
             sources.default = ["lsp" "path" "snippets" "buffer"];
             signature.enabled = true;
@@ -150,6 +177,12 @@
             };
           };
         };
+
+        # GitHub Copilot ghost-text suggestions. Full tier only (pulls in nodejs).
+        # cmp.enable wires copilot-cmp into nvim-cmp, but we run blink — so we stay
+        # on inline suggestions, which are independent of the completion menu.
+        # Accept <M-l>, next/prev <M-]>/<M-[>, dismiss <C-]>. Auth once: :Copilot auth.
+        assistant.copilot.enable = full;
 
         # Languages auto-wire conform; only yaml needs a manual formatter (full only,
         # reusing the prettier the typescript module already puts on PATH).
@@ -173,9 +206,16 @@
         # lands on the phone too).
         utility.motion.flash-nvim.enable = true;
 
+        # Autodetect shiftwidth/expandtab per buffer (baseline, pure Lua).
+        utility.sleuth.enable = true;
+
         # More editing UX (baseline, phone-safe).
         ui.illuminate.enable = true; # highlight other uses of the word under cursor
         visuals.rainbow-delimiters.enable = true;
+
+        # LSP $/progress (server startup, indexing) in the corner. Lazy on LspAttach,
+        # full-tier only — baseline LSPs (nil/lua-ls) barely report progress.
+        visuals.fidget-nvim.enable = full;
         notes.todo-comments = {
           enable = true;
           # No telescope/trouble here, so drop those binds; <leader>tdq (quickfix) stays.
@@ -258,6 +298,7 @@
               map("<F2>", vim.lsp.buf.rename, "Rename")
               map("<A-CR>", vim.lsp.buf.code_action, "Code action", { "n", "v" })
               map("<C-q>", vim.lsp.buf.hover, "Quick documentation")
+              map("<leader>cd", vim.diagnostic.open_float, "Line diagnostics")
             end,
           })
         '';
@@ -370,12 +411,6 @@
             action = "<cmd>bdelete<cr>";
             desc = "Close buffer";
           }
-          {
-            key = "<C-w>";
-            mode = "n";
-            action = "<cmd>bdelete<cr>";
-            desc = "Close buffer";
-          }
 
           # Git (gitsigns; command form is stable across versions)
           {
@@ -444,11 +479,91 @@
             desc = "Toggle comment";
           }
 
+          # Diagnostics (global; fire even with no LSP attached, mirroring ]h/[h hunks)
+          {
+            key = "]d";
+            mode = "n";
+            action = ''function() vim.diagnostic.jump({ count = 1, float = true }) end'';
+            lua = true;
+            desc = "Next diagnostic";
+          }
+          {
+            key = "[d";
+            mode = "n";
+            action = ''function() vim.diagnostic.jump({ count = -1, float = true }) end'';
+            lua = true;
+            desc = "Previous diagnostic";
+          }
+
+          # Clear search highlight (hlsearch is on; it otherwise lingers)
+          {
+            key = "<Esc>";
+            mode = "n";
+            action = "<cmd>nohlsearch<cr>";
+            desc = "Clear search highlight";
+          }
+
+          # Save (GUI reflex; flash's <c-s> is command-mode only, no clash)
+          {
+            key = "<C-s>";
+            mode = ["n" "v"];
+            action = "<cmd>write<cr>";
+            desc = "Save file";
+          }
+          {
+            key = "<C-s>";
+            mode = "i";
+            action = "<cmd>write<cr>";
+            desc = "Save file";
+          }
+
+          # Visual-mode QoL: keep selection on indent; move lines with J/K
+          {
+            key = "<";
+            mode = "v";
+            action = "<gv";
+            desc = "Indent left, keep selection";
+          }
+          {
+            key = ">";
+            mode = "v";
+            action = ">gv";
+            desc = "Indent right, keep selection";
+          }
+          {
+            key = "J";
+            mode = "v";
+            action = ":m '>+1<cr>gv=gv";
+            desc = "Move selection down";
+          }
+          {
+            key = "K";
+            mode = "v";
+            action = ":m '<-2<cr>gv=gv";
+            desc = "Move selection up";
+          }
+
+          # <C-_> fallback for the <C-/> comment toggle (many terminals send 0x1f)
+          {
+            key = "<C-_>";
+            mode = "n";
+            action = "gcc";
+            noremap = false;
+            desc = "Toggle comment";
+          }
+          {
+            key = "<C-_>";
+            mode = "v";
+            action = "gc";
+            noremap = false;
+            desc = "Toggle comment";
+          }
+
           # Format
           {
             key = "<leader>cf";
             mode = ["n" "v"];
-            action = ''function() require("conform").format({ async = true, lsp_fallback = true }) end'';
+            action = ''function() require("conform").format({ async = true, lsp_format = "fallback" }) end'';
             lua = true;
             desc = "Format buffer";
           }
