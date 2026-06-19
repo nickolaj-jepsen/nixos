@@ -106,8 +106,13 @@ For each component, check the latest GitHub release tag:
 ### 4. GitHub Agentic Workflows (`overlays/gh-aw.nix`)
 
 - **Latest version**: Check latest release of `github/gh-aw` on GitHub
-- **New hash**: `nix-prefetch-url "https://github.com/github/gh-aw/releases/download/v<VERSION>/linux-amd64"` → SRI
-- **Update fields**: `version` (in both the attribute and the `url` string) and `sha256` (SRI format)
+- **New hashes**: each platform ships a distinct binary, so compute one hash per
+  entry in `sha256Map`. For each of `linux-amd64`, `linux-arm64`, `darwin-amd64`,
+  `darwin-arm64`, run
+  `nix-prefetch-url "https://github.com/github/gh-aw/releases/download/v<VERSION>/<platform>"`
+  → convert to SRI
+- **Update fields**: `version` (in both the attribute and the `url` string) and all
+  four `sha256Map` entries (SRI format)
 
 ## Reusing the Existing PR
 
