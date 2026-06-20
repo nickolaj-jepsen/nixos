@@ -28,6 +28,19 @@
           "--keep-yearly 75"
         ];
       };
+
+      # "Last successful backup" gauge for node_exporter's textfile collector.
+      # ExecStartPost runs only on success, so a stale gauge means a backup that
+      # silently didn't run — that's what the Grafana freshness alert watches.
+      systemd.services.restic-backups-homelab.serviceConfig.ExecStartPost = lib.getExe (pkgs.writeShellApplication {
+        name = "restic-freshness-gauge";
+        runtimeInputs = [pkgs.coreutils];
+        text = ''
+          dir=/var/lib/node-exporter-textfile
+          printf 'homelab_restic_last_success_timestamp_seconds %s\n' "$(date +%s)" >"$dir/restic.prom.tmp"
+          mv "$dir/restic.prom.tmp" "$dir/restic.prom"
+        '';
+      });
     };
   };
 }

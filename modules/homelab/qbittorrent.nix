@@ -163,6 +163,39 @@
           "/var/lib/qbittorrent"
         ];
       };
+
+      # Availability probe: confirm traffic actually exits via Mullvad from inside the
+      # netns and publish a 0/1 gauge. A dead tunnel = stalled downloads (not a leak —
+      # the netns has no non-tunnel route), so this is an info-tier signal.
+      systemd.services.qbittorrent-vpn-probe = {
+        description = "Probe the qBittorrent VPN tunnel; write a node_exporter gauge";
+        after = ["wg-${vpnNamespace}.service"];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = lib.getExe (pkgs.writeShellApplication {
+            name = "qbittorrent-vpn-probe";
+            runtimeInputs = with pkgs; [iproute2 curl coreutils];
+            text = ''
+              dir=/var/lib/node-exporter-textfile
+              if ip netns exec ${vpnNamespace} curl -fsS --max-time 10 https://am.i.mullvad.net/json \
+                | grep -q '"mullvad_exit_ip"[[:space:]]*:[[:space:]]*true'; then
+                up=1
+              else
+                up=0
+              fi
+              printf 'homelab_qbt_vpn_up %s\n' "$up" >"$dir/qbt-vpn.prom.tmp"
+              mv "$dir/qbt-vpn.prom.tmp" "$dir/qbt-vpn.prom"
+            '';
+          });
+        };
+      };
+      systemd.timers.qbittorrent-vpn-probe = {
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnBootSec = "3min";
+          OnUnitActiveSec = "5min";
+        };
+      };
     };
   };
 }

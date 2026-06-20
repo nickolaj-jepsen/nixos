@@ -1,67 +1,42 @@
 {
+  # These exporters are scraped + remote_written to Grafana Cloud by Alloy
+  # (modules/homelab/alloy.nix); there is no local Prometheus server.
   flake.modules.nixos.prometheus = {
     config,
     lib,
     ...
-  }: let
-    inherit (config.fireproof) hostname;
-    mkScrapeConfig = name: {
-      job_name = name;
-      static_configs = [
-        {
-          labels = {
-            instance = hostname;
-          };
-
-          targets = [
-            "127.0.0.1:${toString config.services.prometheus.exporters.${name}.port}"
-          ];
-        }
-      ];
-    };
-  in {
+  }: {
     config = lib.mkIf config.fireproof.homelab.enable {
-      age.secrets.grafana-cloud-prometheus-api-key = {
-        rekeyFile = ../../secrets/grafana-cloud-prometheus.age;
-        owner = "prometheus";
-        group = "prometheus";
-      };
+      # Drop-dir for node_exporter textfile gauges (restic freshness, qBittorrent
+      # VPN probe, …). World-readable so the exporter reads what root writes.
+      systemd.tmpfiles.rules = [
+        "d /var/lib/node-exporter-textfile 0755 root root -"
+      ];
 
-      services.prometheus = {
-        enable = true;
-        enableAgentMode = true;
-        globalConfig.scrape_interval = "1m";
-        remoteWrite = [
-          {
-            url = "https://prometheus-prod-01-eu-west-0.grafana.net/api/prom/push";
-            basic_auth = {
-              username = "432120";
-              password_file = "${config.age.secrets.grafana-cloud-prometheus-api-key.path}";
-            };
-          }
-        ];
-
-        scrapeConfigs = [
-          (mkScrapeConfig "node")
-          (mkScrapeConfig "nginx")
-          (mkScrapeConfig "postgres")
-        ];
-
-        exporters = {
-          node = {
-            enable = true;
-            extraFlags = [
-              "--web.disable-exporter-metrics"
-            ];
-          };
-          nginx = {
-            enable = true;
-            scrapeUri = "http://127.0.0.1:8070/metrics";
-          };
-          postgres = {
-            enable = true;
-            runAsLocalSuperUser = true;
-          };
+      # All exporters bind loopback only; Alloy scrapes them from the same host.
+      services.prometheus.exporters = {
+        node = {
+          enable = true;
+          listenAddress = "127.0.0.1";
+          enabledCollectors = ["systemd"];
+          extraFlags = [
+            "--web.disable-exporter-metrics"
+            "--collector.textfile.directory=/var/lib/node-exporter-textfile"
+          ];
+        };
+        nginx = {
+          enable = true;
+          listenAddress = "127.0.0.1";
+          scrapeUri = "http://127.0.0.1:8070/metrics";
+        };
+        postgres = {
+          enable = true;
+          listenAddress = "127.0.0.1";
+          runAsLocalSuperUser = true;
+        };
+        smartctl = {
+          enable = true;
+          listenAddress = "127.0.0.1";
         };
       };
     };
