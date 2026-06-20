@@ -308,8 +308,8 @@ Managed with agenix-rekey + YubiKey. Host keys in `secrets/hosts/<hostname>/id_e
 > explicitly registered as agenix-rekey nodes.
 
 ```bash
-just secret-edit <name>  # Edit encrypted secret
-just secret-rekey        # Rekey after adding hosts/secrets (touch YubiKey)
+just secret-edit secrets/hosts/<host>/<name>.age  # Edit a secret (PATH to the .age file, not a bare name)
+just secret-rekey                                 # Rekey after adding hosts/secrets (touch YubiKey)
 ```
 
 Two rekey stores per host, because `agenix rekey` deletes any file in a node's

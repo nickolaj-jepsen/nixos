@@ -177,8 +177,8 @@ secrets/
 ### Commands
 
 ```bash
-# Edit a secret
-just secret-edit <secret-name>
+# Edit a secret (PATH to the .age file, not a bare name)
+just secret-edit secrets/hosts/<host>/<name>.age
 
 # Rekey all secrets (after adding hosts/secrets)
 just secret-rekey

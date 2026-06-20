@@ -190,15 +190,21 @@ age *ARGS="--help":
 decrypt file:
     just age -d {{ file }}
 
-[doc('Edit an encrypted file in $EDITOR')]
+[doc('Edit an encrypted secret in $EDITOR (PATH to the .age file) and stage it')]
 [group('secret')]
-secret-edit name:
-    {{ nixcmd }} run .#agenix-rekey.x86_64-linux.edit-view edit {{ name }}
+secret-edit file:
+    #!/usr/bin/env -S bash -e
+    {{ nixcmd }} run .#agenix-rekey.x86_64-linux.edit-view edit "{{ file }}"
+    # Stage it: `nix` flake eval ignores git-untracked files, so a new secret is invisible until added.
+    if [ -f "{{ file }}" ]; then git add -- "{{ file }}"; fi
 
 [doc('Rekey all secrets - needed when adding secrets/hosts')]
 [group('secret')]
 secret-rekey:
+    #!/usr/bin/env -S bash -e
     {{ nixcmd }} run .#agenix-rekey.x86_64-linux.rekey
+    # Stage rekeyed outputs (secrets/hosts/*/.rekey{,-hm}) + any new source secrets.
+    git add -- secrets
 
 [doc("Sets up configuration + SSH keys for a new host")]
 [group('maintenance')]
