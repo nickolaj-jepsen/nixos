@@ -157,6 +157,12 @@
               same-tab = true;
             }
             {
+              title = "Grimmory";
+              url = "https://grimmory.${cfg.domain}";
+              icon = "sh:booklore";
+              same-tab = true;
+            }
+            {
               title = "Shelfmark";
               url = "https://shelfmark.${cfg.domain}";
               icon = "sh:calibre-web-automated-book-downloader";

@@ -279,6 +279,24 @@ dendritic") — create the file in the right directory, no `imports` list to edi
   `modules/base/fireproof.nix` (declared in both classes automatically), and enable
   it per host via `shared.fireproof.<feature>.enable = true`. For a homelab service
   also add a dashboard link in `modules/homelab/glance/_home-page.nix`.
+- **Containerized homelab service**: homelab leaves are native NixOS services by
+  default; for Docker-only upstreams use `virtualisation.oci-containers.containers`
+  (backend is `docker`, set fleet-wide in `modules/programs/docker.nix`).
+  `modules/homelab/grimmory.nix` is the reference: container env split into a plain
+  `environment` attr plus an agenix `environmentFiles` secret,
+  `virtualisation.docker.enableOnBoot = true` so it survives reboot, and the port
+  published to `127.0.0.1` behind an nginx vhost.
+- **Shared homelab databases**: two always-on engine leaves mirror each other —
+  `postgres.nix` (`services.postgresql` + `postgresqlBackup`) and `mariadb.nix`
+  (`services.mysql` + `mysqlBackup`), both folding dumps into the restic set. A
+  service declares its own DB against them: postgres consumers use
+  `fpLib.mkPostgresDB` / `services.postgresql.ensure*`; MariaDB consumers append to
+  `services.mysql.ensureDatabases` + `services.mysqlBackup.databases`, and (when the
+  service is a container connecting over TCP) add a `systemd.services.mysql.postStart =
+lib.mkAfter` hook to provision a password user — `ensureUsers` is socket-auth only.
+  `mariadb.nix` binds `0.0.0.0` and opens 3306 on `docker0` so containers reach it via
+  `--add-host=host.docker.internal:host-gateway`; `grimmory.nix` is the consumer
+  example.
 - **New always-on leaf**: Put it in `base/`, `scripts/`, or as an ungated
   `programs/`/`system/` leaf and leave it ungated — those apply to every host.
 - **New host**: Run `just new-host <hostname> <username>` — it drops a
