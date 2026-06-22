@@ -14,6 +14,14 @@
         export $(grep -v '^#' ${secretPath} | xargs)
         exec ${pkgs.mcp-grafana}/bin/mcp-grafana "$@"
       '';
+
+    # GrowthBook env (GB_API_KEY + GB_EMAIL, plus GB_API_URL/GB_APP_ORIGIN if self-hosted) sourced from its secret.
+    growthbookMcpWrapper = secretPath:
+      pkgs.writeShellScript "growthbook-mcp-wrapper" ''
+        set -euo pipefail
+        export $(grep -v '^#' ${secretPath} | xargs)
+        exec ${pkgs.nodejs}/bin/npx -y @growthbook/mcp@latest "$@"
+      '';
   in {
     config = lib.mkIf config.fireproof.dev.mcp.enable {
       age.secrets.grafana-mcp-env = {
@@ -22,6 +30,10 @@
       };
       age.secrets.grafana-homelab-env = {
         rekeyFile = ../../secrets/grafana-homelab-env.age;
+        mode = "0600";
+      };
+      age.secrets.growthbook-mcp-env = {
+        rekeyFile = ../../secrets/growthbook-mcp-env.age;
         mode = "0600";
       };
 
@@ -37,6 +49,7 @@
             command = "${pkgs.nodejs}/bin/npx";
             args = ["-y" "snyk@latest" "mcp" "-t" "stdio"];
           };
+          growthbook.command = toString (growthbookMcpWrapper config.age.secrets.growthbook-mcp-env.path);
           grafana-work.command = toString (grafanaMcpWrapper "work" config.age.secrets.grafana-mcp-env.path);
           grafana.command = toString (grafanaMcpWrapper "homelab" config.age.secrets.grafana-homelab-env.path);
         };
