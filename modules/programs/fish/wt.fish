@@ -1,3 +1,19 @@
+# `wt create` prints the new worktree's path on stdout; wrap the command so an
+# interactive shell cd's into the freshly created worktree. Every other verb
+# (and any failure — nothing is printed, so $dir is empty) passes straight
+# through to the binary untouched.
+function wt -d "git worktree manager (cd's into a freshly created worktree)"
+    if test "$argv[1]" = create
+        set -l dir (command wt $argv)
+        set -l rc $status
+        if test $rc -eq 0; and test -d "$dir"
+            cd $dir
+        end
+        return $rc
+    end
+    command wt $argv
+end
+
 function __wt_names
     set -l main (git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')
     test -n "$main"; or return
