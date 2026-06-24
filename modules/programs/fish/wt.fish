@@ -1,9 +1,8 @@
-# `wt create` prints the new worktree's path on stdout; wrap the command so an
-# interactive shell cd's into the freshly created worktree. Every other verb
-# (and any failure — nothing is printed, so $dir is empty) passes straight
-# through to the binary untouched.
-function wt -d "git worktree manager (cd's into a freshly created worktree)"
-    if test "$argv[1]" = create
+# `wt create` and `wt cd` print a worktree path on stdout; wrap the command so an
+# interactive shell cd's into it. Every other verb (and any failure — nothing is
+# printed, so $dir is empty) passes straight through to the binary untouched.
+function wt -d "git worktree manager (cd's on create / cd)"
+    if contains -- "$argv[1]" create cd
         set -l dir (command wt $argv)
         set -l rc $status
         if test $rc -eq 0; and test -d "$dir"
@@ -37,6 +36,7 @@ complete -c wt -f
 
 complete -c wt -n __fish_use_subcommand -a list -d 'List worktrees'
 complete -c wt -n __fish_use_subcommand -a create -d 'Create a worktree on a new branch under .claude/worktrees'
+complete -c wt -n __fish_use_subcommand -a cd -d 'cd into a worktree (fzf picker if no name)'
 complete -c wt -n __fish_use_subcommand -a clean -d 'Remove safely-removable worktrees'
 complete -c wt -n __fish_use_subcommand -a apply -d 'Land branch: rebase, ff default, delete branch'
 complete -c wt -n __fish_use_subcommand -a diff -d 'Review a worktree diff (committed + uncommitted) in diffnav'
@@ -46,5 +46,5 @@ complete -c wt -n __fish_use_subcommand -a code -d 'Open worktree in VS Code'
 complete -c wt -n '__fish_seen_subcommand_from clean' -l dry-run -d 'Show what would be removed'
 complete -c wt -n '__fish_seen_subcommand_from apply' -l dry-run -d 'Show what would be done'
 
-complete -c wt -n '__fish_seen_subcommand_from clean apply diff smerge code' \
+complete -c wt -n '__fish_seen_subcommand_from clean apply diff smerge code cd' \
     -a '(__wt_names)' -d Worktree

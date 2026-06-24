@@ -10,6 +10,8 @@ set -euo pipefail
 #   create <name> [<base>]     Create <repo>/.claude/worktrees/<name> on a new
 #                              branch <name> off <base> (default: <default>).
 #                              Prints the new worktree's path on stdout.
+#   cd [<name>]                Print a worktree's path (fzf picker if no name);
+#                              the fish wrapper cd's the shell into it.
 #   clean [--dry-run] [<name>] Remove safely-removable worktrees. No name: clean
 #                              every safe one (never main, never one parked on
 #                              <default>). With name: clean that one.
@@ -27,6 +29,7 @@ usage() {
 Usage:
   wt list
   wt create <name> [<base>]
+  wt cd [<name>]
   wt clean [--dry-run] [<name>]
   wt apply [--dry-run] [<name>]
   wt diff [<name>]
@@ -348,6 +351,77 @@ cmd_create() {
 
     # stdout is the path alone — for `cd (wt create ...)` and scripting.
     printf '%s\n' "$path"
+}
+
+cmd_cd() {
+    local target=""
+    while (( $# > 0 )); do
+        case "$1" in
+            -*) die "unknown flag: $1" ;;
+            *)  target="$1"; shift ;;
+        esac
+    done
+
+    local rows
+    rows=$(gather_worktrees "$MAIN_WT" "$DEFAULT_BRANCH")
+    [[ -n "$rows" ]] || die "no worktrees"
+
+    # No name: pick any worktree (main included — cd is navigation, not mutation).
+    if [[ -z "$target" ]]; then
+        local choices
+        choices=$(printf '%s\n' "$rows" \
+            | while IFS=$'\x1f' read -r n p r b s a beh lk age sc im; do
+                local b_disp
+                if (( im == 1 )); then
+                    b_disp="(main)"
+                elif (( r == 0 )); then
+                    b_disp="(orphan)"
+                elif [[ -z "$b" ]]; then
+                    b_disp="(detached)"
+                else
+                    b_disp="${b#refs/heads/}"
+                fi
+                local vs_disp
+                if (( im == 1 )); then
+                    vs_disp="(main)"
+                else
+                    vs_disp=$(format_vs "$a" "$beh")
+                fi
+                printf '%s\t%s\t%s\t%s\t%s\n' \
+                    "$n" "$b_disp" "$s" \
+                    "$vs_disp" "$(format_age "$age")"
+                : "$p" "$lk" "$sc"
+            done)
+        local picked
+        picked=$({ printf 'NAME\tBRANCH\tSTATE\tvs main\tAGE\n'; printf '%s\n' "$choices"; } \
+            | column -t -s $'\t' \
+            | fzf --prompt="cd > " --header-lines=1 --layout=reverse --height=40%) \
+            || die "no selection"
+        target=$(awk '{print $1}' <<<"$picked")
+    fi
+
+    local found=""
+    local line
+    while IFS= read -r line; do
+        local n
+        n=$(awk -F$'\x1f' '{print $1}' <<<"$line")
+        if [[ "$n" == "$target" ]]; then
+            found="$line"
+            break
+        fi
+    done <<<"$rows"
+
+    [[ -n "$found" ]] || die "no worktree named '$target'"
+
+    local name path reg branch state ahead behind locked age_s safe_clean is_main
+    IFS=$'\x1f' read -r name path reg branch state ahead behind locked age_s safe_clean is_main <<<"$found"
+
+    [[ -d "$path" ]] || die "'$name' has no directory at $path"
+
+    # stdout is the path alone — the fish wrapper cd's the shell into it.
+    printf '%s\n' "$path"
+
+    : "${reg:-}" "${branch:-}" "${state:-}" "${ahead:-}" "${behind:-}" "${locked:-}" "${age_s:-}" "${safe_clean:-}" "${is_main:-}"
 }
 
 cmd_clean() {
@@ -806,6 +880,7 @@ build_registration_maps "$MAIN_WT"
 case "$verb" in
     list)            cmd_list "$@" ;;
     create)          cmd_create "$@" ;;
+    cd)              cmd_cd "$@" ;;
     clean)           cmd_clean "$@" ;;
     apply)           cmd_apply "$@" ;;
     diff)            cmd_diff "$@" ;;
