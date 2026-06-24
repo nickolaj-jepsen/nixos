@@ -89,6 +89,24 @@ home-switch hostname target='':
         ssh "$target" "$out/activate"
     fi
 
+[doc('Build a nix-darwin host (class = "darwin") — aarch64-darwin, so run ON the Mac')]
+[group("deploy")]
+darwin-build hostname=`hostname -s` *ARGS="":
+    @just build darwinConfigurations."{{ hostname }}".system {{ ARGS }}
+
+# First-time bootstrap on a fresh Mac (run ON the Mac):
+#   1. Install Nix (Determinate or upstream) with flakes enabled.
+#   2. sudo ssh-keygen -A                      # create /etc/ssh/ssh_host_ed25519_key
+#   3. Replace secrets/hosts/<h>/id_ed25519.{pub,age} with this Mac's real host key
+#      (the committed pub is a placeholder), then `just secret-rekey` (YubiKey).
+#   4. nix run nix-darwin/nix-darwin-26.05#darwin-rebuild -- switch --flake .#<h>
+#   nix-homebrew installs Homebrew itself on the first switch (slow); review
+#   homebrew.onActivation.cleanup first.
+[doc('Build + activate a nix-darwin host (run ON the Mac; see bootstrap notes in the justfile for the first run)')]
+[group("deploy")]
+darwin-switch hostname=`hostname -s` *ARGS="":
+    sudo darwin-rebuild switch --flake .#{{ hostname }} {{ ARGS }}
+
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
 deploy-remote hostname target: (_confirm "Deploy " + hostname + " to " + target + "? This will FORMAT disks on the target.")

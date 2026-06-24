@@ -7,7 +7,10 @@
   }: let
     inherit (config.fireproof) username hostname;
     allHosts = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ../../secrets/hosts));
-    publicKeys = map (x: builtins.readFile (../../secrets/hosts + ("/" + x) + "/id_ed25519.pub")) allHosts;
+    # Skip non-SSH pubkeys (e.g. a pre-deploy darwin host's age placeholder).
+    publicKeys =
+      lib.filter (lib.hasPrefix "ssh-")
+      (map (x: builtins.readFile (../../secrets/hosts + ("/" + x) + "/id_ed25519.pub")) allHosts);
   in {
     age.secrets.ssh-key = {
       rekeyFile = ../../secrets/hosts + ("/" + hostname) + /id_ed25519.age;
@@ -27,6 +30,18 @@
     };
 
     users.users.${username}.openssh.authorizedKeys.keys = publicKeys;
+  };
+
+  # darwin: just place the host identity at ~/.ssh so HM-side agenix can decrypt.
+  flake.modules.darwin.ssh = {config, ...}: let
+    inherit (config.fireproof) username hostname;
+  in {
+    age.secrets.ssh-key = {
+      rekeyFile = ../../secrets/hosts + ("/" + hostname) + /id_ed25519.age;
+      path = "/Users/" + username + "/.ssh/id_ed25519";
+      mode = "0600";
+      owner = username;
+    };
   };
 
   flake.modules.homeManager.ssh = {

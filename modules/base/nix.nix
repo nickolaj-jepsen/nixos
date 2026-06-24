@@ -1,5 +1,6 @@
-{
-  flake.modules.nixos.nix = {config, ...}: {
+# nix daemon settings shared by nixos + nix-darwin hosts.
+let
+  nixModule = {config, ...}: {
     nixpkgs.config.allowUnfree = true;
 
     nix.settings = {
@@ -39,4 +40,7 @@
       ];
     };
   };
+in {
+  flake.modules.nixos.nix = nixModule;
+  flake.modules.darwin.nix = nixModule;
 }

@@ -18,13 +18,6 @@
     home.packages =
       [
         (makeScript {
-          path = ./reboot-windows.bash;
-          runtimeInputs = with pkgs; [
-            jq
-            systemd # for bootctl and systemctl
-          ];
-        })
-        (makeScript {
           path = ./port-kill.bash;
           runtimeInputs = with pkgs; [
             lsof
@@ -50,15 +43,6 @@
           ];
         })
         (makeScript {
-          path = ./journalctl-select.bash;
-          runtimeInputs = with pkgs; [
-            fzf
-            systemd
-            gnused
-            coreutils
-          ];
-        })
-        (makeScript {
           path = ./ghpr.bash;
           runtimeInputs = with pkgs; [
             gh
@@ -80,6 +64,25 @@
             gnused
             gnugrep
             findutils
+            coreutils
+          ];
+        })
+      ]
+      # systemd-only scripts (the systemd package isn't built on darwin).
+      ++ lib.optionals pkgs.stdenv.isLinux [
+        (makeScript {
+          path = ./reboot-windows.bash;
+          runtimeInputs = with pkgs; [
+            jq
+            systemd # for bootctl and systemctl
+          ];
+        })
+        (makeScript {
+          path = ./journalctl-select.bash;
+          runtimeInputs = with pkgs; [
+            fzf
+            systemd
+            gnused
             coreutils
           ];
         })

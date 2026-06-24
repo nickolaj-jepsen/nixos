@@ -30,4 +30,8 @@ in {
   flake.nixosModules.overlays = _: {
     nixpkgs.overlays = overlayList;
   };
+
+  flake.darwinModules.overlays = _: {
+    nixpkgs.overlays = overlayList;
+  };
 }

@@ -42,6 +42,18 @@ let
       claude-code.work.enable =
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
+      # GUI apps decoupled from desktop.enable so a non-desktop host (macbook) can opt in.
+      firefox.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = config.fireproof.desktop.enable;
+        description = "Firefox with an HM-managed profile; on darwin the binary is a Homebrew cask (package = null) and HM manages config only.";
+      };
+      vscode.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = config.fireproof.desktop.enable && config.fireproof.dev.enable;
+        description = "VSCode with HM-managed settings/extensions (nixpkgs build); mac-app-util surfaces the .app on darwin.";
+      };
+
       dev = {
         enable = lib.mkEnableOption "development tools and applications";
         intellij.enable = lib.mkOption {
@@ -197,4 +209,6 @@ let
 in {
   flake.modules.nixos.fireproof-options = sharedOptions;
   flake.modules.homeManager.fireproof-options = sharedOptions;
+  # Emitted to darwin too so shared cards' fireproof.* facts type-check there.
+  flake.modules.darwin.fireproof-options = sharedOptions;
 }

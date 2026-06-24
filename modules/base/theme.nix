@@ -47,4 +47,6 @@ let
 in {
   flake.modules.nixos.theme = themeOptions;
   flake.modules.homeManager.theme = themeOptions;
+  # Emitted to darwin too so shared cards' theme colors type-check there.
+  flake.modules.darwin.theme = themeOptions;
 }

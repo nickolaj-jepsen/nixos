@@ -27,7 +27,7 @@ just why-depends <pkg>   # Show why a package is in the closure
 
 ## Architecture
 
-This is a NixOS flake-based configuration managing 7 hosts (6 NixOS + 1 standalone home-manager `dev-ao`) with a custom `fireproof.*` options namespace.
+This is a NixOS flake-based configuration managing 8 hosts (6 NixOS + 1 standalone home-manager `dev-ao` + 1 nix-darwin `macbook`) with a custom `fireproof.*` options namespace.
 
 ### Structure
 
@@ -139,7 +139,7 @@ classes; `homeManager` is the host's HM tweaks. The fleet is **discovered** — 
 there is no central registry.
 
 **Every** `.nix` file in a host dir is a card of the shape `{ class?; shared?;
-nixos?; homeManager?; }` — not just `host.nix`. The collector (`hosts/default.nix`)
+nixos?; homeManager?; darwin?; }` — not just `host.nix`. The collector (`hosts/default.nix`)
 asserts it: a bare NixOS module (a function, or an attrset with any other top-level
 key) throws, pointing you at the `nixos` bucket. That `nixos` bucket is the
 per-host analog of a dendritic leaf's `flake.modules.nixos.<name>`. Buckets are
@@ -150,15 +150,21 @@ any sibling — e.g. `system.nix` (nixos-only settings), `monitors.nix`
 capture config in its `nixos` bucket).
 
 A host's **class** is the one scalar a card may carry: `class = "nixos"` (the
-default) or `class = "home"`. It is read pre-eval and routes the WHOLE host —
-`nixos` hosts build via `nixpkgs.lib.nixosSystem` into `nixosConfigurations.<h>`;
-`home` hosts build via `lib/mkHome.nix` (standalone home-manager, no NixOS eval)
-into `homeConfigurations.<h>`. A `home` host asserts its `nixos` bucket empty. The
-routable set lives in `validClasses` (`hosts/default.nix`) — a typo throws; adding
-`darwin` later is a value there + a `buildDarwin` + a `darwinConfigurations` emit.
-`config.flake.hostNames` (the installer's bootstrap fan-out) is the **nixos** hosts
-only. Example: `hosts/dev-ao/host.nix` is a headless home-manager-only host
-(`class = "home"`).
+default), `class = "home"`, or `class = "darwin"`. It is read pre-eval and routes
+the WHOLE host — `nixos` hosts build via `nixpkgs.lib.nixosSystem` into
+`nixosConfigurations.<h>`; `home` hosts via `lib/mkHome.nix` (standalone
+home-manager, no NixOS eval) into `homeConfigurations.<h>`; `darwin` hosts via
+`inputs.nix-darwin.lib.darwinSystem` (+ embedded home-manager, no NixOS eval) into
+`darwinConfigurations.<h>`. `home`/`darwin` hosts assert their `nixos` bucket
+empty; a `darwin` host carries its nix-darwin system config in a `darwin` bucket
+(the 5th card key — homebrew, etc.) and reuses the `homeManager` leaves via
+nix-darwin's embedded HM (where `fireproof.*` is declared — emitted to the darwin
+class too). The routable set lives in `validClasses` (`hosts/default.nix`) — a
+typo throws. `config.flake.hostNames` (the installer's bootstrap fan-out) is the
+**nixos** hosts only. Examples: `hosts/dev-ao/host.nix` is a headless
+home-manager-only host (`class = "home"`); `hosts/macbook/host.nix` is an
+Apple-Silicon nix-darwin host (`class = "darwin"`), activated on the Mac with
+`just darwin-switch` (first-time bootstrap notes in the justfile).
 
 A "fact" is just a `fireproof.*` option value set in a `shared` card — the toggle
 `fireproof.<feature>.enable = true` IS the fact that gates the feature's leaves;
@@ -311,6 +317,12 @@ lib.mkAfter` hook to provision a password user — `ensureUsers` is socket-auth 
 ## Secrets
 
 Managed with agenix-rekey + YubiKey. Host keys in `secrets/hosts/<hostname>/id_ed25519.{pub,age}`.
+
+agenix-rekey auto-discovers `darwinConfigurations`, so a Mac rekeys like any nixos
+host. A not-yet-deployed Mac ships the agenix-rekey **dummy** pubkey as its
+`id_ed25519.pub` so the flake still evaluates; first bootstrap on the Mac replaces
+it (`sudo ssh-keygen -A` → real `/etc/ssh/ssh_host_ed25519_key.pub` → `just
+secret-rekey`).
 
 ```bash
 just secret-edit secrets/hosts/<host>/<name>.age  # Edit a secret (PATH to the .age file, not a bare name)

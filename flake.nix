@@ -38,6 +38,25 @@
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
+    # nix-darwin-26.05 must match nixpkgs release-26.05 (enableNixpkgsReleaseCheck).
+    nix-darwin.url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
+    nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
+
+    # nix-homebrew manages the brew install + taps (pinned as inputs since
+    # mutableTaps = false); casks live in nix-darwin's own homebrew.* module.
+    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+    homebrew-core = {
+      url = "github:homebrew/homebrew-core";
+      flake = false;
+    };
+    homebrew-cask = {
+      url = "github:homebrew/homebrew-cask";
+      flake = false;
+    };
+
+    # Trampolines so nix-built .app bundles (vscode) show up in Spotlight/Dock.
+    mac-app-util.url = "github:hraban/mac-app-util";
+
     nur.url = "github:nix-community/NUR";
     nur.inputs.nixpkgs.follows = "nixpkgs";
     nur.inputs.flake-parts.follows = "flake-parts";

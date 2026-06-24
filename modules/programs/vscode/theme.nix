@@ -6,7 +6,7 @@
   }: let
     c = config.fireproof.theme.colors;
   in {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+    config = lib.mkIf config.fireproof.vscode.enable {
       programs.vscode.profiles.default.userSettings = {
         # Keep Darcula for syntax highlighting
         "workbench.colorTheme" = "Darcula Theme from IntelliJ";

@@ -11,10 +11,10 @@
     inherit (config) flake;
   };
 
-  validClasses = ["nixos" "home"];
+  validClasses = ["nixos" "home" "darwin"];
 
   collect = dir: let
-    cardKeys = ["class" "shared" "nixos" "homeManager"];
+    cardKeys = ["class" "shared" "nixos" "homeManager" "darwin"];
     names =
       lib.filter
       (n: lib.hasSuffix ".nix" n && !(lib.hasPrefix "_" n))
@@ -46,6 +46,7 @@
     shared = lib.catAttrs "shared" cards;
     nixos = lib.catAttrs "nixos" cards;
     homeManager = lib.catAttrs "homeManager" cards;
+    darwin = lib.catAttrs "darwin" cards;
   };
 
   # `shared` sets fireproof.* in BOTH evals (the no-bridge fact flow); HM user read from resulting config.fireproof.username.
@@ -98,6 +99,60 @@
         }
     );
 
+  # darwinSystem takes no `system` arg — platform is set via nixpkgs.hostPlatform.
+  mkDarwin = {
+    shared ? [],
+    homeManagerModules ? [],
+    darwinModules ? [],
+    system ? "aarch64-darwin",
+  }: let
+    darwinLeaves = builtins.attrValues config.flake.modules.darwin;
+    homeLeaves = builtins.attrValues config.flake.modules.homeManager;
+  in
+    inputs.nix-darwin.lib.darwinSystem {
+      specialArgs = {inherit inputs fpLib;};
+      modules =
+        [
+          {nixpkgs.hostPlatform = system;}
+          inputs.home-manager.darwinModules.home-manager
+          inputs.agenix.darwinModules.default
+          inputs.agenix-rekey.darwinModules.default
+          inputs.nix-homebrew.darwinModules.nix-homebrew
+          inputs.mac-app-util.darwinModules.default
+          inputs.self.darwinModules.overlays
+          ({config, ...}: {
+            home-manager = {
+              useUserPackages = true;
+              useGlobalPkgs = true;
+              extraSpecialArgs = {inherit inputs fpLib;};
+              sharedModules =
+                homeLeaves
+                ++ homeManagerModules
+                ++ shared
+                ++ [
+                  # Surface nix-built GUI .apps (vscode) in Spotlight/Dock.
+                  inputs.mac-app-util.homeManagerModules.default
+                  # Declare programs.niri.* options for the inert desktop-gated niri leaves.
+                  inputs.niri.homeModules.niri
+                  ({pkgs, ...}: {programs.niri.package = lib.mkDefault pkgs.niri-unstable;})
+                  {home.stateVersion = lib.mkDefault "24.11";}
+                ];
+              users.${config.fireproof.username} = {};
+            };
+            # primaryUser + the user's home are required by homebrew + embedded HM activation.
+            users.users.${config.fireproof.username}.home = "/Users/${config.fireproof.username}";
+            system.primaryUser = config.fireproof.username;
+            system.stateVersion = lib.mkDefault 7;
+            # nix-darwin defaults hostName to null; agenix-rekey's target-name needs it set.
+            networking.hostName = lib.mkDefault config.fireproof.hostname;
+            networking.computerName = lib.mkDefault config.fireproof.hostname;
+          })
+        ]
+        ++ shared
+        ++ darwinLeaves
+        ++ darwinModules;
+    };
+
   buildHost = dir: let
     c = collect dir;
   in
@@ -116,6 +171,17 @@
         extraModules = c.shared ++ c.homeManager;
       };
 
+  # darwin-class host: nix-darwin eval only, so a `nixos` bucket has nowhere to apply (loud error).
+  buildDarwin = dir: let
+    c = collect dir;
+  in
+    assert lib.assertMsg (c.nixos == []) "${toString dir}: a darwin-class host has no NixOS eval — move `nixos` config to `darwin`/`homeManager`/`shared`";
+      mkDarwin {
+        inherit (c) shared;
+        homeManagerModules = c.homeManager;
+        darwinModules = c.darwin;
+      };
+
   # A host is any hosts/<name>/ dir containing a host.nix card; _templates/ (no card) excluded for free.
   hostDir = name: ./. + "/${name}";
   isHost = name: type: type == "directory" && builtins.pathExists (hostDir name + "/host.nix");
@@ -124,8 +190,9 @@
   hostClassOf = name: (collect (hostDir name)).class;
   nixosHosts = lib.filter (n: hostClassOf n == "nixos") discovered;
   homeHosts = lib.filter (n: hostClassOf n == "home") discovered;
+  darwinHosts = lib.filter (n: hostClassOf n == "darwin") discovered;
 in {
-  # nixos-class only: home-class hosts have no install ISO for installer/ to fan out over.
+  # nixos-class only: home/darwin-class hosts have no install ISO for installer/ to fan out over.
   config.flake.hostNames = nixosHosts;
 
   config.flake.nixosConfigurations =
@@ -133,4 +200,7 @@ in {
 
   config.flake.homeConfigurations =
     lib.genAttrs homeHosts (name: buildHome (hostDir name));
+
+  config.flake.darwinConfigurations =
+    lib.genAttrs darwinHosts (name: buildDarwin (hostDir name));
 }

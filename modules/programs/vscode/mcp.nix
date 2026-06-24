@@ -4,7 +4,7 @@
     lib,
     ...
   }: {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+    config = lib.mkIf config.fireproof.vscode.enable {
       programs.vscode.profiles.default.enableMcpIntegration = true;
 
       xdg.configFile."Code/User/prompts/global.toolsets.jsonc".text = builtins.toJSON {

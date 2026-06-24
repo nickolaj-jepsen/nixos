@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf config.fireproof.firefox.enable {
       programs.firefox = {
         enable = true;
         package = pkgs.unstable.firefox;
@@ -28,14 +28,18 @@
   }: let
     c = config.fireproof.theme.colors;
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf config.fireproof.firefox.enable {
       programs.firefox = {
         enable = true;
-        package = pkgs.unstable.firefox;
+        # darwin: binary via cask, HM manages the profile only (package = null); Linux: nixpkgs build.
+        package =
+          if pkgs.stdenv.isDarwin
+          then null
+          else pkgs.unstable.firefox;
 
         # TODO: migrate to XDG path "${config.xdg.configHome}/mozilla/firefox" —
         # requires moving ~/.mozilla/firefox to ~/.config/mozilla/firefox first.
-        configPath = ".mozilla/firefox";
+        configPath = lib.mkIf pkgs.stdenv.isLinux ".mozilla/firefox";
 
         profiles.default.settings = {
           # Homepage
