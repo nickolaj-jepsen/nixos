@@ -29,7 +29,6 @@
         user.email = "nickolaj@fireproof.website";
         user.name = "Nickolaj Jepsen";
         gpg.format = "ssh";
-        gpg.ssh.program = "op-ssh-sign";
         push.autosetupremote = "true";
         pull.rebase = "true";
         rebase.autosquash = "true";

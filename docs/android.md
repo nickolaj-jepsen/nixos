@@ -138,12 +138,6 @@ just CPU/RAM-heavy and can crawl or OOM on a phone. The real fix is a binary cac
 point an aarch64 builder (or a `nix copy` from a beefier machine) at a cachix/own
 substituter and let the phone substitute instead of compile.
 
-### `git commit -S` fails
-
-`git.nix` configures SSH commit signing via `op-ssh-sign` (1Password, desktop-only,
-not in the phone closure). Signing is **not** on by default, so this only bites if
-you opt into it on the phone — then it fails with `op-ssh-sign: command not found`.
-
 ### Dead host-only commands
 
 The always-on `scripts` leaf carries a few host-only helpers onto the phone
