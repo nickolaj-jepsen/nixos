@@ -59,9 +59,11 @@
       enable = true;
       package = pkgs.claude-code;
       enableMcpIntegration = true;
-      # One folder per skill (skills/<name>/SKILL.md), one file per command
-      # (commands/<name>.md). avoid-ai-tropes source: https://tropes.fyi/tropes-md
-      skills = ./skills;
+      # Skills live at repo-root skills/ (not here) so `npx skills add
+      # nickolaj-jepsen/nixos` finds them via the default flat layout; see
+      # skills/README.md. One folder per skill (skills/<name>/SKILL.md), one
+      # file per command (commands/<name>.md).
+      skills = ../../../skills;
       commandsDir = ./commands;
 
       settings = {

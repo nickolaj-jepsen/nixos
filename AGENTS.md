@@ -47,6 +47,10 @@ installer/                # Installer ISO builder — owns nixosConfigurations.b
                           #   (not a host: a self-contained corner, direct nixosSystem build)
 secrets/                  # agenix-encrypted secrets with YubiKey
                           #   <host>/.rekey = nixos secrets, <host>/.rekey-hm = HM secrets
+skills/                   # Claude Code agent skills (skills/<name>/SKILL.md), at repo
+                          #   root — NOT under modules/programs/claude-code — so they're
+                          #   publicly installable via `npx skills add nickolaj-jepsen/nixos`;
+                          #   the claude-code HM leaf points back here. See skills/README.md
 ```
 
 ### Modules are dendritic (`flake.modules`), gated by toggles
