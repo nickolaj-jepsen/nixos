@@ -18,7 +18,7 @@
     config = {
       programs = {
         # Rich argument completions for kubectl/gh/docker/git/systemctl; composes
-        # with the bespoke ds/worktree/claude-wt completions (carapace defers to
+        # with the bespoke ds/worktree/wt completions (carapace defers to
         # existing fish completions).
         carapace = {
           enable = true;
@@ -33,7 +33,7 @@
             ${builtins.readFile ./k8s.fish}
             ${builtins.readFile ./autocomplete.fish}
             ${builtins.readFile ./worktree.fish}
-            ${builtins.readFile ./claude-wt.fish}
+            ${builtins.readFile ./wt.fish}
             ${pkgs.nix-your-shell}/bin/nix-your-shell fish | source
 
           '';

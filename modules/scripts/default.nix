@@ -70,10 +70,11 @@
           ];
         })
         (makeScript {
-          path = ./claude-wt.bash;
+          path = ./wt.bash;
           runtimeInputs = with pkgs; [
             git
             fzf
+            diffnav # for the diff verb
             util-linux # for column
             gawk
             gnused
