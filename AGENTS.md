@@ -27,7 +27,7 @@ just why-depends <pkg>   # Show why a package is in the closure
 
 ## Architecture
 
-This is a NixOS flake-based configuration managing 8 hosts (6 NixOS + 1 standalone home-manager `dev-ao` + 1 nix-on-droid `phone`) with a custom `fireproof.*` options namespace.
+This is a NixOS flake-based configuration managing 7 hosts (6 NixOS + 1 standalone home-manager `dev-ao`) with a custom `fireproof.*` options namespace.
 
 ### Structure
 
@@ -150,25 +150,15 @@ any sibling — e.g. `system.nix` (nixos-only settings), `monitors.nix`
 capture config in its `nixos` bucket).
 
 A host's **class** is the one scalar a card may carry: `class = "nixos"` (the
-default), `class = "home"`, or `class = "droid"`. It is read pre-eval and routes
-the WHOLE host — `nixos` hosts build via `nixpkgs.lib.nixosSystem` into
-`nixosConfigurations.<h>`; `home` hosts build via `lib/mkHome.nix` (standalone
-home-manager, no NixOS eval) into `homeConfigurations.<h>`; `droid` hosts build
-via the inline `mkDroid` (`inputs.nix-on-droid.lib.nixOnDroidConfiguration`,
-aarch64, no NixOS eval) into `nixOnDroidConfigurations.<h>`. Both `home` and
-`droid` hosts assert their `nixos` bucket empty. A `droid` host carries its
-nix-on-droid system config in a `droid` bucket (the 5th card key — `user.shell`,
-`system.stateVersion`, `time.timeZone`, …) and reuses the `homeManager` leaves via
-nix-on-droid's embedded home-manager (its `shared`/`homeManager` buckets feed that
-HM eval, where `fireproof.*` is declared — NOT the n-o-d system eval); n-o-d forces
-`home.username`/`homeDirectory` from `config.user.*`, so `mkDroid` sets neither. The
+default) or `class = "home"`. It is read pre-eval and routes the WHOLE host —
+`nixos` hosts build via `nixpkgs.lib.nixosSystem` into `nixosConfigurations.<h>`;
+`home` hosts build via `lib/mkHome.nix` (standalone home-manager, no NixOS eval)
+into `homeConfigurations.<h>`. A `home` host asserts its `nixos` bucket empty. The
 routable set lives in `validClasses` (`hosts/default.nix`) — a typo throws; adding
 `darwin` later is a value there + a `buildDarwin` + a `darwinConfigurations` emit.
 `config.flake.hostNames` (the installer's bootstrap fan-out) is the **nixos** hosts
-only. Examples: `hosts/dev-ao/host.nix` is a headless home-manager-only host
-(`class = "home"`); `hosts/phone/host.nix` is a nix-on-droid Android host
-(`class = "droid"`), activated on-device with `just droid-switch` (`nix-on-droid
-switch --flake .#phone`).
+only. Example: `hosts/dev-ao/host.nix` is a headless home-manager-only host
+(`class = "home"`).
 
 A "fact" is just a `fireproof.*` option value set in a `shared` card — the toggle
 `fireproof.<feature>.enable = true` IS the fact that gates the feature's leaves;
@@ -321,13 +311,6 @@ lib.mkAfter` hook to provision a password user — `ensureUsers` is socket-auth 
 ## Secrets
 
 Managed with agenix-rekey + YubiKey. Host keys in `secrets/hosts/<hostname>/id_ed25519.{pub,age}`.
-
-> **Droid caveat:** agenix-rekey discovers nodes from `nixos`/`home` configs only,
-> not `nixOnDroidConfigurations`, so a `droid` host's HM rekey node is invisible to
-> `just secret-rekey`. Keep droid hosts secret-free (the `phone` deliberately
-> declares zero `age.secrets` — only its `id_ed25519.pub` is committed, so the
-> always-on `ssh`/`hm-secrets` leaves stay inert) until the droid nodes are
-> explicitly registered as agenix-rekey nodes.
 
 ```bash
 just secret-edit secrets/hosts/<host>/<name>.age  # Edit a secret (PATH to the .age file, not a bare name)

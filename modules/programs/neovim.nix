@@ -1,7 +1,6 @@
 # neovim via nvf. Always-on lean baseline (editing UX + nil/lua-ls + cheap
 # grammars) on every host; the heavy language support layers on only when
-# fireproof.neovim.full.enable (defaults to dev.enable, off on the phone) — see
-# docs/phone-aarch64-cache.md.
+# fireproof.neovim.full.enable (defaults to dev.enable).
 {
   flake.modules.homeManager.neovim = {
     config,
@@ -107,7 +106,7 @@
           enableTreesitter = true;
           enableFormat = true;
 
-          # Baseline (every host, incl. phone).
+          # Baseline (every host).
           nix.enable = true;
           nix.lsp.servers = lib.mkForce (
             if full
@@ -139,7 +138,7 @@
           };
         };
 
-        # Baseline grammars for cheap, phone-relevant filetypes that have no
+        # Baseline grammars for cheap, common filetypes that have no
         # language module enabled at baseline (highlighting only, no LSP). The
         # full-tier languages append their own grammars when enabled; lua/vim/
         # vimdoc/query come from treesitter.addDefaultGrammars.
@@ -202,14 +201,13 @@
         };
 
         # flash.nvim: modern easymotion. s jump, S treesitter, r/R remote
-        # (operator/visual), <c-s> toggle — nvf's defaults. Baseline (pure Lua,
-        # lands on the phone too).
+        # (operator/visual), <c-s> toggle — nvf's defaults. Baseline (pure Lua).
         utility.motion.flash-nvim.enable = true;
 
         # Autodetect shiftwidth/expandtab per buffer (baseline, pure Lua).
         utility.sleuth.enable = true;
 
-        # More editing UX (baseline, phone-safe).
+        # More editing UX (baseline).
         ui.illuminate.enable = true; # highlight other uses of the word under cursor
         visuals.rainbow-delimiters.enable = true;
 

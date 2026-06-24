@@ -89,11 +89,6 @@ home-switch hostname target='':
         ssh "$target" "$out/activate"
     fi
 
-[doc('Build + activate a nix-on-droid host (class = "droid") — aarch64, so run ON the device')]
-[group("deploy")]
-droid-switch hostname='phone' *ARGS="":
-    nix-on-droid switch --flake .#{{ hostname }} {{ ARGS }}
-
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
 deploy-remote hostname target: (_confirm "Deploy " + hostname + " to " + target + "? This will FORMAT disks on the target.")
