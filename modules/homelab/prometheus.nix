@@ -38,6 +38,12 @@
           enable = true;
           listenAddress = "127.0.0.1";
         };
+        # Per-unit cgroup CPU/memory (node_exporter's systemd collector gives unit
+        # *state* only). Feeds the Services dashboard's "top services by resource".
+        systemd = {
+          enable = true;
+          listenAddress = "127.0.0.1";
+        };
       };
     };
   };

@@ -105,7 +105,9 @@
               101
             ];
             channel = 25;
-            log_level = "debug";
+            # debug emits ~10k journal lines/h (zigbee-herdsman zstack parser spam) and
+            # dominates Loki ingest; warn keeps it readable. Flip to debug only while pairing.
+            log_level = "warn";
           };
         };
       };

@@ -42,6 +42,12 @@
           forward_to      = [prometheus.relabel.homelab.receiver]
         }
 
+        prometheus.scrape "systemd" {
+          targets         = [{ __address__ = "127.0.0.1:9558" }]
+          scrape_interval = "1m"
+          forward_to      = [prometheus.relabel.homelab.receiver]
+        }
+
         prometheus.relabel "homelab" {
           rule {
             target_label = "instance"
