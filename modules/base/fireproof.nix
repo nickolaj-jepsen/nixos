@@ -53,6 +53,12 @@ let
         default = config.fireproof.desktop.enable && config.fireproof.dev.enable;
         description = "VSCode with HM-managed settings/extensions (nixpkgs build); mac-app-util surfaces the .app on darwin.";
       };
+      ghostty.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = config.fireproof.desktop.enable;
+        description = "Ghostty terminal with HM-managed config/theme; on darwin the binary is a Homebrew cask (package = null) and HM manages config only.";
+      };
+      karabiner.enable = lib.mkEnableOption "Karabiner-Elements key remapping (darwin) — installs the cask and deploys a Nix-generated karabiner.json that ports the keyd/Linux keybindings";
 
       dev = {
         enable = lib.mkEnableOption "development tools and applications";

@@ -14,6 +14,27 @@
       documentation.man.cache.enable = false;
     };
   };
+  # nix-darwin only changes a user's login shell for users it "knows" (knownUsers),
+  # and only when the configured uid matches — 501 is every Mac's first GUI user.
+  # gid defaults to 20 (staff), matching macOS, and deletion is hard-guarded to
+  # uid > 501, so the primary user can never be removed by a config change.
+  flake.modules.darwin.fish = {
+    config,
+    pkgs,
+    ...
+  }: let
+    inherit (config.fireproof) username;
+  in {
+    config = {
+      programs.fish.enable = true;
+      users.knownUsers = [username];
+      users.users.${username} = {
+        uid = 501;
+        shell = pkgs.fish;
+      };
+    };
+  };
+
   flake.modules.homeManager.fish = {pkgs, ...}: {
     config = {
       programs = {

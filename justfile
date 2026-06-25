@@ -2,6 +2,9 @@
 
 nixcmd := "nix --experimental-features 'nix-command flakes'"
 
+# Current Nix system double (e.g. x86_64-linux, aarch64-darwin); agenix-rekey is per-system.
+system := `nix --experimental-features 'nix-command flakes' eval --impure --raw --expr 'builtins.currentSystem'`
+
 @_default:
     just --list
 
@@ -207,7 +210,7 @@ decrypt file:
 [group('secret')]
 secret-edit file:
     #!/usr/bin/env -S bash -e
-    {{ nixcmd }} run .#agenix-rekey.x86_64-linux.edit-view edit "{{ file }}"
+    {{ nixcmd }} run .#agenix-rekey.{{ system }}.edit-view edit "{{ file }}"
     # Stage it: `nix` flake eval ignores git-untracked files, so a new secret is invisible until added.
     if [ -f "{{ file }}" ]; then git add -- "{{ file }}"; fi
 
@@ -215,7 +218,7 @@ secret-edit file:
 [group('secret')]
 secret-rekey:
     #!/usr/bin/env -S bash -e
-    {{ nixcmd }} run .#agenix-rekey.x86_64-linux.rekey
+    {{ nixcmd }} run .#agenix-rekey.{{ system }}.rekey
     # Stage rekeyed outputs (secrets/hosts/*/.rekey{,-hm}) + any new source secrets.
     git add -- secrets
 

@@ -117,6 +117,7 @@
           inputs.home-manager.darwinModules.home-manager
           inputs.agenix.darwinModules.default
           inputs.agenix-rekey.darwinModules.default
+          inputs.nix-index-database.darwinModules.nix-index
           inputs.nix-homebrew.darwinModules.nix-homebrew
           inputs.mac-app-util.darwinModules.default
           inputs.self.darwinModules.overlays

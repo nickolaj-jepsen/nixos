@@ -18,6 +18,15 @@
 in {
   inherit primaryMonitor primaryMonitorName secondaryMonitors;
 
+  # The `programs.<app>.package` an HM GUI leaf should install: null on darwin
+  # (the binary comes from a homebrew cask, so HM manages config only — nixpkgs
+  # .app bundles are second-class there), the nixpkgs build on Linux. Pairs with
+  # a `homebrew.casks` entry in the leaf's `flake.modules.darwin.*` half.
+  mkDarwinGuiPackage = pkgs: linuxPkg:
+    if pkgs.stdenv.isDarwin
+    then null
+    else linuxPkg;
+
   mkVirtualHost = {
     port,
     host ? "127.0.0.1",

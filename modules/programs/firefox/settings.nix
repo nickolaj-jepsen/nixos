@@ -20,10 +20,20 @@
       };
     };
   };
+  flake.modules.darwin.firefox-settings = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.firefox.enable {
+      homebrew.casks = ["firefox"];
+    };
+  };
   flake.modules.homeManager.firefox-settings = {
     config,
     lib,
     pkgs,
+    fpLib,
     ...
   }: let
     c = config.fireproof.theme.colors;
@@ -31,11 +41,7 @@
     config = lib.mkIf config.fireproof.firefox.enable {
       programs.firefox = {
         enable = true;
-        # darwin: binary via cask, HM manages the profile only (package = null); Linux: nixpkgs build.
-        package =
-          if pkgs.stdenv.isDarwin
-          then null
-          else pkgs.unstable.firefox;
+        package = fpLib.mkDarwinGuiPackage pkgs pkgs.unstable.firefox;
 
         # TODO: migrate to XDG path "${config.xdg.configHome}/mozilla/firefox" —
         # requires moving ~/.mozilla/firefox to ~/.config/mozilla/firefox first.

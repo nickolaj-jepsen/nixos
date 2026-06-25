@@ -71,6 +71,9 @@
           "*" = {
             IdentityFile = identityFile;
             ForwardAgent = true;
+            # Load keys into the agent on first use — covers darwin, which has no
+            # systemd add-ssh-keys service (below).
+            AddKeysToAgent = "yes";
             ServerAliveInterval = 60;
             ServerAliveCountMax = 10;
             ControlMaster = "auto";
@@ -139,7 +142,8 @@
     # socket; sets home.sessionVariables.SSH_AUTH_SOCK for shells.
     services.ssh-agent.enable = true;
 
-    systemd.user.services."add-ssh-keys" = lib.mkIf workEnabled {
+    # Linux-only: darwin has no systemd, and AddKeysToAgent (above) covers it there.
+    systemd.user.services."add-ssh-keys" = lib.mkIf (workEnabled && pkgs.stdenv.isLinux) {
       Unit = {
         Description = "Add SSH keys to ssh-agent";
         After = ["network.target" "ssh-agent.service"];
