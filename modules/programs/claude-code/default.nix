@@ -67,6 +67,7 @@
       commandsDir = ./commands;
 
       settings = {
+        tui = "fullscreen";
         voiceEnabled = true;
         useAutoModeDuringPlan = true;
         skipAutoPermissionPrompt = true;
