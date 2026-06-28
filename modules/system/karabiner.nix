@@ -154,6 +154,9 @@
         {
           name = "Fireproof";
           selected = true;
+          # Without this, every activation rewrites karabiner.json with no keyboard
+          # type set, so Karabiner re-prompts for ISO/ANSI/JIS on next launch.
+          virtual_hid_keyboard.keyboard_type_v2 = "iso";
           complex_modifications.rules = [
             {
               description = "CapsLock → Backspace (match keyd)";
