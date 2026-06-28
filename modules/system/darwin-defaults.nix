@@ -2,13 +2,29 @@
   # macOS preference defaults tuned to feel closer to a Linux desktop. Darwin-only
   # leaf, so it lands on every darwin host (just macbook) with no gate needed.
   flake.modules.darwin.darwin-defaults = {
+    config,
+    fpLib,
+    ...
+  }: let
+    c = config.fireproof.theme.colors;
+  in {
     system.defaults = {
       NSGlobalDomain = {
+        # Native macOS chrome can only take the dark/light flag from the palette;
+        # the Flexoki theme is dark. Accent/highlight color live in
+        # CustomUserPreferences below (no typed option in this nix-darwin).
+        AppleInterfaceStyle = "Dark";
+
         # Fast repeat + kill the press-and-hold accent popup, so holding a key
         # repeats it (vim motions, arrow keys) instead of offering diacritics.
         KeyRepeat = 2;
         InitialKeyRepeat = 15;
         ApplePressAndHoldEnabled = false;
+
+        # Tab moves focus through every control, not just text fields (keyboard-driven nav).
+        AppleKeyboardUIMode = 3;
+        # F1–F12 act as plain function keys; media controls need Fn.
+        "com.apple.keyboard.fnState" = true;
 
         "com.apple.mouse.tapBehavior" = 1; # tap-to-click (also applies at the login window)
 
@@ -50,6 +66,7 @@
         autohide-delay = 0.0;
         autohide-time-modifier = 0.2;
         show-recents = false;
+        minimize-to-application = true; # minimized windows fold into the app's Dock icon
         mru-spaces = false; # never auto-reorder Spaces — required for any workspace/tiling habit
         tilesize = 40;
         wvous-bl-corner = 1; # hot corners off (1 = no-op)
@@ -65,9 +82,28 @@
         TrackpadThreeFingerDrag = true;
       };
 
-      CustomUserPreferences."com.apple.desktopservices" = {
-        DSDontWriteNetworkStores = true; # no .DS_Store litter on network/USB shares
-        DSDontWriteUSBStores = true;
+      CustomUserPreferences = {
+        "com.apple.desktopservices" = {
+          DSDontWriteNetworkStores = true; # no .DS_Store litter on network/USB shares
+          DSDontWriteUSBStores = true;
+        };
+
+        # Auto-hide the menu bar everywhere (2 = Always). No typed option for this.
+        "com.apple.controlcenter".AutoHideMenuBarOption = 2;
+
+        # The only theme colors macOS exposes for native UI. AppleAccentColor is a
+        # fixed enum (control tint) — 1 = Orange, nearest to Flexoki coral, matching
+        # the GTK/libadwaita "orange" choice. AppleHighlightColor (text selection)
+        # takes a free-form "R G B name" and gets the real accent hex.
+        NSGlobalDomain = {
+          AppleAccentColor = 1;
+          AppleHighlightColor = "${fpLib.hexToRgbFloat c.accent} Coral";
+
+          # Keep the menu bar hidden in fullscreen too, and don't minimize a window
+          # when its title bar is double-clicked (neither has a typed option).
+          AppleMenuBarVisibleInFullscreen = false;
+          AppleMiniaturizeOnDoubleClick = false;
+        };
       };
     };
 

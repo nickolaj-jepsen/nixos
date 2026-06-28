@@ -11,4 +11,15 @@
       ];
     };
   };
+
+  # On darwin the nixpkgs build isn't used; install the Homebrew cask instead.
+  flake.modules.darwin.slack = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.slack.enable {
+      homebrew.casks = ["slack"];
+    };
+  };
 }

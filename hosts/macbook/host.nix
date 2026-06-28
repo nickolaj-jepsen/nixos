@@ -16,6 +16,15 @@
     fireproof.vscode.enable = true;
     fireproof.ghostty.enable = true;
     fireproof.karabiner.enable = true;
+    fireproof.raycast.enable = true;
+
+    # Hand-installed GUI apps now declared as casks (Tailscale rides the always-on
+    # tailscale leaf's darwin half). InputLeap is omitted — no Homebrew cask exists.
+    fireproof.bitwarden.enable = true;
+    fireproof.obsidian.enable = true;
+    fireproof.claude-desktop.enable = true;
+    fireproof.slack.enable = true;
+    fireproof.linear.enable = true;
   };
 
   # nix-darwin system config (the macOS analog of a host's `nixos` bucket).
