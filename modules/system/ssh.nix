@@ -7,7 +7,10 @@
   }: let
     inherit (config.fireproof) username hostname;
     allHosts = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ../../secrets/hosts));
-    publicKeys = map (x: builtins.readFile (../../secrets/hosts + ("/" + x) + "/id_ed25519.pub")) allHosts;
+    # Skip non-SSH pubkeys (e.g. a pre-deploy darwin host's age placeholder).
+    publicKeys =
+      lib.filter (lib.hasPrefix "ssh-")
+      (map (x: builtins.readFile (../../secrets/hosts + ("/" + x) + "/id_ed25519.pub")) allHosts);
   in {
     age.secrets.ssh-key = {
       rekeyFile = ../../secrets/hosts + ("/" + hostname) + /id_ed25519.age;
@@ -27,6 +30,18 @@
     };
 
     users.users.${username}.openssh.authorizedKeys.keys = publicKeys;
+  };
+
+  # darwin: just place the host identity at ~/.ssh so HM-side agenix can decrypt.
+  flake.modules.darwin.ssh = {config, ...}: let
+    inherit (config.fireproof) username hostname;
+  in {
+    age.secrets.ssh-key = {
+      rekeyFile = ../../secrets/hosts + ("/" + hostname) + /id_ed25519.age;
+      path = "/Users/" + username + "/.ssh/id_ed25519";
+      mode = "0600";
+      owner = username;
+    };
   };
 
   flake.modules.homeManager.ssh = {
@@ -56,6 +71,9 @@
           "*" = {
             IdentityFile = identityFile;
             ForwardAgent = true;
+            # Load keys into the agent on first use — covers darwin, which has no
+            # systemd add-ssh-keys service (below).
+            AddKeysToAgent = "yes";
             ServerAliveInterval = 60;
             ServerAliveCountMax = 10;
             ControlMaster = "auto";
@@ -124,7 +142,8 @@
     # socket; sets home.sessionVariables.SSH_AUTH_SOCK for shells.
     services.ssh-agent.enable = true;
 
-    systemd.user.services."add-ssh-keys" = lib.mkIf workEnabled {
+    # Linux-only: darwin has no systemd, and AddKeysToAgent (above) covers it there.
+    systemd.user.services."add-ssh-keys" = lib.mkIf (workEnabled && pkgs.stdenv.isLinux) {
       Unit = {
         Description = "Add SSH keys to ssh-agent";
         After = ["network.target" "ssh-agent.service"];

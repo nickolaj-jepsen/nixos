@@ -2,9 +2,10 @@
   flake.modules.homeManager.zed-settings = {
     config,
     lib,
+    pkgs,
     ...
   }: {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux) {
       programs.zed-editor = {
         userSettings = {
           # General

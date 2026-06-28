@@ -42,6 +42,14 @@ let
       claude-code.work.enable =
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
+      # GUI apps all gate on desktop.enable (plus dev/work where relevant) — no
+      # per-app toggles. A leaf adds a Homebrew cask in its flake.modules.darwin
+      # half and installs the nixpkgs build in its homeManager half; Mac-only apps
+      # (karabiner, bitwarden, handy, …) ship a darwin half only. Home-manager
+      # halves that can't run on macOS gate additionally on pkgs.stdenv.isLinux,
+      # so desktop.enable on the darwin macbook mirrors the Linux desktop minus
+      # the Linux-only DE (niri, dms, gtk, …).
+
       dev = {
         enable = lib.mkEnableOption "development tools and applications";
         intellij.enable = lib.mkOption {
@@ -197,4 +205,6 @@ let
 in {
   flake.modules.nixos.fireproof-options = sharedOptions;
   flake.modules.homeManager.fireproof-options = sharedOptions;
+  # Emitted to darwin too so shared cards' fireproof.* facts type-check there.
+  flake.modules.darwin.fireproof-options = sharedOptions;
 }

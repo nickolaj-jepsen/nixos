@@ -18,13 +18,6 @@
     home.packages =
       [
         (makeScript {
-          path = ./reboot-windows.bash;
-          runtimeInputs = with pkgs; [
-            jq
-            systemd # for bootctl and systemctl
-          ];
-        })
-        (makeScript {
           path = ./port-kill.bash;
           runtimeInputs = with pkgs; [
             lsof
@@ -47,15 +40,6 @@
           runtimeInputs = with pkgs; [
             kubectl
             fzf
-          ];
-        })
-        (makeScript {
-          path = ./journalctl-select.bash;
-          runtimeInputs = with pkgs; [
-            fzf
-            systemd
-            gnused
-            coreutils
           ];
         })
         (makeScript {
@@ -84,7 +68,27 @@
           ];
         })
       ]
-      ++ lib.optionals config.fireproof.desktop.enable [
+      # systemd-only scripts (the systemd package isn't built on darwin).
+      ++ lib.optionals pkgs.stdenv.isLinux [
+        (makeScript {
+          path = ./reboot-windows.bash;
+          runtimeInputs = with pkgs; [
+            jq
+            systemd # for bootctl and systemctl
+          ];
+        })
+        (makeScript {
+          path = ./journalctl-select.bash;
+          runtimeInputs = with pkgs; [
+            fzf
+            systemd
+            gnused
+            coreutils
+          ];
+        })
+      ]
+      # Wayland screenshot tooling — Linux desktop only.
+      ++ lib.optionals (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) [
         (makeScript {
           path = ./screenshot.bash;
           runtimeInputs = with pkgs; [

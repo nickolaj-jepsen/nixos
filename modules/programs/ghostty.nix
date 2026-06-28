@@ -1,8 +1,19 @@
 {
+  flake.modules.darwin.ghostty = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
+      homebrew.casks = ["ghostty"];
+    };
+  };
+
   flake.modules.homeManager.ghostty = {
     config,
     lib,
     pkgs,
+    fpLib,
     ...
   }: let
     c = config.fireproof.theme.colors;
@@ -10,18 +21,28 @@
     config = lib.mkIf config.fireproof.desktop.enable {
       programs.ghostty = {
         enable = true;
-        package = pkgs.unstable.ghostty;
+        package = fpLib.mkDarwinGuiPackage pkgs pkgs.unstable.ghostty;
         enableFishIntegration = config.programs.fish.enable;
         settings = {
-          window-decoration = false;
+          # niri draws its own decorations; macOS wants the native titlebar.
+          window-decoration = pkgs.stdenv.isDarwin;
           theme = "fireproof";
-          font-size = 11;
+          # Retina displays make 11pt look tiny; bump it on macOS.
+          font-size =
+            if pkgs.stdenv.isDarwin
+            then 14
+            else 11;
           font-family = "Hack Nerd Font";
           window-inherit-font-size = false;
           shell-integration-features = true;
           # Keyboard-first QoL: hide the pointer while typing.
           mouse-hide-while-typing = true;
           copy-on-select = false;
+          # Karabiner leaves terminal Ctrl alone (Ctrl+C = SIGINT), so bind the Linux clipboard habit here.
+          keybind = [
+            "ctrl+shift+c=copy_to_clipboard"
+            "ctrl+shift+v=paste_from_clipboard"
+          ];
           # Drop the desktop notification fired on every clipboard copy.
           app-notifications = "no-clipboard-copy";
           # niri clips windows to 8px rounded corners; pad the cell grid so

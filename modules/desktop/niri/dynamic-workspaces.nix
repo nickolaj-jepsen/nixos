@@ -30,7 +30,7 @@
     imports = [
       inputs.niri-dynamic-workspaces.homeModules.default
     ];
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.niri-dynamic-workspaces = {
         enable = true;
         # Pass package explicitly to avoid upstream's `pkgs.system` warning

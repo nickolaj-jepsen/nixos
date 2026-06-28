@@ -27,7 +27,7 @@
     # Drive the marker from input activity via swayidle (niri's ext-idle-notify-v1),
     # independent of lock state. Present at login and on any activity; cleared after
     # the idle threshold, before sleep, and at logout.
-    systemd.user.services.claude-presence = lib.mkIf config.fireproof.desktop.enable {
+    systemd.user.services.claude-presence = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       Unit = {
         Description = "Mark Claude Code client presence from input activity";
         PartOf = ["graphical-session.target"];

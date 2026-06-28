@@ -2,6 +2,7 @@
   flake.modules.homeManager.dms-bar = {
     config,
     lib,
+    pkgs,
     fpLib,
     ...
   }: let
@@ -121,7 +122,7 @@
       (lib.optional (leftMonitors != []) leftSecondaryBar)
       ++ (lib.optional (rightMonitors != []) rightSecondaryBar);
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.dank-material-shell.settings = {
         launcherLogoMode = "os";
         launcherLogoContrast = 1;

@@ -2,6 +2,9 @@
 
 nixcmd := "nix --experimental-features 'nix-command flakes'"
 
+# Current Nix system double (e.g. x86_64-linux, aarch64-darwin); agenix-rekey is per-system.
+system := `nix --experimental-features 'nix-command flakes' eval --impure --raw --expr 'builtins.currentSystem'`
+
 @_default:
     just --list
 
@@ -88,6 +91,29 @@ home-switch hostname target='':
         {{ nixcmd }} copy --to "ssh://$target" "$out"
         ssh "$target" "$out/activate"
     fi
+
+[doc('Build a nix-darwin host (class = "darwin") — aarch64-darwin, so run ON the Mac')]
+[group("deploy")]
+darwin-build hostname=`hostname -s` *ARGS="":
+    @just build darwinConfigurations."{{ hostname }}".system {{ ARGS }}
+
+[doc('Preview changes vs the current Mac system (nvd diff; run ON the Mac)')]
+[group("deploy")]
+darwin-diff hostname=`hostname -s`: (darwin-build hostname)
+    nvd diff /run/current-system {{ justfile_directory() }}/result
+
+# First-time bootstrap on a fresh Mac (run ON the Mac):
+#   1. Install Nix (Determinate or upstream) with flakes enabled.
+#   2. sudo ssh-keygen -A                      # create /etc/ssh/ssh_host_ed25519_key
+#   3. Replace secrets/hosts/<h>/id_ed25519.{pub,age} with this Mac's real host key
+#      (the committed pub is a placeholder), then `just secret-rekey` (YubiKey).
+#   4. nix run nix-darwin/nix-darwin-26.05#darwin-rebuild -- switch --flake .#<h>
+#   nix-homebrew installs Homebrew itself on the first switch (slow); review
+#   homebrew.onActivation.cleanup first.
+[doc('Build + activate a nix-darwin host (run ON the Mac; see bootstrap notes in the justfile for the first run)')]
+[group("deploy")]
+darwin-switch hostname=`hostname -s` *ARGS="":
+    sudo darwin-rebuild switch --flake .#{{ hostname }} {{ ARGS }}
 
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
@@ -189,7 +215,7 @@ decrypt file:
 [group('secret')]
 secret-edit file:
     #!/usr/bin/env -S bash -e
-    {{ nixcmd }} run .#agenix-rekey.x86_64-linux.edit-view edit "{{ file }}"
+    {{ nixcmd }} run .#agenix-rekey.{{ system }}.edit-view edit "{{ file }}"
     # Stage it: `nix` flake eval ignores git-untracked files, so a new secret is invisible until added.
     if [ -f "{{ file }}" ]; then git add -- "{{ file }}"; fi
 
@@ -197,7 +223,7 @@ secret-edit file:
 [group('secret')]
 secret-rekey:
     #!/usr/bin/env -S bash -e
-    {{ nixcmd }} run .#agenix-rekey.x86_64-linux.rekey
+    {{ nixcmd }} run .#agenix-rekey.{{ system }}.rekey
     # Stage rekeyed outputs (secrets/hosts/*/.rekey{,-hm}) + any new source secrets.
     git add -- secrets
 

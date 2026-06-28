@@ -19,7 +19,7 @@
     imports = [
       inputs.dank-material-shell.homeModules.dank-material-shell
     ];
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.dank-material-shell = {
         enable = true;
 

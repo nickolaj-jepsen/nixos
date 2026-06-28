@@ -2,6 +2,7 @@
   flake.modules.homeManager.dms-desktop-widgets = {
     config,
     lib,
+    pkgs,
     fpLib,
     ...
   }: let
@@ -33,7 +34,7 @@
       })
       positionableMonitors);
   in {
-    config = lib.mkIf (config.fireproof.desktop.enable && primaryMonitor != {}) {
+    config = lib.mkIf (config.fireproof.desktop.enable && primaryMonitor != {} && pkgs.stdenv.isLinux) {
       programs.dank-material-shell.settings = {
         desktopWidgetInstances = [
           {

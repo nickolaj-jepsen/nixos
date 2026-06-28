@@ -15,8 +15,44 @@
     primary = primaryMonitor monitors;
   in
     builtins.filter (m: m != primary) (activeMonitors monitors);
+
+  # Byte (0-255) of a 6-digit hex string at nibble offset i (0=R, 2=G, 4=B).
+  hexByteAt = hex: i: let
+    digit = c:
+      {
+        "0" = 0;
+        "1" = 1;
+        "2" = 2;
+        "3" = 3;
+        "4" = 4;
+        "5" = 5;
+        "6" = 6;
+        "7" = 7;
+        "8" = 8;
+        "9" = 9;
+        "a" = 10;
+        "b" = 11;
+        "c" = 12;
+        "d" = 13;
+        "e" = 14;
+        "f" = 15;
+      }
+      .${
+        lib.toLower c
+      };
+  in
+    digit (builtins.substring i 1 hex) * 16 + digit (builtins.substring (i + 1) 1 hex);
 in {
   inherit primaryMonitor primaryMonitorName secondaryMonitors;
+
+  # The `programs.<app>.package` an HM GUI leaf should install: null on darwin
+  # (the binary comes from a homebrew cask, so HM manages config only — nixpkgs
+  # .app bundles are second-class there), the nixpkgs build on Linux. Pairs with
+  # a `homebrew.casks` entry in the leaf's `flake.modules.darwin.*` half.
+  mkDarwinGuiPackage = pkgs: linuxPkg:
+    if pkgs.stdenv.isDarwin
+    then null
+    else linuxPkg;
 
   mkVirtualHost = {
     port,
@@ -77,35 +113,18 @@ in {
     generatedSecretsDir = hostSecrets;
   };
 
+  # Hex color -> "R G B" floats in 0..1, the form macOS NSGlobalDomain.AppleHighlightColor expects.
+  hexToRgbFloat = hexInput: let
+    hex = lib.removePrefix "#" hexInput;
+    f = i: toString (hexByteAt hex i / 255.0);
+  in "${f 0} ${f 2} ${f 4}";
+
   # Hex color -> "H S L" string (hue 0-360, sat/light 0-100, rounded) that Glance's theme expects.
   hexToHsl = hexInput: let
     hex = lib.removePrefix "#" hexInput;
-    digit = c:
-      {
-        "0" = 0;
-        "1" = 1;
-        "2" = 2;
-        "3" = 3;
-        "4" = 4;
-        "5" = 5;
-        "6" = 6;
-        "7" = 7;
-        "8" = 8;
-        "9" = 9;
-        "a" = 10;
-        "b" = 11;
-        "c" = 12;
-        "d" = 13;
-        "e" = 14;
-        "f" = 15;
-      }
-      .${
-        lib.toLower c
-      };
-    byteAt = i: digit (builtins.substring i 1 hex) * 16 + digit (builtins.substring (i + 1) 1 hex);
-    r = byteAt 0 / 255.0;
-    g = byteAt 2 / 255.0;
-    b = byteAt 4 / 255.0;
+    r = hexByteAt hex 0 / 255.0;
+    g = hexByteAt hex 2 / 255.0;
+    b = hexByteAt hex 4 / 255.0;
     maxc = lib.max r (lib.max g b);
     minc = lib.min r (lib.min g b);
     delta = maxc - minc;

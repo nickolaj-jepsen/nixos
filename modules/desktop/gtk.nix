@@ -108,7 +108,7 @@
       @define-color destructive_color @red;
     '';
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       home.pointerCursor = {
         gtk.enable = true;
         name = "Adwaita";
