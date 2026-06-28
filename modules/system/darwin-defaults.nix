@@ -23,8 +23,6 @@
 
         # Tab moves focus through every control, not just text fields (keyboard-driven nav).
         AppleKeyboardUIMode = 3;
-        # F1–F12 act as plain function keys; media controls need Fn.
-        "com.apple.keyboard.fnState" = true;
 
         "com.apple.mouse.tapBehavior" = 1; # tap-to-click (also applies at the login window)
 
