@@ -23,6 +23,10 @@
 
         # Tab moves focus through every control, not just text fields (keyboard-driven nav).
         AppleKeyboardUIMode = 3;
+        # Top row acts as media/brightness keys directly; Fn gives F1–F12. Set
+        # explicitly (not just omitted) — nix-darwin won't unwrite a previously
+        # applied `true`, so the plist would otherwise keep requiring Fn for volume.
+        "com.apple.keyboard.fnState" = false;
 
         # Activating an app jumps to a Space that already holds its windows instead
         # of yanking the window into the current Space — matches mru-spaces = false.
@@ -53,7 +57,7 @@
       };
 
       finder = {
-        AppleShowAllFiles = true; # show dotfiles
+        AppleShowAllFiles = true;
         ShowPathbar = true;
         ShowStatusBar = true;
         FXPreferredViewStyle = "Nlsv"; # list view
