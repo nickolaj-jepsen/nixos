@@ -2,13 +2,14 @@
   flake.modules.homeManager.dms-plugins = {
     config,
     lib,
+    pkgs,
     inputs,
     ...
   }: {
     imports = [
       inputs.dms-plugin-registry.nixosModules.default
     ];
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.dank-material-shell.plugins = {
         emojiLauncher = {
           enable = true;

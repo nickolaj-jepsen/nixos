@@ -2,9 +2,10 @@
   flake.modules.homeManager.dms-control-center = {
     config,
     lib,
+    pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.dank-material-shell.settings = {
         controlCenterWidgets =
           [

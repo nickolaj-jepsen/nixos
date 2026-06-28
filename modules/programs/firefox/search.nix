@@ -21,7 +21,7 @@
       }
       // lib.optionalAttrs (icon != null) {inherit icon;};
   in {
-    config = lib.mkIf config.fireproof.firefox.enable {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.firefox.profiles.default.search = {
         default = "Kagi";
         privateDefault = "Kagi";

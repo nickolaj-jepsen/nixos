@@ -6,7 +6,8 @@
     ...
   }: {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.work.enable) {
-      home.packages = [
+      # darwin installs the cask (below); the nixpkgs build is Linux-only.
+      home.packages = lib.optionals pkgs.stdenv.isLinux [
         pkgs.unstable.slack
       ];
     };
@@ -18,7 +19,7 @@
     lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.slack.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.work.enable) {
       homebrew.casks = ["slack"];
     };
   };

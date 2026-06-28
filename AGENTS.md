@@ -107,6 +107,20 @@ composition layer (no separate bundle/aspect system). All these options are decl
 centrally in `modules/base/fireproof.nix` (theme in `modules/base/theme.nix`), emitted
 to both module classes.
 
+There are **no per-app GUI toggles** — every GUI app gates on `desktop.enable`
+(plus `dev`/`work` where relevant), so the darwin `macbook` opts into the whole
+roster with one `desktop.enable = true`, just like a Linux desktop. A cross-platform
+app leaf carries a `flake.modules.darwin.<app>` half that adds a `homebrew.casks`
+entry and a `flake.modules.homeManager.<app>` half that installs the nixpkgs build —
+the latter must keep the package off darwin (`fpLib.mkDarwinGuiPackage` for
+`programs.<app>.package`, or `lib.optionals pkgs.stdenv.isLinux [...]` for
+`home.packages`) so the cask is the only binary on the Mac. Home-manager halves
+that **can't** run on macOS (niri, dms, gtk, clipboard, claude-presence, the Wayland
+screenshot script, and Linux-only apps like chromium/ferdium/spotify/zed/pycharm) gate
+additionally on `pkgs.stdenv.isLinux` (ferdium has no Mac cask, so it stays Linux-only). Mac-only apps (karabiner, bitwarden, linear,
+claude-desktop, handy, whatcable) ship a `darwin` half only. nixos halves never
+evaluate on darwin, so they need no platform guard.
+
 The module **name** (`flake.modules.<class>.<name>`) must be **globally unique** —
 it is one flat namespace, so a duplicate silently deep-merges (e.g.
 `modules/dev/postgres.nix` is named `postgres-cli` to avoid colliding with

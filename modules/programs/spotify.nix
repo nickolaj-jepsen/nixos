@@ -1,13 +1,24 @@
-# Spotify + spotify-player TUI. Home-manager half only: the credentials secret
-# decrypts HM-side to spotify-player's fixed cache path (see secrets/hm-secrets.nix).
+# Spotify GUI + spotify-player TUI. On darwin the GUI is a Homebrew cask; the
+# Linux desktop gets the nixpkgs GUI plus the spotify-player TUI (credentials secret
+# decrypted HM-side to a fixed cache path — see secrets/hm-secrets.nix).
 {
+  flake.modules.darwin.spotify = {
+    config,
+    lib,
+    ...
+  }: {
+    config = lib.mkIf config.fireproof.desktop.enable {
+      homebrew.casks = ["spotify"];
+    };
+  };
+
   flake.modules.homeManager.spotify = {
     config,
     lib,
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       home.packages = [pkgs.spotify];
 
       age.secrets.spotify-player = {

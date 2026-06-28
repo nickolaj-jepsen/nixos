@@ -8,7 +8,7 @@
     vscodePackage = pkgs.unstable.vscode;
     marketplaceReleases = pkgs.vscode-marketplace-release;
   in {
-    config = lib.mkIf config.fireproof.vscode.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.vscode = {
         enable = true;
         mutableExtensionsDir = false;

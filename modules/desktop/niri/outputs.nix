@@ -2,12 +2,13 @@
   flake.modules.homeManager.niri-outputs = {
     config,
     lib,
+    pkgs,
     fpLib,
     ...
   }: let
     primaryMonitorName = fpLib.primaryMonitorName config.fireproof.monitors;
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.niri.settings = {
         workspaces = lib.mkIf (primaryMonitorName != "") (
           lib.genAttrs ["01" "02" "03" "04" "05"] (_: {open-on-output = primaryMonitorName;})

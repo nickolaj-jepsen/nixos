@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.firefox.enable {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.firefox = {
         enable = true;
         package = pkgs.unstable.firefox;
@@ -25,7 +25,7 @@
     lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.firefox.enable {
+    config = lib.mkIf config.fireproof.desktop.enable {
       homebrew.casks = ["firefox"];
     };
   };
@@ -38,7 +38,7 @@
   }: let
     c = config.fireproof.theme.colors;
   in {
-    config = lib.mkIf config.fireproof.firefox.enable {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.firefox = {
         enable = true;
         package = fpLib.mkDarwinGuiPackage pkgs pkgs.unstable.firefox;

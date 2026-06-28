@@ -7,7 +7,7 @@
   }: let
     c = config.fireproof.theme.colors;
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.niri.settings = {
         prefer-no-csd = true;
         clipboard.disable-primary = true;

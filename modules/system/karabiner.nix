@@ -7,7 +7,7 @@
     lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.karabiner.enable {
+    config = lib.mkIf config.fireproof.desktop.enable {
       homebrew.casks = ["karabiner-elements"];
     };
   };
@@ -18,8 +18,6 @@
     pkgs,
     ...
   }: let
-    cfg = config.fireproof.karabiner;
-
     # Apps where Ctrl must stay Ctrl (SIGINT/readline). Add VS Code's id
     # ("^com\\.microsoft\\.VSCode$") if its integrated terminal losing Ctrl+C bites.
     terminalBundles = ["^com\\.mitchellh\\.ghostty$"];
@@ -188,7 +186,7 @@
     # Materialise a real file, not a symlink: Karabiner rewrites karabiner.json in
     # place (replacing a symlink with a regular file), so a home.file link would be
     # clobbered. It reloads on write; the kickstart is a belt-and-braces nudge.
-    config = lib.mkIf cfg.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isDarwin) {
       home.activation.karabiner = lib.hm.dag.entryAfter ["writeBoundary"] ''
         $DRY_RUN_CMD mkdir -p "$HOME/.config/karabiner"
         $DRY_RUN_CMD rm -f "$HOME/.config/karabiner/karabiner.json"

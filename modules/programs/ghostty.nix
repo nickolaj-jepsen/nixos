@@ -4,7 +4,7 @@
     lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.ghostty.enable {
+    config = lib.mkIf config.fireproof.desktop.enable {
       homebrew.casks = ["ghostty"];
     };
   };
@@ -18,7 +18,7 @@
   }: let
     c = config.fireproof.theme.colors;
   in {
-    config = lib.mkIf config.fireproof.ghostty.enable {
+    config = lib.mkIf config.fireproof.desktop.enable {
       programs.ghostty = {
         enable = true;
         package = fpLib.mkDarwinGuiPackage pkgs pkgs.unstable.ghostty;

@@ -6,7 +6,7 @@
     lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.bitwarden.enable {
+    config = lib.mkIf config.fireproof.desktop.enable {
       homebrew.casks = ["bitwarden"];
     };
   };

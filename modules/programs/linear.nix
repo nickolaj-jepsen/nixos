@@ -6,7 +6,7 @@
     lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.linear.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.work.enable) {
       homebrew.casks = ["linear"];
     };
   };

@@ -6,7 +6,8 @@
     ...
   }: {
     config = lib.mkIf config.fireproof.desktop.enable {
-      home.packages = [
+      # darwin installs the cask (below); the nixpkgs build is Linux-only.
+      home.packages = lib.optionals pkgs.stdenv.isLinux [
         pkgs.unstable.obsidian
       ];
     };
@@ -19,7 +20,7 @@
     lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.obsidian.enable {
+    config = lib.mkIf config.fireproof.desktop.enable {
       homebrew.casks = ["obsidian"];
     };
   };

@@ -1,12 +1,11 @@
 {
-  # darwin has no desktop.enable; gate the cask on dev.enable (its natural analog
-  # on a Mac, which is always a GUI host). Linux installs the nixpkgs build below.
+  # darwin installs the cask; Linux installs the nixpkgs build (HM half below).
   flake.modules.darwin.sublime-merge = {
     config,
     lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.dev.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       homebrew.casks = ["sublime-merge"];
     };
   };
@@ -18,7 +17,8 @@
     ...
   }: {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
-      home.packages = [
+      # darwin installs the cask (below); the nixpkgs build is Linux-only.
+      home.packages = lib.optionals pkgs.stdenv.isLinux [
         pkgs.unstable.sublime-merge
       ];
     };

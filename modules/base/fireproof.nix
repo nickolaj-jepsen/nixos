@@ -42,33 +42,13 @@ let
       claude-code.work.enable =
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
-      # GUI apps decoupled from desktop.enable so a non-desktop host (macbook) can opt in.
-      firefox.enable = lib.mkOption {
-        type = lib.types.bool;
-        default = config.fireproof.desktop.enable;
-        description = "Firefox with an HM-managed profile; on darwin the binary is a Homebrew cask (package = null) and HM manages config only.";
-      };
-      vscode.enable = lib.mkOption {
-        type = lib.types.bool;
-        default = config.fireproof.desktop.enable && config.fireproof.dev.enable;
-        description = "VSCode with HM-managed settings/extensions (nixpkgs build); mac-app-util surfaces the .app on darwin.";
-      };
-      ghostty.enable = lib.mkOption {
-        type = lib.types.bool;
-        default = config.fireproof.desktop.enable;
-        description = "Ghostty terminal with HM-managed config/theme; on darwin the binary is a Homebrew cask (package = null) and HM manages config only.";
-      };
-      karabiner.enable = lib.mkEnableOption "Karabiner-Elements key remapping (darwin) — installs the cask and deploys a Nix-generated karabiner.json that ports the keyd/Linux keybindings";
-
-      # Personal/work GUI apps on darwin: each installs only a Homebrew cask
-      # (config is app- or account-synced). On Linux, obsidian/slack install the
-      # nixpkgs build via their HM halves (gated on desktop.enable), so these
-      # toggles are darwin-scoped, enabled per host.
-      bitwarden.enable = lib.mkEnableOption "Bitwarden desktop (darwin Homebrew cask)";
-      obsidian.enable = lib.mkEnableOption "Obsidian notes (darwin Homebrew cask)";
-      claude-desktop.enable = lib.mkEnableOption "Claude desktop app (darwin Homebrew cask)";
-      slack.enable = lib.mkEnableOption "Slack (darwin Homebrew cask)";
-      linear.enable = lib.mkEnableOption "Linear issue tracker (darwin Homebrew cask)";
+      # GUI apps all gate on desktop.enable (plus dev/work where relevant) — no
+      # per-app toggles. A leaf adds a Homebrew cask in its flake.modules.darwin
+      # half and installs the nixpkgs build in its homeManager half; Mac-only apps
+      # (karabiner, bitwarden, handy, …) ship a darwin half only. Home-manager
+      # halves that can't run on macOS gate additionally on pkgs.stdenv.isLinux,
+      # so desktop.enable on the darwin macbook mirrors the Linux desktop minus
+      # the Linux-only DE (niri, dms, gtk, …).
 
       dev = {
         enable = lib.mkEnableOption "development tools and applications";

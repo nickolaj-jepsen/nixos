@@ -2,9 +2,10 @@
   flake.modules.homeManager.niri-binds = {
     config,
     lib,
+    pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.niri.settings.binds = {
         "XF86AudioRaiseVolume" = {
           allow-when-locked = true;

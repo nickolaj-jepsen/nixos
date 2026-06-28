@@ -9,7 +9,7 @@
     pkgs,
     ...
   }: {
-    config = lib.mkIf (config.fireproof.ghostty.enable || config.fireproof.vscode.enable) {
+    config = lib.mkIf config.fireproof.desktop.enable {
       fonts.packages = [pkgs.nerd-fonts.hack];
     };
   };

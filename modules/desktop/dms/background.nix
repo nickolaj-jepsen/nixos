@@ -36,7 +36,7 @@
       geometryPng
     ];
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       # hyprpaper: DMS can't set wallpapers yet
       services.hyprpaper = {
         enable = true;

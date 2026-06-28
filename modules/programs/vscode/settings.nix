@@ -11,7 +11,7 @@
       };
     };
   in {
-    config = lib.mkIf config.fireproof.vscode.enable {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.vscode.profiles.default = {
         enableUpdateCheck = true;
         enableExtensionUpdateCheck = true;

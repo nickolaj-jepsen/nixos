@@ -499,30 +499,6 @@ true
 
 
 
-## fireproof\.firefox\.enable
-
-
-
-Firefox with an HM-managed profile; on darwin the binary is a Homebrew cask (package = null) and HM manages config only\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.hardware\.battery
 
 
@@ -2097,30 +2073,6 @@ string
 
 ```nix
 "nickolaj"
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.vscode\.enable
-
-
-
-VSCode with HM-managed settings/extensions (nixpkgs build); mac-app-util surfaces the \.app on darwin\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
 ```
 
 *Declared by:*

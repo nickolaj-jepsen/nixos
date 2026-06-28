@@ -87,7 +87,8 @@
           ];
         })
       ]
-      ++ lib.optionals config.fireproof.desktop.enable [
+      # Wayland screenshot tooling — Linux desktop only.
+      ++ lib.optionals (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) [
         (makeScript {
           path = ./screenshot.bash;
           runtimeInputs = with pkgs; [
