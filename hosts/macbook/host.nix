@@ -16,7 +16,6 @@
     fireproof.vscode.enable = true;
     fireproof.ghostty.enable = true;
     fireproof.karabiner.enable = true;
-    fireproof.raycast.enable = true;
 
     # Hand-installed GUI apps now declared as casks (Tailscale rides the always-on
     # tailscale leaf's darwin half). InputLeap is omitted — no Homebrew cask exists.

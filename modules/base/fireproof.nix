@@ -59,12 +59,11 @@ let
         description = "Ghostty terminal with HM-managed config/theme; on darwin the binary is a Homebrew cask (package = null) and HM manages config only.";
       };
       karabiner.enable = lib.mkEnableOption "Karabiner-Elements key remapping (darwin) — installs the cask and deploys a Nix-generated karabiner.json that ports the keyd/Linux keybindings";
-      raycast.enable = lib.mkEnableOption "Raycast launcher (darwin) — installs the Homebrew cask; config stays app-managed (no declarative HM half)";
 
       # Personal/work GUI apps on darwin: each installs only a Homebrew cask
       # (config is app- or account-synced). On Linux, obsidian/slack install the
       # nixpkgs build via their HM halves (gated on desktop.enable), so these
-      # toggles are darwin-scoped like raycast.
+      # toggles are darwin-scoped, enabled per host.
       bitwarden.enable = lib.mkEnableOption "Bitwarden desktop (darwin Homebrew cask)";
       obsidian.enable = lib.mkEnableOption "Obsidian notes (darwin Homebrew cask)";
       claude-desktop.enable = lib.mkEnableOption "Claude desktop app (darwin Homebrew cask)";
