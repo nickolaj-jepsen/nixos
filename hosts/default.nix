@@ -121,7 +121,9 @@
           inputs.nix-homebrew.darwinModules.nix-homebrew
           inputs.mac-app-util.darwinModules.default
           inputs.self.darwinModules.overlays
-          ({config, ...}: {
+          ({config, ...}: let
+            inherit (config.fireproof) username hostname;
+          in {
             home-manager = {
               useUserPackages = true;
               useGlobalPkgs = true;
@@ -138,15 +140,15 @@
                   ({pkgs, ...}: {programs.niri.package = lib.mkDefault pkgs.niri-unstable;})
                   {home.stateVersion = lib.mkDefault "24.11";}
                 ];
-              users.${config.fireproof.username} = {};
+              users.${username} = {};
             };
             # primaryUser + the user's home are required by homebrew + embedded HM activation.
-            users.users.${config.fireproof.username}.home = "/Users/${config.fireproof.username}";
-            system.primaryUser = config.fireproof.username;
+            users.users.${username}.home = "/Users/${username}";
+            system.primaryUser = username;
             system.stateVersion = lib.mkDefault 7;
             # nix-darwin defaults hostName to null; agenix-rekey's target-name needs it set.
-            networking.hostName = lib.mkDefault config.fireproof.hostname;
-            networking.computerName = lib.mkDefault config.fireproof.hostname;
+            networking.hostName = lib.mkDefault hostname;
+            networking.computerName = lib.mkDefault hostname;
           })
         ]
         ++ shared
