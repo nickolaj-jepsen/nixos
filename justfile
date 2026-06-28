@@ -97,6 +97,11 @@ home-switch hostname target='':
 darwin-build hostname=`hostname -s` *ARGS="":
     @just build darwinConfigurations."{{ hostname }}".system {{ ARGS }}
 
+[doc('Preview changes vs the current Mac system (nvd diff; run ON the Mac)')]
+[group("deploy")]
+darwin-diff hostname=`hostname -s`: (darwin-build hostname)
+    nvd diff /run/current-system {{ justfile_directory() }}/result
+
 # First-time bootstrap on a fresh Mac (run ON the Mac):
 #   1. Install Nix (Determinate or upstream) with flakes enabled.
 #   2. sudo ssh-keygen -A                      # create /etc/ssh/ssh_host_ed25519_key

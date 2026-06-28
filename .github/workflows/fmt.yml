@@ -83,3 +83,21 @@ jobs:
           attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Build ${{ matrix.host }}
         run: nix build .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel
+
+  # The darwin host can't build on Linux (aarch64-darwin), so it gets its own
+  # macOS runner instead of a matrix slot. Free on a public repo; needs [fmt,
+  # check] keeps a broken-format/broken-check PR from spinning it up. Mark this
+  # job as a required status check on `main` so a broken Mac config blocks merge.
+  darwin:
+    needs: [fmt, check]
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: ./.github/actions/setup-nix
+        with:
+          attic-endpoint: https://attic.${{ secrets.HOMELAB_DOMAIN }}/
+          attic-cache: nixos
+          attic-token: ${{ secrets.ATTIC_TOKEN }}
+      - name: Build macbook
+        run: nix build .#darwinConfigurations.macbook.system
