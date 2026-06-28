@@ -115,6 +115,15 @@
         # Auto-hide the menu bar everywhere (2 = Always). No typed option for this.
         "com.apple.controlcenter".AutoHideMenuBarOption = 2;
 
+        # Keep Spotlight/Look Up local — don't ship typed queries to Apple for
+        # web/Siri suggestions. Local file indexing is unaffected. (Leaving the
+        # com.apple.Spotlight orderedItems array alone: writing it resets every
+        # other category, and this key already stops the network round-trip.)
+        "com.apple.lookup.shared".LookupSuggestionsDisabled = true;
+
+        # No Apple advertising identifier (App Store / News / Stocks targeting).
+        "com.apple.AdLib".allowApplePersonalizedAdvertising = false;
+
         # The only theme colors macOS exposes for native UI. AppleAccentColor is a
         # fixed enum (control tint) — 1 = Orange, nearest to Flexoki coral, matching
         # the GTK/libadwaita "orange" choice. AppleHighlightColor (text selection)
@@ -139,6 +148,12 @@
     system.activationScripts.postActivation.text = ''
       mkdir -p /Users/${config.fireproof.username}/Screenshots
       chown ${config.fireproof.username} /Users/${config.fireproof.username}/Screenshots
+
+      # Opt out of sending diagnostics + crash data to Apple. This is a root-owned
+      # /Library plist, not a user default, and macOS re-touches it — so re-assert
+      # on every activation rather than declaring it in system.defaults.
+      defaults write "/Library/Application Support/CrashReporter/DiagnosticMessagesHistory" AutoSubmit -bool false
+      defaults write "/Library/Application Support/CrashReporter/DiagnosticMessagesHistory" ThirdPartyDataSubmit -bool false
     '';
   };
 }
