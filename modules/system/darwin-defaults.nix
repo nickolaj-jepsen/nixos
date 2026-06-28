@@ -24,6 +24,10 @@
         # Tab moves focus through every control, not just text fields (keyboard-driven nav).
         AppleKeyboardUIMode = 3;
 
+        # Activating an app jumps to a Space that already holds its windows instead
+        # of yanking the window into the current Space — matches mru-spaces = false.
+        AppleSpacesSwitchOnActivate = true;
+
         "com.apple.mouse.tapBehavior" = 1; # tap-to-click (also applies at the login window)
 
         # Stop macOS rewriting what you type — mangles code and commit messages.
@@ -57,6 +61,13 @@
         FXEnableExtensionChangeWarning = false;
         _FXSortFoldersFirst = true;
         FXDefaultSearchScope = "SCcf"; # search the current folder, not the whole Mac
+        NewWindowTarget = "Home"; # new Finder windows open ~, not Recents
+
+        # Keep the Desktop free of drive/volume icons.
+        ShowExternalHardDrivesOnDesktop = false;
+        ShowHardDrivesOnDesktop = false;
+        ShowMountedServersOnDesktop = false;
+        ShowRemovableMediaOnDesktop = false;
       };
 
       dock = {
@@ -66,6 +77,8 @@
         show-recents = false;
         minimize-to-application = true; # minimized windows fold into the app's Dock icon
         mru-spaces = false; # never auto-reorder Spaces — required for any workspace/tiling habit
+        launchanim = false; # no bounce-into-place animation when an app launches
+        expose-group-apps = false; # Mission Control lays windows out individually, not grouped per app
         tilesize = 40;
         wvous-bl-corner = 1; # hot corners off (1 = no-op)
         wvous-br-corner = 1;
@@ -73,7 +86,16 @@
         wvous-tr-corner = 1;
       };
 
-      WindowManager.GloballyEnabled = false; # Stage Manager off
+      WindowManager = {
+        GloballyEnabled = false; # Stage Manager off
+        EnableStandardClickToShowDesktop = false; # clicking the wallpaper won't shove windows aside
+      };
+
+      screencapture = {
+        location = "/Users/${config.fireproof.username}/Screenshots";
+        type = "png";
+        disable-shadow = true; # no drop-shadow border around window screenshots
+      };
 
       trackpad = {
         Clicking = true; # tap to click
@@ -107,5 +129,12 @@
 
     # Touch ID (and Apple Watch) for sudo; add `.reattach = true` to also work under tmux.
     security.pam.services.sudo_local.touchIdAuth = true;
+
+    # screencapture.location won't create its target; macOS silently falls back to
+    # the Desktop when the dir is missing.
+    system.activationScripts.postActivation.text = ''
+      mkdir -p /Users/${config.fireproof.username}/Screenshots
+      chown ${config.fireproof.username} /Users/${config.fireproof.username}/Screenshots
+    '';
   };
 }
