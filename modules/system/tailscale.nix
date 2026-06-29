@@ -1,6 +1,7 @@
 {
   flake.modules.nixos.tailscale = _: {
     services.tailscale.enable = true;
+    networking.firewall.trustedInterfaces = ["tailscale0"];
   };
 
   # macOS counterpart: the GUI client as a Homebrew cask (the standalone build,

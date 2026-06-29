@@ -8,6 +8,9 @@
     fireproof.hardware.nvidia.enable = true;
     fireproof.claude-code.work.enable = true;
     fireproof.networkd.enable = true;
+
+    # Share keyboard/mouse with the Mac (edge-crossing KVM) via Lan Mouse.
+    fireproof.desktop.lan-mouse.enable = true;
   };
 
   homeManager = {lib, ...}: {

@@ -99,7 +99,7 @@ defaults to `desktop.enable`; `dev.{intellij,clickhouse,
 playwright}.enable` default to `dev.enable`; `hardware.physical` defaults to
 `!wsl.enable`, `hardware.zram` to `hardware.physical`, and `hardware.{battery,wifi,
 dimmableBacklight}` to `hardware.laptop`. Opt-in extras (`desktop.{bambu-studio,
-google-chrome,snapcast,oxcbMedia}.enable`, `hardware.nvidia.enable`) default **off**.
+google-chrome,snapcast,oxcbMedia,lan-mouse}.enable`, `hardware.nvidia.enable`) default **off**.
 So minilab — a desktop host that skips chromium and the IDEs — sets
 `desktop.enable = true` then overrides `desktop.chromium.enable = false` and
 `dev.{intellij,clickhouse,playwright}.enable = false`. This cascade IS the lightweight
