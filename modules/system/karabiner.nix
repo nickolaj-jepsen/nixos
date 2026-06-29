@@ -179,6 +179,27 @@
               description = "PC-style Home/End + Ctrl-arrow word nav (except terminal)";
               manipulators = navRules;
             }
+            {
+              # Danish Apple layout puts @ on Option + the '/* key (macOS keycode
+              # 42, Karabiner "backslash") — not Option+2. Re-home it to the
+              # PC-muscle-memory right-Cmd+2.
+              description = "Right Cmd + 2 → @ (Danish layout)";
+              manipulators = [
+                {
+                  type = "basic";
+                  from = {
+                    key_code = "2";
+                    modifiers.mandatory = ["right_command"];
+                  };
+                  to = [
+                    {
+                      key_code = "backslash";
+                      modifiers = ["left_option"];
+                    }
+                  ];
+                }
+              ];
+            }
           ];
         }
       ];
