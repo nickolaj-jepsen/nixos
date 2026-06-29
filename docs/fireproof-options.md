@@ -132,6 +132,38 @@ false
 
 
 
+## fireproof\.desktop\.lan-mouse\.enable
+
+
+
+Whether to enable Lan Mouse — LAN keyboard/mouse sharing (edge-crossing KVM)\. On niri it uses the layer-shell capture backend (no input-capture portal needed)\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.desktop\.oxcbMedia\.enable
 
 
