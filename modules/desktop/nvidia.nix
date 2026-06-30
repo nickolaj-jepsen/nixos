@@ -15,6 +15,8 @@
 
       services.xserver.videoDrivers = ["nvidia"];
 
+      boot.kernelModules = ["nvidia_modeset" "nvidia_drm"];
+
       hardware.nvidia = {
         open = true;
         modesetting.enable = true;
