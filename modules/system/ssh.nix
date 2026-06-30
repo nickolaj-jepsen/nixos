@@ -1,16 +1,18 @@
 # ssh-key (nixos-side) IS ~/.ssh/id_ed25519, the runtime identity HM agenix uses to decrypt every other user secret, so it must stay root-placed (can't decrypt itself).
-{
-  flake.modules.nixos.ssh = {
-    config,
-    lib,
-    ...
-  }: let
+let
+  secretsHosts = ../../secrets/hosts;
+  hostEntries = builtins.readDir secretsHosts;
+  hostDirs = builtins.filter (n: hostEntries.${n} == "directory") (builtins.attrNames hostEntries);
+  # Authorize every host's pubkey; skip non-SSH entries (e.g. a pre-deploy darwin host's age placeholder).
+  # builtins-only so the list is shared across all three module halves without lib at this scope.
+  publicKeys =
+    builtins.filter (s: builtins.substring 0 4 s == "ssh-")
+    (map (x: builtins.readFile (secretsHosts + ("/" + x) + "/id_ed25519.pub")) hostDirs);
+  # Each .pub already ends in "\n"; strip it so the joined file is one key per line, no blanks.
+  authorizedKeysText = builtins.concatStringsSep "\n" (map (k: builtins.replaceStrings ["\n"] [""] k) publicKeys) + "\n";
+in {
+  flake.modules.nixos.ssh = {config, ...}: let
     inherit (config.fireproof) username hostname;
-    allHosts = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ../../secrets/hosts));
-    # Skip non-SSH pubkeys (e.g. a pre-deploy darwin host's age placeholder).
-    publicKeys =
-      lib.filter (lib.hasPrefix "ssh-")
-      (map (x: builtins.readFile (../../secrets/hosts + ("/" + x) + "/id_ed25519.pub")) allHosts);
   in {
     age.secrets.ssh-key = {
       rekeyFile = ../../secrets/hosts + ("/" + hostname) + /id_ed25519.age;
@@ -32,7 +34,12 @@
     users.users.${username}.openssh.authorizedKeys.keys = publicKeys;
   };
 
-  # darwin: just place the host identity at ~/.ssh so HM-side agenix can decrypt.
+  # darwin: place the host identity at ~/.ssh (so HM-side agenix can decrypt) and
+  # harden the native macOS sshd. Remote Login itself is enabled once by hand
+  # (`systemsetup -setremotelogin on`; see the macbook bootstrap notes) — this
+  # only manages its config. macOS Includes sshd_config.d/* at the top of
+  # sshd_config and is socket-activated (a fresh sshd per connection), so a 000-
+  # drop-in wins first-match and applies to the next connection without a reload.
   flake.modules.darwin.ssh = {config, ...}: let
     inherit (config.fireproof) username hostname;
   in {
@@ -42,6 +49,12 @@
       mode = "0600";
       owner = username;
     };
+
+    environment.etc."ssh/sshd_config.d/000-nix-darwin.conf".text = ''
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+    '';
   };
 
   flake.modules.homeManager.ssh = {
@@ -62,6 +75,18 @@
     };
 
     home.file.".ssh/id_ed25519.pub".source = ../../secrets/hosts + ("/" + hostname) + "/id_ed25519.pub";
+
+    # darwin sshd reads authorized_keys with StrictModes on, and a symlink into the
+    # group-writable /nix/store would be rejected — so write a real file as the user
+    # (mode 600) from the shared all-hosts pubkey list. NixOS does this via
+    # users.users.<user>.openssh.authorizedKeys, hence darwin-only here.
+    home.activation.darwinAuthorizedKeys = lib.mkIf pkgs.stdenv.isDarwin (
+      lib.hm.dag.entryAfter ["writeBoundary"] ''
+        run mkdir -p "$HOME/.ssh"
+        run chmod 700 "$HOME/.ssh"
+        run install -m 600 ${pkgs.writeText "authorized_keys" authorizedKeysText} "$HOME/.ssh/authorized_keys"
+      ''
+    );
 
     programs.ssh = {
       enable = true;

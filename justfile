@@ -110,6 +110,10 @@ darwin-diff hostname=`hostname -s`: (darwin-build hostname)
 #   4. nix run nix-darwin/nix-darwin-26.05#darwin-rebuild -- switch --flake .#<h>
 #   nix-homebrew installs Homebrew itself on the first switch (slow); review
 #   homebrew.onActivation.cleanup first.
+#   5. sudo systemsetup -setremotelogin on     # enable sshd (Remote Login); nix
+#      manages the hardening drop-in + authorized_keys, but not the on/off bit.
+#      Confirm Settings > General > Sharing > Remote Login access is "All users"
+#      (or includes the user). Key-only auth; reach it over Tailscale/LAN.
 [doc('Build + activate a nix-darwin host (run ON the Mac; see bootstrap notes in the justfile for the first run)')]
 [group("deploy")]
 darwin-switch hostname=`hostname -s` *ARGS="":
