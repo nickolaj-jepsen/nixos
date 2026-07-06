@@ -124,17 +124,17 @@
           typescript.enable = full; # ts/tsx/js/jsx via typescript-language-server + prettier
           markdown = {
             enable = full;
-            format.type = ["prettierd"];
+            format.type = ["prettier"];
           };
           json = {
             enable = full;
-            format.type = ["prettierd"];
+            format.type = ["prettier"];
           };
           yaml.enable = full; # nvf has no yaml formatter; added via conform below
           html.enable = full; # superhtml (nvf default)
           css = {
             enable = full;
-            format.type = ["prettierd"];
+            format.type = ["prettier"];
           };
         };
 
