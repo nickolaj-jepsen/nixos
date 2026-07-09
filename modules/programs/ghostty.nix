@@ -49,6 +49,8 @@
           # glyphs don't touch the clipped edge, and extend the bg into the pad.
           window-padding-balance = true;
           window-padding-color = "extend";
+          background-opacity = 0.9;
+          background-blur = true;
           scrollback-limit = 104857600; # 100 MiB
         };
         themes = {

@@ -36,7 +36,13 @@
 
         settings = {
           # Must match SettingsData.qml schema version, else a per-start migration runs silently; re-pin after `just update`.
-          configVersion = 11;
+          configVersion = 12;
+
+          # Enable blur on DMS's layer-shell surfaces. Blur only shows through
+          # translucency, so popupTransparency must be < 1 — the default 1.0 is solid
+          # and hides it entirely.
+          blurEnabled = true;
+          popupTransparency = 0.65;
 
           loginctlLockIntegration = true;
           fadeToLockEnabled = true;
@@ -59,6 +65,31 @@
           powerMenuDefaultAction = "lock";
         };
       };
+
+      # niri defaults blur to xray (blurs the wallpaper — near-black here, so popouts
+      # look solid); force xray off so DMS's layers blur the windows behind them.
+      # niri-flake can't express background-effect, so append the rule and re-validate
+      # against niri-unstable (its default niri-stable predates it, would reject it).
+      xdg.configFile.niri-config.source = lib.mkForce (
+        pkgs.runCommand "niri-config.kdl" {
+          config =
+            config.programs.niri.finalConfig
+            + ''
+
+              layer-rule {
+                  match namespace="^dms:"
+                  background-effect {
+                      xray false
+                  }
+              }
+            '';
+          passAsFile = ["config"];
+          buildInputs = [pkgs.niri-unstable];
+        } ''
+          niri validate -c $configPath
+          cp $configPath $out
+        ''
+      );
     };
   };
 }
