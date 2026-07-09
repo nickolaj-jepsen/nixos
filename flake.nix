@@ -79,6 +79,10 @@
     # instead of maintained as hand-written `imports = [ … ]` lists.
     import-tree.url = "github:vic/import-tree";
 
+    # No nixpkgs follows: pi.cachix.org (modules/base/nix.nix) is keyed to this
+    # flake's own pin, so following ours would force source rebuilds.
+    pi.url = "github:lukasl-dev/pi.nix";
+
     agenix.url = "github:ryantm/agenix";
     agenix.inputs.nixpkgs.follows = "nixpkgs";
     agenix.inputs.home-manager.follows = "home-manager";

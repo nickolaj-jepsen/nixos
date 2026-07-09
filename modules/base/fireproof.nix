@@ -78,6 +78,11 @@ let
           default = config.fireproof.dev.enable;
           description = "Enable MCP servers (incl. the grafana env-wrapper secret)";
         };
+        pi.enable = lib.mkOption {
+          type = lib.types.bool;
+          default = config.fireproof.dev.enable;
+          description = "Enable the pi coding agent with the lazypi extension roster";
+        };
       };
 
       neovim.full.enable = lib.mkOption {
