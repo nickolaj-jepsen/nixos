@@ -507,6 +507,30 @@ true
 
 
 
+## fireproof\.dev\.pi\.enable
+
+
+
+Enable the pi coding agent with the lazypi extension roster
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.dev\.playwright\.enable
 
 
