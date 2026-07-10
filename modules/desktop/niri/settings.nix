@@ -109,6 +109,13 @@
               bottom-right = 8.0;
             };
           }
+          # Behind a CSD window niri fills the whole rect with the border color
+          # rather than tracing the rounded corners, so ghostty's translucent
+          # background reads as accent-tinted instead of showing what's behind it.
+          {
+            matches = [{app-id = "^com\\.mitchellh\\.ghostty$";}];
+            draw-border-with-background = false;
+          }
           # Floating windows (Mod+S) get a soft drop shadow so the state reads at
           # a glance against the otherwise flat Flexoki theme.
           {
