@@ -114,6 +114,17 @@ For each component, check the latest GitHub release tag:
 - **Update fields**: `version` (in both the attribute and the `url` string) and all
   four `sha256Map` entries (SRI format)
 
+### 5. GitHub Copilot CLI (`overlays/github-copilot-cli.nix`)
+
+- **Latest version**: Check latest release of `github/copilot-cli` on GitHub (the
+  tag is `v<VERSION>`; prefer the release endpoint over tags, which also carry
+  pre-releases)
+- **New hashes**: one tgz per platform, so compute one hash per entry in `plat`.
+  For each of `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, run
+  `nix-prefetch-url "https://github.com/github/copilot-cli/releases/download/v<VERSION>/github-copilot-<VERSION>-<platform>.tgz"`
+  → convert to SRI
+- **Update fields**: `version` and all four `plat.*.hash` entries (SRI format)
+
 ## Reusing the Existing PR
 
 Always use the branch name `chore/update-overlays`.
