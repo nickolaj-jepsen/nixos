@@ -35,6 +35,11 @@ let
           default = false;
           description = "Enable Google Chrome";
         };
+        jellyfin-media-player.enable = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Enable Jellyfin Media Player desktop client";
+        };
         snapcast.enable = lib.mkEnableOption "Snapcast audio streaming server";
         oxcbMedia.enable = lib.mkEnableOption "0xCB-media host daemon (bridges MPRIS + PipeWire to the 0xCB-1337 macropad over USB CDC ACM)";
         lan-mouse.enable = lib.mkEnableOption "Lan Mouse — LAN keyboard/mouse sharing (edge-crossing KVM). On niri it uses the layer-shell capture backend (no input-capture portal needed)";
