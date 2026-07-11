@@ -132,6 +132,30 @@ false
 
 
 
+## fireproof\.desktop\.jellyfin-media-player\.enable
+
+
+
+Enable Jellyfin Media Player desktop client
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.desktop\.lan-mouse\.enable
 
 
