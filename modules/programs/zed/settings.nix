@@ -4,7 +4,14 @@
     lib,
     pkgs,
     ...
-  }: {
+  }: let
+    # Prettier-compatible, and the same formatter neovim's conform uses. Resolved
+    # from PATH, which zed's extraPackages owns.
+    oxfmt.external = {
+      command = "oxfmt";
+      arguments = ["--stdin-filepath" "{buffer_path}"];
+    };
+  in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux) {
       programs.zed-editor = {
         userSettings = {
@@ -130,14 +137,14 @@
                 arguments = ["fmt" "--"];
               };
             };
-            JavaScript = {formatter = "prettier";};
-            TypeScript = {formatter = "prettier";};
-            TSX = {formatter = "prettier";};
-            JSON = {formatter = "prettier";};
-            JSONC = {formatter = "prettier";};
-            CSS = {formatter = "prettier";};
-            YAML = {formatter = "prettier";};
-            Markdown = {formatter = "prettier";};
+            JavaScript = {formatter = oxfmt;};
+            TypeScript = {formatter = oxfmt;};
+            TSX = {formatter = oxfmt;};
+            JSON = {formatter = oxfmt;};
+            JSONC = {formatter = oxfmt;};
+            CSS = {formatter = oxfmt;};
+            YAML = {formatter = oxfmt;};
+            Markdown = {formatter = oxfmt;};
           };
 
           # Language servers

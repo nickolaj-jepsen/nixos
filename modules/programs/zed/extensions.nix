@@ -50,7 +50,7 @@
 
           # JS / TS / JSON / CSS / HTML
           typescript-language-server
-          prettier
+          oxfmt
           vscode-langservers-extracted
 
           # YAML

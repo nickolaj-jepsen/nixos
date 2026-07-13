@@ -121,20 +121,29 @@
             lsp.servers = ["pyrefly"];
             format.type = ["ruff"];
           };
-          typescript.enable = full; # ts/tsx/js/jsx via typescript-language-server + prettier
+          # oxfmt (below) covers ts/js/json/css/markdown/yaml, so these keep their
+          # LSP + grammars but hand formatting to conform. nvf's format.type enum
+          # predates oxc and only offers prettier/biome/deno.
+          typescript = {
+            enable = full; # ts/tsx/js/jsx via typescript-language-server
+            format.enable = false;
+          };
           markdown = {
             enable = full;
-            format.type = ["prettier"];
+            format.enable = false;
           };
           json = {
             enable = full;
-            format.type = ["prettier"];
+            format.enable = false;
           };
-          yaml.enable = full; # nvf has no yaml formatter; added via conform below
+          yaml = {
+            enable = full;
+            format.enable = false;
+          };
           html.enable = full; # superhtml (nvf default)
           css = {
             enable = full;
-            format.type = ["prettier"];
+            format.enable = false;
           };
         };
 
@@ -183,10 +192,36 @@
         # Accept <M-l>, next/prev <M-]>/<M-[>, dismiss <C-]>. Auth once: :Copilot auth.
         assistant.copilot.enable = full;
 
-        # Languages auto-wire conform; only yaml needs a manual formatter (full only,
-        # reusing the prettier the typescript module already puts on PATH).
-        formatter.conform-nvim.setupOpts.formatters_by_ft = lib.optionalAttrs full {
-          yaml = ["prettier"];
+        # oxfmt: one prettier-compatible formatter for the whole JS-adjacent set
+        # (prettier itself is unbuildable in 26.05 — it drags in pnpm_9, which is
+        # marked insecure). conform ships the oxfmt definition; we only pin the
+        # binary so it doesn't hunt through node_modules.
+        formatter.conform-nvim.setupOpts = {
+          formatters.oxfmt.command = lib.mkIf full "${pkgs.oxfmt}/bin/oxfmt";
+          formatters_by_ft = lib.optionalAttrs full {
+            typescript = ["oxfmt"];
+            typescriptreact = ["oxfmt"];
+            javascript = ["oxfmt"];
+            javascriptreact = ["oxfmt"];
+            json = ["oxfmt"];
+            jsonc = ["oxfmt"];
+            css = ["oxfmt"];
+            markdown = ["oxfmt"];
+            yaml = ["oxfmt"];
+          };
+        };
+
+        # oxlint for JS/TS diagnostics — nvf's language modules only know biomejs,
+        # so drive nvim-lint directly (it ships the oxlint definition).
+        diagnostics.nvim-lint = lib.mkIf full {
+          enable = true;
+          linters.oxlint.cmd = "${pkgs.oxlint}/bin/oxlint";
+          linters_by_ft = {
+            typescript = ["oxlint"];
+            typescriptreact = ["oxlint"];
+            javascript = ["oxlint"];
+            javascriptreact = ["oxlint"];
+          };
         };
 
         utility.snacks-nvim = {
