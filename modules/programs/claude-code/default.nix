@@ -38,22 +38,8 @@
 
     home.packages = lib.optional cfg.work.enable claudeWorkWrapper;
 
-    programs.claude-code.context = ''
-      # Global preferences
-
-      ## Environment
-      - NixOS — declarative & immutable. Imperative installs (`apt`, `npm -g`, global `pip`) and `/etc` edits won't persist; system changes go through the flake at `~/nixos`. For a one-off tool, use [comma](https://github.com/nix-community/comma): `, pstree`, `, ncdu .`
-
-      ## Tooling
-      - Language toolchains — prefer uv (Python) and pnpm (Node), but defer to whatever the repo already uses.
-      - Git: rebase over merge — even if I ask to "merge" — unless I explicitly say "use merge over rebase".
-      - Digital-Udvikling repos (check git remote): use the `ds` CLI when applicable (run `ds --help` to see what it covers).
-
-      ## Code style
-      - Comments earn their place. The code already states *what* it does — don't restate it. Comment only what a competent reader can't recover from the code: the load-bearing *why* (intent, a gotcha, a non-obvious tradeoff). If nothing qualifies, write no comment.
-      - Default to one line. Give the minimal why and stop; run past a line only when the rationale genuinely can't compress. Length is not thoroughness.
-      - Docstrings state the function's own contract — what it does, params, returns, errors, invariants — and nothing else. Don't restate the signature; don't document who calls it or where ("used by the signup flow") — that belongs at the call site and goes stale here. Guidance on *when* to call it is fine.
-    '';
+    # Shared with copilot (agents.nix) and pi; keep it agent-agnostic.
+    programs.claude-code.context = builtins.readFile ../agent-context.md;
 
     programs.claude-code = {
       enable = true;

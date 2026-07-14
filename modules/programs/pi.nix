@@ -17,7 +17,8 @@
     config = lib.mkIf config.fireproof.dev.pi.enable {
       programs.pi.coding-agent = {
         enable = true;
-        rules = config.programs.claude-code.context;
+        # Shared with claude-code and copilot (agents.nix); keep it agent-agnostic.
+        rules = builtins.readFile ./agent-context.md;
         skills = [
           # pi parses any root-level *.md as a skill, so the repo README would warn.
           (builtins.path {
