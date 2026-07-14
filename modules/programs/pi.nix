@@ -28,7 +28,7 @@
           })
         ];
         # Nix-built pi can't self-update; extension-update notices still show.
-        environment.PI_SKIP_VERSION_CHECK = "1";
+        environment.PI_SKIP_VERSION_CHECK.value = "1";
         settings.packages = [
           # extension-settings must load before powerbar (its settings panel).
           "npm:@juanibiapina/pi-extension-settings"
