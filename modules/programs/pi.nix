@@ -9,6 +9,7 @@
   flake.modules.homeManager.pi = {
     config,
     lib,
+    pkgs,
     inputs,
     ...
   }: {
@@ -19,14 +20,8 @@
         enable = true;
         # Shared with claude-code and copilot (agents.nix); keep it agent-agnostic.
         rules = builtins.readFile ./agent-context.md;
-        skills = [
-          # pi parses any root-level *.md as a skill, so the repo README would warn.
-          (builtins.path {
-            name = "pi-skills";
-            path = ../../skills;
-            filter = path: _type: baseNameOf path != "README.md";
-          })
-        ];
+        # The fireproof.agents.skills registry, linked into one dir.
+        skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
         settings.packages = [

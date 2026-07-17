@@ -45,11 +45,10 @@
       enable = true;
       package = pkgs.claude-code;
       enableMcpIntegration = true;
-      # Skills live at repo-root skills/ (not here) so `npx skills add
-      # nickolaj-jepsen/nixos` finds them via the default flat layout; see
-      # skills/README.md. One folder per skill (skills/<name>/SKILL.md), one
-      # file per command (commands/<name>.md).
-      skills = ../../../skills;
+      # The fireproof.agents.skills registry: repo-root skills/ (registered by
+      # agent-skills.nix; see skills/README.md) plus skills registered by
+      # feature leaves. One file per command (commands/<name>.md).
+      skills = config.fireproof.agents.skills;
       commandsDir = ./commands;
 
       settings = {

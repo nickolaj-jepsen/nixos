@@ -1,4 +1,28 @@
+## fireproof\.agents\.skills
+
+Agent skill directories by skill name, installed for every coding agent\.
+
+
+
+*Type:*
+attribute set of absolute path
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.claude-code\.work\.enable
+
+
 
 Whether to enable claude-work wrapper sharing the personal claude-code config via ~/\.claude-work\.
 

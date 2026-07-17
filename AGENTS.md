@@ -47,10 +47,12 @@ installer/                # Installer ISO builder — owns nixosConfigurations.b
                           #   (not a host: a self-contained corner, direct nixosSystem build)
 secrets/                  # agenix-encrypted secrets with YubiKey
                           #   <host>/.rekey = nixos secrets, <host>/.rekey-hm = HM secrets
-skills/                   # Claude Code agent skills (skills/<name>/SKILL.md), at repo
+skills/                   # OWN agent skills (skills/<name>/SKILL.md), at repo
                           #   root — NOT under modules/programs/claude-code — so they're
-                          #   publicly installable via `npx skills add nickolaj-jepsen/nixos`;
-                          #   the claude-code HM leaf points back here. See skills/README.md
+                          #   publicly installable via `npx skills add nickolaj-jepsen/nixos`.
+                          #   Registered into fireproof.agents.skills by
+                          #   modules/programs/agent-skills.nix; see skills/README.md and
+                          #   "Agent skills" below.
 ```
 
 ### Modules are dendritic (`flake.modules`), gated by toggles
@@ -311,6 +313,13 @@ lib.mkAfter` hook to provision a password user — `ensureUsers` is socket-auth 
   `mariadb.nix` binds `0.0.0.0` and opens 3306 on `docker0` so containers reach it via
   `--add-host=host.docker.internal:host-gateway`; `grimmory.nix` is the consumer
   example.
+- **New agent skill**: skills for the coding agents (claude-code, copilot, pi) flow
+  through the `fireproof.agents.skills` registry (`attrsOf path`, merged across
+  leaves; the agent leaves consume the merged set). Own skills go in repo-root
+  `skills/<name>/SKILL.md` (auto-registered by `modules/programs/agent-skills.nix`);
+  a third-party skill is registered by its feature leaf, referencing the upstream
+  source instead of vendoring — e.g. `modules/programs/git.nix` registers
+  `fireproof.agents.skills.gh-stack = "${pkgs.unstable.gh-stack.src}/skills/gh-stack"`.
 - **New always-on leaf**: Put it in `base/`, `scripts/`, or as an ungated
   `programs/`/`system/` leaf and leave it ungated — those apply to every host.
 - **New host**: Run `just new-host <hostname> <username>` — it drops a

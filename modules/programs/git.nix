@@ -13,9 +13,14 @@
         pkgs.gh-aw
         pkgs.unstable.gh-poi
         pkgs.unstable.gh-dash
+        pkgs.unstable.gh-stack
       ];
       settings.git_protocol = "ssh";
     };
+
+    # Upstream ships the agent skill in the extension's source, so it always
+    # matches the installed version.
+    fireproof.agents.skills.gh-stack = "${pkgs.unstable.gh-stack.src}/skills/gh-stack";
 
     programs.delta = {
       enable = true;

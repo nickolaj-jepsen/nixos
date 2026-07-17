@@ -48,6 +48,16 @@ let
       claude-code.work.enable =
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
+      # Registry: leaves register skills next to the feature they document (e.g.
+      # git.nix registers gh-stack from the extension's own source — third-party
+      # skills are referenced upstream, never vendored); the agent leaves
+      # (claude-code, copilot, pi) consume the merged set.
+      agents.skills = lib.mkOption {
+        type = lib.types.attrsOf lib.types.path;
+        default = {};
+        description = "Agent skill directories by skill name, installed for every coding agent.";
+      };
+
       # GUI apps all gate on desktop.enable (plus dev/work where relevant) — no
       # per-app toggles. A leaf adds a Homebrew cask in its flake.modules.darwin
       # half and installs the nixpkgs build in its homeManager half; Mac-only apps
