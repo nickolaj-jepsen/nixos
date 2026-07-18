@@ -34,12 +34,12 @@ _: {
         zwift = pkgs.buildHomeAssistantComponent rec {
           owner = "snicker";
           domain = "zwift";
-          version = "v3.3.5";
+          version = "v4.1.0";
           src = pkgs.fetchFromGitHub {
             inherit owner;
             repo = "zwift_hass";
             rev = version;
-            hash = "sha256-+lJ6Otp8lT+xVtjiQLSQrqT5cVinRTRPTzS+HB1AxB0=";
+            hash = "sha256-2Xm6FWYoKJaeXQ858TZ3mKB+9uAxtSTv2tN/58r4QBA=";
           };
           propagatedBuildInputs = [
             zwift-client
