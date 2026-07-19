@@ -37,7 +37,17 @@
         # (its default uses the deprecated alias). TODO: fix upstream and drop.
         package = inputs.niri-dynamic-workspaces.packages.${pkgs.stdenv.hostPlatform.system}.default;
         settings = {
+          general.hide_empty_static = true;
+
           workspace = {
+            # Pinned to the fixed niri workspaces (Mod+q/w/e/r/t -> "01".."05"),
+            # mirroring the compositor binds in the overlay.
+            q.static = "01";
+            w.static = "02";
+            e.static = "03";
+            r.static = "04";
+            t.static = "05";
+
             n = mkWorkspace {
               name = "nix";
               path = "/home/nickolaj/nixos";
@@ -58,10 +68,6 @@
               name = "insight";
               path = "/home/nickolaj/dev/devenv-tilt/projects/insight";
             };
-            r = mkWorkspace {
-              name = "reviews";
-              path = "/home/nickolaj/dev/devenv-tilt/projects/reviews";
-            };
             p = mkWorkspace {
               name = "producthub";
               path = "/home/nickolaj/dev/devenv-tilt/projects/producthub";
@@ -74,7 +80,7 @@
               name = "devenv";
               path = "/home/nickolaj/dev/devenv-tilt";
             };
-            t = mkRemoteWorkspace {
+            y = mkRemoteWorkspace {
               name = "scw-tf";
               host = "dev.ao";
               path = "/home/nij/scw-tf";

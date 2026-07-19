@@ -732,11 +732,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1783775757,
-        "narHash": "sha256-xKM4/R1E2q5hVO23Qgq+E3t750qRHMYVzXZICbNYan4=",
+        "lastModified": 1784480018,
+        "narHash": "sha256-iRwM6roYMS1na/bZ58h8eXPpwhBiPAIsJ47PF9IpEMU=",
         "owner": "nickolaj-jepsen",
         "repo": "niri-dynamic-workspaces",
-        "rev": "9b3267cd2c9b9e3fd1bae61d50dc31479b9dff90",
+        "rev": "44f7d1bd43df30e9afbec5c9883f824a9be4a892",
         "type": "github"
       },
       "original": {
