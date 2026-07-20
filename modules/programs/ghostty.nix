@@ -33,6 +33,8 @@
             then 14
             else 11;
           font-family = "Hack Nerd Font";
+          # The single-instance handoff intermittently yields shell-less transparent windows.
+          gtk-single-instance = false;
           window-inherit-font-size = false;
           shell-integration-features = true;
           # Keyboard-first QoL: hide the pointer while typing.
