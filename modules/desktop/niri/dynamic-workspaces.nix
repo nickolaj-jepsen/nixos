@@ -42,11 +42,20 @@
           workspace = {
             # Pinned to the fixed niri workspaces (Mod+q/w/e/r/t -> "01".."05"),
             # mirroring the compositor binds in the overlay.
-            q.static = "01";
+            q = {
+              static = "01";
+              name = "browser";
+            };
             w.static = "02";
             e.static = "03";
-            r.static = "04";
-            t.static = "05";
+            r = {
+              static = "04";
+              name = "music";
+            };
+            t = {
+              static = "05";
+              name = "diff";
+            };
 
             n = mkWorkspace {
               name = "nix";
