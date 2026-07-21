@@ -156,6 +156,30 @@ false
 
 
 
+## fireproof\.desktop\.ivpn\.enable
+
+
+
+Enable the IVPN client (daemon + CLI + desktop UI)
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.desktop\.jellyfin-media-player\.enable
 
 
