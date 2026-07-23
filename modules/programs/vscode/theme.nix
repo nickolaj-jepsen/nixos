@@ -11,6 +11,7 @@
         # Keep Darcula for syntax highlighting
         "workbench.colorTheme" = "Darcula Theme from IntelliJ";
         "window.titleBarStyle" = "custom";
+        "window.controlsStyle" = "hidden"; # niri manages the window
 
         # Font
         "editor.fontFamily" = "'Hack Nerd Font', 'Hack', 'monospace', monospace";
@@ -20,26 +21,29 @@
 
         # Workbench color overrides using Flexoki palette
         "workbench.colorCustomizations" = {
-          # Title bar
-          "titleBar.activeBackground" = "#${c.bg}";
+          # Base — modernUI derives status bar text and activity bar icons from these
+          "foreground" = "#${c.fg}";
+          "descriptionForeground" = "#${c.muted}";
+          "icon.foreground" = "#${c.muted}";
+          "toolbar.hoverBackground" = "#${c.ui}";
+
+          # modernUI card outline; the fallback is a near-invisible 12% foreground mix
+          "agentsPanel.border" = "#${c.ui}";
+
+          # Title bar — modernUI forces the part transparent, so only foregrounds apply
           "titleBar.activeForeground" = "#${c.fg}";
-          "titleBar.inactiveBackground" = "#${c.bg}";
           "titleBar.inactiveForeground" = "#${c.muted}";
 
-          # Activity bar
-          "activityBar.background" = "#${c.bg}";
-          "activityBar.foreground" = "#${c.fg}";
-          "activityBar.inactiveForeground" = "#${c.muted}";
-          "activityBar.activeBorder" = "#${c.accent}";
+          # Activity bar — modernUI replaces the active left border with a rounded pill
+          "activityBar.activeBackground" = "#${c.ui}";
           "activityBarBadge.background" = "#${c.accent}";
           "activityBarBadge.foreground" = "#${c.black}";
 
-          # Sidebar
-          "sideBar.background" = "#${c.bg}";
+          # Sidebar — one step above the backdrop so the card floats
+          "sideBar.background" = "#${c.bgAlt}";
           "sideBar.foreground" = "#${c.fg}";
-          "sideBar.border" = "#${c.ui}";
           "sideBarTitle.foreground" = "#${c.fg}";
-          "sideBarSectionHeader.background" = "#${c.bg}";
+          "sideBarSectionHeader.background" = "#${c.bgAlt}";
           "sideBarSectionHeader.foreground" = "#${c.fg}";
 
           # Editor
@@ -68,13 +72,7 @@
           "tab.activeBorderTop" = "#${c.accent}";
           "tab.border" = "#${c.bg}";
 
-          # Status bar
-          "statusBar.background" = "#${c.accent}";
-          "statusBar.foreground" = "#${c.black}";
-          "statusBar.debuggingBackground" = "#${c.orange}";
-          "statusBar.debuggingForeground" = "#${c.black}";
-          "statusBar.noFolderBackground" = "#${c.purple}";
-          "statusBar.noFolderForeground" = "#${c.black}";
+          # Status bar — modernUI forces the part transparent; only item-level colors survive
           "statusBarItem.hoverBackground" = "#${c.orangeAlt}";
           "statusBarItem.remoteBackground" = "#${c.green}";
           "statusBarItem.remoteForeground" = "#${c.black}";
@@ -100,20 +98,20 @@
           "terminal.ansiBrightWhite" = "#${c.whiteAlt}";
 
           # Panel (bottom: terminal, problems, output)
-          "panel.background" = "#${c.bg}";
+          "panel.background" = "#${c.bgAlt}";
           "panel.border" = "#${c.ui}";
           "panelTitle.activeForeground" = "#${c.fg}";
           "panelTitle.activeBorder" = "#${c.accent}";
           "panelTitle.inactiveForeground" = "#${c.muted}";
 
-          # Input fields
-          "input.background" = "#${c.bgAlt}";
+          # Input fields — a step above the sidebar card so search boxes stay visible
+          "input.background" = "#${c.ui}";
           "input.foreground" = "#${c.fg}";
           "input.border" = "#${c.ui}";
           "input.placeholderForeground" = "#${c.muted}";
 
           # Dropdown
-          "dropdown.background" = "#${c.bgAlt}";
+          "dropdown.background" = "#${c.ui}";
           "dropdown.foreground" = "#${c.fg}";
           "dropdown.border" = "#${c.ui}";
 
@@ -125,8 +123,8 @@
           # Lists and trees
           "list.activeSelectionBackground" = "#${c.uiAlt}";
           "list.activeSelectionForeground" = "#${c.fg}";
-          "list.inactiveSelectionBackground" = "#${c.ui}";
-          "list.hoverBackground" = "#${c.bgAlt}";
+          "list.inactiveSelectionBackground" = "#${c.uiAlt}";
+          "list.hoverBackground" = "#${c.ui}";
           "list.highlightForeground" = "#${c.accent}";
 
           # Scrollbar

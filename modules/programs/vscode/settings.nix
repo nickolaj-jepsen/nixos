@@ -93,6 +93,7 @@
             "workbench.editor.limit.enabled" = true;
             "workbench.editor.limit.value" = 10;
             "workbench.editor.limit.perEditorGroup" = true;
+            "workbench.experimental.modernUI" = true;
 
             # Terminal
             "terminal.integrated.defaultProfile.linux" = "fish";
