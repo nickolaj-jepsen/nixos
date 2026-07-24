@@ -12,20 +12,20 @@ _: {
     };
     # Each release asset is a distinct binary, so hashes are per-platform.
     sha256Map = {
-      "linux-amd64" = "sha256-KZ30/9u639GO1h6iSDt8yT0KIpLPynq4KvwbxyVy5ag=";
-      "linux-arm64" = "sha256-QwSKUYDbYNsqqL2B1BF4XLFWB4skuacQhFmZCU0oTRQ=";
-      "darwin-amd64" = "sha256-t/TMEMIfbbQRocI/fqRk+w6xcUmwQNPSEa+zQm1Ok6I=";
-      "darwin-arm64" = "sha256-3KKe61dFObZ1N7DL4iPEiw6cnOG5Fg7jsHEy0ZC9uto=";
+      "linux-amd64" = "sha256-jDkoq/uwOmDs/9EeJjoPe0e3buhsMwSiD4ml4U9Zz4M=";
+      "linux-arm64" = "sha256-z3+FbGLLSTG3zcriMhW+02HkLqInyxZ6aI95fe/59To=";
+      "darwin-amd64" = "sha256-G3Kl90nWUI5hZKAzANQVx2J//vQ5GL5FtTegqPnCeqg=";
+      "darwin-arm64" = "sha256-PdTEOh5jE6HCfPWoIZGBsB9cYPvTrTRwpie4LUAIjFY=";
     };
     platform = platformMap.${system};
   in {
     overlayAttrs = {
       gh-aw = pkgs.stdenv.mkDerivation {
         pname = "gh-aw";
-        version = "0.82.14";
+        version = "0.83.1";
 
         src = pkgs.fetchurl {
-          url = "https://github.com/github/gh-aw/releases/download/v0.82.14/${platform}";
+          url = "https://github.com/github/gh-aw/releases/download/v0.83.1/${platform}";
           sha256 = sha256Map.${platform};
         };
 
