@@ -20,10 +20,17 @@ let
 
       desktop = {
         enable = lib.mkEnableOption "desktop environment with niri, greetd, and all desktop features";
-        chromium.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.desktop.enable;
-          description = "Enable the Chromium browser";
+        chromium = {
+          enable = lib.mkOption {
+            type = lib.types.bool;
+            default = config.fireproof.desktop.enable;
+            description = "Enable the Chromium browser";
+          };
+          work.enable = lib.mkOption {
+            type = lib.types.bool;
+            default = config.fireproof.desktop.chromium.enable && config.fireproof.work.enable;
+            description = "Enable a separate chromium-work instance (own profile, runs alongside the personal one)";
+          };
         };
         bambu-studio.enable = lib.mkOption {
           type = lib.types.bool;
