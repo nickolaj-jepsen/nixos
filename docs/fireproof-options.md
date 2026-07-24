@@ -132,6 +132,30 @@ true
 
 
 
+## fireproof\.desktop\.chromium\.work\.enable
+
+
+
+Enable a separate chromium-work instance (own profile, runs alongside the personal one)
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.desktop\.google-chrome\.enable
 
 
