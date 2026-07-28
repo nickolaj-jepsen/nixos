@@ -39,7 +39,7 @@ _: {
             inherit owner;
             repo = "zwift_hass";
             rev = version;
-            hash = "sha256-2Xm6FWYoKJaeXQ858TZ3mKB+9uAxtSTv2tN/58r4QBA=";
+            hash = "sha256-oQzbkrHSeHKo0I+5nc/z1DQI1VWxrbUHSywOHPM7chI=";
           };
           propagatedBuildInputs = [
             zwift-client
