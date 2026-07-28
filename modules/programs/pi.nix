@@ -52,6 +52,99 @@
         ];
       };
 
+      age.secrets.tensorx-api-key = {
+        rekeyFile = ../../secrets/tensorx-api-key.age;
+        mode = "0600";
+      };
+
+      # Not the module's `models` option: that one only installs models.json when
+      # the file is absent, so later edits here would never reach an existing
+      # install.
+      #
+      # Per-model metadata mirrors each vendor's own entry in pi's built-in
+      # catalog, minus the flags that assume the vendor's native wire format
+      # survives a proxy (kimi's deferredToolsMode, glm's zai thinkingFormat +
+      # zaiToolStream) — pi drops those for the gateway-hosted copies too.
+      home.file.".pi/agent/models.json".text = builtins.toJSON {
+        providers.tensorx = {
+          baseUrl = "https://api.tensorx.ai/v1";
+          api = "openai-completions";
+          # `!cmd` runs via `sh -c`, which is what expands the shell syntax agenix
+          # bakes into `.path` ($XDG_RUNTIME_DIR on linux, $(getconf …) on darwin).
+          # Keeps the key on tmpfs and out of the world-readable store.
+          apiKey = "!cat ${config.age.secrets.tensorx-api-key.path}";
+          # pi auto-detects compat from provider name/baseUrl and falls back to
+          # OpenAI's own dialect for anything it doesn't recognise, which none of
+          # these upstreams speak. Pin the lowest common denominator instead.
+          compat = {
+            supportsStore = false;
+            supportsDeveloperRole = false;
+            supportsReasoningEffort = true;
+            maxTokensField = "max_tokens";
+            supportsStrictMode = false;
+            thinkingFormat = "openai";
+          };
+          models = [
+            {
+              id = "moonshotai/kimi-k3";
+              name = "Kimi K3 (TensorX)";
+              reasoning = true;
+              input = ["text" "image"];
+              contextWindow = 1048576;
+              maxTokens = 131072;
+              # Costs across all three are TensorX's own published rates; their
+              # cache hits are documented as best-effort, not guaranteed.
+              cost = {
+                input = 3;
+                output = 15;
+                cacheRead = 0.75;
+                cacheWrite = 0;
+              };
+              # K3 always reasons; only low/high/max are real effort levels.
+              thinkingLevelMap = {
+                off = null;
+                minimal = null;
+                low = "low";
+                medium = null;
+                high = "high";
+                xhigh = null;
+                max = "max";
+              };
+            }
+            {
+              id = "z-ai/glm-5.2";
+              name = "GLM 5.2 (TensorX)";
+              reasoning = true;
+              input = ["text"];
+              # TensorX caps this one at 198K, well short of Z.ai's own 1M.
+              contextWindow = 198000;
+              maxTokens = 128000;
+              cost = {
+                input = 1.5;
+                output = 4.5;
+                cacheRead = 0.38;
+                cacheWrite = 0;
+              };
+            }
+            {
+              id = "minimax/minimax-m3";
+              name = "MiniMax M3 (TensorX)";
+              reasoning = true;
+              input = ["text" "image"];
+              # TensorX publishes no context window for M3; these are MiniMax's.
+              contextWindow = 1000000;
+              maxTokens = 128000;
+              cost = {
+                input = 0.4;
+                output = 2;
+                cacheRead = 0.1;
+                cacheWrite = 0;
+              };
+            }
+          ];
+        };
+      };
+
       # Nix-owned (read-only), so pi's "persist globally" approval won't stick;
       # session approvals still work.
       home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
