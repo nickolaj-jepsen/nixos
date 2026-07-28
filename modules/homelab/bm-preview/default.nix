@@ -1,10 +1,11 @@
-# Draft preview for bmtomrermontage.dk: a container that runs `astro build`
-# against the CMS's draft endpoint whenever Payload POSTs /rebuild (debounced
-# CMS-side, a few seconds after every save) and serves the result. Editors see
-# drafts here; the production site on Cloudflare never talks to this host.
+# Draft preview for bmtomrermontage.dk: the same Astro site as an SSR server
+# that fetches the CMS's draft endpoint on every request — an editor's save
+# shows on the next refresh. Editors see drafts here; the production site on
+# Cloudflare never talks to this host.
 #
 # This module also grafts the preview wiring onto the bm-cms container (shared
-# docker network, hook URL, shared secret) so everything preview lives here.
+# docker network, shared secret, Preview-button URL) so everything preview
+# lives here.
 #
 # Manual steps before `just switch`:
 #   - `agenix edit secrets/hosts/homelab/bm-preview-env.age` with
@@ -34,8 +35,8 @@
         owner = "nginx";
       };
 
-      # A named network so the CMS can reach `bm-preview` (and the preview
-      # build `bm-cms`) by container name; the default bridge has no DNS.
+      # A named network so the preview can reach `bm-cms` by container name;
+      # the default bridge has no DNS.
       systemd.services.docker-network-bm = {
         after = ["docker.service"];
         requires = ["docker.service"];
@@ -63,13 +64,10 @@
         extraOptions = ["--network=${network}"];
       };
 
-      # The preview half of bm-cms's config: draft saves POST the rebuild hook
-      # over the shared network, and the admin's Preview button opens ${domain}.
+      # The preview half of bm-cms's config: the secret guards the draft
+      # endpoint, and the admin's Preview button opens ${domain}.
       virtualisation.oci-containers.containers.bm-cms = {
-        environment = {
-          PREVIEW_DEPLOY_HOOK_URL = "http://bm-preview:8080/rebuild";
-          PREVIEW_URL = "https://${domain}";
-        };
+        environment.PREVIEW_URL = "https://${domain}";
         environmentFiles = [config.age.secrets.bm-preview-env.path];
         extraOptions = ["--network=${network}"];
       };
@@ -87,14 +85,9 @@
         requires = ["docker-network-bm.service"];
       };
 
-      # Basic auth because this serves unpublished content; /rebuild is only
-      # for the CMS over the docker network, so the vhost never exposes it
-      # (the server checks a bearer token besides).
+      # Basic auth because this serves unpublished content.
       services.nginx.virtualHosts."${domain}" =
-        fpLib.mkVirtualHost {
-          inherit port;
-          extraLocations."/rebuild" = {return = "404";};
-        }
+        fpLib.mkVirtualHost {inherit port;}
         // {
           basicAuthFile = config.age.secrets.bm-preview-htpasswd.path;
           extraConfig = ''
