@@ -1,3 +1,3 @@
 # Pinned by digest, never by tag — a tag makes nixos-rebuild non-reproducible.
 # Bump from the bm-website CI `cms-image` job summary; currently a pr-2 build.
-"ghcr.io/nickolaj-jepsen/bm-cms@sha256:28a2d869fe23525755794e1e4a2bfaff680b7f4324fe8be10f7310545d64bc34"
+"ghcr.io/nickolaj-jepsen/bm-cms@sha256:ba6c7c4e2d1ab5bc4b35eecf0f526f809252a62c0757d4b750b307cc566de659"

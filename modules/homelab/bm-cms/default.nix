@@ -1,9 +1,8 @@
 # PayloadCMS admin UI for bmtomrermontage.dk, as an OCI container (Docker-only
-# upstream). Published content is committed to the bm-website repo as JSON and the
-# Astro build reads it from git, so the public site has no runtime dependency on
-# this host — if the container is down, only editing stops.
-#
-# Host-side contract: bm-website's docs/deploy-nixos.md.
+# upstream). Site builds fetch published content from this CMS's API at build
+# time; the deployed site never calls it, so the public site has no runtime
+# dependency on this host — if the container is down, editing and site builds
+# stop, the live site does not. Draft previews live in ../bm-preview.
 {
   flake.modules.nixos.bm-cms = {
     config,
