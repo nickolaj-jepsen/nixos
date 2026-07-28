@@ -229,6 +229,12 @@
               icon = "sh:beszel";
               same-tab = true;
             }
+            {
+              title = "BM CMS";
+              url = "https://cms.bmtomrermontage.dk/admin";
+              icon = "sh:payload";
+              same-tab = true;
+            }
           ];
         }
         {
