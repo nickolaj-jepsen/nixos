@@ -17,7 +17,10 @@
     envFile = config.age.secrets.bm-cms-env.path;
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
-      # KEY=value: DATABASE_URI, DATABASE_PASSWORD, PAYLOAD_SECRET, GITHUB_TOKEN.
+      # KEY=value: DATABASE_URI, DATABASE_PASSWORD, PAYLOAD_SECRET, DEPLOY_HOOK_URL.
+      # DEPLOY_HOOK_URL is the Workers Builds hook a publish POSTs; the URL is
+      # the credential. Without it the CMS logs a warning and never triggers a
+      # site build, which looks exactly like a working publish.
       # DATABASE_PASSWORD must repeat the password inside DATABASE_URI — nix can't
       # read the secret to derive one from the other. owner=postgres is for the
       # postgresql-setup hook below.
@@ -55,15 +58,12 @@
           username = "nickolaj-jepsen";
           passwordFile = config.age.secrets.ghcr-pull-token.path;
         };
-        environment = {
-          GITHUB_REPOSITORY = "nickolaj-jepsen/bm-website";
-          # Published content is committed straight to this branch, with no staging
-          # and no confirmation. Flip to "main" when the CMS PR lands, not before.
-          GITHUB_BRANCH = "feat/payload-cms";
-          # Must be the literal string: the exporter treats unset as off, despite
-          # the upstream doc claiming it defaults on.
-          EXPORT_ON_BOOT = "true";
-        };
+        # Payload's CSRF allowlist, and nothing else. It has to match the origin
+        # the browser actually sends — scheme and host, no trailing slash — or
+        # every write 403s. The app falls back to this same string, but the
+        # fallback is a literal in the repo that nothing keeps in step with
+        # `domain` here.
+        environment.SERVER_URL = "https://${domain}";
         environmentFiles = [envFile];
         ports = ["127.0.0.1:${toString port}:${toString port}"];
         # Host Postgres over its socket instead of TCP.
