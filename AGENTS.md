@@ -355,7 +355,16 @@ secret-rekey`).
 ```bash
 just secret-edit secrets/hosts/<host>/<name>.age  # Edit a secret (PATH to the .age file, not a bare name)
 just secret-rekey                                 # Rekey after adding hosts/secrets (touch YubiKey)
+printf 'KEY=value\n' | just secret-write secrets/hosts/<host>/<name>.age  # Write from stdin, no editor
 ```
+
+**Which of those need the YubiKey**: only the ones that _decrypt_. Encryption uses
+the recipient pubkeys alone, so `secret-write` can create a **new** secret
+unattended — reach for it when a new service's secret must exist before the flake
+will evaluate. `secret-edit` (prefills the current value) and `secret-rekey` both
+decrypt, so both need a touch; a build fails with "Rekeyed secret not found" until
+`secret-rekey` has run. `secret-write` refuses to overwrite without `force=1`,
+since stdin replaces the file wholesale and the caller can't read what they'd drop.
 
 Two rekey stores per host, because `agenix rekey` deletes any file in a node's
 `localStorageDir` that the node doesn't own — so the nixos and home-manager nodes

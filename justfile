@@ -223,6 +223,36 @@ secret-edit file:
     # Stage it: `nix` flake eval ignores git-untracked files, so a new secret is invisible until added.
     if [ -f "{{ file }}" ]; then git add -- "{{ file }}"; fi
 
+# Encryption needs only the recipient pubkeys, so a NEW secret needs no YubiKey.
+# force=1 must delete first: `agenix edit` decrypts an existing file to prefill
+# the buffer, which would block on a touch.
+[doc('Write a secret from stdin, no $EDITOR (PATH to the .age file) - for agents/scripts. Needs no YubiKey; refuses to overwrite unless force=1')]
+[group('secret')]
+secret-write file force="":
+    #!/usr/bin/env -S bash -e
+    if [ -t 0 ]; then
+        echo "Error: expects the plaintext secret on stdin, e.g. printf 'KEY=value\n' | just secret-write {{ file }}" >&2
+        exit 1
+    fi
+    if [ -e "{{ file }}" ] && [ -z "{{ force }}" ]; then
+        echo "Error: {{ file }} already exists, and stdin would replace it wholesale." >&2
+        echo "Use 'just secret-edit {{ file }}' to edit in place (YubiKey), or pass force=1 to discard the current value." >&2
+        exit 1
+    fi
+    umask 077
+    temp=$(mktemp -d)
+    trap "rm -rf $temp" EXIT
+    cat > "$temp/plaintext"
+    if [ ! -s "$temp/plaintext" ]; then
+        echo "Error: stdin was empty; refusing to write an empty secret." >&2
+        exit 1
+    fi
+    printf '#!/usr/bin/env bash\ncat %q > "$1"\n' "$temp/plaintext" > "$temp/editor"
+    chmod +x "$temp/editor"
+    rm -f "{{ file }}"
+    EDITOR="$temp/editor" just secret-edit "{{ file }}"
+    echo "Wrote {{ file }} - run 'just secret-rekey' (YubiKey) before it can build."
+
 [doc('Rekey all secrets - needed when adding secrets/hosts')]
 [group('secret')]
 secret-rekey:
