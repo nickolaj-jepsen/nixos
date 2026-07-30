@@ -163,6 +163,12 @@
               same-tab = true;
             }
             {
+              title = "RomM";
+              url = "https://romm.${cfg.domain}";
+              icon = "sh:romm";
+              same-tab = true;
+            }
+            {
               title = "Shelfmark";
               url = "https://shelfmark.${cfg.domain}";
               icon = "sh:calibre-web-automated-book-downloader";
