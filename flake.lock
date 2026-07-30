@@ -1231,11 +1231,11 @@
         "systems": "systems_4"
       },
       "locked": {
-        "lastModified": 1785307686,
-        "narHash": "sha256-UH9zF6+bhUHH34OJne2sHA5OouxCVqgUMLWWW5Fc/MI=",
+        "lastModified": 1785425050,
+        "narHash": "sha256-qgZFY+50Urp1IFYauNGIFw1ipQqgTmECAYwPtuWfh6U=",
         "owner": "lukasl-dev",
         "repo": "pi.nix",
-        "rev": "5e7bbe666704df45b6f391bfa4320cb52b8c26a9",
+        "rev": "3b8eaf70667e27ac4711a30938e9a98866304e8c",
         "type": "github"
       },
       "original": {
