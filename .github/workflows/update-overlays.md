@@ -18,6 +18,7 @@ network:
     - node
     - github
     - storage.googleapis.com
+    - downloads.claude.ai
     - install.determinate.systems
     - cache.nixos.org
     - python
@@ -124,6 +125,19 @@ For each component, check the latest GitHub release tag:
   `nix-prefetch-url "https://github.com/github/copilot-cli/releases/download/v<VERSION>/github-copilot-<VERSION>-<platform>.tgz"`
   → convert to SRI
 - **Update fields**: `version` and all four `plat.*.hash` entries (SRI format)
+
+### 6. Claude Desktop (`overlays/claude-desktop.nix`)
+
+Upstream publishes no release feed — the apt repository index is the source of truth.
+
+- **Latest version**: fetch
+  `https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages`
+  and take the highest `Version:` (sort with `sort -V`; entries are not ordered)
+- **New hashes**: the index already carries a `SHA256:` per package, so no download is
+  needed — read the `SHA256:` of the chosen version from the `binary-amd64` index and
+  from `.../binary-arm64/Packages`, then convert each hex hash to SRI with
+  `nix hash to-sri --type sha256 <hex>`
+- **Update fields**: `version` and both `plat.*.hash` entries (SRI format)
 
 ## Reusing the Existing PR
 

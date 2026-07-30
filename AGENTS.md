@@ -120,8 +120,13 @@ the latter must keep the package off darwin (`fpLib.mkDarwinGuiPackage` for
 that **can't** run on macOS (niri, dms, gtk, clipboard, claude-presence, the Wayland
 screenshot script, and Linux-only apps like chromium/ferdium/spotify/zed/pycharm) gate
 additionally on `pkgs.stdenv.isLinux` (ferdium has no Mac cask, so it stays Linux-only). Mac-only apps (karabiner, bitwarden, linear,
-claude-desktop, handy, whatcable) ship a `darwin` half only. nixos halves never
+handy, whatcable) ship a `darwin` half only. nixos halves never
 evaluate on darwin, so they need no platform guard.
+
+`claude-desktop` is the cross-platform shape without a nixpkgs build: the cask on
+darwin, and on Linux the official beta `.deb` repackaged in
+`overlays/claude-desktop.nix`, so its home-manager half gates on
+`pkgs.stdenv.isLinux` too.
 
 The module **name** (`flake.modules.<class>.<name>`) must be **globally unique** —
 it is one flat namespace, so a duplicate silently deep-merges (e.g.
