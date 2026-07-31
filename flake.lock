@@ -1297,8 +1297,29 @@
         "nur": "nur",
         "nvf": "nvf",
         "pi": "pi",
+        "runite-podcast": "runite-podcast",
         "treefmt-nix": "treefmt-nix_4",
         "zero-x-cb-media": "zero-x-cb-media"
+      }
+    },
+    "runite-podcast": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1785540312,
+        "narHash": "sha256-TgPuzW3AuR2gN+P/ATMiseS+sZQcoYx+V1lRRQBrMEU=",
+        "owner": "nickolaj-jepsen",
+        "repo": "runite-podcast",
+        "rev": "72d295bf44e076a1b9b1952ef623cbc20756e643",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nickolaj-jepsen",
+        "repo": "runite-podcast",
+        "type": "github"
       }
     },
     "rust-analyzer-src": {
