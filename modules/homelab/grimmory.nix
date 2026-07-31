@@ -1,6 +1,6 @@
 # Grimmory (maintained community fork of BookLore): EPUB/PDF library with a web
 # reader, OPDS, and a native KOReader kosync endpoint for two-way read-progress
-# sync — the gap that made Kavita unsuitable. Replaces kavita.nix once migrated.
+# sync — the gap that made the previous ebook server unsuitable.
 #
 # Docker-only upstream (Spring Boot), so the app runs as an OCI container (the
 # homelab's first; docker backend is set fleet-wide in programs/docker.nix). It only
@@ -9,8 +9,8 @@
 # here, and reaching host MariaDB over the docker bridge gateway.
 #
 # The shared /mnt/data/books library is mounted read-only with DISK_TYPE=NETWORK so
-# Grimmory only indexes it — it never rewrites files and so can't fight Shelfmark,
-# Audiobookshelf or Kavita over the same tree (read-only also means a world-readable
+# Grimmory only indexes it — it never rewrites files and so can't fight Shelfmark or
+# Audiobookshelf over the same tree (read-only also means a world-readable
 # mount is enough, no uid juggling). Shelfmark already drops downloads into that
 # path, so the "Shelfmark integration" is just the shared library.
 {

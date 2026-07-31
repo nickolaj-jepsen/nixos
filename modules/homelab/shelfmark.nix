@@ -30,7 +30,7 @@
         };
       };
 
-      # mergerfs FUSE honours only the caller's primary gid, so run as media:media (not DynamicUser); UMask 0022 keeps downloads world-readable for Kavita/Audiobookshelf.
+      # mergerfs FUSE honours only the caller's primary gid, so run as media:media (not DynamicUser); UMask 0022 keeps downloads world-readable for Grimmory/Audiobookshelf.
       systemd.services.shelfmark.serviceConfig = {
         DynamicUser = lib.mkForce false;
         User = "media";

@@ -151,12 +151,6 @@
               same-tab = true;
             }
             {
-              title = "Kavita";
-              url = "https://kavita.${cfg.domain}";
-              icon = "sh:kavita";
-              same-tab = true;
-            }
-            {
               title = "Grimmory";
               url = "https://grimmory.${cfg.domain}";
               icon = "sh:booklore";
