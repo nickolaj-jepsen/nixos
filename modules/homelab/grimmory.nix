@@ -100,9 +100,25 @@
         };
       };
 
+      # KOReader 2026.07 asks for OPDS 2.0 with a bare `Accept: application/opds+json`;
+      # Grimmory only emits Atom, so Spring finds no acceptable representation and its
+      # handler renders that as a 500 ("Cannot get catalog" on the device). Widen just
+      # that one header value — every other Accept passes through, and the device stops
+      # sending it once it runs koreader#15751 (>= 2026.08), so this then goes inert.
+      services.nginx.appendHttpConfig = ''
+        map $http_accept $grimmory_opds_accept {
+          default                 $http_accept;
+          "application/opds+json" "*/*";
+        }
+      '';
+
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
         inherit port;
         websockets = true;
+        extraLocations."/api/v1/opds" = {
+          proxyPass = "http://127.0.0.1:${toString port}";
+          extraConfig = "proxy_set_header Accept $grimmory_opds_accept;";
+        };
       };
       # NB: no oauth2-proxy gate — KOReader's OPDS + kosync auth can't do the OIDC
       # browser flow, so the vhost relies on Grimmory's own per-user credentials.
