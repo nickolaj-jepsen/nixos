@@ -24,17 +24,21 @@
         skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
+        # pi-lens prepends its findings to the message list, so every turn it has
+        # something to say invalidates the whole cached prefix. Its tools, LSP,
+        # read-guard and formatting are unaffected; findings stay reachable via
+        # lens_diagnostics and /lens-health.
+        environment.PI_LENS_NO_CONTEXT_INJECTION.value = "1";
         settings.packages = [
           # extension-settings must load before powerbar (its settings panel).
           "npm:@juanibiapina/pi-extension-settings"
           # core
           "npm:pi-subagents"
-          "npm:pi-ask-user"
+          "npm:@juicesharp/rpiv-ask-user-question"
           "npm:pi-mcp-adapter"
           "npm:pi-web-access"
-          "git:github.com/VandeeFeng/pi-memory-md@2c6e1948f0a594bf904c5f9dcd92a16be96710d9"
-          "npm:@devkade/pi-plan"
-          "npm:pi-simplify"
+          # Plan mode + code review in one; replaced pi-plan and pi-simplify.
+          "npm:@plannotator/pi-extension"
           # Claude Code CLI login as model provider — no API key in the flake.
           "npm:pi-claude-cli"
           # guardrails
@@ -42,11 +46,12 @@
           # feedback + context diet
           "npm:pi-lens"
           "npm:@hypabolic/pi-hypa"
+          # Keeps the prompt prefix stable so the tensorx proxy can actually
+          # cache it; `/cache-optimizer doctor` reports the hit rate.
+          "npm:pi-cache-optimizer"
           # ui
-          "npm:pi-slopchop"
           "npm:@juanibiapina/pi-powerbar"
           "npm:@tmustier/pi-usage-extension"
-          "npm:@tmustier/pi-raw-paste"
           "npm:@juicesharp/rpiv-todo"
           "npm:@ayulab/pi-rewind"
         ];
@@ -83,6 +88,10 @@
             maxTokensField = "max_tokens";
             supportsStrictMode = false;
             thinkingFormat = "openai";
+            # Sticky-routing hint for pi-cache-optimizer: a gateway that spreads
+            # one session over several upstreams can't hit its own prompt cache.
+            # Just extra headers — ignored if tensorx doesn't honour them.
+            sendSessionAffinityHeaders = true;
           };
           models = [
             {
@@ -139,6 +148,31 @@
                 output = 2;
                 cacheRead = 0.1;
                 cacheWrite = 0;
+              };
+            }
+            {
+              id = "deepseek/deepseek-v4-flash";
+              name = "DeepSeek V4 Flash (TensorX)";
+              reasoning = true;
+              input = ["text"];
+              contextWindow = 1000000;
+              # TensorX publishes no output cap; DeepSeek's own figure.
+              maxTokens = 384000;
+              cost = {
+                input = 0.15;
+                output = 0.3;
+                cacheRead = 0.04;
+                cacheWrite = 0;
+              };
+              # Only high/max are real effort levels upstream.
+              thinkingLevelMap = {
+                off = null;
+                minimal = null;
+                low = null;
+                medium = null;
+                high = "high";
+                xhigh = null;
+                max = "max";
               };
             }
           ];
