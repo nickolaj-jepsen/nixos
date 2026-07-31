@@ -44,6 +44,8 @@
           keybind = [
             "ctrl+shift+c=copy_to_clipboard"
             "ctrl+shift+v=paste_from_clipboard"
+            # Free ctrl+enter (default: toggle_fullscreen) for TUI apps.
+            "ctrl+enter=unbind"
           ];
           # Drop the desktop notification fired on every clipboard copy.
           app-notifications = "no-clipboard-copy";
