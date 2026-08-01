@@ -3,10 +3,14 @@ let
   secretsHosts = ../../secrets/hosts;
   hostEntries = builtins.readDir secretsHosts;
   hostDirs = builtins.filter (n: hostEntries.${n} == "directory") (builtins.attrNames hostEntries);
+  # Break-glass key for logging in from a device that holds no host key (phone, borrowed laptop);
+  # its private half lives only in Bitwarden, never in this repo and never on a host.
+  backupKey = builtins.readFile ../../secrets/backup-key.pub;
   # Authorize every host's pubkey; skip non-SSH entries (e.g. a pre-deploy darwin host's age placeholder).
   # builtins-only so the list is shared across all three module halves without lib at this scope.
   publicKeys =
-    builtins.filter (s: builtins.substring 0 4 s == "ssh-")
+    [backupKey]
+    ++ builtins.filter (s: builtins.substring 0 4 s == "ssh-")
     (map (x: builtins.readFile (secretsHosts + ("/" + x) + "/id_ed25519.pub")) hostDirs);
   # Each .pub already ends in "\n"; strip it so the joined file is one key per line, no blanks.
   authorizedKeysText = builtins.concatStringsSep "\n" (map (k: builtins.replaceStrings ["\n"] [""] k) publicKeys) + "\n";
