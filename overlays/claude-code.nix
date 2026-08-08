@@ -14,19 +14,19 @@
       {
         x86_64-linux = {
           dir = "linux-x64";
-          hash = "sha256-orWt19xLzY6qAp9Oi9rE33dptAc2mNt5idIGuvlBnC0=";
+          hash = "sha256-TpvsEXfOlpDovZiLcQrCQQXnDaQo3QlMWty754alVVU=";
         };
         aarch64-linux = {
           dir = "linux-arm64";
-          hash = "sha256-PlCDbiJ4aHRic2U+D4EVz1/JyzSggYR8YEDIHYCBLDM=";
+          hash = "sha256-/rcV7gZtAqQAydg5QVkvEcjo+mYowePBQmK8Up+VBJg=";
         };
         x86_64-darwin = {
           dir = "darwin-x64";
-          hash = "sha256-euF6dopycMe9bFSEWHw8ZQ3/QltL7usDrdwfKkp9cCo=";
+          hash = "sha256-dzsJWHbxPduDNr+uICpXxi41ixiCdG8dVeNoBgGjLFk=";
         };
         aarch64-darwin = {
           dir = "darwin-arm64";
-          hash = "sha256-OR350qsE5M8yGZM1cgrHcVpYLpHq7P1NIZihb1fqWbM=";
+          hash = "sha256-AToc8X31/x3MGJ1db9P91fCX3cPNQaqZkumYBVdP674=";
         };
       }
       .${
@@ -35,7 +35,7 @@
   in {
     overlayAttrs = {
       claude-code = pkgsUnstable.claude-code.overrideAttrs (oldAttrs: rec {
-        version = "2.1.224";
+        version = "2.1.226";
         src = pkgsUnstable.fetchurl {
           url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/${version}/${plat.dir}/claude";
           inherit (plat) hash;
