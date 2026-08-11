@@ -142,11 +142,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786309844,
-        "narHash": "sha256-UYzTw5DVjp0lw7JPvHjrTTxRh0Vs4eX+zZxaJC4NMU8=",
+        "lastModified": 1786401309,
+        "narHash": "sha256-U58SLO6ecL1QUXtNo/NXOVrONIHyYcRqXX7vjTREdo0=",
         "owner": "AvengeMedia",
         "repo": "DankMaterialShell",
-        "rev": "db1ab5b7b42a222d5a4e7bcc9c4bc2c6efab65dd",
+        "rev": "2f27eab949cc7ef27d162fc0b3bcc85d9b07929b",
         "type": "github"
       },
       "original": {
@@ -261,11 +261,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786301172,
-        "narHash": "sha256-t/yAVrLR/vM7w9is075DSPSj5Jd7Rkv2IM8qQzugIy0=",
+        "lastModified": 1786365182,
+        "narHash": "sha256-Nm0AHv/b1g3CuHE+qiiTWJN6KK+0TZ7Ygff/NQVQWy8=",
         "owner": "AvengeMedia",
         "repo": "dms-plugin-registry",
-        "rev": "0c44cc642f537b874b847f265ca8805c6dbbed5e",
+        "rev": "155a87876ece427c268970bff927efb06347b0b6",
         "type": "github"
       },
       "original": {
@@ -600,11 +600,11 @@
     "homebrew-cask": {
       "flake": false,
       "locked": {
-        "lastModified": 1786325431,
-        "narHash": "sha256-i/kAq84pDIbqy1D445vE0oLv2eOWpd08npRuIYbz/A0=",
+        "lastModified": 1786412239,
+        "narHash": "sha256-7IF3olg9dAYtq/+m0b99XET1x3fl2p+xYzN7Lcw2Gp8=",
         "owner": "homebrew",
         "repo": "homebrew-cask",
-        "rev": "2eaf9f0f995e3a107f3cde6cdb273fb25020683f",
+        "rev": "fec8271574e858706805b735adaa40df4203db3b",
         "type": "github"
       },
       "original": {
@@ -616,11 +616,11 @@
     "homebrew-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1786325359,
-        "narHash": "sha256-74+lQIiIoSVvuPzsKsWk6ZgdcXsZI0alFcRHPZfcL7w=",
+        "lastModified": 1786409791,
+        "narHash": "sha256-RyauujAcUykliV7YLvsfr2/MAeOs5srRAiJeC0Kscig=",
         "owner": "homebrew",
         "repo": "homebrew-core",
-        "rev": "5ac613e38031cae8e6306db9cd46984d8c612164",
+        "rev": "6f00a77c724299946d98cc40f2ebc29616e098b4",
         "type": "github"
       },
       "original": {
@@ -903,11 +903,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786241478,
-        "narHash": "sha256-K/jbo7rTV0jRcDdHKL9VxGURqH61OJcCat9al7q9oMg=",
+        "lastModified": 1786328173,
+        "narHash": "sha256-ghZYtP08BstfBD3keiUHM5KupIRY3+YS+naBsFPtGzc=",
         "owner": "nix-community",
         "repo": "nix-vscode-extensions",
-        "rev": "c7e586ad09d79ab867b055b818d4122334ff6dfe",
+        "rev": "f5911382d78f7d739197702509b83d790d592cea",
         "type": "github"
       },
       "original": {
@@ -1148,11 +1148,11 @@
     },
     "nixpkgs_5": {
       "locked": {
-        "lastModified": 1786318918,
-        "narHash": "sha256-8+bc+WSmIqPlILdQKjJKsKW9CgO8pksEwebsWQn6vKE=",
+        "lastModified": 1786409676,
+        "narHash": "sha256-zdpFL1mOd+aB9fZfDABRbyZ5pZWcAKDNuvYpvSn63jA=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "8ec2a51e6d247c5e9ced533d45cfd406920b6f1f",
+        "rev": "60109f6415d420aad389335df3b94df33fa0f45e",
         "type": "github"
       },
       "original": {
@@ -1188,11 +1188,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786326302,
-        "narHash": "sha256-ttCPd59KOQTYtxSbDNdr7mgJeW7gBgrHQi0wngRkLp4=",
+        "lastModified": 1786412232,
+        "narHash": "sha256-RdT2Mdx7VM3L4rkHtmYmNzCGa2D+DQpxAvVIW7EyI1Q=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "c31d0b9511aadb1f2366b37dc4796f2c45dca722",
+        "rev": "9a4ef0abeb71841736f718592ef6a04b1c06bbe1",
         "type": "github"
       },
       "original": {
@@ -1231,11 +1231,11 @@
         "systems": "systems_4"
       },
       "locked": {
-        "lastModified": 1786252889,
-        "narHash": "sha256-XtxgVI2n/SbVDgtlOH6YqIP9Iwkj7+YlNsKv5FMwGCc=",
+        "lastModified": 1786340852,
+        "narHash": "sha256-+TLBzIxn77lg0cmX0aDFfamBv7db74LxuIjmDgX04pw=",
         "owner": "lukasl-dev",
         "repo": "pi.nix",
-        "rev": "bb6be7f56fcc9b071235ae3281276fce7da6aa95",
+        "rev": "344e6ef05f6c3405e7ebb68b5aef592b0f3f9391",
         "type": "github"
       },
       "original": {
