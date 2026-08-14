@@ -151,27 +151,33 @@
               };
             }
             {
-              id = "deepseek/deepseek-v4-flash";
-              name = "DeepSeek V4 Flash (TensorX)";
+              # TensorX only serves the dated snapshot; the bare
+              # deepseek/deepseek-v4-flash alias is not in its catalog.
+              id = "deepseek/deepseek-v4-flash-0731";
+              name = "DeepSeek V4 Flash 0731 (TensorX)";
               reasoning = true;
               input = ["text"];
               contextWindow = 1000000;
               # TensorX publishes no output cap; DeepSeek's own figure.
               maxTokens = 384000;
               cost = {
-                input = 0.15;
+                input = 0.25;
                 output = 0.3;
-                cacheRead = 0.04;
+                cacheRead = 0.06;
                 cacheWrite = 0;
               };
-              # Only high/max are real effort levels upstream.
+              # DeepSeek rejects replayed assistant turns that lack
+              # reasoning_content; every openai-completions copy of this model
+              # in pi's catalog keeps the flag, proxied or not.
+              compat.requiresReasoningContentOnAssistantMessages = true;
+              # high/max are the only real effort levels upstream. `off` is left
+              # unset (not null) so the non-think mode stays selectable — an
+              # explicit null would drop it from the picker.
               thinkingLevelMap = {
-                off = null;
                 minimal = null;
                 low = null;
                 medium = null;
                 high = "high";
-                xhigh = null;
                 max = "max";
               };
             }
