@@ -166,10 +166,24 @@
                 cacheRead = 0.06;
                 cacheWrite = 0;
               };
-              # DeepSeek rejects replayed assistant turns that lack
-              # reasoning_content; every openai-completions copy of this model
-              # in pi's catalog keeps the flag, proxied or not.
-              compat.requiresReasoningContentOnAssistantMessages = true;
+              # Model-level, so it overrides the provider block for this model
+              # only — the other three here don't speak DeepSeek's dialect.
+              # Unlike kimi's/glm's native flags, these were checked against the
+              # proxy: it accepts thinking:{type:…} and prompt_cache_retention.
+              compat = {
+                # DeepSeek rejects replayed assistant turns that lack
+                # reasoning_content; every openai-completions copy of this model
+                # in pi's catalog keeps the flag, proxied or not.
+                requiresReasoningContentOnAssistantMessages = true;
+                # Sends thinking:{type:"disabled"} on the off path instead of
+                # omitting the control and hoping the upstream default is
+                # non-think.
+                thinkingFormat = "deepseek";
+                # Already what pi detects for this baseUrl; explicit because
+                # pi-cache-optimizer warns on the unset value. Only bites once
+                # PI_CACHE_RETENTION=long makes pi send prompt_cache_key.
+                supportsLongCacheRetention = true;
+              };
               # high/max are the only real effort levels upstream. `off` is left
               # unset (not null) so the non-think mode stays selectable — an
               # explicit null would drop it from the picker.
