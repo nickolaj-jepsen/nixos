@@ -223,9 +223,7 @@ secret-edit file:
     # Stage it: `nix` flake eval ignores git-untracked files, so a new secret is invisible until added.
     if [ -f "{{ file }}" ]; then git add -- "{{ file }}"; fi
 
-# Encryption needs only the recipient pubkeys, so a NEW secret needs no YubiKey.
-# force=1 must delete first: `agenix edit` decrypts an existing file to prefill
-# the buffer, which would block on a touch.
+# rm first: secret-edit would decrypt the old file to prefill, needing a touch.
 [doc('Write a secret from stdin, no $EDITOR (PATH to the .age file) - for agents/scripts. Needs no YubiKey; refuses to overwrite unless force=1')]
 [group('secret')]
 secret-write file force="":

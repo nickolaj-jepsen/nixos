@@ -1,6 +1,6 @@
 # Grimmory (maintained community fork of BookLore): EPUB/PDF library with a web
 # reader, OPDS, and a native KOReader kosync endpoint for two-way read-progress
-# sync — the gap that made the previous ebook server unsuitable.
+# sync.
 #
 # Docker-only upstream (Spring Boot), so the app runs as an OCI container (the
 # homelab's first; docker backend is set fleet-wide in programs/docker.nix). It only
@@ -100,11 +100,7 @@
         };
       };
 
-      # KOReader 2026.07 asks for OPDS 2.0 with a bare `Accept: application/opds+json`;
-      # Grimmory only emits Atom, so Spring finds no acceptable representation and its
-      # handler renders that as a 500 ("Cannot get catalog" on the device). Widen just
-      # that one header value — every other Accept passes through, and the device stops
-      # sending it once it runs koreader#15751 (>= 2026.08), so this then goes inert.
+      # Works around KOReader OPDS Accept header (koreader#15751); drop once fixed.
       services.nginx.appendHttpConfig = ''
         map $http_accept $grimmory_opds_accept {
           default                 $http_accept;

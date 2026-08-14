@@ -1,11 +1,3 @@
-# RomM: ROM library manager, metadata scraper and in-browser player (EmulatorJS).
-#
-# Docker-only upstream, so it runs as an OCI container like grimmory/bm-cms; the
-# image bundles its own Valkey (internal one starts only while REDIS_HOST is
-# unset), so there is no second container.
-#
-# No oauth2-proxy gate: the download endpoints are consumed by ES-DE, Tinfoil and
-# Playnite, none of which can do the OIDC browser flow the proxy demands.
 {
   flake.modules.nixos.romm = {
     config,
@@ -20,24 +12,17 @@
     library = "/mnt/data/roms";
     stateDir = "/var/lib/romm";
     db = "romm";
-    # Runs as media: mergerfs honours only the caller's primary gid, so media must
-    # be the primary group, not an extra one (same constraint as shelfmark.nix).
+    # mergerfs only honours the caller's primary gid
     uid = config.users.users.media.uid;
     gid = config.users.groups.media.gid;
     envFile = config.age.secrets.romm-env.path;
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
-      # KEY=value, no shell/SQL metacharacters (the postgresql-setup hook below
-      # sources it): DB_PASSWD, ROMM_AUTH_SECRET_KEY, OIDC_CLIENT_ID/SECRET, plus
-      # any metadata-provider keys (IGDB, ScreenScraper, SteamGridDB,
-      # RetroAchievements). owner=postgres lets that hook read it; root reads it
-      # regardless.
       age.secrets.romm-env = {
         rekeyFile = ../../secrets/hosts/homelab/romm-env.age;
         owner = "postgres";
       };
 
-      # The container depends on the daemon at boot; docker.nix defaults this off.
       virtualisation.docker.enableOnBoot = true;
 
       systemd.tmpfiles.rules = [
@@ -50,13 +35,11 @@
       services.postgresql = fpLib.mkPostgresDB {
         name = db;
         login = true;
-        # Peer auth would map the container's uid to media, not romm; mkBefore puts
-        # this ahead of the default `local all all peer`.
+        # peer auth would map the container's uid to media, not romm
         authentication = lib.mkBefore "local ${db} ${db} scram-sha-256";
       };
 
-      # ensureUsers can't set a password; idempotent, so a rotated secret applies
-      # on the next postgresql restart.
+      # reapplies the password so a rotated secret takes effect
       systemd.services.postgresql-setup.postStart = lib.mkAfter ''
         set -a
         . ${envFile}
@@ -75,57 +58,42 @@
           ROMM_DB_DRIVER = "postgresql";
           DB_NAME = db;
           DB_USER = db;
-          # No socket option: RomM builds the URL from parts, and an unset DB_HOST
-          # plus a libpq `host` query param is how SQLAlchemy expresses a unix
-          # socket. DB_PORT defaults to 3306 (MariaDB's), so it must be set anyway.
+          # unix socket via DB_QUERY_JSON host=; DB_PORT still required (default 3306)
           DB_PORT = "5432";
           DB_QUERY_JSON = builtins.toJSON {host = "/run/postgresql";};
 
           OIDC_ENABLED = "true";
           OIDC_PROVIDER = "zitadel";
-          # UI-only: hides the login form but does NOT gate /api/login or
-          # /api/token. The bootstrap admin stays reachable there on purpose, as
-          # the way back in when OIDC breaks.
+          # UI-only; /api/login + /api/token stay open on purpose (OIDC fallback)
           DISABLE_USERPASS_LOGIN = "true";
-          # Accounts are pre-created; an unknown Zitadel user gets a 403.
           OIDC_ALLOW_REGISTRATION = "false";
           OIDC_SERVER_APPLICATION_URL = "https://sso.${cfg.domain}";
           OIDC_REDIRECT_URI = "https://${domain}/api/oauth/openid";
 
-          # Keyless providers; the keyed ones (IGDB, ScreenScraper, SteamGridDB,
-          # RetroAchievements) come from the env file.
           HASHEOUS_API_ENABLED = "true";
           PLAYMATCH_API_ENABLED = "true";
           HLTB_API_ENABLED = "true";
           LAUNCHBOX_API_ENABLED = "true";
 
-          # The RQ scheduler only starts if one of these is on. Preferred over
-          # ENABLE_RESCAN_ON_FILESYSTEM_CHANGE: inotify on mergerfs misses writes
-          # made straight to a branch rather than through /mnt/data.
+          # scheduled, not inotify-based: mergerfs branch writes don't trigger it
           ENABLE_SCHEDULED_RESCAN = "true";
           ENABLE_SCHEDULED_CLEANUP_ORPHANED_RESOURCES = "true";
           ENABLE_SCHEDULED_RETROACHIEVEMENTS_PROGRESS_SYNC = "true";
           ENABLE_SCHEDULED_UPDATE_LAUNCHBOX_METADATA = "true";
 
-          # Upstream suggests 2×cores+1 (17 here), but this box also runs Plex,
-          # Immich, Nextcloud and the arr stack.
           WEB_SERVER_CONCURRENCY = "4";
         };
         environmentFiles = [envFile];
         volumes = [
-          "${stateDir}/data:/romm" # resources, assets (saves/states), config
+          "${stateDir}/data:/romm"
           "${stateDir}/redis:/redis-data"
           "${library}:/romm/library"
           "/run/postgresql:/run/postgresql"
         ];
         ports = ["127.0.0.1:${toString port}:8080"];
-        # Upstream supports a non-root uid: it only drops nginx to its own `romm`
-        # user when EUID is 0.
         extraOptions = ["--user=${toString uid}:${toString gid}"];
       };
 
-      # postgresql.target (not .service) also pulls in postgresql-setup, which sets
-      # the role password. The container exits if its startup migration fails.
       systemd.services.docker-romm = {
         after = ["postgresql.target"];
         requires = ["postgresql.target"];
@@ -138,14 +106,13 @@
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
         inherit port;
         websockets = true;
-        # Multi-GB ROM uploads; RomM limits them via MAX_ASSET_UPLOAD_SIZE_BYTES.
+        # unlimited on purpose: RomM caps size via MAX_ASSET_UPLOAD_SIZE_BYTES
         extraConfig = ''
           client_max_body_size 0;
         '';
       };
 
-      # The only unrecoverable state: resources/ is scraped art a rescan
-      # re-downloads, and the database is already in the postgresqlBackup dump.
+      # only unrecoverable state: art rescans, DB is already in postgresqlBackup
       services.restic.backups.homelab.paths = [
         "${stateDir}/data/assets"
         "${stateDir}/data/config"

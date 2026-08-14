@@ -1,19 +1,8 @@
-# Draft preview for bmtomrermontage.dk: the same Astro site as an SSR server
-# that fetches the CMS's draft endpoint on every request — an editor's save
-# shows on the next refresh. Editors see drafts here; the production site on
-# Cloudflare never talks to this host.
-#
-# This module also grafts the preview wiring onto the bm-cms container (shared
-# docker network, shared secret, Preview-button URL) so everything preview
-# lives here.
-#
 # Manual steps before `just switch`:
-#   - `agenix edit secrets/hosts/homelab/bm-preview-env.age` with
-#     PREVIEW_SECRET=<long random string> (shared by both containers).
-#   - `agenix edit secrets/hosts/homelab/bm-preview-htpasswd.age` with an
-#     htpasswd line for the customer (nix run nixpkgs#apacheHttpd — htpasswd -nB).
-#   - A DNS record for preview.bmtomrermontage.dk pointing at this host.
-#   - Pin _image.nix from the bm-website CI `preview-image` job summary.
+#   - bm-preview-env.age: PREVIEW_SECRET=<long random string>
+#   - bm-preview-htpasswd.age: htpasswd -nB line for the customer
+#   - DNS record: preview.bmtomrermontage.dk -> this host
+#   - Pin _image.nix from the bm-website CI `preview-image` job summary
 {
   flake.modules.nixos.bm-preview = {
     config,
@@ -27,16 +16,13 @@
     network = "bm";
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
-      # KEY=value: PREVIEW_SECRET only. Guards /api/site-content-draft on the
-      # CMS and /rebuild on this container, so both containers load it.
       age.secrets.bm-preview-env.rekeyFile = ../../../secrets/hosts/homelab/bm-preview-env.age;
       age.secrets.bm-preview-htpasswd = {
         rekeyFile = ../../../secrets/hosts/homelab/bm-preview-htpasswd.age;
         owner = "nginx";
       };
 
-      # A named network so the preview can reach `bm-cms` by container name;
-      # the default bridge has no DNS.
+      # Named network: default docker bridge has no DNS for container names.
       systemd.services.docker-network-bm = {
         after = ["docker.service"];
         requires = ["docker.service"];
@@ -64,8 +50,6 @@
         extraOptions = ["--network=${network}"];
       };
 
-      # The preview half of bm-cms's config: the secret guards the draft
-      # endpoint, and the admin's Preview button opens ${domain}.
       virtualisation.oci-containers.containers.bm-cms = {
         environment.PREVIEW_URL = "https://${domain}";
         environmentFiles = [config.age.secrets.bm-preview-env.path];
@@ -85,7 +69,6 @@
         requires = ["docker-network-bm.service"];
       };
 
-      # Basic auth because this serves unpublished content.
       services.nginx.virtualHosts."${domain}" =
         fpLib.mkVirtualHost {inherit port;}
         // {

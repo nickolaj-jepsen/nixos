@@ -117,10 +117,6 @@
     zero-x-cb-media.url = "github:nickolaj-jepsen/0xCB-media";
     zero-x-cb-media.inputs.nixpkgs.follows = "nixpkgs";
 
-    # Supplies the container, the ledger-migration barrier, and the image
-    # digest those assume — pinned together so they cannot disagree about the
-    # environment contract. Everything host-specific (proxy, secret, database,
-    # cutoff) stays in modules/homelab/runite-podcast.
     runite-podcast.url = "github:nickolaj-jepsen/runite-podcast";
     runite-podcast.inputs.nixpkgs.follows = "nixpkgs";
 

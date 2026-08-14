@@ -23,7 +23,7 @@
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
       # for linux ISOs
-      # ids pinned (to those already allocated) — romm.nix passes them to `docker run --user`.
+      # ids pinned — romm.nix's docker run --user expects these exact values.
       users.groups."${group}" = {
         gid = 988;
         members = [username];

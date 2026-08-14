@@ -1,5 +1,3 @@
-# Account-synced, so there's no declarative settings half. (claude-code, the CLI,
-# is a separate leaf.)
 {
   flake.modules.darwin.claude-desktop = {
     config,

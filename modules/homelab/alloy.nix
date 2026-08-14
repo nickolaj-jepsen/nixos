@@ -16,11 +16,6 @@
         environmentFile = config.age.secrets.grafana-cloud-env.path;
       };
 
-      # OTLP in, over the docker bridge, same idiom as mariadb.nix: containers
-      # reach it at host.docker.internal:4318 and the default deny still blocks
-      # 4318 on the LAN/WAN NICs. HTTP rather than gRPC because a container
-      # talking protobuf-over-HTTP needs no extra dependency and the OTLP
-      # exporter meta-package carries both transports anyway.
       networking.firewall.interfaces."docker0".allowedTCPPorts = [4318];
 
       environment.etc."alloy/config.alloy".text = ''
@@ -85,11 +80,7 @@
             source_labels = ["__journal__systemd_unit"]
             target_label  = "unit"
           }
-          // Container logs reach the journal through dockerd, so every one of
-          // them carries _SYSTEMD_UNIT=docker.service — indistinguishable from
-          // each other and from the daemon without this. One underscore here,
-          // not two: the journal field is CONTAINER_NAME, and the doubled one
-          // above is only because _SYSTEMD_UNIT already starts with one.
+          // single _, not __ (unlike __journal__systemd_unit above)
           rule {
             source_labels = ["__journal_container_name"]
             target_label  = "container"
@@ -108,9 +99,6 @@
         }
 
         // ── OTLP in: applications that push rather than being scraped ──
-        // runite-podcast is the first. Its worker is a container with no
-        // Prometheus endpoint to scrape (runite's pull endpoint is an unbuilt
-        // gap), so metrics arrive here alongside its traces and logs.
         otelcol.receiver.otlp "default" {
           http { endpoint = "0.0.0.0:4318" }
 
@@ -127,8 +115,7 @@
           }
         }
 
-        // Converted to Prometheus and pushed down the same relabel rule the
-        // scrapes use, so OTLP series carry instance="homelab" too.
+        // reused so OTLP series get instance="homelab" too
         otelcol.exporter.prometheus "otlp_metrics" {
           forward_to = [prometheus.relabel.homelab.receiver]
         }
@@ -137,14 +124,7 @@
           forward_to = [loki.write.grafana_cloud.receiver]
         }
 
-        // Traces are received but deliberately not forwarded: Grafana Cloud
-        // Tempo needs its own endpoint and credentials, and grafana-cloud-env
-        // holds only PROM_* and LOKI_*. Adding them is a manual step —
-        // `just secret-edit secrets/hosts/homelab/grafana-cloud-env.age` with
-        // TEMPO_URL/TEMPO_USER/TEMPO_TOKEN — after which this becomes an
-        // otelcol.exporter.otlp block wired into the batch processor's
-        // `traces` output. Referencing sys.env of an unset variable would fail
-        // Alloy's config load and take the metrics and logs down with it.
+        // Traces not forwarded: needs TEMPO_URL/USER/TOKEN creds first
       '';
     };
   };

@@ -135,8 +135,7 @@ Upstream publishes no release feed — the apt repository index is the source of
   and take the highest `Version:` (sort with `sort -V`; entries are not ordered)
 - **New hashes**: the index already carries a `SHA256:` per package, so no download is
   needed — read the `SHA256:` of the chosen version from the `binary-amd64` index and
-  from `.../binary-arm64/Packages`, then convert each hex hash to SRI with
-  `nix hash to-sri --type sha256 <hex>`
+  from `.../binary-arm64/Packages`, then convert each hex hash to SRI
 - **Update fields**: `version` and both `plat.*.hash` entries (SRI format)
 
 ## Reusing the Existing PR

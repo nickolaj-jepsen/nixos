@@ -3,8 +3,7 @@ let
   secretsHosts = ../../secrets/hosts;
   hostEntries = builtins.readDir secretsHosts;
   hostDirs = builtins.filter (n: hostEntries.${n} == "directory") (builtins.attrNames hostEntries);
-  # Break-glass key for logging in from a device that holds no host key (phone, borrowed laptop);
-  # its private half lives only in Bitwarden, never in this repo and never on a host.
+  # Break-glass key; private half lives only in Bitwarden, not in this repo.
   backupKey = builtins.readFile ../../secrets/backup-key.pub;
   # Authorize every host's pubkey; skip non-SSH entries (e.g. a pre-deploy darwin host's age placeholder).
   # builtins-only so the list is shared across all three module halves without lib at this scope.

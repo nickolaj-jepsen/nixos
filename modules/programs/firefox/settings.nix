@@ -95,7 +95,6 @@
           # Geolocation
           "geo.enabled" = false;
 
-          # Ctrl+Q (quit) sits next to Ctrl+W (close tab); unbind it.
           "browser.quitShortcut.disabled" = true;
 
           # Enable userChrome.css

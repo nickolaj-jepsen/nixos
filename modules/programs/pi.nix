@@ -24,10 +24,6 @@
         skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
-        # pi-lens prepends its findings to the message list, so every turn it has
-        # something to say invalidates the whole cached prefix. Its tools, LSP,
-        # read-guard and formatting are unaffected; findings stay reachable via
-        # lens_diagnostics and /lens-health.
         environment.PI_LENS_NO_CONTEXT_INJECTION.value = "1";
         settings.packages = [
           # extension-settings must load before powerbar (its settings panel).
@@ -37,7 +33,6 @@
           "npm:@juicesharp/rpiv-ask-user-question"
           "npm:pi-mcp-adapter"
           "npm:pi-web-access"
-          # Plan mode + code review in one; replaced pi-plan and pi-simplify.
           "npm:@plannotator/pi-extension"
           # Claude Code CLI login as model provider — no API key in the flake.
           "npm:pi-claude-cli"
@@ -46,8 +41,6 @@
           # feedback + context diet
           "npm:pi-lens"
           "npm:@hypabolic/pi-hypa"
-          # Keeps the prompt prefix stable so the tensorx proxy can actually
-          # cache it; `/cache-optimizer doctor` reports the hit rate.
           "npm:pi-cache-optimizer"
           # ui
           "npm:@juanibiapina/pi-powerbar"
@@ -62,25 +55,13 @@
         mode = "0600";
       };
 
-      # Not the module's `models` option: that one only installs models.json when
-      # the file is absent, so later edits here would never reach an existing
-      # install.
-      #
-      # Per-model metadata mirrors each vendor's own entry in pi's built-in
-      # catalog, minus the flags that assume the vendor's native wire format
-      # survives a proxy (kimi's deferredToolsMode, glm's zai thinkingFormat +
-      # zaiToolStream) — pi drops those for the gateway-hosted copies too.
+      # Not the module's `models` option — it only writes once, never updates.
       home.file.".pi/agent/models.json".text = builtins.toJSON {
         providers.tensorx = {
           baseUrl = "https://api.tensorx.ai/v1";
           api = "openai-completions";
-          # `!cmd` runs via `sh -c`, which is what expands the shell syntax agenix
-          # bakes into `.path` ($XDG_RUNTIME_DIR on linux, $(getconf …) on darwin).
-          # Keeps the key on tmpfs and out of the world-readable store.
+          # `!cmd` keeps the key on tmpfs, out of the Nix store.
           apiKey = "!cat ${config.age.secrets.tensorx-api-key.path}";
-          # pi auto-detects compat from provider name/baseUrl and falls back to
-          # OpenAI's own dialect for anything it doesn't recognise, which none of
-          # these upstreams speak. Pin the lowest common denominator instead.
           compat = {
             supportsStore = false;
             supportsDeveloperRole = false;
@@ -88,9 +69,6 @@
             maxTokensField = "max_tokens";
             supportsStrictMode = false;
             thinkingFormat = "openai";
-            # Sticky-routing hint for pi-cache-optimizer: a gateway that spreads
-            # one session over several upstreams can't hit its own prompt cache.
-            # Just extra headers — ignored if tensorx doesn't honour them.
             sendSessionAffinityHeaders = true;
           };
           models = [
@@ -101,15 +79,13 @@
               input = ["text" "image"];
               contextWindow = 1048576;
               maxTokens = 131072;
-              # Costs across all three are TensorX's own published rates; their
-              # cache hits are documented as best-effort, not guaranteed.
               cost = {
                 input = 3;
                 output = 15;
                 cacheRead = 0.75;
                 cacheWrite = 0;
               };
-              # K3 always reasons; only low/high/max are real effort levels.
+              # K3 always reasons; only low/high/max are real levels.
               thinkingLevelMap = {
                 off = null;
                 minimal = null;
@@ -151,8 +127,7 @@
               };
             }
             {
-              # TensorX only serves the dated snapshot; the bare
-              # deepseek/deepseek-v4-flash alias is not in its catalog.
+              # TensorX only serves the dated snapshot, not the bare alias.
               id = "deepseek/deepseek-v4-flash-0731";
               name = "DeepSeek V4 Flash 0731 (TensorX)";
               reasoning = true;
@@ -166,27 +141,13 @@
                 cacheRead = 0.06;
                 cacheWrite = 0;
               };
-              # Model-level, so it overrides the provider block for this model
-              # only — the other three here don't speak DeepSeek's dialect.
-              # Unlike kimi's/glm's native flags, these were checked against the
-              # proxy: it accepts thinking:{type:…} and prompt_cache_retention.
               compat = {
-                # DeepSeek rejects replayed assistant turns that lack
-                # reasoning_content; every openai-completions copy of this model
-                # in pi's catalog keeps the flag, proxied or not.
+                # DeepSeek rejects replayed turns missing reasoning_content.
                 requiresReasoningContentOnAssistantMessages = true;
-                # Sends thinking:{type:"disabled"} on the off path instead of
-                # omitting the control and hoping the upstream default is
-                # non-think.
                 thinkingFormat = "deepseek";
-                # Already what pi detects for this baseUrl; explicit because
-                # pi-cache-optimizer warns on the unset value. Only bites once
-                # PI_CACHE_RETENTION=long makes pi send prompt_cache_key.
                 supportsLongCacheRetention = true;
               };
-              # high/max are the only real effort levels upstream. `off` is left
-              # unset (not null) so the non-think mode stays selectable — an
-              # explicit null would drop it from the picker.
+              # `off` stays unset, not null, or it's dropped from the picker.
               thinkingLevelMap = {
                 minimal = null;
                 low = null;

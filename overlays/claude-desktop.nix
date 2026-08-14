@@ -5,7 +5,6 @@ _: {
     ...
   }: let
     version = "1.34493.1";
-    # Anthropic's apt repo only publishes amd64/arm64 debs.
     sources = {
       x86_64-linux = {
         arch = "amd64";
@@ -68,7 +67,7 @@ _: {
           libsecret
         ];
 
-        # Bundled ANGLE dlopens libEGL.so.1; runtimeDependencies only reaches executables.
+        # ANGLE dlopens libEGL.so.1; runtimeDependencies only patches executables.
         appendRunpaths = ["${pkgs.lib.getLib pkgs.libglvnd}/lib"];
 
         dontUnpack = true;
@@ -76,15 +75,14 @@ _: {
         installPhase = ''
           runHook preInstall
 
-          # chrome-sandbox is setuid, so `dpkg -x` bails; unpack the payload tarball
-          # directly. Non-setuid is fine — Chromium's namespace sandbox works here.
+          # chrome-sandbox is setuid, so `dpkg -x` bails; unpack via tar instead.
           dpkg --fsys-tarfile $src | tar --extract --no-same-permissions --no-same-owner
 
           mkdir -p $out/lib $out/share
           mv usr/lib/claude-desktop $out/lib/
           mv usr/share/icons $out/share/
 
-          # Patched rather than regenerated to keep upstream's desktop actions.
+          # Patched, not regenerated, to keep upstream's desktop actions.
           install -Dm444 usr/share/applications/com.anthropic.Claude.desktop \
             $out/share/applications/com.anthropic.Claude.desktop
           substituteInPlace $out/share/applications/com.anthropic.Claude.desktop \
