@@ -51,5 +51,19 @@
       # Prune undeclared brew packages (without zapping data); review before first switch.
       onActivation.cleanup = "uninstall";
     };
+
+    # Don't idle-sleep or lock aggressively. Lid-close still sleeps (separate knob).
+    power.sleep = {
+      computer = "never"; # no system idle-sleep while the lid is open
+      display = 30; # minutes of idle before the screen turns off
+    };
+    system.defaults = {
+      screensaver = {
+        askForPassword = true; # still require the password when it does lock
+        askForPasswordDelay = 60; # ...but not until 60s after screen-off, so a nudge doesn't re-prompt
+      };
+      # When the screensaver (and thus the lock) kicks in, in seconds. 900 = 15 min.
+      CustomUserPreferences."com.apple.screensaver".idleTime = 900;
+    };
   };
 }
