@@ -10,6 +10,7 @@
     fireproof.desktop.snapcast.enable = true;
     fireproof.dev.enable = true;
     fireproof.dev.clickhouse.enable = false; # query ao's ClickHouse over SSH; no local client needed on desktop
+    fireproof.dev.llm.enable = true; # only host with a GPU big enough to serve Qwen3.8-27B
     fireproof.work.enable = true;
     fireproof.hardware.nvidia.enable = true;
     fireproof.claude-code.work.enable = true;

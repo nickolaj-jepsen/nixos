@@ -110,6 +110,11 @@ let
           default = config.fireproof.dev.enable;
           description = "Enable the pi coding agent with the lazypi extension roster";
         };
+        llm.enable = lib.mkEnableOption ''
+          local LLM serving (llama-swap + CUDA llama.cpp) and its pi provider.
+          Off by default rather than following dev.enable: it needs a ≥16GB
+          NVIDIA GPU, which macbook and dev-ao don't have
+        '';
       };
 
       neovim.full.enable = lib.mkOption {
