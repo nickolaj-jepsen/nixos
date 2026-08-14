@@ -71,6 +71,46 @@
       # survives a proxy (kimi's deferredToolsMode, glm's zai thinkingFormat +
       # zaiToolStream) — pi drops those for the gateway-hosted copies too.
       home.file.".pi/agent/models.json".text = builtins.toJSON {
+        # Local llama-server on the macbook over the LAN (docs/local-llm-plan.md).
+        # Hardcoded IP, not a name: no host here runs avahi/mDNS so `macbook.local`
+        # doesn't resolve, and tailscale isn't a path while nij-desktop is offline.
+        # Update if the DHCP lease moves. Measured 14.8 tok/s decode — this is for
+        # offline or keep-it-local work, not the default driver.
+        providers.macbook = {
+          baseUrl = "http://10.0.2.101:8080/v1";
+          api = "openai-completions";
+          # llama-server is started without --api-key-file, so it accepts anything;
+          # pi still wants the field. Swap for a `!cat` of the agenix secret once
+          # fireproof.llm.apiKeyFile is set.
+          apiKey = "unused";
+          compat = {
+            supportsStore = false;
+            supportsDeveloperRole = false;
+            # Served with --reasoning-budget 0; effort levels would be ignored.
+            supportsReasoningEffort = false;
+            maxTokensField = "max_tokens";
+            supportsStrictMode = false;
+          };
+          models = [
+            {
+              id = config.fireproof.llm.modelAlias;
+              name = "Qwen3.8 27B (macbook)";
+              reasoning = false;
+              # Vision is deliberately not loaded — no mmproj on the server.
+              input = ["text"];
+              contextWindow = config.fireproof.llm.contextSize;
+              maxTokens = 8192;
+              # Local inference: the only cost is the electricity and your patience.
+              cost = {
+                input = 0;
+                output = 0;
+                cacheRead = 0;
+                cacheWrite = 0;
+              };
+            }
+          ];
+        };
+
         providers.tensorx = {
           baseUrl = "https://api.tensorx.ai/v1";
           api = "openai-completions";

@@ -125,6 +125,70 @@ let
       networkd.enable = lib.mkEnableOption "systemd-networkd wired networking";
       wsl.enable = lib.mkEnableOption "WSL configuration";
 
+      llm = {
+        enable = lib.mkEnableOption "local llama.cpp inference server (darwin only; see docs/local-llm-plan.md)";
+        modelPath = lib.mkOption {
+          type = lib.types.str;
+          default = "/Users/${config.fireproof.username}/llm/models/Qwen3.8-27B-UD-Q4_K_XL.gguf";
+          description = "GGUF to serve. Weights live outside the nix store — 18 GB in the system closure would drag `just check` and `nix copy`.";
+        };
+        contextSize = lib.mkOption {
+          type = lib.types.int;
+          default = 65536;
+          description = ''
+            Context window. Qwen3.8-27B carries a KV cache on only 16 of its 65
+            layers (full_attention_interval = 4), costing 64 KiB/token at f16.
+            64k therefore needs q8_0 KV to fit the budget; at f16 it overruns and
+            the ceiling is ~32k.
+          '';
+        };
+        cacheType = lib.mkOption {
+          type = lib.types.str;
+          default = "q8_0";
+          description = "KV cache precision for both K and V. q4_0 degrades exactly the long-range recall the window exists for.";
+        };
+        modelAlias = lib.mkOption {
+          type = lib.types.str;
+          default = "qwen3.8-27b";
+          description = "API-facing model id. Without an alias llama-server reports the full GGUF path, which clients would then have to hardcode.";
+        };
+        mlock = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = ''
+            Pin the weights in RAM. Without it macOS reclaims the mmap'd model
+            pages as soon as a desktop session competes for memory, and decode
+            collapses from ~15 tok/s to ~1.4 as every token streams from disk
+            (measured). The cost is that ~18 GB stays locked, so the machine is
+            an appliance while the server runs — which is the intended use.
+          '';
+        };
+        host = lib.mkOption {
+          type = lib.types.str;
+          default = "0.0.0.0";
+          description = "Bind address. 0.0.0.0 serves the LAN — acceptable only because this host sits lid-closed on a desk.";
+        };
+        port = lib.mkOption {
+          type = lib.types.port;
+          default = 8080;
+          description = "Port for the OpenAI-compatible endpoint.";
+        };
+        apiKeyFile = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = "Path to a file holding the API key. Never inline the key — a flake literal lands world-readable in /nix/store and in `ps` output.";
+        };
+        wiredLimitMb = lib.mkOption {
+          type = lib.types.int;
+          default = 21504;
+          description = ''
+            iogpu.wired_limit_mb. Metal defaults to ~75% of RAM (18 GB of 24),
+            which a 17.9 GB model overruns during graph compute. Does not survive
+            reboot, hence the activation script.
+          '';
+        };
+      };
+
       homelab = {
         enable = lib.mkEnableOption "homelab server services (arr, jellyfin, nginx, …)";
         domain = lib.mkOption {

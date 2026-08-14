@@ -21,6 +21,11 @@
 
     # clickhouse: heavy/flaky on darwin and unused locally.
     fireproof.dev.clickhouse.enable = false;
+
+    # Local inference endpoint for personal data. The only host in the fleet with
+    # enough memory for a 27B at a good quant — the desktop's 5070 Ti has 16 GB.
+    # Holds ~18 GB locked, so this host is a lid-closed appliance, not a laptop.
+    fireproof.llm.enable = true;
   };
 
   # nix-darwin system config (the macOS analog of a host's `nixos` bucket).
