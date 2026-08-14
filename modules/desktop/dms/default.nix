@@ -26,7 +26,6 @@
         enableDynamicTheming = false;
         enableVPN = true;
         enableCalendarEvents = false;
-        dgop.package = pkgs.unstable.dgop; # not in stable nixpkgs (26.05) yet
         quickshell.package = pkgs.unstable.quickshell; # dms 1.5-beta needs quickshell >= 0.3.0 for `pragma AppId`
 
         systemd.enable = true;
@@ -36,7 +35,7 @@
 
         settings = {
           # Must match SettingsData.qml schema version, else a per-start migration runs silently; re-pin after `just update`.
-          configVersion = 12;
+          configVersion = 15;
 
           # Enable blur on DMS's layer-shell surfaces. Blur only shows through
           # translucency, so popupTransparency must be < 1 — the default 1.0 is solid
