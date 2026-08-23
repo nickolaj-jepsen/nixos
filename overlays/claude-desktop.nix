@@ -4,16 +4,16 @@ _: {
     system,
     ...
   }: let
-    version = "1.32352.0";
+    version = "1.34493.1";
     # Anthropic's apt repo only publishes amd64/arm64 debs.
     sources = {
       x86_64-linux = {
         arch = "amd64";
-        hash = "sha256-JEDQdDdlU9cLIvweUzR9pg5YdXSYll7+uYmYh9ph4Nk=";
+        hash = "sha256-GYKXeWM6J3/NcqZYNCbGik7P96pDomcY1mRcLpVHR8o=";
       };
       aarch64-linux = {
         arch = "arm64";
-        hash = "sha256-sKLeZMXpR/BnkknlRfnHrqip57I6v27YJx+qnl++mkE=";
+        hash = "sha256-pBrmRGGSobipXVcMcCnTFxOaMMViyfTotnW5Bb5SoBA=";
       };
     };
     plat =
