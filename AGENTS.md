@@ -1,390 +1,53 @@
-## Intrepetring tasks
+# Agent notes
 
-When you're asked to update a configuration, the user usually referes to update the config in this nixos configuration, eg claude-code config should be updated in modules/programs/claude-code and vscode in /home/nickolaj/nixos/modules/programs/vscode
+"Update the X config" usually means the config in this repo — e.g. claude-code
+lives in `modules/programs/claude-code`, vscode in `modules/programs/vscode`.
 
 ## Commands
 
-All operations use the `just` command runner. Run `just` to see all commands.
+All operations use `just`; run `just` for the full list.
 
 ```bash
-just switch              # Rebuild and switch to new config
-just switch desktop      # Rebuild specific host
+just switch [host]       # Rebuild + switch (NEEDS EXPLICIT USER APPROVAL, same for `just boot`)
 just test                # Apply temporarily (reverts on reboot)
-just boot                # Apply on next boot
-just build-system        # Build without switching
-just home-build <h>      # Build a home-manager (class="home") host, e.g. dev-ao
-just home-switch <h>     # Activate it on the host; push to remote: home-switch dev-ao nij@dev.ao
+just build-system        # Build without switching — use this to verify builds
 just diff                # Preview changes vs current system
-just update              # Update flake.lock
 just fmt                 # Format all files (ALWAYS run before finishing)
-just docs                # Generate fireproof.* options reference -> docs/fireproof-options.md
 just check               # Full flake check (slow, use sparingly)
-just repl                # Open nix repl with flake loaded
-just why-depends <pkg>   # Show why a package is in the closure
+just docs                # Regenerate docs/fireproof-options.md
+just secret-edit <path>  # Edit a secret (PATH to the .age file, not a bare name)
+just secret-rekey        # Rekey after adding hosts/secrets (YubiKey)
 ```
 
-**Safety**: Do not run `just switch` or `just boot` without explicit user approval. Use `just test` or `just build-system` to verify builds.
+## Architecture in brief
 
-## Architecture
+A NixOS flake managing 8 hosts (6 NixOS, 1 standalone home-manager, 1
+nix-darwin). Every `.nix` file under `modules/` is a dendritic flake-parts
+leaf (`flake.modules.{nixos,homeManager,darwin}.<name>`), auto-imported into
+**every** host — so each leaf must gate its `config` with
+`lib.mkIf config.fireproof.<feature>.enable` (both halves; `options`/`imports`
+stay outside the mkIf). `fireproof.*` options are declared centrally in
+`modules/base/fireproof.nix`, nest, and cascade (child enables default to
+their parent). A host is a `hosts/<name>/` dir of cards setting toggles via
+`shared.fireproof.<feature>.enable = true`; discovery is automatic. New files
+must be `git add`ed or flake eval ignores them.
 
-This is a NixOS flake-based configuration managing 8 hosts (6 NixOS + 1 standalone home-manager `dev-ao` + 1 nix-darwin `macbook`) with a custom `fireproof.*` options namespace.
+## Read before touching
 
-### Structure
+- `docs/modules.md` — creating/editing leaves under `modules/`: gating rules,
+  option cascade, new toggles, theme/unstable/fpLib, overlays, scripts,
+  agent skills.
+- `docs/hosts.md` — anything under `hosts/`: card shape, classes
+  (nixos/home/darwin), cross-platform app packaging, new-host/bootstrap.
+- `docs/secrets.md` — anything under `secrets/`: rekey stores, secret-write
+  vs secret-edit, YubiKey needs.
+- `docs/homelab.md` — adding a homelab service: containers, shared
+  postgres/mariadb, glance dashboard.
+- `docs/fireproof-options.md` — generated reference of all `fireproof.*`
+  options.
 
-```
-hosts/                    # Per-host configs; <h>/host.nix = toggle+fact card; default.nix = builder + discovery
-lib/                      # Shared helpers (fpLib) + mkHome.nix (standalone home-manager builder)
-modules/                  # Feature leaves; each self-gates on a fireproof.* option (nested + cascading)
-  ├── base/               #   always-on: fireproof.nix + theme.nix (central option decls),
-  │                       #   nix, gc, secrets, hm-secrets
-  ├── system/             #   host/OS leaves: boot, networking, user, ssh, yubikey, wsl, keyd,
-  │                       #   + hardware hygiene (smartd, thermald, zram, journald, btrfs-scrub, battery, networkd)
-  ├── desktop/            #   niri + dms + greetd + desktop apps; nvidia, snapcast, 0xcb-media
-  ├── programs/           #   CLI + GUI programs (claude-code, vscode, zed, firefox, git, fish, …)
-  ├── homelab/            #   server services (arr, jellyfin, nginx, …)
-  └── scripts/            #   writeShellApplication helpers (always-on)
-installer/                # Installer ISO builder — owns nixosConfigurations.bootstrap{,-<host>}
-                          #   (not a host: a self-contained corner, direct nixosSystem build)
-secrets/                  # agenix-encrypted secrets with YubiKey
-                          #   <host>/.rekey = nixos secrets, <host>/.rekey-hm = HM secrets
-skills/                   # OWN agent skills (skills/<name>/SKILL.md), at repo
-                          #   root — NOT under modules/programs/claude-code — so they're
-                          #   publicly installable via `npx skills add nickolaj-jepsen/nixos`.
-                          #   Registered into fireproof.agents.skills by
-                          #   modules/programs/agent-skills.nix; see skills/README.md and
-                          #   "Agent skills" below.
-```
+## Maintaining these files
 
-### Modules are dendritic (`flake.modules`), gated by toggles
-
-Every `.nix` file under `modules/` is a **dendritic flake-parts module** that
-self-declares its outputs (not a bare NixOS module).
-[`import-tree`](https://github.com/vic/import-tree) (at the flake level in
-`flake.nix`) auto-collects **every** such file into
-`flake.modules.{nixos,homeManager}.<name>` — no hand-maintained `imports = [ … ]`.
-
-The host builder (`hosts/default.nix`) imports **every** leaf into **every** host
-(routing nixos halves into the system, homeManager halves into that user's
-home-manager). A leaf applies only when its **toggle** is on, so each feature leaf
-**self-gates** its `config` with `lib.mkIf config.fireproof.<feature>.enable`:
-
-```nix
-# modules/desktop/foo.nix
-{
-  flake.modules.nixos.foo = {config, lib, pkgs, ...}: {
-    config = lib.mkIf config.fireproof.desktop.enable {
-      environment.systemPackages = [pkgs.foo];
-    };
-  };
-  flake.modules.homeManager.foo = {config, lib, ...}: {
-    config = lib.mkIf config.fireproof.desktop.enable { … };   # gate BOTH halves
-  };
-}
-```
-
-The **folder** a leaf lives in is just organization — it has no semantic effect;
-the gate is whatever `fireproof.*` option the leaf's `mkIf` reads. By convention a
-folder clusters leaves that share a gate: `desktop/*` gate `desktop.enable` (or a
-`desktop.<sub>.enable` child), `homelab/*` gate `homelab.enable`, `programs/*` gate
-the relevant capability (`desktop.enable && dev.enable` for the GUI IDEs,
-`dev.<tool>.enable` for CLI dev tools, `desktop.<app>.enable` for desktop apps). The
-always-on leaves — `base/*`, `scripts/*`, and the baseline `programs/*` (git, fish,
-neovim, docker, …) and `system/*` (boot, networking, user, …) — are **ungated**; the
-hardware-hygiene `system/*` leaves gate `hardware.physical`/`hardware.zram`, and
-`system/battery.nix` gates `hardware.battery`.
-
-### Options are nested + cascading
-
-`fireproof.*` options nest and **cascade**: a child enable defaults to its parent,
-so a host sets the parent toggle and only overrides exceptions. `desktop.chromium.enable`
-defaults to `desktop.enable`; `dev.{intellij,clickhouse,
-playwright}.enable` default to `dev.enable`; `hardware.physical` defaults to
-`!wsl.enable`, `hardware.zram` to `hardware.physical`, and `hardware.{battery,wifi,
-dimmableBacklight}` to `hardware.laptop`. Opt-in extras (`desktop.{bambu-studio,
-google-chrome,snapcast,oxcbMedia,lan-mouse}.enable`, `hardware.nvidia.enable`,
-`dev.llm.enable`) default **off** — `dev.llm` breaks the `dev.*` cascade deliberately,
-since serving a 27B model needs a ≥16GB NVIDIA GPU that only desktop has.
-So minilab — a desktop host that skips chromium and the IDEs — sets
-`desktop.enable = true` then overrides `desktop.chromium.enable = false` and
-`dev.{intellij,clickhouse,playwright}.enable = false`. This cascade IS the lightweight
-composition layer (no separate bundle/aspect system). All these options are declared
-centrally in `modules/base/fireproof.nix` (theme in `modules/base/theme.nix`), emitted
-to both module classes.
-
-There are **no per-app GUI toggles** — every GUI app gates on `desktop.enable`
-(plus `dev`/`work` where relevant), so the darwin `macbook` opts into the whole
-roster with one `desktop.enable = true`, just like a Linux desktop. A cross-platform
-app leaf carries a `flake.modules.darwin.<app>` half that adds a `homebrew.casks`
-entry and a `flake.modules.homeManager.<app>` half that installs the nixpkgs build —
-the latter must keep the package off darwin (`fpLib.mkDarwinGuiPackage` for
-`programs.<app>.package`, or `lib.optionals pkgs.stdenv.isLinux [...]` for
-`home.packages`) so the cask is the only binary on the Mac. Home-manager halves
-that **can't** run on macOS (niri, dms, gtk, clipboard, claude-presence, the Wayland
-screenshot script, and Linux-only apps like chromium/ferdium/spotify/zed/pycharm) gate
-additionally on `pkgs.stdenv.isLinux` (ferdium has no Mac cask, so it stays Linux-only). Mac-only apps (karabiner, bitwarden, linear,
-handy, whatcable) ship a `darwin` half only. nixos halves never
-evaluate on darwin, so they need no platform guard.
-
-`claude-desktop` is the cross-platform shape without a nixpkgs build: the cask on
-darwin, and on Linux the official beta `.deb` repackaged in
-`overlays/claude-desktop.nix`, so its home-manager half gates on
-`pkgs.stdenv.isLinux` too.
-
-The module **name** (`flake.modules.<class>.<name>`) must be **globally unique** —
-it is one flat namespace, so a duplicate silently deep-merges (e.g.
-`modules/dev/postgres.nix` is named `postgres-cli` to avoid colliding with
-`modules/homelab/postgres.nix`'s `postgres`).
-
-Gotchas:
-
-- **`lib.mkIf` gates `config` ONLY.** Never put `imports` or `options` inside the
-  `mkIf` — they must stay at the top level (siblings of `config`). A leaf that
-  `imports` a third-party module (e.g. `modules/desktop/dms/default.nix`,
-  `modules/desktop/0xcb-media.nix`) imports it on **every** host; only its `config`
-  is toggle-gated, so such modules must be inert when their feature is disabled.
-- **`_`-prefixed paths are skipped** by import-tree and by the host collector
-  (helper files, page fragments): `modules/homelab/glance/_home-page.nix`,
-  `modules/homelab/glance/_work-page.nix`.
-- **Per-host files** live in the host's directory (`hosts/<h>/`) and are imported
-  only for that host. Each is a **card** — same shape as `host.nix` — with its
-  NixOS config in a `nixos` bucket (see "Host cards").
-- Shared cross-class options live in `modules/base/fireproof.nix` (theme in
-  `modules/base/theme.nix`).
-
-### Host cards (`fireproof.*`)
-
-A host enables **toggles**, not aspects, via a `hosts/<host>/host.nix` **card**:
-`{ shared = { fireproof.<feature>.enable = true; … }; homeManager = { … }; }`.
-`shared` is a module merged into BOTH the nixos and the home-manager evals (the
-no-bridge fact flow — no osConfig), so a toggle set there is visible to both
-classes; `homeManager` is the host's HM tweaks. The fleet is **discovered** — any
-`hosts/<name>/` directory containing a `host.nix` is a host (`hosts/default.nix`);
-there is no central registry.
-
-**Every** `.nix` file in a host dir is a card of the shape `{ class?; shared?;
-nixos?; homeManager?; darwin?; }` — not just `host.nix`. The collector (`hosts/default.nix`)
-asserts it: a bare NixOS module (a function, or an attrset with any other top-level
-key) throws, pointing you at the `nixos` bucket. That `nixos` bucket is the
-per-host analog of a dendritic leaf's `flake.modules.nixos.<name>`. Buckets are
-merged across all cards in the dir, so config/facts/HM can live in `host.nix` or
-any sibling — e.g. `system.nix` (nixos-only settings), `monitors.nix`
-(`shared.fireproof.monitors`), or a feature co-located with its config (minilab's
-`snapcast.nix` carries both `shared.fireproof.desktop.snapcast.enable = true` and the
-capture config in its `nixos` bucket).
-
-A host's **class** is the one scalar a card may carry: `class = "nixos"` (the
-default), `class = "home"`, or `class = "darwin"`. It is read pre-eval and routes
-the WHOLE host — `nixos` hosts build via `nixpkgs.lib.nixosSystem` into
-`nixosConfigurations.<h>`; `home` hosts via `lib/mkHome.nix` (standalone
-home-manager, no NixOS eval) into `homeConfigurations.<h>`; `darwin` hosts via
-`inputs.nix-darwin.lib.darwinSystem` (+ embedded home-manager, no NixOS eval) into
-`darwinConfigurations.<h>`. `home`/`darwin` hosts assert their `nixos` bucket
-empty; a `darwin` host carries its nix-darwin system config in a `darwin` bucket
-(the 5th card key — homebrew, etc.) and reuses the `homeManager` leaves via
-nix-darwin's embedded HM (where `fireproof.*` is declared — emitted to the darwin
-class too). The routable set lives in `validClasses` (`hosts/default.nix`) — a
-typo throws. `config.flake.hostNames` (the installer's bootstrap fan-out) is the
-**nixos** hosts only. Examples: `hosts/dev-ao/host.nix` is a headless
-home-manager-only host (`class = "home"`); `hosts/macbook/host.nix` is an
-Apple-Silicon nix-darwin host (`class = "darwin"`), activated on the Mac with
-`just darwin-switch` (first-time bootstrap notes in the justfile).
-
-A "fact" is just a `fireproof.*` option value set in a `shared` card — the toggle
-`fireproof.<feature>.enable = true` IS the fact that gates the feature's leaves;
-the module system merges these with real precedence. **Every toggle must be
-declared in both module classes** (it is, in `modules/base/fireproof.nix`, emitted
-to both): a toggle set via `shared` reaches both evals, so a class-only declaration
-would throw on an undeclared option in the other eval. The cascade defaults (see
-"Options are nested + cascading") are the composition layer — a host sets the parent
-toggles and overrides exceptions, rather than listing every leaf.
-
-Shared, cross-class options (`fireproof.{hostname,username,monitors,hardware.*,
-desktop.*,dev.*,…}` plus the feature `*.enable` toggles) are declared once in
-`modules/base/fireproof.nix` (theme palette in `modules/base/theme.nix`), both
-emitted to both module classes.
-
-### Home Manager
-
-Author a feature's home-manager half as `flake.modules.homeManager.<name>`,
-reading `config.fireproof.*` locally (facts are injected). It evaluates both
-embedded (per host, via the NixOS home-manager module) and standalone
-(`lib/mkHome.nix`, `osConfig = null`) — the standalone path is how a
-`class = "home"` host builds. The `dev-ao` home host doubles as the standalone-HM
-guard: `home-check.nix` builds `homeConfigurations.dev-ao.activationPackage` in
-`just check`, so an HM half that starts reading `osConfig` (or a non-shared
-option) fails CI, not just a future deploy. For embedded (nixos) hosts the host
-builder (`hosts/default.nix`) defines `home-manager.users.<user>` (the user read
-from `config.fireproof.username`) and routes **all** homeManager leaves (each
-self-gates via `lib.mkIf`) — plus the host card's `shared` and `homeManager`
-buckets — into its `sharedModules`. There is no `fireproof.home-manager` alias.
-
-### Theme System
-
-Colors in `modules/base/theme.nix` as `config.fireproof.theme.colors.*`:
-
-```nix
-let c = config.fireproof.theme.colors;
-in {
-  background = c.bg;        # Without # prefix
-  border = "#${c.accent}";  # Add # when needed
-}
-```
-
-### Gate every feature leaf with mkIf
-
-A leaf is imported into every host, so it must **gate its own `config`** with
-`lib.mkIf config.fireproof.<feature>.enable` — otherwise it applies everywhere:
-
-```nix
-# modules/desktop/foo.nix → active only where fireproof.desktop.enable is true
-{
-  flake.modules.nixos.foo = {config, lib, pkgs, ...}: {
-    config = lib.mkIf config.fireproof.desktop.enable {
-      environment.systemPackages = [pkgs.foo];
-    };
-  };
-}
-```
-
-Gate **both** halves of a dual-class leaf on the same toggle. Keep `options` and
-`imports` OUTSIDE the `mkIf` (it gates `config` only). The always-on leaves
-(`base/*`, `scripts/*`, and the baseline `programs/*` and `system/*`) are the
-exception — they apply unconditionally, so no gate.
-
-Intra-module conditionals on other `fireproof.*` values (e.g.
-`lib.optional config.fireproof.hardware.battery …`) nest fine inside the feature
-gate — those are parameters.
-
-### Unstable Packages
-
-`pkgs.unstable` is available via an overlay on the `pkgs` set:
-
-```nix
-{pkgs, ...}: {
-  environment.systemPackages = [pkgs.unstable.somePackage];
-}
-```
-
-### Shared Helpers (`lib/`)
-
-`fpLib` is available via `specialArgs` and contains shared utility functions:
-
-```nix
-{fpLib, ...}: {
-  services.nginx.virtualHosts."example.com" = fpLib.mkVirtualHost {
-    port = 8080;
-    websockets = true;  # optional, default false
-    http2 = true;       # optional, default false
-    host = "127.0.0.1"; # optional, default "127.0.0.1"
-  };
-
-  services.postgresql = fpLib.mkPostgresDB {
-    name = "myservice";
-    login = true;              # optional, default false — adds ensureClauses.login
-    authentication = lib.mkAfter "..."; # optional, default null
-  };
-}
-```
-
-## Adding Features
-
-Leaf modules, host files, and overlays are **auto-imported** (see "Modules are
-dendritic") — create the file in the right directory, no `imports` list to edit.
-
-- **New program / feature (leaf)**: Create the file under the relevant folder —
-  `modules/<group>/<name>.nix` (`programs/` for apps, `desktop/` for desktop bits,
-  `system/` for OS/hardware, `homelab/` for services). Declare
-  `flake.modules.nixos.<name>` and/or `flake.modules.homeManager.<name>`, gating each
-  half's `config` with `lib.mkIf config.fireproof.<feature>.enable` (reuse the
-  capability gate, e.g. `desktop.enable`, or a nested child). For a **new** toggle,
-  add a `fireproof.<feature>.enable = lib.mkEnableOption "…";` (or a cascading
-  `lib.mkOption { default = config.fireproof.<parent>.enable; }`) to
-  `modules/base/fireproof.nix` (declared in both classes automatically), and enable
-  it per host via `shared.fireproof.<feature>.enable = true`. For a homelab service
-  also add a dashboard link in `modules/homelab/glance/_home-page.nix`.
-- **Containerized homelab service**: homelab leaves are native NixOS services by
-  default; for Docker-only upstreams use `virtualisation.oci-containers.containers`
-  (backend is `docker`, set fleet-wide in `modules/programs/docker.nix`).
-  `modules/homelab/grimmory.nix` is the reference: container env split into a plain
-  `environment` attr plus an agenix `environmentFiles` secret,
-  `virtualisation.docker.enableOnBoot = true` so it survives reboot, and the port
-  published to `127.0.0.1` behind an nginx vhost.
-- **Shared homelab databases**: two always-on engine leaves mirror each other —
-  `postgres.nix` (`services.postgresql` + `postgresqlBackup`) and `mariadb.nix`
-  (`services.mysql` + `mysqlBackup`), both folding dumps into the restic set. A
-  service declares its own DB against them: postgres consumers use
-  `fpLib.mkPostgresDB` / `services.postgresql.ensure*`; MariaDB consumers append to
-  `services.mysql.ensureDatabases` + `services.mysqlBackup.databases`, and (when the
-  service is a container connecting over TCP) add a `systemd.services.mysql.postStart =
-lib.mkAfter` hook to provision a password user — `ensureUsers` is socket-auth only.
-  `mariadb.nix` binds `0.0.0.0` and opens 3306 on `docker0` so containers reach it via
-  `--add-host=host.docker.internal:host-gateway`; `grimmory.nix` is the consumer
-  example.
-- **New agent skill**: skills for the coding agents (claude-code, copilot, pi) flow
-  through the `fireproof.agents.skills` registry (`attrsOf path`, merged across
-  leaves; the agent leaves consume the merged set). Own skills go in repo-root
-  `skills/<name>/SKILL.md` (auto-registered by `modules/programs/agent-skills.nix`);
-  a third-party skill is registered by its feature leaf, referencing the upstream
-  source instead of vendoring — e.g. `modules/programs/git.nix` registers
-  `fireproof.agents.skills.gh-stack = "${pkgs.unstable.gh-stack.src}/skills/gh-stack"`.
-- **New always-on leaf**: Put it in `base/`, `scripts/`, or as an ungated
-  `programs/`/`system/` leaf and leave it ungated — those apply to every host.
-- **New host**: Run `just new-host <hostname> <username>` — it drops a
-  `hosts/<hostname>/host.nix` card; enable features via
-  `shared.fireproof.<feature>.enable = true` (and add `homeManager` tweaks) to
-  taste. The host is **discovered automatically** (the `host.nix` is the marker);
-  no `hosts/default.nix` edit. Per-host files (`system.nix`,
-  `disk-configuration.nix`, `monitors.nix`, …) go in the host directory as
-  **cards** — NixOS config under a `nixos` bucket. To install
-  on physical hardware,
-  build a host-specific bootstrap ISO with `just bootstrap-iso <hostname>` and
-  flash with `just bootstrap-flash <hostname> /dev/sdX` — the ISO bakes in the
-  host SSH key + a copy of this flake, target boots and runs `bootstrap-install`.
-- **New disko template**: Add `hosts/_templates/disko/<name>.nix` with `device = "@@DISK@@";` as the sentinel. The bootstrap installer offers any template found here when no `disk-configuration.nix` exists yet.
-- **New script**: Use `pkgs.writeShellApplication`, include `set -euo pipefail`
-- **New overlay**: Create `overlays/<name>.nix` (auto-imported), and add update instructions (if needed) in `.github/workflows/update-overlays.md` a [GitHub Agentic Workflows file](https://github.com/github/gh-aw). Then recompile: `gh aw compile update-overlays`
-
-## Secrets
-
-Managed with agenix-rekey + YubiKey. Host keys in `secrets/hosts/<hostname>/id_ed25519.{pub,age}`.
-
-agenix-rekey auto-discovers `darwinConfigurations`, so a Mac rekeys like any nixos
-host. A not-yet-deployed Mac ships the agenix-rekey **dummy** pubkey as its
-`id_ed25519.pub` so the flake still evaluates; first bootstrap on the Mac replaces
-it (`sudo ssh-keygen -A` → real `/etc/ssh/ssh_host_ed25519_key.pub` → `just
-secret-rekey`).
-
-```bash
-just secret-edit secrets/hosts/<host>/<name>.age  # Edit a secret (PATH to the .age file, not a bare name)
-just secret-rekey                                 # Rekey after adding hosts/secrets (touch YubiKey)
-printf 'KEY=value\n' | just secret-write secrets/hosts/<host>/<name>.age  # Write from stdin, no editor
-```
-
-**Which of those need the YubiKey**: only the ones that _decrypt_. Encryption uses
-the recipient pubkeys alone, so `secret-write` can create a **new** secret
-unattended — reach for it when a new service's secret must exist before the flake
-will evaluate. `secret-edit` (prefills the current value) and `secret-rekey` both
-decrypt, so both need a touch; a build fails with "Rekeyed secret not found" until
-`secret-rekey` has run. `secret-write` refuses to overwrite without `force=1`,
-since stdin replaces the file wholesale and the caller can't read what they'd drop.
-
-Two rekey stores per host, because `agenix rekey` deletes any file in a node's
-`localStorageDir` that the node doesn't own — so the nixos and home-manager nodes
-of one host **must not share a dir**:
-
-- **`secrets/hosts/<h>/.rekey/`** — nixos secrets (`modules/base/secrets.nix`):
-  `age.secrets.*` declared in a `flake.modules.nixos.*` half, decrypted by root.
-- **`secrets/hosts/<h>/.rekey-hm/`** — home-manager secrets
-  (`modules/base/hm-secrets.nix`): `age.secrets.*` declared in a
-  `flake.modules.homeManager.*` half, decrypted during HM activation (as the user)
-  via `~/.ssh/id_ed25519`. The `ssh-key` secret stays nixos-side because it _is_
-  that identity (it can't decrypt itself). Both stores use the same `hostPubkey`,
-  so the encrypted blobs are interchangeable.
-
-## Maintaining This File
-
-Update this file (AGENTS.md — CLAUDE.md just `@`-includes it) when making changes relevant to AI agents, such as:
-
-- New just commands or workflows
-- Changes to the module structure or `fireproof.*` options
-- New patterns or conventions
+When making changes relevant to AI agents (new commands, structure, patterns),
+update the matching `docs/` page — or this file only for things every task
+needs. CLAUDE.md just `@`-includes this file.
