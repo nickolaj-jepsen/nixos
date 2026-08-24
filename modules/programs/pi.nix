@@ -32,7 +32,7 @@
           # core
           "npm:@juicesharp/rpiv-ask-user-question"
           "npm:pi-mcp-adapter"
-          "npm:@plannotator/pi-extension"
+          "npm:@juicesharp/rpiv-todo"
           # Kagi search/extract; far cheaper in context than pi-web-access.
           "npm:@mjakl/pi-kagi-api"
           # Claude Code CLI login as model provider — no API key in the flake.
@@ -43,8 +43,6 @@
           "npm:pi-cache-optimizer"
           # ui
           "npm:@juanibiapina/pi-powerbar"
-          "npm:@tmustier/pi-usage-extension"
-          "npm:@juicesharp/rpiv-todo"
           "npm:@ayulab/pi-rewind"
         ];
       };
