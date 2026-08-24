@@ -178,3 +178,24 @@ If the existing PR already contains all the latest updates, or if no files chang
 - **Draft**: `false`
 - **Body**: List each updated package with old and new version/revision
 - **Labels**: `dependencies`, `automated`
+
+### 7. llama.cpp CUDA (`overlays/llama-cpp-cuda.nix`)
+
+This overlay overrides nixpkgs' `llama-cpp` with a newer pinned tag (`b<VERSION>`)
+because nixpkgs lagged behind features Qwen3.8 serving needs (`--reasoning-effort`
+merged in ~b10425). The pin is meant to be temporary:
+
+- **Check nixpkgs first**: read `version` in
+  `https://raw.githubusercontent.com/NixOS/nixpkgs/nixpkgs-unstable/pkgs/by-name/ll/llama-cpp/package.nix`.
+  If it is >= the pinned version, DELETE the `overrideAttrs` call entirely
+  (restore plain `.llama-cpp.override {cudaSupport = true;}`) instead of bumping.
+- **Otherwise bump the pin**: take the latest release tag of `ggml-org/llama.cpp`
+  (tags are `b<NUMBER>`), compute the hash with
+  `nix-prefetch-url --unpack "https://github.com/ggml-org/llama.cpp/archive/<TAG>.tar.gz"`
+  → convert to SRI.
+- **Update fields**: `version` (number without the `b` prefix), `tag`, and `hash`
+  (SRI format)
+- **Note**: the nixpkgs package also builds the webui from `tools/ui` with a pinned
+  `npmDepsHash`. If the build fails on the npm-deps hash, `tools/ui/package-lock.json`
+  changed upstream — skip the bump and note it in the PR instead of chasing the
+  second hash.
