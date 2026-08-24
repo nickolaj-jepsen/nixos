@@ -24,23 +24,22 @@
         skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
-        environment.PI_LENS_NO_CONTEXT_INJECTION.value = "1";
+        # Read at launch, so the key never lands in the Nix store.
+        environment.KAGI_API_KEY.file = config.age.secrets.kagi-api-key.path;
         settings.packages = [
           # extension-settings must load before powerbar (its settings panel).
           "npm:@juanibiapina/pi-extension-settings"
           # core
-          "npm:pi-subagents"
           "npm:@juicesharp/rpiv-ask-user-question"
           "npm:pi-mcp-adapter"
-          "npm:pi-web-access"
           "npm:@plannotator/pi-extension"
+          # Kagi search/extract; far cheaper in context than pi-web-access.
+          "npm:@mjakl/pi-kagi-api"
           # Claude Code CLI login as model provider — no API key in the flake.
           "npm:pi-claude-cli"
           # guardrails
           "npm:@gotgenes/pi-permission-system"
-          # feedback + context diet
-          "npm:pi-lens"
-          "npm:@hypabolic/pi-hypa"
+          # context diet
           "npm:pi-cache-optimizer"
           # ui
           "npm:@juanibiapina/pi-powerbar"
@@ -48,6 +47,15 @@
           "npm:@juicesharp/rpiv-todo"
           "npm:@ayulab/pi-rewind"
         ];
+      };
+
+      # Explicit path: the wrapper single-quotes this, so the default
+      # ${XDG_RUNTIME_DIR} spelling would reach `cat` unexpanded. uid 1000 = the
+      # primary user, same tmpfs dir agenix would have picked itself.
+      age.secrets.kagi-api-key = {
+        rekeyFile = ../../secrets/kagi-api-key.age;
+        path = "/run/user/1000/agenix/kagi-api-key";
+        mode = "0600";
       };
 
       age.secrets.tensorx-api-key = {
