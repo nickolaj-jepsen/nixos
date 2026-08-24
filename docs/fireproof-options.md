@@ -579,6 +579,41 @@ true
 
 
 
+## fireproof\.dev\.llm\.enable
+
+
+
+Whether to enable local LLM serving (llama-swap + CUDA llama\.cpp) and its pi provider\.
+Off by default rather than following dev\.enable: it needs a ≥16GB
+NVIDIA GPU, which macbook and dev-ao don’t have
+\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.dev\.mcp\.enable
 
 
