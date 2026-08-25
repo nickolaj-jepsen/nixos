@@ -21,7 +21,7 @@
 
         # Workbench color overrides using Flexoki palette
         "workbench.colorCustomizations" = {
-          # Base — modernUI derives status bar text and activity bar icons from these
+          # Base — global fallbacks; modernUI derives activity bar icons from these
           "foreground" = "#${c.fg}";
           "descriptionForeground" = "#${c.muted}";
           "icon.foreground" = "#${c.muted}";
@@ -30,17 +30,21 @@
           # modernUI card outline; the fallback is a near-invisible 12% foreground mix
           "agentsPanel.border" = "#${c.ui}";
 
-          # Title bar — modernUI forces the part transparent, so only foregrounds apply
+          # Title bar — activeBackground also paints modernUI's shell backdrop behind the floating parts
+          "titleBar.activeBackground" = "#${c.bgAlt}";
+          "titleBar.inactiveBackground" = "#${c.bgAlt}";
           "titleBar.activeForeground" = "#${c.fg}";
           "titleBar.inactiveForeground" = "#${c.muted}";
 
           # Activity bar — modernUI replaces the active left border with a rounded pill
+          "activityBar.background" = "#${c.bg}";
+          "activityBar.foreground" = "#${c.fg}";
           "activityBar.activeBackground" = "#${c.ui}";
           "activityBarBadge.background" = "#${c.accent}";
           "activityBarBadge.foreground" = "#${c.black}";
 
-          # Sidebar — one step above the backdrop so the card floats
-          "sideBar.background" = "#${c.bgAlt}";
+          # Sidebar — shares the editor surface; the lighter chrome behind it does the framing
+          "sideBar.background" = "#${c.bg}";
           "sideBar.foreground" = "#${c.fg}";
           "sideBarTitle.foreground" = "#${c.fg}";
           "sideBarSectionHeader.background" = "#${c.bgAlt}";
@@ -72,8 +76,13 @@
           "tab.activeBorderTop" = "#${c.accent}";
           "tab.border" = "#${c.bg}";
 
-          # Status bar — modernUI forces the part transparent; only item-level colors survive
-          "statusBarItem.hoverBackground" = "#${c.orangeAlt}";
+          # Status bar — accent field; debugging goes blue because the stock #CC6633 is indistinguishable from accent
+          "statusBar.background" = "#${c.accent}";
+          "statusBar.foreground" = "#${c.black}";
+          "statusBar.noFolderBackground" = "#${c.accent}";
+          "statusBar.debuggingBackground" = "#${c.blue}";
+          "statusBar.debuggingForeground" = "#${c.black}";
+          "statusBarItem.hoverBackground" = "#${c.accentContainer}";
           "statusBarItem.remoteBackground" = "#${c.green}";
           "statusBarItem.remoteForeground" = "#${c.black}";
 
@@ -98,7 +107,7 @@
           "terminal.ansiBrightWhite" = "#${c.whiteAlt}";
 
           # Panel (bottom: terminal, problems, output)
-          "panel.background" = "#${c.bgAlt}";
+          "panel.background" = "#${c.bg}";
           "panel.border" = "#${c.ui}";
           "panelTitle.activeForeground" = "#${c.fg}";
           "panelTitle.activeBorder" = "#${c.accent}";
