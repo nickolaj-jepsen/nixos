@@ -10,19 +10,19 @@
       {
         x86_64-linux = {
           dir = "linux-x64";
-          hash = "sha256-2s6jYMgj3Vj3ENeoHDa76fZ3PfRYkIeqJctmumN8gig=";
+          hash = "sha256-CVCH0/qjr2fXoenQ3GasBWQDlYLkRigraCy8DbREcHM=";
         };
         aarch64-linux = {
           dir = "linux-arm64";
-          hash = "sha256-TYgTS5IT+B9eMetc7noZH5FvVv9m4/s9Eh7sdspigJ4=";
+          hash = "sha256-7H+KUTPP4JQ2s8SD9qQyVxcuhe/w04tBoSJNwkdO+Yg=";
         };
         x86_64-darwin = {
           dir = "darwin-x64";
-          hash = "sha256-mxqn3jGddO4eIglerqwyB6XNp42d8bzMM1AJfgSYWZg=";
+          hash = "sha256-WE3K3nezMur9R5GFFQ9WpWJsDU2VW/l6LuJK7peP+To=";
         };
         aarch64-darwin = {
           dir = "darwin-arm64";
-          hash = "sha256-HR4GBZ0LrHONzMND3rqXzQvw0XV1TsKfg6Ckc6osa0A=";
+          hash = "sha256-n3VNr3hgkCY4EN8K6Xa4mAhQdwfYBly+z2Qpe6AagnA=";
         };
       }
       .${
@@ -31,7 +31,7 @@
   in {
     overlayAttrs = {
       github-copilot-cli = pkgsUnstable.github-copilot-cli.overrideAttrs (finalAttrs: old: {
-        version = "1.0.80";
+        version = "1.0.81";
         src = pkgsUnstable.fetchurl {
           url = "https://github.com/github/copilot-cli/releases/download/v${finalAttrs.version}/github-copilot-${finalAttrs.version}-${plat.dir}.tgz";
           inherit (plat) hash;
