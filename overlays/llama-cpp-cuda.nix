@@ -24,12 +24,12 @@
         };
       in
         (pkgs.llama-cpp.override {cudaSupport = true;}).overrideAttrs (_old: {
-          version = "10675";
+          version = "10679";
           src = pkgs.fetchFromGitHub {
             owner = "ggml-org";
             repo = "llama.cpp";
-            tag = "b10675";
-            hash = "sha256-+BuBjMjmPaRs66edws36GgDwscYhq6kSZiovS/J6RHA=";
+            tag = "b10679";
+            hash = "sha256-nYf/UuDD2eF9LBqnYEbe5LJq3F6W5IutXqtNMMPt5xQ=";
           };
         });
     };
