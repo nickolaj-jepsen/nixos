@@ -4,15 +4,15 @@ _: {
     system,
     ...
   }: let
-    version = "1.37937.3";
+    version = "1.40609.0";
     sources = {
       x86_64-linux = {
         arch = "amd64";
-        hash = "sha256-U1kMVyX7NIcpn5QPW4nVUYKw+u4Uyhvz41utrg9hE18=";
+        hash = "sha256-qW6W/4601Nf/p4Wrp/wj+GhLEqyD7S70Bg8PCfQXepg=";
       };
       aarch64-linux = {
         arch = "arm64";
-        hash = "sha256-ngfBFNRCtkaBJqd4WU421D0DD5fjEYS475gVTQnAuF0=";
+        hash = "sha256-yX4aoM1JQ3BUsWG87R/qLr+uYEU+YW1bc1JKkUZCF3M=";
       };
     };
     plat =
