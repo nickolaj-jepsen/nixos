@@ -78,6 +78,16 @@
           ];
         })
         (makeScript {
+          path = ./tailnet.bash;
+          runtimeInputs = with pkgs; [
+            tailscale
+            jq
+            gawk
+            coreutils
+            libnotify
+          ];
+        })
+        (makeScript {
           path = ./journalctl-select.bash;
           runtimeInputs = with pkgs; [
             fzf

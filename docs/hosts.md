@@ -69,3 +69,19 @@ nixos halves never evaluate on darwin — no guard needed.
 - Disko templates: `hosts/_templates/disko/<name>.nix` with
   `device = "@@DISK@@";` as the sentinel; the installer offers any template
   found there when the host has no `disk-configuration.nix` yet.
+
+## Tailscale
+
+One tailscaled per host, `tailscale switch` between profiles — never two
+tailnets at once (`modules/system/tailscale.nix`, `modules/scripts/tailnet.bash`).
+
+- **Personal tailnet is declarative.** `secrets/tailscale-authkey.age` holds an
+  OAuth client secret (admin console → Settings → OAuth clients, `auth_keys`
+  write scope, tag `tag:fireproof`; the tag needs a `tagOwners` entry in the
+  ACL first). `tailscaled-autoconnect` enrols every NixOS host on first boot as
+  a tagged node (no key expiry). The Mac logs in once via the GUI.
+- **Work tailnet is manual** (work-enabled hosts only): once per host, run
+  `tailscale login` while on the personal profile to add the second profile.
+  `tailnet toggle` (also the DMS bar widget) switches; boot always lands on the
+  personal profile. Work-enabled hosts don't trust `tailscale0` in the firewall,
+  so switching never exposes anything not opened explicitly.

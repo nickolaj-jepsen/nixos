@@ -69,8 +69,9 @@
           "focusedWindow"
         ];
         rightWidgets =
-          [
-            "music"
+          ["music"]
+          ++ lib.optional config.fireproof.work.enable "dankActions:variant_tailnet"
+          ++ [
             "systemTray"
             "cpuUsage"
             "diskUsage"
