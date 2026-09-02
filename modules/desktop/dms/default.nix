@@ -35,7 +35,7 @@
 
         settings = {
           # Must match SettingsData.qml schema version, else a per-start migration runs silently; re-pin after `just update`.
-          configVersion = 15;
+          configVersion = 16;
 
           # Enable blur on DMS's layer-shell surfaces. Blur only shows through
           # translucency, so popupTransparency must be < 1 — the default 1.0 is solid
