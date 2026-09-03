@@ -49,9 +49,22 @@
     rightMonitors = builtins.filter (m: m.position.x > primaryX) secondaryMonitors;
 
     primaryBar =
-      {
+      commonBarSettings
+      // {
         id = "default";
         name = "Primary Bar";
+
+        # Primary sits flush against the screen edge, so it gets a slightly roomier,
+        # rounded treatment; the secondaries keep the flat square defaults above.
+        attachToScreenEdge = true;
+        squareCorners = false;
+        innerPadding = 0;
+        widgetPadding = 12;
+        barInsetPadding = 4;
+        fontScale = 1.05;
+        # Ignored while attachToScreenEdge is set (DMS forces 0); kept for when it isn't.
+        spacing = 2;
+
         screenPreferences = [
           {
             name = primaryMonitor.name or "";
@@ -79,11 +92,11 @@
           ]
           ++ lib.optional config.fireproof.hardware.battery "battery"
           ++ ["notificationButton"];
-      }
-      // commonBarSettings;
+      };
 
     leftSecondaryBar =
-      {
+      commonBarSettings
+      // {
         id = "secondary-left";
         name = "Secondary Bar (Left)";
         screenPreferences =
@@ -97,11 +110,11 @@
         rightWidgets = [
           "workspaceSwitcher"
         ];
-      }
-      // commonBarSettings;
+      };
 
     rightSecondaryBar =
-      {
+      commonBarSettings
+      // {
         id = "secondary-right";
         name = "Secondary Bar (Right)";
         screenPreferences =
@@ -115,8 +128,7 @@
         ];
         centerWidgets = [];
         rightWidgets = [];
-      }
-      // commonBarSettings;
+      };
 
     # Only include secondary bars if they have monitors assigned
     secondaryBars =
@@ -125,9 +137,12 @@
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.dank-material-shell.settings = {
+        launcherStyle = "spotlight";
         launcherLogoMode = "os";
         launcherLogoContrast = 1;
-        launcherLogoSizeOffset = 3;
+
+        # Bar draws its own background; the global drop shadow just muddies the edge.
+        barElevationEnabled = false;
 
         centeringMode = "geometric";
 

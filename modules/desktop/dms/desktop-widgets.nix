@@ -14,7 +14,7 @@
     widgetHeight = 480;
     padding = 16;
     # DMS derives its bar thickness internally (no settable key); hand-tuned to match.
-    barHeight = 34;
+    barHeight = 38;
 
     # Filter null resolutions (schema allows null) — would abort evaluation otherwise.
     positionableMonitors =

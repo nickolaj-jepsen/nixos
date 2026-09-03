@@ -49,6 +49,9 @@
         monoFontFamily = "Hack Nerd Font Mono";
         fontWeight = 400;
         fontScale = 1;
+        textRenderType = 1; # Native (FreeType) — matches the rest of the desktop's hinting
+
+        motionEffect = 2; # Depth: panels scale up as they slide in
       };
     };
   };

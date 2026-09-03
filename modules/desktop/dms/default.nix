@@ -41,7 +41,15 @@
           # translucency, so popupTransparency must be < 1 — the default 1.0 is solid
           # and hides it entirely.
           blurEnabled = true;
-          popupTransparency = 0.65;
+          popupTransparency = 0.46;
+          # DMS outlines every blurred surface by default; the outline fights the
+          # near-black palette, so drop it (blurBorderColor/Opacity are then dead keys).
+          blurBorderEnabled = false;
+
+          clockFormat = "24h";
+          clockDateFormat = "yyyy-MM-dd";
+          firstDayOfWeek = 1; # Monday; -1 means "follow locale"
+          showWeekNumber = true;
 
           loginctlLockIntegration = true;
           fadeToLockEnabled = true;
