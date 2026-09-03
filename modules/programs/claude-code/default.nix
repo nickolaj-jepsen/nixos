@@ -43,6 +43,11 @@
       '';
     };
 
+    # claude-code resolves the checker off PATH by bare name, so it has to be a
+    # real package rather than a store path like the LSP servers below. hunspell
+    # over aspell because only it takes several dictionaries at once (`-d a,b`).
+    spellChecker = pkgs.hunspell.withDicts (d: [d.en_US d.da_DK]);
+
     claudeWorkWrapper = pkgs.writeShellApplication {
       name = "claude-work";
       runtimeInputs = [config.programs.claude-code.finalPackage];
@@ -78,7 +83,7 @@
       workFiles
     ];
 
-    home.packages = lib.optional cfg.work.enable claudeWorkWrapper;
+    home.packages = [spellChecker] ++ lib.optional cfg.work.enable claudeWorkWrapper;
 
     # Shared with copilot (agents.nix) and pi; keep it agent-agnostic.
     programs.claude-code.context = builtins.readFile ../agent-context.md;
@@ -137,6 +142,14 @@
         useAutoModeDuringPlan = true;
         skipAutoPermissionPrompt = true;
         preferredNotifChannel = "terminal_bell";
+        # Underlines misspelled words in the prompt input. Colour is left to the
+        # theme's error colour, like the statusline above. Only ever read from
+        # user settings — a spellcheck block in a repo's .claude/ is ignored.
+        spellcheck = {
+          enabled = true;
+          checker = "hunspell";
+          language = "en_US,da_DK";
+        };
         statusLine = {
           type = "command";
           command = lib.getExe statusLine;
