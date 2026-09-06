@@ -59,10 +59,8 @@ Verify with `/opt/nix-portable/nix-portable nix --version` before computing hash
 
 ## Hash Computation
 
-Two hash formats are used in this repo:
-
-- **Hex format** (no prefix): `"e7e847383c466..."` — used in `claude-code.nix`
-- **SRI format** (`sha256-` prefix): `"sha256-DfDsU/qY..."` — used everywhere else
+Overlay hashes are SRI format (`sha256-` prefix): `"sha256-DfDsU/qY..."`.
+`nix-prefetch-url` returns hex, so convert before writing it into a nix file.
 
 To compute hashes (prefix every command with `/opt/nix-portable/nix-portable`):
 
@@ -76,9 +74,15 @@ Read each overlay file first to determine the current version/revision, then che
 
 ### 1. Claude Code (`overlays/claude-code.nix`)
 
-- **Latest version**: Fetch `https://registry.npmjs.org/@anthropic-ai/claude-code` and read `dist-tags.latest`
-- **New hash**: `nix-prefetch-url "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/<VERSION>/linux-x64/claude"`
-- **Update fields**: `version` (string) and `sha256` (hex format, no prefix)
+The overlay carries no hashes: it feeds upstream's release manifest into the
+nixpkgs package, which derives the download URL, version and per-platform
+checksum from it. Updating means replacing the vendored manifest.
+
+- **Latest version**: fetch `https://downloads.claude.ai/claude-code-releases/latest` (plain text)
+- **Update**: overwrite `overlays/claude-code-manifest.zst.json` with
+  `https://downloads.claude.ai/claude-code-releases/<VERSION>/manifest.zst.json`
+- **Do not edit** `overlays/claude-code.nix` — no `version` or hash lives there
+- Report the old → new version from the manifest's `version` field
 
 ### 2. BambuStudio (`overlays/bambu-studio.nix`)
 
