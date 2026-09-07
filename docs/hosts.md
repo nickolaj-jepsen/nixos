@@ -73,7 +73,7 @@ nixos halves never evaluate on darwin — no guard needed.
 ## Tailscale
 
 One tailscaled per host, `tailscale switch` between profiles — never two
-tailnets at once (`modules/system/tailscale.nix`, `modules/scripts/tailnet.bash`).
+tailnets at once (`modules/system/tailscale.nix`).
 
 - **Personal tailnet is declarative.** `secrets/tailscale-authkey.age` holds an
   OAuth client secret (admin console → Settings → OAuth clients, `auth_keys`
@@ -82,6 +82,6 @@ tailnets at once (`modules/system/tailscale.nix`, `modules/scripts/tailnet.bash`
   a tagged node (no key expiry). The Mac logs in once via the GUI.
 - **Work tailnet is manual** (work-enabled hosts only): once per host, run
   `tailscale login` while on the personal profile to add the second profile.
-  `tailnet toggle` (also the DMS bar widget) switches; boot always lands on the
-  personal profile. Work-enabled hosts don't trust `tailscale0` in the firewall,
-  so switching never exposes anything not opened explicitly.
+  `tailscale switch` swaps between them; boot always lands on the personal
+  profile. Work-enabled hosts don't trust `tailscale0` in the firewall, so
+  switching never exposes anything not opened explicitly.

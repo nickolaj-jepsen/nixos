@@ -19,7 +19,7 @@
         extraSetFlags = ["--operator=${config.fireproof.username}"];
       };
 
-      # Work hosts also carry a work-tailnet profile (`tailnet toggle`); trusting the
+      # Work hosts also carry a work-tailnet profile (`tailscale switch`); trusting the
       # interface there would open every port to work peers while that profile is active.
       networking.firewall.trustedInterfaces = lib.mkIf (!config.fireproof.work.enable) ["tailscale0"];
 
