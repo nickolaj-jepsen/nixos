@@ -1405,6 +1405,55 @@ true
 
 
 
+## fireproof\.tailscale\.enable
+
+
+
+Run tailscaled and join the personal tailnet\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.tailscale\.autoLogin
+
+
+
+Enrol declaratively with the OAuth auth key\. Off means ` tailscale up `
+by hand — for machines that shouldn’t silently join the tailnet\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.theme\.colors\.accent
 
 

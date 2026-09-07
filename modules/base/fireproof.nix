@@ -149,6 +149,22 @@ let
       networkd.enable = lib.mkEnableOption "systemd-networkd wired networking";
       wsl.enable = lib.mkEnableOption "WSL configuration";
 
+      tailscale = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Run tailscaled and join the personal tailnet.";
+        };
+        autoLogin = lib.mkOption {
+          type = lib.types.bool;
+          default = config.fireproof.tailscale.enable;
+          description = ''
+            Enrol declaratively with the OAuth auth key. Off means `tailscale up`
+            by hand — for machines that shouldn't silently join the tailnet.
+          '';
+        };
+      };
+
       homelab = {
         enable = lib.mkEnableOption "homelab server services (arr, jellyfin, nginx, …)";
         domain = lib.mkOption {

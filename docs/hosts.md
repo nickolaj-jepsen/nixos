@@ -72,16 +72,20 @@ nixos halves never evaluate on darwin — no guard needed.
 
 ## Tailscale
 
-One tailscaled per host, `tailscale switch` between profiles — never two
-tailnets at once (`modules/system/tailscale.nix`).
+One tailnet per host — nothing switches profiles
+(`modules/system/tailscale.nix`, gated on `fireproof.tailscale.enable`; off
+only for desktop-wsl, which rides the Windows client).
 
-- **Personal tailnet is declarative.** `secrets/tailscale-authkey.age` holds an
-  OAuth client secret (admin console → Settings → OAuth clients, `auth_keys`
-  write scope, tag `tag:fireproof`; the tag needs a `tagOwners` entry in the
-  ACL first). `tailscaled-autoconnect` enrols every NixOS host on first boot as
-  a tagged node (no key expiry). The Mac logs in once via the GUI.
-- **Work tailnet is manual** (work-enabled hosts only): once per host, run
-  `tailscale login` while on the personal profile to add the second profile.
-  `tailscale switch` swaps between them; boot always lands on the personal
-  profile. Work-enabled hosts don't trust `tailscale0` in the firewall, so
-  switching never exposes anything not opened explicitly.
+- **Auto-login** (`fireproof.tailscale.autoLogin`, defaults to `enable`):
+  `secrets/tailscale-authkey.age` holds an OAuth client secret (admin console →
+  Settings → OAuth clients, `auth_keys` write scope, tag `tag:fireproof`; the
+  tag needs a `tagOwners` entry in the ACL first). `tailscaled-autoconnect`
+  enrols the host on first boot as a tagged node (no key expiry). These hosts
+  trust `tailscale0` in the firewall.
+- **Manual login** (`autoLogin = false`, the `work` host): tailscaled with no
+  auth key — run `tailscale up` by hand. No secret is decrypted there, and
+  `tailscale0` stays untrusted because the host may be pointed at a tailnet
+  other than the personal one. The Mac is the same by nature: cask plus one
+  GUI login.
+- **The work tailnet is never joined from Linux.** `scw-tailnet` sshuttles into
+  it through the Mac, the only device enrolled there.
