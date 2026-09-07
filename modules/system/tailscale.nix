@@ -17,7 +17,10 @@
         # The key is an OAuth client secret (never expires) — it must tag the node,
         # and tagged nodes have no key expiry, so enrolment is set-and-forget.
         authKeyFile = lib.mkIf cfg.autoLogin config.age.secrets.tailscale-authkey.path;
-        extraUpFlags = lib.mkIf cfg.autoLogin ["--advertise-tags=tag:fireproof"];
+        # --reset because `tailscale up` refuses to run while a non-default pref it
+        # doesn't mention is set, and the --operator above is exactly that (it lands
+        # in prefs via `tailscale set`, which re-runs after autoconnect anyway).
+        extraUpFlags = lib.mkIf cfg.autoLogin ["--reset" "--advertise-tags=tag:fireproof"];
       };
 
       # Manual-login hosts may be pointed at a tailnet other than the personal
