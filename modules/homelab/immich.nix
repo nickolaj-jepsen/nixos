@@ -2,6 +2,7 @@
   flake.modules.nixos.immich = {
     config,
     lib,
+    pkgs,
     ...
   }: let
     domain = "immich.${config.fireproof.homelab.domain}";
@@ -31,6 +32,7 @@
 
       services.immich = {
         enable = true;
+        package = pkgs.unstable.immich;
         host = "127.0.0.1";
         inherit port;
         machine-learning.enable = true;
