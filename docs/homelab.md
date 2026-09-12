@@ -49,6 +49,35 @@ mass rename drops watched state. To rename the whole library later, back up
 Jellyfin's data dir, run "Rename Files" per series/movie, and accept the lost
 watched history (or migrate it first with a plugin keyed on provider ids).
 
+## Subtitles (Bazarr)
+
+Bazarr (`modules/homelab/arr.nix`) fetches external SRTs for everything Sonarr
+and Radarr import. The NixOS module has no settings option; everything below
+lives in `/var/lib/bazarr/config/config.yaml` (restic-backed) and was set via
+the API on 2026-09-13. Re-apply by hand if the data dir is ever rebuilt.
+
+- Language profile `Default`: Danish + English, no cutoff, HI allowed as
+  fallback, applied to all series and movies. Danish is unavailable for most
+  older content; the wanted list is expected to stay large.
+- Providers: OpenSubtitles.com (free tier, 20 downloads/day — delivers ~99%),
+  subf2m (needs a browser user-agent string or it self-throttles),
+  gestdown, supersubtitles, yify, animetosho, embedded. SubDL/Subsource need
+  accounts and are off; Podnapisi no longer exists in 1.6.
+- Embedded subs count as present except PGS/VobSub (image subs force a
+  transcode in Jellyfin, so a text SRT is fetched instead). Deep audio-track
+  analysis is on.
+- Auto-sync (ffsubsync) is on with thresholds 96 (series) / 86 (movies) and
+  "use original language audio track" on. Without the latter ffsubsync picks
+  the first audio stream, which on dubbed releases produces a bogus offset at
+  the 60 s cap. When re-syncing by hand, prefer an embedded text subtitle
+  track as reference (`reference=s:N` in the API) over audio.
+- Upgrades on, 7-day window. Jellyfin integration on (API key from the
+  Jellyfin dashboard, immediate per-item refresh, Shows + Movies libraries).
+- Sonarr/Radarr both import extra files (`srt`) so release-bundled subs are
+  kept.
+
+A pre-resync archive of every SRT lives in `/mnt/data/.subtitle-backup/`.
+
 ## Shared databases
 
 Two always-on engine leaves mirror each other — `postgres.nix`
