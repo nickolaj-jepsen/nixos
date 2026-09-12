@@ -18,6 +18,35 @@ For Docker-only upstreams use `virtualisation.oci-containers.containers`
 - `virtualisation.docker.enableOnBoot = true` so it survives reboot;
 - port published to `127.0.0.1` behind an nginx vhost.
 
+## Arr stack (Sonarr, Radarr, Prowlarr, SABnzbd)
+
+Services live in `modules/homelab/arr.nix`; grab policy (profiles, custom
+formats, quality sizes, naming) is owned by recyclarr in
+`modules/homelab/recyclarr.nix`, synced daily from the TRaSH guides. Never
+edit profiles or custom formats in the arr UI — recyclarr resets unmatched
+scores and deletes custom formats it does not manage. The
+`{sonarr,radarr}-api-key.age` secrets are copies of each app's API key;
+update them if a key is regenerated.
+
+Profiles (assigned per series/movie in the UI):
+
+- Sonarr `WEB-1080p` — default. `WEB-1080p (Keep)` — same with upgrades
+  off, for legacy shows whose sub-1080p files must not be re-downloaded.
+- Sonarr `WEB-2160p` — 4K HDR opt-in. `[Anime] Remux-1080p` — series type
+  must be `anime`.
+- Radarr `HD Bluray + WEB` — default; `UHD Bluray + WEB` — 4K opt-in.
+  Both use language `Original`, set via the API (not a recyclarr field).
+
+Not declarative, set once via the API: recycle bins at
+`/mnt/data/.recycle/<app>`, SAB remove-completed, notifications (Jellyfin
+needs an API key from its dashboard), profile assignment. qBittorrent is
+deliberately not attached to any arr (no torrent indexers).
+
+Naming formats apply to new imports only: Jellyfin keys items by path, so a
+mass rename drops watched state. To rename the whole library later, back up
+Jellyfin's data dir, run "Rename Files" per series/movie, and accept the lost
+watched history (or migrate it first with a plugin keyed on provider ids).
+
 ## Shared databases
 
 Two always-on engine leaves mirror each other — `postgres.nix`
