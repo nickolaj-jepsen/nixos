@@ -35,7 +35,9 @@ Profiles (assigned per series/movie in the UI):
 - Sonarr `WEB-2160p` — 4K HDR opt-in. `[Anime] Remux-1080p` — series type
   must be `anime`.
 - Radarr `HD Bluray + WEB` — default; `UHD Bluray + WEB` — 4K opt-in.
-  Both use language `Original`, set via the API (not a recyclarr field).
+  `HD Remux (Keep)` / `UHD Remux (Keep)` — upgrades off, for existing remuxes
+  the main profiles would replace with encodes. All use language `Original`,
+  set via the API (not a recyclarr field).
 
 Not declarative, set once via the API: recycle bins at
 `/mnt/data/.recycle/<app>`, SAB remove-completed, notifications (Jellyfin

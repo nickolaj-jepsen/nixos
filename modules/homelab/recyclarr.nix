@@ -179,15 +179,20 @@
     # ---- Radarr -----------------------------------------------------------
     radarrHd = "HD Bluray + WEB";
     radarrUhd = "UHD Bluray + WEB";
-    radarrBoth = [radarrHd radarrUhd];
+    # "(Keep)" = upgrades off, for remuxes the main profiles would otherwise replace with encodes.
+    radarrHdKeep = "HD Remux (Keep)";
+    radarrUhdKeep = "UHD Remux (Keep)";
+    radarrHdAll = [radarrHd radarrHdKeep];
+    radarrUhdAll = [radarrUhd radarrUhdKeep];
+    radarrBoth = radarrHdAll ++ radarrUhdAll;
 
     # Profile language (Original) is not a recyclarr field: set via the API, recyclarr leaves it alone.
-    mkRadarrProfile = name: cutoff: qualities: {
+    mkRadarrProfile = name: upgrades: cutoff: qualities: {
       inherit name qualities;
       reset_unmatched_scores.enabled = true;
       min_format_score = 0;
       upgrade = {
-        allowed = true;
+        allowed = upgrades;
         until_quality = cutoff;
         until_score = 10000;
       };
@@ -219,7 +224,7 @@
           "c20c8647f2746a1f4c4262b0fbbeeeae"
           "5608c71bcebba0a5e666223bae8c9227"
         ];
-        assign_scores_to = assignTo [radarrHd];
+        assign_scores_to = assignTo radarrHdAll;
       }
       {
         # UHD Bluray release-group tiers 01-03
@@ -228,7 +233,7 @@
           "a58f517a70193f8e578056642178419d"
           "e71939fae578037e7aed3ee219bbe7c1"
         ];
-        assign_scores_to = assignTo [radarrUhd];
+        assign_scores_to = assignTo radarrUhdAll;
       }
       {
         # Streaming services (general)
@@ -297,7 +302,7 @@
           "923b6abef9b17f937fab56cfcf89e1f1" # DV (w/o HDR fallback)
           "9c38ebb7384dada637be8899efa68e6f" # SDR
         ];
-        assign_scores_to = assignTo [radarrUhd];
+        assign_scores_to = assignTo radarrUhdAll;
       }
       {
         # Audio formats (guide scores these for UHD only)
@@ -317,7 +322,7 @@
           "240770601cc226190c367ef59aba7463" # AAC
           "c2998bd0d90ed5621d8df281e839436e" # DD
         ];
-        assign_scores_to = assignTo [radarrUhd];
+        assign_scores_to = assignTo radarrUhdAll;
       }
     ];
   in {
@@ -417,7 +422,7 @@
               };
             };
             quality_profiles = [
-              (mkRadarrProfile radarrHd "Bluray-1080p" [
+              (mkRadarrProfile radarrHd true "Bluray-1080p" [
                 {name = "Bluray-1080p";}
                 {
                   name = "WEB 1080p";
@@ -425,7 +430,24 @@
                 }
                 {name = "Bluray-720p";}
               ])
-              (mkRadarrProfile radarrUhd "Bluray-2160p" [
+              (mkRadarrProfile radarrHdKeep false "Remux-1080p" [
+                {name = "Remux-1080p";}
+                {name = "Bluray-1080p";}
+                {
+                  name = "WEB 1080p";
+                  qualities = ["WEBDL-1080p" "WEBRip-1080p"];
+                }
+                {name = "Bluray-720p";}
+              ])
+              (mkRadarrProfile radarrUhd true "Bluray-2160p" [
+                {name = "Bluray-2160p";}
+                {
+                  name = "WEB 2160p";
+                  qualities = ["WEBDL-2160p" "WEBRip-2160p"];
+                }
+              ])
+              (mkRadarrProfile radarrUhdKeep false "Remux-2160p" [
+                {name = "Remux-2160p";}
                 {name = "Bluray-2160p";}
                 {
                   name = "WEB 2160p";
