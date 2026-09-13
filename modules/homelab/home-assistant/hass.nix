@@ -81,6 +81,7 @@
         customComponents = [
           pkgs.unstable.home-assistant-custom-components.adaptive_lighting
           (import ./_zwift.nix {inherit pkgs;})
+          (import ./_bambu.nix {inherit pkgs;})
         ];
         # Config-flow integrations (set up in the UI) still need their deps built in.
         # Only these: the module already adds every top-level `config` key below, plus its
@@ -91,9 +92,12 @@
           "unifi"
           "google"
           "spotify"
+          "jellyfin"
           "sleep_as_android"
           "met"
           "mcp_server"
+          # ha-bambulab depends on ffmpeg; nixpkgs patches in the absolute binary path.
+          "ffmpeg"
         ];
         lovelaceConfig = import ./_dashboard.nix {inherit lib dev;};
         config = {
@@ -138,7 +142,8 @@
             exclude.entity_globs = ["sensor.*_linkquality" "sensor.*_last_seen"];
             # These two embed raw LQI values in their attributes, so excluding the
             # linkquality sensors alone would not stop the per-report state rows.
-            exclude.entities = ["sensor.zigbee_weak_links" "sensor.zigbee_health_report"];
+            # zigbee2mqtt_health updates every 10 min with per-device counters; only the current value matters.
+            exclude.entities = ["sensor.zigbee_weak_links" "sensor.zigbee_health_report" dev.z2m.health];
           };
 
           input_boolean = {
@@ -158,7 +163,47 @@
               name = "Entrance switched manually";
               icon = "mdi:hand-back-right";
             };
+            zwift_ride = {
+              name = "Zwift ride";
+              icon = "mdi:bike";
+            };
+            watching_manual = {
+              name = "Living room switched during playback";
+              icon = "mdi:hand-back-right";
+            };
+            mqtt_triggers_armed = {
+              name = "MQTT triggers armed";
+              icon = "mdi:antenna";
+            };
+            away_simulation = {
+              name = "Away simulation";
+              icon = "mdi:home-clock";
+            };
           };
+
+          # province is a case-insensitive regex on the alert's area name; tighten the alternation
+          # once a real warning shows DMI's exact name for the Aarhus area.
+          binary_sensor = [
+            {
+              platform = "meteoalarm";
+              country = "denmark";
+              province = "Østjylland|East Jutland|Midtjylland";
+              language = "da-DK";
+            }
+          ];
+
+          mqtt.sensor = [
+            {
+              name = "Zigbee2MQTT health";
+              unique_id = "zigbee2mqtt_health";
+              state_topic = "zigbee2mqtt/bridge/health";
+              value_template = "{{ value_json.mqtt.queued }}";
+              unit_of_measurement = "msgs";
+              icon = "mdi:heart-pulse";
+              json_attributes_topic = "zigbee2mqtt/bridge/health";
+              json_attributes_template = "{{ {'response_time': value_json.response_time, 'process': value_json.process, 'os': value_json.os, 'mqtt': value_json.mqtt, 'devices': value_json.devices} | tojson }}";
+            }
+          ];
 
           # The arr Discord channel.
           rest_command.discord = {

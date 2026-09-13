@@ -229,7 +229,13 @@
               timeout = 1500;
             };
           };
+          # bridge/health feeds the Zigbee2MQTT health sensor.
+          health.interval = 10;
           advanced = {
+            # Internet-facing frontend; no user-provided converters or extensions are needed.
+            enable_external_js = false;
+            # Coordinator's outgoing side only; weak uplinks need dongle placement.
+            transmit_power = 20;
             # Network identity: changing any of these re-pairs every device. The old
             # plaintext key is still in git history.
             network_key = "!${z2mSecret} network_key";
