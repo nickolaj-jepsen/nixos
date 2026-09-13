@@ -146,4 +146,63 @@
 
   # zwift_hass 4.x names entities "Zwift <profile name> <sensor>"; verify on the device page after the config flow.
   zwiftOnline = "sensor.zwift_nickolaj_jepsen_online";
+  zwift = {
+    online = zwiftOnline;
+    powerZone = "sensor.zwift_nickolaj_jepsen_power_zone";
+    power = "sensor.zwift_nickolaj_jepsen_power";
+    heartRate = "sensor.zwift_nickolaj_jepsen_heart_rate";
+    cadence = "sensor.zwift_nickolaj_jepsen_cadence";
+    speed = "sensor.zwift_nickolaj_jepsen_speed";
+    # Polled against an unofficial API: 15 s while riding, 120 s otherwise.
+    updateInterval = "number.zwift_nickolaj_jepsen_update_interval";
+  };
+
+  # Config-flow integrations: ids derive from device names in the UI; verify on the device page, correct here only.
+  person = "person.nickolaj_jepsen";
+  phoneNotify = "notify.pixel_8_pro"; # message/title only
+  # The entity service takes no `data`; channels and actions need the legacy action.
+  phoneNotifyAction = "notify.mobile_app_pixel_8_pro";
+  phoneNextAlarm = "sensor.pixel_8_pro_next_alarm"; # enabled under Manage sensors in the app
+  phoneWifiTracker = "device_tracker.pixel_8_pro_wifi";
+  pcTracker = "device_tracker.nickolaj"; # DESKTOP-I059SU2 by cable (UniFi); the sim PC, not a person
+  spotify = "media_player.spotify_nickolaj_jepsen";
+  # Jellyfin names the player after the session's DeviceName; the Shield's is expected to slug to this.
+  jellyfinShield = "media_player.shield_android_tv";
+  weather = "weather.forecast_home";
+  meteoalarm = "binary_sensor.meteoalarm";
+  saa = {
+    alarmEvent = "event.sleep_as_android_alarm_clock";
+    nextAlarm = "sensor.sleep_as_android_next_alarm";
+    alarmLabel = "sensor.sleep_as_android_alarm_label";
+  };
+  # ha-bambulab names entities after the printer name from the flow ("3DP-039-008" -> 3dp_039_008).
+  printer = {
+    name = "3DP-039-008";
+    status = "sensor.3dp_039_008_print_status"; # idle | prepare | running | pause | finish | failed | offline
+    progress = "sensor.3dp_039_008_print_progress";
+    remainingTime = "sensor.3dp_039_008_remaining_time";
+    currentStage = "sensor.3dp_039_008_current_stage";
+    endTime = "sensor.3dp_039_008_end_time";
+    taskName = "sensor.3dp_039_008_task_name";
+  };
+  z2m = {
+    bridgeState = "binary_sensor.zigbee2mqtt_bridge_connection_state";
+    permitJoin = "switch.zigbee2mqtt_bridge_permit_join";
+    restart = "button.zigbee2mqtt_bridge_restart";
+    health = "sensor.zigbee2mqtt_health"; # mqtt sensor declared in hass.nix from bridge/health
+  };
+  unifi = {
+    firmware = "update.dream_machine_firmware";
+    restart = "button.dream_machine_restart";
+  };
+  helpers = {
+    sleepMode = "input_boolean.sleep_mode";
+    guestMode = "input_boolean.guest_mode";
+    stairsManual = "input_boolean.stairs_manual";
+    entranceManual = "input_boolean.entrance_manual";
+    zwiftRide = "input_boolean.zwift_ride"; # set by ride mode; the fan-off path only acts while it is on
+    watchingManual = "input_boolean.watching_manual"; # a Kitchen switch press during playback owns the room for the session
+    mqttTriggersArmed = "input_boolean.mqtt_triggers_armed"; # cleared at start, set after a successful reload
+    awaySimulation = "input_boolean.away_simulation"; # on after 24 h away; dashboard + the evening pattern
+  };
 }
