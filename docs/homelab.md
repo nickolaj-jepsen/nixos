@@ -92,8 +92,10 @@ in `hass.yaml.age`) and the dashboard. The UI owns only config-flow
 integrations (MQTT, mobile app, UniFi, Google, Spotify, Sleep as Android,
 MCP server, Zwift), the registries/areas and Assist exposure. Persistent state used by automations
 lives in `input_boolean.{sleep_mode,guest_mode,stairs_manual,entrance_manual}`.
-HA's `http` settings (trusted proxies, login-attempt ban) live in
-`.storage/http`, managed in Settings > System > Network.
+HA's `http` settings (trusted proxies, login-attempt ban at 5) live in
+`.storage/http`, managed in Settings > System > Network; the module still
+renders
+an `http:` block, so ignore the "YAML still present" repair once.
 
 - Zigbee2MQTT friendly names are load-bearing: HA entity ids, the Nix group
   definitions and the switch automations (`zigbee2mqtt/<name>/action`) all

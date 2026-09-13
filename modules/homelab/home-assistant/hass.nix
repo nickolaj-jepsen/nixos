@@ -13,8 +13,13 @@
     automations = import ./_automations.nix {inherit lib dev;};
 
     batteryTable = lib.concatStringsSep ", " (lib.mapAttrsToList (n: d: "'${dev.battery n}': [${toString d.threshold}, '${n}', '${d.cells}']") dev.batteryDevices);
-    watchList = lib.concatStringsSep ", " (map (e: "'${e}'") automations.zigbeeWatch);
+    jinjaList = xs: "[${lib.concatStringsSep ", " (map (e: "'${e}'") xs)}]";
+    watchList = jinjaList automations.zigbeeWatch;
+    updateList = jinjaList dev.updateEntities;
 
+    # detect_non_ha_changes: lights are turned on via Zigbee2MQTT groups, which AL
+    # cannot intercept; without it AL marks those bulbs manual and never adapts them.
+    # MQTT lights do not poll, so it costs nothing.
     adaptiveProfile = room: extra:
       {
         name = room;
@@ -24,7 +29,7 @@
         initial_transition = 1;
         skip_redundant_commands = true;
         take_over_control = true;
-        detect_non_ha_changes = false;
+        detect_non_ha_changes = true;
         separate_turn_on_commands = false;
         min_color_temp = 2200;
         max_color_temp = 4000;
@@ -42,10 +47,7 @@
         group = "hass";
       };
 
-      services.restic.backups.homelab = {
-        paths = [configDir];
-        exclude = ["${configDir}/home-assistant_v2.db-wal" "${configDir}/home-assistant_v2.db-shm"];
-      };
+      services.restic.backups.homelab.paths = [configDir];
 
       services.nginx.virtualHosts."ha.${cfg.domain}" = fpLib.mkVirtualHost {
         port = homeAssistantPort;
@@ -84,6 +86,14 @@
         ];
         lovelaceConfig = import ./_dashboard.nix {inherit lib dev;};
         config = {
+          # lovelaceConfig alone registers an "Overview" panel; set it as default per user once.
+          lovelace.dashboards.nixos-lovelace = {
+            mode = "yaml";
+            filename = "ui-lovelace.yaml";
+            title = "Home";
+            icon = "mdi:home";
+            show_in_sidebar = true;
+          };
           homeassistant = {
             name = "Home";
             latitude = "!secret latitude";
@@ -188,10 +198,10 @@
                   name = "Zigbee unavailable";
                   unique_id = "zigbee_unavailable";
                   icon = "mdi:lan-disconnect";
-                  state = "{{ [${watchList}] | select('is_state', 'unavailable') | list | count }}";
+                  state = "{{ ${watchList} | select('is_state', 'unavailable') | list | count }}";
                   attributes.items = ''
                     {% set ns = namespace(out=[]) %}
-                    {% for e in [${watchList}] %}
+                    {% for e in ${watchList} %}
                       {% if states(e) == 'unavailable' %}
                         {% set ns.out = ns.out + [state_attr(e, 'friendly_name') or e] %}
                       {% endif %}
@@ -203,8 +213,8 @@
                   name = "Zigbee updates";
                   unique_id = "zigbee_updates";
                   icon = "mdi:update";
-                  state = "{{ states.update | selectattr('state','eq','on') | list | count }}";
-                  attributes.items = "{{ states.update | selectattr('state','eq','on') | map(attribute='name') | list }}";
+                  state = "{{ ${updateList} | select('is_state', 'on') | list | count }}";
+                  attributes.items = "{{ ${updateList} | select('is_state', 'on') | map('state_attr', 'friendly_name') | list }}";
                 }
                 {
                   name = "Zigbee health report";

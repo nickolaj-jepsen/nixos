@@ -105,6 +105,7 @@
     offTarget,
   }: [
     {
+      # Gated on the room being off: a re-trigger would overwrite a manual level.
       id = "motion_${room}_on";
       alias = "Motion: ${room} on";
       mode = "single";
@@ -115,7 +116,7 @@
           to = "on";
         }
       ];
-      conditions = [(dark sensor.dark)];
+      conditions = [(dark sensor.dark) (isOff offTarget)];
       actions = onActions;
     }
     {
@@ -219,7 +220,8 @@ in {
     ++ (motion {
       room = "stairs";
       sensor = dev.sensors."Stairs - Movement sensor";
-      onActions = [(turnOn (group "stairs") {})]; # Adaptive Lighting sets level and colour
+      # Explicit level avoids a flash at the last level before Adaptive Lighting adapts.
+      onActions = [(turnOn (group "stairs") {brightness_pct = nightLevel;})];
       offTarget = group "stairs";
     })
     ++ (motion {
@@ -266,15 +268,24 @@ in {
             to = "home";
           }
           {
+            # The door opens before GPS notices; counts only while away or just arrived.
             trigger = "state";
             entity_id = dev.sensors."Entrance - Door".contact;
             to = "on";
           }
         ];
-        conditions = [sunDown (isOff (group "entrance"))];
+        conditions = [
+          sunDown
+          (isOff (group "entrance"))
+          (isOff sleepMode)
+          {
+            condition = "template";
+            value_template = "{{ is_state('${person}', 'not_home') or (now() - states['${person}'].last_changed).total_seconds() < 600 }}";
+          }
+        ];
         actions = [
           (turnOn (group "entrance") {brightness_pct = nightLevel;})
-          (turnOn (group "stairs") {})
+          (turnOn (group "stairs") {brightness_pct = nightLevel;})
         ];
       }
       # ---- door ------------------------------------------------------------------
@@ -331,6 +342,7 @@ in {
         ];
       }
       {
+        # Daily reset of every latch (sleep mode, motion overrides, alarm-ramp manual flag).
         id = "sleep_mode_safety";
         alias = "Sleep mode: off by mid-morning";
         triggers = [
@@ -339,7 +351,19 @@ in {
             at = "10:00:00";
           }
         ];
-        actions = [(setBool sleepMode false)];
+        actions = [
+          (setBool sleepMode false)
+          (setBool (manual "stairs") false)
+          (setBool (manual "entrance") false)
+          {
+            action = "adaptive_lighting.set_manual_control";
+            data = {
+              entity_id = alSwitch "bedroom";
+              lights = [bedroomCeiling];
+              manual_control = false;
+            };
+          }
+        ];
       }
       # ---- alarm (Sleep as Android, core webhook integration) --------------------
       {
@@ -439,7 +463,7 @@ in {
         triggers = [
           {
             trigger = "state";
-            entity_id = "sensor.zwift_online_7364818";
+            entity_id = dev.zwiftOnline;
             to = "True";
           }
         ];
@@ -463,7 +487,8 @@ in {
         triggers = [
           {
             trigger = "state";
-            entity_id = "sensor.zwift_online_7364818";
+            entity_id = dev.zwiftOnline;
+            from = "True";
             to = "False";
             for = "00:10:00";
           }
@@ -536,24 +561,23 @@ in {
         actions = [(discord "📡 Monthly Zigbee report\n{{ state_attr('sensor.zigbee_health_report','report') }}\nBatteries: {{ (state_attr('sensor.zigbee_low_batteries','all') or []) | join(', ') }}")];
       }
       {
+        # One message per change of the set, not per entity: a broker outage flips everything at once.
         id = "zigbee_device_unavailable";
         alias = "Zigbee: device unavailable";
-        mode = "queued";
         triggers = [
           {
             trigger = "state";
-            entity_id = dev.routerEntities;
-            to = "unavailable";
-            for = "02:00:00";
-          }
-          {
-            trigger = "state";
-            entity_id = dev.batteryEntities;
-            to = "unavailable";
-            for = "01:00:00";
+            entity_id = "sensor.zigbee_unavailable";
+            for = "00:30:00";
           }
         ];
-        actions = [(discord "⚠️ {{ trigger.to_state.name }} is unreachable (Zigbee availability timed out). Battery, or switched off?")];
+        conditions = [
+          {
+            condition = "template";
+            value_template = "{{ trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}";
+          }
+        ];
+        actions = [(discord "⚠️ Unreachable Zigbee devices: {{ state_attr('sensor.zigbee_unavailable','items') | join(', ') }}. Battery, or switched off at the wall?")];
       }
     ];
 
@@ -565,10 +589,12 @@ in {
         description = "Level to end at";
         default = 100;
       };
-      sequence = lib.concatMap (l: [
-        (turnOn (light l) {brightness_pct = "{{ brightness_pct }}";})
-        {delay.milliseconds = 250;}
-      ]) dev.rooms.entrance.lights;
+      sequence =
+        lib.concatMap (l: [
+          (turnOn (light l) {brightness_pct = "{{ brightness_pct | default(100) }}";})
+          {delay.milliseconds = 250;}
+        ])
+        dev.rooms.entrance.lights;
     };
     goodnight = {
       alias = "Goodnight";
