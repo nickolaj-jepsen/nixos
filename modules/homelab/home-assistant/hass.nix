@@ -27,12 +27,22 @@
         websockets = true;
       };
 
+      # Ordering after the broker was luck until now (HA only had network-online).
+      # stopIfChanged/RestartSec/start limit: see the same block in mqtt.nix.
+      systemd.services.home-assistant = {
+        after = ["mosquitto.service"];
+        wants = ["mosquitto.service"];
+        stopIfChanged = false;
+        startLimitIntervalSec = 120;
+        startLimitBurst = 5;
+        serviceConfig.RestartSec = "5s";
+      };
+
       services.home-assistant = {
         enable = true;
         package = pkgs.unstable.home-assistant;
         customComponents = with pkgs.unstable.home-assistant-custom-components; [
           adaptive_lighting
-          sleep_as_android_mqtt
           pkgs.homeAssistantCustomComponents.switch_manager
           pkgs.homeAssistantCustomComponents.zwift
         ];
