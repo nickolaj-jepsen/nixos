@@ -91,24 +91,7 @@ checksum from it. Updating means replacing the vendored manifest.
 - **Update fields**: `version`, `ubuntu_version` (extract from asset filename: `BambuStudio_ubuntu-<ubuntu_version>.AppImage`), and `sha256` (SRI format)
 - **Note**: The URL template in the nix file must match the actual asset filename exactly — upstream has changed naming conventions in the past (e.g. `Bambu_Studio_` → `BambuStudio_`). Always verify the asset name from the release before updating.
 
-### 3. Home Assistant Components (`overlays/home-assistant.nix`)
-
-For each component, check the latest GitHub release tag:
-
-**switch_manager** (`Sian-Lee-SA/Home-Assistant-Switch-Manager`):
-
-- **Update fields**: `version` and `hash` (SRI format)
-
-**zwift** (`snicker/zwift_hass`):
-
-- **Update fields**: `version` and `hash` (SRI format)
-
-**zwift-client** (`nickolaj-jepsen/zwift-client`):
-
-- Check latest commit on default branch (not releases)
-- **Update fields**: `rev` and `hash` (SRI format)
-
-### 4. GitHub Agentic Workflows (`overlays/gh-aw.nix`)
+### 3. GitHub Agentic Workflows (`overlays/gh-aw.nix`)
 
 - **Latest version**: Check latest release of `github/gh-aw` on GitHub
 - **New hashes**: each platform ships a distinct binary, so compute one hash per
@@ -119,7 +102,7 @@ For each component, check the latest GitHub release tag:
 - **Update fields**: `version` (in both the attribute and the `url` string) and all
   four `sha256Map` entries (SRI format)
 
-### 5. GitHub Copilot CLI (`overlays/github-copilot-cli.nix`)
+### 4. GitHub Copilot CLI (`overlays/github-copilot-cli.nix`)
 
 - **Latest version**: Check latest release of `github/copilot-cli` on GitHub (the
   tag is `v<VERSION>`; prefer the release endpoint over tags, which also carry
@@ -130,7 +113,7 @@ For each component, check the latest GitHub release tag:
   → convert to SRI
 - **Update fields**: `version` and all four `plat.*.hash` entries (SRI format)
 
-### 6. Claude Desktop (`overlays/claude-desktop.nix`)
+### 5. Claude Desktop (`overlays/claude-desktop.nix`)
 
 Upstream publishes no release feed — the apt repository index is the source of truth.
 
@@ -183,7 +166,7 @@ If the existing PR already contains all the latest updates, or if no files chang
 - **Body**: List each updated package with old and new version/revision
 - **Labels**: `dependencies`, `automated`
 
-### 7. llama.cpp CUDA (`overlays/llama-cpp-cuda.nix`)
+### 6. llama.cpp CUDA (`overlays/llama-cpp-cuda.nix`)
 
 This overlay overrides nixpkgs' `llama-cpp` with a newer pinned tag (`b<VERSION>`)
 because nixpkgs lagged behind features Qwen3.8 serving needs (`--reasoning-effort`
