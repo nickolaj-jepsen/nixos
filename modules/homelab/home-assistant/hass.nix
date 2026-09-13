@@ -38,6 +38,16 @@
         sleep_color_temp = 2200;
       }
       // extra;
+    alExtra = {
+      stairs = {
+        min_brightness = 10;
+        max_brightness = 67;
+      };
+      bedroom = {
+        max_sunrise_time = "07:00:00";
+        max_sunset_time = "20:00:00";
+      };
+    };
   in {
     config = lib.mkIf cfg.enable {
       age.secrets.hassSecrets = {
@@ -270,18 +280,9 @@
             }
           ];
 
-          adaptive_lighting = [
-            (adaptiveProfile "office" {})
-            (adaptiveProfile "stairs" {
-              min_brightness = 10;
-              max_brightness = 67;
-            })
-            (adaptiveProfile "living_room" {})
-            (adaptiveProfile "bedroom" {
-              max_sunrise_time = "07:00:00";
-              max_sunset_time = "20:00:00";
-            })
-          ];
+          # Driven by dev.alRooms, which sleep_mode_sync also targets: a room in one list
+          # and not the other means that whole service call fails and no room syncs.
+          adaptive_lighting = map (r: adaptiveProfile r (alExtra.${r} or {})) dev.alRooms;
 
           inherit (automations) automation;
           inherit (automations) script;

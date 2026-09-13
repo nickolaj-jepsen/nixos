@@ -90,7 +90,8 @@ All logic is YAML rendered from Nix: automations, scripts, Adaptive Lighting,
 template sensors, the `rest_command.discord` notifier (secret `discord_webhook`
 in `hass.yaml.age`) and the dashboard. The UI owns only config-flow
 integrations (MQTT, mobile app, UniFi, Google, Spotify, Sleep as Android,
-MCP server, Zwift), the registries/areas and Assist exposure.
+MCP server, Zwift), the registries (areas, the person's trackers, the enabled
+link-quality sensors, the Adaptive Lighting switch ids) and Assist exposure.
 `zigbee2mqtt-error-report` posts the day's failed-command count to #sys-info
 at 18:15; the target is under 50. Persistent state used by automations lives
 in `input_boolean.{sleep_mode,guest_mode,stairs_manual,entrance_manual}`.

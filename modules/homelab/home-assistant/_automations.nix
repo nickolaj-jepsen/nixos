@@ -15,9 +15,7 @@
   deskLamp = light "Bedroom - Desk lamp";
   bedroomFan = switch dev.outlets.bedroomFan;
   kitchenFan = switch dev.outlets.kitchenFan;
-  alSwitch = room: "switch.adaptive_lighting_${room}";
-  alSleep = room: "switch.adaptive_lighting_sleep_mode_${room}";
-  alRooms = ["office" "stairs" "living_room" "bedroom"];
+  inherit (dev) alSwitch alSleep alRooms;
 
   # Night: sleep mode, or late hours as a fallback when goodnight was never pressed.
   isNight = "is_state('${sleepMode}','on') or now().hour >= 23 or now().hour < 6";

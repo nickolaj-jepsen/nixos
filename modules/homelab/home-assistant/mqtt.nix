@@ -11,45 +11,33 @@
     zigbee2mqttPort = 8180;
     z2mSecret = config.age.secrets."zigbee2mqtt-secret.yaml".path;
 
+    dev = import ./_devices.nix {inherit lib;};
+
     # Group ids/names are settings; membership lives in Z2M's database.db and on the
     # bulbs, reconciled by zigbee2mqtt-groups-sync. One multicast per command, so a
-    # wall-switched member never stalls the radio. Names are load-bearing (see _devices.nix).
-    zigbeeGroups = {
-      "1" = {
-        friendly_name = "Office - Lights";
-        members = ["Office - Ceiling light 1" "Office - Ceiling light 3" "Office - Ceiling light 4"];
-      };
-      "2" = {
-        friendly_name = "Stairs - Lights";
-        members = ["Stairs - Ceiling light 1" "Stairs - Ceiling light 2"];
-      };
-      "3" = {
-        friendly_name = "Entrance - Lights";
-        members = [
-          "Entrance - Ceiling light 1"
-          "Entrance - Ceiling light 2"
-          "Entrance - Ceiling light 3"
-          "Entrance - Ceiling light 4"
-          "Entrance - Ceiling light 5"
-        ];
-      };
-      "4" = {
-        friendly_name = "Bathroom - Lights";
-        members = ["Bathroom - Ceiling light 1" "Bathroom - Ceiling light 2" "Bathroom - Ceiling light 3"];
-      };
-      "5" = {
-        friendly_name = "Bedroom - Lights";
-        members = ["Bedroom - Ceiling light" "Bedroom - Desk lamp"];
-      };
-      "6" = {
-        friendly_name = "Living room - Lights";
-        members = ["Kitchen - Ceiling light" "Kitchen - Sofa light"];
-      };
-      "7" = {
-        friendly_name = "All lights";
-        members = lib.unique (lib.concatMap (g: g.members) (lib.attrValues (lib.removeAttrs zigbeeGroups ["7"])));
-      };
+    # wall-switched member never stalls the radio. Derived from _devices.nix so a bulb
+    # added to a room cannot reach Adaptive Lighting and the dashboard but miss the group.
+    # The ids are live keys in database.db and on the bulbs: pin them, never derive.
+    groupIds = {
+      "1" = "office";
+      "2" = "stairs";
+      "3" = "entrance";
+      "4" = "bathroom";
+      "5" = "bedroom";
+      "6" = "living_room";
     };
+    zigbeeGroups =
+      lib.mapAttrs (_: room: {
+        friendly_name = dev.groups.${room};
+        members = dev.rooms.${room}.lights;
+      })
+      groupIds
+      // {
+        "7" = {
+          friendly_name = dev.groups.all;
+          members = dev.allLights;
+        };
+      };
     desiredGroupsJson = pkgs.writeText "zigbee-groups.json" (builtins.toJSON (
       lib.mapAttrs' (_: g: lib.nameValuePair g.friendly_name g.members) zigbeeGroups
     ));
