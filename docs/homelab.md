@@ -75,6 +75,35 @@ re-applied by hand if the data dir is rebuilt.
 
 Pre-resync archive of every SRT: `/mnt/data/.subtitle-backup/`.
 
+## Home Assistant + Zigbee (`modules/homelab/home-assistant/`)
+
+`hass.nix` (HA package, components, config), `mqtt.nix` (Mosquitto + Zigbee2MQTT
+settings, Zigbee groups, group sync), `health.nix` (readiness check + coordinator
+watchdog, both posting to #sys-info), `_z2m-mqtt.nix` (root-only `z2m-mqtt
+sub|pub` broker client used by the units and for ops).
+
+- Zigbee2MQTT friendly names are load-bearing: HA entity ids, the Nix group
+  definitions and the switch automations (`zigbee2mqtt/<name>/action`) all
+  derive from them. Rename a device only together with every reference.
+- Groups: ids/names are settings in `mqtt.nix`; membership lives in Z2M's
+  `database.db` and is reconciled by `zigbee2mqtt-groups-sync` after each Z2M
+  start and daily. A member that is powered off at the wall joins on the next
+  run after it is back. Target group entities, never HA areas, for multi-bulb
+  actions (one multicast; no per-bulb timeout).
+- Availability is on: a device that stops answering goes `unavailable` in HA.
+  `advanced.last_seen` exposes per-device last-seen sensors (disabled by default).
+- `version` in the Z2M settings must track upstream `CURRENT_VERSION`; Z2M
+  refuses to start on an unsupported value. `log_level` must be one of
+  `error|warning|info|debug`.
+- Secrets in `zigbee2mqtt-secret.yaml.age`: `password` (MQTT), `network_key`
+  (list of 16 ints; rotating it means re-pairing every device), `frontend_token`.
+  The broker listens on loopback only; both users have `readwrite #`.
+- Network identity (`pan_id`, `ext_pan_id`, `channel`, `network_key`) is pinned;
+  `coordinator_backup.json` + `database.db` + `devices.yaml` are what avoid
+  re-pairing. Copy them off-box before touching the dongle or the data dir.
+- Coordinator hangs show as `SRSP - ... after 6000ms` in the journal with the
+  process still up; `zigbee2mqtt-watchdog` restarts the unit on a burst of them.
+
 ## Shared databases
 
 Two always-on engine leaves mirror each other — `postgres.nix`
