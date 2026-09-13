@@ -1,3 +1,10 @@
+# Manual step before `just switch`: the env secret must define every variable
+# the pages reference (Glance refuses to start on a missing one):
+# WEATHER_LOCATION, GITHUB_TOKEN, HA_TOKEN (long-lived token, HA profile →
+# Security), SABNZBD_API_KEY (Config → General), SONARR_API_KEY and
+# RADARR_API_KEY (same values as the recyclarr secrets), JELLYFIN_API_KEY
+# (Dashboard → API Keys), plus the Work page URLs. Edit with
+# `just secret-edit secrets/hosts/homelab/glance-env.age`.
 {
   flake.modules.nixos.glance = {
     config,
@@ -17,13 +24,21 @@
 
     customCss = pkgs.writeText "glance-custom.css" (builtins.readFile ./templates/custom.css);
 
+    dev = import ../home-assistant/_devices.nix {inherit lib;};
     templates = {
       recent-repos = builtins.readFile ./templates/recent-repos.tpl;
       prs-awaiting-review = builtins.readFile ./templates/prs-awaiting-review.tpl;
       my-pull-requests = builtins.readFile ./templates/my-pull-requests.tpl;
+      sabnzbd-queue = builtins.readFile ./templates/sabnzbd-queue.tpl;
+      coming-up = builtins.readFile ./templates/coming-up.tpl;
+      recently-added = builtins.readFile ./templates/recently-added.tpl;
+      home-status = import ./_home-status.nix {
+        inherit lib dev;
+        haUrl = "https://ha.${cfg.domain}";
+      };
     };
 
-    homePage = import ./_home-page.nix {inherit cfg;};
+    homePage = import ./_home-page.nix {inherit cfg templates;};
     workPage = import ./_work-page.nix {inherit templates;};
   in {
     config = lib.mkIf config.fireproof.homelab.enable {

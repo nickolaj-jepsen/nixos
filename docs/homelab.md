@@ -4,8 +4,20 @@ Read this before adding or reworking a service under `modules/homelab/`.
 
 Services are native NixOS services by default, gated on
 `fireproof.homelab.enable` (leaf authoring rules: `docs/modules.md`). Every
-new service gets a dashboard link in `modules/homelab/glance/_home-page.nix`,
-and its vhost via `fpLib.mkVirtualHost`.
+new service gets a monitor entry in one of the groups (Media, Arr, Infra,
+External) at the bottom of `modules/homelab/glance/_home-page.nix`, and its
+vhost via `fpLib.mkVirtualHost`.
+
+## Glance dashboard
+
+`modules/homelab/glance/`: `_home-page.nix` and `_work-page.nix` are the two
+pages, `templates/*.tpl` are Go templates for `custom-api` widgets, and
+`_home-status.nix` renders the Home Assistant widget from the same
+`home-assistant/_devices.nix` inventory the HA dashboard uses, so a room or
+helper rename lands in both. Widgets talk to services on loopback ports and
+read tokens from the `glance-env` secret; the list of required variables is
+at the top of `default.nix`, and Glance refuses to start when one is missing.
+Custom CSS lives in `templates/custom.css`, served by nginx at `/custom.css`.
 
 ## Containerized services
 
