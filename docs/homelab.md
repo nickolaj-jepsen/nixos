@@ -90,12 +90,18 @@ All logic is YAML rendered from Nix: automations, scripts, Adaptive Lighting,
 template sensors, the `rest_command.discord` notifier (secret `discord_webhook`
 in `hass.yaml.age`) and the dashboard. The UI owns only config-flow
 integrations (MQTT, mobile app, UniFi, Google, Spotify, Sleep as Android,
-MCP server, Zwift), the registries/areas and Assist exposure. Persistent state used by automations
-lives in `input_boolean.{sleep_mode,guest_mode,stairs_manual,entrance_manual}`.
-HA's `http` settings (trusted proxies, login-attempt ban at 5) live in
-`.storage/http`, managed in Settings > System > Network; the module still
-renders
-an `http:` block, so ignore the "YAML still present" repair once.
+MCP server, Zwift), the registries/areas and Assist exposure.
+`zigbee2mqtt-error-report` posts the day's failed-command count to #sys-info
+at 18:15; the target is under 50. Persistent state used by automations lives
+in `input_boolean.{sleep_mode,guest_mode,stairs_manual,entrance_manual}`.
+HA migrates the rendered `http:` block into `.storage/http` exactly once and
+ignores YAML afterwards, so the live settings (including the login-attempt ban,
+set to 5) are managed under Settings, System, Network. `use_x_forwarded_for`
+and `trusted_proxies` stay declared in `hass.nix` anyway, because that one-shot
+migration is what seeds a rebuilt data dir: without them every request is
+attributed to nginx on 127.0.0.1 and five failed logins ban the proxy, locking
+everyone out. The module always renders an `http:` block, so ignore the "YAML
+still present" repair.
 
 - Zigbee2MQTT friendly names are load-bearing: HA entity ids, the Nix group
   definitions and the switch automations (`zigbee2mqtt/<name>/action`) all

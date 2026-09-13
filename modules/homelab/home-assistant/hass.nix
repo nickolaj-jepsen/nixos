@@ -16,6 +16,7 @@
     jinjaList = xs: "[${lib.concatStringsSep ", " (map (e: "'${e}'") xs)}]";
     watchList = jinjaList automations.zigbeeWatch;
     updateList = jinjaList dev.updateEntities;
+    linkList = jinjaList dev.linkqualityEntities;
 
     # detect_non_ha_changes: lights are turned on via Zigbee2MQTT groups, which AL
     # cannot intercept; without it AL marks those bulbs manual and never adapts them.
@@ -125,6 +126,9 @@
             purge_keep_days = 30;
             commit_interval = 5;
             exclude.entity_globs = ["sensor.*_linkquality" "sensor.*_last_seen"];
+            # These two embed raw LQI values in their attributes, so excluding the
+            # linkquality sensors alone would not stop the per-report state rows.
+            exclude.entities = ["sensor.zigbee_weak_links" "sensor.zigbee_health_report"];
           };
 
           input_boolean = {
@@ -217,17 +221,49 @@
                   attributes.items = "{{ ${updateList} | select('is_state', 'on') | map('state_attr', 'friendly_name') | list }}";
                 }
                 {
+                  # LQI 0-255; under 30 IKEA remotes start losing presses. The sensors are discovered disabled.
+                  name = "Zigbee weak links";
+                  unique_id = "zigbee_weak_links";
+                  icon = "mdi:signal-cellular-1";
+                  state = ''
+                    {% set ns = namespace(n=0) %}
+                    {% for e in ${linkList} %}
+                      {% set v = states(e) %}
+                      {% if v not in ['unknown','unavailable'] and v | int(255) < 30 %}
+                        {% set ns.n = ns.n + 1 %}
+                      {% endif %}
+                    {% endfor %}
+                    {{ ns.n }}
+                  '';
+                  attributes = {
+                    items = ''
+                      {% set ns = namespace(out=[]) %}
+                      {% for e in ${linkList} %}
+                        {% set v = states(e) %}
+                        {% if v not in ['unknown','unavailable'] and v | int(255) < 30 %}
+                          {% set ns.out = ns.out + [(state_attr(e, 'friendly_name') or e) ~ ' (' ~ v ~ ')'] %}
+                        {% endif %}
+                      {% endfor %}
+                      {{ ns.out }}
+                    '';
+                    # 0 only means "all fine" when this is non-zero (sensors enabled).
+                    reporting = "{{ ${linkList} | reject('is_state', 'unknown') | reject('is_state', 'unavailable') | list | count }}";
+                  };
+                }
+                {
                   name = "Zigbee health report";
                   unique_id = "zigbee_health_report";
                   icon = "mdi:clipboard-pulse";
-                  state = "{{ states('sensor.zigbee_low_batteries') | int(0) + states('sensor.zigbee_unavailable') | int(0) + states('sensor.zigbee_updates') | int(0) }}";
+                  state = "{{ states('sensor.zigbee_low_batteries') | int(0) + states('sensor.zigbee_unavailable') | int(0) + states('sensor.zigbee_updates') | int(0) + states('sensor.zigbee_weak_links') | int(0) }}";
                   attributes.report = ''
                     {% set lb = state_attr('sensor.zigbee_low_batteries','items') or [] %}
                     {% set un = state_attr('sensor.zigbee_unavailable','items') or [] %}
                     {% set up = state_attr('sensor.zigbee_updates','items') or [] %}
+                    {% set wl = state_attr('sensor.zigbee_weak_links','items') or [] %}
                     🔋 Low batteries: {{ lb | join(', ') if lb else 'none' }}
                     📵 Unreachable: {{ un | join(', ') if un else 'none' }}
                     ⬆️ Firmware updates: {{ up | join(', ') if up else 'none' }}
+                    📶 Weak links: {{ wl | join(', ') if wl else 'none' }}
                   '';
                 }
               ];

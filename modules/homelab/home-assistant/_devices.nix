@@ -134,6 +134,9 @@
     ++ map switch (lib.attrValues outlets);
   batteryEntities = lib.mapAttrsToList (n: _: battery n) batteryDevices;
   updateEntities = map update (allLights ++ lib.attrValues outlets ++ lib.attrNames batteryDevices);
+  # Discovered disabled (diagnostic); enabled once in the entity registry.
+  linkquality = n: "sensor.${slug n}_linkquality";
+  linkqualityEntities = map linkquality (allLights ++ lib.attrValues outlets ++ lib.attrNames batteryDevices);
 
   # zwift_hass 4.x names entities "Zwift <profile name> <sensor>"; verify on the device page after the config flow.
   zwiftOnline = "sensor.zwift_nickolaj_jepsen_online";

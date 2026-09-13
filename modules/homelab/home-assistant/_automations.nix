@@ -538,7 +538,7 @@ in {
         conditions = [
           {
             condition = "template";
-            value_template = "{{ states('sensor.zigbee_low_batteries') | int(0) + states('sensor.zigbee_unavailable') | int(0) + states('sensor.zigbee_updates') | int(0) > 0 }}";
+            value_template = "{{ states('sensor.zigbee_health_report') | int(0) > 0 }}";
           }
         ];
         actions = [(discord "{{ state_attr('sensor.zigbee_health_report','report') }}")];

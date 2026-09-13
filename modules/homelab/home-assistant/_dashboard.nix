@@ -105,6 +105,12 @@ in {
                 })
                 dev.batteryDevices;
             }
+            {
+              type = "history-graph";
+              title = "Last 30 days";
+              hours_to_show = 720;
+              entities = map (e: {entity = e;}) dev.batteryEntities;
+            }
           ];
         }
         {
@@ -118,6 +124,10 @@ in {
             (tile "binary_sensor.zigbee2mqtt_bridge_connection_state" {name = "Zigbee bridge";})
             (tile "sensor.zigbee_unavailable" {name = "Unreachable devices";})
             (tile "sensor.zigbee_updates" {name = "Firmware updates";})
+            (tile "sensor.zigbee_weak_links" {
+              name = "Weak links";
+              state_content = ["state" "reporting"];
+            })
             {
               type = "markdown";
               content = "{{ state_attr('sensor.zigbee_health_report','report') }}";
