@@ -79,8 +79,10 @@ Pre-resync archive of every SRT: `/mnt/data/.subtitle-backup/`.
 
 Files: `hass.nix` (HA package, components, config, Adaptive Lighting profiles,
 health template sensors), `_automations.nix` (every automation and script),
-`_dashboard.nix` (YAML dashboard), `_devices.nix` (Zigbee inventory the others
-derive entity ids from), `_zwift.nix` (custom component), `mqtt.nix`
+`_dashboard.nix` (YAML dashboard), `_devices.nix` (Zigbee inventory and the
+entity-id contract every other file derives ids from, including the config-flow
+integrations' provisional ids), `_zwift.nix` and `_bambu.nix` (custom
+components), `mqtt.nix`
 (Mosquitto and Zigbee2MQTT settings, Zigbee groups, group sync), `health.nix`
 (readiness check and coordinator watchdog, both posting to #sys-info),
 `_z2m-mqtt.nix` (root-only `z2m-mqtt sub|pub` broker client used by the units
@@ -88,13 +90,21 @@ and for ops).
 
 All logic is YAML rendered from Nix: automations, scripts, Adaptive Lighting,
 template sensors, the `rest_command.discord` notifier (secret `discord_webhook`
-in `hass.yaml.age`) and the dashboard. The UI owns only config-flow
-integrations (MQTT, mobile app, UniFi, Google, Spotify, Sleep as Android,
-MCP server, Zwift), the registries (areas, the person's trackers, the enabled
+in `hass.yaml.age`), the MeteoAlarm binary sensor (YAML platform; `province`
+is a regex on the alert's area name) and the dashboard. The UI owns only
+config-flow integrations (MQTT, mobile app, UniFi, Google, Spotify, Sleep as
+Android, MCP server, Zwift, Jellyfin, Bambu Lab), the registries (areas, the person's trackers, the enabled
 link-quality sensors, the Adaptive Lighting switch ids) and Assist exposure.
 `zigbee2mqtt-error-report` posts the day's failed-command count to #sys-info
 at 18:15; the target is under 50. Persistent state used by automations lives
-in `input_boolean.{sleep_mode,guest_mode,stairs_manual,entrance_manual}`.
+in the `input_boolean`s listed under `dev.helpers` (sleep and guest mode, the
+motion latches, the Zwift ride and watching latches, the MQTT-recovery latch,
+the away-simulation flag). Phone pushes use the legacy
+`notify.mobile_app_<device>` action: the notify entity service takes no `data`,
+so channels, tags and actions need it. The stairs motion sensor's
+`illuminance_below_threshold_check: false` is a Z2M device option set over MQTT
+(it lives in `devices.yaml`, not in Nix); without it the ungated stairs
+automation never fires in daylight.
 HA migrates the rendered `http:` block into `.storage/http` exactly once and
 ignores YAML afterwards, so the live settings (including the login-attempt ban,
 set to 5) are managed under Settings, System, Network. `use_x_forwarded_for`
