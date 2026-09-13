@@ -77,10 +77,23 @@ Pre-resync archive of every SRT: `/mnt/data/.subtitle-backup/`.
 
 ## Home Assistant + Zigbee (`modules/homelab/home-assistant/`)
 
-`hass.nix` (HA package, components, config), `mqtt.nix` (Mosquitto + Zigbee2MQTT
-settings, Zigbee groups, group sync), `health.nix` (readiness check + coordinator
-watchdog, both posting to #sys-info), `_z2m-mqtt.nix` (root-only `z2m-mqtt
-sub|pub` broker client used by the units and for ops).
+Files: `hass.nix` (HA package, components, config, Adaptive Lighting profiles,
+health template sensors), `_automations.nix` (every automation and script),
+`_dashboard.nix` (YAML dashboard), `_devices.nix` (Zigbee inventory the others
+derive entity ids from), `_zwift.nix` (custom component), `mqtt.nix`
+(Mosquitto and Zigbee2MQTT settings, Zigbee groups, group sync), `health.nix`
+(readiness check and coordinator watchdog, both posting to #sys-info),
+`_z2m-mqtt.nix` (root-only `z2m-mqtt sub|pub` broker client used by the units
+and for ops).
+
+All logic is YAML rendered from Nix: automations, scripts, Adaptive Lighting,
+template sensors, the `rest_command.discord` notifier (secret `discord_webhook`
+in `hass.yaml.age`) and the dashboard. The UI owns only config-flow
+integrations (MQTT, mobile app, UniFi, Google, Spotify, Sleep as Android,
+MCP server, Zwift), the registries/areas and Assist exposure. Persistent state used by automations
+lives in `input_boolean.{sleep_mode,guest_mode,stairs_manual,entrance_manual}`.
+HA's `http` settings (trusted proxies, login-attempt ban) live in
+`.storage/http`, managed in Settings > System > Network.
 
 - Zigbee2MQTT friendly names are load-bearing: HA entity ids, the Nix group
   definitions and the switch automations (`zigbee2mqtt/<name>/action`) all

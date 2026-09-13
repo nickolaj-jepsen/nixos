@@ -8,18 +8,43 @@
   }: let
     cfg = config.fireproof.homelab;
     homeAssistantPort = 8123;
+    configDir = config.services.home-assistant.configDir;
+    dev = import ./_devices.nix {inherit lib;};
+    automations = import ./_automations.nix {inherit lib dev;};
+
+    batteryTable = lib.concatStringsSep ", " (lib.mapAttrsToList (n: d: "'${dev.battery n}': [${toString d.threshold}, '${n}', '${d.cells}']") dev.batteryDevices);
+    watchList = lib.concatStringsSep ", " (map (e: "'${e}'") automations.zigbeeWatch);
+
+    adaptiveProfile = room: extra:
+      {
+        name = room;
+        lights = map dev.light dev.rooms.${room}.lights;
+        interval = 300;
+        transition = 5;
+        initial_transition = 1;
+        skip_redundant_commands = true;
+        take_over_control = true;
+        detect_non_ha_changes = false;
+        separate_turn_on_commands = false;
+        min_color_temp = 2200;
+        max_color_temp = 4000;
+        sleep_brightness = 5;
+        sleep_color_temp = 2200;
+      }
+      // extra;
   in {
-    config = lib.mkIf config.fireproof.homelab.enable {
+    config = lib.mkIf cfg.enable {
       age.secrets.hassSecrets = {
         rekeyFile = ../../../secrets/hosts/homelab/hass.yaml.age;
-        path = "${config.services.home-assistant.configDir}/secrets.yaml";
+        path = "${configDir}/secrets.yaml";
         mode = "400";
         owner = "hass";
         group = "hass";
       };
 
       services.restic.backups.homelab = {
-        paths = [config.services.home-assistant.configDir];
+        paths = [configDir];
+        exclude = ["${configDir}/home-assistant_v2.db-wal" "${configDir}/home-assistant_v2.db-shm"];
       };
 
       services.nginx.virtualHosts."ha.${cfg.domain}" = fpLib.mkVirtualHost {
@@ -27,8 +52,7 @@
         websockets = true;
       };
 
-      # Ordering after the broker was luck until now (HA only had network-online).
-      # stopIfChanged/RestartSec/start limit: see the same block in mqtt.nix.
+      # stopIfChanged/RestartSec/start limit: see mqtt.nix.
       systemd.services.home-assistant = {
         after = ["mosquitto.service"];
         wants = ["mosquitto.service"];
@@ -41,29 +65,24 @@
       services.home-assistant = {
         enable = true;
         package = pkgs.unstable.home-assistant;
-        customComponents = with pkgs.unstable.home-assistant-custom-components; [
-          adaptive_lighting
-          pkgs.homeAssistantCustomComponents.switch_manager
-          pkgs.homeAssistantCustomComponents.zwift
+        customComponents = [
+          pkgs.unstable.home-assistant-custom-components.adaptive_lighting
+          (import ./_zwift.nix {inherit pkgs;})
         ];
+        # Config-flow integrations (set up in the UI) still need their deps built in.
+        # Only these: the module already adds every top-level `config` key below, plus its
+        # readOnly defaultIntegrations. Listing those again builds the same derivation.
         extraComponents = [
-          "analytics"
-          "default_config"
           "isal"
-          "shopping_list"
-          "nextcloud"
-          "met"
           "mqtt"
-          "ffmpeg"
-          "esphome"
+          "unifi"
           "google"
           "spotify"
-          "unifi"
-          "upnp"
-          "homeassistant_hardware"
+          "sleep_as_android"
+          "met"
           "mcp_server"
-          "mcp"
         ];
+        lovelaceConfig = import ./_dashboard.nix {inherit lib dev;};
         config = {
           homeassistant = {
             name = "Home";
@@ -72,30 +91,155 @@
             elevation = "!secret elevation";
             unit_system = "metric";
             time_zone = "Europe/Copenhagen";
+            currency = "DKK";
+            country = "DK";
             external_url = "https://ha.${cfg.domain}";
           };
-          frontend = {
-            themes = "!include_dir_merge_named themes";
-          };
+          # The module always renders an http: block, and HA migrates it into .storage/http
+          # exactly once. Declaring the proxy keys here is what makes that one-shot seed
+          # correct on a rebuilt data dir: without them every request is attributed to
+          # nginx on 127.0.0.1, so five failed logins ban the proxy and lock everyone out.
           http = {
-            server_port = homeAssistantPort;
             use_x_forwarded_for = true;
-            trusted_proxies = [
-              "127.0.0.1"
-              "::1"
-            ];
+            trusted_proxies = ["127.0.0.1" "::1"];
           };
-          sensor = [
+          frontend = {};
+          config = {};
+          my = {};
+          system_health = {};
+          mobile_app = {};
+          sun = {};
+          history = {};
+          logbook = {};
+          recorder = {
+            purge_keep_days = 30;
+            commit_interval = 5;
+            exclude.entity_globs = ["sensor.*_linkquality" "sensor.*_last_seen"];
+          };
+
+          input_boolean = {
+            sleep_mode = {
+              name = "Sleep mode";
+              icon = "mdi:sleep";
+            };
+            guest_mode = {
+              name = "Guest mode";
+              icon = "mdi:account-group";
+            };
+            stairs_manual = {
+              name = "Stairs switched manually";
+              icon = "mdi:hand-back-right";
+            };
+            entrance_manual = {
+              name = "Entrance switched manually";
+              icon = "mdi:hand-back-right";
+            };
+          };
+
+          # The arr Discord channel.
+          rest_command.discord = {
+            url = "!secret discord_webhook";
+            method = "POST";
+            content_type = "application/json";
+            payload = ''{"content": {{ message | tojson }}}'';
+          };
+
+          template = [
             {
-              platform = "zwift";
-              username = "!secret zwift_username";
-              password = "!secret zwift_password";
+              sensor = [
+                {
+                  name = "Zigbee low batteries";
+                  unique_id = "zigbee_low_batteries";
+                  icon = "mdi:battery-alert";
+                  state = ''
+                    {% set t = {${batteryTable}} %}
+                    {% set ns = namespace(n=0) %}
+                    {% for e, v in t.items() %}
+                      {% set pct = states(e) %}
+                      {% if pct not in ['unknown','unavailable'] and pct | int(100) <= v[0] %}
+                        {% set ns.n = ns.n + 1 %}
+                      {% endif %}
+                    {% endfor %}
+                    {{ ns.n }}
+                  '';
+                  attributes = {
+                    items = ''
+                      {% set t = {${batteryTable}} %}
+                      {% set ns = namespace(out=[]) %}
+                      {% for e, v in t.items() %}
+                        {% set pct = states(e) %}
+                        {% if pct not in ['unknown','unavailable'] and pct | int(100) <= v[0] %}
+                          {% set ns.out = ns.out + [v[1] ~ ' ' ~ pct ~ '% (' ~ v[2] ~ ')'] %}
+                        {% endif %}
+                      {% endfor %}
+                      {{ ns.out }}
+                    '';
+                    all = ''
+                      {% set t = {${batteryTable}} %}
+                      {% set ns = namespace(out=[]) %}
+                      {% for e, v in t.items() %}
+                        {% set ns.out = ns.out + [v[1] ~ ' ' ~ states(e) ~ '%'] %}
+                      {% endfor %}
+                      {{ ns.out }}
+                    '';
+                  };
+                }
+                {
+                  name = "Zigbee unavailable";
+                  unique_id = "zigbee_unavailable";
+                  icon = "mdi:lan-disconnect";
+                  state = "{{ [${watchList}] | select('is_state', 'unavailable') | list | count }}";
+                  attributes.items = ''
+                    {% set ns = namespace(out=[]) %}
+                    {% for e in [${watchList}] %}
+                      {% if states(e) == 'unavailable' %}
+                        {% set ns.out = ns.out + [state_attr(e, 'friendly_name') or e] %}
+                      {% endif %}
+                    {% endfor %}
+                    {{ ns.out }}
+                  '';
+                }
+                {
+                  name = "Zigbee updates";
+                  unique_id = "zigbee_updates";
+                  icon = "mdi:update";
+                  state = "{{ states.update | selectattr('state','eq','on') | list | count }}";
+                  attributes.items = "{{ states.update | selectattr('state','eq','on') | map(attribute='name') | list }}";
+                }
+                {
+                  name = "Zigbee health report";
+                  unique_id = "zigbee_health_report";
+                  icon = "mdi:clipboard-pulse";
+                  state = "{{ states('sensor.zigbee_low_batteries') | int(0) + states('sensor.zigbee_unavailable') | int(0) + states('sensor.zigbee_updates') | int(0) }}";
+                  attributes.report = ''
+                    {% set lb = state_attr('sensor.zigbee_low_batteries','items') or [] %}
+                    {% set un = state_attr('sensor.zigbee_unavailable','items') or [] %}
+                    {% set up = state_attr('sensor.zigbee_updates','items') or [] %}
+                    🔋 Low batteries: {{ lb | join(', ') if lb else 'none' }}
+                    📵 Unreachable: {{ un | join(', ') if un else 'none' }}
+                    ⬆️ Firmware updates: {{ up | join(', ') if up else 'none' }}
+                  '';
+                }
+              ];
             }
           ];
 
-          automation = "!include automations.yaml";
-          script = "!include scripts.yaml";
-          scene = "!include scenes.yaml";
+          adaptive_lighting = [
+            (adaptiveProfile "office" {})
+            (adaptiveProfile "stairs" {
+              min_brightness = 10;
+              max_brightness = 67;
+            })
+            (adaptiveProfile "living_room" {})
+            (adaptiveProfile "bedroom" {
+              max_sunrise_time = "07:00:00";
+              max_sunset_time = "20:00:00";
+            })
+          ];
+
+          inherit (automations) automation;
+          inherit (automations) script;
+          scene = [];
         };
       };
     };
