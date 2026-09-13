@@ -3,7 +3,8 @@
 # WEATHER_LOCATION, GITHUB_TOKEN, HA_TOKEN (long-lived token, HA profile →
 # Security), SABNZBD_API_KEY (Config → General), SONARR_API_KEY and
 # RADARR_API_KEY (same values as the recyclarr secrets), JELLYFIN_API_KEY
-# (Dashboard → API Keys), plus the Work page URLs. Edit with
+# (Dashboard → API Keys), LINEAR_API_KEY (Settings → Security & access →
+# Personal API keys), plus the Work page URLs. Edit with
 # `just secret-edit secrets/hosts/homelab/glance-env.age`.
 {
   flake.modules.nixos.glance = {
@@ -32,6 +33,7 @@
       sabnzbd-queue = builtins.readFile ./templates/sabnzbd-queue.tpl;
       coming-up = builtins.readFile ./templates/coming-up.tpl;
       recently-added = builtins.readFile ./templates/recently-added.tpl;
+      linear-issues = builtins.readFile ./templates/linear-issues.tpl;
       home-status = import ./_home-status.nix {
         inherit lib dev;
         haUrl = "https://ha.${cfg.domain}";

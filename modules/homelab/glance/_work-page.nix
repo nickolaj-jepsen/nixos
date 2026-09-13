@@ -144,6 +144,22 @@
       widgets = [
         {
           type = "custom-api";
+          title = "My Issues";
+          title-url = "https://linear.app/my-issues/assigned";
+          cache = "5m";
+          url = "https://api.linear.app/graphql";
+          method = "POST";
+          headers = {
+            # Personal API keys go bare, without a Bearer prefix.
+            Authorization = "\${LINEAR_API_KEY}";
+            Content-Type = "application/json";
+          };
+          body-type = "json";
+          body.query = "{ viewer { assignedIssues(filter: { state: { type: { nin: [\"completed\", \"canceled\"] } } }, orderBy: updatedAt, first: 50) { nodes { identifier title url priority priorityLabel updatedAt state { type } project { name } } } } }";
+          template = templates.linear-issues;
+        }
+        {
+          type = "custom-api";
           title = "Recent Repos";
           title-url = "https://github.com";
           cache = "10m";
