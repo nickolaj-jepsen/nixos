@@ -103,6 +103,43 @@
           OnUnitActiveSec = "5min";
         };
       };
+
+      # HA cannot read the journal; the target is under 50 failed commands a day.
+      systemd.services.zigbee2mqtt-error-report = {
+        description = "Zigbee2MQTT failed-command count for the last 24 h → Discord";
+        path = [pkgs.systemd];
+        serviceConfig = {
+          Type = "oneshot";
+          EnvironmentFile = discordEnv;
+          ExecStart = lib.getExe (pkgs.writeShellApplication {
+            name = "zigbee2mqtt-error-report";
+            runtimeInputs = [pkgs.curl pkgs.jq pkgs.coreutils pkgs.gnugrep pkgs.gnused];
+            text = ''
+              ${discordPost}
+              # Each pipeline may match nothing: a quiet day must not trip pipefail. Read the
+              # journal separately so a failed read reports itself instead of posting "0 errors".
+              raw=$(journalctl -u zigbee2mqtt.service --since -24h -o cat) || {
+                post "homelab: Zigbee2MQTT error report could not read the journal"
+                exit 1
+              }
+              errors=$(printf '%s\n' "$raw" | sed -E 's/\x1b\[[0-9;]*m//g' | grep -E "^\[[^]]+\] error:" || true)
+              n=$(printf '%s\n' "$errors" | grep -c . || true)
+              top=$(printf '%s\n' "$errors" | grep -oE "to '[^']+' failed" | sed -E "s/^to '|' failed$//g" | sort | uniq -c | sort -rn | head -3 | sed -E 's/^ *([0-9]+) (.*)$/\2 (\1)/' | paste -sd, - | sed 's/,/, /g' || true)
+              msg="homelab: Zigbee2MQTT logged $n failed commands in the last 24 h''${top:+ — top: $top}"
+              if [ "$n" -ge 50 ]; then msg="⚠️ $msg (target is under 50)"; fi
+              echo "$msg"
+              post "$msg"
+            '';
+          });
+        };
+      };
+      systemd.timers.zigbee2mqtt-error-report = {
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnCalendar = "18:15";
+          Persistent = true;
+        };
+      };
     };
   };
 }
