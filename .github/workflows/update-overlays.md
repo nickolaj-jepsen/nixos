@@ -15,14 +15,8 @@ tools:
   web-fetch:
 network:
   allowed:
-    - node
     - github
-    - storage.googleapis.com
     - downloads.claude.ai
-    - install.determinate.systems
-    - cache.nixos.org
-    - python
-    - go
 safe-outputs:
   create-pull-request:
     draft: false
@@ -36,37 +30,27 @@ safe-outputs:
     required-title-prefix: "chore(overlays): "
     required-labels: [dependencies, automated]
   noop:
-pre-agent-steps:
-  - name: Install nix-portable for agent chroot
-    shell: bash
-    run: |
-      set -euo pipefail
-      sudo install -d /opt/nix-portable
-      sudo curl -fL --retry 3 -o /opt/nix-portable/nix-portable \
-        https://github.com/DavHau/nix-portable/releases/download/v012/nix-portable-x86_64
-      sudo chmod +x /opt/nix-portable/nix-portable
 ---
 
 # Update Overlay Packages
 
 You are an AI agent that checks for updates to manually fetched packages in a NixOS configuration repository. If updates are found, keep a single pull request with all changes up to date.
 
-## Setup
-
-The agent chroot cannot see the host runner's `/nix`. Use the portable Nix binary mounted at `/opt/nix-portable/nix-portable` instead. It's invoked as `nix-portable <nix-command>` (e.g. `/opt/nix-portable/nix-portable nix-prefetch-url <url>`).
-
-Verify with `/opt/nix-portable/nix-portable nix --version` before computing hashes. The first call extracts the bundled store to `~/.nix-portable/` (one-time, ~10s).
-
 ## Hash Computation
 
-Overlay hashes are SRI format (`sha256-` prefix): `"sha256-DfDsU/qY..."`.
-`nix-prefetch-url` returns hex, so convert before writing it into a nix file.
+There is no Nix in this environment and you must not try to install one. Every
+hash the overlays need comes from `.github/scripts/nix-hash.py` (plain Python 3,
+no dependencies), which prints the SRI string (`sha256-...`) ready to paste:
 
-To compute hashes (prefix every command with `/opt/nix-portable/nix-portable`):
+- **`fetchurl`** (direct file download):
+  `python3 .github/scripts/nix-hash.py file <url>`
+- **`fetchFromGitHub`** (repo archive, NAR hash of the unpacked tree):
+  `python3 .github/scripts/nix-hash.py unpack "https://github.com/<owner>/<repo>/archive/<tag>.tar.gz"`
+- **Hex digest from an index** (e.g. an apt `Packages` file):
+  `python3 .github/scripts/nix-hash.py sri <hex>`
 
-- **For `fetchurl`** (direct file download): `/opt/nix-portable/nix-portable nix-prefetch-url <url>` returns hex hash
-- **For `fetchFromGitHub`** (repo archive): `/opt/nix-portable/nix-portable nix-prefetch-url --unpack "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"` returns hex hash
-- **Convert hex → SRI**: `/opt/nix-portable/nix-portable nix hash to-sri --type sha256 <hex-hash>`
+Never guess or hand-compute a hash. If the script fails, report it with
+`missing_tool` instead of working around it.
 
 ## Packages to Check
 
@@ -87,8 +71,8 @@ checksum from it. Updating means replacing the vendored manifest.
 ### 2. BambuStudio (`overlays/bambu-studio.nix`)
 
 - **Latest version**: Check latest release of `bambulab/BambuStudio` on GitHub
-- **New hash**: Find the `BambuStudio_ubuntu-*.AppImage` asset for Ubuntu 24.04 in the release. Run `nix-prefetch-url <asset-url>` and convert to SRI
-- **Update fields**: `version`, `ubuntu_version` (extract from asset filename: `BambuStudio_ubuntu-<ubuntu_version>.AppImage`), and `sha256` (SRI format)
+- **New hash**: Find the `BambuStudio_ubuntu-*.AppImage` asset for Ubuntu 24.04 in the release and run `nix-hash.py file <asset-url>`
+- **Update fields**: `version`, `ubuntu_version` (extract from asset filename: `BambuStudio_ubuntu<ubuntu_version>.AppImage`), and `sha256`
 - **Note**: The URL template in the nix file must match the actual asset filename exactly — upstream has changed naming conventions in the past (e.g. `Bambu_Studio_` → `BambuStudio_`). Always verify the asset name from the release before updating.
 
 ### 3. GitHub Agentic Workflows (`overlays/gh-aw.nix`)
@@ -97,10 +81,9 @@ checksum from it. Updating means replacing the vendored manifest.
 - **New hashes**: each platform ships a distinct binary, so compute one hash per
   entry in `sha256Map`. For each of `linux-amd64`, `linux-arm64`, `darwin-amd64`,
   `darwin-arm64`, run
-  `nix-prefetch-url "https://github.com/github/gh-aw/releases/download/v<VERSION>/<platform>"`
-  → convert to SRI
+  `nix-hash.py file "https://github.com/github/gh-aw/releases/download/v<VERSION>/<platform>"`
 - **Update fields**: `version` (in both the attribute and the `url` string) and all
-  four `sha256Map` entries (SRI format)
+  four `sha256Map` entries
 
 ### 4. GitHub Copilot CLI (`overlays/github-copilot-cli.nix`)
 
@@ -109,9 +92,8 @@ checksum from it. Updating means replacing the vendored manifest.
   pre-releases)
 - **New hashes**: one tgz per platform, so compute one hash per entry in `plat`.
   For each of `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, run
-  `nix-prefetch-url "https://github.com/github/copilot-cli/releases/download/v<VERSION>/github-copilot-<VERSION>-<platform>.tgz"`
-  → convert to SRI
-- **Update fields**: `version` and all four `plat.*.hash` entries (SRI format)
+  `nix-hash.py file "https://github.com/github/copilot-cli/releases/download/v<VERSION>/github-copilot-<VERSION>-<platform>.tgz"`
+- **Update fields**: `version` and all four `plat.*.hash` entries
 
 ### 5. Claude Desktop (`overlays/claude-desktop.nix`)
 
@@ -122,49 +104,8 @@ Upstream publishes no release feed — the apt repository index is the source of
   and take the highest `Version:` (sort with `sort -V`; entries are not ordered)
 - **New hashes**: the index already carries a `SHA256:` per package, so no download is
   needed — read the `SHA256:` of the chosen version from the `binary-amd64` index and
-  from `.../binary-arm64/Packages`, then convert each hex hash to SRI
-- **Update fields**: `version` and both `plat.*.hash` entries (SRI format)
-
-## Reusing the Existing PR
-
-Always use the branch name `chore/update-overlays`.
-
-Before making any changes, check if there is already an open PR with head branch `chore/update-overlays`. If you cannot find one by branch, fall back to searching for the title `chore(overlays): update packages`.
-
-If an open PR already exists and you have new overlay updates:
-
-- Use `push_to_pull_request_branch` to push the new changes to that PR instead of creating a new PR.
-- Use `update_pull_request` to replace the PR body so it matches the latest set of updated packages.
-- Keep the PR title as `chore(overlays): update packages`.
-- Do **not** call `create_pull_request` for an existing PR.
-
-If no open PR exists and updates are needed, call `create_pull_request` with:
-
-- **Branch**: `chore/update-overlays`
-- **Title**: `chore(overlays): update packages`
-- **Draft**: `false`
-- **Labels**: `dependencies`, `automated`
-
-If the existing PR already contains all the latest updates, or if no files changed, use `noop`.
-
-## Procedure
-
-1. Read all overlay files to get current versions
-2. Check each package for updates using GitHub API and web-fetch
-3. For packages with updates available:
-   a. Compute the new hash with `nix-prefetch-url`
-   b. Convert to the correct format (hex or SRI as noted above)
-   c. Edit the file to update version/rev and hash
-4. If any files changed, either update the existing overlay PR or create it if missing
-5. If nothing changed, use `noop` output
-
-## Pull Request
-
-- **Title**: `chore(overlays): update packages`
-- **Branch**: `chore/update-overlays`
-- **Draft**: `false`
-- **Body**: List each updated package with old and new version/revision
-- **Labels**: `dependencies`, `automated`
+  from `.../binary-arm64/Packages`, then convert each with `nix-hash.py sri <hex>`
+- **Update fields**: `version` and both `plat.*.hash` entries
 
 ### 6. llama.cpp CUDA (`overlays/llama-cpp-cuda.nix`)
 
@@ -177,12 +118,42 @@ merged in ~b10425). The pin is meant to be temporary:
   If it is >= the pinned version, DELETE the `overrideAttrs` call entirely
   (restore plain `.llama-cpp.override {cudaSupport = true;}`) instead of bumping.
 - **Otherwise bump the pin**: take the latest release tag of `ggml-org/llama.cpp`
-  (tags are `b<NUMBER>`), compute the hash with
-  `nix-prefetch-url --unpack "https://github.com/ggml-org/llama.cpp/archive/<TAG>.tar.gz"`
-  → convert to SRI.
+  (tags are `b<NUMBER>`) and run
+  `nix-hash.py unpack "https://github.com/ggml-org/llama.cpp/archive/<TAG>.tar.gz"`
 - **Update fields**: `version` (number without the `b` prefix), `tag`, and `hash`
-  (SRI format)
 - **Note**: the nixpkgs package also builds the webui from `tools/ui` with a pinned
   `npmDepsHash`. If the build fails on the npm-deps hash, `tools/ui/package-lock.json`
   changed upstream — skip the bump and note it in the PR instead of chasing the
   second hash.
+
+## Procedure
+
+1. Read all overlay files to get current versions
+2. Check each package for updates using the GitHub API and web-fetch
+3. For packages with updates available, compute the new hash with `nix-hash.py`
+   and edit the file to update version/rev and hash
+4. If any files changed, update the existing overlay PR or create it if missing
+5. If nothing changed, use `noop`
+
+## Pull Request
+
+The branch name is chosen for you (a `chore/update-overlays-<id>` prefix), so
+look for an existing PR by title, not by branch: search open PRs for the exact
+title `chore(overlays): update packages` carrying the `automated` label.
+
+If one exists and you have new updates:
+
+- Use `push_to_pull_request_branch` to push the new changes to that PR.
+- Use `update_pull_request` to replace the PR body so it lists the full set of
+  updated packages.
+- Do **not** call `create_pull_request`.
+
+If none exists and updates are needed, call `create_pull_request` with:
+
+- **Title**: `chore(overlays): update packages`
+- **Body**: one line per updated package with old → new version, plus any
+  package you skipped and why
+- **Draft**: `false`
+- **Labels**: `dependencies`, `automated`
+
+If the existing PR already contains every update, or nothing changed, use `noop`.

@@ -2,6 +2,11 @@
 # and `darwin` checks from fmt.yml must be marked as required status checks on
 # `main` in the repo's branch protection settings. Otherwise this PR
 # auto-merges regardless of whether builds pass.
+#
+# PRs opened with the default GITHUB_TOKEN never get a working `pull_request`
+# CI run, so the PR is created with GH_AW_GITHUB_TOKEN (a fine-grained PAT with
+# contents + pull-requests write; the same secret gh-aw uses for
+# update-overlays) when it is set, and falls back to the default token.
 name: Update flake.lock
 on:
   schedule:
@@ -27,6 +32,7 @@ jobs:
       - uses: DeterminateSystems/update-flake-lock@834c491b2ece4de0bbd00d85214bb5e83b4da5c6 # v28
         id: update
         with:
+          token: ${{ secrets.GH_AW_GITHUB_TOKEN || github.token }}
           pr-title: "chore(flake): update flake.lock"
           pr-labels: |
             dependencies
