@@ -134,11 +134,16 @@
     ++ map switch (lib.attrValues outlets);
   batteryEntities = lib.mapAttrsToList (n: _: battery n) batteryDevices;
   updateEntities = map update (allLights ++ lib.attrValues outlets ++ lib.attrNames batteryDevices);
-  # Adaptive Lighting profiles (hass.nix). The switch ids are set in the entity
-  # registry; a fresh registry composes them from device + entity name instead.
-  alRooms = ["office" "stairs" "living_room" "bedroom"];
+  # Adaptive Lighting profiles (hass.nix). The first four rooms keep sleep-mode switch
+  # ids set by hand in the entity registry; AL composes a fresh one from the device
+  # name plus "Sleep Mode". Verify on the device page after adding a room.
+  alRooms = ["office" "stairs" "living_room" "bedroom" "entrance" "bathroom"];
+  alLegacySleepIds = ["office" "stairs" "living_room" "bedroom"];
   alSwitch = r: "switch.adaptive_lighting_${r}";
-  alSleep = r: "switch.adaptive_lighting_sleep_mode_${r}";
+  alSleep = r:
+    if lib.elem r alLegacySleepIds
+    then "switch.adaptive_lighting_sleep_mode_${r}"
+    else "switch.adaptive_lighting_${r}_sleep_mode";
 
   # Discovered disabled (diagnostic); enabled once in the entity registry.
   linkquality = n: "sensor.${slug n}_linkquality";
