@@ -55,6 +55,7 @@ switch hostname=`hostname -s` target='' *ARGS="":
     target="{{ target }}"
     if [ -z "$target" ]; then
         sudo nixos-rebuild switch --flake .#{{ hostname }} {{ ARGS }}
+        just _failed-units
     else
         nixos-rebuild switch \
             --flake .#{{ hostname }} \
@@ -72,6 +73,20 @@ boot hostname=`hostname -s` *ARGS="":
 [group("deploy")]
 test hostname=`hostname -s` *ARGS="":
     sudo nixos-rebuild test --flake .#{{ hostname }} {{ ARGS }}
+    @just _failed-units
+
+# Activation can succeed while units fail; surface them instead of leaving them to be found later.
+[private]
+_failed-units:
+    #!/usr/bin/env -S bash -e
+    for scope in --system --user; do
+        failed=$(systemctl "$scope" --failed --no-legend --plain | awk '{print $1}')
+        if [ -n "$failed" ]; then
+            echo "⚠ failed units ($scope):"
+            echo "$failed" | sed 's/^/  /'
+            echo "  inspect: journalctl ${scope/--system/} -b -u <unit>"
+        fi
+    done
 
 [doc('Build a home-manager host (class = "home") activation package')]
 [group("deploy")]

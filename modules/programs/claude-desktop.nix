@@ -17,6 +17,8 @@
   }: {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       home.packages = [pkgs.claude-desktop];
+      # Self-registered at launch; declared so the managed mimeapps.list keeps it.
+      xdg.mimeApps.defaultApplications."x-scheme-handler/claude" = "com.anthropic.Claude.desktop";
     };
   };
 }

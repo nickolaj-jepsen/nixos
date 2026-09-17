@@ -11,9 +11,6 @@
       programs.niri.settings = {
         prefer-no-csd = true;
         clipboard.disable-primary = true;
-        spawn-at-startup = [
-          {command = ["systemctl" "--user" "start" "hyprpaper"];}
-        ];
         xwayland-satellite = {
           enable = true;
           path = lib.getExe pkgs.xwayland-satellite-unstable;

@@ -48,6 +48,10 @@ in {
   flake.modules.nixos.nix = {config, ...}: {
     nixpkgs.config.allowUnfree = true;
     nix.settings = mkSettings config;
+
+    # Builds yield CPU/IO to the desktop; `batch` rather than `idle` so a pegged CPU can't starve a rebuild.
+    nix.daemonCPUSchedPolicy = "batch";
+    nix.daemonIOSchedClass = "idle";
   };
 
   # The Mac runs Determinate Nix, which owns the daemon + /etc/nix/nix.conf, so

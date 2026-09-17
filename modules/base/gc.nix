@@ -9,6 +9,12 @@
     };
 
     nix.optimise.automatic = true;
+
+    # nixpkgs already idles nix-optimise, but not nix-gc.
+    systemd.services.nix-gc.serviceConfig = {
+      CPUSchedulingPolicy = "idle";
+      IOSchedulingClass = "idle";
+    };
   };
 
   # nix-darwin: same GC + optimise (no boot.loader; launchd default interval).

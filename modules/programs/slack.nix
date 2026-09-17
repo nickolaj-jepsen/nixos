@@ -10,6 +10,10 @@
       home.packages = lib.optionals pkgs.stdenv.isLinux [
         pkgs.unstable.slack
       ];
+      # Slack self-registers this at launch; declared so the managed mimeapps.list keeps it.
+      xdg.mimeApps.defaultApplications = lib.mkIf pkgs.stdenv.isLinux {
+        "x-scheme-handler/slack" = "slack.desktop";
+      };
     };
   };
 
