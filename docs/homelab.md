@@ -95,6 +95,15 @@ is a regex on the alert's area name) and the dashboard. The UI owns only
 config-flow integrations (MQTT, mobile app, UniFi, Google, Spotify, Sleep as
 Android, MCP server, Zwift, Jellyfin, Bambu Lab), the registries (areas, the person's trackers, the enabled
 link-quality sensors, the Adaptive Lighting switch ids) and Assist exposure.
+Adaptive Lighting covers every room (`dev.alRooms`); the office runs AL's
+default floors and the other rooms sit slightly above them (`alExtra` in
+`hass.nix`). Automations that turn a room on pass `alLevel <room>`, the
+`brightness_pct` attribute of that room's AL switch, so a bulb comes up at the
+level AL is about to set instead of flashing its last level first; with the
+switch off it falls back to a fixed night/day level. AL composes fresh
+sleep-mode switch ids as `switch.adaptive_lighting_<room>_sleep_mode`; the
+four original rooms keep the hand-set `..._sleep_mode_<room>` ids
+(`dev.alLegacySleepIds`). After adding a room, check both ids on its device page.
 `zigbee2mqtt-error-report` posts the day's failed-command count to #sys-info
 at 18:15; the target is under 50. Persistent state used by automations lives
 in the `input_boolean`s listed under `dev.helpers` (sleep and guest mode, the

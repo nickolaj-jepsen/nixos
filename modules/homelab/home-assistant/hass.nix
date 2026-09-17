@@ -38,15 +38,27 @@
         sleep_color_temp = 2200;
       }
       // extra;
+    # The office keeps AL's defaults (1 % floor, 5 % asleep). Every other room sits a
+    # little above it: a passage lit like the office is too dark to be of use.
+    passage = {
+      min_brightness = 10;
+      sleep_brightness = 10;
+    };
+    living = {
+      min_brightness = 5;
+      sleep_brightness = 8;
+    };
     alExtra = {
-      stairs = {
-        min_brightness = 10;
-        max_brightness = 67;
-      };
-      bedroom = {
-        max_sunrise_time = "07:00:00";
-        max_sunset_time = "20:00:00";
-      };
+      stairs = passage // {max_brightness = 67;};
+      entrance = passage;
+      bathroom = passage;
+      living_room = living;
+      bedroom =
+        living
+        // {
+          max_sunrise_time = "07:00:00";
+          max_sunset_time = "20:00:00";
+        };
     };
   in {
     config = lib.mkIf cfg.enable {
@@ -325,8 +337,7 @@
             }
           ];
 
-          # Driven by dev.alRooms, which sleep_mode_sync also targets: a room in one list
-          # and not the other means that whole service call fails and no room syncs.
+          # Driven by dev.alRooms, which sleep_mode_sync also targets.
           adaptive_lighting = map (r: adaptiveProfile r (alExtra.${r} or {})) dev.alRooms;
 
           inherit (automations) automation;

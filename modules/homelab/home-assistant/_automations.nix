@@ -19,9 +19,12 @@
     entrance = dev.sensors."Entrance - Movement sensor";
   };
 
-  # Night: sleep mode, or late hours as a fallback when goodnight was never pressed.
+  # Turn-on level: what Adaptive Lighting is about to set, read off its switch. A bulb
+  # turned on without a level comes up at its last one (100 % from the afternoon) and
+  # is dimmed a second later. With the switch off or unavailable the attribute is None:
+  # a fixed night level then (sleep mode, or late hours when goodnight was never pressed).
   isNight = "is_state('${sleepMode}','on') or now().hour >= 23 or now().hour < 6";
-  nightLevel = "{{ 15 if (${isNight}) else 100 }}";
+  alLevel = room: "{{ state_attr('${alSwitch room}','brightness_pct') | int(15 if (${isNight}) else 100) }}";
 
   # ---- conditions ------------------------------------------------------------
   template = t: {
@@ -291,19 +294,19 @@ in {
         arrow_right_click = [(ctCooler "office")];
       })
       (remote "Bedroom - Switch" {
-        "on" = [(turnOn (group "bedroom") {})];
+        "on" = [(turnOn (group "bedroom") {brightness_pct = alLevel "bedroom";})];
         "off" = [(turnOff (group "bedroom"))];
         brightness_move_up = holdUp "bedroom";
         brightness_move_down = holdDown "bedroom";
       })
       (remote "Kitchen - Switch" {
-        "on" = [watchingLatch (turnOn (group "living_room") {})];
+        "on" = [watchingLatch (turnOn (group "living_room") {brightness_pct = alLevel "living_room";})];
         "off" = [watchingLatch (turnOff (group "living_room"))];
         brightness_move_up = [watchingLatch] ++ holdUp "living_room";
         brightness_move_down = [watchingLatch] ++ holdDown "living_room";
       })
       (remote "Stairs - Switch top" {
-        "on" = [(setBool (manual "stairs") true) (turnOn (group "stairs") {})];
+        "on" = [(setBool (manual "stairs") true) (turnOn (group "stairs") {brightness_pct = alLevel "stairs";})];
         "off" = [(turnOff (group "stairs")) (turnOff (group "entrance")) (turnOff (group "living_room"))];
         brightness_move_up = holdUp "stairs";
         brightness_move_down = holdDown "stairs";
@@ -312,8 +315,8 @@ in {
         "on" = [
           (setBool (manual "stairs") true)
           (setBool (manual "entrance") true)
-          (turnOn (group "stairs") {})
-          (turnOn (group "entrance") {brightness_pct = nightLevel;})
+          (turnOn (group "stairs") {brightness_pct = alLevel "stairs";})
+          (turnOn (group "entrance") {brightness_pct = alLevel "entrance";})
         ];
         "off" = [(turnOff (group "stairs")) (turnOff (group "entrance"))];
         brightness_move_up = holdUp "stairs";
@@ -344,9 +347,9 @@ in {
       (remote "Bathroom - Switch" {
         # Re-sent after 2 s so a bulb that missed the multicast catches up; the group state cannot tell.
         "on" = [
-          (turnOn (group "bathroom") {brightness_pct = nightLevel;})
+          (turnOn (group "bathroom") {brightness_pct = alLevel "bathroom";})
           {delay.seconds = 2;}
-          (turnOn (group "bathroom") {brightness_pct = nightLevel;})
+          (turnOn (group "bathroom") {brightness_pct = alLevel "bathroom";})
         ];
         "off" = [(turnOff (group "bathroom"))];
         brightness_move_up = [(step (group "bathroom") 20)];
@@ -359,8 +362,7 @@ in {
       sensor = hallwaySensors.stairs;
       # Dark at noon; the sensor's own light check is off via the Z2M device option illuminance_below_threshold_check.
       whenDark = false;
-      # Explicit level avoids a flash at the last level before Adaptive Lighting adapts.
-      onActions = [(turnOn (group "stairs") {brightness_pct = nightLevel;})];
+      onActions = [(turnOn (group "stairs") {brightness_pct = alLevel "stairs";})];
       offTarget = group "stairs";
     })
     ++ (motion {
@@ -370,7 +372,7 @@ in {
       onActions = [
         {
           action = "script.entrance_animation";
-          data.brightness_pct = nightLevel;
+          data.brightness_pct = alLevel "entrance";
         }
       ];
       offTarget = group "entrance";
@@ -451,8 +453,8 @@ in {
           (template "{{ is_state('${person}', 'not_home') or (now() - states['${person}'].last_changed).total_seconds() < 600 }}")
         ];
         actions = [
-          (turnOn (group "entrance") {brightness_pct = nightLevel;})
-          (turnOn (group "stairs") {brightness_pct = nightLevel;})
+          (turnOn (group "entrance") {brightness_pct = alLevel "entrance";})
+          (turnOn (group "stairs") {brightness_pct = alLevel "stairs";})
         ];
       }
       # ---- door ------------------------------------------------------------------
@@ -519,12 +521,15 @@ in {
             to = ["on" "off"];
           }
         ];
-        actions = [
-          {
+        # One call per room: a sleep switch whose registry id differs from alSleep
+        # (a freshly added room) must not stop the others from syncing.
+        actions =
+          map (r: {
             action = "switch.turn_{{ trigger.to_state.state }}";
-            target.entity_id = map alSleep alRooms;
-          }
-        ];
+            target.entity_id = alSleep r;
+            continue_on_error = true;
+          })
+          alRooms;
       }
       {
         id = "sleep_mode_safety";
