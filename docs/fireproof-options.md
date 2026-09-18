@@ -584,7 +584,7 @@ true
 
 
 Whether to enable local LLM serving (llama-swap + CUDA llama\.cpp) and its pi provider\.
-Off by default rather than following dev\.enable: it needs a ≥16GB
+Off by default rather than following dev\.enable: it needs a ≥12GB
 NVIDIA GPU, which macbook and dev-ao don’t have
 \.
 
@@ -607,6 +607,64 @@ false
 
 ```nix
 true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.llm\.cudaCapability
+
+
+
+CUDA compute capability of the serving GPU (5070 Ti = 12\.0,
+4070 = 8\.9)\. llama\.cpp is compiled for this one target only\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"12.0"
+```
+
+
+
+*Example:*
+
+```nix
+"8.9"
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.llm\.vramGiB
+
+
+
+VRAM tier of the serving GPU; picks the quant/context set in
+modules/programs/_llm-models\.nix, each tuned to fit that card\.
+
+
+
+*Type:*
+one of 12, 16
+
+
+
+*Default:*
+
+```nix
+16
 ```
 
 *Declared by:*

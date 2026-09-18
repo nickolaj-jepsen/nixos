@@ -66,8 +66,7 @@
         providers =
           lib.optionalAttrs config.fireproof.dev.llm.enable {
             # Served by llama-swap (modules/programs/llm.nix), which unloads one
-            # entry to load the other — switching costs a ~15s reload. The 128k
-            # entry runs a smaller quant; only it leaves room for 128k of KV.
+            # entry to load the other — switching costs a ~15s reload.
             local = {
               baseUrl = "http://127.0.0.1:9292/v1";
               api = "openai-completions";
@@ -88,14 +87,14 @@
                 # replacing it, so the thinking toggle works and effort survives.
                 chatTemplateArgs.enable_thinking = {"$var" = "thinking.enabled";};
               };
-              models = [
-                {
-                  id = "qwen3.8-27b";
-                  name = "Qwen3.8 27B (local 32k)";
+              models =
+                lib.mapAttrsToList (id: m: {
+                  inherit id;
+                  inherit (m) name;
                   reasoning = true;
                   # mmproj isn't loaded — no VRAM left for the vision tower.
                   input = ["text"];
-                  contextWindow = 32768;
+                  contextWindow = m.ctx;
                   maxTokens = 8192;
                   cost = {
                     input = 0;
@@ -103,22 +102,8 @@
                     cacheRead = 0;
                     cacheWrite = 0;
                   };
-                }
-                {
-                  id = "qwen3.8-27b-128k";
-                  name = "Qwen3.8 27B (local 128k)";
-                  reasoning = true;
-                  input = ["text"];
-                  contextWindow = 131072;
-                  maxTokens = 8192;
-                  cost = {
-                    input = 0;
-                    output = 0;
-                    cacheRead = 0;
-                    cacheWrite = 0;
-                  };
-                }
-              ];
+                })
+                (import ./_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
             };
           }
           // {

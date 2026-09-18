@@ -110,11 +110,30 @@ let
           default = config.fireproof.dev.enable;
           description = "Enable the pi coding agent with the lazypi extension roster";
         };
-        llm.enable = lib.mkEnableOption ''
-          local LLM serving (llama-swap + CUDA llama.cpp) and its pi provider.
-          Off by default rather than following dev.enable: it needs a ≥16GB
-          NVIDIA GPU, which macbook and dev-ao don't have
-        '';
+        llm = {
+          enable = lib.mkEnableOption ''
+            local LLM serving (llama-swap + CUDA llama.cpp) and its pi provider.
+            Off by default rather than following dev.enable: it needs a ≥12GB
+            NVIDIA GPU, which macbook and dev-ao don't have
+          '';
+          vramGiB = lib.mkOption {
+            type = lib.types.enum [12 16];
+            default = 16;
+            description = ''
+              VRAM tier of the serving GPU; picks the quant/context set in
+              modules/programs/_llm-models.nix, each tuned to fit that card.
+            '';
+          };
+          cudaCapability = lib.mkOption {
+            type = lib.types.str;
+            default = "12.0";
+            example = "8.9";
+            description = ''
+              CUDA compute capability of the serving GPU (5070 Ti = 12.0,
+              4070 = 8.9). llama.cpp is compiled for this one target only.
+            '';
+          };
+        };
       };
 
       neovim.full.enable = lib.mkOption {

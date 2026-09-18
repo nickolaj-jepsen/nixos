@@ -1,4 +1,4 @@
-# CUDA llama.cpp for desktop's RTX 5070 Ti. nixpkgs ships llama-cpp CPU-only and
+# CUDA llama.cpp for the dev.llm hosts. nixpkgs ships llama-cpp CPU-only and
 # the CUDA variant isn't in the binary cache, so this compiles locally (~10 min).
 #
 # Pinned ahead of nixpkgs (b11018, Sep 17): Qwen3.8 MTP speculative
@@ -12,14 +12,15 @@
 }: {
   perSystem = {system, ...}:
     lib.optionalAttrs (system == "x86_64-linux") {
-      overlayAttrs.llama-cpp-cuda = let
+      # `.override {cudaCapabilities = ["8.9"];}` retargets it per GPU.
+      overlayAttrs.llama-cpp-cuda = lib.makeOverridable ({cudaCapabilities ? ["12.0"]}: let
         pkgs = import inputs.nixpkgs-unstable {
           inherit system;
           config = {
             allowUnfree = true;
-            # GB203 is sm_120; building the one capability instead of all nine
-            # is the difference between ~10 minutes and most of an hour.
-            cudaCapabilities = ["12.0"];
+            # Building the one capability instead of all nine is the
+            # difference between ~10 minutes and most of an hour.
+            inherit cudaCapabilities;
             cudaForwardCompat = false;
           };
         };
@@ -32,6 +33,6 @@
             tag = "b11018";
             hash = "sha256-+3KSknDeEsBcESKj/jPqfm4K8rQ8v12+iw0c7T7rWug=";
           };
-        });
+        })) {};
     };
 }

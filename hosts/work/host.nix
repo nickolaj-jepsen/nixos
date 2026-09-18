@@ -6,6 +6,11 @@
     fireproof.dev.enable = true;
     fireproof.work.enable = true;
     fireproof.hardware.nvidia.enable = true;
+    fireproof.dev.llm = {
+      enable = true;
+      vramGiB = 12; # RTX 4070
+      cudaCapability = "8.9";
+    };
     fireproof.claude-code.work.enable = true;
     fireproof.networkd.enable = true;
 
