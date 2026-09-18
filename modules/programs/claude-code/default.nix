@@ -157,6 +157,17 @@
         env = {
           CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
         };
+        # Private repo, so fetched by Claude Code at runtime with the user's git
+        # credentials rather than as a flake input; no access just means no plugin.
+        extraKnownMarketplaces = lib.mkIf cfg.work.enable {
+          ao-agent-skills.source = {
+            source = "github";
+            repo = "Digital-Udvikling/skills";
+          };
+        };
+        enabledPlugins = lib.mkIf cfg.work.enable {
+          "ao-skills@ao-agent-skills" = true;
+        };
         permissions = {
           # Only commands that are frequent AND slow to classify earn a rule: in
           # auto mode an allow rule buys determinism, not safety. Omitted on

@@ -95,3 +95,7 @@ standalone guard, so an osConfig read fails CI.
   `skills/README.md`). Third-party skills: registered by their feature leaf
   from the upstream source, e.g. `modules/programs/git.nix` registers
   `fireproof.agents.skills.gh-stack = "${pkgs.unstable.gh-stack.src}/skills/gh-stack"`.
+  Private skills (e.g. Digital-Udvikling/skills) must not be flake inputs;
+  they are Claude Code plugin marketplaces fetched at runtime
+  (`extraKnownMarketplaces`/`enabledPlugins` in
+  `modules/programs/claude-code/default.nix`), so they reach Claude Code only.
