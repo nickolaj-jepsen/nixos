@@ -56,32 +56,60 @@ in {
     };
   };
 
-  # work, RTX 4070. Only ByteShape's 2.56 bpw IQ2_XXS (8.2 GiB, 93% of BF16 on
-  # their benchmark mix) fits; their 3.23 bpw IQ3_S is 10.3 GiB and doesn't
-  # leave room beside the desktop, which holds 1.5–2.6 GiB and drifts upward.
+  # work, RTX 4070. The desktop holds 1.8–2.1 GiB (all three monitors hang off
+  # this card), and loads start failing around 11.7 GiB total, so the model
+  # gets ~9.6 GiB. That buys exactly one upgrade over the default entry — MTP,
+  # 64k, or the next quant up — never two, hence one entry each.
   #
-  # Peak own VRAM, measured 2026-09-18 on b11018 (~1.1k tok/s prefill for all):
-  #   32k, no MTP: 8.5 GiB, 42 tok/s
-  #   16k + MTP:   8.9 GiB, 64 tok/s
-  #   24k + MTP:   OOM'd on load with the desktop at 2.5 GiB
+  # ByteShape quants, score vs BF16 on their benchmark mix / PPL over 200
+  # chunks of this repo:
+  #   IQ2_XXS 2.56 bpw, 8.2 GiB: 93.0% / 4.448
+  #   IQ3_XXS 2.88 bpw, 9.2 GiB: 96.6% / 4.046
+  #   IQ3_XS 3.01 bpw (9.6 GiB) and up don't fit at any useful context.
+  #
+  # Peak own VRAM, measured 2026-09-18 on b11018 (~1.1k tok/s prefill for all;
+  # MTP tok/s swings with draft acceptance). KV is ~23 MiB per 1k tokens.
+  #   IQ2 32k:        8.5 GiB, 40 tok/s
+  #   IQ2 16k + MTP:  8.9 GiB, 57–75 tok/s
+  #   IQ2 64k:        9.3 GiB, 39 tok/s
+  #   IQ2 32k + MTP:  9.3 GiB, 57–75 tok/s
+  #   IQ3 32k:        9.5 GiB, 38 tok/s
+  #   IQ2 64k + MTP, IQ2 128k, IQ3 48k, IQ3 + MTP (even at 8k): OOM on load
   # Letting --fit offload layers instead of pinning -ngl 99 always loads, but
   # a few CPU layers drop it to 12–15 tok/s, so a failed load is the better
   # signal to fall back to the default entry.
   "12" = {
+    # The only entry with real slack (desktop up to ~3.2 GiB), so it stays the
+    # default that other clients hit blind.
     "qwen3.8-27b" = {
       name = "Qwen3.8 27B IQ2 (local 32k)";
       weights = byteshape "Qwen3.8-27B-IQ2_XXS-2.56bpw.gguf";
       ctx = 32768;
       args = kvQ4;
     };
-    # Fails to load once the desktop holds more than ~2.8 GiB.
+    # Fails to load once the desktop holds more than ~2.4 GiB.
     "qwen3.8-27b-fast" = {
-      name = "Qwen3.8 27B IQ2 (local 16k, MTP)";
+      name = "Qwen3.8 27B IQ2 (local 32k, MTP)";
       weights = byteshape "Qwen3.8-27B-IQ2_XXS-2.56bpw.gguf";
-      ctx = 16384;
+      ctx = 32768;
       # The MTP draft's compute buffer is sized by ubatch; 256 instead of the
       # default 512 saves ~240 MiB with prefill speed unchanged.
       args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
+    };
+    # Fails to load once the desktop holds more than ~2.5 GiB.
+    "qwen3.8-27b-64k" = {
+      name = "Qwen3.8 27B IQ2 (local 64k)";
+      weights = byteshape "Qwen3.8-27B-IQ2_XXS-2.56bpw.gguf";
+      ctx = 65536;
+      args = kvQ4;
+    };
+    # Fails to load once the desktop holds more than ~2.2 GiB (loaded at 2.06).
+    # A smaller ubatch only buys ~60 MiB here, so it isn't worth the flag.
+    "qwen3.8-27b-hq" = {
+      name = "Qwen3.8 27B IQ3 (local 32k)";
+      weights = byteshape "Qwen3.8-27B-IQ3_XXS-2.88bpw.gguf";
+      ctx = 32768;
+      args = kvQ4;
     };
   };
 }
