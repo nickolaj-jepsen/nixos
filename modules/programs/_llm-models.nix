@@ -5,10 +5,6 @@
 # q4_0 KV everywhere: 32k at q8_0 needs ~14.1 GiB on the 16 GiB tier and OOM'd
 # once at 14.06 GiB free, so it loses the race against a busy browser.
 let
-  unsloth = file: {
-    inherit file;
-    url = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/${file}";
-  };
   byteshape = file: {
     inherit file;
     url = "https://huggingface.co/byteshape/Qwen3.8-27B-GGUF/resolve/main/${file}";
@@ -23,36 +19,38 @@ let
     "--spec-draft-type-v q4_0"
   ];
 in {
-  # desktop, RTX 5070 Ti. Two quants, because no single one covers both jobs:
-  #   UD-Q3_K_XL (~12.5 GiB) — the default. Measured PPL 2.996 vs IQ3_XXS's
-  #     3.050 over 213 chunks of this repo, i.e. 1.8% better for ~the same tok/s
-  #     (48 vs 50 short-context, 35 at 32k depth). IQ4_XS is a further 2.2% but
-  #     spills to CPU and collapses to 4.6 tok/s, so 4-bit isn't worth having.
-  #   UD-IQ3_XXS (~11 GiB) — only for the 128k entry: 128k of KV needs 2 GiB
-  #     even at q4_0, which Q3_K_XL leaves no room for.
+  # desktop, RTX 5070 Ti. The desktop holds 1.1–1.6 GiB, so the model gets
+  # ~14.1 GiB. Two quants, because context and bits compete for it.
   #
-  # Unsloth replaced both files in-place with Dynamic v3 on 2026-08-19 (~10%
-  # better accuracy at the same size, same URLs) — the PPL figures above are
-  # from the launch-day files, but the size/speed tradeoff stands. To pick v3
-  # up: rm ~/models/*.gguf && llm-fetch.
+  # Measured 2026-09-18 on b11018. Score vs BF16 on ByteShape's benchmark mix /
+  # PPL over this repo / HumanEval+ (±3 tasks of noise):
+  #   byteshape IQ4_XS 3.84 bpw, 12.2 GiB: 99.6% / 3.541 / 89.6%
+  #   unsloth UD-Q3_K_XL,        12.2 GiB: 97.6% / 3.516 / 87.8%
+  #   byteshape IQ3_S 3.23 bpw,  10.3 GiB: 98.7% / 3.688 / 90.9%
+  #   unsloth UD-IQ3_XXS,        10.2 GiB: 93.6% / 3.615 / 90.2%
+  # Only the vendor score separates them; ByteShape also takes ~150 MiB less.
+  # q4_0 KV costs nothing measurable: PPL at 8k is 2.739 f16, 2.710 q4_0.
+  #
+  # Own VRAM, tok/s short, tok/s at depth; MTP + ubatch 256, ~27 MiB per 1k ctx:
+  #   IQ4_XS 32k:  13.7 GiB, 97
+  #   IQ4_XS 48k:  14.1 GiB, 97, 69 at 42k
+  #   IQ3_S 96k:   13.5 GiB, 96, 61 at 83k
+  #   IQ3_S 112k:  14.0 GiB, 94, 51 at 104k
+  #   IQ4_XS 64k, IQ3_S 128k: load only with the desktop under ~1.2 GiB
+  #   128k without MTP: 13.4 GiB, 55, 23 at 83k
+  # ngram-mod on top of MTP gains nothing; DFlash2 drafting needs 1.1 GiB more.
   "16" = {
     "qwen3.8-27b" = {
-      name = "Qwen3.8 27B (local 32k)";
-      weights = unsloth "Qwen3.8-27B-UD-Q3_K_XL.gguf";
-      ctx = 32768;
-      # Measured 2026-08-24 on the v3 quant: 47 tok/s bare, 81 at n-max 2, 89
-      # at n-max 3 (n-max 3 costs only ~200 MiB more; total ~15.5 GiB with the
-      # desktop holding 1.4).
-      args = kvQ4 ++ mtp;
+      name = "Qwen3.8 27B (local 48k)";
+      weights = byteshape "Qwen3.8-27B-IQ4_XS-3.84bpw.gguf";
+      ctx = 49152;
+      args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
     };
-    # ~1.2 GiB of headroom since the smaller v3 quant, but still no MTP: the
-    # draft context wants another ~720 MiB that isn't there (measured
-    # 2026-08-24), and it OOMs if the desktop is using much VRAM.
-    "qwen3.8-27b-128k" = {
-      name = "Qwen3.8 27B (local 128k)";
-      weights = unsloth "Qwen3.8-27B-UD-IQ3_XXS.gguf";
-      ctx = 131072;
-      args = kvQ4;
+    "qwen3.8-27b-long" = {
+      name = "Qwen3.8 27B (local 112k)";
+      weights = byteshape "Qwen3.8-27B-IQ3_S-3.23bpw.gguf";
+      ctx = 114688;
+      args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
     };
   };
 
