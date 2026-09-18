@@ -12,10 +12,6 @@
       device = "/dev/disk/by-id/ata-WDC_WD120EFBX-68B0EN0_5PKVMK7F-part1";
       fsType = "ext4";
     };
-    fileSystems."/mnt/longhorn" = {
-      device = "/dev/disk/by-id/ata-TOSHIBA_HDWE160_26N7K5N0F56D-part1";
-      fsType = "ext4";
-    };
     fileSystems."/mnt/data" = {
       fsType = "fuse.mergerfs";
       device = "/mnt/data-disk/*";
