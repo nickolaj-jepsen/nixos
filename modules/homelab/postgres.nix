@@ -16,6 +16,18 @@
           extensions = ps: [ps.postgis];
           settings = {
             port = 5432;
+
+            # Data lives on the SSD mirror and totals ~2.5 GB, so 1 GB of buffers holds the hot set.
+            shared_buffers = "1GB";
+            effective_cache_size = "8GB";
+            maintenance_work_mem = "256MB";
+            random_page_cost = 1.1;
+            effective_io_concurrency = 200;
+
+            # Fewer, smaller checkpoints: the checkpointer is the top steady writer on the SSDs.
+            checkpoint_timeout = "15min";
+            max_wal_size = "4GB";
+            wal_compression = "zstd";
           };
         };
         postgresqlBackup.enable = true;
