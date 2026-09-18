@@ -23,8 +23,10 @@ let
     "--spec-draft-type-v q4_0"
   ];
 in {
-  # desktop, RTX 5070 Ti. The desktop holds 1.1–1.6 GiB, so the model gets
-  # ~14.1 GiB. Two quants, because context and bits compete for it.
+  # desktop, RTX 5070 Ti. The desktop holds 1.1–1.6 GiB, and the model is capped
+  # at ~13.7 GiB so the compositor keeps ~1 GiB of headroom: a failed display
+  # allocation wedges nvidia-drm page flips until reboot. Two quants, because
+  # context and bits compete for it.
   #
   # Measured 2026-09-18 on b11018. Score vs BF16 on ByteShape's benchmark mix /
   # PPL over this repo / HumanEval+ (±3 tasks of noise):
@@ -45,15 +47,15 @@ in {
   # ngram-mod on top of MTP gains nothing; DFlash2 drafting needs 1.1 GiB more.
   "16" = {
     "qwen3.8-27b" = {
-      name = "Qwen3.8 27B (local 48k)";
+      name = "Qwen3.8 27B (local 32k)";
       weights = byteshape "Qwen3.8-27B-IQ4_XS-3.84bpw.gguf";
-      ctx = 49152;
+      ctx = 32768;
       args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
     };
     "qwen3.8-27b-long" = {
-      name = "Qwen3.8 27B (local 112k)";
+      name = "Qwen3.8 27B (local 96k)";
       weights = byteshape "Qwen3.8-27B-IQ3_S-3.23bpw.gguf";
-      ctx = 114688;
+      ctx = 98304;
       args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
     };
 
