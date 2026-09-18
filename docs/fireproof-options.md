@@ -1347,6 +1347,30 @@ null
 
 
 
+## fireproof\.monitors\.\*\.vrr
+
+
+
+Enable on-demand VRR in niri: active only while a window that opts in is on this output\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.neovim\.full\.enable
 
 

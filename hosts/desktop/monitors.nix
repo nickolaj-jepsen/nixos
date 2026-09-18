@@ -8,6 +8,7 @@
         height = 1440;
       };
       refreshRateNiri = 170.001;
+      vrr = true;
       position = {
         x = 1920;
         y = 0;
@@ -20,6 +21,7 @@
         height = 1440;
       };
       refreshRateNiri = 165.000;
+      vrr = true;
       position = {
         x = 4480;
         y = 0;

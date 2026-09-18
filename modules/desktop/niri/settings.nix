@@ -112,6 +112,8 @@
           {
             matches = [{app-id = "^com\\.mitchellh\\.ghostty$";}];
             draw-border-with-background = false;
+            # Present keystroke frames immediately instead of on the next fixed refresh.
+            variable-refresh-rate = true;
           }
           # Floating windows (Mod+S) get a soft drop shadow so the state reads at
           # a glance against the otherwise flat Flexoki theme.

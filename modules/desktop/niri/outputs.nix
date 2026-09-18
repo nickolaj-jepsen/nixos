@@ -24,6 +24,7 @@
                   refresh = monitor.refreshRateNiri;
                 };
                 focus-at-startup = monitor.name == primaryMonitorName;
+                variable-refresh-rate = lib.mkIf monitor.vrr "on-demand";
                 transform.rotation =
                   if (monitor.transform != null)
                   then monitor.transform * 90

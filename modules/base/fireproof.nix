@@ -268,6 +268,11 @@ let
               type = lib.types.bool;
               default = true;
             };
+            vrr = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = "Enable on-demand VRR in niri: active only while a window that opts in is on this output.";
+            };
             # When unset on every entry, consumers fall back to the first active entry (fpLib.primaryMonitor).
             primary = lib.mkOption {
               type = lib.types.bool;
