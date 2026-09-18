@@ -122,6 +122,10 @@ in {
             User = "nickolaj";
             ProxyJump = "homelab";
           };
+          macbook = {
+            HostName = "10.0.2.101";
+            User = "nickolaj";
+          };
         }
         // lib.optionalAttrs workEnabled {
           "bastion.ao" = {

@@ -1405,6 +1405,38 @@ true
 
 
 
+## fireproof\.scripts\.tunnel-home\.enable
+
+
+
+Whether to enable tunnel-home, an sshuttle wrapper for reaching a remote network over SSH\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.tailscale\.enable
 
 

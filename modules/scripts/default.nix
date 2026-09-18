@@ -15,6 +15,13 @@
         text = builtins.readFile path;
       };
   in {
+    age.secrets = lib.optionalAttrs (config.fireproof.scripts.tunnel-home.enable && pkgs.stdenv.isLinux) {
+      tunnel-home = {
+        rekeyFile = ../../secrets/tunnel-home.age;
+        mode = "0400";
+      };
+    };
+
     home.packages =
       [
         (makeScript {
@@ -85,6 +92,25 @@
             gnused
             coreutils
           ];
+        })
+      ]
+      # The secret body gets no build-time shellcheck — test before committing.
+      ++ lib.optionals (config.fireproof.scripts.tunnel-home.enable && pkgs.stdenv.isLinux) [
+        (pkgs.writeShellApplication {
+          name = "tunnel-home";
+          runtimeInputs = with pkgs; [
+            sshuttle
+            openssh
+            nftables
+            iptables
+            tailscale
+            jq
+            gawk
+            coreutils
+          ];
+          text = ''
+            exec ${lib.getExe pkgs.bash} "${config.age.secrets.tunnel-home.path}" "$@"
+          '';
         })
       ]
       # Wayland screenshot tooling — Linux desktop only.
