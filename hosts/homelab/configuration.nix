@@ -24,6 +24,12 @@
       '';
     };
 
+    # Containers here are all declarative, so an unused image is a leftover from a removed or upgraded service.
+    virtualisation.docker.autoPrune = {
+      enable = true;
+      flags = ["--all"];
+    };
+
     # Monitor SMART health on the SSDs and spinning disks; log failures to the
     # journal so a failing drive surfaces before it dies.
     services.smartd.enable = true;
