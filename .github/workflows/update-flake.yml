@@ -1,12 +1,6 @@
-# For the `--auto` merge below to actually wait for CI, the `build (<host>)`
-# and `darwin` checks from fmt.yml must be marked as required status checks on
-# `main` in the repo's branch protection settings. Otherwise this PR
-# auto-merges regardless of whether builds pass.
-#
-# PRs opened with the default GITHUB_TOKEN never get a working `pull_request`
-# CI run, so the PR is created with GH_AW_GITHUB_TOKEN (a fine-grained PAT with
-# contents + pull-requests write; the same secret gh-aw uses for
-# update-overlays) when it is set, and falls back to the default token.
+# Gated by repo settings: a ruleset on `main` requiring `CI gate` (fmt.yml),
+# "Allow auto-merge", and GH_AW_GITHUB_TOKEN (fine-grained PAT, contents +
+# pull-requests write) — GITHUB_TOKEN PRs get no CI run, so without it the PR sits open.
 name: Update flake.lock
 on:
   schedule:
@@ -23,7 +17,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
-      id-token: write
       issues: write
       pull-requests: write
     steps:
@@ -39,6 +32,16 @@ jobs:
             automated
       - name: Enable auto-merge
         if: steps.update.outputs.pull-request-number != ''
-        run: gh pr merge --auto --rebase "${{ steps.update.outputs.pull-request-number }}"
+        # `--auto` merges on the spot when nothing is required, so check first.
+        run: |
+          required=$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/main" \
+            --jq 'any(.[]; .type == "required_status_checks")')
+          if [ "$required" != true ]; then
+            echo "::error::main has no required status checks; leaving PR #$PR open instead of auto-merging unchecked."
+            exit 1
+          fi
+          gh pr merge --auto --rebase "$PR"
         env:
-          GH_TOKEN: ${{ github.token }}
+          # A GITHUB_TOKEN merge wouldn't trigger CI on main.
+          GH_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN || github.token }}
+          PR: ${{ steps.update.outputs.pull-request-number }}

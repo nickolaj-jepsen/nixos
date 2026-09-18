@@ -101,3 +101,18 @@ jobs:
           attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Build macbook
         run: nix build .#darwinConfigurations.macbook.system
+
+  # The required check on `main`: a stable name, unlike the matrix jobs. Skipped counts as failed.
+  gate:
+    name: CI gate
+    if: always()
+    needs: [fmt, check, eval, build, darwin]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to have succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done
