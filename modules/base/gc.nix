@@ -1,6 +1,7 @@
 {
-  flake.modules.nixos.gc = _: {
-    boot.loader.systemd-boot.configurationLimit = 10;
+  flake.modules.nixos.gc = {lib, ...}: {
+    # mkDefault: a generation costs ~144 MB of ESP, so small-ESP hosts cap it lower.
+    boot.loader.systemd-boot.configurationLimit = lib.mkDefault 10;
 
     nix.gc = {
       automatic = true;
