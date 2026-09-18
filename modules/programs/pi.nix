@@ -147,6 +147,56 @@
                   };
                 }
                 {
+                  id = "z-ai/glm-5.3";
+                  name = "GLM 5.3 (TensorX)";
+                  reasoning = true;
+                  input = ["text"];
+                  contextWindow = 1000000;
+                  maxTokens = 128000;
+                  cost = {
+                    input = 1.75;
+                    output = 4.5;
+                    cacheRead = 0.44;
+                    cacheWrite = 0;
+                  };
+                  # 5.3 dropped `thinking.type: "disabled"`; it always reasons and
+                  # only low/high/max are real levels, max being the default.
+                  thinkingLevelMap = {
+                    off = null;
+                    minimal = null;
+                    low = "low";
+                    medium = null;
+                    high = "high";
+                    xhigh = null;
+                    max = "max";
+                  };
+                }
+                {
+                  id = "z-ai/glm-5.3-flash";
+                  name = "GLM 5.3 Flash (TensorX)";
+                  reasoning = true;
+                  input = ["text" "image"];
+                  contextWindow = 1000000;
+                  # TensorX publishes no output cap; Z.ai's API limit.
+                  maxTokens = 131072;
+                  cost = {
+                    input = 0.2;
+                    output = 0.5;
+                    cacheRead = 0.05;
+                    cacheWrite = 0;
+                  };
+                  # Same always-on three-level budget as full 5.3.
+                  thinkingLevelMap = {
+                    off = null;
+                    minimal = null;
+                    low = "low";
+                    medium = null;
+                    high = "high";
+                    xhigh = null;
+                    max = "max";
+                  };
+                }
+                {
                   id = "z-ai/glm-5.2";
                   name = "GLM 5.2 (TensorX)";
                   reasoning = true;
@@ -204,6 +254,33 @@
                     medium = null;
                     high = "high";
                     max = "max";
+                  };
+                }
+                {
+                  id = "qwen/qwen3.8-flash-next";
+                  name = "Qwen3.8 Flash Next (TensorX)";
+                  reasoning = true;
+                  input = ["text" "image"];
+                  # Native window — the 1M YaRN stretch isn't what TensorX serves.
+                  contextWindow = 262144;
+                  # TensorX publishes no output cap; Qwen's recommended response budget.
+                  maxTokens = 131072;
+                  cost = {
+                    input = 0.2;
+                    output = 0.5;
+                    cacheRead = 0.05;
+                    cacheWrite = 0;
+                  };
+                  # Qwen's own levels. Thinking only switches off through the chat
+                  # template kwarg, which this provider can't reach — so no `off`.
+                  thinkingLevelMap = {
+                    off = null;
+                    minimal = null;
+                    low = "low";
+                    medium = "medium";
+                    high = null;
+                    xhigh = "xhigh";
+                    max = null;
                   };
                 }
               ];
