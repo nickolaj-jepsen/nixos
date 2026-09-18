@@ -69,6 +69,9 @@
       # btop is enabled globally in core.nix; on NVIDIA hosts use the build that
       # links NVML so the GPU panel (util/VRAM/temp/power) populates.
       programs.btop.package = pkgs.btop-cuda;
+
+      # Per-process VRAM, which btop's GPU panel doesn't break down.
+      home.packages = [pkgs.nvtopPackages.nvidia];
     };
   };
 }

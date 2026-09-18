@@ -8,7 +8,15 @@
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.work.enable) {
       # darwin installs the cask (below); the nixpkgs build is Linux-only.
       home.packages = lib.optionals pkgs.stdenv.isLinux [
-        pkgs.unstable.slack
+        # Wrapped in-package since slack.desktop execs $out/bin/slack by store
+        # path. --disable-gpu frees ~85 MiB of VRAM for the local LLM (llm.nix).
+        (pkgs.unstable.slack.overrideAttrs (old: {
+          postFixup =
+            (old.postFixup or "")
+            + ''
+              wrapProgram $out/bin/slack --add-flags --disable-gpu
+            '';
+        }))
       ];
       # Slack self-registers this at launch; declared so the managed mimeapps.list keeps it.
       xdg.mimeApps.defaultApplications = lib.mkIf pkgs.stdenv.isLinux {
