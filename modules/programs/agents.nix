@@ -8,7 +8,7 @@
     config = lib.mkIf config.fireproof.dev.enable {
       programs.github-copilot-cli = {
         enable = true;
-        package = pkgs.github-copilot-cli;
+        package = pkgs.unstable.github-copilot-cli;
         # Pulls in programs.mcp.servers (see modules/programs/mcp.nix).
         enableMcpIntegration = true;
         # Shared with claude-code and pi; keep it agent-agnostic.

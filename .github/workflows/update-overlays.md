@@ -85,17 +85,7 @@ checksum from it. Updating means replacing the vendored manifest.
 - **Update fields**: `version` (in both the attribute and the `url` string) and all
   four `sha256Map` entries
 
-### 4. GitHub Copilot CLI (`overlays/github-copilot-cli.nix`)
-
-- **Latest version**: Check latest release of `github/copilot-cli` on GitHub (the
-  tag is `v<VERSION>`; prefer the release endpoint over tags, which also carry
-  pre-releases)
-- **New hashes**: one tgz per platform, so compute one hash per entry in `plat`.
-  For each of `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, run
-  `nix-hash.py file "https://github.com/github/copilot-cli/releases/download/v<VERSION>/github-copilot-<VERSION>-<platform>.tgz"`
-- **Update fields**: `version` and all four `plat.*.hash` entries
-
-### 5. Claude Desktop (`overlays/claude-desktop.nix`)
+### 4. Claude Desktop (`overlays/claude-desktop.nix`)
 
 Upstream publishes no release feed — the apt repository index is the source of truth.
 
@@ -107,7 +97,7 @@ Upstream publishes no release feed — the apt repository index is the source of
   from `.../binary-arm64/Packages`, then convert each with `nix-hash.py sri <hex>`
 - **Update fields**: `version` and both `plat.*.hash` entries
 
-### 6. llama.cpp CUDA (`overlays/llama-cpp-cuda.nix`)
+### 5. llama.cpp CUDA (`overlays/llama-cpp-cuda.nix`)
 
 This overlay overrides nixpkgs' `llama-cpp` with a newer pinned tag (`b<VERSION>`)
 because nixpkgs lagged behind features Qwen3.8 serving needs (`--reasoning-effort`
