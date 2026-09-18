@@ -2,12 +2,16 @@
 # llm.nix (serving) and pi.nix (provider). Every tier reuses the id
 # "qwen3.8-27b" for its default entry so clients don't care which host they hit.
 #
-# q4_0 KV everywhere: 32k at q8_0 needs ~14.1 GiB on the 16 GiB tier and OOM'd
+# q4_0 KV on the 27B: 32k at q8_0 needs ~14.1 GiB on the 16 GiB tier and OOM'd
 # once at 14.06 GiB free, so it loses the race against a busy browser.
 let
   byteshape = file: {
     inherit file;
     url = "https://huggingface.co/byteshape/Qwen3.8-27B-GGUF/resolve/main/${file}";
+  };
+  unsloth = repo: path: {
+    file = baseNameOf path;
+    url = "https://huggingface.co/unsloth/${repo}/resolve/main/${path}";
   };
   kvQ4 = ["--cache-type-k q4_0" "--cache-type-v q4_0"];
   # The GGUFs carry the model's own MTP head (blk.*.nextn.*), so drafting with
@@ -51,6 +55,45 @@ in {
       weights = byteshape "Qwen3.8-27B-IQ3_S-3.23bpw.gguf";
       ctx = 114688;
       args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
+    };
+
+    # Fast entries, measured 2026-09-18 with thinking off: tok/s raw / tok/s on
+    # tool-call turns / of 60 bash-tool tasks passed / s per 20 / HumanEval+.
+    # The 27B: 100 / 97 / 60 / 56 / 89.6%.
+    #   Qwen3.5-4B + MTP:             255 / 247 / 59 / 24 / 80.5%
+    #   Gemma 4 26B-A4B Q3 + MTP:     235 / 181 / 60 / 36 / 94.5%
+    #   Qwen3.6-35B-A3B IQ2 + MTP:    280 / 244 / 58 / 27 / 84.8%, but 10.8 GiB
+    #   Gemma 4 E4B + MTP:            292 / 243 / 48 / 20
+    #   MiniCPM5-2B:                  301 / 293 / 46 / 29
+    # Everything past 300 tok/s (Qwen3.5-2B, Gemma E2B, LFM2.5) failed a quarter
+    # of the tasks. DFlash on the 4B: 340 raw but 201 on tool-call turns.
+    "qwen3.5-4b" = {
+      name = "Qwen3.5 4B (local fast 64k)";
+      weights = unsloth "Qwen3.5-4B-MTP-GGUF" "Qwen3.5-4B-UD-Q4_K_XL.gguf";
+      ctx = 65536;
+      # 5.8 GiB. Thinking only when the client asks; Qwen's non-thinking sampling.
+      args = [
+        "--spec-type draft-mtp"
+        "--spec-draft-n-max 2"
+        "--reasoning off"
+        "--temp 0.7"
+        "--top-p 0.8"
+      ];
+    };
+    "gemma-4-26b-a4b" = {
+      name = "Gemma 4 26B-A4B (local 32k)";
+      weights = unsloth "gemma-4-26B-A4B-it-GGUF" "gemma-4-26B-A4B-it-UD-Q3_K_XL.gguf";
+      # Gemma ships its MTP head as a separate file.
+      draft = unsloth "gemma-4-26B-A4B-it-qat-GGUF" "MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf";
+      ctx = 32768;
+      # 14.0 GiB. q4_0 KV would save 500 MiB but cost 13% tok/s; ubatch 256
+      # saves 180 MiB for free. The Q4 quants leave no room for MTP.
+      args = [
+        "--spec-type draft-mtp"
+        "--spec-draft-n-max 2"
+        "--top-k 64"
+        "--ubatch-size 256"
+      ];
     };
   };
 

@@ -1,9 +1,9 @@
-# Qwen3.8-27B served locally on the dev.llm host's GPU, fronted by llama-swap
-# so the weights only hold VRAM while something is actually asking (5 min TTL)
-# — the card is shared with niri, the browser, and anything else wanting it.
-# The quant/context set per card lives in _llm-models.nix.
+# Local models on the dev.llm host's GPU, fronted by llama-swap so only one is
+# loaded and only while something is actually asking (5 min TTL) — the card is
+# shared with niri, the browser, and anything else wanting it.
+# The model/quant/context set per card lives in _llm-models.nix.
 #
-# Weights stay out of the Nix store: 8–12 GiB each, and fetchurl can't resume.
+# Weights stay out of the Nix store: up to 12 GiB each, and fetchurl can't resume.
 # Run `llm-fetch` once; the service stays inactive until the files exist.
 {
   flake.modules.homeManager.llm = {
@@ -15,11 +15,15 @@
     cfg = config.fireproof.dev.llm;
     models = (import ./_llm-models.nix).${toString cfg.vramGiB};
     modelDir = "${config.home.homeDirectory}/models";
-    modelPath = m: "${modelDir}/${m.weights.file}";
+    filePath = f: "${modelDir}/${f.file}";
+    modelFiles = m: [m.weights] ++ lib.optional (m ? draft) m.draft;
     llama-cpp = pkgs.llama-cpp-cuda.override {cudaCapabilities = [cfg.cudaCapability];};
 
     # --parallel defaults to auto in b10612+ and multiplies the KV/recurrent-state
     # caches per slot — without pinning it to 1 the MTP config OOMs on load.
+    #
+    # Sampling and --reasoning-effort are Qwen3.8's; other entries override them
+    # through args, since the last occurrence of a flag wins.
     #
     # --reasoning-effort: the template defaults to xhigh, which burns tokens on a
     # local model. Needs the b10612 overlay pin (PR #26941 merged after nixpkgs'
@@ -29,7 +33,7 @@
     serverCmd = m:
       lib.concatStringsSep "\n" ([
           "${llama-cpp}/bin/llama-server"
-          "--model ${modelPath m}"
+          "--model ${filePath m.weights}"
           "--host 127.0.0.1"
           "--port \${PORT}"
           "--flash-attn on"
@@ -42,6 +46,7 @@
           "--ctx-size ${toString m.ctx}"
           "--reasoning-effort medium"
         ]
+        ++ lib.optional (m ? draft) "--model-draft ${filePath m.draft}"
         ++ m.args);
 
     swapConfig = (pkgs.formats.yaml {}).generate "llama-swap.yaml" {
@@ -57,7 +62,7 @@
         models;
     };
 
-    weights = lib.unique (lib.mapAttrsToList (_: m: m.weights) models);
+    weights = lib.unique (lib.concatMap modelFiles (lib.attrValues models));
 
     llm-fetch = pkgs.writeShellApplication {
       name = "llm-fetch";
@@ -88,7 +93,7 @@
         Unit = {
           Description = "llama-swap — on-demand local LLM router";
           # Idle until the weights are actually on disk.
-          ConditionPathExists = map modelPath (lib.attrValues models);
+          ConditionPathExists = map filePath weights;
           After = ["network.target"];
         };
         Service = {
