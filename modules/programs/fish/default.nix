@@ -38,6 +38,9 @@
   flake.modules.homeManager.fish = {pkgs, ...}: {
     config = {
       programs = {
+        # HM's fish module enables this too; the man-cache build is slow.
+        man.generateCaches = false;
+
         # Rich argument completions for kubectl/gh/docker/git/systemctl; composes
         # with the bespoke ds/worktree/wt completions (carapace defers to
         # existing fish completions).

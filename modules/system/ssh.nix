@@ -178,15 +178,18 @@ in {
     systemd.user.services."add-ssh-keys" = lib.mkIf (workEnabled && pkgs.stdenv.isLinux) {
       Unit = {
         Description = "Add SSH keys to ssh-agent";
-        After = ["network.target" "ssh-agent.service"];
+        # agenix.service decrypts the key this unit loads.
+        After = ["network.target" "ssh-agent.service" "agenix.service"];
         Requires = ["ssh-agent.service"];
+        Wants = ["agenix.service"];
       };
       Service = {
         Type = "oneshot";
+        # Stay active so switches only re-run this on change; Requires= still re-adds keys on agent restart.
+        RemainAfterExit = true;
         # The systemd user manager doesn't inherit home.sessionVariables, so point
         # ssh-add at the agent socket explicitly.
         Environment = ["SSH_AUTH_SOCK=%t/ssh-agent"];
-        ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
         ExecStart = "${pkgs.openssh}/bin/ssh-add -q ${config.age.secrets.ssh-key-ao.path}";
       };
       Install.WantedBy = ["default.target"];
