@@ -15,3 +15,26 @@
   padding: 10px 0;
   width: 100%;
 }
+
+/* Home Assistant context list: every row is conditional, so hide the gap when nothing is happening. */
+.fp-context:empty {
+  display: none;
+}
+
+.fp-context:not(:empty) {
+  margin-bottom: 10px;
+}
+
+.fp-posters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+.fp-poster img {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: var(--border-radius);
+  margin-bottom: 4px;
+}

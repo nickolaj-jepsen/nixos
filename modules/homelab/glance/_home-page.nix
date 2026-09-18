@@ -1,4 +1,30 @@
-{cfg}: {
+{
+  cfg,
+  templates,
+}: let
+  url = sub: "https://${sub}.${cfg.domain}";
+  site = {
+    title,
+    sub,
+    icon,
+    ...
+  } @ args:
+    {
+      inherit title icon;
+      url = url sub;
+      same-tab = true;
+    }
+    // removeAttrs args ["title" "sub" "icon"];
+  monitor = title: sites: {
+    type = "monitor";
+    inherit title sites;
+    cache = "5m";
+  };
+  bookmark = title: url: icon: {
+    inherit title url icon;
+    same-tab = true;
+  };
+in {
   name = "Home";
   columns = [
     {
@@ -13,6 +39,18 @@
           title = "Weather";
           location = "\${WEATHER_LOCATION}";
           units = "metric";
+        }
+        {
+          type = "custom-api";
+          title = "Home";
+          title-url = "${url "ha"}/nixos-lovelace/home";
+          cache = "1m";
+          url = "http://127.0.0.1:8123/api/states";
+          headers = {
+            Authorization = "Bearer \${HA_TOKEN}";
+            Accept = "application/json";
+          };
+          template = templates.home-status;
         }
         {
           type = "server-stats";
@@ -35,207 +73,70 @@
             {
               title = "Social";
               links = [
-                {
-                  title = "Gmail";
-                  url = "https://mail.google.com";
-                  icon = "si:gmail";
-                  same-tab = true;
-                }
-                {
-                  title = "Reddit";
-                  url = "https://old.reddit.com";
-                  icon = "si:reddit";
-                  same-tab = true;
-                }
-                {
-                  title = "Github";
-                  url = "https://github.com";
-                  icon = "si:github";
-                  same-tab = true;
-                }
+                (bookmark "Gmail" "https://mail.google.com" "si:gmail")
+                (bookmark "Reddit" "https://old.reddit.com" "si:reddit")
+                (bookmark "Github" "https://github.com" "si:github")
               ];
             }
             {
               title = "NixOS";
               links = [
-                {
-                  title = "NixOS Search";
-                  url = "https://search.nixos.org";
-                  icon = "si:nixos";
-                  same-tab = true;
-                }
-                {
-                  title = "Home-manager Search";
-                  url = "https://home-manager-options.extranix.com";
-                  icon = "mdi:home";
-                  same-tab = true;
-                }
-                {
-                  title = "Noogle";
-                  url = "https://noogle.dev";
-                  icon = "mdi:text-search";
-                  same-tab = true;
-                }
+                (bookmark "NixOS Search" "https://search.nixos.org" "si:nixos")
+                (bookmark "Home-manager Search" "https://home-manager-options.extranix.com" "mdi:home")
+                (bookmark "Noogle" "https://noogle.dev" "mdi:text-search")
               ];
             }
             {
               title = "Streaming";
               links = [
-                {
-                  title = "YouTube";
-                  url = "https://youtube.com";
-                  icon = "si:youtube";
-                  same-tab = true;
-                }
-                {
-                  title = "Twitch";
-                  url = "https://twitch.tv";
-                  icon = "si:twitch";
-                  same-tab = true;
-                }
-                {
-                  title = "DR TV";
-                  url = "https://dr.dk/tv";
-                  icon = "mdi:television";
-                  same-tab = true;
-                }
+                (bookmark "YouTube" "https://youtube.com" "si:youtube")
+                (bookmark "Twitch" "https://twitch.tv" "si:twitch")
+                (bookmark "DR TV" "https://dr.dk/tv" "mdi:television")
               ];
             }
           ];
         }
         {
-          type = "monitor";
-          cache = "5m";
-          sites = [
+          type = "split-column";
+          widgets = [
             {
-              title = "Home Assistant";
-              url = "https://ha.${cfg.domain}";
-              icon = "sh:home-assistant";
-              same-tab = true;
+              type = "custom-api";
+              title = "Downloads";
+              title-url = url "sabnzbd";
+              cache = "1m";
+              url = "http://127.0.0.1:8080/api";
+              parameters = {
+                mode = "queue";
+                output = "json";
+                apikey = "\${SABNZBD_API_KEY}";
+              };
+              template = templates.sabnzbd-queue;
             }
             {
-              title = "Nextcloud";
-              url = "https://nextcloud.${cfg.domain}";
-              icon = "sh:nextcloud";
-              same-tab = true;
-            }
-            {
-              title = "Zigbee2MQTT";
-              url = "https://zigbee.${cfg.domain}";
-              icon = "sh:zigbee2mqtt";
-              same-tab = true;
-            }
-            {
-              title = "Plex";
-              url = "https://plex.${cfg.domain}";
-              icon = "sh:plex";
-              same-tab = true;
-              alt-status-codes = [401];
-            }
-            {
-              title = "Jellyfin";
-              url = "https://jellyfin.${cfg.domain}";
-              icon = "sh:jellyfin";
-              same-tab = true;
-            }
-            {
-              title = "Navidrome";
-              url = "https://navidrome.${cfg.domain}";
-              icon = "sh:navidrome";
-              same-tab = true;
-            }
-            {
-              title = "Audiobookshelf";
-              url = "https://audiobookshelf.${cfg.domain}";
-              icon = "sh:audiobookshelf";
-              same-tab = true;
-            }
-            {
-              title = "Grimmory";
-              url = "https://grimmory.${cfg.domain}";
-              icon = "sh:booklore";
-              same-tab = true;
-            }
-            {
-              title = "RomM";
-              url = "https://romm.${cfg.domain}";
-              icon = "sh:romm";
-              same-tab = true;
-            }
-            {
-              title = "Shelfmark";
-              url = "https://shelfmark.${cfg.domain}";
-              icon = "sh:calibre-web-automated-book-downloader";
-              same-tab = true;
-            }
-            {
-              title = "Sonarr";
-              url = "https://sonarr.${cfg.domain}";
-              icon = "sh:sonarr";
-              same-tab = true;
-            }
-            {
-              title = "Radarr";
-              url = "https://radarr.${cfg.domain}";
-              icon = "sh:radarr";
-              same-tab = true;
-            }
-            {
-              title = "Lidarr";
-              url = "https://lidarr.${cfg.domain}";
-              icon = "sh:lidarr";
-              same-tab = true;
-            }
-            {
-              title = "SABnzbd";
-              url = "https://sabnzbd.${cfg.domain}";
-              icon = "sh:sabnzbd";
-              same-tab = true;
-            }
-            {
-              title = "Prowlarr";
-              url = "https://prowlarr.${cfg.domain}";
-              icon = "sh:prowlarr";
-              same-tab = true;
-            }
-            {
-              title = "qBittorrent";
-              url = "https://qbittorrent.${cfg.domain}";
-              icon = "sh:qbittorrent";
-              same-tab = true;
-            }
-            {
-              title = "Attic";
-              url = "https://attic.${cfg.domain}";
-              icon = "sh:nix";
-              same-tab = true;
-              alt-status-codes = [404];
-            }
-            {
-              title = "Zitadel";
-              url = "https://sso.${cfg.domain}";
-              icon = "sh:zitadel";
-              same-tab = true;
-            }
-            {
-              title = "Grafana";
-              url = "https://fireproof.grafana.net/a/grafana-setupguide-app/home";
-              icon = "si:grafana";
-              same-tab = true;
-            }
-            {
-              title = "Beszel";
-              url = "https://beszel.${cfg.domain}";
-              icon = "sh:beszel";
-              same-tab = true;
-            }
-            {
-              title = "BM CMS";
-              url = "https://cms.bmtomrermontage.dk/admin";
-              icon = "sh:payload";
-              same-tab = true;
+              type = "custom-api";
+              title = "Coming up";
+              title-url = "${url "sonarr"}/calendar";
+              cache = "30m";
+              options = {
+                sonarr-url = url "sonarr";
+                radarr-url = url "radarr";
+              };
+              template = templates.coming-up;
             }
           ];
+        }
+        {
+          type = "custom-api";
+          title = "Recently added";
+          title-url = url "jellyfin";
+          cache = "30m";
+          url = "http://127.0.0.1:8096/Users";
+          headers = {
+            Authorization = "MediaBrowser Token=\"\${JELLYFIN_API_KEY}\"";
+            Accept = "application/json";
+          };
+          options.jellyfin-url = url "jellyfin";
+          template = templates.recently-added;
         }
         {
           type = "group";
@@ -288,6 +189,148 @@
               comments-url-template = "https://old.reddit.com/{POST-PATH}";
               title-url = "https://old.reddit.com/r/denmark";
             }
+          ];
+        }
+        {
+          type = "split-column";
+          widgets = [
+            (monitor "Media" [
+              (site {
+                title = "Jellyfin";
+                sub = "jellyfin";
+                icon = "sh:jellyfin";
+              })
+              (site {
+                title = "Navidrome";
+                sub = "navidrome";
+                icon = "sh:navidrome";
+              })
+              (site {
+                title = "Audiobookshelf";
+                sub = "audiobookshelf";
+                icon = "sh:audiobookshelf";
+              })
+              (site {
+                title = "Immich";
+                sub = "immich";
+                icon = "sh:immich";
+              })
+              (site {
+                title = "Grimmory";
+                sub = "grimmory";
+                icon = "sh:booklore";
+              })
+              (site {
+                title = "RomM";
+                sub = "romm";
+                icon = "sh:romm";
+              })
+              (site {
+                title = "Shelfmark";
+                sub = "shelfmark";
+                icon = "sh:calibre-web-automated-book-downloader";
+              })
+              (site {
+                title = "Runite";
+                sub = "runite";
+                icon = "mdi:podcast";
+              })
+            ])
+            (monitor "Arr" [
+              (site {
+                title = "Sonarr";
+                sub = "sonarr";
+                icon = "sh:sonarr";
+              })
+              (site {
+                title = "Radarr";
+                sub = "radarr";
+                icon = "sh:radarr";
+              })
+              (site {
+                title = "Lidarr";
+                sub = "lidarr";
+                icon = "sh:lidarr";
+              })
+              (site {
+                title = "Bazarr";
+                sub = "bazarr";
+                icon = "sh:bazarr";
+              })
+              (site {
+                title = "Prowlarr";
+                sub = "prowlarr";
+                icon = "sh:prowlarr";
+              })
+              (site {
+                title = "SABnzbd";
+                sub = "sabnzbd";
+                icon = "sh:sabnzbd";
+              })
+              (site {
+                title = "qBittorrent";
+                sub = "qbittorrent";
+                icon = "sh:qbittorrent";
+              })
+            ])
+            (monitor "Infra" [
+              (site {
+                title = "Home Assistant";
+                sub = "ha";
+                icon = "sh:home-assistant";
+              })
+              (site {
+                title = "Zigbee2MQTT";
+                sub = "zigbee";
+                icon = "sh:zigbee2mqtt";
+              })
+              (site {
+                title = "Nextcloud";
+                sub = "nextcloud";
+                icon = "sh:nextcloud";
+              })
+              (site {
+                title = "Vaultwarden";
+                sub = "bitwarden";
+                icon = "sh:vaultwarden";
+              })
+              (site {
+                title = "Attic";
+                sub = "attic";
+                icon = "sh:nix";
+                alt-status-codes = [404];
+              })
+              (site {
+                title = "Zitadel";
+                sub = "sso";
+                icon = "sh:zitadel";
+              })
+              (site {
+                title = "Beszel";
+                sub = "beszel";
+                icon = "sh:beszel";
+              })
+              {
+                title = "Grafana";
+                url = "https://fireproof.grafana.net/";
+                icon = "si:grafana";
+                same-tab = true;
+              }
+            ])
+            (monitor "External" [
+              {
+                title = "BM CMS";
+                url = "https://cms.bmtomrermontage.dk/admin";
+                icon = "sh:payload";
+                same-tab = true;
+              }
+              {
+                title = "BM Preview";
+                url = "https://preview.bmtomrermontage.dk";
+                icon = "mdi:web";
+                same-tab = true;
+              }
+            ])
           ];
         }
       ];
