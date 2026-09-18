@@ -19,6 +19,8 @@
           OnCalendar = "daily";
           Persistent = true;
         };
+        # Irreplaceable leftovers from the pre-NixOS Docker server (game worlds, own code, SQL dump).
+        paths = ["${config.users.users.${config.fireproof.username}.home}/archive"];
         passwordFile = "${config.age.secrets.restic-password.path}";
         environmentFile = "${config.age.secrets.restic-env.path}";
         pruneOpts = [
