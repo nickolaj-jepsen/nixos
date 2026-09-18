@@ -27,8 +27,10 @@
         extraLocations."^~ /rest" = {
           proxyPass = "http://127.0.0.1:${toString port}";
           proxyWebsockets = true;
+          # Ungated: navidrome trusts Remote-User from nginx, so drop the client's.
           extraConfig = ''
             auth_request off;
+            proxy_set_header Remote-User "";
           '';
         };
       };
