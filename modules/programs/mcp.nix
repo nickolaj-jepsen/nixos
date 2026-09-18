@@ -23,37 +23,45 @@
         exec ${pkgs.nodejs}/bin/npx -y @growthbook/mcp@latest "$@"
       '';
   in {
-    config = lib.mkIf config.fireproof.dev.mcp.enable {
-      age.secrets.grafana-mcp-env = {
-        rekeyFile = ../../secrets/grafana-mcp-env.age;
-        mode = "0600";
-      };
-      age.secrets.grafana-homelab-env = {
-        rekeyFile = ../../secrets/grafana-homelab-env.age;
-        mode = "0600";
-      };
-      age.secrets.growthbook-mcp-env = {
-        rekeyFile = ../../secrets/growthbook-mcp-env.age;
-        mode = "0600";
-      };
+    config = lib.mkIf config.fireproof.dev.mcp.enable (lib.mkMerge [
+      {
+        age.secrets.grafana-homelab-env = {
+          rekeyFile = ../../secrets/grafana-homelab-env.age;
+          mode = "0600";
+        };
 
-      programs.mcp = {
-        enable = true;
-        servers = {
+        programs.mcp = {
+          enable = true;
+          servers = {
+            figma.url = "https://mcp.figma.com/mcp";
+            snyk = {
+              command = "${pkgs.nodejs}/bin/npx";
+              args = ["-y" "snyk@latest" "mcp" "-t" "stdio"];
+            };
+            grafana.command = toString (grafanaMcpWrapper "homelab" config.age.secrets.grafana-homelab-env.path);
+          };
+        };
+      }
+      # Keeps work tokens off personal-only hosts.
+      (lib.mkIf config.fireproof.work.enable {
+        age.secrets.grafana-mcp-env = {
+          rekeyFile = ../../secrets/grafana-mcp-env.age;
+          mode = "0600";
+        };
+        age.secrets.growthbook-mcp-env = {
+          rekeyFile = ../../secrets/growthbook-mcp-env.age;
+          mode = "0600";
+        };
+
+        programs.mcp.servers = {
           linear.url = "https://mcp.linear.app/mcp";
           sentry.url = "https://mcp.sentry.dev/mcp";
-          figma.url = "https://mcp.figma.com/mcp";
           insight.url = "https://insight.mcp.aortl.net/mcp";
           metabase.url = "https://metabase.aortl.net/api/metabase-mcp";
-          snyk = {
-            command = "${pkgs.nodejs}/bin/npx";
-            args = ["-y" "snyk@latest" "mcp" "-t" "stdio"];
-          };
           growthbook.command = toString (growthbookMcpWrapper config.age.secrets.growthbook-mcp-env.path);
           grafana-work.command = toString (grafanaMcpWrapper "work" config.age.secrets.grafana-mcp-env.path);
-          grafana.command = toString (grafanaMcpWrapper "homelab" config.age.secrets.grafana-homelab-env.path);
         };
-      };
-    };
+      })
+    ]);
   };
 }

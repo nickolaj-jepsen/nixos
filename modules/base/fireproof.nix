@@ -100,7 +100,7 @@ let
         };
         k8s.enable = lib.mkOption {
           type = lib.types.bool;
-          default = config.fireproof.dev.enable;
+          default = config.fireproof.dev.enable && config.fireproof.work.enable;
           description = "Enable kubectl and the AO kube configs";
         };
         mcp.enable = lib.mkOption {
