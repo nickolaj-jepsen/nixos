@@ -124,6 +124,14 @@
             wl-clipboard
           ];
         })
+        (makeScript {
+          path = ./window-kill.bash;
+          runtimeInputs = with pkgs; [
+            niri-unstable # match the running compositor's IPC
+            jq
+            procps
+          ];
+        })
       ];
   };
 }

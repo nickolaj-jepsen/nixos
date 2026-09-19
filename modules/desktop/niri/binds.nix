@@ -148,11 +148,11 @@
         "Mod+S".action.toggle-window-floating = {};
         "Mod+C".action.switch-preset-column-width = {};
 
-        "Mod+Z".action.set-column-width = "-5%";
         "Mod+X".action.set-column-width = "+5%";
+        "Mod+Shift+X".action.set-column-width = "-5%";
         "Mod+Ctrl+X".action.expand-column-to-available-width = {};
+        "Mod+Z".action.set-window-height = "+5%";
         "Mod+Shift+Z".action.set-window-height = "-5%";
-        "Mod+Shift+X".action.set-window-height = "+5%";
 
         "Mod+Shift+WheelScrollDown".action.focus-workspace-down = {};
         "Mod+Shift+WheelScrollUp".action.focus-workspace-up = {};
@@ -192,6 +192,10 @@
 
         "Mod+Return".action.spawn = ["ghostty"];
         "Mod+Backspace".action.close-window = {};
+        "Mod+Shift+Backspace" = {
+          action.spawn = ["window-kill"];
+          hotkey-overlay.title = "Force-kill focused window (SIGKILL)";
+        };
       };
     };
   };
