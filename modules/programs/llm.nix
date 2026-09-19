@@ -17,7 +17,8 @@
     modelDir = "${config.home.homeDirectory}/models";
     filePath = f: "${modelDir}/${f.file}";
     modelFiles = m: [m.weights] ++ lib.optional (m ? draft) m.draft;
-    llama-cpp = pkgs.llama-cpp-cuda.override {cudaCapabilities = [cfg.cudaCapability];};
+    # Stock build so it substitutes from cache.nixos-cuda.org; any change here (capabilities, src pin) means a local CUDA compile.
+    llama-cpp = pkgs.unstable.llama-cpp.override {cudaSupport = true;};
 
     # --parallel defaults to auto in b10612+ and multiplies the KV/recurrent-state
     # caches per slot — without pinning it to 1 the MTP config OOMs on load.
@@ -26,8 +27,7 @@
     # through args, since the last occurrence of a flag wins.
     #
     # --reasoning-effort: the template defaults to xhigh, which burns tokens on a
-    # local model. Needs the b10612 overlay pin (PR #26941 merged after nixpkgs'
-    # b10408); a client-sent reasoning_effort still overrides this.
+    # local model; a client-sent reasoning_effort still overrides this.
     #
     # ${PORT} is llama-swap's macro, not Nix's.
     serverCmd = m:

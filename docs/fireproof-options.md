@@ -638,39 +638,6 @@ true
 
 
 
-## fireproof\.dev\.llm\.cudaCapability
-
-
-
-CUDA compute capability of the serving GPU (5070 Ti = 12\.0,
-4070 = 8\.9)\. llama\.cpp is compiled for this one target only\.
-
-
-
-*Type:*
-string
-
-
-
-*Default:*
-
-```nix
-"12.0"
-```
-
-
-
-*Example:*
-
-```nix
-"8.9"
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.dev\.llm\.vramGiB
 
 

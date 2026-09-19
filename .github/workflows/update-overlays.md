@@ -97,25 +97,6 @@ Upstream publishes no release feed — the apt repository index is the source of
   from `.../binary-arm64/Packages`, then convert each with `nix-hash.py sri <hex>`
 - **Update fields**: `version` and both `plat.*.hash` entries
 
-### 5. llama.cpp CUDA (`overlays/llama-cpp-cuda.nix`)
-
-This overlay overrides nixpkgs' `llama-cpp` with a newer pinned tag (`b<VERSION>`)
-because nixpkgs lagged behind features Qwen3.8 serving needs (`--reasoning-effort`
-merged in ~b10425). The pin is meant to be temporary:
-
-- **Check nixpkgs first**: read `version` in
-  `https://raw.githubusercontent.com/NixOS/nixpkgs/nixpkgs-unstable/pkgs/by-name/ll/llama-cpp/package.nix`.
-  If it is >= the pinned version, DELETE the `overrideAttrs` call entirely
-  (restore plain `.llama-cpp.override {cudaSupport = true;}`) instead of bumping.
-- **Otherwise bump the pin**: take the latest release tag of `ggml-org/llama.cpp`
-  (tags are `b<NUMBER>`) and run
-  `nix-hash.py unpack "https://github.com/ggml-org/llama.cpp/archive/<TAG>.tar.gz"`
-- **Update fields**: `version` (number without the `b` prefix), `tag`, and `hash`
-- **Note**: the nixpkgs package also builds the webui from `tools/ui` with a pinned
-  `npmDepsHash`. If the build fails on the npm-deps hash, `tools/ui/package-lock.json`
-  changed upstream — skip the bump and note it in the PR instead of chasing the
-  second hash.
-
 ## Procedure
 
 1. Read all overlay files to get current versions

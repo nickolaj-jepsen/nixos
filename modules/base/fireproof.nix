@@ -132,15 +132,6 @@ let
               modules/programs/_llm-models.nix, each tuned to fit that card.
             '';
           };
-          cudaCapability = lib.mkOption {
-            type = lib.types.str;
-            default = "12.0";
-            example = "8.9";
-            description = ''
-              CUDA compute capability of the serving GPU (5070 Ti = 12.0,
-              4070 = 8.9). llama.cpp is compiled for this one target only.
-            '';
-          };
         };
       };
 
