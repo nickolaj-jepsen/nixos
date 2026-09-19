@@ -20,10 +20,6 @@
           # GDK_BACKEND globally can mis-init xdg-desktop-portal-gnome (itself a
           # GTK process) and cause flaky screencasts. See niri "Important Software".
           NIXOS_OZONE_WL = "1";
-          # GUI apps launched from niri (e.g. VS Code) don't inherit shell session
-          # vars, so point them at the ssh-agent socket here. niri takes values
-          # literally (no $XDG_RUNTIME_DIR expansion); uid 1000 = the primary user.
-          SSH_AUTH_SOCK = "/run/user/1000/ssh-agent";
         };
         # Skip the per-session "Important Hotkeys" popup, and make Mod+Slash show
         # only the binds defined here (not niri's built-in defaults).
@@ -112,7 +108,15 @@
           {
             matches = [{app-id = "^com\\.mitchellh\\.ghostty$";}];
             draw-border-with-background = false;
-            # Present keystroke frames immediately instead of on the next fixed refresh.
+          }
+          # On-demand VRR opt-ins. Keep desktop apps out: every flip allocates a
+          # buffer, and that fails in a retry storm when llama-server has VRAM full.
+          {
+            matches = [
+              {app-id = "^steam_app_";}
+              {app-id = "^gamescope$";}
+              {app-id = "^mpv$";}
+            ];
             variable-refresh-rate = true;
           }
           # Floating windows (Mod+S) get a soft drop shadow so the state reads at

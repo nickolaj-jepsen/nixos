@@ -18,7 +18,7 @@
           lib.listToAttrs (map (monitor: {
               inherit (monitor) name;
               value = {
-                inherit (monitor) position enable;
+                inherit (monitor) position enable scale;
                 mode = lib.mkIf (monitor.resolution.width != null && monitor.resolution.height != null) {
                   inherit (monitor.resolution) width height;
                   refresh = monitor.refreshRateNiri;

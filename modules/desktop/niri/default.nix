@@ -18,6 +18,8 @@
           default = ["gtk"];
           "org.freedesktop.impl.portal.ScreenCast" = "gnome";
           "org.freedesktop.impl.portal.Screenshot" = "gnome";
+          # This file outranks niri's own niri-portals.conf, so restate its Secret mapping.
+          "org.freedesktop.impl.portal.Secret" = "gnome-keyring";
         };
         xdgOpenUsePortal = true;
       };

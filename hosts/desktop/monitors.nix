@@ -39,5 +39,10 @@
         y = 0;
       };
     }
+    # Odyssey G5: cabled but unused.
+    {
+      name = "DP-1";
+      enable = false;
+    }
   ];
 }

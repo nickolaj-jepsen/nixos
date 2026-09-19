@@ -174,6 +174,12 @@ in {
     # socket; sets home.sessionVariables.SSH_AUTH_SOCK for shells.
     services.ssh-agent.enable = true;
 
+    # GUI apps (e.g. VS Code under niri.service) inherit the user manager's
+    # environment, not shell session vars; environment.d expands the variable.
+    systemd.user.sessionVariables = lib.mkIf pkgs.stdenv.isLinux {
+      SSH_AUTH_SOCK = "\${XDG_RUNTIME_DIR}/ssh-agent";
+    };
+
     # Linux-only: darwin has no systemd, and AddKeysToAgent (above) covers it there.
     systemd.user.services."add-ssh-keys" = lib.mkIf (workEnabled && pkgs.stdenv.isLinux) {
       Unit = {
