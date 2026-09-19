@@ -7,6 +7,7 @@
     fireproof.desktop.bambu-studio.enable = true;
     fireproof.desktop.jellyfin-media-player.enable = true;
     fireproof.desktop.ivpn.enable = true;
+    fireproof.desktop.mullvad.enable = true;
     fireproof.desktop.snapcast.enable = true;
     fireproof.dev.enable = true;
     fireproof.dev.clickhouse.enable = false; # query ao's ClickHouse over SSH; no local client needed on desktop
