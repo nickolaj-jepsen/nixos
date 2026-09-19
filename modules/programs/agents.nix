@@ -13,9 +13,8 @@
         enableMcpIntegration = true;
         # Shared with claude-code and pi; keep it agent-agnostic.
         context = builtins.readFile ./agent-context.md;
-        # The fireproof.agents.skills registry, linked into one dir since this
-        # option takes a single path.
-        skills = "${pkgs.linkFarm "copilot-skills" config.fireproof.agents.skills}";
+        # An attrset, not a linkFarm: the module's pathIsDirectory check on a path is IFD, which breaks the darwin eval in Linux CI.
+        skills = config.fireproof.agents.skills;
       };
     };
   };
