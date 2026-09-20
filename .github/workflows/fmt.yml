@@ -52,22 +52,9 @@ jobs:
       - name: Run nix flake check
         run: nix flake check
 
-  eval:
-    needs: hosts
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        host: ${{ fromJson(needs.hosts.outputs.list) }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: ./.github/actions/setup-nix
-      - name: Evaluate ${{ matrix.host }}
-        run: nix eval --raw .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel.drvPath
-
+  # --skip-cached: a host already in attic passes without pulling its closure onto the runner.
   build:
-    needs: [hosts, fmt, check, eval]
+    needs: [hosts, fmt, check]
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -82,7 +69,10 @@ jobs:
           attic-cache: nixos
           attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Build ${{ matrix.host }}
-        run: nix build .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel
+        run: |
+          nix run --inputs-from . nixpkgs#nix-fast-build -- \
+            --skip-cached --no-nom --no-link --eval-workers 1 \
+            --flake ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
 
   # The darwin host can't build on Linux (aarch64-darwin), so it gets its own
   # macOS runner instead of a matrix slot. Free on a public repo; needs [fmt,
@@ -100,13 +90,16 @@ jobs:
           attic-cache: nixos
           attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Build macbook
-        run: nix build .#darwinConfigurations.macbook.system
+        run: |
+          nix run --inputs-from . nixpkgs#nix-fast-build -- \
+            --skip-cached --no-nom --no-link --eval-workers 1 \
+            --flake ".#darwinConfigurations.macbook.system"
 
   # The required check on `main`: a stable name, unlike the matrix jobs. Skipped counts as failed.
   gate:
     name: CI gate
     if: always()
-    needs: [fmt, check, eval, build, darwin]
+    needs: [fmt, check, build, darwin]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
