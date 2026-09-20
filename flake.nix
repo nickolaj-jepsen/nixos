@@ -79,9 +79,10 @@
     # instead of maintained as hand-written `imports = [ … ]` lists.
     import-tree.url = "github:vic/import-tree";
 
-    # No nixpkgs follows: pi.cachix.org (modules/base/nix.nix) is keyed to this
-    # flake's own pin, so following ours would force source rebuilds.
+    # Follows ours: the closure override in modules/programs/pi.nix already misses
+    # pi.cachix.org, so a private nixpkgs only bought duplicate nodejs/icu/glibc.
     pi.url = "github:lukasl-dev/pi.nix";
+    pi.inputs.nixpkgs.follows = "nixpkgs";
 
     agenix.url = "github:ryantm/agenix";
     agenix.inputs.nixpkgs.follows = "nixpkgs";
