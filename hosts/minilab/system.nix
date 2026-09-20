@@ -1,3 +1,3 @@
 {
-  nixos.facter.reportPath = ./facter.json;
+  nixos.hardware.facter.reportPath = ./facter.json;
 }

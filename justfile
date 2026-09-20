@@ -167,7 +167,7 @@ disko-install hostname disk:
 [doc('Build an install ISO for a host')]
 [group('tools')]
 iso hostname:
-    {{ nixcmd }} build .#nixosConfigurations.{{ hostname }}.config.formats.install-iso
+    {{ nixcmd }} build .#nixosConfigurations.{{ hostname }}.config.system.build.images.iso-installer
 
 [doc('Generate Markdown reference for the fireproof.* options into docs/')]
 [group('tools')]

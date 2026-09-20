@@ -31,11 +31,6 @@
     nix-index-database.url = "github:nix-community/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
 
-    nixos-generators.url = "github:nix-community/nixos-generators";
-    nixos-generators.inputs.nixpkgs.follows = "nixpkgs";
-
-    nixos-facter-modules.url = "github:numtide/nixos-facter-modules";
-
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -57,10 +52,10 @@
 
     # Trampolines so nix-built .app bundles (vscode) show up in Spotlight/Dock.
     mac-app-util.url = "github:hraban/mac-app-util";
+    mac-app-util.inputs.treefmt-nix.follows = "treefmt-nix";
 
-    nur.url = "github:nix-community/NUR";
-    nur.inputs.nixpkgs.follows = "nixpkgs";
-    nur.inputs.flake-parts.follows = "flake-parts";
+    firefox-addons.url = "gitlab:rycee/nur-expressions?dir=pkgs/firefox-addons";
+    firefox-addons.inputs.nixpkgs.follows = "nixpkgs";
 
     nixos-wsl.url = "github:nix-community/NixOS-WSL/main";
     nixos-wsl.inputs.nixpkgs.follows = "nixpkgs";
@@ -83,10 +78,12 @@
     # pi.cachix.org, so a private nixpkgs only bought duplicate nodejs/icu/glibc.
     pi.url = "github:lukasl-dev/pi.nix";
     pi.inputs.nixpkgs.follows = "nixpkgs";
+    pi.inputs.flake-parts.follows = "flake-parts";
 
     agenix.url = "github:ryantm/agenix";
     agenix.inputs.nixpkgs.follows = "nixpkgs";
     agenix.inputs.home-manager.follows = "home-manager";
+    agenix.inputs.darwin.follows = "nix-darwin";
     agenix-rekey.url = "github:oddlama/agenix-rekey";
     agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
     agenix-rekey.inputs.treefmt-nix.follows = "treefmt-nix";
@@ -100,6 +97,7 @@
 
     niri.url = "github:sodiboo/niri-flake";
     niri.inputs.nixpkgs.follows = "nixpkgs";
+    niri.inputs.nixpkgs-stable.follows = "nixpkgs";
 
     dgop.url = "github:AvengeMedia/dgop";
     dgop.inputs.nixpkgs.follows = "nixpkgs";
@@ -111,9 +109,13 @@
 
     niri-dynamic-workspaces.url = "github:nickolaj-jepsen/niri-dynamic-workspaces";
     niri-dynamic-workspaces.inputs.nixpkgs.follows = "nixpkgs";
+    niri-dynamic-workspaces.inputs.flake-parts.follows = "flake-parts";
+    niri-dynamic-workspaces.inputs.home-manager.follows = "home-manager";
+    niri-dynamic-workspaces.inputs.niri-flake.follows = "niri";
 
     fnug.url = "github:nickolaj-jepsen/fnug";
     fnug.inputs.nixpkgs.follows = "nixpkgs";
+    fnug.inputs.flake-parts.follows = "flake-parts";
 
     zero-x-cb-media.url = "github:nickolaj-jepsen/0xCB-media";
     zero-x-cb-media.inputs.nixpkgs.follows = "nixpkgs";

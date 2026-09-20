@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: let
-    extensions = pkgs.nur.repos.rycee.firefox-addons;
+    extensions = pkgs.firefox-addons;
   in {
     config = lib.mkIf config.fireproof.desktop.enable {
       programs.firefox.profiles.default = {

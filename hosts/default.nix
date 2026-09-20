@@ -67,12 +67,10 @@
             [
               {nixpkgs.hostPlatform = system;}
               inputs.disko.nixosModules.disko
-              inputs.nixos-generators.nixosModules.all-formats
               inputs.home-manager.nixosModules.home-manager
               inputs.agenix.nixosModules.default
               inputs.agenix-rekey.nixosModules.default
               inputs.nix-index-database.nixosModules.nix-index
-              inputs.nixos-facter-modules.nixosModules.facter
               inputs.dank-material-shell.nixosModules.dank-material-shell
               inputs.niri.nixosModules.niri
               inputs.nixos-wsl.nixosModules.default
@@ -90,7 +88,8 @@
                     ++ [{home.stateVersion = lib.mkDefault "24.11";}];
                   users.${config.fireproof.username} = {};
                 };
-                system.stateVersion = lib.mkDefault "24.11";
+                # 999: the installer profile behind `just iso` also mkDefaults it, and equal priorities conflict.
+                system.stateVersion = lib.mkOverride 999 "24.11";
               })
             ]
             ++ shared

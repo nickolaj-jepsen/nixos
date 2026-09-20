@@ -7,7 +7,7 @@
   # standalone home-manager build gets pkgs.unstable etc. too).
   overlayList = [
     inputs.nix-vscode-extensions.overlays.default
-    inputs.nur.overlays.default
+    inputs.firefox-addons.overlays.default
     inputs.niri.overlays.niri
     inputs.fnug.overlays.default
     inputs.self.overlays.default
