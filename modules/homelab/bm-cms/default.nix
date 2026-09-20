@@ -1,8 +1,7 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.bm-cms = {
     config,
     lib,
-    fpLib,
     ...
   }: let
     # The customer's own domain, not fireproof.homelab.domain.

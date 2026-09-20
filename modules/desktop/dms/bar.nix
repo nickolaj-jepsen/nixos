@@ -1,9 +1,8 @@
-{
+{fpLib, ...}: {
   flake.modules.homeManager.dms-bar = {
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     inherit (config.fireproof) monitors;

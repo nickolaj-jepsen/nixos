@@ -1,9 +1,8 @@
-{
+{inputs, ...}: {
   flake.modules.homeManager.niri-dynamic-workspaces = {
     config,
     lib,
     pkgs,
-    inputs,
     ...
   }: let
     mkWorkspace = {

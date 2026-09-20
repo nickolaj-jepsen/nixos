@@ -3,12 +3,11 @@
 #   - bm-preview-htpasswd.age: htpasswd -nB line for the customer
 #   - DNS record: preview.bmtomrermontage.dk -> this host
 #   - Pin _image.nix from the bm-website CI `preview-image` job summary
-{
+{fpLib, ...}: {
   flake.modules.nixos.bm-preview = {
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     domain = "preview.bmtomrermontage.dk";

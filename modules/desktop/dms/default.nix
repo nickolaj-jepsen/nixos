@@ -1,4 +1,4 @@
-{
+{inputs, ...}: {
   flake.modules.nixos.dms = {
     config,
     lib,
@@ -12,7 +12,6 @@
   flake.modules.homeManager.dms = {
     config,
     lib,
-    inputs,
     pkgs,
     ...
   }: {

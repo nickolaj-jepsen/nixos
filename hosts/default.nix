@@ -1,15 +1,9 @@
 {
   inputs,
-  withSystem,
   config,
   ...
 }: let
   inherit (inputs.nixpkgs) lib;
-  fpLib = import ../lib {inherit lib;};
-  mkHome = import ../lib/mkHome.nix {
-    inherit inputs lib fpLib;
-    inherit (config) flake;
-  };
 
   validClasses = ["nixos" "home" "darwin"];
 
@@ -49,54 +43,42 @@
     darwin = lib.catAttrs "darwin" cards;
   };
 
+  homeLeaves = builtins.attrValues config.flake.modules.homeManager;
+
+  # niri-flake's nixos module wires up its own HM half; darwin + standalone HM import it by hand so the inert niri leaves type-check.
+  niriHome = [
+    inputs.niri.homeModules.niri
+    ({pkgs, ...}: {programs.niri.package = lib.mkDefault pkgs.niri-unstable;})
+  ];
+
   # `shared` sets fireproof.* in BOTH evals (the no-bridge fact flow); HM user read from resulting config.fireproof.username.
+  embeddedHome = modules: {config, ...}: {
+    home-manager = {
+      useUserPackages = true;
+      useGlobalPkgs = true;
+      sharedModules = homeLeaves ++ modules;
+      users.${config.fireproof.username} = {};
+    };
+  };
+
   mkNixos = {
     shared ? [],
     nixosModules ? [],
     homeManagerModules ? [],
     system ? "x86_64-linux",
   }:
-    withSystem system (
-      {system, ...}: let
-        nixosLeaves = builtins.attrValues config.flake.modules.nixos;
-        homeLeaves = builtins.attrValues config.flake.modules.homeManager;
-      in
-        inputs.nixpkgs.lib.nixosSystem {
-          specialArgs = {inherit inputs fpLib;};
-          modules =
-            [
-              {nixpkgs.hostPlatform = system;}
-              inputs.disko.nixosModules.disko
-              inputs.home-manager.nixosModules.home-manager
-              inputs.agenix.nixosModules.default
-              inputs.agenix-rekey.nixosModules.default
-              inputs.nix-index-database.nixosModules.nix-index
-              inputs.dank-material-shell.nixosModules.dank-material-shell
-              inputs.niri.nixosModules.niri
-              inputs.nixos-wsl.nixosModules.default
-              inputs.self.nixosModules.overlays
-              ({config, ...}: {
-                # mkDefault on both stateVersions so a host (e.g. desktop-wsl) can bump system.stateVersion.
-                home-manager = {
-                  useUserPackages = true;
-                  useGlobalPkgs = true;
-                  extraSpecialArgs = {inherit inputs fpLib;};
-                  sharedModules =
-                    homeLeaves
-                    ++ homeManagerModules
-                    ++ shared
-                    ++ [{home.stateVersion = lib.mkDefault "24.11";}];
-                  users.${config.fireproof.username} = {};
-                };
-                # 999: the installer profile behind `just iso` also mkDefaults it, and equal priorities conflict.
-                system.stateVersion = lib.mkOverride 999 "24.11";
-              })
-            ]
-            ++ shared
-            ++ nixosLeaves
-            ++ nixosModules;
-        }
-    );
+    inputs.nixpkgs.lib.nixosSystem {
+      modules =
+        [
+          {nixpkgs.hostPlatform = system;}
+          inputs.home-manager.nixosModules.home-manager
+          inputs.self.nixosModules.overlays
+          (embeddedHome (homeManagerModules ++ shared))
+        ]
+        ++ shared
+        ++ builtins.attrValues config.flake.modules.nixos
+        ++ nixosModules;
+    };
 
   # darwinSystem takes no `system` arg — platform is set via nixpkgs.hostPlatform.
   mkDarwin = {
@@ -104,55 +86,51 @@
     homeManagerModules ? [],
     darwinModules ? [],
     system ? "aarch64-darwin",
-  }: let
-    darwinLeaves = builtins.attrValues config.flake.modules.darwin;
-    homeLeaves = builtins.attrValues config.flake.modules.homeManager;
-  in
+  }:
     inputs.nix-darwin.lib.darwinSystem {
-      specialArgs = {inherit inputs fpLib;};
       modules =
         [
           {nixpkgs.hostPlatform = system;}
           inputs.home-manager.darwinModules.home-manager
-          inputs.agenix.darwinModules.default
-          inputs.agenix-rekey.darwinModules.default
-          inputs.nix-index-database.darwinModules.nix-index
-          inputs.nix-homebrew.darwinModules.nix-homebrew
-          inputs.mac-app-util.darwinModules.default
           inputs.self.darwinModules.overlays
+          (embeddedHome (homeManagerModules ++ shared ++ niriHome))
           ({config, ...}: let
             inherit (config.fireproof) username hostname;
           in {
-            home-manager = {
-              useUserPackages = true;
-              useGlobalPkgs = true;
-              extraSpecialArgs = {inherit inputs fpLib;};
-              sharedModules =
-                homeLeaves
-                ++ homeManagerModules
-                ++ shared
-                ++ [
-                  # Surface nix-built GUI .apps (vscode) in Spotlight/Dock.
-                  inputs.mac-app-util.homeManagerModules.default
-                  # Declare programs.niri.* options for the inert desktop-gated niri leaves.
-                  inputs.niri.homeModules.niri
-                  ({pkgs, ...}: {programs.niri.package = lib.mkDefault pkgs.niri-unstable;})
-                  {home.stateVersion = lib.mkDefault "24.11";}
-                ];
-              users.${username} = {};
-            };
             # primaryUser + the user's home are required by homebrew + embedded HM activation.
             users.users.${username}.home = "/Users/${username}";
             system.primaryUser = username;
-            system.stateVersion = lib.mkDefault 7;
             # nix-darwin defaults hostName to null; agenix-rekey's target-name needs it set.
             networking.hostName = lib.mkDefault hostname;
             networking.computerName = lib.mkDefault hostname;
           })
         ]
         ++ shared
-        ++ darwinLeaves
+        ++ builtins.attrValues config.flake.modules.darwin
         ++ darwinModules;
+    };
+
+  # Standalone home-manager (osConfig = null): builds its own pkgs + identity.
+  mkHome = {
+    modules ? [],
+    system ? "x86_64-linux",
+  }:
+    inputs.home-manager.lib.homeManagerConfiguration {
+      pkgs = import inputs.nixpkgs {
+        inherit system;
+        config.allowUnfree = true;
+        overlays = config.flake.lib.overlays;
+      };
+      modules =
+        homeLeaves
+        ++ niriHome
+        ++ [
+          ({config, ...}: {
+            home.username = lib.mkDefault config.fireproof.username;
+            home.homeDirectory = lib.mkDefault "/home/${config.fireproof.username}";
+          })
+        ]
+        ++ modules;
     };
 
   buildHost = dir: let
@@ -170,7 +148,7 @@
   in
     assert lib.assertMsg (c.nixos == []) "${toString dir}: a home-class host has no NixOS eval — move `nixos` config to `homeManager`/`shared`";
       mkHome {
-        extraModules = c.shared ++ c.homeManager;
+        modules = c.shared ++ c.homeManager;
       };
 
   # darwin-class host: nix-darwin eval only, so a `nixos` bucket has nowhere to apply (loud error).

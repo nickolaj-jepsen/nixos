@@ -1,12 +1,11 @@
 # neovim via nvf. Always-on lean baseline (editing UX + nil/lua-ls + cheap
 # grammars) on every host; the heavy language support layers on only when
 # fireproof.neovim.full.enable (defaults to dev.enable).
-{
+{inputs, ...}: {
   flake.modules.homeManager.neovim = {
     config,
     lib,
     pkgs,
-    inputs,
     ...
   }: let
     full = config.fireproof.neovim.full.enable;

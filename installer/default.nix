@@ -4,7 +4,6 @@
   ...
 }: let
   inherit (inputs.nixpkgs) lib;
-  fpLib = import ../lib {inherit lib;};
   system = "x86_64-linux";
 
   # The installer ISO, built directly (not through the host resolver — it isn't a
@@ -18,7 +17,7 @@
   # `fireproof.username` fact feeds that nix leaf's trusted-users.
   build = name:
     inputs.nixpkgs.lib.nixosSystem {
-      specialArgs = {inherit inputs fpLib;};
+      specialArgs = {inherit inputs;};
       modules =
         [
           {nixpkgs.hostPlatform = system;}

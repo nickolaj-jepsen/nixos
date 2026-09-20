@@ -1,4 +1,4 @@
-{
+{fpLib, ...}: {
   flake.modules.darwin.ghostty = {
     config,
     lib,
@@ -13,7 +13,6 @@
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     c = config.fireproof.theme.colors;

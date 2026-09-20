@@ -1,11 +1,10 @@
 # HM secrets decrypt during activation (run as user) with no osConfig bridge: rekey identity from the `hostname` fact.
 {
-  flake.modules.homeManager.hm-secrets = {
-    config,
-    inputs,
-    fpLib,
-    ...
-  }: {
+  inputs,
+  fpLib,
+  ...
+}: {
+  flake.modules.homeManager.hm-secrets = {config, ...}: {
     imports = [
       inputs.agenix.homeManagerModules.default
       inputs.agenix-rekey.homeManagerModules.default

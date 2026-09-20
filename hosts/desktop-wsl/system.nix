@@ -7,7 +7,5 @@
     documentation.nixos.enable = false;
     documentation.doc.enable = false;
     documentation.info.enable = false;
-
-    system.stateVersion = "25.11";
   };
 }

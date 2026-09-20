@@ -1,9 +1,8 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.home-assistant-mqtt = {
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;

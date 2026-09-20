@@ -1,8 +1,7 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.romm = {
     config,
     lib,
-    fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;
@@ -95,6 +94,7 @@
       };
 
       systemd.services.docker-romm = {
+        unitConfig.RequiresMountsFor = ["/mnt/data"];
         after = ["postgresql.target"];
         requires = ["postgresql.target"];
         serviceConfig = {

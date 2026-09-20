@@ -1,8 +1,7 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.shelfmark = {
     config,
     lib,
-    fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;
@@ -30,6 +29,7 @@
         };
       };
 
+      systemd.services.shelfmark.unitConfig.RequiresMountsFor = ["/mnt/data"];
       # mergerfs honours only the primary gid, so media:media, not DynamicUser.
       systemd.services.shelfmark.serviceConfig = {
         DynamicUser = lib.mkForce false;

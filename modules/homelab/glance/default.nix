@@ -1,9 +1,8 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.glance = {
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     c = config.fireproof.theme.colors;

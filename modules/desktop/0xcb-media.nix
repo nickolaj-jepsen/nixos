@@ -1,8 +1,7 @@
-{
+{inputs, ...}: {
   flake.modules.nixos.oxcb-media = {
     config,
     lib,
-    inputs,
     ...
   }: let
     cfg = config.fireproof.desktop.oxcbMedia;

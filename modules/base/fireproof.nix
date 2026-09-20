@@ -34,31 +34,11 @@ let
           enable = cascade config.fireproof.desktop.enable "Enable the Chromium browser";
           work.enable = cascade (config.fireproof.desktop.chromium.enable && config.fireproof.work.enable) "Enable a separate chromium-work instance (own profile, runs alongside the personal one)";
         };
-        bambu-studio.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = "Enable Bambu Studio 3D printing slicer";
-        };
-        google-chrome.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = "Enable Google Chrome";
-        };
-        jellyfin-media-player.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = "Enable Jellyfin Media Player desktop client";
-        };
-        ivpn.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = "Enable the IVPN client (daemon + CLI + desktop UI)";
-        };
-        mullvad.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = "Enable the Mullvad VPN client (daemon + CLI + desktop UI)";
-        };
+        bambu-studio.enable = lib.mkEnableOption "Bambu Studio 3D printing slicer";
+        google-chrome.enable = lib.mkEnableOption "Google Chrome";
+        jellyfin-media-player.enable = lib.mkEnableOption "Jellyfin Media Player desktop client";
+        ivpn.enable = lib.mkEnableOption "IVPN client (daemon + CLI + desktop UI)";
+        mullvad.enable = lib.mkEnableOption "Mullvad VPN client (daemon + CLI + desktop UI)";
         snapcast.enable = lib.mkEnableOption "Snapcast audio streaming server";
         oxcbMedia.enable = lib.mkEnableOption "0xCB-media host daemon (bridges MPRIS + PipeWire to the 0xCB-1337 macropad over USB CDC ACM)";
         lan-mouse.enable = lib.mkEnableOption "Lan Mouse — LAN keyboard/mouse sharing (edge-crossing KVM). On niri it uses the layer-shell capture backend (no input-capture portal needed)";
@@ -211,11 +191,7 @@ let
               type = lib.types.bool;
               default = true;
             };
-            vrr = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-              description = "Enable on-demand VRR in niri: active only while a window that opts in is on this output.";
-            };
+            vrr = lib.mkEnableOption "on-demand VRR in niri: active only while a window that opts in is on this output";
             # When unset on every entry, consumers fall back to the first active entry (fpLib.primaryMonitor).
             primary = lib.mkOption {
               type = lib.types.bool;

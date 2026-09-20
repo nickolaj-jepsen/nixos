@@ -1,8 +1,7 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.arr = {
     config,
     lib,
-    fpLib,
     ...
   }: let
     inherit (config.fireproof) username;
@@ -22,6 +21,10 @@
       };
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
+      systemd.services = lib.genAttrs ["bazarr" "lidarr" "radarr" "sabnzbd" "sonarr"] (_: {
+        unitConfig.RequiresMountsFor = ["/mnt/data"];
+      });
+
       # for linux ISOs
       # ids pinned — romm.nix's docker run --user expects these exact values.
       users.groups."${group}" = {

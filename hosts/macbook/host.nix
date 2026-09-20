@@ -23,33 +23,6 @@
     fireproof.dev.clickhouse.enable = false;
   };
 
-  # nix-darwin system config (the macOS analog of a host's `nixos` bucket).
-  darwin = {
-    inputs,
-    config,
-    ...
-  }: {
-    # nix-homebrew owns the brew install + pinned taps; homebrew.* (below) the casks.
-    nix-homebrew = {
-      enable = true;
-      # No x86_64-only brews/casks today (firefox + ghostty ship arm64); flip on
-      # only if an Intel-only package needs the Rosetta /usr/local prefix.
-      enableRosetta = false;
-      user = config.fireproof.username;
-      mutableTaps = false;
-      taps = {
-        "homebrew/homebrew-core" = inputs.homebrew-core;
-        "homebrew/homebrew-cask" = inputs.homebrew-cask;
-      };
-    };
-
-    homebrew = {
-      enable = true;
-      taps = builtins.attrNames config.nix-homebrew.taps;
-      # Casks are co-located with their program leaves (each contributes its own
-      # cask via flake.modules.darwin.<app>, gated on the app's fireproof toggle).
-      # Prune undeclared brew packages (without zapping data); review before first switch.
-      onActivation.cleanup = "uninstall";
-    };
-  };
+  darwin.system.stateVersion = 7;
+  homeManager.home.stateVersion = "24.11";
 }

@@ -5,12 +5,11 @@
 # ~/.pi/agent/settings.json on every launch and arrays replace wholesale —
 # imperative `pi install`/`pi remove` edits revert at next start, and entries
 # removed here stop loading but leave their download in ~/.pi/agent/{npm,git}.
-{
+{inputs, ...}: {
   flake.modules.homeManager.pi = {
     config,
     lib,
     pkgs,
-    inputs,
     ...
   }: {
     imports = [inputs.pi.homeModules.default];

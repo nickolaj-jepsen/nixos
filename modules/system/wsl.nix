@@ -1,9 +1,10 @@
-{
+{inputs, ...}: {
   flake.modules.nixos.wsl = {
     config,
     lib,
     ...
   }: {
+    imports = [inputs.nixos-wsl.nixosModules.default];
     config = lib.mkIf config.fireproof.wsl.enable {
       wsl = {
         enable = true;

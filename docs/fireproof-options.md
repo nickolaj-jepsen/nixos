@@ -88,7 +88,7 @@ true
 
 
 
-Enable Bambu Studio 3D printing slicer
+Whether to enable Bambu Studio 3D printing slicer\.
 
 
 
@@ -101,6 +101,14 @@ boolean
 
 ```nix
 false
+```
+
+
+
+*Example:*
+
+```nix
+true
 ```
 
 *Declared by:*
@@ -160,7 +168,7 @@ true
 
 
 
-Enable Google Chrome
+Whether to enable Google Chrome\.
 
 
 
@@ -173,6 +181,14 @@ boolean
 
 ```nix
 false
+```
+
+
+
+*Example:*
+
+```nix
+true
 ```
 
 *Declared by:*
@@ -184,7 +200,7 @@ false
 
 
 
-Enable the IVPN client (daemon + CLI + desktop UI)
+Whether to enable IVPN client (daemon + CLI + desktop UI)\.
 
 
 
@@ -199,6 +215,14 @@ boolean
 false
 ```
 
+
+
+*Example:*
+
+```nix
+true
+```
+
 *Declared by:*
  - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
@@ -208,7 +232,7 @@ false
 
 
 
-Enable Jellyfin Media Player desktop client
+Whether to enable Jellyfin Media Player desktop client\.
 
 
 
@@ -221,6 +245,14 @@ boolean
 
 ```nix
 false
+```
+
+
+
+*Example:*
+
+```nix
+true
 ```
 
 *Declared by:*
@@ -264,7 +296,7 @@ true
 
 
 
-Enable the Mullvad VPN client (daemon + CLI + desktop UI)
+Whether to enable Mullvad VPN client (daemon + CLI + desktop UI)\.
 
 
 
@@ -277,6 +309,14 @@ boolean
 
 ```nix
 false
+```
+
+
+
+*Example:*
+
+```nix
+true
 ```
 
 *Declared by:*
@@ -1342,7 +1382,7 @@ null
 
 
 
-Enable on-demand VRR in niri: active only while a window that opts in is on this output\.
+Whether to enable on-demand VRR in niri: active only while a window that opts in is on this output\.
 
 
 
@@ -1355,6 +1395,14 @@ boolean
 
 ```nix
 false
+```
+
+
+
+*Example:*
+
+```nix
+true
 ```
 
 *Declared by:*

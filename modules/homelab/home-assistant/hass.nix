@@ -1,9 +1,8 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.home-assistant-hass = {
     pkgs,
     config,
     lib,
-    fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;

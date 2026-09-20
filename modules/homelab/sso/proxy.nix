@@ -1,9 +1,8 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.sso-proxy = {
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     rootDomain = config.fireproof.homelab.domain;

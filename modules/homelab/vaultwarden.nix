@@ -1,8 +1,7 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.vaultwarden = {
     config,
     lib,
-    fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;

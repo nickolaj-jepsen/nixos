@@ -10,6 +10,7 @@
         ./devshell.nix
         ./docs.nix
         ./home-check.nix
+        ./lib/flake-module.nix
         ./hosts
         ./installer
         ./overlays

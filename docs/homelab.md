@@ -5,9 +5,9 @@ Read this before adding or reworking a service under `modules/homelab/`.
 Services are native NixOS services by default, gated on
 `fireproof.homelab.enable` (leaf authoring rules: `docs/modules.md`). Every
 new service gets a dashboard link in `modules/homelab/glance/_home-page.nix`,
-and its vhost via `fpLib.mkVirtualHost`. A service using `/mnt/data` also goes
-in `poolUnits` (`modules/homelab/resilience.nix`), or it runs against an empty
-dir when a data disk is missing. Ports stay on `127.0.0.1`: an open one
+and its vhost via `fpLib.mkVirtualHost`. A service using `/mnt/data` also sets
+`systemd.services.<unit>.unitConfig.RequiresMountsFor = ["/mnt/data"];` in its
+own leaf, or it runs against an empty dir when a data disk is missing. Ports stay on `127.0.0.1`: an open one
 bypasses the SSO vhost.
 
 ## Containerized services

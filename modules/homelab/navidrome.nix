@@ -1,9 +1,8 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.navidrome = {
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;
@@ -11,6 +10,8 @@
     port = 4533;
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
+      systemd.services.navidrome.unitConfig.RequiresMountsFor = ["/mnt/data"];
+
       age.secrets.navidrome-env.rekeyFile = ../../secrets/hosts/homelab/navidrome-env.age;
 
       services.restic.backups.homelab.paths = ["/var/lib/navidrome"];

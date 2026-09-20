@@ -1,4 +1,4 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.firefox-settings = {
     config,
     lib,
@@ -25,7 +25,6 @@
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     c = config.fireproof.theme.colors;

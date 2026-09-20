@@ -1,10 +1,11 @@
-{
+{inputs, ...}: {
   flake.modules.nixos.niri = {
     config,
     lib,
     pkgs,
     ...
   }: {
+    imports = [inputs.niri.nixosModules.niri];
     config = lib.mkIf config.fireproof.desktop.enable {
       programs.xwayland.enable = true;
 

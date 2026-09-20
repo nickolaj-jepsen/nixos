@@ -1,9 +1,8 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.sso-zitadel = {
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     port = 9190;

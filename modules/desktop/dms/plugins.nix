@@ -1,9 +1,8 @@
-{
+{inputs, ...}: {
   flake.modules.homeManager.dms-plugins = {
     config,
     lib,
     pkgs,
-    inputs,
     ...
   }: {
     imports = [

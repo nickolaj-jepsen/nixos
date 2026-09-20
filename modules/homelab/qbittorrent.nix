@@ -1,9 +1,8 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.qbittorrent = {
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;
@@ -114,6 +113,7 @@
       };
 
       systemd.services.qbittorrent = {
+        unitConfig.RequiresMountsFor = ["/mnt/data"];
         after = [
           "network.target"
           "wg-${vpnNamespace}.service"

@@ -13,11 +13,10 @@
 # Audiobookshelf over the same tree (read-only also means a world-readable
 # mount is enough, no uid juggling). Shelfmark already drops downloads into that
 # path, so the "Shelfmark integration" is just the shared library.
-{
+{fpLib, ...}: {
   flake.modules.nixos.grimmory = {
     config,
     lib,
-    fpLib,
     ...
   }: let
     cfg = config.fireproof.homelab;
@@ -91,6 +90,7 @@
       };
 
       systemd.services.docker-grimmory = {
+        unitConfig.RequiresMountsFor = ["/mnt/data"];
         after = ["mysql.service"];
         requires = ["mysql.service"];
         # Spring Boot can outrace a cold MariaDB; let systemd retry instead.

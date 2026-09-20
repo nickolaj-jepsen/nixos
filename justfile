@@ -314,6 +314,15 @@ new-host hostname username:
     }
     EOF
 
+    release=$({{ nixcmd }} eval --inputs-from . --raw nixpkgs#lib.trivial.release)
+    cat > "hosts/{{ hostname }}/state-version.nix" <<EOF
+    # Install-time release; never bump.
+    {
+      nixos.system.stateVersion = "$release";
+      homeManager.home.stateVersion = "$release";
+    }
+    EOF
+
     echo "Generating SSH key for {{ username }}@{{ hostname }}"
     ssh-keygen -q -t ed25519 -f "$temp/id_ed25519" -C "{{ username }}@{{ hostname }}" -N ""
     cp "$temp/id_ed25519.pub" "secrets/hosts/{{ hostname }}/id_ed25519.pub"
@@ -346,7 +355,6 @@ check:
 [group('maintenance')]
 gc days='7': (_confirm "Delete generations and store paths older than " + days + " days?")
     sudo nix-collect-garbage --delete-older-than {{ days }}d
-    sudo nix-env -p /nix/var/nix/profiles/system --delete-generations {{ days }}d
     sudo nix-store --optimise
 
 [doc("Run nix-tree")]

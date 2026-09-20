@@ -74,9 +74,25 @@ standalone guard, so an osConfig read fails CI.
 - Theme: `let c = config.fireproof.theme.colors; in { background = c.bg; border = "#${c.accent}"; }`
   (values have no `#` prefix).
 - Unstable packages: `pkgs.unstable.<pkg>` (overlay on the pkgs set).
-- `fpLib` (via specialArgs): `mkVirtualHost { port; websockets?; http2?; host?; }`,
+- `fpLib` (see below): `mkVirtualHost { port; websockets?; http2?; host?; }`,
   `mkPostgresDB { name; login?; authentication?; }`,
   `mkDarwinGuiPackage pkgs linuxPkg` — see `lib/default.nix`.
+
+## `inputs` and `fpLib`
+
+Neither is a specialArg. Both are flake-parts module args: take them at the
+file head and let the inner modules close over them. A leaf that configures a
+third-party module also `imports` it (the host builder imports nothing but
+home-manager and the overlays):
+
+```nix
+{inputs, fpLib, ...}: {
+  flake.modules.nixos.foo = {config, lib, ...}: {
+    imports = [inputs.foo.nixosModules.default];
+    config = lib.mkIf config.fireproof.foo.enable { … };
+  };
+}
+```
 
 ## Adding other things
 

@@ -1,9 +1,8 @@
-{
+{fpLib, ...}: {
   flake.modules.homeManager.niri-outputs = {
     config,
     lib,
     pkgs,
-    fpLib,
     ...
   }: let
     primaryMonitorName = fpLib.primaryMonitorName config.fireproof.monitors;

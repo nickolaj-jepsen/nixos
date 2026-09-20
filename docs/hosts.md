@@ -18,7 +18,11 @@ with its config, e.g. minilab's `snapcast.nix`).
   `fireproof.<feature>.enable = true` IS the fact that gates the feature's
   leaves. Hosts set parent toggles and override exceptions (e.g. minilab sets
   `desktop.enable = true` then `desktop.chromium.enable = false`).
-- `nixos` / `homeManager` / `darwin` are per-class config buckets.
+- `nixos` / `homeManager` / `darwin` are per-class config buckets. They are
+  plain modules with no `inputs`/`fpLib` args (no specialArgs) — anything
+  needing a flake input belongs in a leaf under `modules/`.
+- `state-version.nix` pins `system.stateVersion` + `home.stateVersion` per host
+  (stamped by `just new-host`; there is no fleet-wide default). Never bump it.
 - Every toggle is declared in all module classes (centrally, in
   `modules/base/fireproof.nix`) so `shared` values reach every eval.
 
@@ -31,7 +35,7 @@ the whole host:
 - `nixos` → `nixosConfigurations.<h>` via `nixosSystem`. The host builder
   defines `home-manager.users.<fireproof.username>` and routes all homeManager
   leaves + the card's `shared`/`homeManager` buckets into `sharedModules`.
-- `home` → `homeConfigurations.<h>` via `lib/mkHome.nix` (standalone HM, no
+- `home` → `homeConfigurations.<h>` via `mkHome` in `hosts/default.nix` (standalone HM, no
   NixOS eval; `osConfig = null`). Example: `dev-ao`. Activate with
   `just home-switch <h> [user@target]`; the target needs the user in
   `trusted-users`. HM services that assume system bits (e.g. an ssh-agent)
