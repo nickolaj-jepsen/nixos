@@ -18,6 +18,21 @@
     config = lib.mkIf config.fireproof.dev.pi.enable {
       programs.pi.coding-agent = {
         enable = true;
+        # node-gyp leaves config.gypi/Makefiles naming the npm-deps cache, python and
+        # -dev outputs, which pins ~600 MB of build inputs into the runtime closure.
+        # Costs a local build: the override misses pi.cachix.org.
+        package = inputs.pi.packages.${pkgs.stdenv.hostPlatform.system}.coding-agent.overrideAttrs (old: {
+          postInstall =
+            (old.postInstall or "")
+            + ''
+              find $out/lib/node_modules -type d -path '*/build' -prune -print0 \
+                | while IFS= read -r -d "" d; do
+                  [ -e "$d/config.gypi" ] || continue
+                  find "$d" -mindepth 1 -maxdepth 1 ! -name Release -exec rm -rf {} +
+                  rm -rf "$d/Release/obj.target" "$d/Release/.deps"
+                done
+            '';
+        });
         # Shared with claude-code and copilot (agents.nix); keep it agent-agnostic.
         rules = builtins.readFile ./agent-context.md;
         # The fireproof.agents.skills registry, linked into one dir.
