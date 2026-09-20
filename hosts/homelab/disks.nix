@@ -17,6 +17,15 @@
       device = "/mnt/data-disk/*";
       options = ["cache.files=partial" "dropcacheonclose=true" "category.create=mfs"];
     };
+    # Else the glob pools a dead disk's empty mountpoint on the root fs.
+    # Drop-in, not an fstab x-systemd option: changed options make `switch` remount, which FUSE can't.
+    systemd.units."mnt-data.mount" = {
+      overrideStrategy = "asDropin";
+      text = ''
+        [Unit]
+        RequiresMountsFor=/mnt/data-disk/1 /mnt/data-disk/2
+      '';
+    };
 
     # System disks
     disko.devices = {
