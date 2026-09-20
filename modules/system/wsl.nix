@@ -13,6 +13,9 @@
         usbip.enable = true;
       };
 
+      # The VHD grows on every write and never shrinks; keep /tmp churn in RAM.
+      boot.tmp.useTmpfs = true;
+
       # wsl.usbip.enable ships the tooling but never loads the driver
       boot.kernelModules = ["vhci-hcd"];
 
