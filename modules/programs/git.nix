@@ -19,8 +19,14 @@
     };
 
     # Upstream ships the agent skill in the extension's source, so it always
-    # matches the installed version.
-    fireproof.agents.skills.gh-stack = "${pkgs.unstable.gh-stack.src}/skills/gh-stack";
+    # matches the installed version. fetchTarball, not `.src` (same store path):
+    # the agent modules pathIsDirectory-check skills, which is IFD on a derivation.
+    fireproof.agents.skills.gh-stack = let
+      inherit (pkgs.unstable.gh-stack) src;
+    in "${builtins.fetchTarball {
+      inherit (src) url;
+      sha256 = src.outputHash;
+    }}/skills/gh-stack";
 
     programs.delta = {
       enable = true;

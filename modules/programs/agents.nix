@@ -14,7 +14,7 @@
         enableMcpIntegration = true;
         # Shared with claude-code and pi; keep it agent-agnostic.
         context = builtins.readFile ./agent-context.md;
-        # An attrset, not a linkFarm: the module's pathIsDirectory check on a path is IFD, which breaks the darwin eval in Linux CI.
+        # An attrset, not a linkFarm: the module pathIsDirectory-checks a path, which on a derivation is IFD.
         skills = config.fireproof.agents.skills;
       };
     };
