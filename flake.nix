@@ -25,7 +25,8 @@
     };
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/release-26.05";
+    # nixos-* only advances once Hydra has built + tested it; release-* is the raw dev branch.
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     nix-index-database.url = "github:nix-community/nix-index-database";
@@ -34,7 +35,7 @@
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
-    # nix-darwin-26.05 must match nixpkgs release-26.05 (enableNixpkgsReleaseCheck).
+    # nix-darwin-26.05 must match the nixpkgs 26.05 release (enableNixpkgsReleaseCheck).
     nix-darwin.url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
     nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -52,7 +53,11 @@
 
     # Trampolines so nix-built .app bundles (vscode) show up in Spotlight/Dock.
     mac-app-util.url = "github:hraban/mac-app-util";
+    mac-app-util.inputs.nixpkgs.follows = "nixpkgs";
     mac-app-util.inputs.treefmt-nix.follows = "treefmt-nix";
+    mac-app-util.inputs.cl-nix-lite.inputs.nixpkgs.follows = "nixpkgs";
+    mac-app-util.inputs.cl-nix-lite.inputs.flake-parts.follows = "flake-parts";
+    mac-app-util.inputs.cl-nix-lite.inputs.treefmt-nix.follows = "treefmt-nix";
 
     firefox-addons.url = "gitlab:rycee/nur-expressions?dir=pkgs/firefox-addons";
     firefox-addons.inputs.nixpkgs.follows = "nixpkgs";
