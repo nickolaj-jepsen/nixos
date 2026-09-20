@@ -186,12 +186,6 @@
           };
         };
 
-        # GitHub Copilot ghost-text suggestions. Full tier only (pulls in nodejs).
-        # cmp.enable wires copilot-cmp into nvim-cmp, but we run blink — so we stay
-        # on inline suggestions, which are independent of the completion menu.
-        # Accept <M-l>, next/prev <M-]>/<M-[>, dismiss <C-]>. Auth once: :Copilot auth.
-        assistant.copilot.enable = full;
-
         # oxfmt: one prettier-compatible formatter for the whole JS-adjacent set
         # (prettier itself is unbuildable in 26.05 — it drags in pnpm_9, which is
         # marked insecure). conform ships the oxfmt definition; we only pin the
