@@ -54,7 +54,7 @@ jobs:
 
   # --skip-cached: a host already in attic passes without pulling its closure onto the runner.
   build:
-    needs: [hosts, fmt, check]
+    needs: [hosts, fmt]
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -75,11 +75,11 @@ jobs:
             --flake ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
 
   # The darwin host can't build on Linux (aarch64-darwin), so it gets its own
-  # macOS runner instead of a matrix slot. Free on a public repo; needs [fmt,
-  # check] keeps a broken-format/broken-check PR from spinning it up. Mark this
+  # macOS runner instead of a matrix slot. Free on a public repo; needs [fmt]
+  # keeps a broken-format PR from spinning it up. Mark this
   # job as a required status check on `main` so a broken Mac config blocks merge.
   darwin:
-    needs: [fmt, check]
+    needs: [fmt]
     runs-on: macos-latest
     timeout-minutes: 120
     steps:
