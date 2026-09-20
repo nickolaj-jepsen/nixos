@@ -136,11 +136,11 @@
         serviceConfig = {
           Type = "simple";
           Restart = "on-failure";
-          ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${toString webUiPort},fork,reuseaddr,bind=0.0.0.0 EXEC:'${pkgs.iproute2}/bin/ip netns exec ${vpnNamespace} ${pkgs.socat}/bin/socat STDIO TCP\\:127.0.0.1\\:${toString webUiPort}'";
+          ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${toString webUiPort},fork,reuseaddr,bind=127.0.0.1 EXEC:'${pkgs.iproute2}/bin/ip netns exec ${vpnNamespace} ${pkgs.socat}/bin/socat STDIO TCP\\:127.0.0.1\\:${toString webUiPort}'";
         };
       };
 
-      networking.firewall.allowedTCPPorts = [webUiPort];
+      # WebUI has no TCP rule: an open port bypasses the oauth2-proxy vhost.
       networking.firewall.allowedUDPPorts = [torrentPort];
 
       services = {
