@@ -27,9 +27,9 @@ let
   mkSettings = config:
     mkCaches config
     // {
+      # Trusted = passwordless root-equivalent, so the one deploy user, not all of @wheel.
       trusted-users = [
         "root"
-        "@wheel"
         config.fireproof.username
       ];
 
