@@ -140,7 +140,7 @@ let
         default = config.fireproof.dev.enable;
         description = ''
           Layer the heavy neovim language support (pyrefly/TS/web LSPs + their
-          tree-sitter grammars, nixd) on top of the always-on lean baseline.
+          tree-sitter grammars) on top of the always-on lean baseline.
           Defaults to dev.enable; override off to keep the editor lean.
         '';
       };

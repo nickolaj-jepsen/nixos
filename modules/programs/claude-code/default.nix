@@ -99,13 +99,13 @@
       commandsDir = ./commands;
 
       # Real go-to-definition/find-references/diagnostics instead of grep. Mirrors
-      # neovim's full tier (modules/programs/neovim.nix), so nixd/pyrefly/tsserver
+      # neovim's full tier (modules/programs/neovim.nix), so nil/pyrefly/tsserver
       # cost no extra closure; rust-analyzer replaces the hand-installed
       # rust-analyzer-lsp plugin. Store paths, not bare names — claude-code spawns
       # these itself and inherits whatever PATH the terminal had.
       lspServers = {
         nix = {
-          command = lib.getExe pkgs.nixd;
+          command = lib.getExe pkgs.nil;
           extensionToLanguage.".nix" = "nix";
         };
         python = {

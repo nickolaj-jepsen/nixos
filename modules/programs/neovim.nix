@@ -107,12 +107,7 @@
           enableFormat = true;
 
           # Baseline (every host).
-          nix.enable = true;
-          nix.lsp.servers = lib.mkForce (
-            if full
-            then ["nixd"]
-            else ["nil"]
-          );
+          nix.enable = true; # nil (nvf default); nixd links llvm, ~540 MB
           lua.enable = true;
 
           # Full tier (desktop + dev-ao): heavy LSPs + their grammars.
@@ -130,6 +125,7 @@
           };
           markdown = {
             enable = full;
+            lsp.enable = false; # marksman drags in a .NET runtime
             format.enable = false;
           };
           json = {
