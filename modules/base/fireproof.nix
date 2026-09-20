@@ -182,7 +182,7 @@ let
         physical = lib.mkOption {
           type = lib.types.bool;
           default = !config.fireproof.wsl.enable;
-          description = "Whether this is a physical machine (not WSL/VM). Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub and journald caps.";
+          description = "Whether this is a physical machine (not WSL/VM). Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub, firmware/fwupd and removable-media automount.";
         };
         zram = lib.mkOption {
           type = lib.types.bool;

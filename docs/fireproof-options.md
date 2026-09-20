@@ -886,7 +886,7 @@ true
 
 
 
-Whether this is a physical machine (not WSL/VM)\. Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub and journald caps\.
+Whether this is a physical machine (not WSL/VM)\. Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub, firmware/fwupd and removable-media automount\.
 
 
 

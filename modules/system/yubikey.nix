@@ -2,6 +2,9 @@
   flake.modules.nixos.yubikey = _: {
     services.pcscd.enable = true;
 
+    # pcscd authorizes through polkit; explicit because WSL has no udisks2/fwupd to pull it in.
+    security.polkit.enable = true;
+
     # pcscd's polkit defaults need an active logind session, which WSL's
     # /init.scope, systemd units and agent shells don't have.
     security.polkit.extraConfig = ''
