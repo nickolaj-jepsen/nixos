@@ -55,7 +55,7 @@ cascade IS the composition layer. Opt-in extras (`hardware.nvidia`,
 default off. Full reference: `docs/fireproof-options.md` (`just docs`).
 
 New toggle: add `fireproof.<feature>.enable = lib.mkEnableOption "…";` (or a
-cascading `lib.mkOption { default = config.fireproof.<parent>.enable; }`) to
+cascading `cascade config.fireproof.<parent>.enable "…"`, the helper at the top of that file) to
 `modules/base/fireproof.nix`; hosts enable it via
 `shared.fireproof.<feature>.enable = true`.
 

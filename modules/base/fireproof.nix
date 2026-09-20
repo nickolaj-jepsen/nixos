@@ -4,7 +4,14 @@ let
     config,
     lib,
     ...
-  }: {
+  }: let
+    # Bool defaulting to another toggle (the cascade in docs/modules.md).
+    cascade = default: description:
+      lib.mkOption {
+        type = lib.types.bool;
+        inherit default description;
+      };
+  in {
     options.fireproof = {
       hostname = lib.mkOption {
         type = lib.types.str;
@@ -24,16 +31,8 @@ let
       desktop = {
         enable = lib.mkEnableOption "desktop environment with niri, greetd, and all desktop features";
         chromium = {
-          enable = lib.mkOption {
-            type = lib.types.bool;
-            default = config.fireproof.desktop.enable;
-            description = "Enable the Chromium browser";
-          };
-          work.enable = lib.mkOption {
-            type = lib.types.bool;
-            default = config.fireproof.desktop.chromium.enable && config.fireproof.work.enable;
-            description = "Enable a separate chromium-work instance (own profile, runs alongside the personal one)";
-          };
+          enable = cascade config.fireproof.desktop.enable "Enable the Chromium browser";
+          work.enable = cascade (config.fireproof.desktop.chromium.enable && config.fireproof.work.enable) "Enable a separate chromium-work instance (own profile, runs alongside the personal one)";
         };
         bambu-studio.enable = lib.mkOption {
           type = lib.types.bool;
@@ -88,36 +87,12 @@ let
 
       dev = {
         enable = lib.mkEnableOption "development tools and applications";
-        intellij.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.dev.enable;
-          description = "Enable IntelliJ-based IDEs";
-        };
-        clickhouse.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.dev.enable;
-          description = "Enable Clickhouse";
-        };
-        playwright.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.dev.enable;
-          description = "Enable Playwright";
-        };
-        k8s.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.dev.enable && config.fireproof.work.enable;
-          description = "Enable kubectl and the AO kube configs";
-        };
-        mcp.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.dev.enable;
-          description = "Enable MCP servers (incl. the grafana env-wrapper secret)";
-        };
-        pi.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.dev.enable;
-          description = "Enable the pi coding agent with the lazypi extension roster";
-        };
+        intellij.enable = cascade config.fireproof.dev.enable "Enable IntelliJ-based IDEs";
+        clickhouse.enable = cascade config.fireproof.dev.enable "Enable Clickhouse";
+        playwright.enable = cascade config.fireproof.dev.enable "Enable Playwright";
+        k8s.enable = cascade (config.fireproof.dev.enable && config.fireproof.work.enable) "Enable kubectl and the AO kube configs";
+        mcp.enable = cascade config.fireproof.dev.enable "Enable MCP servers (incl. the grafana env-wrapper secret)";
+        pi.enable = cascade config.fireproof.dev.enable "Enable the pi coding agent with the lazypi extension roster";
         llm = {
           enable = lib.mkEnableOption ''
             local LLM serving (llama-swap + CUDA llama.cpp) and its pi provider.
@@ -135,15 +110,11 @@ let
         };
       };
 
-      neovim.full.enable = lib.mkOption {
-        type = lib.types.bool;
-        default = config.fireproof.dev.enable;
-        description = ''
-          Layer the heavy neovim language support (pyrefly/TS/web LSPs + their
-          tree-sitter grammars) on top of the always-on lean baseline.
-          Defaults to dev.enable; override off to keep the editor lean.
-        '';
-      };
+      neovim.full.enable = cascade config.fireproof.dev.enable ''
+        Layer the heavy neovim language support (pyrefly/TS/web LSPs + their
+        tree-sitter grammars) on top of the always-on lean baseline.
+        Defaults to dev.enable; override off to keep the editor lean.
+      '';
 
       networkd.enable = lib.mkEnableOption "systemd-networkd wired networking";
       wsl.enable = lib.mkEnableOption "WSL configuration";
@@ -154,14 +125,10 @@ let
           default = true;
           description = "Run tailscaled and join the personal tailnet.";
         };
-        autoLogin = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.tailscale.enable;
-          description = ''
-            Enrol declaratively with the OAuth auth key. Off means `tailscale up`
-            by hand — for machines that shouldn't silently join the tailnet.
-          '';
-        };
+        autoLogin = cascade config.fireproof.tailscale.enable ''
+          Enrol declaratively with the OAuth auth key. Off means `tailscale up`
+          by hand — for machines that shouldn't silently join the tailnet.
+        '';
       };
 
       homelab = {
@@ -179,16 +146,8 @@ let
       };
 
       hardware = {
-        physical = lib.mkOption {
-          type = lib.types.bool;
-          default = !config.fireproof.wsl.enable;
-          description = "Whether this is a physical machine (not WSL/VM). Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub, firmware/fwupd and removable-media automount.";
-        };
-        zram = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.hardware.physical;
-          description = "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
-        };
+        physical = cascade (!config.fireproof.wsl.enable) "Whether this is a physical machine (not WSL/VM). Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub, firmware/fwupd and removable-media automount.";
+        zram = cascade config.fireproof.hardware.physical "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
         nvidia.enable = lib.mkEnableOption "NVIDIA GPU support (open kernel module + VA-API video offload)";
         laptop = lib.mkEnableOption "laptop-specific configurations and tools";
         gpuPciId = lib.mkOption {
@@ -202,21 +161,9 @@ let
             null disables the GPU widgets.
           '';
         };
-        battery = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.hardware.laptop;
-          description = "Enable battery support (UPower, battery widget, etc.)";
-        };
-        wifi = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.hardware.laptop;
-          description = "Enable WiFi support (NetworkManager, wireless tools, etc.)";
-        };
-        dimmableBacklight = lib.mkOption {
-          type = lib.types.bool;
-          default = config.fireproof.hardware.laptop;
-          description = "Enable dimmable backlight support (brightnessctl, backlight widget, etc.)";
-        };
+        battery = cascade config.fireproof.hardware.laptop "Enable battery support (UPower, battery widget, etc.)";
+        wifi = cascade config.fireproof.hardware.laptop "Enable WiFi support (NetworkManager, wireless tools, etc.)";
+        dimmableBacklight = cascade config.fireproof.hardware.laptop "Enable dimmable backlight support (brightnessctl, backlight widget, etc.)";
       };
 
       # Cross-class fact read by home-manager halves. See: https://github.com/ChangeCaps/nixos-config
