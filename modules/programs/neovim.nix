@@ -292,7 +292,7 @@
 
         statusline.lualine = {
           enable = true;
-          theme = "auto";
+          setupOpts.options.theme = "auto";
         };
 
         extraPackages = [pkgs.ripgrep pkgs.fd]; # snacks grep/files
