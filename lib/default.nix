@@ -110,7 +110,8 @@ in {
       "age1pzrfw28f8qvsk9g8p2stundf4ph466jut0g6q47sse76zljtqy9q2w32zr" # Backup key (bitwarden)
     ];
     localStorageDir = hostSecrets + ("/" + store);
-    generatedSecretsDir = hostSecrets;
+    # Own subdir: `agenix generate` deletes every *.age here that no generator owns.
+    generatedSecretsDir = hostSecrets + "/generated";
   };
 
   # Hex color -> "R G B" floats in 0..1, the form macOS NSGlobalDomain.AppleHighlightColor expects.

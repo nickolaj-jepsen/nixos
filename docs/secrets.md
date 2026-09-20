@@ -15,6 +15,24 @@ to overwrite without `force=1` (stdin replaces the file wholesale).
 `secret-edit` and `secret-rekey` both decrypt → both need a touch; builds fail
 with "Rekeyed secret not found" until `secret-rekey` has run.
 
+## Generated secrets
+
+For a **new** secret that is only random material nobody outside this repo
+needs to know (an internal DB password, a cookie/session key), skip
+`secret-write` and let agenix-rekey create it:
+
+```nix
+age.secrets.foo-db-pass.generator.script = "alnum";
+```
+
+No `rekeyFile`: it defaults to `secrets/hosts/<h>/generated/<name>.age`. Then
+`just secret-generate` (no YubiKey) and `just secret-rekey`. `generate` deletes
+any `*.age` in `generated/` that no generator owns - never point
+`generatedSecretsDir` (`lib/default.nix`) at the hand-written secrets.
+
+Don't retrofit a generator onto an existing secret: `generate -f` would rotate
+it, which is fatal for `restic-password` and `zitadel-master`.
+
 ## Two rekey stores per host
 
 `agenix rekey` deletes any file in a node's `localStorageDir` the node doesn't

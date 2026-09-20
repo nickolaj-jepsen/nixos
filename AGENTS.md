@@ -16,6 +16,7 @@ just fmt                 # Format all files (ALWAYS run before finishing)
 just check               # Full flake check (slow, use sparingly)
 just docs                # Regenerate docs/fireproof-options.md
 just secret-edit <path>  # Edit a secret (PATH to the .age file, not a bare name)
+just secret-generate     # Create new `generator`-declared secrets (no YubiKey)
 just secret-rekey        # Rekey after adding hosts/secrets (YubiKey)
 ```
 

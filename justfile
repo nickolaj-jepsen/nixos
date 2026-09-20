@@ -266,6 +266,13 @@ secret-write file force="":
     EDITOR="$temp/editor" just secret-edit "{{ file }}"
     echo "Wrote {{ file }} - run 'just secret-rekey' (YubiKey) before it can build."
 
+[doc('Create secrets that declare a `generator` and have no file yet (no YubiKey) - follow with secret-rekey')]
+[group('secret')]
+secret-generate:
+    #!/usr/bin/env -S bash -e
+    {{ nixcmd }} run .#agenix-rekey.{{ system }}.generate
+    git add -- secrets
+
 [doc('Rekey all secrets - needed when adding secrets/hosts')]
 [group('secret')]
 secret-rekey:
