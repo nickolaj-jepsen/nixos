@@ -63,12 +63,11 @@
           '';
 
           interactiveShellInit = ''
-            # fzf.fish: reuse the delta diff highlighter and a bat file preview.
+            # fzf.fish: reuse the delta diff highlighter.
             # Leave Ctrl-R to fish's native history (--history= disables fzf.fish's
             # history binding); other pickers keep defaults (dir=Ctrl+Alt+F,
             # git_log=Ctrl+Alt+L, git_status=Ctrl+Alt+S).
             set -g fzf_diff_highlighter delta --paging=never
-            set -g fzf_preview_file_cmd bat --color=always --style=numbers
             set -g fzf_fd_opts --hidden --exclude=.git
             fzf_configure_bindings --history=
           '';
