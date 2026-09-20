@@ -52,7 +52,7 @@
         (makeScript {
           path = ./ghpr.bash;
           runtimeInputs = with pkgs; [
-            gh
+            unstable.gh # same build as programs.gh, so only one lands in the closure
             fzf
             util-linux # for column
             gawk

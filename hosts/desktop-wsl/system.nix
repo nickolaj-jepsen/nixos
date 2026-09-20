@@ -7,6 +7,8 @@
     # Never unlocked without a graphical login; gh and git don't use it.
     services.gnome.gnome-keyring.enable = lib.mkForce false;
     documentation.nixos.enable = false;
+    documentation.doc.enable = false;
+    documentation.info.enable = false;
 
     system.stateVersion = "25.11";
   };
