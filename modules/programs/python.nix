@@ -26,6 +26,8 @@
         (mkWrapLDLibraryPath pkgs.unstable.rye)
         (mkWrapLDLibraryPath pkgs.python3)
         (mkWrapLDLibraryPath pkgs.unstable.prek)
+        # Drop-in for tools and hook scripts that invoke `pre-commit` by name
+        (pkgs.writeShellScriptBin "pre-commit" ''exec prek "$@"'')
       ];
 
       # uv tool adds executable to $HOME/.local/bin, so add it to PATH

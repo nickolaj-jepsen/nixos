@@ -4,8 +4,6 @@
     lib,
     ...
   }: {
-    home.packages = [pkgs.pre-commit];
-
     programs.gh = {
       enable = true;
       package = pkgs.unstable.gh;
