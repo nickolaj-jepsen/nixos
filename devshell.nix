@@ -1,7 +1,7 @@
-{inputs, ...}: {
+{
   perSystem = {
+    config,
     pkgs,
-    system,
     ...
   }: {
     devShells.default = pkgs.mkShell {
@@ -17,7 +17,7 @@
         nurl # Generate Nix fetcher calls from URLs
 
         # Secrets management
-        inputs.agenix.packages.${system}.default
+        config.agenix-rekey.package # `agenix rekey|edit|generate`
         age
         rage # Used by `just age`
         age-plugin-yubikey # YubiKey plugin discovered via PATH by rage

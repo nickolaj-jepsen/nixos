@@ -1,5 +1,5 @@
 name: Setup Nix
-description: Install Nix with our cachix substituters; optionally attach the homelab attic cache.
+description: Install Nix with our public substituters; optionally attach the homelab attic cache.
 
 inputs:
   attic-endpoint:
@@ -24,8 +24,8 @@ runs:
         # IFD breaks cross-platform eval (darwin from Linux).
         extra-conf: |
           allow-import-from-derivation = false
-          extra-substituters = https://nix-community.cachix.org https://fnug.cachix.org https://niri.cachix.org https://0xcbmedia.cachix.org https://cache.nixos-cuda.org
-          extra-trusted-public-keys = nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs= fnug.cachix.org-1:SDUeF2nZSbSPOAMNJdYZdoVB+tHdB8UHHcqhEmizeNk= niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964= 0xcbmedia.cachix.org-1:u8PfgqbbO/hjnsA77TCxi5w7hh82dApsqJ4bAgg9Rmo= cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=
+          extra-substituters = https://nix-community.cachix.org https://cache.nixos-cuda.org
+          extra-trusted-public-keys = nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs= cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=
 
     - name: Configure attic
       if: inputs.attic-token != ''

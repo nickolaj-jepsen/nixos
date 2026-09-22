@@ -10,10 +10,6 @@ _: {
         arch = "amd64";
         hash = "sha256-ZwD92E53prjJORLC9p610eQPqZvNnTf0OPgJ7ypv5vg=";
       };
-      aarch64-linux = {
-        arch = "arm64";
-        hash = "sha256-AAOm+WBaIQ8Dw4Zw1izVnHEVPCcCqkQn5Mq+Li5fM5A=";
-      };
     };
     plat =
       sources.${system}

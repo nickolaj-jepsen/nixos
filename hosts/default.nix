@@ -65,12 +65,11 @@
     shared ? [],
     nixosModules ? [],
     homeManagerModules ? [],
-    system ? "x86_64-linux",
   }:
     inputs.nixpkgs.lib.nixosSystem {
       modules =
         [
-          {nixpkgs.hostPlatform = system;}
+          {nixpkgs.hostPlatform = "x86_64-linux";}
           inputs.home-manager.nixosModules.home-manager
           inputs.self.nixosModules.overlays
           (embeddedHome (homeManagerModules ++ shared))
@@ -85,12 +84,11 @@
     shared ? [],
     homeManagerModules ? [],
     darwinModules ? [],
-    system ? "aarch64-darwin",
   }:
     inputs.nix-darwin.lib.darwinSystem {
       modules =
         [
-          {nixpkgs.hostPlatform = system;}
+          {nixpkgs.hostPlatform = "aarch64-darwin";}
           inputs.home-manager.darwinModules.home-manager
           inputs.self.darwinModules.overlays
           (embeddedHome (homeManagerModules ++ shared ++ niriHome))
@@ -111,13 +109,10 @@
     };
 
   # Standalone home-manager (osConfig = null): builds its own pkgs + identity.
-  mkHome = {
-    modules ? [],
-    system ? "x86_64-linux",
-  }:
+  mkHome = {modules ? []}:
     inputs.home-manager.lib.homeManagerConfiguration {
       pkgs = import inputs.nixpkgs {
-        inherit system;
+        system = "x86_64-linux";
         config.allowUnfree = true;
         overlays = config.flake.lib.overlays;
       };
