@@ -1,16 +1,11 @@
 # ssh-key (nixos-side) IS ~/.ssh/id_ed25519, the runtime identity HM agenix uses to decrypt every other user secret, so it must stay root-placed (can't decrypt itself).
 let
-  secretsHosts = ../../secrets/hosts;
-  hostEntries = builtins.readDir secretsHosts;
-  hostDirs = builtins.filter (n: hostEntries.${n} == "directory") (builtins.attrNames hostEntries);
   # Break-glass key; private half lives only in Bitwarden, not in this repo.
   backupKey = builtins.readFile ../../secrets/backup-key.pub;
-  # Authorize every host's pubkey; skip non-SSH entries (e.g. a pre-deploy darwin host's age placeholder).
+  # Hosts whose identity may log in everywhere; dev-ao is left out because its key lives on a work-owned server.
+  trustedHosts = ["desktop" "desktop-wsl" "homelab" "laptop" "macbook" "minilab" "work"];
   # builtins-only so the list is shared across all three module halves without lib at this scope.
-  publicKeys =
-    [backupKey]
-    ++ builtins.filter (s: builtins.substring 0 4 s == "ssh-")
-    (map (x: builtins.readFile (secretsHosts + ("/" + x) + "/id_ed25519.pub")) hostDirs);
+  publicKeys = [backupKey] ++ map (h: builtins.readFile (../../secrets/hosts + ("/" + h) + "/id_ed25519.pub")) trustedHosts;
   # Each .pub already ends in "\n"; strip it so the joined file is one key per line, no blanks.
   authorizedKeysText = builtins.concatStringsSep "\n" (map (k: builtins.replaceStrings ["\n"] [""] k) publicKeys) + "\n";
 in {
@@ -81,7 +76,7 @@ in {
 
     # darwin sshd reads authorized_keys with StrictModes on, and a symlink into the
     # group-writable /nix/store would be rejected — so write a real file as the user
-    # (mode 600) from the shared all-hosts pubkey list. NixOS does this via
+    # (mode 600) from the shared trusted-host pubkey list. NixOS does this via
     # users.users.<user>.openssh.authorizedKeys, hence darwin-only here.
     home.activation.darwinAuthorizedKeys = lib.mkIf pkgs.stdenv.isDarwin (
       lib.hm.dag.entryAfter ["writeBoundary"] ''
@@ -98,7 +93,6 @@ in {
         {
           "*" = {
             IdentityFile = identityFile;
-            ForwardAgent = true;
             # Load keys into the agent on first use — covers darwin, which has no
             # systemd add-ssh-keys service (below).
             AddKeysToAgent = "yes";
