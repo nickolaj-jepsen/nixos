@@ -7,8 +7,8 @@
     ...
   }: {
     config = lib.mkIf config.fireproof.homelab.enable {
-      # Drop-dir for node_exporter textfile gauges (restic freshness, qBittorrent
-      # VPN probe, …). World-readable so the exporter reads what root writes.
+      # Drop-dir for node_exporter textfile gauges (restic freshness, cert
+      # expiry). World-readable so the exporter reads what root writes.
       systemd.tmpfiles.rules = [
         "d /var/lib/node-exporter-textfile 0755 root root -"
       ];

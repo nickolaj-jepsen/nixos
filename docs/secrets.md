@@ -1,6 +1,8 @@
 # Secrets
 
 agenix-rekey + YubiKey. Host keys: `secrets/hosts/<h>/id_ed25519.{pub,age}`.
+`secrets/yubikey-identity.age` is a passphrase-encrypted offline backup of the
+YubiKey identity; nothing references it by design, so don't prune it.
 
 ```bash
 just secret-edit secrets/hosts/<h>/<name>.age   # Edit in $EDITOR (PATH to the .age file, not a bare name)
@@ -46,6 +48,8 @@ own, so the nixos and HM nodes of one host must not share a dir:
   The `ssh-key` secret stays nixos-side because it IS that identity.
 
 Both stores use the same `hostPubkey`, so the blobs are interchangeable.
+After narrowing a host's secret set, run `just secret-rekey`: orphans are only
+pruned there, and until then they ship in that host's store copy of the dir.
 
 ## Darwin
 

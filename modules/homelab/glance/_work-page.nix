@@ -1,4 +1,27 @@
-{templates}: {
+{templates}: let
+  # One GraphQL call per widget; statusCheckRollup includes Actions check runs, which REST /status omits.
+  prSearch = query: {
+    type = "custom-api";
+    cache = "10m";
+    url = "https://api.github.com/graphql";
+    headers.Authorization = "Bearer \${GITHUB_TOKEN}";
+    body.query = ''
+      {
+        search(query: "${query}", type: ISSUE, first: 15) {
+          nodes {
+            ... on PullRequest {
+              title url number isDraft mergeable createdAt updatedAt
+              author { login avatarUrl(size: 32) }
+              repository { nameWithOwner }
+              reviewRequests { totalCount }
+              commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+            }
+          }
+        }
+      }
+    '';
+  };
+in {
   name = "Work";
   columns = [
     {
@@ -154,30 +177,18 @@
           };
           template = templates.recent-repos;
         }
-        {
-          type = "custom-api";
-          title = "PRs Awaiting Review";
-          title-url = "https://github.com/pulls/review-requested";
-          cache = "10m";
-          url = "https://api.github.com/search/issues?q=is:pr+is:open+review-requested:@me&per_page=15";
-          headers = {
-            Authorization = "Bearer \${GITHUB_TOKEN}";
-            Accept = "application/vnd.github.v3+json";
-          };
-          template = templates.prs-awaiting-review;
-        }
-        {
-          type = "custom-api";
-          title = "My Pull Requests";
-          title-url = "https://github.com/pulls";
-          cache = "10m";
-          url = "https://api.github.com/search/issues?q=is:pr+is:open+author:@me&per_page=15&sort=updated";
-          headers = {
-            Authorization = "Bearer \${GITHUB_TOKEN}";
-            Accept = "application/vnd.github.v3+json";
-          };
-          template = templates.my-pull-requests;
-        }
+        (prSearch "is:pr is:open review-requested:@me"
+          // {
+            title = "PRs Awaiting Review";
+            title-url = "https://github.com/pulls/review-requested";
+            template = templates.prs-awaiting-review;
+          })
+        (prSearch "is:pr is:open author:@me sort:updated-desc"
+          // {
+            title = "My Pull Requests";
+            title-url = "https://github.com/pulls";
+            template = templates.my-pull-requests;
+          })
       ];
     }
   ];
