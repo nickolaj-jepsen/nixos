@@ -1,5 +1,5 @@
-_: {
-  disko.devices = {
+{
+  nixos.disko.devices = {
     disk = {
       main = {
         device = "@@DISK@@";
@@ -20,7 +20,7 @@ _: {
                 type = "filesystem";
                 format = "vfat";
                 mountpoint = "/boot";
-                mountOptions = ["defaults"];
+                mountOptions = ["umask=0077"];
               };
             };
             root = {

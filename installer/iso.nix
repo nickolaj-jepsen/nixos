@@ -20,6 +20,7 @@
 
       After install: reboot, then `cd ~/nixos && git status` to review
       any live-generated configs (facter.json, disk-configuration.nix).
+      Then wipe or reflash this stick: it holds ${targetHost}'s private host key.
 
     ''
     else ''
@@ -68,18 +69,18 @@ in {
   # Disable systemd-boot as we're using ISO bootloader
   boot.loader.systemd-boot.enable = lib.mkForce false;
 
-  # Enable SSH for remote installation
+  # Password root SSH is what `just deploy-remote` (nixos-anywhere) logs into on the
+  # generic image; a host-baked image carries the host key and installs at the console.
   services.openssh = {
-    enable = true;
-    settings = {
+    enable = !hostBaked;
+    settings = lib.mkIf (!hostBaked) {
       PermitRootLogin = lib.mkForce "yes";
       PasswordAuthentication = lib.mkForce true;
       KbdInteractiveAuthentication = lib.mkForce true;
     };
   };
 
-  # Set a root password for the live environment (override the ISO's empty password)
-  users.users.root = {
+  users.users.root = lib.mkIf (!hostBaked) {
     initialHashedPassword = lib.mkForce null;
     initialPassword = lib.mkForce "nixos";
   };

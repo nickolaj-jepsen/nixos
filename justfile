@@ -1,6 +1,7 @@
-# export NIXPKGS_ALLOW_UNFREE := "1"
-
 nixcmd := "nix --experimental-features 'nix-command flakes'"
+
+# Built bootstrap ISOs carry a private host key, so they live outside the repo and the world-readable store.
+bootstrap_iso_dir := cache_directory() / "bootstrap-iso"
 
 # Current Nix system double (e.g. x86_64-linux, aarch64-darwin); agenix-rekey is per-system.
 system := `nix --experimental-features 'nix-command flakes' eval --impure --raw --expr 'builtins.currentSystem'`
@@ -29,7 +30,7 @@ build target *ARGS="":
 build-system hostname=`hostname -s` *ARGS="":
     @just build nixosConfigurations."{{ hostname }}".config.system.build.toplevel {{ ARGS }}
 
-[doc('Wrapper for nixos-facter')]
+[doc('Write hosts/<host>/facter.json from nixos-facter, run here or over ssh on a running target (never reinstalls)')]
 [group('deploy')]
 factor hostname=`hostname -s` target='':
     #!/usr/bin/env -S bash -e
@@ -38,15 +39,14 @@ factor hostname=`hostname -s` target='':
         echo "Error: Host '{{ hostname }}' does not exist in ./hosts/"
         exit 1
     fi
+    report=$(mktemp)
+    trap 'rm -f "$report"' EXIT
     if [ -z "$target" ]; then
-        sudo {{ nixcmd }} run nixpkgs#nixos-facter -- -o hosts/{{ hostname }}/facter.json
+        sudo {{ nixcmd }} run nixpkgs#nixos-facter > "$report"
     else
-        {{ nixcmd }} run github:nix-community/nixos-anywhere -- \
-            --flake .#{{ hostname }} \
-            --target-host {{ target }} \
-            --generate-hardware-config nixos-facter \
-            ./hosts/{{ hostname }}/facter.json
+        ssh "$target" "sudo {{ nixcmd }} run nixpkgs#nixos-facter" > "$report"
     fi
+    install -m644 "$report" "hosts/{{ hostname }}/facter.json"
 
 [doc('Wrapper for nixos-rebuild switch')]
 [group("deploy")]
@@ -122,6 +122,8 @@ darwin-diff hostname=`hostname -s`: (darwin-build hostname)
 #   2. sudo ssh-keygen -A                      # create /etc/ssh/ssh_host_ed25519_key
 #   3. Replace secrets/hosts/<h>/id_ed25519.{pub,age} with this Mac's real host key
 #      (the committed pub is a placeholder), then `just secret-rekey` (YubiKey).
+#      If <h> isn't in trustedHosts (modules/system/ssh.nix) yet, add it now that the
+#      real key is committed, and switch the other hosts so they accept it.
 #   4. nix run nix-darwin/nix-darwin-26.05#darwin-rebuild -- switch --flake .#<h>
 #   nix-homebrew installs Homebrew itself on the first switch (slow); review
 #   homebrew.onActivation.cleanup first.
@@ -138,7 +140,8 @@ darwin-switch hostname=`hostname -s` *ARGS="":
 [group('deploy')]
 deploy-remote hostname target: (_confirm "Deploy " + hostname + " to " + target + "? This will FORMAT disks on the target.")
     #!/usr/bin/env -S bash -e
-    git add .
+    # Untracked files are invisible to the flake.
+    git add -- "hosts/{{ hostname }}" "secrets/hosts/{{ hostname }}"
 
     temp=$(mktemp -d)
     trap "rm -rf $temp" EXIT
@@ -159,12 +162,7 @@ deploy-remote hostname target: (_confirm "Deploy " + hostname + " to " + target 
         --extra-files "$temp" \
         --target-host "{{ target }}"
 
-[doc('A wrapper disko-install')]
-[group('deploy')]
-disko-install hostname disk:
-    sudo {{ nixcmd }} run 'github:nix-community/disko/latest#disko-install' -- --flake .#{{ hostname }} --disk main {{ disk }}
-
-[doc('Build an install ISO for a host')]
+[doc("Build a live image of a host's own config (no host key baked in; to install a host, use bootstrap-iso)")]
 [group('tools')]
 iso hostname:
     {{ nixcmd }} build .#nixosConfigurations.{{ hostname }}.config.system.build.images.iso-installer
@@ -178,7 +176,7 @@ docs:
     install -m 644 "$out" docs/fireproof-options.md
     echo "Wrote docs/fireproof-options.md"
 
-[doc('Build a host-specific bootstrap ISO with the host SSH key + repo baked in')]
+[doc('Build a host-specific bootstrap ISO (host SSH key + repo baked in) into ~/.cache/bootstrap-iso/')]
 [group('deploy')]
 bootstrap-iso hostname:
     #!/usr/bin/env -S bash -e
@@ -191,18 +189,43 @@ bootstrap-iso hostname:
         exit 1
     fi
 
+    # nixos-install is the first thing to force the rekeyed files, and on the target that is after disko has wiped the disk.
+    {{ nixcmd }} eval --raw ".#nixosConfigurations.{{ hostname }}.config" --apply 'c: builtins.deepSeq (map (s: toString s.file) (builtins.attrValues c.age.secrets ++ builtins.concatMap (u: builtins.attrValues (u.age.secrets or {})) (builtins.attrValues c.home-manager.users))) "ok"' >/dev/null ||
+        { echo "Secrets for {{ hostname }} aren't all rekeyed. Run: just secret-rekey"; exit 1; }
+
     temp=$(mktemp -d)
-    trap "rm -rf $temp" EXIT
+    # Everything built on the payload is a world-readable copy of the key, so purge on every exit, not only success.
+    # Images drop their references: take outputs from the dependent .drvs, since `store delete` refuses a partial set.
+    purge() {
+        [ -f "$temp/payload/id_ed25519" ] || return 0
+        rm -f "$temp/result"
+        local payload closure built
+        if payload=$({{ nixcmd }} store add --dry-run --name source "$temp/payload") &&
+            closure=$(nix-store --query --referrers-closure "$payload" 2>/dev/null) &&
+            built=$(nix-store --query --outputs $(grep '\.drv$' <<<"$closure") </dev/null) &&
+            {{ nixcmd }} store delete $closure $built; then
+            echo "Purged the plaintext host key from the Nix store."
+        elif [ -e "$payload" ]; then
+            echo "Warning: couldn't purge the plaintext host key from the Nix store (see above)." >&2
+        fi
+    }
+    trap 'purge; rm -rf "$temp"' EXIT
 
     echo "Decrypting host SSH key (touch YubiKey if prompted)..."
-    just age -d "secrets/hosts/{{ hostname }}/id_ed25519.age" > "$temp/id_ed25519"
-    chmod 600 "$temp/id_ed25519"
-    cp "secrets/hosts/{{ hostname }}/id_ed25519.pub" "$temp/id_ed25519.pub"
+    install -d -m700 "$temp/payload"
+    just age -d "secrets/hosts/{{ hostname }}/id_ed25519.age" > "$temp/payload/id_ed25519"
+    chmod 600 "$temp/payload/id_ed25519"
+    cp "secrets/hosts/{{ hostname }}/id_ed25519.pub" "$temp/payload/id_ed25519.pub"
+    override="--override-input bootstrap-payload path:$temp/payload"
 
     echo "Building bootstrap ISO for {{ hostname }}..."
     just build "nixosConfigurations.bootstrap-{{ hostname }}.config.system.build.isoImage" \
-        --override-input bootstrap-payload "path:$temp"
-    echo "ISO built: $(ls -1 result/iso/*.iso)"
+        $override --out-link "$temp/result"
+    iso="{{ bootstrap_iso_dir }}/{{ hostname }}.iso"
+    install -d -m700 "{{ bootstrap_iso_dir }}"
+    install -m600 "$temp"/result/iso/*.iso "$iso"
+    echo "ISO built: $iso"
+    echo "It holds the private host key: delete it once flashed (bootstrap-flash does)."
 
 [doc('Flash a host-specific bootstrap ISO to a USB drive')]
 [group('deploy')]
@@ -215,10 +238,12 @@ bootstrap-flash hostname device: (_confirm "Flash bootstrap ISO for " + hostname
 
     just bootstrap-iso {{ hostname }}
 
-    iso_file=$(ls -1 result/iso/*.iso | head -1)
+    iso_file="{{ bootstrap_iso_dir }}/{{ hostname }}.iso"
     echo "Flashing $iso_file to {{ device }}..."
     sudo dd if="$iso_file" of="{{ device }}" bs=4M status=progress oflag=sync
+    rm -f "$iso_file"
     echo "Done! You can now boot from {{ device }}"
+    echo "Wipe or reflash it after the install: it holds the host's private key."
 
 [doc('Runs (r)age with yubikey identity')]
 [group('secret')]
@@ -330,11 +355,14 @@ new-host hostname username:
     echo "Encrypting SSH key"
     just age -e "$temp/id_ed25519" -o "secrets/hosts/{{ hostname }}/id_ed25519.age"
 
+    # Untracked files are invisible to the flake, so agenix-rekey would skip the new host.
+    git add -- "hosts/{{ hostname }}" "secrets/hosts/{{ hostname }}"
     echo "Secret rekeying..."
     just secret-rekey
 
-    echo "Host '{{ hostname }}' created and discovered automatically (no hosts/default.nix edit needed)."
+    echo "Host '{{ hostname }}' created and staged; it is discovered automatically (no hosts/default.nix edit needed)."
     echo "Edit hosts/{{ hostname }}/host.nix to enable features via fireproof.*.enable — see modules/base/fireproof.nix."
+    echo "Add \"{{ hostname }}\" to trustedHosts in modules/system/ssh.nix so the other hosts accept its SSH key."
 
 [doc("Update flake.lock")]
 [group('maintenance')]
@@ -385,7 +413,7 @@ nurl *ARGS="--help":
 [doc("Show why a package is in the closure")]
 [group("tools")]
 why-depends package hostname=`hostname -s`:
-    {{ nixcmd }} why-depends --all .#nixosConfigurations.{{ hostname }}.config.system.build.toplevel nixpkgs#{{ package }}
+    {{ nixcmd }} why-depends --all .#nixosConfigurations.{{ hostname }}.config.system.build.toplevel .#nixosConfigurations.{{ hostname }}.pkgs.{{ package }}
 
 [doc('Remove build results and temporary files')]
 [group('tools')]

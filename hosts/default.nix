@@ -6,9 +6,9 @@
   inherit (inputs.nixpkgs) lib;
 
   validClasses = ["nixos" "home" "darwin"];
+  cardKeys = ["class" "shared" "nixos" "homeManager" "darwin"];
 
   collect = dir: let
-    cardKeys = ["class" "shared" "nixos" "homeManager" "darwin"];
     names =
       lib.filter
       (n: lib.hasSuffix ".nix" n && !(lib.hasPrefix "_" n))
@@ -174,6 +174,8 @@
 in {
   # nixos-class only: home/darwin-class hosts have no install ISO for installer/ to fan out over.
   config.flake.hostNames = nixosHosts;
+  # home-check.nix validates the disko templates against the same card shape.
+  config.flake.hostCardKeys = cardKeys;
 
   config.flake.nixosConfigurations =
     lib.genAttrs nixosHosts (name: buildHost (hostDir name));
