@@ -14,6 +14,20 @@ let
     url = "https://huggingface.co/unsloth/${repo}/resolve/main/${path}";
   };
   kvQ4 = ["--cache-type-k q4_0" "--cache-type-v q4_0"];
+  # 5.8 GiB at 64k on either card. Thinking only when the client asks; Qwen's
+  # non-thinking sampling.
+  qwen35-4b = {
+    name = "Qwen3.5 4B (local fast 64k)";
+    weights = unsloth "Qwen3.5-4B-MTP-GGUF" "Qwen3.5-4B-UD-Q4_K_XL.gguf";
+    ctx = 65536;
+    args = [
+      "--spec-type draft-mtp"
+      "--spec-draft-n-max 2"
+      "--reasoning off"
+      "--temp 0.7"
+      "--top-p 0.8"
+    ];
+  };
   # The GGUFs carry the model's own MTP head (blk.*.nextn.*), so drafting with
   # it is lossless. Draft cache q4_0 for the same reason as the main cache.
   mtp = [
@@ -69,19 +83,7 @@ in {
     #   MiniCPM5-2B:                  301 / 293 / 46 / 29
     # Everything past 300 tok/s (Qwen3.5-2B, Gemma E2B, LFM2.5) failed a quarter
     # of the tasks. DFlash on the 4B: 340 raw but 201 on tool-call turns.
-    "qwen3.5-4b" = {
-      name = "Qwen3.5 4B (local fast 64k)";
-      weights = unsloth "Qwen3.5-4B-MTP-GGUF" "Qwen3.5-4B-UD-Q4_K_XL.gguf";
-      ctx = 65536;
-      # 5.8 GiB. Thinking only when the client asks; Qwen's non-thinking sampling.
-      args = [
-        "--spec-type draft-mtp"
-        "--spec-draft-n-max 2"
-        "--reasoning off"
-        "--temp 0.7"
-        "--top-p 0.8"
-      ];
-    };
+    "qwen3.5-4b" = qwen35-4b;
     "gemma-4-26b-a4b" = {
       name = "Gemma 4 26B-A4B (local 32k)";
       weights = unsloth "gemma-4-26B-A4B-it-GGUF" "gemma-4-26B-A4B-it-UD-Q3_K_XL.gguf";
@@ -133,5 +135,14 @@ in {
       # default 512 saves ~240 MiB with prefill speed unchanged.
       args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
     };
+    # Measured 2026-09-22 on b10964, thinking off, 3 x 24 bash-tool tasks
+    # passed / s per 24 / HumanEval+ / tok/s on tool-call turns:
+    #   27B IQ2 + MTP (above):  70 / 129 / 86.0% / 69
+    #   MiMo Q5_K_M:            66 /  90 / 75.6% / 65
+    #   MiMo Q4_K_M:            67 /  57 / 68.9% / 74
+    #   Qwen3.5-4B + MTP:       67 /  41 / 76.8% / 191
+    # MiMo has no MTP head (the distill dropped it), hence dense-9B raw speed;
+    # it also needs a patched chat template for llama.cpp to parse its tool calls.
+    "qwen3.5-4b" = qwen35-4b;
   };
 }
