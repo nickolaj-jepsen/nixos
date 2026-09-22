@@ -74,7 +74,7 @@ standalone guard, so an osConfig read fails CI.
 - Theme: `let c = config.fireproof.theme.colors; in { background = c.bg; border = "#${c.accent}"; }`
   (values have no `#` prefix).
 - Unstable packages: `pkgs.unstable.<pkg>` (overlay on the pkgs set).
-- `fpLib` (see below): `mkVirtualHost { port; websockets?; http2?; host?; }`,
+- `fpLib` (see below): `mkVirtualHost { port; websockets?; host?; extraConfig?; extraLocations?; }`,
   `mkPostgresDB { name; login?; authentication?; }`,
   `mkDarwinGuiPackage pkgs linuxPkg` — see `lib/default.nix`.
 

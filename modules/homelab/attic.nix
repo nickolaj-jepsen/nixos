@@ -17,8 +17,10 @@
       # No oauth2-proxy: atticd has its own JWT auth and CI pushes with a bearer token, not browser SSO.
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
         inherit port;
+        # Each NAR is one PUT (some are several GiB); stream it instead of spooling to /tmp on the SSDs.
         extraConfig = ''
-          client_max_body_size 1G;
+          client_max_body_size 0;
+          proxy_request_buffering off;
         '';
       };
 

@@ -13,6 +13,9 @@
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
         port = 8096;
         websockets = true;
+        extraConfig = ''
+          proxy_buffering off;
+        '';
       };
 
       # Grant the media user access to GPU devices for hardware transcoding

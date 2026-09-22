@@ -1,4 +1,4 @@
-{
+{fpLib, ...}: {
   flake.modules.nixos.immich = {
     config,
     lib,
@@ -11,21 +11,14 @@
     config = lib.mkIf config.fireproof.homelab.enable {
       services.restic.backups.homelab.paths = ["/var/lib/immich"];
 
-      services.nginx.virtualHosts."${domain}" = {
-        forceSSL = true;
-        enableACME = true;
-        http2 = true;
+      services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {
+        inherit port;
+        websockets = true;
         extraConfig = ''
           client_max_body_size 50000M;
+          proxy_read_timeout 600s;
+          send_timeout 600s;
         '';
-        locations."/" = {
-          proxyPass = "http://127.0.0.1:${toString port}";
-          proxyWebsockets = true;
-          extraConfig = ''
-            proxy_read_timeout 600s;
-            send_timeout 600s;
-          '';
-        };
       };
 
       users.users.immich.extraGroups = ["video" "render"];

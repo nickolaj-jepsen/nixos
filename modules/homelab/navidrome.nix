@@ -46,9 +46,9 @@
           Address = "127.0.0.1";
           Port = port;
           MusicFolder = "/mnt/data/music";
-          ScanSchedule = "@every 1m";
+          # The watcher catches most adds; this nets writes that bypass the mergerfs mount's inotify.
+          "Scanner.Schedule" = "@every 24h";
           LogLevel = "info";
-          "ExtAuth.Enabled" = true;
           "ExtAuth.TrustedSources" = "127.0.0.1/32";
           "ExtAuth.UserHeader" = "Remote-User";
         };
