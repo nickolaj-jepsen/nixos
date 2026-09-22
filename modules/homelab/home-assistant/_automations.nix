@@ -57,11 +57,8 @@
     entity_id = person;
     inherit state;
   };
-  # Timestamp checks instead of `for:` timers survive the automation.reload the MQTT recovery
-  # runs at every start; last_updated also moves on brightness changes (activity outside AL).
-  staleBy = attr: minutes: e: "(states['${e}'] is not none and (now() - states['${e}'].${attr}).total_seconds() > ${toString (minutes * 60)})";
-  stale = staleBy "last_changed";
-  idle = staleBy "last_updated";
+  # Timestamp checks instead of `for:` timers survive the automation.reload the MQTT recovery runs at every start.
+  stale = minutes: e: "(states['${e}'] is not none and (now() - states['${e}'].last_changed).total_seconds() > ${toString (minutes * 60)})";
   everyFiveMinutes = {
     trigger = "time_pattern";
     minutes = "/5";
@@ -103,11 +100,6 @@
     }";
     target.entity_id = e;
   };
-  setNumber = e: value: {
-    action = "number.set_value";
-    target.entity_id = e;
-    data.value = value;
-  };
   discord = message: {
     action = "rest_command.discord";
     data.message = message;
@@ -131,10 +123,18 @@
       }
       // lib.optionalAttrs (title != null) {inherit title;};
   };
+  # Spotify answers a pause on a paused player with a 403 that continue_on_error cannot catch.
   pausePlayers = {
-    action = "media_player.media_pause";
-    target.entity_id = [shield spotify];
-    continue_on_error = true;
+    repeat = {
+      for_each = "{{ ['${shield}', '${spotify}'] | select('is_state', 'playing') | list }}";
+      sequence = [
+        {
+          action = "media_player.media_pause";
+          target.entity_id = "{{ repeat.item }}";
+          continue_on_error = true;
+        }
+      ];
+    };
   };
 
   roomLights = room: map light dev.rooms.${room}.lights;
@@ -161,7 +161,7 @@
     {
       "if" = [(groupOn (group room))];
       "then" = [(step (group room) 20)];
-      "else" = [(turnOn (group room) {})];
+      "else" = [(turnOn (group room) {brightness_pct = alLevel room;})];
     }
   ];
   holdDown = room: [
@@ -280,13 +280,7 @@ in {
     [
       # ---- remotes -------------------------------------------------------------
       (remote "Office - Switch" {
-        "on" = [
-          {
-            "if" = [(groupOn (group "office"))];
-            "then" = [(step (group "office") 20)];
-            "else" = [(turnOn (group "office") {})];
-          }
-        ];
+        "on" = holdUp "office";
         "off" = [(step (group "office") (-20))];
         brightness_move_up = [(turnOn (group "office") {brightness_pct = 100;})];
         brightness_move_down = [(turnOff (group "office"))];
@@ -331,7 +325,7 @@ in {
           (plugOn bedroomFan)
         ];
         brightness_move_up = [
-          (turnOn (group "bedroom") {})
+          (turnOn (group "bedroom") {brightness_pct = alLevel "bedroom";})
           {
             # The same hold lights the room for a night trip or an evening read; only a morning one ends sleep mode.
             "if" = [(template "{{ 5 <= now().hour < 12 }}")];
@@ -404,7 +398,8 @@ in {
         triggers = [everyFiveMinutes];
         conditions = [
           (groupOn (group "bathroom"))
-          (template "{{ ${idle 45 (group "bathroom")} }}")
+          # After sunset AL restyles the bulbs every 5 min, so last_updated never ages; the remote's last press does.
+          (template "{{ ${stale 45 (group "bathroom")} and (now() - (state_attr('automation.remote_bathroom_switch','last_triggered') or as_datetime(0))).total_seconds() > 2700 }}")
         ];
         actions = [(turnOff (group "bathroom"))];
       }
@@ -491,6 +486,8 @@ in {
       {
         id = "door_opened_while_away";
         alias = "Door: opened while away";
+        # A second opening during the wait is the same homecoming.
+        max_exceeded = "silent";
         triggers = [
           {
             trigger = "state";
@@ -500,11 +497,17 @@ in {
         ];
         conditions = [(personIs "not_home")];
         actions = [
+          # The door opens before GPS notices an arrival, so presence gets a few minutes to catch up.
+          {
+            wait_template = "{{ not is_state('${person}','not_home') }}";
+            timeout = "00:05:00";
+          }
+          (template "{{ not wait.completed }}")
           (phone {
             title = "Door";
             channel = "Door";
             tag = "door-away";
-            message = "The entrance door opened at {{ now().strftime('%H:%M') }} while nobody is home.";
+            message = "The entrance door opened at {{ as_local(trigger.to_state.last_changed).strftime('%H:%M') }} while nobody is home.";
           })
         ];
       }
@@ -563,7 +566,7 @@ in {
           (setBool sleepMode false)
           (alManualFor "bedroom" [bedroomCeiling] false)
           (turnOn bedroomCeiling {})
-          (turnOn (group "stairs") {})
+          (turnOn (group "stairs") {brightness_pct = alLevel "stairs";})
         ];
       }
       {
@@ -629,7 +632,6 @@ in {
         actions = [
           (setBool zwiftRide true)
           (plugOn kitchenFan)
-          (setNumber dev.zwift.updateInterval 15)
           (alManual "living_room" true)
           (turnOn (group "living_room") {
             brightness_pct = 100;
@@ -673,7 +675,6 @@ in {
               })
             ];
           }
-          (setNumber dev.zwift.updateInterval 120)
           (setBool zwiftRide false)
         ];
       }
@@ -694,19 +695,6 @@ in {
             color_temp_kelvin = "{{ 3000 if (states('${dev.zwift.powerZone}') | int(3)) <= 2 else (3500 if (states('${dev.zwift.powerZone}') | int(3)) == 3 else 4000) }}";
           })
         ];
-      }
-      {
-        id = "zwift_polling_idle";
-        alias = "Zwift: slow polling while idle";
-        mode = "single";
-        triggers = [
-          {
-            trigger = "homeassistant";
-            event = "start";
-          }
-        ];
-        conditions = [(template "{{ not is_state('${dev.zwift.online}','True') }}")];
-        actions = [(setNumber dev.zwift.updateInterval 120)];
       }
       # ---- watching mode (Jellyfin on the Shield) --------------------------------
       {
@@ -886,7 +874,7 @@ in {
           (discord "⚠️ DMI warning: {{ state_attr('${dev.meteoalarm}','headline') }} ({{ state_attr('${dev.meteoalarm}','severity') }}) — {{ state_attr('${dev.meteoalarm}','description') | default('', true) | truncate(300) }}")
         ];
       }
-      # ---- printer (Bambu Lab; ids are provisional, see _devices.nix) -------------
+      # ---- printer (Bambu Lab) ---------------------------------------------------
       {
         id = "printer_finished";
         alias = "Printer: print finished";
@@ -1037,8 +1025,13 @@ in {
       sequence = [
         (turnOff (group "all"))
         (plugOff [bedroomFan kitchenFan])
-        pausePlayers
+        # Sleep mode makes AL restyle every bulb still reported on; Zigbee2MQTT reports the off about 0.5 s late.
+        {
+          wait_template = "{{ ${builtins.toJSON (map light dev.allLights)} | select('is_state', 'on') | list | count == 0 }}";
+          timeout = "00:00:05";
+        }
         (setBool sleepMode true)
+        pausePlayers
       ];
     };
   };
