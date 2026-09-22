@@ -12,11 +12,11 @@
     cp -r ${
       lib.cleanSourceWith {
         src = inputs.self;
-        # Keep `.git` (post-install `git status` depends on it) and
-        # `secrets/` (encrypted; the decrypted host key is delivered
-        # separately via the override-input payload). Filter out the
-        # noise nixpkgs' `cleanSourceFilter` normally would: editor
-        # swap/backup files, build artefacts, OS metadata.
+        # `self` has no `.git` (bootstrap-install re-attaches history after
+        # install). Keep `secrets/` (encrypted; the decrypted host key comes
+        # via the override-input payload). Filter out the noise nixpkgs'
+        # `cleanSourceFilter` normally would: editor swap/backup files,
+        # build artefacts, OS metadata.
         filter = path: type: let
           base = baseNameOf (toString path);
         in
@@ -52,6 +52,8 @@ in {
     };
     "iso-bootstrap/ssh/id_ed25519.pub".source = "${payload}/id_ed25519.pub";
     "iso-bootstrap/target-host".text = config.installer.targetHost;
+    # Base for re-attaching history; a dirty tree records its HEAD.
+    "iso-bootstrap/rev".text = inputs.self.rev or (lib.removeSuffix "-dirty" (inputs.self.dirtyRev or ""));
     "iso-bootstrap/nixos".source = flakeSrc;
   };
 }

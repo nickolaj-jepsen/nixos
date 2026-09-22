@@ -64,15 +64,27 @@ nixos halves never evaluate on darwin — no guard needed.
 
 ## New host / install
 
-- `just new-host <hostname> <username>` drops the card + generates and
-  encrypts the host SSH key.
+- `just new-host <hostname> <username>` drops the card, generates and
+  encrypts the host SSH key, `git add`s `hosts/<h>` + `secrets/hosts/<h>`
+  (untracked files are invisible to agenix-rekey) and rekeys. Then add `<h>`
+  to `trustedHosts` in `modules/system/ssh.nix` so the other hosts accept its
+  SSH key.
 - Physical install: `just bootstrap-iso <h>` bakes the host key + this flake
-  into an ISO; `just bootstrap-flash <h> /dev/sdX`; target boots and runs
-  `bootstrap-install`. The installer lives in `installer/` (a self-contained
-  corner owning `nixosConfigurations.bootstrap{,-<host>}`, not a host).
-- Disko templates: `hosts/_templates/disko/<name>.nix` with
-  `device = "@@DISK@@";` as the sentinel; the installer offers any template
-  found there when the host has no `disk-configuration.nix` yet.
+  into `~/.cache/bootstrap-iso/<h>.iso` and purges the key's copies from the
+  Nix store; `just bootstrap-flash <h> /dev/sdX`; target boots and runs
+  `bootstrap-install`. Wipe the stick afterwards (it holds the key). The
+  installer lives in `installer/` (a self-contained corner owning
+  `nixosConfigurations.bootstrap{,-<host>}`, not a host). Host-baked images
+  run no sshd; only the generic `bootstrap` image allows root password SSH,
+  for `just deploy-remote`.
+- Disko templates: `hosts/_templates/disko/<name>.nix` are host cards
+  (`{ nixos.disko.devices = …; }`) with `device = "@@DISK@@";` as the
+  sentinel; `checks.disko-templates` (`home-check.nix`) enforces that shape.
+  The installer keeps an existing layout (any host file defining
+  `disko.devices`) and offers the templates when there is none, or to replace
+  one that lives in `disk-configuration.nix`.
+- `just factor <h> [user@target]` rewrites `hosts/<h>/facter.json` by running
+  nixos-facter locally or over ssh; it never reinstalls.
 
 ## Tailscale
 

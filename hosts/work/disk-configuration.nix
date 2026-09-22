@@ -3,7 +3,7 @@
     disko.devices = {
       disk = {
         main = {
-          device = "/dev/sda";
+          device = "/dev/disk/by-id/nvme-SAMSUNG_MZVL81T0HELB-00BH1_S79UNX0XC63332";
           type = "disk";
           content = {
             type = "gpt";
@@ -21,7 +21,7 @@
                   type = "filesystem";
                   format = "vfat";
                   mountpoint = "/boot";
-                  mountOptions = ["defaults"];
+                  mountOptions = ["umask=0077"];
                 };
               };
               luks = {

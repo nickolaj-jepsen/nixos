@@ -8,7 +8,6 @@
   # `github:nix-community/disko/latest` at install time. Saves ~1-2 GB of tmpfs
   # pressure on the live ISO (no duplicate nixpkgs eval, no rebuild of disko).
   disko = inputs.disko.packages.${pkgs.stdenv.hostPlatform.system}.disko;
-  disko-install = inputs.disko.packages.${pkgs.stdenv.hostPlatform.system}.disko-install;
 in {
   environment.systemPackages = [
     (pkgs.writeShellApplication {
@@ -22,8 +21,8 @@ in {
         gnugrep
         gawk
         shadow
+        git
         disko
-        disko-install
       ];
       text = builtins.readFile ./bootstrap-install.bash;
     })

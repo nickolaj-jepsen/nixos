@@ -49,7 +49,7 @@ just switch hostname user@remote
 # Fresh install on a new machine (via nixos-anywhere)
 just deploy-remote hostname user@remote
 
-# Generate hardware configuration for a remote host
+# Refresh hosts/<hostname>/facter.json from a running remote host (nixos-facter over ssh, never reinstalls)
 just factor hostname user@remote
 ```
 
@@ -65,7 +65,7 @@ just history
 # Visualize dependency tree
 just tree
 
-# Build an install ISO for a specific host
+# Build a live image of a host's own config (no host key baked in; to install a host, see bootstrap-iso below)
 just iso hostname
 
 # Generate the fireproof.* options reference (docs/fireproof-options.md)
@@ -83,23 +83,25 @@ it with `just docs` after changing any option declarations.
 
 The recommended flow is a **host-specific bootstrap ISO**: an install image with the new host's pre-rekeyed SSH key and a copy of this flake baked in. The target boots the USB and runs `bootstrap-install` — no GitHub roundtrip, no manual rekeying on the target, no `nixos-anywhere` fragility.
 
-1. Create the host on your laptop (generates the SSH key, rekeys secrets with YubiKey):
+1. Create the host on your laptop (generates the SSH key, stages the new files, rekeys secrets with YubiKey):
 
    ```bash
    just new-host <hostname> <username>
    ```
 
-   Creates `hosts/<hostname>/host.nix` (a card) and `secrets/hosts/<hostname>/`. Edit the card to enable features via `shared.fireproof.<feature>.enable = true` (and add `homeManager` tweaks). The host is discovered automatically — there is no `hosts/default.nix` registry to edit.
+   Creates `hosts/<hostname>/host.nix` (a card) and `secrets/hosts/<hostname>/`. Edit the card to enable features via `shared.fireproof.<feature>.enable = true` (and add `homeManager` tweaks). The host is discovered automatically — there is no `hosts/default.nix` registry to edit. Add the hostname to `trustedHosts` in `modules/system/ssh.nix` so the other hosts accept its SSH key.
 
-2. (Optional) Pre-populate `hosts/<hostname>/disk-configuration.nix` if you already know the disk layout — otherwise the installer will pick a template interactively. Templates live in `hosts/_templates/disko/`.
+2. (Optional) Pre-populate `hosts/<hostname>/disk-configuration.nix` with a `{ nixos.disko.devices = …; }` card if you already know the disk layout — otherwise the installer will pick a template interactively. Templates live in `hosts/_templates/disko/`.
 
-3. Build a host-specific ISO (decrypts the SSH key via YubiKey, bakes it into the image):
+3. Build a host-specific ISO (decrypts the SSH key via YubiKey, bakes it into the image at `~/.cache/bootstrap-iso/<hostname>.iso`, then purges the key's copies from the world-readable Nix store):
 
    ```bash
    just bootstrap-iso <hostname>
    ```
 
-4. Flash to USB:
+   It refuses to build until every secret the host declares is rekeyed, so re-run `just secret-rekey` after enabling features that add secrets. Push first: the installer re-attaches git history at the commit the ISO was built from.
+
+4. Flash to USB (builds the ISO, flashes it, then deletes the ISO file):
 
    ```bash
    just bootstrap-flash <hostname> /dev/sdX
@@ -113,17 +115,19 @@ The recommended flow is a **host-specific bootstrap ISO**: an install image with
    ```
 
    The installer:
-   - Uses `hosts/<hostname>/disk-configuration.nix` if present, otherwise prompts to pick a template and substitutes the chosen disk.
-   - Regenerates `facter.json` if missing, prompts before overwriting an existing one.
-   - Prompts for the LUKS passphrase only if the disko config uses LUKS.
+   - Keeps the host's existing disko layout (any `hosts/<hostname>/*.nix` defining `disko.devices`), otherwise prompts to pick a template and substitutes the chosen disk.
+   - Regenerates `facter.json` if missing, prompts before overwriting an existing one, and wires it in with a `facter.nix` card if no host file references it.
+   - Lists every disk it will wipe (path, size, model) before the final confirmation, and prompts for the LUKS passphrase only if the layout uses LUKS.
    - Places the host SSH key on the target before activation so agenix can decrypt secrets (including the user password) during install.
-   - Copies the (possibly modified) flake into `~/<user>/nixos` on the installed system, so any live-generated configs show up as `git diff` after first boot.
+   - Copies the (possibly modified) flake into `~/nixos` on the installed system and fetches the repo's git history under it, so any live-generated configs show up in `git status` after first boot.
 
 6. Reboot, then on the target:
 
    ```bash
-   cd ~/nixos && git status   # review live-generated configs, commit if desired
+   cd ~/nixos && git status   # new host files are staged; commit and push them
    ```
+
+   Then wipe or reflash the USB stick: it still holds the host's private SSH key.
 
 7. (Optional, LUKS hosts) Enroll the TPM2 for passwordless boot. This skips the
    LUKS passphrase prompt in initrd (~5–7s faster boot). The systemd initrd
@@ -152,7 +156,7 @@ If the target is already booted into a Linux environment with SSH access (cloud 
 just deploy-remote <hostname> user@remote
 ```
 
-This uses `nixos-anywhere` and is convenient when it works, but is fragile on flaky networks or hosts that auto-reboot during kexec. Prefer the bootstrap ISO for physical machines.
+This uses `nixos-anywhere` and is convenient when it works, but is fragile on flaky networks or hosts that auto-reboot during kexec. Prefer the bootstrap ISO for physical machines. The generic ISO (`nixosConfigurations.bootstrap`) makes a suitable target: it allows root SSH with the password `nixos`. Host-specific bootstrap ISOs run no SSH server.
 
 ## Secret Management
 
@@ -205,7 +209,7 @@ Code is formatted using `treefmt-nix` with:
 - **alejandra** - Nix formatter
 - **deadnix** - Remove unused Nix code
 - **statix** - Nix linter
-- **prettier** - JSON/YAML/Markdown
+- **oxfmt** - JSON/YAML/Markdown
 - **just** - Justfile formatter
 - **fish_indent** - Fish scripts
 

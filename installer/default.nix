@@ -12,9 +12,10 @@
   #
   # Module list is deliberately slim: the upstream installation-cd plus only the
   # two dendritic leaves the ISO actually benefits from — `fireproof-options`
-  # (option decls) and `nix` (its substituters, so a desktop install pulls
-  # niri/dms from the caches instead of compiling on the live USB). The lone
-  # `fireproof.username` fact feeds that nix leaf's trusted-users.
+  # (option decls) and `nix` (its substituters, so an install pulls from attic
+  # instead of compiling on the live USB). `fireproof.username` feeds that leaf's
+  # trusted-users; a host-baked ISO also copies the target's dev.llm, the only
+  # fact that changes the substituter list (the CUDA cache).
   build = name:
     inputs.nixpkgs.lib.nixosSystem {
       specialArgs = {inherit inputs;};
@@ -31,6 +32,7 @@
           ./bake.nix
           ./bootstrap-install.nix
           {installer.targetHost = name;}
+          {fireproof.dev.llm.enable = config.flake.nixosConfigurations.${name}.config.fireproof.dev.llm.enable;}
         ];
     };
 in {

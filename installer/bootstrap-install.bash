@@ -12,6 +12,7 @@ SRC=/etc/iso-bootstrap/nixos
 WORK=/tmp/nixos
 EXTRA=/tmp/extra-files
 LUKS_PATH=/luks-password
+REPO_URL=https://github.com/nickolaj-jepsen/nixos.git
 
 echo "=== Bootstrap install for ${HOST} ==="
 
@@ -58,6 +59,27 @@ sed_quote_replacement() {
     printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
 }
 
+# The baked flake is a plain tree (no .git); fetch the repo's history under it
+# so `git status` shows what this install changed. Must run after nixos-install:
+# WORK has to stay a path: flake so the install sees untracked generated files.
+# Resets onto the commit the ISO was built from, so upstream commits since then
+# show as "behind" rather than as local reverts. Intent-to-add keeps files that
+# aren't upstream (the new host, generated configs) visible to the git flake.
+attach_history() {
+    local dir="$1" rev
+    rev=$(cat /etc/iso-bootstrap/rev 2>/dev/null || true)
+    git -C "${dir}" init -q -b main &&
+        git -C "${dir}" remote add origin "${REPO_URL}" &&
+        git -C "${dir}" fetch -q origin main || return 1
+    if [ -z "${rev}" ] || ! git -C "${dir}" fetch -q origin "${rev}"; then
+        echo "Warning: the ISO's source commit ${rev:-(unknown)} isn't on GitHub; diffing against origin/main instead." >&2
+        rev=origin/main
+    fi
+    git -C "${dir}" reset -q "${rev}" &&
+        git -C "${dir}" branch -q --set-upstream-to=origin/main &&
+        git -C "${dir}" add --intent-to-add --all
+}
+
 # State flags + cleanup. Trap is set EARLY so /tmp/extra-files (which
 # holds the decrypted host SSH identity — the agenix master key) is
 # shredded even if we abort during the disk prompts.
@@ -93,18 +115,21 @@ install -d -m700 "${EXTRA}"
 install -m600 /etc/iso-bootstrap/ssh/id_ed25519     "${EXTRA}/ssh_host_ed25519_key"
 install -m644 /etc/iso-bootstrap/ssh/id_ed25519.pub "${EXTRA}/ssh_host_ed25519_key.pub"
 
-# 3. Disko config. If the host already has one and the user wants to keep it,
-#    the disk path comes from that config — no disk prompt needed. Otherwise
-#    we ask for a disk and substitute it into a template.
+# 3. Disko config. If a host card already defines `disko.devices` and the user
+#    keeps it, the disks come from that config — no disk prompt needed.
+#    Otherwise we ask for a disk and substitute it into a template.
 DISKO="hosts/${HOST}/disk-configuration.nix"
+mapfile -t LAYOUT_FILES < <(grep -l 'disko\.devices' "hosts/${HOST}"/*.nix || true)
 PICK_DISKO=0
-CHOSEN_DISK=""
-if [ ! -s "${DISKO}" ] || ! grep -q "disko.devices" "${DISKO}"; then
+if [ "${#LAYOUT_FILES[@]}" -eq 0 ]; then
     PICK_DISKO=1
 else
     echo
-    echo "Existing disk-configuration.nix found for ${HOST}."
-    if confirm "Replace it with a template?"; then
+    echo "Existing disk layout for ${HOST}: ${LAYOUT_FILES[*]}"
+    if [ "${LAYOUT_FILES[*]}" != "${DISKO}" ]; then
+        # A template would merge with it rather than replace it (e.g. homelab's disks.nix).
+        echo "Keeping it; to change the layout, edit those files and rebuild the ISO."
+    elif confirm "Replace it with a template?"; then
         PICK_DISKO=1
     fi
 fi
@@ -195,13 +220,33 @@ if [ "${GEN_FACTER}" -eq 1 ]; then
     echo "==> Generating facter.json"
     nixos-facter -o "${FACTER}"
 fi
+# A report no card points at is silently ignored by the installed system.
+if ! grep -q 'facter\.json' "hosts/${HOST}"/*.nix; then
+    printf '{\n  nixos.hardware.facter.reportPath = ./facter.json;\n}\n' > "hosts/${HOST}/facter.nix"
+    echo "Wrote hosts/${HOST}/facter.nix to wire facter.json in"
+fi
 
-# 5. LUKS detection via the canonical NixOS option (`boot.initrd.luks.devices`)
-#    rather than grepping the disko config — disko populates this option
-#    regardless of how the user structures their disk-configuration.nix.
-HAS_LUKS=$(nix --experimental-features "nix-command flakes" eval \
-    "${WORK}#nixosConfigurations.${HOST}.config.boot.initrd.luks.devices" \
-    --apply '(d: d != {})' 2>/dev/null || echo "false")
+# 5. Read the resolved layout back from the host config: whether it uses LUKS
+#    (`boot.initrd.luks.devices`, which disko populates) and every disk disko
+#    will wipe. An eval error aborts here, before anything is formatted.
+LAYOUT=$(nix --experimental-features "nix-command flakes" eval --raw \
+    "${WORK}#nixosConfigurations.${HOST}.config" \
+    --apply 'c: builtins.concatStringsSep "\n" ([(if c.boot.initrd.luks.devices != {} then "luks" else "plain")] ++ map (d: d.device) (builtins.attrValues c.disko.devices.disk))')
+HAS_LUKS=false
+if [ "$(head -n1 <<<"${LAYOUT}")" = "luks" ]; then
+    HAS_LUKS=true
+fi
+mapfile -t TARGET_DISKS < <(tail -n +2 <<<"${LAYOUT}")
+if [ "${#TARGET_DISKS[@]}" -eq 0 ]; then
+    echo "Error: the ${HOST} config defines no disko disks." >&2
+    exit 1
+fi
+for d in "${TARGET_DISKS[@]}"; do
+    if [ ! -b "${d}" ]; then
+        echo "Error: ${d} (from the ${HOST} disk layout) is not a block device on this machine." >&2
+        exit 1
+    fi
+done
 
 if [ "${HAS_LUKS}" = "true" ]; then
     while true; do
@@ -219,11 +264,9 @@ fi
 echo
 echo "About to format and install:"
 echo "  Host:  ${HOST}"
-if [ -n "${CHOSEN_DISK}" ]; then
-    echo "  Disk:  ${CHOSEN_DISK}  (WILL BE WIPED)"
-else
-    echo "  Disk:  per existing hosts/${HOST}/disk-configuration.nix  (WILL BE WIPED)"
-fi
+for d in "${TARGET_DISKS[@]}"; do
+    echo "  Disk:  ${d} -> $(readlink -f "${d}") $(lsblk -dno SIZE,MODEL "${d}")  (WILL BE WIPED)"
+done
 if [ "${HAS_LUKS}" = "true" ]; then
     echo "  LUKS:  yes"
 fi
@@ -287,8 +330,8 @@ OVERLAY_MOUNTED=0
 rm -rf /mnt/nix/.overlay-work
 
 # 12. Stage the (possibly modified) flake into the installed user's home so any
-#     live-generated facter.json / disk-configuration.nix shows up as `git diff`
-#     after first boot.
+#     live-generated facter.json / disk-configuration.nix shows up in
+#     `git status` after first boot.
 TARGET_USER=$(nix --experimental-features "nix-command flakes" eval --raw \
     "${WORK}#nixosConfigurations.${HOST}.config.fireproof.username")
 USER_HOME="/mnt/home/${TARGET_USER}"
@@ -299,6 +342,11 @@ if [ ! -d "${USER_HOME}" ]; then
 fi
 install -d -m755 "${USER_HOME}/nixos"
 cp -a "${WORK}/." "${USER_HOME}/nixos/"
+HAS_HISTORY=1
+if ! attach_history "${USER_HOME}/nixos"; then
+    rm -rf "${USER_HOME}/nixos/.git"
+    HAS_HISTORY=0
+fi
 USER_UID=$(awk -F: -v u="${TARGET_USER}" '$1==u{print $3}' /mnt/etc/passwd)
 USER_GID=$(awk -F: -v u="${TARGET_USER}" '$1==u{print $4}' /mnt/etc/passwd)
 if [ -n "${USER_UID}" ] && [ -n "${USER_GID}" ]; then
@@ -310,5 +358,11 @@ fi
 
 echo
 echo "=== Done ==="
-echo "Reboot, then: cd ~/nixos && git status"
-echo "Any live-generated configs (facter.json, disk-configuration.nix) will appear there."
+if [ "${HAS_HISTORY}" -eq 1 ]; then
+    echo "Reboot, then: cd ~/nixos && git status"
+    echo "New files (the host, facter.json, disk-configuration.nix) are staged intent-to-add: commit and push them."
+else
+    echo "Couldn't fetch ${REPO_URL}, so ~/nixos is a plain copy without git history."
+    echo "After reboot, clone the repo and carry over the new files in hosts/${HOST}/."
+fi
+echo "Then wipe or reflash this USB stick: it holds ${HOST}'s private host key."
