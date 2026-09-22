@@ -85,6 +85,10 @@
     pi.url = "github:lukasl-dev/pi.nix";
     pi.inputs.nixpkgs.follows = "nixpkgs";
     pi.inputs.flake-parts.follows = "flake-parts";
+    # pi only reads its *-x86_64-darwin inputs on that system, which no host is.
+    pi.inputs.nixpkgs-x86_64-darwin.follows = "nixpkgs";
+    pi.inputs.bun2nix-x86_64-darwin.follows = "pi/bun2nix";
+    pi.inputs.bun2nix.inputs.treefmt-nix.follows = "treefmt-nix";
 
     agenix.url = "github:ryantm/agenix";
     agenix.inputs.nixpkgs.follows = "nixpkgs";
@@ -104,9 +108,6 @@
     niri.url = "github:sodiboo/niri-flake";
     niri.inputs.nixpkgs.follows = "nixpkgs";
     niri.inputs.nixpkgs-stable.follows = "nixpkgs";
-
-    dgop.url = "github:AvengeMedia/dgop";
-    dgop.inputs.nixpkgs.follows = "nixpkgs";
 
     dank-material-shell.url = "github:AvengeMedia/DankMaterialShell";
     dank-material-shell.inputs.nixpkgs.follows = "nixpkgs";

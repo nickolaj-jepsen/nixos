@@ -79,11 +79,11 @@ checksum from it. Updating means replacing the vendored manifest.
 
 - **Latest version**: Check latest release of `github/gh-aw` on GitHub
 - **New hashes**: each platform ships a distinct binary, so compute one hash per
-  entry in `sha256Map`. For each of `linux-amd64`, `linux-arm64`, `darwin-amd64`,
-  `darwin-arm64`, run
+  entry in `sha256Map`. For each of `linux-amd64` and `darwin-arm64` (the only
+  platforms any host builds), run
   `nix-hash.py file "https://github.com/github/gh-aw/releases/download/v<VERSION>/<platform>"`
-- **Update fields**: `version` (in both the attribute and the `url` string) and all
-  four `sha256Map` entries
+- **Update fields**: `version` (in both the attribute and the `url` string) and both
+  `sha256Map` entries
 
 ### 4. Claude Desktop (`overlays/claude-desktop.nix`)
 
@@ -93,9 +93,9 @@ Upstream publishes no release feed — the apt repository index is the source of
   `https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages`
   and take the highest `Version:` (sort with `sort -V`; entries are not ordered)
 - **New hashes**: the index already carries a `SHA256:` per package, so no download is
-  needed — read the `SHA256:` of the chosen version from the `binary-amd64` index and
-  from `.../binary-arm64/Packages`, then convert each with `nix-hash.py sri <hex>`
-- **Update fields**: `version` and both `plat.*.hash` entries
+  needed — read the `SHA256:` of the chosen version from the `binary-amd64` index
+  (x86_64-linux is the only platform built) and convert it with `nix-hash.py sri <hex>`
+- **Update fields**: `version` and `sources.x86_64-linux.hash`
 
 ## Procedure
 

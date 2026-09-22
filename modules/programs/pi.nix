@@ -19,7 +19,6 @@
         enable = true;
         # node-gyp leaves config.gypi/Makefiles naming the npm-deps cache, python and
         # -dev outputs, which pins ~600 MB of build inputs into the runtime closure.
-        # Costs a local build: the override misses pi.cachix.org.
         package = inputs.pi.packages.${pkgs.stdenv.hostPlatform.system}.coding-agent.overrideAttrs (old: {
           postInstall =
             (old.postInstall or "")
