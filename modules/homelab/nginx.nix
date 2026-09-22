@@ -18,6 +18,11 @@
         recommendedGzipSettings = true;
         recommendedBrotliSettings = true;
 
+        # nixpkgs spools proxied responses to /tmp, which is on the SSD mirror here.
+        appendHttpConfig = ''
+          proxy_max_temp_file_size 0;
+        '';
+
         virtualHosts."status.localhost" = {
           listen = [
             {
