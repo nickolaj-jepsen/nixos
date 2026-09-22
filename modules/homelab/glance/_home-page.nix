@@ -1,4 +1,7 @@
-{cfg}: {
+{
+  cfg,
+  services,
+}: {
   name = "Home";
   columns = [
     {
@@ -106,6 +109,7 @@
         {
           type = "monitor";
           cache = "5m";
+          # SSO-gated sites need a loopback check-url; the public URL only reaches the Zitadel login.
           sites = [
             {
               title = "Home Assistant";
@@ -122,6 +126,7 @@
             {
               title = "Zigbee2MQTT";
               url = "https://zigbee.${cfg.domain}";
+              check-url = "http://127.0.0.1:${toString services.zigbee2mqtt.settings.frontend.port}";
               icon = "sh:zigbee2mqtt";
               same-tab = true;
             }
@@ -141,6 +146,7 @@
             {
               title = "Navidrome";
               url = "https://navidrome.${cfg.domain}";
+              check-url = "http://127.0.0.1:${toString services.navidrome.settings.Port}/ping";
               icon = "sh:navidrome";
               same-tab = true;
             }
@@ -165,43 +171,43 @@
             {
               title = "Shelfmark";
               url = "https://shelfmark.${cfg.domain}";
+              check-url = "http://127.0.0.1:${toString services.shelfmark.environment.FLASK_PORT}";
               icon = "sh:calibre-web-automated-book-downloader";
               same-tab = true;
             }
             {
               title = "Sonarr";
               url = "https://sonarr.${cfg.domain}";
+              check-url = "http://127.0.0.1:${toString services.sonarr.settings.server.port}/ping";
               icon = "sh:sonarr";
               same-tab = true;
             }
             {
               title = "Radarr";
               url = "https://radarr.${cfg.domain}";
+              check-url = "http://127.0.0.1:${toString services.radarr.settings.server.port}/ping";
               icon = "sh:radarr";
               same-tab = true;
             }
             {
               title = "Lidarr";
               url = "https://lidarr.${cfg.domain}";
+              check-url = "http://127.0.0.1:${toString services.lidarr.settings.server.port}/ping";
               icon = "sh:lidarr";
               same-tab = true;
             }
             {
               title = "SABnzbd";
               url = "https://sabnzbd.${cfg.domain}";
+              check-url = "http://127.0.0.1:${toString services.sabnzbd.settings.misc.port}";
               icon = "sh:sabnzbd";
               same-tab = true;
             }
             {
               title = "Prowlarr";
               url = "https://prowlarr.${cfg.domain}";
+              check-url = "http://127.0.0.1:${toString services.prowlarr.settings.server.port}/ping";
               icon = "sh:prowlarr";
-              same-tab = true;
-            }
-            {
-              title = "qBittorrent";
-              url = "https://qbittorrent.${cfg.domain}";
-              icon = "sh:qbittorrent";
               same-tab = true;
             }
             {
@@ -221,12 +227,6 @@
               title = "Grafana";
               url = "https://fireproof.grafana.net/a/grafana-setupguide-app/home";
               icon = "si:grafana";
-              same-tab = true;
-            }
-            {
-              title = "Beszel";
-              url = "https://beszel.${cfg.domain}";
-              icon = "sh:beszel";
               same-tab = true;
             }
             {
@@ -255,38 +255,6 @@
                   url = "https://www.inoreader.com/stream/user/1004648594/tag/all-articles";
                 }
               ];
-            }
-            {
-              type = "reddit";
-              subreddit = "simracing";
-              show-thumbnails = true;
-              collapse-after = 10;
-              comments-url-template = "https://old.reddit.com/{POST-PATH}";
-              title-url = "https://old.reddit.com/r/simracing";
-            }
-            {
-              type = "reddit";
-              subreddit = "iracing";
-              show-thumbnails = true;
-              collapse-after = 10;
-              comments-url-template = "https://old.reddit.com/{POST-PATH}";
-              title-url = "https://old.reddit.com/r/iracing";
-            }
-            {
-              type = "reddit";
-              subreddit = "formula1";
-              show-thumbnails = true;
-              collapse-after = 10;
-              comments-url-template = "https://old.reddit.com/{POST-PATH}";
-              title-url = "https://old.reddit.com/r/formula1";
-            }
-            {
-              type = "reddit";
-              subreddit = "denmark";
-              show-thumbnails = true;
-              collapse-after = 10;
-              comments-url-template = "https://old.reddit.com/{POST-PATH}";
-              title-url = "https://old.reddit.com/r/denmark";
             }
           ];
         }

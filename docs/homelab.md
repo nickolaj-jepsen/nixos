@@ -4,8 +4,10 @@ Read this before adding or reworking a service under `modules/homelab/`.
 
 Services are native NixOS services by default, gated on
 `fireproof.homelab.enable` (leaf authoring rules: `docs/modules.md`). Every
-new service gets a dashboard link in `modules/homelab/glance/_home-page.nix`,
-and its vhost via `fpLib.mkVirtualHost`. A service using `/mnt/data` also sets
+new service gets a dashboard link in `modules/homelab/glance/_home-page.nix`
+(behind SSO it also needs a loopback `check-url`, or the monitor only probes
+the Zitadel login), and its vhost via `fpLib.mkVirtualHost`. A service using
+`/mnt/data` also sets
 `systemd.services.<unit>.unitConfig.RequiresMountsFor = ["/mnt/data"];` in its
 own leaf, or it runs against an empty dir when a data disk is missing. Ports stay on `127.0.0.1`: an open one
 bypasses the SSO vhost.
@@ -44,8 +46,7 @@ Profiles (assigned per series/movie in the UI):
 
 Not declarative, set once via the API: recycle bins at
 `/mnt/data/.recycle/<app>`, SAB remove-completed, notifications (Jellyfin
-needs an API key from its dashboard), profile assignment. qBittorrent is
-deliberately not attached to any arr (no torrent indexers).
+needs an API key from its dashboard), profile assignment.
 
 Naming formats apply to new imports only: Jellyfin keys items by path, so a
 mass rename drops watched state. To rename the whole library later, back up
@@ -118,13 +119,14 @@ so channels, tags and actions need it. The stairs motion sensor's
 (it lives in `devices.yaml`, not in Nix); without it the ungated stairs
 automation never fires in daylight.
 HA migrates the rendered `http:` block into `.storage/http` exactly once and
-ignores YAML afterwards, so the live settings (including the login-attempt ban,
-set to 5) are managed under Settings, System, Network. `use_x_forwarded_for`
-and `trusted_proxies` stay declared in `hass.nix` anyway, because that one-shot
-migration is what seeds a rebuilt data dir: without them every request is
-attributed to nginx on 127.0.0.1 and five failed logins ban the proxy, locking
-everyone out. The module always renders an `http:` block, so ignore the "YAML
-still present" repair.
+ignores YAML afterwards, so the live settings are managed under Settings,
+System, Network. The login-attempt ban is set to 50 because the Claude MCP
+connector's expired-token 401s count as strikes and the counter only resets on
+restart. `use_x_forwarded_for` and `trusted_proxies` stay declared in
+`hass.nix` anyway, because that one-shot migration is what seeds a rebuilt data
+dir: without them every request is attributed to nginx on 127.0.0.1 and failed
+logins ban the proxy, locking everyone out. The module always renders an
+`http:` block, so ignore the "YAML still present" repair.
 
 - Zigbee2MQTT friendly names are load-bearing: HA entity ids, the Nix group
   definitions and the switch automations (`zigbee2mqtt/<name>/action`) all

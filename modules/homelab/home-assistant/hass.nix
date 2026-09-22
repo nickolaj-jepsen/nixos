@@ -134,7 +134,7 @@
           # The module always renders an http: block, and HA migrates it into .storage/http
           # exactly once. Declaring the proxy keys here is what makes that one-shot seed
           # correct on a rebuilt data dir: without them every request is attributed to
-          # nginx on 127.0.0.1, so five failed logins ban the proxy and lock everyone out.
+          # nginx on 127.0.0.1, so failed logins ban the proxy and lock everyone out.
           http = {
             use_x_forwarded_for = true;
             trusted_proxies = ["127.0.0.1" "::1"];

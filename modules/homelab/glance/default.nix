@@ -22,7 +22,10 @@
       my-pull-requests = builtins.readFile ./templates/my-pull-requests.tpl;
     };
 
-    homePage = import ./_home-page.nix {inherit cfg;};
+    homePage = import ./_home-page.nix {
+      inherit cfg;
+      inherit (config) services;
+    };
     workPage = import ./_work-page.nix {inherit templates;};
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
