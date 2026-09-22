@@ -20,6 +20,8 @@
       recent-repos = builtins.readFile ./templates/recent-repos.tpl;
       prs-awaiting-review = builtins.readFile ./templates/prs-awaiting-review.tpl;
       my-pull-requests = builtins.readFile ./templates/my-pull-requests.tpl;
+      linear-overview = builtins.readFile ./templates/linear-overview.tpl;
+      linear-notifications = builtins.readFile ./templates/linear-notifications.tpl;
     };
 
     homePage = import ./_home-page.nix {

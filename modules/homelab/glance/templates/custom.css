@@ -15,3 +15,49 @@
   padding: 10px 0;
   width: 100%;
 }
+
+/* Linear tab: drop the widget frame so the template's two boxes stand alone. */
+.linear-overview > .widget-content {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.linear-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--widget-gap);
+  align-items: start;
+}
+
+.linear-overview-box {
+  padding: var(--widget-content-padding);
+}
+
+@container widget (max-width: 700px) {
+  .linear-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.linear-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  font-size: 0.85em;
+}
+
+.linear-health::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.linear-health-none::before {
+  background: none;
+  border: 1px solid currentColor;
+}

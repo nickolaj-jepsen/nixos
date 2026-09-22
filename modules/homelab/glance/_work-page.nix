@@ -21,6 +21,14 @@
       }
     '';
   };
+  linearQuery = query: {
+    type = "custom-api";
+    cache = "5m";
+    url = "https://api.linear.app/graphql";
+    # Personal API keys go in raw; Linear rejects them with a Bearer prefix.
+    headers.Authorization = "\${LINEAR_API_KEY}";
+    body.query = query;
+  };
 in {
   name = "Work";
   columns = [
@@ -38,6 +46,19 @@ in {
           location = "\${WEATHER_LOCATION}";
           units = "metric";
         }
+        (linearQuery ''
+            {
+              notifications(first: 50) {
+                nodes { title subtitle inboxUrl createdAt readAt snoozedUntilAt actor { displayName } }
+              }
+            }
+          ''
+          // {
+            title = "Inbox";
+            title-url = "https://linear.app/inbox";
+            cache = "2m";
+            template = templates.linear-notifications;
+          })
         {
           type = "calendar";
           first-day-of-week = "monday";
@@ -143,6 +164,27 @@ in {
         {
           type = "group";
           widgets = [
+            (linearQuery ''
+                {
+                  viewer {
+                    assignedIssues(first: 25, orderBy: updatedAt, filter: {state: {type: {in: ["unstarted", "started"]}}}) {
+                      nodes { identifier title url priority priorityLabel updatedAt state { name type color position } creator { displayName isMe } }
+                    }
+                  }
+                  projects(first: 15, orderBy: updatedAt, filter: {
+                    status: {type: {in: ["started", "planned"]}}
+                    or: [{lead: {isMe: {eq: true}}}, {members: {some: {isMe: {eq: true}}}}]
+                  }) {
+                    nodes { name url progress health priority priorityLabel targetDate status { name type color } lead { displayName } }
+                  }
+                }
+              ''
+              // {
+                title = "Linear";
+                title-url = "https://linear.app";
+                css-class = "linear-overview";
+                template = templates.linear-overview;
+              })
             {
               type = "hacker-news";
               collapse-after = 10;
