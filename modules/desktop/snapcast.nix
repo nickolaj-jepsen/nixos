@@ -6,6 +6,7 @@
   }: let
     cfg = config.fireproof.desktop.snapcast;
     fifo = "/run/snapcast-fifo";
+    sinkName = "snapcast";
 
     mkLoopback = name: target: description: {
       name = "libpipewire-module-loopback";
@@ -23,22 +24,12 @@
     };
 
     captureModules = lib.flatten (lib.mapAttrsToList (name: capture:
-      [(mkLoopback name cfg.sinkName "Snapcast capture: ${name}")]
+      [(mkLoopback name sinkName "Snapcast capture: ${name}")]
       ++ lib.optional (capture.monitor != null)
       (mkLoopback name capture.monitor "Snapcast monitor: ${name}"))
     cfg.captures);
   in {
     options.fireproof.desktop.snapcast = {
-      sinkName = lib.mkOption {
-        type = lib.types.str;
-        readOnly = true;
-        default = "snapcast";
-        description = ''
-          PipeWire `node.name` of the virtual sink that feeds snapserver.
-          Reference this from other modules to route audio into the stream
-          (e.g. as the `playback.props."node.target"` of a loopback module).
-        '';
-      };
       captures = lib.mkOption {
         default = {};
         description = ''
@@ -87,7 +78,7 @@
                 "audio.channels" = 2;
                 "audio.position" = ["FL" "FR"];
                 "stream.props" = {
-                  "node.name" = cfg.sinkName;
+                  "node.name" = sinkName;
                   "node.description" = "Snapcast";
                 };
               };
@@ -103,7 +94,6 @@
           stream = {
             source = "pipe://${fifo}?name=default&mode=read&sampleformat=48000:16:2&codec=flac";
           };
-          tcp.enabled = true;
           http.enabled = true;
         };
       };

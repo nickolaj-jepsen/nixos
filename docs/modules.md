@@ -51,7 +51,7 @@ all module classes. Children default to their parent
 (`desktop.chromium.enable` → `desktop.enable`; `hardware.physical` →
 `!wsl.enable`; …), so hosts set parent toggles and override exceptions — this
 cascade IS the composition layer. Opt-in extras (`hardware.nvidia`,
-`dev.llm`, `desktop.{bambu-studio,google-chrome,snapcast,oxcbMedia,lan-mouse}`)
+`dev.llm`, `desktop.{bambu-studio,snapcast,oxcbMedia,lan-mouse}`)
 default off. Full reference: `docs/fireproof-options.md` (`just docs`).
 
 New toggle: add `fireproof.<feature>.enable = lib.mkEnableOption "…";` (or a

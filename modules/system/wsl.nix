@@ -19,10 +19,6 @@
 
       # wsl.usbip.enable ships the tooling but never loads the driver
       boot.kernelModules = ["vhci-hcd"];
-
-      # WSL doesn't use a bootloader - disable systemd-boot
-      boot.loader.systemd-boot.enable = false;
-      boot.loader.efi.canTouchEfiVariables = false;
     };
   };
 }

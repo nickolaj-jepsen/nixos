@@ -43,25 +43,17 @@
               enabled = true;
               width = 50;
             }
-          ]
-          ++ [
-            {
-              id = "bluetooth";
-              enabled = true;
-              width =
-                if config.fireproof.hardware.wifi
-                then 50
-                else 100;
-            }
             {
               id = "builtin_vpn";
               enabled = true;
               width = 50;
             }
+          ]
+          ++ [
             {
-              id = "builtin_cups";
+              id = "bluetooth";
               enabled = true;
-              width = 50;
+              width = 100;
             }
           ]
           ++ lib.optionals config.fireproof.hardware.battery [

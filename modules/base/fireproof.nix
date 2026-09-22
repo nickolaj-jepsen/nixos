@@ -35,7 +35,6 @@ let
           work.enable = cascade (config.fireproof.desktop.chromium.enable && config.fireproof.work.enable) "Enable a separate chromium-work instance (own profile, runs alongside the personal one)";
         };
         bambu-studio.enable = lib.mkEnableOption "Bambu Studio 3D printing slicer";
-        google-chrome.enable = lib.mkEnableOption "Google Chrome";
         jellyfin-media-player.enable = lib.mkEnableOption "Jellyfin Media Player desktop client";
         ivpn.enable = lib.mkEnableOption "IVPN client (daemon + CLI + desktop UI)";
         mullvad.enable = lib.mkEnableOption "Mullvad VPN client (daemon + CLI + desktop UI)";
@@ -57,8 +56,9 @@ let
         description = "Agent skill directories by skill name, installed for every coding agent.";
       };
 
-      # GUI apps all gate on desktop.enable (plus dev/work where relevant) — no
-      # per-app toggles. A leaf adds a Homebrew cask in its flake.modules.darwin
+      # Everyday GUI apps gate on desktop.enable (plus dev/work where relevant)
+      # with no toggle of their own; only the opt-in extras under desktop above
+      # have one. A leaf adds a Homebrew cask in its flake.modules.darwin
       # half and installs the nixpkgs build in its homeManager half; Mac-only apps
       # (karabiner, bitwarden, handy, …) ship a darwin half only. Home-manager
       # halves that can't run on macOS gate additionally on pkgs.stdenv.isLinux,
@@ -143,9 +143,9 @@ let
             null disables the GPU widgets.
           '';
         };
-        battery = cascade config.fireproof.hardware.laptop "Enable battery support (UPower, battery widget, etc.)";
-        wifi = cascade config.fireproof.hardware.laptop "Enable WiFi support (NetworkManager, wireless tools, etc.)";
-        dimmableBacklight = cascade config.fireproof.hardware.laptop "Enable dimmable backlight support (brightnessctl, backlight widget, etc.)";
+        battery = cascade config.fireproof.hardware.laptop "Enable battery support (UPower, power-profiles-daemon, DMS battery widgets).";
+        wifi = cascade config.fireproof.hardware.laptop "Show the DMS Wi-Fi and VPN tiles. Both need NetworkManager, which the host card enables itself.";
+        dimmableBacklight = cascade config.fireproof.hardware.laptop "Show the DMS brightness slider (built-in dimmable backlight).";
       };
 
       # Cross-class fact read by home-manager halves. See: https://github.com/ChangeCaps/nixos-config
