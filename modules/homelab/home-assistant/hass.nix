@@ -6,7 +6,6 @@
     ...
   }: let
     cfg = config.fireproof.homelab;
-    homeAssistantPort = 8123;
     configDir = config.services.home-assistant.configDir;
     dev = import ./_devices.nix {inherit lib;};
     automations = import ./_automations.nix {inherit lib dev;};
@@ -72,7 +71,7 @@
       services.restic.backups.homelab.paths = [configDir];
 
       services.nginx.virtualHosts."ha.${cfg.domain}" = fpLib.mkVirtualHost {
-        port = homeAssistantPort;
+        port = config.services.home-assistant.config.http.server_port;
         websockets = true;
       };
 
@@ -126,7 +125,6 @@
             longitude = "!secret longitude";
             elevation = "!secret elevation";
             unit_system = "metric";
-            time_zone = "Europe/Copenhagen";
             currency = "DKK";
             country = "DK";
             external_url = "https://ha.${cfg.domain}";
