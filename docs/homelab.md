@@ -152,7 +152,8 @@ still present" repair.
 
 Two always-on engine leaves mirror each other — `postgres.nix`
 (`services.postgresql` + `postgresqlBackup`) and `mariadb.nix`
-(`services.mysql` + `mysqlBackup`), both folding dumps into the restic set.
+(`services.mysql` + `mysqlBackup`). Neither dump has its own timer: restic pulls
+both in right before each snapshot, so files and dumps are from the same moment.
 A service declares its own DB against them:
 
 - Postgres: `fpLib.mkPostgresDB` / `services.postgresql.ensure*`.

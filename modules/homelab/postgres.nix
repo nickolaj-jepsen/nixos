@@ -10,13 +10,10 @@
 
         postgresql = {
           enable = true;
-          enableTCPIP = true;
           # The dawarich database requires PostGIS; without it pg_dumpall aborts
           # on that DB and no database backups are produced.
           extensions = ps: [ps.postgis];
           settings = {
-            port = 5432;
-
             # Data lives on the SSD mirror and totals ~2.5 GB, so 1 GB of buffers holds the hot set.
             shared_buffers = "1GB";
             effective_cache_size = "8GB";
@@ -30,7 +27,21 @@
             wal_compression = "zstd";
           };
         };
-        postgresqlBackup.enable = true;
+        postgresqlBackup = {
+          enable = true;
+          # Run by restic instead, so each snapshot pairs the files with a same-moment dump.
+          startAt = [];
+        };
+      };
+
+      systemd.services = {
+        # wants, not requires: a failed dump must not skip the file backup.
+        restic-backups-homelab = {
+          wants = ["postgresqlBackup.service"];
+          after = ["postgresqlBackup.service"];
+        };
+        # Upstream only Requires= the target, so restic's Persistent catch-up at boot would dump before postgres is up.
+        postgresqlBackup.after = ["postgresql.target"];
       };
     };
   };

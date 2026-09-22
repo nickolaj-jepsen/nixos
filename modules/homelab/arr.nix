@@ -60,7 +60,8 @@
             "/var/lib/radarr"
             "/var/lib/sonarr"
             "/var/lib/lidarr"
-            "/var/lib/prowlarr"
+            # DynamicUser: /var/lib/prowlarr is only a symlink, which restic stores as-is.
+            "/var/lib/private/prowlarr"
             "/var/lib/sabnzbd"
             "/var/lib/bazarr"
           ];
@@ -68,6 +69,7 @@
             # arrs logs and media cover
             "/var/lib/*/.config/*/logs/"
             "/var/lib/*/.config/*/MediaCover/"
+            "/var/lib/private/prowlarr/logs/"
             "/var/lib/sabnzbd/Downloads/"
             "/var/lib/sabnzbd/logs/"
           ];
