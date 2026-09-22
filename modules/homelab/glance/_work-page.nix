@@ -168,7 +168,7 @@ in {
                 {
                   viewer {
                     assignedIssues(first: 25, orderBy: updatedAt, filter: {state: {type: {in: ["unstarted", "started"]}}}) {
-                      nodes { identifier title url priority priorityLabel updatedAt state { name type color position } creator { displayName isMe } }
+                      nodes { identifier title url priority priorityLabel updatedAt state { name type color position } creator { displayName isMe } team { id key name } }
                     }
                   }
                   projects(first: 15, orderBy: updatedAt, filter: {

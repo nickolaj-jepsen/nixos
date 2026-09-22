@@ -61,3 +61,81 @@
   background: none;
   border: 1px solid currentColor;
 }
+
+.linear-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.linear-issues-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 15px;
+  margin-bottom: 15px;
+}
+
+.linear-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.linear-filter label {
+  cursor: pointer;
+  font-size: 0.85em;
+  padding: 2px 10px;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--color-widget-content-border);
+  color: var(--color-text-subdue);
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+}
+
+.linear-filter label:hover,
+.linear-filter label:has(input:checked) {
+  background-color: var(--color-widget-background-highlight);
+  color: var(--color-text-highlight);
+}
+
+.linear-filter label span {
+  opacity: 0.6;
+  margin-left: 2px;
+}
+
+.linear-filter label.linear-filter-clear,
+.linear-filter label.linear-filter-clear:hover {
+  display: flex;
+  align-items: center;
+  font-size: 1.1em;
+  line-height: 1;
+  padding: 2px 4px;
+  border-color: transparent;
+  background: none;
+}
+
+.linear-filter label.linear-filter-clear:hover {
+  color: var(--color-text-highlight);
+}
+
+.linear-filter label.linear-filter-clear:has(input:checked) {
+  display: none;
+}
+
+.linear-filter input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* A team filter shows every match, so glance's show-more collapse is moot. */
+.linear-issues:has(.linear-filter input:checked:not([value="all"])) .collapsible-item {
+  display: block;
+}
+
+.linear-issues:has(.linear-filter input:checked:not([value="all"])) .expand-toggle-button {
+  display: none;
+}
