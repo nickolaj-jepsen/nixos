@@ -52,7 +52,9 @@ Both stores use the same `hostPubkey`, so the blobs are interchangeable.
 agenix-rekey auto-discovers `darwinConfigurations`. A not-yet-deployed Mac
 ships the agenix-rekey dummy pubkey as its `id_ed25519.pub` so the flake still
 evaluates; first bootstrap replaces it (`sudo ssh-keygen -A` → real
-`/etc/ssh/ssh_host_ed25519_key.pub` → `just secret-rekey`).
+`/etc/ssh/ssh_host_ed25519_key.pub` → `just secret-rekey`). Only then add it to
+`trustedHosts` in `modules/system/ssh.nix`, which is what authorizes a host's key
+for SSH logins fleet-wide.
 
 ## Rekeying from WSL
 
