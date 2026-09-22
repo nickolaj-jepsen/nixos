@@ -3,25 +3,23 @@
   flake.modules.nixos.nvidia = {
     config,
     lib,
-    pkgs,
+    options,
     ...
   }: {
     config = lib.mkIf config.fireproof.hardware.nvidia.enable {
-      hardware.graphics = {
-        enable = true;
-        # VA-API -> NVDEC bridge so Firefox/mpv can hardware-decode video.
-        extraPackages = [pkgs.nvidia-vaapi-driver];
-      };
+      hardware.graphics.enable = true;
 
       services.xserver.videoDrivers = ["nvidia"];
 
       boot.kernelModules = ["nvidia_modeset" "nvidia_drm"];
 
+      # facter would put nvidia in the initrd: ~90 MB of ESP per generation (mostly GSP firmware) for no early KMS.
+      hardware.facter.detected.boot.graphics.kernelModules =
+        lib.remove "nvidia" options.hardware.facter.detected.boot.graphics.kernelModules.default;
+
       hardware.nvidia = {
         open = true;
-        modesetting.enable = true;
         powerManagement.enable = true;
-        nvidiaSettings = true;
       };
 
       # NVIDIA does not release VRAM back to the pool under Wayland compositors,
