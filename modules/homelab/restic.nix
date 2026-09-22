@@ -29,6 +29,8 @@
           "--keep-monthly 12"
           "--keep-yearly 75"
         ];
+        # prune only proves packs exist; reading a sample catches corrupted contents.
+        checkOpts = ["--read-data-subset=2%"];
       };
 
       # "Last successful backup" gauge for node_exporter's textfile collector.

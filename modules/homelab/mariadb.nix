@@ -19,8 +19,13 @@
     config = lib.mkIf config.fireproof.homelab.enable {
       services.mysql = {
         enable = true;
-        package = pkgs.mariadb;
-        settings.mysqld.bind-address = "0.0.0.0";
+        # Pinned major: a datadir can't be downgraded, so bump deliberately and run mariadb-upgrade.
+        package = pkgs.mariadb_114;
+        settings.mysqld = {
+          bind-address = "0.0.0.0";
+          # Docker bridge IPs have no PTR record; each lookup stalls a new connection ~15 s.
+          skip-name-resolve = true;
+        };
       };
 
       services.mysqlBackup = {
@@ -31,6 +36,17 @@
       networking.firewall.interfaces."docker0".allowedTCPPorts = [3306];
 
       services.restic.backups.homelab.paths = [config.services.mysqlBackup.location];
+
+      # Run by restic instead of its own timer (see postgres.nix).
+      systemd.timers.mysql-backup.enable = false;
+      systemd.services = {
+        restic-backups-homelab = {
+          wants = ["mysql-backup.service"];
+          after = ["mysql-backup.service"];
+        };
+        # Upstream has no ordering on mysql, so restic's Persistent catch-up at boot would dump before it is up.
+        mysql-backup.after = ["mysql.service"];
+      };
     };
   };
 }

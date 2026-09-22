@@ -16,8 +16,6 @@
         environmentFile = config.age.secrets.grafana-cloud-env.path;
       };
 
-      networking.firewall.interfaces."docker0".allowedTCPPorts = [4318];
-
       environment.etc."alloy/config.alloy".text = ''
         // ── Metrics: scrape the local Prometheus exporters, remote_write to Grafana Cloud ──
         prometheus.scrape "node" {
@@ -70,12 +68,15 @@
 
         // ── Logs: ship the system journal to Grafana Cloud Loki ──
         loki.source.journal "system" {
-          max_age    = "12h"
-          labels     = { host = "homelab" }
-          forward_to = [loki.relabel.journal.receiver]
+          max_age       = "12h"
+          labels        = { host = "homelab" }
+          relabel_rules = loki.relabel.journal.rules
+          forward_to    = [loki.write.grafana_cloud.receiver]
         }
 
+        // Rules only: __journal_* labels are visible to the source's relabel_rules, gone downstream.
         loki.relabel "journal" {
+          forward_to = []
           rule {
             source_labels = ["__journal__systemd_unit"]
             target_label  = "unit"
@@ -85,7 +86,6 @@
             source_labels = ["__journal_container_name"]
             target_label  = "container"
           }
-          forward_to = [loki.write.grafana_cloud.receiver]
         }
 
         loki.write "grafana_cloud" {
@@ -97,34 +97,6 @@
             }
           }
         }
-
-        // ── OTLP in: applications that push rather than being scraped ──
-        otelcol.receiver.otlp "default" {
-          http { endpoint = "0.0.0.0:4318" }
-
-          output {
-            metrics = [otelcol.processor.batch.default.input]
-            logs    = [otelcol.processor.batch.default.input]
-          }
-        }
-
-        otelcol.processor.batch "default" {
-          output {
-            metrics = [otelcol.exporter.prometheus.otlp_metrics.input]
-            logs    = [otelcol.exporter.loki.otlp_logs.input]
-          }
-        }
-
-        // reused so OTLP series get instance="homelab" too
-        otelcol.exporter.prometheus "otlp_metrics" {
-          forward_to = [prometheus.relabel.homelab.receiver]
-        }
-
-        otelcol.exporter.loki "otlp_logs" {
-          forward_to = [loki.write.grafana_cloud.receiver]
-        }
-
-        // Traces not forwarded: needs TEMPO_URL/USER/TOKEN creds first
       '';
     };
   };
