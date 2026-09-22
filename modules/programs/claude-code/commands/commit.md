@@ -1,7 +1,7 @@
 ---
 name: commit
 description: Create a git commit message and commit the changes.
-allowed-tools: Read, Edit, Grep, Glob, Bash(git commit:*), Bash(gh pr edit:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git branch:*), Bash(git checkout:*), Bash(git stash:*), Bash(git fetch:*), Bash(git rebase:*), Bash(git merge:*), Bash(git cherry-pick:*), Bash(git worktree:*), Bash(git reset:*), Bash(git show:*)
+allowed-tools: Read, Edit, Grep, Glob, Bash(git commit:*), Bash(gh pr edit:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git branch:*), Bash(git checkout -b:*), Bash(git switch:*), Bash(git stash:*), Bash(git fetch:*), Bash(git rebase:*), Bash(git merge:*), Bash(git cherry-pick:*), Bash(git worktree:*), Bash(git reset:*), Bash(git show:*)
 disable-model-invocation: true
 ---
 

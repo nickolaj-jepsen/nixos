@@ -109,7 +109,7 @@
           nix.enable = true; # nil (nvf default); nixd links llvm, ~540 MB
           lua.enable = true;
 
-          # Full tier (desktop + dev-ao): heavy LSPs + their grammars.
+          # Full tier: heavy LSPs + their grammars.
           python = {
             enable = full;
             lsp.servers = ["pyrefly"];

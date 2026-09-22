@@ -1,7 +1,7 @@
 ---
 name: pr
 description: Create a pull request from the current branch.
-allowed-tools: Read, Grep, Glob, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(git checkout:*), Bash(git remote:*), Bash(git rev-parse:*), Bash(git show:*), Bash(gh pr *), Bash(git push:*)
+allowed-tools: Read, Grep, Glob, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(git checkout -b:*), Bash(git switch:*), Bash(git remote:*), Bash(git rev-parse:*), Bash(git show:*), Bash(gh pr *), Bash(git push:*)
 disable-model-invocation: true
 ---
 

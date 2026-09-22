@@ -5,30 +5,34 @@
     pkgs,
     ...
   }: let
-    # Sets LD_LIBRARY_PATH for various python-based tools
-    # Some python packages requires shared libraries to build C extensions.
-    mkWrapLDLibraryPath = pkg: let
-      mainProgram = pkg.meta.mainProgram or pkg.pname or (lib.getName pkg);
-    in
-      pkgs.symlinkJoin {
-        name = "${pkg.name}-wrapped";
-        paths = [pkg];
-        nativeBuildInputs = [pkgs.makeWrapper];
-        postBuild = ''
-          wrapProgram $out/bin/${mainProgram} \
-            --run "export LD_LIBRARY_PATH=\$NIX_LD_LIBRARY_PATH"
-        '';
-      };
+    # pip-installed manylinux wheels need nix-ld's libraries. Appended so a
+    # devShell's LD_LIBRARY_PATH wins; a no-op where nix-ld isn't set up.
+    python3 =
+      if pkgs.stdenv.isLinux
+      then
+        pkgs.symlinkJoin {
+          name = "${pkgs.python3.name}-wrapped";
+          paths = [pkgs.python3];
+          nativeBuildInputs = [pkgs.makeWrapper];
+          postBuild = ''
+            wrapProgram $out/bin/python3 \
+              --run '[ -z "$NIX_LD_LIBRARY_PATH" ] || export LD_LIBRARY_PATH="''${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$NIX_LD_LIBRARY_PATH"'
+          '';
+        }
+      else pkgs.python3;
   in {
     config = lib.mkIf config.fireproof.dev.enable {
       home.packages = [
-        (mkWrapLDLibraryPath pkgs.unstable.uv)
-        (mkWrapLDLibraryPath pkgs.unstable.rye)
-        (mkWrapLDLibraryPath pkgs.python3)
-        (mkWrapLDLibraryPath pkgs.unstable.prek)
+        pkgs.unstable.uv
+        pkgs.unstable.prek
+        python3
         # Drop-in for tools and hook scripts that invoke `pre-commit` by name
         (pkgs.writeShellScriptBin "pre-commit" ''exec prek "$@"'')
       ];
+
+      # Venvs made from the Nix python bypass its wrapper; uv's own CPython runs
+      # through nix-ld instead.
+      home.sessionVariables.UV_PYTHON_PREFERENCE = "only-managed";
 
       # uv tool adds executable to $HOME/.local/bin, so add it to PATH
       home.sessionPath = [

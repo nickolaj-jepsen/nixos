@@ -7,19 +7,19 @@ if [ -z "$PORT" ]; then
     exit 1
 fi
 
-# lsof returns exit code 1 if no files found
-PID=$(lsof -t -i:"$PORT" || true)
+# Listeners only (a bare -i:PORT also matches connected clients); lsof exits 1 on no match.
+mapfile -t PIDS < <(lsof -t -iTCP:"$PORT" -sTCP:LISTEN || true)
 
-if [ -z "$PID" ]; then
-    echo "No process found on port $PORT"
+if [ ${#PIDS[@]} -eq 0 ]; then
+    echo "No process listening on port $PORT"
     exit 1
 fi
 
-COMMAND=$(ps -p "$PID" -o comm=)
-echo "Process '$COMMAND' (PID $PID) is using port $PORT."
+echo "Listening on port $PORT:"
+ps -o pid=,comm= -p "$(IFS=,; echo "${PIDS[*]}")"
 read -p "Kill? [y/N] " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    kill "$PID"
+    kill "${PIDS[@]}"
     echo "Killed."
 fi

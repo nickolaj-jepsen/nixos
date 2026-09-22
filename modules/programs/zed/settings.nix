@@ -176,28 +176,6 @@
               };
             };
           };
-
-          # Auto-installed extensions (Zed-side; Nix-managed list lives in extensions.nix)
-          auto_install_extensions = {
-            basher = true;
-            biome = true;
-            "css-modules-kit" = true;
-            "darcula-dark" = true;
-            dockerfile = true;
-            env = true;
-            fish = true;
-            harper = true;
-            "jetbrains-icons" = true;
-            "jetbrains-new-ui-icons" = true;
-            "jetbrains-themes" = true;
-            just = true;
-            "just-ls" = true;
-            "mcp-server-linear" = true;
-            nix = true;
-            pyrefly = true;
-            "seti-icons" = true;
-            toml = true;
-          };
         };
 
         userKeymaps = [

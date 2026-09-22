@@ -43,13 +43,6 @@
           ];
         })
         (makeScript {
-          path = ./kctx.bash;
-          runtimeInputs = with pkgs; [
-            kubectl
-            fzf
-          ];
-        })
-        (makeScript {
           path = ./ghpr.bash;
           runtimeInputs = with pkgs; [
             unstable.gh # same build as programs.gh, so only one lands in the closure

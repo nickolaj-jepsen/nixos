@@ -37,7 +37,6 @@
       settings = {
         user.email = "nickolaj@fireproof.website";
         user.name = "Nickolaj Jepsen";
-        gpg.format = "ssh";
         push.autosetupremote = "true";
         pull.rebase = "true";
         rebase.autosquash = "true";
