@@ -164,38 +164,6 @@ true
 
 
 
-## fireproof\.desktop\.google-chrome\.enable
-
-
-
-Whether to enable Google Chrome\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.desktop\.ivpn\.enable
 
 
@@ -356,62 +324,6 @@ true
 
 
 
-## fireproof\.desktop\.oxcbMedia\.mprisPlayer
-
-
-
-Pin the daemon to a specific MPRIS player\. Null lets the daemon pick automatically\.
-
-
-
-*Type:*
-null or string
-
-
-
-*Default:*
-
-```nix
-null
-```
-
-
-
-*Example:*
-
-```nix
-"org.mpris.MediaPlayer2.spotify"
-```
-
-*Declared by:*
- - [modules/desktop/0xcb-media\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/0xcb-media.nix)
-
-
-
-## fireproof\.desktop\.oxcbMedia\.serialDevice
-
-
-
-CDC ACM serial device the macropad enumerates as\.
-
-
-
-*Type:*
-string
-
-
-
-*Default:*
-
-```nix
-"/dev/ttyACM0"
-```
-
-*Declared by:*
- - [modules/desktop/0xcb-media\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/0xcb-media.nix)
-
-
-
 ## fireproof\.desktop\.snapcast\.enable
 
 
@@ -507,32 +419,6 @@ PipeWire ` node.target ` of the source to capture from
 
 *Type:*
 string
-
-*Declared by:*
- - [modules/desktop/snapcast\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/snapcast.nix)
-
-
-
-## fireproof\.desktop\.snapcast\.sinkName
-
-
-
-PipeWire ` node.name ` of the virtual sink that feeds snapserver\.
-Reference this from other modules to route audio into the stream
-(e\.g\. as the ` playback.props."node.target" ` of a loopback module)\.
-
-
-
-*Type:*
-string *(read only)*
-
-
-
-*Default:*
-
-```nix
-"snapcast"
-```
 
 *Declared by:*
  - [modules/desktop/snapcast\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/snapcast.nix)
@@ -707,7 +593,31 @@ one of 12, 16
 
 
 
-Enable MCP servers (incl\. the grafana env-wrapper secret)
+Enable MCP servers
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.mcp\.homelab\.enable
+
+
+
+Enable the homelab Grafana MCP server and its token secret
 
 
 
@@ -751,35 +661,11 @@ true
 
 
 
-## fireproof\.dev\.playwright\.enable
-
-
-
-Enable Playwright
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.hardware\.battery
 
 
 
-Enable battery support (UPower, battery widget, etc\.)
+Enable battery support (UPower, power-profiles-daemon, DMS battery widgets)\.
 
 
 
@@ -803,7 +689,7 @@ false
 
 
 
-Enable dimmable backlight support (brightnessctl, backlight widget, etc\.)
+Show the DMS brightness slider (built-in dimmable backlight)\.
 
 
 
@@ -950,7 +836,7 @@ true
 
 
 
-Enable WiFi support (NetworkManager, wireless tools, etc\.)
+Show the DMS Wi-Fi and VPN tiles\. Both need NetworkManager, which the host card enables itself\.
 
 
 
