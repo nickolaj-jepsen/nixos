@@ -9,4 +9,9 @@
     fireproof.homelab.enable = true;
     fireproof.networkd.enable = true;
   };
+
+  # Same headless trim for copilot, which has no fireproof toggle of its own.
+  homeManager = {lib, ...}: {
+    programs.github-copilot-cli.enable = lib.mkForce false;
+  };
 }

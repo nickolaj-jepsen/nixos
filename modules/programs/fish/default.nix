@@ -7,7 +7,11 @@
     inherit (config.fireproof) username;
   in {
     config = {
-      programs.fish.enable = true;
+      programs.fish = {
+        enable = true;
+        # Translate the env at build time instead of fenv spawning bash per shell.
+        useBabelfish = true;
+      };
       users.users.${username}.shell = pkgs.fish;
 
       # Fish enables man cache generation by default, which causes slow builds
@@ -26,7 +30,10 @@
     inherit (config.fireproof) username;
   in {
     config = {
-      programs.fish.enable = true;
+      programs.fish = {
+        enable = true;
+        useBabelfish = true;
+      };
       users.knownUsers = [username];
       users.users.${username} = {
         uid = 501;
@@ -42,8 +49,8 @@
         man.generateCaches = false;
 
         # Rich argument completions for kubectl/gh/docker/git/systemctl; composes
-        # with the bespoke ds/worktree/wt completions (carapace defers to
-        # existing fish completions).
+        # with the bespoke ds/wt completions (carapace defers to existing fish
+        # completions).
         carapace = {
           enable = true;
           enableFishIntegration = true;
@@ -54,15 +61,17 @@
           shellInit = ''
 
             ${builtins.readFile ./theme.fish}
-            ${builtins.readFile ./k8s.fish}
-            ${builtins.readFile ./autocomplete.fish}
-            ${builtins.readFile ./worktree.fish}
-            ${builtins.readFile ./wt.fish}
             ${pkgs.nix-your-shell}/bin/nix-your-shell fish | source
 
           '';
 
+          # Autoloaded on the first `ds <TAB>`: ds is a slow-starting click CLI.
+          completions.ds = "type -q ds; and _DS_COMPLETE=fish_source ds | source";
+
           interactiveShellInit = ''
+            ${builtins.readFile ./k8s.fish}
+            ${builtins.readFile ./wt.fish}
+
             # fzf.fish: reuse the delta diff highlighter.
             # Leave Ctrl-R to fish's native history (--history= disables fzf.fish's
             # history binding); other pickers keep defaults (dir=Ctrl+Alt+F,

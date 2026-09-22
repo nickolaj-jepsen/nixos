@@ -10,7 +10,28 @@
     inherit (config.home) homeDirectory;
   in {
     config = lib.mkIf config.fireproof.dev.k8s.enable {
-      home.packages = [pkgs.kubectl];
+      home.packages = [
+        pkgs.kubectl
+        (pkgs.writeShellApplication {
+          name = "kctx";
+          runtimeInputs = [pkgs.kubectl pkgs.fzf];
+          text = ''
+            CONTEXTS=$(kubectl config get-contexts -o name)
+
+            if [ -z "$CONTEXTS" ]; then
+                echo "No kubernetes contexts found"
+                exit 1
+            fi
+
+            SELECTED=$(echo "$CONTEXTS" | fzf --prompt="Kube Context > " --height=20% --layout=reverse)
+
+            if [ -n "$SELECTED" ]; then
+                kubectl config use-context "$SELECTED"
+                echo "Switched to context: $SELECTED"
+            fi
+          '';
+        })
+      ];
 
       age.secrets.k8s-ao-dev = {
         rekeyFile = ../../secrets/k8s/ao-dev.age;

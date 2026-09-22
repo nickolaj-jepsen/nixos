@@ -98,12 +98,12 @@
       skills = config.fireproof.agents.skills;
       commandsDir = ./commands;
 
-      # Real go-to-definition/find-references/diagnostics instead of grep. Mirrors
-      # neovim's full tier (modules/programs/neovim.nix), so nil/pyrefly/tsserver
-      # cost no extra closure; rust-analyzer replaces the hand-installed
+      # Real go-to-definition/find-references/diagnostics instead of grep. Gated on
+      # neovim's full tier (modules/programs/neovim.nix), which already carries
+      # nil/pyrefly/tsserver; rust-analyzer replaces the hand-installed
       # rust-analyzer-lsp plugin. Store paths, not bare names — claude-code spawns
       # these itself and inherits whatever PATH the terminal had.
-      lspServers = {
+      lspServers = lib.mkIf config.fireproof.neovim.full.enable {
         nix = {
           command = lib.getExe pkgs.nil;
           extensionToLanguage.".nix" = "nix";
@@ -175,10 +175,12 @@
           # which/diff/stat/du and read-only git) never prompts in any mode, and
           # trivia like mkdir/touch/basename costs the classifier nothing.
           allow = [
-            # Git — write verbs only; the destructive ones are in `ask` below.
+            # Git — write verbs only; their destructive forms are in `ask` below.
             "Bash(git add:*)"
             "Bash(git commit:*)"
-            "Bash(git checkout:*)"
+            # Not `git checkout:*`: `git checkout <path>` discards edits and no ask glob can tell a path from a branch.
+            "Bash(git checkout -b:*)"
+            "Bash(git switch:*)"
             "Bash(git stash:*)"
             "Bash(git fetch:*)"
             "Bash(git rebase:*)"
@@ -234,8 +236,22 @@
             "Bash(just switch:*)"
             "Bash(just boot:*)"
             "Bash(git reset:*)"
-            "Bash(git push --force*:*)"
+            # Globs, not `:*` prefixes: a `*` inside a prefix rule is literal.
+            "Bash(git push *--force*)"
+            "Bash(git push* -f*)"
             "Bash(git clean:*)"
+            # Forms of checkout/switch/stash/worktree that discard work; other checkouts fall to the classifier.
+            "Bash(git checkout --:*)"
+            "Bash(git checkout * -- *)"
+            "Bash(git checkout .*)"
+            "Bash(git checkout -f:*)"
+            "Bash(git checkout --force:*)"
+            "Bash(git switch *--discard-changes*)"
+            "Bash(git switch *--force*)"
+            "Bash(git switch* -f*)"
+            "Bash(git stash drop:*)"
+            "Bash(git stash clear:*)"
+            "Bash(git worktree remove:*)"
             "Bash(gh pr merge:*)"
           ];
           # Read rules cover the file tools only — Bash can still cat these. The

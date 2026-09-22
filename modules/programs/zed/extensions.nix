@@ -27,8 +27,14 @@
           # Languages
           "nix"
           "just"
+          "just-ls"
           "toml"
           "basher"
+          "fish"
+          "dockerfile"
+          "env"
+          "biome"
+          "css-modules-kit"
 
           # Python (matches the pyrefly + ruff setup from VSCode)
           "pyrefly"
@@ -38,6 +44,9 @@
 
           # Spell / grammar check (replaces cSpell)
           "harper"
+
+          # Context servers
+          "mcp-server-linear"
         ];
 
         extraPackages = with pkgs; [
