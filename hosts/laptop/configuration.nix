@@ -1,8 +1,7 @@
 {
-  nixos = {
-    hardware.graphics = {
-      enable = true;
-    };
+  nixos = {pkgs, ...}: {
+    # VA-API for the UHD 630, which renders everything not PRIME-offloaded; Mesa has no Intel backend.
+    hardware.graphics.extraPackages = [pkgs.intel-media-driver];
 
     networking.networkmanager.enable = true;
     users.users.nickolaj.extraGroups = ["networkmanager"];
@@ -11,10 +10,8 @@
 
     hardware.nvidia = {
       open = true;
-      modesetting.enable = true;
       powerManagement.enable = true;
       powerManagement.finegrained = true;
-      nvidiaSettings = true;
       prime = {
         offload = {
           enable = true;

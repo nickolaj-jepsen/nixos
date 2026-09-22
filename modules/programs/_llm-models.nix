@@ -84,21 +84,6 @@ in {
     # Everything past 300 tok/s (Qwen3.5-2B, Gemma E2B, LFM2.5) failed a quarter
     # of the tasks. DFlash on the 4B: 340 raw but 201 on tool-call turns.
     "qwen3.5-4b" = qwen35-4b;
-    "gemma-4-26b-a4b" = {
-      name = "Gemma 4 26B-A4B (local 32k)";
-      weights = unsloth "gemma-4-26B-A4B-it-GGUF" "gemma-4-26B-A4B-it-UD-Q3_K_XL.gguf";
-      # Gemma ships its MTP head as a separate file.
-      draft = unsloth "gemma-4-26B-A4B-it-qat-GGUF" "MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf";
-      ctx = 32768;
-      # 14.0 GiB. q4_0 KV would save 500 MiB but cost 13% tok/s; ubatch 256
-      # saves 180 MiB for free. The Q4 quants leave no room for MTP.
-      args = [
-        "--spec-type draft-mtp"
-        "--spec-draft-n-max 2"
-        "--top-k 64"
-        "--ubatch-size 256"
-      ];
-    };
   };
 
   # work, RTX 4070. The desktop holds 1.8–2.1 GiB (all three monitors hang off

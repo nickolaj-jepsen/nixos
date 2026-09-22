@@ -23,7 +23,8 @@
         enable = true;
 
         enableDynamicTheming = false;
-        enableVPN = true;
+        # DMS VPN only drives NetworkManager connections.
+        enableVPN = config.fireproof.hardware.wifi;
         enableCalendarEvents = false;
         quickshell.package = pkgs.unstable.quickshell; # dms 1.5-beta needs quickshell >= 0.3.0 for `pragma AppId`
 

@@ -15,7 +15,8 @@
     virtualisation.docker = {
       enable = true;
       enableOnBoot = lib.mkDefault false;
-      storageDriver = "btrfs";
+      # Only where / really is btrfs: WSL's VHD and the ext4-plain template aren't.
+      storageDriver = lib.mkIf ((config.fileSystems."/".fsType or null) == "btrfs") "btrfs";
     };
     virtualisation.oci-containers = {
       backend = "docker";

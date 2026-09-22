@@ -16,7 +16,6 @@
     models = (import ./_llm-models.nix).${toString cfg.vramGiB};
     modelDir = "${config.home.homeDirectory}/models";
     filePath = f: "${modelDir}/${f.file}";
-    modelFiles = m: [m.weights] ++ lib.optional (m ? draft) m.draft;
     # Stock build so it substitutes from cache.nixos-cuda.org; any change here (capabilities, src pin) means a local CUDA compile.
     llama-cpp = pkgs.unstable.llama-cpp.override {cudaSupport = true;};
 
@@ -46,12 +45,13 @@
           "--ctx-size ${toString m.ctx}"
           "--reasoning-effort medium"
         ]
-        ++ lib.optional (m ? draft) "--model-draft ${filePath m.draft}"
         ++ m.args);
 
     swapConfig = (pkgs.formats.yaml {}).generate "llama-swap.yaml" {
       healthCheckTimeout = 300;
       logLevel = "info";
+      # The default "proxy" keeps llama-server's output (CUDA errors, load OOMs) out of the journal.
+      logToStdout = "both";
       startPort = 10001;
       models =
         lib.mapAttrs (_: m: {
@@ -62,19 +62,21 @@
         models;
     };
 
-    weights = lib.unique (lib.concatMap modelFiles (lib.attrValues models));
+    weights = lib.unique (map (m: m.weights) (lib.attrValues models));
 
+    # Only a finished download takes the final name, so a rerun resumes the .part.
     llm-fetch = pkgs.writeShellApplication {
       name = "llm-fetch";
       runtimeInputs = [pkgs.curl pkgs.coreutils];
       text = ''
         mkdir -p ${modelDir}
         ${lib.concatMapStrings (w: ''
-            if [ -s "${modelDir}/${w.file}" ]; then
+            if [ -e "${filePath w}" ]; then
               echo "already present: ${w.file}"
             else
               echo "fetching ${w.file} (resumable)..."
-              curl -L -C - --retry 5 --fail -o "${modelDir}/${w.file}" "${w.url}"
+              curl -L -C - --retry 5 --fail -o "${filePath w}.part" "${w.url}"
+              mv "${filePath w}.part" "${filePath w}"
             fi
           '')
           weights}
@@ -94,12 +96,13 @@
           Description = "llama-swap — on-demand local LLM router";
           # Idle until the weights are actually on disk.
           ConditionPathExists = map filePath weights;
-          After = ["network.target"];
         };
         Service = {
           ExecStart = "${pkgs.unstable.llama-swap}/bin/llama-swap -config ${swapConfig} -listen 127.0.0.1:9292";
           Restart = "on-failure";
           RestartSec = 5;
+          # Inherited by llama-server, whose CUDA-abort core is ~15G and holds the VRAM while it streams.
+          LimitCORE = 0;
         };
         Install.WantedBy = ["default.target"];
       };
