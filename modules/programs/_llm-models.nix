@@ -14,12 +14,12 @@ let
     url = "https://huggingface.co/unsloth/${repo}/resolve/main/${path}";
   };
   kvQ4 = ["--cache-type-k q4_0" "--cache-type-v q4_0"];
-  # 5.8 GiB at 64k on either card. Thinking only when the client asks; Qwen's
-  # non-thinking sampling.
+  # 8.2 GiB at 128k on either card; 256k fits only with q4_0 KV, at ~40 tok/s.
+  # Thinking only when the client asks; Qwen's non-thinking sampling.
   qwen35-4b = {
-    name = "Qwen3.5 4B (local fast 64k)";
+    name = "Qwen3.5 4B (local fast 128k)";
     weights = unsloth "Qwen3.5-4B-MTP-GGUF" "Qwen3.5-4B-UD-Q4_K_XL.gguf";
-    ctx = 65536;
+    ctx = 131072;
     args = [
       "--spec-type draft-mtp"
       "--spec-draft-n-max 2"
