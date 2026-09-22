@@ -61,12 +61,11 @@
         ];
       };
 
-      # Explicit path: the wrapper single-quotes this, so the default
-      # ${XDG_RUNTIME_DIR} spelling would reach `cat` unexpanded. uid 1000 = the
-      # primary user, same tmpfs dir agenix would have picked itself.
+      # Literal path: the wrapper single-quotes it, so the default secretsDir
+      # spelling would reach `cat` unexpanded. It's a symlink into secretsDir.
       age.secrets.kagi-api-key = {
         rekeyFile = ../../secrets/kagi-api-key.age;
-        path = "/run/user/1000/agenix/kagi-api-key";
+        path = "${config.home.homeDirectory}/.pi/agent/kagi-api-key";
         mode = "0600";
       };
 

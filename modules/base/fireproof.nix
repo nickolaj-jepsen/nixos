@@ -69,9 +69,11 @@ let
         enable = lib.mkEnableOption "development tools and applications";
         intellij.enable = cascade config.fireproof.dev.enable "Enable IntelliJ-based IDEs";
         clickhouse.enable = cascade config.fireproof.dev.enable "Enable Clickhouse";
-        playwright.enable = cascade config.fireproof.dev.enable "Enable Playwright";
         k8s.enable = cascade (config.fireproof.dev.enable && config.fireproof.work.enable) "Enable kubectl and the AO kube configs";
-        mcp.enable = cascade config.fireproof.dev.enable "Enable MCP servers (incl. the grafana env-wrapper secret)";
+        mcp = {
+          enable = cascade config.fireproof.dev.enable "Enable MCP servers";
+          homelab.enable = cascade config.fireproof.dev.mcp.enable "Enable the homelab Grafana MCP server and its token secret";
+        };
         pi.enable = cascade config.fireproof.dev.enable "Enable the pi coding agent with the lazypi extension roster";
         llm = {
           enable = lib.mkEnableOption ''

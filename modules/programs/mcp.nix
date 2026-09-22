@@ -1,5 +1,5 @@
 # MCP servers, incl. grafana wrappers that source their env from a secret.
-# Home-manager half only: the secrets decrypt HM-side (see secrets/hm-secrets.nix).
+# Home-manager half only: the secrets decrypt HM-side (see modules/base/hm-secrets.nix).
 {
   flake.modules.homeManager.mcp = {
     config,
@@ -11,7 +11,7 @@
     grafanaMcpWrapper = name: secretPath:
       pkgs.writeShellScript "grafana-mcp-wrapper-${name}" ''
         set -euo pipefail
-        export $(grep -v '^#' ${secretPath} | xargs)
+        set -a; . "${secretPath}"; set +a
         exec ${pkgs.mcp-grafana}/bin/mcp-grafana "$@"
       '';
 
@@ -19,29 +19,32 @@
     growthbookMcpWrapper = secretPath:
       pkgs.writeShellScript "growthbook-mcp-wrapper" ''
         set -euo pipefail
-        export $(grep -v '^#' ${secretPath} | xargs)
-        exec ${pkgs.nodejs}/bin/npx -y @growthbook/mcp@latest "$@"
+        set -a; . "${secretPath}"; set +a
+        exec ${pkgs.nodejs}/bin/npx -y @growthbook/mcp@2.1.0 "$@"
       '';
   in {
     config = lib.mkIf config.fireproof.dev.mcp.enable (lib.mkMerge [
       {
+        programs.mcp = {
+          enable = true;
+          servers = {
+            figma.url = "https://mcp.figma.com/mcp";
+            # npx, not pkgs.snyk: `snyk mcp` lives in the Go CLI the npm package fetches.
+            snyk = {
+              command = "${pkgs.nodejs}/bin/npx";
+              args = ["-y" "snyk@1.1307.3" "mcp" "-t" "stdio"];
+            };
+          };
+        };
+      }
+      (lib.mkIf config.fireproof.dev.mcp.homelab.enable {
         age.secrets.grafana-homelab-env = {
           rekeyFile = ../../secrets/grafana-homelab-env.age;
           mode = "0600";
         };
 
-        programs.mcp = {
-          enable = true;
-          servers = {
-            figma.url = "https://mcp.figma.com/mcp";
-            snyk = {
-              command = "${pkgs.nodejs}/bin/npx";
-              args = ["-y" "snyk@latest" "mcp" "-t" "stdio"];
-            };
-            grafana.command = toString (grafanaMcpWrapper "homelab" config.age.secrets.grafana-homelab-env.path);
-          };
-        };
-      }
+        programs.mcp.servers.grafana.command = toString (grafanaMcpWrapper "homelab" config.age.secrets.grafana-homelab-env.path);
+      })
       # Keeps work tokens off personal-only hosts.
       (lib.mkIf config.fireproof.work.enable {
         age.secrets.grafana-mcp-env = {

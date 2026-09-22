@@ -1,6 +1,6 @@
 # Spotify GUI + spotify-player TUI. On darwin the GUI is a Homebrew cask; the
 # Linux desktop gets the nixpkgs GUI plus the spotify-player TUI (credentials secret
-# decrypted HM-side to a fixed cache path — see secrets/hm-secrets.nix).
+# decrypted HM-side to a fixed cache path — see modules/base/hm-secrets.nix).
 {
   flake.modules.darwin.spotify = {
     config,
