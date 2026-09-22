@@ -10,6 +10,5 @@
     fireproof.dev.enable = true;
     fireproof.dev.intellij.enable = false;
     fireproof.dev.clickhouse.enable = false;
-    fireproof.dev.playwright.enable = false;
   };
 }

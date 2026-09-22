@@ -1,5 +1,5 @@
 # kubectl + the AO kube configs. Home-manager half only: the secrets decrypt
-# HM-side via ~/.ssh/id_ed25519 (see secrets/hm-secrets.nix). Selected on dev hosts.
+# HM-side via ~/.ssh/id_ed25519 (see modules/base/hm-secrets.nix). Selected on dev hosts.
 {
   flake.modules.homeManager.k8s = {
     config,
