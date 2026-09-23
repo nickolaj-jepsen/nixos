@@ -14,14 +14,6 @@
         set -a; . "${secretPath}"; set +a
         exec ${pkgs.mcp-grafana}/bin/mcp-grafana "$@"
       '';
-
-    # GrowthBook env (GB_API_KEY + GB_EMAIL, plus GB_API_URL/GB_APP_ORIGIN if self-hosted) sourced from its secret.
-    growthbookMcpWrapper = secretPath:
-      pkgs.writeShellScript "growthbook-mcp-wrapper" ''
-        set -euo pipefail
-        set -a; . "${secretPath}"; set +a
-        exec ${pkgs.nodejs}/bin/npx -y @growthbook/mcp@2.1.0 "$@"
-      '';
   in {
     config = lib.mkIf config.fireproof.dev.mcp.enable (lib.mkMerge [
       {
@@ -51,17 +43,14 @@
           rekeyFile = ../../secrets/grafana-mcp-env.age;
           mode = "0600";
         };
-        age.secrets.growthbook-mcp-env = {
-          rekeyFile = ../../secrets/growthbook-mcp-env.age;
-          mode = "0600";
-        };
 
         programs.mcp.servers = {
           linear.url = "https://mcp.linear.app/mcp";
           sentry.url = "https://mcp.sentry.dev/mcp";
           insight.url = "https://insight.mcp.aortl.net/mcp";
           metabase.url = "https://metabase.aortl.net/api/metabase-mcp";
-          growthbook.command = toString (growthbookMcpWrapper config.age.secrets.growthbook-mcp-env.path);
+          # Hosted GrowthBook MCP; auth is browser OAuth, so no API-key secret.
+          growthbook.url = "https://mcp.growthbook.io/mcp";
           grafana-work.command = toString (grafanaMcpWrapper "work" config.age.secrets.grafana-mcp-env.path);
         };
       })
