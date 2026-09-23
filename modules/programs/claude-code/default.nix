@@ -11,8 +11,8 @@
     hmLib = config.lib;
     homeDir = config.home.homeDirectory;
 
-    # Surfaces the session state deliberately left out of settings.json (model,
-    # effort, fast mode) plus which profile is running — claude-work shares this
+    # Surfaces session state that settings.json can't pin (model, effort as
+    # changed by /effort, fast mode) plus which profile is running — claude-work shares this
     # file and CLAUDE.md by symlink, so nothing else distinguishes the two.
     # ANSI codes only, so the ghostty Flexoki palette stays authoritative.
     statusLine = pkgs.writeShellApplication {
@@ -142,6 +142,8 @@
         useAutoModeDuringPlan = true;
         skipAutoPermissionPrompt = true;
         preferredNotifChannel = "terminal_bell";
+        # Global, not per-model — the only knob; /effort still overrides per session.
+        effortLevel = "high";
         # Underlines misspelled words in the prompt input. Colour is left to the
         # theme's error colour, like the statusline above. Only ever read from
         # user settings — a spellcheck block in a repo's .claude/ is ignored.
