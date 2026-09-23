@@ -177,7 +177,7 @@
           # which/diff/stat/du and read-only git) never prompts in any mode, and
           # trivia like mkdir/touch/basename costs the classifier nothing.
           allow = [
-            # Git — write verbs only; their destructive forms are in `ask` below.
+            # Git — write verbs only.
             "Bash(git add:*)"
             "Bash(git commit:*)"
             # Not `git checkout:*`: `git checkout <path>` discards edits and no ask glob can tell a path from a branch.
@@ -231,43 +231,22 @@
             "WebSearch"
           ];
           # Auto mode suspends wildcard and interpreter allow rules, but a narrow
-          # one (`Bash(just:*)`) skips the classifier entirely — so the commands
-          # whose blast radius is the running system or unrecoverable work are
-          # pinned here, where `ask` outranks `allow` in every mode.
+          # one (`Bash(just:*)`) skips the classifier entirely — so commands that
+          # touch the running system or outside world are pinned here, where
+          # `ask` outranks `allow` in every mode. Destructive git is left to the classifier.
           ask = [
             "Bash(just switch:*)"
             "Bash(just boot:*)"
-            "Bash(git reset:*)"
-            # Globs, not `:*` prefixes: a `*` inside a prefix rule is literal.
-            "Bash(git push *--force*)"
-            "Bash(git push* -f*)"
-            "Bash(git clean:*)"
-            # Forms of checkout/switch/stash/worktree that discard work; other checkouts fall to the classifier.
-            "Bash(git checkout --:*)"
-            "Bash(git checkout * -- *)"
-            "Bash(git checkout .*)"
-            "Bash(git checkout -f:*)"
-            "Bash(git checkout --force:*)"
-            "Bash(git switch *--discard-changes*)"
-            "Bash(git switch *--force*)"
-            "Bash(git switch* -f*)"
-            "Bash(git stash drop:*)"
-            "Bash(git stash clear:*)"
-            "Bash(git worktree remove:*)"
             "Bash(gh pr merge:*)"
           ];
-          # Read rules cover the file tools only — Bash can still cat these. The
-          # targets are the plaintext ones: agenix decrypts to /run, and ~/.ssh
-          # keys are symlinks into it. secrets/ is deliberately absent, it holds
-          # nothing but .age blobs.
+          # Read rules cover the file tools only — Bash can still cat these. agenix
+          # decrypts to /run, and the ~/.ssh keys are symlinks into it.
           deny = [
             "Read(//run/agenix/**)"
             "Read(//run/user/*/agenix/**)"
-            "Read(~/.ssh/**)"
+            "Read(~/.ssh/id_*)"
             "Read(~/.claude/.credentials.json)"
             "Read(**/.env)"
-            "Read(**/.env.*)"
-            "Edit(.env)"
           ];
         };
       };
