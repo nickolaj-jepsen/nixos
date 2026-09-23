@@ -4,11 +4,11 @@ _: {
     system,
     ...
   }: let
-    version = "2.2553.1";
+    version = "2.2553.13";
     sources = {
       x86_64-linux = {
         arch = "amd64";
-        hash = "sha256-ZwD92E53prjJORLC9p610eQPqZvNnTf0OPgJ7ypv5vg=";
+        hash = "sha256-AqlanRM0csG3c8jp297lZoG4FkUAF4CDvYtTudEdEJ8=";
       };
     };
     plat =
