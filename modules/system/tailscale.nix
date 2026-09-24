@@ -13,7 +13,10 @@
 
       services.tailscale = {
         enable = true;
-        extraSetFlags = ["--operator=${config.fireproof.username}"];
+        extraSetFlags =
+          ["--operator=${config.fireproof.username}"]
+          # ts-input's 100.64.0.0/10 anti-spoof drop eats sshuttle's REDIRECT replies on lo
+          ++ lib.optional config.fireproof.scripts.tunnel-home.enable "--netfilter-mode=nodivert";
         # The key is an OAuth client secret (never expires) — it must tag the node,
         # and tagged nodes have no key expiry, so enrolment is set-and-forget.
         authKeyFile = lib.mkIf cfg.autoLogin config.age.secrets.tailscale-authkey.path;
