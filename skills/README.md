@@ -30,3 +30,5 @@ npx skills add https://github.com/nickolaj-jepsen/nixos/tree/main/skills/grill-m
 - **avoid-ai-tropes** — catalog of AI writing tells to check human-facing prose
   against and rewrite. Sourced from [tropes.fyi](https://tropes.fyi) by
   [ossama.is](https://ossama.is); credited in the skill file.
+- **pricerunner** — search, filter and compare Danish prices on PriceRunner.dk via its
+  unofficial frontend API: facet filters, categories, offers, price history, deals.
