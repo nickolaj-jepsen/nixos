@@ -77,14 +77,22 @@
         // Rules only: __journal_* labels are visible to the source's relabel_rules, gone downstream.
         loki.relabel "journal" {
           forward_to = []
+          // oci-containers run attached, so each container line arrives twice: via the journald log driver
+          // (unit docker.service) and as the docker-<name> unit's stdout. Keep the unit copy; it also has docker CLI errors.
+          rule {
+            source_labels = ["__journal__systemd_unit", "__journal_container_name"]
+            regex         = "docker\\.service;.+"
+            action        = "drop"
+          }
           rule {
             source_labels = ["__journal__systemd_unit"]
             target_label  = "unit"
           }
-          // single _, not __ (unlike __journal__systemd_unit above)
           rule {
-            source_labels = ["__journal_container_name"]
+            source_labels = ["__journal__systemd_unit"]
+            regex         = "docker-(.+)\\.service"
             target_label  = "container"
+            replacement   = "$1"
           }
         }
 
