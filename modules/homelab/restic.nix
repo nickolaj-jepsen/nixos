@@ -24,6 +24,8 @@
         passwordFile = "${config.age.secrets.restic-password.path}";
         environmentFile = "${config.age.secrets.restic-env.path}";
         pruneOpts = [
+          # The default host+paths grouping freezes a group whenever `paths` changes: its snapshots never age out.
+          "--group-by host"
           "--keep-daily 7"
           "--keep-weekly 5"
           "--keep-monthly 12"
