@@ -1,4 +1,4 @@
-# Dual: nixos driver + home-manager niri/btop tweaks.
+# Dual: nixos driver + home-manager session env, Firefox VA-API and btop tweaks.
 {
   flake.modules.nixos.nvidia = {
     config,
@@ -58,11 +58,15 @@
     ...
   }: {
     config = lib.mkIf config.fireproof.hardware.nvidia.enable {
-      programs.niri.settings.environment = {
+      # User-manager env, not niri's: apps launched from dms.service never see niri's environment.
+      systemd.user.sessionVariables = {
         "LIBVA_DRIVER_NAME" = "nvidia";
         "__GLX_VENDOR_LIBRARY_NAME" = "nvidia";
         "NVD_BACKEND" = "direct";
       };
+
+      # Firefox ≥137 blocklists VA-API on NVIDIA; without this YouTube decodes AV1/VP9 on the CPU.
+      programs.firefox.profiles.default.settings."media.hardware-video-decoding.force-enabled" = true;
 
       # btop is enabled globally in core.nix; on NVIDIA hosts use the build that
       # links NVML so the GPU panel (util/VRAM/temp/power) populates.
