@@ -53,15 +53,50 @@
       warn-dirty = false;
     };
 in {
-  flake.modules.nixos.nix = {config, ...}: {
+  flake.modules.nixos.nix = {config, ...}: let
+    report = config.hardware.facter.report;
+    threads = lib.foldl' (n: cpu: n + cpu.siblings) 0 (report.hardware.cpu or []);
+    ramBytes = lib.pipe (report.hardware.memory or []) [
+      (lib.concatMap (m: m.resources or []))
+      (lib.filter (r: r.type == "phys_mem"))
+      (lib.foldl' (n: r: n + r.range) 0)
+    ];
+    cores = lib.min 4 threads;
+  in {
     nixpkgs.config.allowUnfree = true;
-    nix.settings = mkSettings config;
+    # Defaults run threads² compilers; keep max-jobs × cores ≈ threads.
+    nix.settings =
+      mkSettings config
+      // lib.optionalAttrs (threads > 0) {
+        inherit cores;
+        max-jobs = lib.max 1 (threads / cores);
+      };
     # `<nixpkgs>` resolves through the pinned registry instead of a stale channel.
     nix.channel.enable = false;
 
-    # Builds yield CPU/IO to the desktop; `batch` rather than `idle` so a pegged CPU can't starve a rebuild.
+    # `batch` rather than `idle` so a pegged CPU can't starve a rebuild; best-effort IO because BFQ enforces `idle` strictly.
     nix.daemonCPUSchedPolicy = "batch";
-    nix.daemonIOSchedClass = "idle";
+    nix.daemonIOSchedClass = "best-effort";
+    nix.daemonIOSchedPriority = 7;
+
+    # Weights only compete between siblings; a top-level slice is what makes builds yield to user.slice.
+    systemd.slices.nix-build.sliceConfig = {
+      CPUWeight = 20;
+      IOWeight = 20;
+      MemoryHigh = "75%";
+    };
+    systemd.services.nix-daemon.serviceConfig = {
+      Slice = "nix-build.slice";
+      # scx schedulers ignore CPUWeight but honour nice; under EEVDF this only competes inside the slice.
+      Nice = 19;
+    };
+
+    # Nix ≥2.30 builds here, not /tmp; zram absorbs overflow.
+    fileSystems."/nix/var/nix/builds" = lib.mkIf (ramBytes >= 32 * 1024 * 1024 * 1024) {
+      device = "none";
+      fsType = "tmpfs";
+      options = ["mode=0755" "size=50%"];
+    };
   };
 
   # The user registry outranks the system one, so pin it too or `nixpkgs#x` drifts from the host.

@@ -84,7 +84,9 @@ nixos halves never evaluate on darwin — no guard needed.
   `disko.devices`) and offers the templates when there is none, or to replace
   one that lives in `disk-configuration.nix`.
 - `just factor <h> [user@target]` rewrites `hosts/<h>/facter.json` by running
-  nixos-facter locally or over ssh; it never reinstalls.
+  nixos-facter locally or over ssh; it never reinstalls. `modules/base/nix.nix`
+  sizes Nix `max-jobs`/`cores` and the tmpfs build dir from it, so a host
+  without a report falls back to Nix's (oversubscribing) defaults.
 
 ## Tailscale
 
