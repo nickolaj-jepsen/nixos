@@ -28,6 +28,7 @@
 
           # Productivity
           new-tab-override
+          web-clipper-obsidian
 
           # Social
           reddit-enhancement-suite
