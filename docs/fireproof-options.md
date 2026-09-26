@@ -709,41 +709,6 @@ false
 
 
 
-## fireproof\.hardware\.gpuPciId
-
-
-
-PCI id of a discrete GPU to surface in DMS GPU widgets (bar gpuTemp +
-system-monitor GPU temperature)\. Must match the id dgop reports
-(` dgop gpu --json ` -> \.gpus\[]\.pciId), not the sysfs bus address\.
-null disables the GPU widgets\.
-
-
-
-*Type:*
-null or string
-
-
-
-*Default:*
-
-```nix
-null
-```
-
-
-
-*Example:*
-
-```nix
-"10de:2c05"
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.hardware\.laptop
 
 

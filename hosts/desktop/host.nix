@@ -1,7 +1,6 @@
 {
   shared = {
     fireproof.hostname = "desktop";
-    fireproof.hardware.gpuPciId = "10de:2c05";
 
     fireproof.desktop.enable = true;
     fireproof.desktop.bambu-studio.enable = true;

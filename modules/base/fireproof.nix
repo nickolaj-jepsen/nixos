@@ -132,17 +132,6 @@ let
         zram = cascade config.fireproof.hardware.physical "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
         nvidia.enable = lib.mkEnableOption "NVIDIA GPU support (open kernel module + VA-API video offload)";
         laptop = lib.mkEnableOption "laptop-specific configurations and tools";
-        gpuPciId = lib.mkOption {
-          type = lib.types.nullOr lib.types.str;
-          default = null;
-          example = "10de:2c05";
-          description = ''
-            PCI id of a discrete GPU to surface in DMS GPU widgets (bar gpuTemp +
-            system-monitor GPU temperature). Must match the id dgop reports
-            (`dgop gpu --json` -> .gpus[].pciId), not the sysfs bus address.
-            null disables the GPU widgets.
-          '';
-        };
         battery = cascade config.fireproof.hardware.laptop "Enable battery support (UPower, power-profiles-daemon, DMS battery widgets).";
         wifi = cascade config.fireproof.hardware.laptop "Show the DMS Wi-Fi and VPN tiles. Both need NetworkManager, which the host card enables itself.";
         dimmableBacklight = cascade config.fireproof.hardware.laptop "Show the DMS brightness slider (built-in dimmable backlight).";

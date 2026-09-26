@@ -1,7 +1,6 @@
 {
   shared = {
     fireproof.hostname = "work";
-    fireproof.hardware.gpuPciId = "10de:2786";
 
     fireproof.desktop.enable = true;
     fireproof.dev.enable = true;
