@@ -7,23 +7,19 @@
   }: let
     background = pkgs.stdenvNoCC.mkDerivation {
       pname = "desktop-background";
-      version = "0.2";
+      version = "0.3";
 
       src = lib.fileset.toSource {
-        root = ./.;
-        fileset = lib.fileset.unions [
-          ./backgrounds/geometry.svg
-          ./backgrounds/unknown.svg
-          ./backgrounds/seele.svg
-        ];
+        root = ./backgrounds;
+        fileset = lib.fileset.fileFilter (file: file.hasExt "svg") ./backgrounds;
       };
 
       nativeBuildInputs = [pkgs.inkscape];
 
       buildPhase = ''
-        inkscape -w 3840 -h 2160 backgrounds/geometry.svg -o geometry.png
-        inkscape -w 3840 -h 2160 backgrounds/unknown.svg -o unknown.png
-        inkscape -w 3840 -h 2160 backgrounds/seele.svg -o seele.png
+        for svg in *.svg; do
+          inkscape -w 3840 -h 2160 "$svg" -o "''${svg%.svg}.png"
+        done
       '';
 
       installPhase = ''
@@ -31,14 +27,7 @@
         cp *.svg *.png $out/share/backgrounds
       '';
     };
-    unknownPng = background + "/share/backgrounds/unknown.png";
-    geometryPng = background + "/share/backgrounds/geometry.png";
-    seelePng = background + "/share/backgrounds/seele.png";
-    pngs = [
-      unknownPng
-      geometryPng
-      seelePng
-    ];
+    activeWallpaper = background + "/share/backgrounds/unknown.png";
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       # hyprpaper: DMS can't set wallpapers yet
@@ -46,11 +35,12 @@
         enable = true;
         settings = {
           splash = false;
-          preload = pngs;
+          # Preload only the active one; each decoded 4K PNG costs ~33 MB.
+          preload = [activeWallpaper];
           wallpaper = [
             {
               monitor = "*";
-              path = builtins.head pngs;
+              path = activeWallpaper;
             }
           ];
         };
@@ -62,7 +52,7 @@
       };
 
       programs.dank-material-shell.session = {
-        wallpaperPath = unknownPng;
+        wallpaperPath = activeWallpaper;
       };
     };
   };
