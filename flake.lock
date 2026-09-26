@@ -840,6 +840,29 @@
         "type": "github"
       }
     },
+    "obsidian-extensions": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "treefmt-nix": [
+          "treefmt-nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1790330363,
+        "narHash": "sha256-3sN8uZl36LP7Xw0i9gb5306Q7sIaA/cW0uDkS41SCDA=",
+        "owner": "karaolidis",
+        "repo": "nix-obsidian-extensions",
+        "rev": "80799a61cb7bdb4a0a625f584ad172bf9e192024",
+        "type": "github"
+      },
+      "original": {
+        "owner": "karaolidis",
+        "repo": "nix-obsidian-extensions",
+        "type": "github"
+      }
+    },
     "pi": {
       "inputs": {
         "bun2nix": "bun2nix",
@@ -921,6 +944,7 @@
         "nixpkgs": "nixpkgs",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nvf": "nvf",
+        "obsidian-extensions": "obsidian-extensions",
         "pi": "pi",
         "treefmt-nix": "treefmt-nix",
         "zero-x-cb-media": "zero-x-cb-media"

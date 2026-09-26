@@ -118,6 +118,12 @@ in {
     f = i: toString (hexByteAt hex i / 255.0);
   in "${f 0} ${f 2} ${f 4}";
 
+  # Hex color -> "R, G, B" (0-255), the form CSS `rgb(var(--x-rgb))` channels expect.
+  hexToRgb = hexInput: let
+    hex = lib.removePrefix "#" hexInput;
+  in
+    lib.concatMapStringsSep ", " (i: toString (hexByteAt hex i)) [0 2 4];
+
   # Hex color -> "H S L" string (hue 0-360, sat/light 0-100, rounded) that Glance's theme expects.
   hexToHsl = hexInput: let
     hex = lib.removePrefix "#" hexInput;

@@ -102,6 +102,11 @@
     nix-vscode-extensions.url = "github:nix-community/nix-vscode-extensions";
     nix-vscode-extensions.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Daily-refreshed Obsidian community plugins as pkgs.obsidianPlugins.<id>.
+    obsidian-extensions.url = "github:karaolidis/nix-obsidian-extensions";
+    obsidian-extensions.inputs.nixpkgs.follows = "nixpkgs";
+    obsidian-extensions.inputs.treefmt-nix.follows = "treefmt-nix";
+
     nvf.url = "github:NotAShelf/nvf";
     nvf.inputs.nixpkgs.follows = "nixpkgs";
 

@@ -166,3 +166,40 @@ A service declares its own DB against them:
   password user. `mariadb.nix` binds `0.0.0.0` and opens 3306 on `docker0`;
   containers reach it via `--add-host=host.docker.internal:host-gateway`.
   Consumer example: `grimmory.nix`.
+
+## Obsidian sync (`obsidian-sync.nix` + `modules/programs/obsidian/`)
+
+Self-hosted LiveSync against CouchDB at `obsidian.<domain>`. It is public and
+outside SSO (the plugin only speaks CouchDB basic auth) so work PCs off the
+tailnet can sync. The `obsidian-couchdb` fail2ban jail bans on that vhost's
+401s (own access log); `/_up` is the only anonymous endpoint.
+
+- Vaults: `~/obsidian/<name>` on every desktop host, one CouchDB database
+  each. The name lists live in both files; add a vault to both.
+- Devices: one CouchDB user per device (`devices` in `obsidian-sync.nix`),
+  password in `secrets/obsidian/<device>.age`, declared by the homelab and by
+  that host's HM half (a shared generator). The phone has no Nix:
+  `just secret-edit secrets/obsidian/phone.age` shows its password. Revoke a
+  device by dropping it from `devices` (then delete its `_users` doc).
+- `secrets/obsidian/passphrase.age` is the vault E2EE passphrase every device
+  shares; the server never sees it. Changing it means a remote rebuild.
+- `couchdb-obsidian-provision` creates the users and databases. Device users
+  are database members only: they can't delete a database, so LiveSync's
+  "rebuild remote" (first upload, or after changing E2EE/chunk settings) is
+  done with the admin login (`/run/agenix/couchdb-admin` on the homelab).
+  Device users then fetch.
+- Backup: restic copies the CouchDB data dir as is. Its contents are E2EE,
+  so a restore needs `secrets/obsidian/passphrase.age` too.
+- Client side (`default.nix` app settings, `plugins.nix` per-vault plugins,
+  `livesync.nix`): app settings and plugin code (`pkgs.obsidianPlugins`, from
+  the `obsidian-extensions` input) are read-only Nix links. Plugin settings
+  are deep-merged into each mutable `data.json` on activation (Nix keys win).
+  Keep LiveSync's hidden-file sync off. Customization sync is on so the phone
+  can apply the Nix hosts' plugins/settings; never apply it on a Nix host.
+  Templater's "trigger on file creation" is per-device localStorage, so the
+  package is patched to default it on. LiveSync's own `data.json` stays
+  mutable: `obsidian-livesync-seed` (run on activation) writes the
+  connection, E2EE and path-obfuscation settings only when the file is
+  missing, so delete it to re-seed after a password change.
+  `obsidian-livesync-creds` prints the device's login and the passphrase; the
+  phone must match the seeded E2EE + path obfuscation settings.
