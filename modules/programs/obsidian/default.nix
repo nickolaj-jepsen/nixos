@@ -88,6 +88,23 @@
                   inherit (c) red orange yellow green cyan blue purple;
                   pink = c.magenta;
                 };
+                headings = lib.range 1 6;
+                # Heading bar width in px: h1 widest, narrowing to 2.
+                barWidth = n: lib.max 2 (7 - n);
+                # VS Code's syntax theme (vscode/theme.nix uses "Darcula Theme from IntelliJ").
+                darcula = {
+                  normal = "A9B7C6";
+                  comment = "808080";
+                  function = "FFC66D";
+                  important = "CC7832";
+                  keyword = "CC7832";
+                  operator = "A9B7C6";
+                  property = "9876AA";
+                  punctuation = "A9B7C6";
+                  string = "6A8759";
+                  tag = "FFC66D";
+                  value = "6897BB";
+                };
               in ''
                 /* Doubled class outranks Border's .theme-dark.theme-dark-background-* palettes. */
                 body.theme-dark.theme-dark {
@@ -115,7 +132,36 @@
                   /* Ribbon, tab and status bar text on the backdrop; Border tints it with the accent by default. */
                   --on-border-dark: #${c.fg};
                   --mix-blend-mode-on-border-dark: normal;
+
+                  /* Plain bold/italic, and solid code backgrounds instead of Border's dotted pattern. */
+                  --bold-color: var(--text-normal);
+                  --italic-color: var(--text-normal);
+                  --code-background-dark: #${c.bgAlt};
+                  --code-border-dark: none;
+                  --inline-code-background-dark: #${c.bgAlt};
+                  --inline-code-normal: #${darcula.normal};
+                ${lib.concatStrings (lib.mapAttrsToList (name: hex: "  --code-${name}: #${hex};\n") darcula)}
+
+                  /* Heading bars fade from fg (h1) toward the editor background instead of Border's rainbow. */
+                ${lib.concatMapStrings (n: "  --h${toString n}-accent-color: color-mix(in srgb, #${c.fg} ${toString (100 - (n - 1) * 100 / 6)}%, var(--background-primary));\n") headings}
                 ${lib.concatStrings (lib.mapAttrsToList (name: hex: "  --color-${name}: #${hex};\n  --color-${name}-rgb: ${fpLib.hexToRgb hex};\n") accents)}}
+
+                /* Border's heading bars are all 3px; the text indent keeps the 6px gap live preview has. */
+                ${lib.concatMapStrings (n: let
+                    h = toString n;
+                  in ''
+                    body:not(.heading-indicator-off) :is(.is-live-preview .HyperMD-header-${h}, .markdown-rendered > h${h}, .markdown-preview-sizer > div > h${h})::before {
+                      width: ${toString (barWidth n)}px;
+                    }
+                    body:not(.heading-indicator-off) :is(.markdown-rendered > h${h}, .markdown-preview-sizer > div > h${h}) {
+                      text-indent: ${toString (barWidth n + 6)}px;
+                    }
+                  '')
+                  headings}
+                /* Darcula bolds keywords. */
+                .theme-dark :is(.markdown-rendered .token.keyword, .cm-s-obsidian span.cm-keyword) {
+                  font-weight: bold;
+                }
 
                 /* niri draws no decorations and closes windows itself; drop Obsidian's min/max/close. */
                 body.mod-linux .titlebar-button-container.mod-right {

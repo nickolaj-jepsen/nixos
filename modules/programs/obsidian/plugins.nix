@@ -82,10 +82,14 @@
       }
       // preset;
 
-    # Border's island look is a class toggle, which only Style Settings can set.
+    # Border's layout switches are class toggles, which only Style Settings can set.
     styleSettings = {
       pkg = p.obsidian-style-settings;
-      settings."Appearance-dark@@card-layout-open-dark" = true;
+      settings = {
+        "Appearance-dark@@card-layout-open-dark" = true;
+        # Keep the bar before each heading; the fireproof snippet grays it. Explicit, as the merge keeps stale keys.
+        "Editor@@heading-indicator-off" = false;
+      };
     };
 
     # vault -> [{pkg, settings?}]
