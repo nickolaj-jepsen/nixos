@@ -224,11 +224,19 @@
               # Templater's own Alt+N default is unset on macOS.
               "templater-obsidian:create-new-note-from-template" = [(hk ["Mod" "Alt"] "N")];
               # JetBrains keymap: go to file, find action, reformat.
-              "switcher:open" = [(hk ["Mod"] "O") (hk ["Mod" "Shift"] "N")];
+              # Ctrl+Space too, Ctrl even on macOS where Cmd+Space is Spotlight.
+              "switcher:open" = [(hk ["Mod"] "O") (hk ["Mod" "Shift"] "N") (hk ["Ctrl"] " ")];
               "file-explorer:new-file-in-new-pane" = [];
               "command-palette:open" = [(hk ["Mod"] "P") (hk ["Mod" "Shift"] "A")];
               # Formats code blocks, then lints (plugins.nix).
-              "fireproof-format:format-note" = [(hk ["Mod" "Shift"] "P")];
+              "fireproof:format-note" = [(hk ["Mod" "Shift"] "P")];
+              # Mod+Enter jumps to the Claude terminal (opening one if needed) and back. Leaving uses
+              # Terminal's unfocus: only its own commands get through while a terminal has focus, and
+              # unlike its toggle it declines when none does, so Obsidian falls through to ours.
+              # Takes Mod+Enter from "open link under cursor in new tab" (Ctrl+click does it).
+              "fireproof:toggle-terminal" = [(hk ["Mod"] "Enter")];
+              "terminal:unfocus-terminal" = [(hk ["Mod"] "Enter")];
+              "editor:open-link-in-new-leaf" = [];
             };
           };
           legacy = {

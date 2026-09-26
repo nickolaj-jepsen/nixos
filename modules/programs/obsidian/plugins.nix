@@ -92,7 +92,7 @@
       };
     };
 
-    # Fence language -> fast stdin formatter, for format-plugin.js.
+    # Fence language -> fast stdin formatter, for plugin.js.
     # No SQL: sqruff rewrites ClickHouse (drops FINAL, upper-cases case-sensitive functions).
     formatters = let
       u = pkgs.unstable;
@@ -115,19 +115,19 @@
       }
       // langs ["sh" "bash" "shell"] shfmt;
 
-    formatPlugin = let
-      manifestId = "fireproof-format";
+    fireproofPlugin = let
+      manifestId = "fireproof";
       manifest = (pkgs.formats.json {}).generate "manifest.json" {
         id = manifestId;
-        name = "Fireproof format";
+        name = "Fireproof";
         version = "1.0.0";
         minAppVersion = "1.0.0";
-        description = "Formats fenced code blocks with Nix-pinned formatters, then runs the Linter.";
+        description = "Formats code blocks with Nix-pinned formatters, and toggles the Claude terminal.";
         author = "fireproof";
         # Spawns processes; stops the phone loading it if Customization Sync copies it there.
         isDesktopOnly = true;
       };
-      main = pkgs.replaceVars ./format-plugin.js {formatters = builtins.toJSON formatters;};
+      main = pkgs.replaceVars ./plugin.js {formatters = builtins.toJSON formatters;};
     in
       pkgs.runCommand "obsidian-plugin-${manifestId}" {passthru = {inherit manifestId;};} ''
         mkdir $out
@@ -140,7 +140,7 @@
       notes = [
         {pkg = p.obsidian-livesync;}
         styleSettings
-        {pkg = formatPlugin;}
+        {pkg = fireproofPlugin;}
         {
           # "Trigger on file creation" lives in per-device localStorage, not data.json, so flip its
           # default instead. Safe with sync: Templater only fills files whose body is empty.
@@ -209,6 +209,7 @@
                   "ended"
                   "source"
                   "servings"
+                  "summary"
                 ];
                 priority-keys-at-start-of-yaml = true;
                 yaml-sort-order-for-other-keys = "None";
@@ -225,6 +226,42 @@
               };
               line-break-at-document-end.enabled = true;
             };
+          };
+        }
+        {
+          pkg = p.terminal;
+          settings = let
+            # Integrated profiles pipe through the plugin's Python pty helper (stdlib only).
+            fish = name: args: {
+              inherit name args;
+              type = "integrated";
+              executable = lib.getExe pkgs.fish;
+              pythonExecutable = lib.getExe pkgs.python3;
+              platforms = {
+                linux = true;
+                darwin = true;
+              };
+              environment = [];
+              followTheme = true;
+              restoreHistory = false;
+              rightClickAction = "copyPaste";
+              successExitCodes = ["0" "SIGINT" "SIGTERM"];
+              terminalOptions = {
+                documentOverride = null;
+                fontFamily = "Hack Nerd Font Mono";
+              };
+              useWin32Conhost = true;
+            };
+          in {
+            # Claude runs in the vault root, so its AGENTS.md, skills and hooks apply; fish remains after it exits.
+            profiles = {
+              claude = fish "Claude" ["--init-command" "claude"];
+              fish = fish "fish" [];
+            };
+            defaultProfile = "claude";
+            # Obsidian has no bottom panel; a split below the active note is the closest thing.
+            newInstanceBehavior = "newHorizontalSplit";
+            openChangelogOnUpdate = false;
           };
         }
         {

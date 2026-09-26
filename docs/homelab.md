@@ -197,11 +197,21 @@ tailnet can sync. The `obsidian-couchdb` fail2ban jail bans on that vhost's
   Keep LiveSync's hidden-file sync off. Customization sync is on so the phone
   can apply the Nix hosts' plugins/settings; never apply it on a Nix host.
   Templater's "trigger on file creation" is per-device localStorage, so the
-  package is patched to default it on. `format-plugin.js` is our own
-  plugin (Ctrl+Shift+P): it pipes each fenced code block through a
-  Nix-pinned formatter picked by the fence language, then runs the Linter. LiveSync's own `data.json` stays
-  mutable: `obsidian-livesync-seed` (run on activation) writes the
-  connection, E2EE and path-obfuscation settings only when the file is
-  missing, so delete it to re-seed after a password change.
+  package is patched to default it on. `plugin.js` is our own plugin:
+  Ctrl+Shift+P pipes each fenced code block through a Nix-pinned formatter
+  picked by the fence language, then runs the Linter; Ctrl+Enter opens the
+  Claude terminal or toggles focus between it and the note. LiveSync's own
+  `data.json` stays mutable: `obsidian-livesync-seed` (run on activation)
+  writes the connection, E2EE and path-obfuscation settings only when the file
+  is missing, so delete it to re-seed after a password change.
   `obsidian-livesync-creds` prints the device's login and the passphrase; the
   phone must match the seeded E2EE + path obfuscation settings.
+- Agents (`agents.nix`): the notes vault's conventions are its own synced
+  `AGENTS.md`. Nix adds the CLI (`obsidian-cli`), a global `/notes` skill
+  (explicit invocation only), and in the vault's `.claude/` the `/inbox`,
+  `/check`, `/meeting` and kepano skills plus hooks that git-snapshot the
+  vault on session start/end (a local, never-pushed repo; review agent edits
+  with `git log -p`) and lint changed notes through the running app.
+  Ctrl+Enter (Cmd on macOS) opens Claude below the note via the Terminal
+  plugin (`plugins.nix`). Hidden-file sync being off keeps `.git` and
+  `.claude` local.
