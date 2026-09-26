@@ -218,6 +218,13 @@
               alt-status-codes = [404];
             }
             {
+              title = "Obsidian Sync";
+              url = "https://obsidian.${cfg.domain}/_utils/";
+              check-url = "http://127.0.0.1:${toString services.couchdb.port}/_up";
+              icon = "si:obsidian";
+              same-tab = true;
+            }
+            {
               title = "Zitadel";
               url = "https://sso.${cfg.domain}";
               icon = "sh:zitadel";
