@@ -227,7 +227,8 @@
               "switcher:open" = [(hk ["Mod"] "O") (hk ["Mod" "Shift"] "N")];
               "file-explorer:new-file-in-new-pane" = [];
               "command-palette:open" = [(hk ["Mod"] "P") (hk ["Mod" "Shift"] "A")];
-              "obsidian-linter:lint-file" = [(hk ["Mod" "Shift"] "P")];
+              # Formats code blocks, then lints (plugins.nix).
+              "fireproof-format:format-note" = [(hk ["Mod" "Shift"] "P")];
             };
           };
           legacy = {

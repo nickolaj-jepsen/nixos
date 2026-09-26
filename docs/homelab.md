@@ -197,7 +197,9 @@ tailnet can sync. The `obsidian-couchdb` fail2ban jail bans on that vhost's
   Keep LiveSync's hidden-file sync off. Customization sync is on so the phone
   can apply the Nix hosts' plugins/settings; never apply it on a Nix host.
   Templater's "trigger on file creation" is per-device localStorage, so the
-  package is patched to default it on. LiveSync's own `data.json` stays
+  package is patched to default it on. `format-plugin.js` is our own
+  plugin (Ctrl+Shift+P): it pipes each fenced code block through a
+  Nix-pinned formatter picked by the fence language, then runs the Linter. LiveSync's own `data.json` stays
   mutable: `obsidian-livesync-seed` (run on activation) writes the
   connection, E2EE and path-obfuscation settings only when the file is
   missing, so delete it to re-seed after a password change.

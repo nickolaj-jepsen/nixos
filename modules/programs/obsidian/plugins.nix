@@ -92,11 +92,55 @@
       };
     };
 
+    # Fence language -> fast stdin formatter, for format-plugin.js.
+    # No SQL: sqruff rewrites ClickHouse (drops FINAL, upper-cases case-sensitive functions).
+    formatters = let
+      u = pkgs.unstable;
+      ruff = file: [(lib.getExe u.ruff) "format" "--stdin-filename" file "-"];
+      oxfmt = ext: [(lib.getExe u.oxfmt) "--stdin-filepath" "block.${ext}"];
+      shfmt = [(lib.getExe u.shfmt) "-i" "2" "-ln" "bash"];
+      langs = names: value: lib.genAttrs names (_: value);
+    in
+      langs ["python" "py" "python3" "py3"] (ruff "block.py")
+      // {pyi = ruff "block.pyi";}
+      // langs ["js" "javascript" "mjs" "cjs"] (oxfmt "js")
+      // langs ["ts" "typescript" "mts" "cts"] (oxfmt "ts")
+      // lib.genAttrs ["jsx" "tsx" "json" "jsonc" "json5" "css" "scss" "less" "graphql" "html" "vue" "yaml"] oxfmt
+      // {
+        gql = oxfmt "graphql";
+        yml = oxfmt "yaml";
+        nix = [(lib.getExe u.alejandra) "--quiet" "-"];
+        toml = [(lib.getExe u.taplo) "fmt" "-"];
+        fish = [(lib.getExe' pkgs.fish "fish_indent")];
+      }
+      // langs ["sh" "bash" "shell"] shfmt;
+
+    formatPlugin = let
+      manifestId = "fireproof-format";
+      manifest = (pkgs.formats.json {}).generate "manifest.json" {
+        id = manifestId;
+        name = "Fireproof format";
+        version = "1.0.0";
+        minAppVersion = "1.0.0";
+        description = "Formats fenced code blocks with Nix-pinned formatters, then runs the Linter.";
+        author = "fireproof";
+        # Spawns processes; stops the phone loading it if Customization Sync copies it there.
+        isDesktopOnly = true;
+      };
+      main = pkgs.replaceVars ./format-plugin.js {formatters = builtins.toJSON formatters;};
+    in
+      pkgs.runCommand "obsidian-plugin-${manifestId}" {passthru = {inherit manifestId;};} ''
+        mkdir $out
+        cp ${manifest} $out/manifest.json
+        cp ${main} $out/main.js
+      '';
+
     # vault -> [{pkg, settings?}]
     plugins = {
       notes = [
         {pkg = p.obsidian-livesync;}
         styleSettings
+        {pkg = formatPlugin;}
         {
           # "Trigger on file creation" lives in per-device localStorage, not data.json, so flip its
           # default instead. Safe with sync: Templater only fills files whose body is empty.
