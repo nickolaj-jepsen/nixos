@@ -14,7 +14,18 @@
     lib,
     pkgs,
     ...
-  }: {
+  }: let
+    jq = lib.getExe pkgs.jq;
+    jsonFormat = pkgs.formats.json {};
+    # session.json is DMS's runtime state (wallpaper, night mode, …), so it stays writable instead of
+    # using `programs.dank-material-shell.session`: enforced keys win on every switch, defaults only fill gaps.
+    sessionEnforced = jsonFormat.generate "dms-session-enforced.json" {
+      weatherCoordinates = "56.1496278,10.2134046";
+    };
+    sessionDefaults = jsonFormat.generate "dms-session-defaults.json" {
+      wallpaperPath = "${config.xdg.dataHome}/backgrounds/unknown.png";
+    };
+  in {
     imports = [
       inputs.dank-material-shell.homeModules.dank-material-shell
     ];
@@ -29,9 +40,6 @@
         quickshell.package = pkgs.unstable.quickshell; # dms 1.5-beta needs quickshell >= 0.3.0 for `pragma AppId`
 
         systemd.enable = true;
-
-        # weatherCoordinates is a session.json key, so it must live under `session`, not `settings`.
-        session.weatherCoordinates = "56.1496278,10.2134046";
 
         settings = {
           # Must match SettingsData.qml schema version, else a per-start migration runs silently; re-pin after `just update`.
@@ -97,6 +105,19 @@
           cp $configPath $out
         ''
       );
+
+      home.activation.dmsSession = lib.hm.dag.entryAfter ["linkGeneration"] ''
+        file=${config.xdg.stateHome}/DankMaterialShell/session.json
+        old='{}'
+        # A leftover HM store symlink holds Nix values, not user choices.
+        if [ -f "$file" ] && [ ! -L "$file" ]; then
+          old=$(${jq} -c 'objects' "$file" 2>/dev/null) && [ -n "$old" ] || old='{}'
+        fi
+        new=$(${jq} -s --argjson old "$old" '.[0] * $old * .[1]' ${sessionDefaults} ${sessionEnforced})
+        run mkdir -p "$(dirname "$file")"
+        run rm -f "$file"
+        run install -m644 /dev/stdin "$file" <<<"$new"
+      '';
     };
   };
 }

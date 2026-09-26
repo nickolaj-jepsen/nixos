@@ -17,43 +17,19 @@
       nativeBuildInputs = [pkgs.inkscape];
 
       buildPhase = ''
-        for svg in *.svg; do
-          inkscape -w 3840 -h 2160 "$svg" -o "''${svg%.svg}.png"
-        done
+        printf '%s\0' *.svg | xargs -0 -P "$NIX_BUILD_CORES" -I{} \
+          sh -c 'inkscape -w 3840 -h 2160 "$1" -o "''${1%.svg}.png"' _ {}
       '';
 
       installPhase = ''
         mkdir -p $out/share/backgrounds
-        cp *.svg *.png $out/share/backgrounds
+        cp *.png $out/share/backgrounds
       '';
     };
-    activeWallpaper = background + "/share/backgrounds/unknown.png";
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
-      # hyprpaper: DMS can't set wallpapers yet
-      services.hyprpaper = {
-        enable = true;
-        settings = {
-          splash = false;
-          # Preload only the active one; each decoded 4K PNG costs ~33 MB.
-          preload = [activeWallpaper];
-          wallpaper = [
-            {
-              monitor = "*";
-              path = activeWallpaper;
-            }
-          ];
-        };
-      };
-
-      programs.dank-material-shell.settings = {
-        # disable DMS wallpaper mgmt to avoid conflicting with hyprpaper
-        screenPreferences.wallpaper = [];
-      };
-
-      programs.dank-material-shell.session = {
-        wallpaperPath = activeWallpaper;
-      };
+      # Stable path so a wallpaper picked in DMS survives rebuilds and GC; the default lives in dms/default.nix.
+      xdg.dataFile.backgrounds.source = "${background}/share/backgrounds";
     };
   };
 }
