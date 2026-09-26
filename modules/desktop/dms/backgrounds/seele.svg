@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080">
+  <defs>
+    <style>
+      .lines {
+        fill: none;
+        stroke: #CF6A4C;
+        stroke-width: 5px;
+      }
+      .eye {
+        fill: #1C1B1A;
+      }
+    </style>
+    <g id="eye">
+      <path class="eye lines" d="M-73,0 Q0,-46 73,0 Q0,46 -73,0 Z"/>
+      <circle class="lines" r="18"/>
+    </g>
+  </defs>
+  <rect fill="#1C1B1A" width="1920" height="1080"/>
+  <path class="lines" stroke-linejoin="miter" d="M802,393 H1134 L968,690 Z M966,393 V684"/>
+  <use href="#eye" x="857" y="440"/>
+  <use href="#eye" x="857" y="510"/>
+  <use href="#eye" x="857" y="578"/>
+  <use href="#eye" x="1080" y="440"/>
+  <use href="#eye" x="1080" y="510"/>
+  <use href="#eye" x="1080" y="578"/>
+  <use href="#eye" x="1080" y="648"/>
+</svg>

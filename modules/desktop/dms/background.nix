@@ -14,6 +14,7 @@
         fileset = lib.fileset.unions [
           ./backgrounds/geometry.svg
           ./backgrounds/unknown.svg
+          ./backgrounds/seele.svg
         ];
       };
 
@@ -22,6 +23,7 @@
       buildPhase = ''
         inkscape -w 3840 -h 2160 backgrounds/geometry.svg -o geometry.png
         inkscape -w 3840 -h 2160 backgrounds/unknown.svg -o unknown.png
+        inkscape -w 3840 -h 2160 backgrounds/seele.svg -o seele.png
       '';
 
       installPhase = ''
@@ -31,9 +33,11 @@
     };
     unknownPng = background + "/share/backgrounds/unknown.png";
     geometryPng = background + "/share/backgrounds/geometry.png";
+    seelePng = background + "/share/backgrounds/seele.png";
     pngs = [
       unknownPng
       geometryPng
+      seelePng
     ];
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
