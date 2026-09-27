@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+<rect x="0" y="0" width="1920" height="1080" fill="#1C1B1A"/>
+<line x1="0" y1="640" x2="1920" y2="640" stroke="#575653" stroke-width="2"/>
+<path d="M250 500L519.3 481.2M250.7 510L520 491.1M251.4 520L520.7 501.1M252.1 529.9L521.4 511.1M252.8 539.9L522.1 521.1" fill="none" stroke="#494845" stroke-width="1" stroke-linecap="butt"/>
+<path d="M294.1 506.5A6.5 6.5 0 1 0 307.1 506.5A6.5 6.5 0 1 0 294.1 506.5ZM360.3 521.9A6.5 6.5 0 1 0 373.3 521.9A6.5 6.5 0 1 0 360.3 521.9ZM424.5 507.4A6.5 6.5 0 1 0 437.5 507.4A6.5 6.5 0 1 0 424.5 507.4Z" fill="none" stroke="#575653" stroke-width="1.5" stroke-linecap="butt"/>
+<line x1="249.8" y1="497" x2="253" y2="542.9" fill="none" stroke="#575653" stroke-width="1.5" stroke-linecap="butt"/>
+<circle cx="402.4" cy="529.4" r="6.5" fill="#575653"/>
+<line x1="522.1" y1="521.1" x2="572" y2="640" fill="none" stroke="#575653" stroke-width="1.5" stroke-linecap="butt"/>
+<path d="M572 640A118 118 0 1 0 808 640A118 118 0 1 0 572 640Z" fill="none" stroke="#575653" stroke-width="1.5" stroke-linecap="butt"/>
+<circle cx="761" cy="526.4" r="14" fill="#403E3C"/>
+<line x1="572" y1="640" x2="808" y2="640" stroke="#575653" stroke-width="3.5"/>
+<path d="M860 654L949.2 821.8M865 654L954.2 821.8M870 654L959.2 821.8M875 654L964.2 821.8M880 654L969.2 821.8M885 654L974.2 821.8M890 654L979.2 821.8M895 654L984.2 821.8M900 654L989.2 821.8M905 654L994.2 821.8M910 654L999.2 821.8M915 654L1004.2 821.8M920 654L1009.2 821.8M925 654L1014.2 821.8M930 654L1019.2 821.8M935 654L1024.2 821.8M940 654L1029.2 821.8M945 654L1034.2 821.8M950 654L1039.2 821.8M955 654L1044.2 821.8M960 654L1049.2 821.8M965 654L1054.2 821.8M970 654L1059.2 821.8M975 654L1064.2 821.8M980 654L1069.2 821.8M985 654L1074.2 821.8M990 654L1079.2 821.8M995 654L1084.2 821.8M1000 654L1089.2 821.8M1005 654L1094.2 821.8M1010 654L1099.2 821.8M1015 654L1104.2 821.8M1020 654L1109.2 821.8M1025 654L1114.2 821.8" fill="none" stroke="#494845" stroke-width="1" stroke-linecap="butt"/>
+<rect x="859" y="650" width="167" height="4" fill="#575653"/>
+<polygon points="1120,640 1240,640 1194.4,490" fill="none" stroke="#575653" stroke-width="1.5" stroke-linejoin="miter"/>
+<line x1="1240" y1="640" x2="1194.4" y2="490" stroke="#575653" stroke-width="3.5"/>
+<path d="M1220.4 484A230 230 0 0 1 1390 594" fill="none" stroke="#494845" stroke-width="3" stroke-linecap="round" stroke-dasharray="0 11"/>
+<path d="M1500 630L1580 630A180 180 0 0 0 1760 450M1500 620L1580 620A170 170 0 0 0 1750 450M1500 610L1580 610A160 160 0 0 0 1740 450M1500 600L1580 600A150 150 0 0 0 1730 450M1500 590L1580 590A140 140 0 0 0 1720 450" fill="none" stroke="#494845" stroke-width="1" stroke-linecap="butt"/>
+<line x1="1500" y1="586" x2="1500" y2="640" fill="none" stroke="#575653" stroke-width="1.5" stroke-linecap="butt"/>
+<line x1="1714" y1="450" x2="1766" y2="450" fill="none" stroke="#575653" stroke-width="1.5" stroke-linecap="butt"/>
+<path d="M1655 714A5 5 0 1 0 1665 714A5 5 0 1 0 1655 714ZM1647 714A13 13 0 1 0 1673 714A13 13 0 1 0 1647 714ZM1636 714A24 24 0 1 0 1684 714A24 24 0 1 0 1636 714Z" fill="none" stroke="#494845" stroke-width="1" stroke-linecap="butt"/>
+<circle cx="1390" cy="640" r="34" fill="none" stroke="#71311E" stroke-width="1.5"/>
+<circle cx="1390" cy="640" r="22" fill="#CF6A4C"/>
+</svg>
