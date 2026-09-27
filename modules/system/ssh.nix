@@ -46,6 +46,8 @@ in {
       path = "/Users/" + username + "/.ssh/id_ed25519";
       mode = "0600";
       owner = username;
+      # agenix's default reads users.users.<owner>.group, which nix-darwin lacks (ryantm/agenix#399).
+      group = "0";
     };
 
     environment.etc."ssh/sshd_config.d/000-nix-darwin.conf".text = ''
