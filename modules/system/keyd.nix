@@ -11,11 +11,14 @@
           ids = [
             "046d:c051:4ae65a29" # Work mouse
             "046d:407f:ee6ee407" # Home mouse
+            "046d:c547:3a5dd700" # Home mouse (USB receiver)
+            "046d:c098:c9d1afa0" # Home mouse (USB cable)
           ];
           settings = {
             main = {
-              # Bind mouse-back to meta if held
+              # Bind mouse back/forward to meta if held
               mouse1 = "overload(meta, mouse1)";
+              mouse2 = "overload(meta, mouse2)";
             };
           };
         };
