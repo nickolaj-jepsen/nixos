@@ -23,7 +23,7 @@
       weatherCoordinates = "56.1496278,10.2134046";
     };
     sessionDefaults = jsonFormat.generate "dms-session-defaults.json" {
-      wallpaperPath = "${config.xdg.dataHome}/backgrounds/unknown.png";
+      wallpaperPath = "${config.xdg.dataHome}/backgrounds/dither-moon.png";
     };
   in {
     imports = [
@@ -114,6 +114,13 @@
           old=$(${jq} -c 'objects' "$file" 2>/dev/null) && [ -n "$old" ] || old='{}'
         fi
         new=$(${jq} -s --argjson old "$old" '.[0] * $old * .[1]' ${sessionDefaults} ${sessionEnforced})
+        # DMS saves resolved /nix/store paths, which go stale on rebuild; point them back at the stable dir.
+        wp=$(${jq} -r '.wallpaperPath // ""' <<<"$new")
+        if [[ $wp == /nix/store/* ]]; then
+          bg=${config.xdg.dataHome}/backgrounds
+          [ -e "${config.xdg.dataFile.backgrounds.source}/''${wp##*/}" ] && wp="$bg/''${wp##*/}" || wp=$(${jq} -r .wallpaperPath ${sessionDefaults})
+          new=$(${jq} --arg wp "$wp" '.wallpaperPath = $wp' <<<"$new")
+        fi
         run mkdir -p "$(dirname "$file")"
         run rm -f "$file"
         run install -m644 /dev/stdin "$file" <<<"$new"

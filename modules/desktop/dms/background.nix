@@ -1,35 +1,27 @@
-{
+{inputs, ...}: {
   flake.modules.homeManager.dms-background = {
     config,
     lib,
     pkgs,
     ...
   }: let
-    background = pkgs.stdenvNoCC.mkDerivation {
-      pname = "desktop-background";
-      version = "0.3";
-
-      src = lib.fileset.toSource {
-        root = ./backgrounds;
-        fileset = lib.fileset.fileFilter (file: file.hasExt "svg") ./backgrounds;
-      };
-
-      nativeBuildInputs = [pkgs.inkscape];
-
-      buildPhase = ''
-        printf '%s\0' *.svg | xargs -0 -P "$NIX_BUILD_CORES" -I{} \
-          sh -c 'inkscape -w 3840 -h 2160 "$1" -o "''${1%.svg}.png"' _ {}
-      '';
-
-      installPhase = ''
-        mkdir -p $out/share/backgrounds
-        cp *.png $out/share/backgrounds
-      '';
-    };
+    inherit (inputs.walldye.packages.${pkgs.stdenv.hostPlatform.system}.default) mkWallpaper;
+    slugs = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir "${inputs.walldye}/wallpapers"));
+    # Real files, not a linkFarm: DMS saves resolved paths and browses their parent dir.
+    background = pkgs.runCommand "desktop-background" {} "cp -rL ${wallpapers} $out";
+    wallpapers = pkgs.linkFarm "walldye-wallpapers" (map (slug: {
+        name = "${slug}.png";
+        path = mkWallpaper {
+          inherit slug;
+          width = 3840;
+          height = 2160;
+        };
+      })
+      slugs);
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       # Stable path so a wallpaper picked in DMS survives rebuilds and GC; the default lives in dms/default.nix.
-      xdg.dataFile.backgrounds.source = "${background}/share/backgrounds";
+      xdg.dataFile.backgrounds.source = background;
     };
   };
 }

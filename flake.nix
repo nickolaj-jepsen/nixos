@@ -118,6 +118,8 @@
     dank-material-shell.inputs.nixpkgs.follows = "nixpkgs";
     dms-plugin-registry.url = "github:AvengeMedia/dms-plugin-registry";
     dms-plugin-registry.inputs.nixpkgs.follows = "nixpkgs";
+    walldye.url = "github:nickolaj-jepsen/walldye";
+    walldye.inputs.nixpkgs.follows = "nixpkgs";
 
     niri-dynamic-workspaces.url = "github:nickolaj-jepsen/niri-dynamic-workspaces";
     niri-dynamic-workspaces.inputs.nixpkgs.follows = "nixpkgs";
