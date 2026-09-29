@@ -19,6 +19,13 @@ Or pick one by its subpath:
 npx skills add https://github.com/nickolaj-jepsen/nixos/tree/main/skills/grill-me
 ```
 
+Or as a Claude Code plugin marketplace (`.claude-plugin/marketplace.json`):
+
+```bash
+claude plugin marketplace add nickolaj-jepsen/nixos
+claude plugin install skills@nickolaj-jepsen
+```
+
 ## What's here
 
 - **grill-me** — interview yourself relentlessly about a plan or design until every

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "nickolaj-jepsen",
+  "owner": {
+    "name": "Nickolaj Jepsen"
+  },
+  "metadata": {
+    "description": "Agent skills from nickolaj-jepsen/nixos"
+  },
+  "plugins": [
+    {
+      "name": "skills",
+      "description": "grill-me, prune-comments, prune-hard, avoid-ai-tropes and pricerunner",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/avoid-ai-tropes",
+        "./skills/grill-me",
+        "./skills/pricerunner",
+        "./skills/prune-comments",
+        "./skills/prune-hard"
+      ]
+    }
+  ]
+}

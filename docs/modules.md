@@ -108,7 +108,8 @@ home-manager and the overlays):
   `fireproof.agents.skills` registry (`attrsOf path`, merged across leaves).
   Own skills: repo-root `skills/<name>/SKILL.md` (auto-registered by
   `modules/programs/agent-skills.nix`; publicly installable, see
-  `skills/README.md`). Third-party skills: registered by their feature leaf
+  `skills/README.md`; also list new ones in `.claude-plugin/marketplace.json`).
+  Third-party skills: registered by their feature leaf
   from the upstream source, e.g. `modules/programs/git.nix` registers
   `fireproof.agents.skills.gh-stack = "${pkgs.unstable.gh-stack.src}/skills/gh-stack"`.
   Private skills (e.g. Digital-Udvikling/skills) must not be flake inputs;
