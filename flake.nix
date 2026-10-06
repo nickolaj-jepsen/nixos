@@ -134,6 +134,10 @@
     zero-x-cb-media.url = "github:nickolaj-jepsen/0xCB-media";
     zero-x-cb-media.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Only the NixOS module is used; the package comes from pkgs.unstable (cached).
+    paseo.url = "github:getpaseo/paseo";
+    paseo.inputs.nixpkgs.follows = "nixpkgs";
+
     # Overridden at build time by `just bootstrap-iso <host>` to inject the
     # decrypted host SSH key into a host-specific bootstrap ISO. The default
     # points at an empty directory so the flake evaluates without any override.

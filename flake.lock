@@ -856,6 +856,26 @@
         "type": "github"
       }
     },
+    "paseo": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791312856,
+        "narHash": "sha256-qq2FOK9PYdArFxtWPwK0kLzxcSmn2IPuUVq/voptR9s=",
+        "owner": "getpaseo",
+        "repo": "paseo",
+        "rev": "05637a7f052630a35f07e1264c95646d414ef33a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "getpaseo",
+        "repo": "paseo",
+        "type": "github"
+      }
+    },
     "pi": {
       "inputs": {
         "bun2nix": "bun2nix",
@@ -988,6 +1008,7 @@
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nvf": "nvf",
         "obsidian-extensions": "obsidian-extensions",
+        "paseo": "paseo",
         "pi": "pi",
         "treefmt-nix": "treefmt-nix",
         "walldye": "walldye",

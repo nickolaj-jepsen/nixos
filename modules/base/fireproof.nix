@@ -75,6 +75,7 @@ let
           homelab.enable = cascade config.fireproof.dev.mcp.enable "Enable the homelab Grafana MCP server and its token secret";
         };
         pi.enable = cascade config.fireproof.dev.enable "Enable the pi coding agent with the lazypi extension roster";
+        paseo.enable = lib.mkEnableOption "the Paseo daemon, for driving coding agents from the phone app";
         llm = {
           enable = lib.mkEnableOption ''
             local LLM serving (llama-swap + CUDA llama.cpp) and its pi provider.
