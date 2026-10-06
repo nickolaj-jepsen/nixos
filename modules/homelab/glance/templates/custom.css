@@ -139,3 +139,48 @@
 .linear-issues:has(.linear-filter input:checked:not([value="all"])) .expand-toggle-button {
   display: none;
 }
+
+/* Storage widget (storage-status.tpl); --storage-warn is set from the theme in default.nix. */
+.storage-summary {
+  margin-bottom: 10px;
+}
+
+.storage-group {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 12px 0 6px;
+}
+
+.storage-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.storage-text {
+  min-width: 0;
+}
+
+.storage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.storage-ok {
+  background-color: var(--color-positive);
+}
+
+.storage-warn {
+  background-color: var(--storage-warn);
+}
+
+.storage-bad {
+  background-color: var(--color-negative);
+}
+
+.storage-text-warn {
+  color: var(--storage-warn);
+}

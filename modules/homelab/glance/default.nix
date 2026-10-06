@@ -14,7 +14,10 @@
     domain = "glance.${cfg.domain}";
     port = 8088;
 
-    customCss = pkgs.writeText "glance-custom.css" (builtins.readFile ./templates/custom.css);
+    customCss = pkgs.writeText "glance-custom.css" ''
+      :root { --storage-warn: #${c.orange}; }
+      ${builtins.readFile ./templates/custom.css}
+    '';
 
     templates = {
       recent-repos = builtins.readFile ./templates/recent-repos.tpl;
@@ -22,10 +25,11 @@
       my-pull-requests = builtins.readFile ./templates/my-pull-requests.tpl;
       linear-overview = builtins.readFile ./templates/linear-overview.tpl;
       linear-notifications = builtins.readFile ./templates/linear-notifications.tpl;
+      storage-status = builtins.readFile ./templates/storage-status.tpl;
     };
 
     homePage = import ./_home-page.nix {
-      inherit cfg;
+      inherit cfg templates;
       inherit (config) services;
     };
     workPage = import ./_work-page.nix {inherit templates;};

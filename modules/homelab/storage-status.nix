@@ -10,8 +10,8 @@
     # Dedup by device so the btrfs subvolumes sharing / are listed once ("/" sorts first).
     realFs = lib.filterAttrs (_: fs: lib.elem fs.fsType ["ext4" "btrfs" "vfat" "fuse.mergerfs"]) config.fileSystems;
     mountPerDevice = lib.listToAttrs (lib.mapAttrsToList (m: fs: lib.nameValuePair fs.device m) realFs);
-    mounts = lib.attrValues mountPerDevice;
-    btrfsMounts = lib.attrValues (lib.filterAttrs (d: m: realFs.${m}.fsType == "btrfs") mountPerDevice);
+    mounts = lib.sort lib.lessThan (lib.attrValues mountPerDevice);
+    btrfsMounts = lib.attrValues (lib.filterAttrs (_d: m: realFs.${m}.fsType == "btrfs") mountPerDevice);
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
       systemd.services.storage-status = {
@@ -25,6 +25,8 @@
             runtimeInputs = with pkgs; [coreutils jq smartmontools util-linux btrfs-progs systemd gawk gnused];
             text = ''
               out=/var/lib/homelab-status/storage.json
+              mounts=(${lib.escapeShellArgs mounts})
+              btrfsMounts=(${lib.escapeShellArgs btrfsMounts})
               rows='[]'
               # row GROUP NAME DETAIL STATUS(ok|warn|bad) [EPOCH]
               row() {
@@ -65,24 +67,6 @@
                   row Backups "$name" "not run since boot" ok
                 fi
               done
-              for m in ${lib.escapeShellArgs btrfsMounts}; do
-                scrub=$(btrfs scrub status "$m" 2>/dev/null || true)
-                started=$(sed -n 's/^Scrub started: *//p' <<<"$scrub")
-                status=$(sed -n 's/^Status: *//p' <<<"$scrub")
-                summary=$(sed -n 's/^Error summary: *//p' <<<"$scrub")
-                devErrs=$(btrfs device stats "$m" 2>/dev/null | awk '{s += $2} END {print s + 0}')
-                if [ "$devErrs" -gt 0 ]; then
-                  row Filesystems "Scrub $m" "$devErrs btrfs device errors" bad "$(epoch "$started")"
-                elif [ -z "$started" ]; then
-                  row Filesystems "Scrub $m" "never scrubbed" warn
-                elif [ "$summary" != "no errors found" ]; then
-                  row Filesystems "Scrub $m" "$summary" bad "$(epoch "$started")"
-                elif [ "$status" != finished ] && [ "$status" != running ]; then
-                  row Filesystems "Scrub $m" "$status" warn "$(epoch "$started")"
-                else
-                  row Filesystems "Scrub $m" "$status, no errors" ok "$(epoch "$started")"
-                fi
-              done
 
               # ---- RAID -------------------------------------------------------------
               for link in /dev/md/*; do
@@ -116,7 +100,7 @@
                   ([.ata_smart_attributes.table[]? | {(.id | tostring): .raw.value}] | add // {}) as $a
                   | [(.smart_status.passed | if . == null then "null" else . end), .temperature.current // "?", .power_on_time.hours // 0,
                      $a["5"] // 0, $a["197"] // 0, $a["198"] // 0] | map(tostring) | join(" ")' <<<"$smart")
-                detail="$model · $size · ''${temp}°C · $(( hours / 8766 ))y on"
+                detail="$model · $size · ''${temp}°C · $(( hours / 8766 ))y powered on"
                 [ "$realloc" -eq 0 ] || detail="$detail · $realloc reallocated"
                 [ "$pending" -eq 0 ] || detail="$detail · $pending pending"
                 [ "$uncorr" -eq 0 ] || detail="$detail · $uncorr uncorrectable"
@@ -127,7 +111,7 @@
               done < <(lsblk -dnpo NAME,TYPE | awk '$2 == "disk" && $1 ~ /\/sd/ {print $1}')
 
               # ---- filesystems -------------------------------------------------------
-              for m in ${lib.escapeShellArgs mounts}; do
+              for m in "''${mounts[@]}"; do
                 if ! mountpoint -q "$m"; then
                   row Filesystems "$m" "not mounted" bad
                   continue
@@ -137,6 +121,24 @@
                 # Same lines as the HostDiskFilling (85%) and HostOutOfDiskSpace (95%) alerts.
                 if [ "$pct" -ge 95 ]; then s=bad; elif [ "$pct" -ge 85 ]; then s=warn; else s=ok; fi
                 row Filesystems "$m" "$pct% used · $(numfmt --to=iec --suffix=B "$avail") free" "$s"
+              done
+              for m in "''${btrfsMounts[@]}"; do
+                scrub=$(btrfs scrub status "$m" 2>/dev/null || true)
+                started=$(sed -n 's/^Scrub started: *//p' <<<"$scrub")
+                status=$(sed -n 's/^Status: *//p' <<<"$scrub")
+                summary=$(sed -n 's/^Error summary: *//p' <<<"$scrub")
+                devErrs=$(btrfs device stats "$m" 2>/dev/null | awk '{s += $2} END {print s + 0}')
+                if [ "$devErrs" -gt 0 ]; then
+                  row Filesystems "Scrub $m" "$devErrs btrfs device errors" bad "$(epoch "$started")"
+                elif [ -z "$started" ]; then
+                  row Filesystems "Scrub $m" "never scrubbed" warn
+                elif [ "$summary" != "no errors found" ]; then
+                  row Filesystems "Scrub $m" "$summary" bad "$(epoch "$started")"
+                elif [ "$status" != finished ] && [ "$status" != running ]; then
+                  row Filesystems "Scrub $m" "$status" warn "$(epoch "$started")"
+                else
+                  row Filesystems "Scrub $m" "$status, no errors" ok "$(epoch "$started")"
+                fi
               done
 
               jq -n --argjson rows "$rows" --arg updated "$now" '{
