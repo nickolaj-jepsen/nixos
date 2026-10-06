@@ -19,12 +19,12 @@
     '';
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
-      # Readiness after every HA/Z2M start ("Started" only means spawned), posted to
-      # Discord as evidence for the next "nothing worked after an update".
+      # Readiness after every HA/Z2M start ("Started" only means spawned). Timings go to the
+      # journal; Discord only hears about a start that never became ready.
       systemd.services.home-assistant.wants = ["homelab-health-check.service"];
       systemd.services.zigbee2mqtt.wants = ["homelab-health-check.service"];
       systemd.services.homelab-health-check = {
-        description = "Home Assistant + Zigbee2MQTT readiness check → Discord";
+        description = "Home Assistant + Zigbee2MQTT readiness check (Discord on failure)";
         after = ["home-assistant.service" "zigbee2mqtt.service" "mosquitto.service"];
         path = [pkgs.systemd];
         serviceConfig = {
@@ -54,7 +54,7 @@
               done
               msg="homelab: Home Assistant $( [ -n "$ha" ] && echo "up after ''${ha}s" || echo "NOT up after ''${deadline}s" ), Zigbee2MQTT $( [ -n "$z2m" ] && echo "online after ''${z2m}s" || echo "NOT online after ''${deadline}s" )"
               echo "$msg"
-              post "$msg"
+              if [ -z "$ha" ] || [ -z "$z2m" ]; then post "⚠️ $msg"; fi
               # Deliberately exit 0: the Discord post and the journal line are the signal. A
               # non-zero exit would leave the unit failed, so every later switch ends in
               # "units failed" — the symptom the oauth2-proxy gate in this branch removed.
@@ -104,9 +104,9 @@
         };
       };
 
-      # HA cannot read the journal; the target is under 50 failed commands a day.
+      # HA cannot read the journal. Under the 50/day target the count only goes to the journal.
       systemd.services.zigbee2mqtt-error-report = {
-        description = "Zigbee2MQTT failed-command count for the last 24 h → Discord";
+        description = "Zigbee2MQTT failed-command count for the last 24 h (Discord when over target)";
         path = [pkgs.systemd];
         serviceConfig = {
           Type = "oneshot";
@@ -126,9 +126,8 @@
               n=$(printf '%s\n' "$errors" | grep -c . || true)
               top=$(printf '%s\n' "$errors" | grep -oE "to '[^']+' failed" | sed -E "s/^to '|' failed$//g" | sort | uniq -c | sort -rn | head -3 | sed -E 's/^ *([0-9]+) (.*)$/\2 (\1)/' | paste -sd, - | sed 's/,/, /g' || true)
               msg="homelab: Zigbee2MQTT logged $n failed commands in the last 24 h''${top:+ — top: $top}"
-              if [ "$n" -ge 50 ]; then msg="⚠️ $msg (target is under 50)"; fi
               echo "$msg"
-              post "$msg"
+              if [ "$n" -ge 50 ]; then post "⚠️ $msg (target is under 50)"; fi
             '';
           });
         };

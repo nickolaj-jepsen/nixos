@@ -33,6 +33,8 @@
             adminpassFile = "${config.age.secrets.nextcloud-admin-pass.path}";
             dbtype = "pgsql";
           };
+          # Hour in UTC: heavy background jobs run 01:00-05:00 instead of whenever cron fires.
+          settings.maintenance_window_start = 1;
           extraApps = {
             inherit (config.services.nextcloud.package.packages.apps) sociallogin;
           };
@@ -40,8 +42,8 @@
       };
 
       # Daily healthcheck → #sys-info: catches the classic silent Nextcloud failures
-      # (background cron stopped; setup checks flagging issues) that no host metric
-      # reveals. Posts only when something is wrong.
+      # (background cron stopped; error-level setup checks) that no host metric
+      # reveals. Posts only when something is wrong; warnings stay in the admin page.
       systemd.services.nextcloud-healthcheck = {
         description = "Nextcloud cron/setup healthcheck → Discord";
         after = ["phpfpm-nextcloud.service"];
@@ -59,9 +61,12 @@
               if [ "$lastcron" -gt 0 ] && [ "$((now - lastcron))" -gt 3600 ]; then
                 problems="$problems cron has not run in $(( (now - lastcron) / 60 )) min;"
               fi
-              # Confirm `occ setupchecks` exit semantics on the box; drop this branch if noisy.
-              if ! nextcloud-occ setupchecks >/dev/null 2>&1; then
-                problems="$problems setupchecks flagged issues;"
+              # The exit code is non-zero for mere warnings, so filter on severity instead.
+              checks=$(nextcloud-occ setupchecks --output=json 2>/dev/null || true)
+              if errors=$(printf '%s' "$checks" | jq -er '[.[][] | select(.severity == "error") | .name] | join(", ")'); then
+                [ -z "$errors" ] || problems="$problems setup check errors: $errors;"
+              else
+                problems="$problems occ setupchecks returned no usable output;"
               fi
               if [ -n "$problems" ]; then
                 jq -nc --arg c "Nextcloud healthcheck:$problems" '{content: $c}' \

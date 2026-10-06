@@ -83,6 +83,8 @@
         startLimitIntervalSec = 120;
         startLimitBurst = 5;
         serviceConfig.RestartSec = "5s";
+        # Feeds rest_command.discord's !env_var; the #sys-info webhook is declared in nextcloud.nix.
+        serviceConfig.EnvironmentFile = config.age.secrets.discord-webhook-sys-info.path;
       };
 
       services.home-assistant = {
@@ -214,9 +216,8 @@
             }
           ];
 
-          # The arr Discord channel.
           rest_command.discord = {
-            url = "!secret discord_webhook";
+            url = "!env_var DISCORD_WEBHOOK_SYS_INFO";
             method = "POST";
             content_type = "application/json";
             payload = ''{"content": {{ message | tojson }}}'';

@@ -965,18 +965,6 @@ in {
         ];
       }
       {
-        id = "zigbee_daily_digest";
-        alias = "Zigbee: daily digest";
-        triggers = [
-          {
-            trigger = "time";
-            at = "18:00:00";
-          }
-        ];
-        conditions = [(template "{{ states('sensor.zigbee_health_report') | int(0) > 0 }}")];
-        actions = [(discord "{{ state_attr('sensor.zigbee_health_report','report') }}")];
-      }
-      {
         id = "zigbee_monthly_health";
         alias = "Zigbee: monthly health report";
         triggers = [
