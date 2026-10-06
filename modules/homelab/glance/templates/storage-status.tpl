@@ -1,26 +1,20 @@
 {{ $rows := .JSON.Array "rows" }}
-{{ $bad := .JSON.Int "bad" }}
-{{ $warn := .JSON.Int "warn" }}
-<div class="storage-status">
-  <div class="storage-summary {{ if gt $bad 0 }}color-negative{{ else if gt $warn 0 }}storage-text-warn{{ else }}color-positive{{ end }}">
-    {{ if gt $bad 0 }}{{ $bad }} problem{{ if gt $bad 1 }}s{{ end }}{{ if gt $warn 0 }}, {{ $warn }} warning{{ if gt $warn 1 }}s{{ end }}{{ end }}
-    {{ else if gt $warn 0 }}{{ $warn }} warning{{ if gt $warn 1 }}s{{ end }}
-    {{ else }}All healthy{{ end }}
-    <span class="color-subdue"> · checked <span {{ .JSON.String "updated" | parseTime "unix" | toRelativeTime }}></span> ago</span>
-  </div>
-  {{ range $g := unique "group" $rows }}
-    {{ $group := $g.String "group" }}
-    <div class="size-h6 color-subdue storage-group">{{ $group }}</div>
-    <ul class="list list-gap-4">
-      {{ range $rows }}{{ if eq (.String "group") $group }}
-        <li class="storage-row">
-          <span class="storage-dot storage-{{ .String "status" }}"></span>
-          <div class="storage-text">
-            <div class="color-highlight text-truncate">{{ .String "name" }}</div>
-            <div class="size-h6 color-subdue text-truncate">{{ .String "detail" }}{{ if .Exists "time" }} · <span {{ .String "time" | parseTime "unix" | toRelativeTime }}></span> ago{{ end }}</div>
-          </div>
-        </li>
+<ul class="list list-gap-10 storage-status">
+  {{ range .JSON.Array "groups" }}
+    {{ $group := .String "name" }}
+    <li>
+      <div class="storage-row">
+        <span class="storage-dot storage-{{ .String "status" }}"></span>
+        <span class="color-highlight">{{ $group }}</span>
+        <span class="color-subdue text-truncate">{{ .String "summary" }}{{ if .Exists "time" }} <span {{ .String "time" | parseTime "unix" | toRelativeTime }}></span> ago{{ end }}</span>
+      </div>
+      {{ range $rows }}{{ if and (eq (.String "group") $group) (or (eq (.String "status") "warn") (eq (.String "status") "bad")) }}
+        <div class="storage-problem size-h6 storage-text-{{ .String "status" }}">{{ .String "name" }}: {{ .String "detail" }}</div>
       {{ end }}{{ end }}
-    </ul>
+    </li>
   {{ end }}
-</div>
+</ul>
+{{/* The timer runs every 5 min; older data means the collector itself stopped. */}}
+{{ if (.JSON.String "updated" | parseTime "unix").Before (offsetNow "-15m") }}
+  <div class="size-h6 color-negative storage-stale">Stale: last checked <span {{ .JSON.String "updated" | parseTime "unix" | toRelativeTime }}></span> ago</div>
+{{ end }}

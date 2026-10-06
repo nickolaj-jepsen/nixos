@@ -28,7 +28,7 @@
               mounts=(${lib.escapeShellArgs mounts})
               btrfsMounts=(${lib.escapeShellArgs btrfsMounts})
               rows='[]'
-              # row GROUP NAME DETAIL STATUS(ok|warn|bad) [EPOCH]
+              # row GROUP NAME DETAIL STATUS(ok|warn|bad|idle) [EPOCH]; idle = shown nowhere, counted only
               row() {
                 rows=$(jq -c --arg g "$1" --arg n "$2" --arg d "$3" --arg s "$4" --arg t "''${5:-}" \
                   '. + [{group: $g, name: $n, detail: $d, status: $s} + (if $t == "" then {} else {time: $t} end)]' <<<"$rows")
@@ -52,6 +52,7 @@
                 if [ "$age" -ge 40 ]; then s=bad; elif [ "$age" -ge 26 ]; then s=warn; else s=ok; fi
                 row Backups Restic "last success" "$s" "$last"
               fi
+              resticTime=''${last:-}
               # The pre-backup dumps are whatever restic Wants=; their state resets at reboot.
               for unit in $(systemctl show restic-backups-homelab.service -p Wants --value); do
                 case "$unit" in *.service) ;; *) continue ;; esac
@@ -104,13 +105,17 @@
                 [ "$realloc" -eq 0 ] || detail="$detail · $realloc reallocated"
                 [ "$pending" -eq 0 ] || detail="$detail · $pending pending"
                 [ "$uncorr" -eq 0 ] || detail="$detail · $uncorr uncorrectable"
-                if [ "$passed" = false ] || [ "$pending" -gt 0 ] || [ "$uncorr" -gt 0 ]; then s=bad
+                # Nothing on an unmounted disk is at risk: only an outright SMART failure is worth a look.
+                if [ "$role" = unused ]; then
+                  if [ "$passed" = false ]; then s=warn; else s=idle; fi
+                elif [ "$passed" = false ] || [ "$pending" -gt 0 ] || [ "$uncorr" -gt 0 ]; then s=bad
                 elif [ "$passed" = null ] || [ "$realloc" -gt 0 ]; then s=warn
                 else s=ok; fi
                 row Disks "$role ($serial)" "$detail" "$s"
               done < <(lsblk -dnpo NAME,TYPE | awk '$2 == "disk" && $1 ~ /\/sd/ {print $1}')
 
               # ---- filesystems -------------------------------------------------------
+              fullest="" fullestPct=-1 scrubTime=""
               for m in "''${mounts[@]}"; do
                 if ! mountpoint -q "$m"; then
                   row Filesystems "$m" "not mounted" bad
@@ -120,6 +125,7 @@
                 pct=''${pcent%\%}
                 # Same lines as the HostDiskFilling (85%) and HostOutOfDiskSpace (95%) alerts.
                 if [ "$pct" -ge 95 ]; then s=bad; elif [ "$pct" -ge 85 ]; then s=warn; else s=ok; fi
+                if [ "$pct" -gt "$fullestPct" ]; then fullest=$m fullestPct=$pct; fi
                 row Filesystems "$m" "$pct% used · $(numfmt --to=iec --suffix=B "$avail") free" "$s"
               done
               for m in "''${btrfsMounts[@]}"; do
@@ -128,6 +134,7 @@
                 status=$(sed -n 's/^Status: *//p' <<<"$scrub")
                 summary=$(sed -n 's/^Error summary: *//p' <<<"$scrub")
                 devErrs=$(btrfs device stats "$m" 2>/dev/null | awk '{s += $2} END {print s + 0}')
+                scrubTime=$(epoch "$started")
                 if [ "$devErrs" -gt 0 ]; then
                   row Filesystems "Scrub $m" "$devErrs btrfs device errors" bad "$(epoch "$started")"
                 elif [ -z "$started" ]; then
@@ -141,12 +148,23 @@
                 fi
               done
 
-              jq -n --argjson rows "$rows" --arg updated "$now" '{
-                updated: $updated,
-                rows: $rows,
-                bad: ($rows | map(select(.status == "bad")) | length),
-                warn: ($rows | map(select(.status == "warn")) | length)
-              }' >"$out.tmp"
+              # One summary line per group; the template lists only the rows that need attention.
+              jq -n --argjson rows "$rows" --arg updated "$now" --arg restic "$resticTime" \
+                --arg fullest "$fullest" --arg fullestPct "$fullestPct" --arg scrub "$scrubTime" '
+                def worst: map(.status) | if index("bad") then "bad" elif index("warn") then "warn" else "ok" end;
+                def count(s): map(select(.status == s)) | length;
+                {
+                  updated: $updated,
+                  rows: $rows,
+                  groups: [
+                    ($rows | map(select(.group == "Backups")) | {name: "Backups", status: worst, summary: "last success", time: $restic}),
+                    ($rows | map(select(.group == "RAID")) | {name: "RAID", status: worst, summary: "\(count("ok"))/\(length) arrays mirrored"}),
+                    ($rows | map(select(.group == "Disks")) | {name: "Disks", status: worst,
+                      summary: ("\(count("ok"))/\(length - count("idle")) healthy" + (if count("idle") > 0 then " · \(count("idle")) unused" else "" end))}),
+                    ($rows | map(select(.group == "Filesystems")) | {name: "Filesystems", status: worst,
+                      summary: ("fullest \($fullest) \($fullestPct)% · scrubbed"), time: $scrub})
+                  ] | map(if .time == "" then del(.time) else . end)
+                }' >"$out.tmp"
               mv "$out.tmp" "$out"
             '';
           });
