@@ -92,8 +92,8 @@
         package = pkgs.unstable.home-assistant;
         customComponents = [
           pkgs.unstable.home-assistant-custom-components.adaptive_lighting
-          (import ./_zwift.nix {inherit pkgs;})
-          (import ./_bambu.nix {inherit pkgs;})
+          pkgs.zwift-hass
+          pkgs.ha-bambulab
         ];
         # Config-flow integrations (set up in the UI) still need their deps built in.
         # Only these: the module already adds every top-level `config` key below, plus its

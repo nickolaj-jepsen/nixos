@@ -3,7 +3,7 @@
 
 Subcommands (see docs/updates.md for the flow):
   flake-update --json PATH       nix flake update, falling back to per-input so one bad fetch can't block the rest
-  nightly --overlays-json P --flake-json P
+  nightly --packages-json P --flake-json P
                                  commit the current tree to auto/update and open/refresh its PR
   triage --run-id ID             attribute a failed CI run on auto/update to updated units and hold them back
   landed --pr N                  clear held-back state for units that landed with a merged update PR
@@ -11,8 +11,8 @@ Subcommands (see docs/updates.md for the flow):
   finish-fix --issue N --unit U  act on the fix agent's verdict (env VERDICT holds its JSON)
   fix-rules                      check the hard automerge rules for an auto/fix-* branch
 
-A "unit" is one revertible update: a root flake input (by name) or an overlay
-(`overlays/<name>`). State lives in the pinned `update-status` issue.
+A "unit" is one revertible update: a root flake input (by name) or a package
+with an updater (`pkgs/<name>`). State lives in the pinned `update-status` issue.
 
 Environment: BOT_TOKEN (PAT; pushes and PRs, so CI runs) and GITHUB_TOKEN
 (issues and comments, so the owner is notified), GITHUB_REPOSITORY.
@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from update_overlays import UPDATERS  # noqa: E402
+from update_packages import UPDATERS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 BRANCH = "auto/update"
@@ -51,7 +51,7 @@ UNFIXABLE_KINDS = {"timeout", "fetch"}
 MAX_TRIAGE_PASSES = 3
 META_RE = re.compile(r"<!-- update-bot\n(.*?)\n-->", re.S)
 
-FIX_ALLOWED = ("modules/", "overlays/", "hosts/", "lib/", "flake.nix")
+FIX_ALLOWED = ("modules/", "pkgs/", "hosts/", "lib/", "flake.nix")
 FIX_MAX_FILES = 3
 FIX_MAX_LINES = 40
 FIX_FORBIDDEN_ADDED = [
@@ -190,15 +190,15 @@ def describe_locked(node: dict) -> str:
 # --- units -----------------------------------------------------------------
 
 
-def overlay_unit(name: str) -> str:
-    return f"overlays/{name}"
+def package_unit(name: str) -> str:
+    return f"pkgs/{name}"
 
 
-def is_overlay(unit: str) -> bool:
-    return unit.startswith("overlays/")
+def is_package(unit: str) -> bool:
+    return unit.startswith("pkgs/")
 
 
-def changed_units(base_ref: str, tree: Path = ROOT, overlay_versions: dict | None = None) -> dict:
+def changed_units(base_ref: str, tree: Path = ROOT, package_versions: dict | None = None) -> dict:
     """Map each unit that differs between `base_ref` and the working tree to {"old", "new"}."""
     base, cand = read_lock(base_ref, tree), read_lock(None, tree)
     units = {}
@@ -211,19 +211,18 @@ def changed_units(base_ref: str, tree: Path = ROOT, overlay_versions: dict | Non
             continue
         if bnode.get("locked") != cnode.get("locked"):
             units[name] = {"old": describe_locked(bnode), "new": describe_locked(cnode)}
-    for name, (_fn, files) in UPDATERS.items():
-        if run("git", "diff", "--name-only", base_ref, "--", *files, cwd=tree).strip():
-            v = (overlay_versions or {}).get(name, {})
-            units[overlay_unit(name)] = {"old": v.get("old", "?"), "new": v.get("new", "?")}
+    for name in UPDATERS:
+        if run("git", "diff", "--name-only", base_ref, "--", package_unit(name), cwd=tree).strip():
+            v = (package_versions or {}).get(name, {})
+            units[package_unit(name)] = {"old": v.get("old", "?"), "new": v.get("new", "?")}
     return units
 
 
 def revert_units(tree: Path, units: list[str], base_ref: str) -> None:
     base, cand = read_lock(base_ref, tree), read_lock(None, tree)
     for unit in units:
-        if is_overlay(unit):
-            files = UPDATERS[unit.removeprefix("overlays/")][1]
-            run("git", "checkout", base_ref, "--", *files, cwd=tree)
+        if is_package(unit):
+            run("git", "checkout", base_ref, "--", unit, cwd=tree)
         else:
             cand = graft_input(cand, base, unit)
     write_lock(cand, tree)
@@ -343,7 +342,7 @@ def escalate(state: dict, unit: str, details: str) -> None:
 
 
 def render_commit(meta: dict) -> str:
-    lines = [f"chore(update): update inputs and overlays ({meta['date']})", ""]
+    lines = [f"chore(update): update inputs and packages ({meta['date']})", ""]
     if meta["units"]:
         lines += ["Updated:"] + [f"- {u}: {v['old']} -> {v['new']}" for u, v in sorted(meta["units"].items())]
     if meta["held"]:
@@ -410,11 +409,11 @@ def cmd_flake_update(args) -> None:
 
 
 def cmd_nightly(args) -> None:
-    overlays = json.loads(args.overlays_json.read_text())
+    packages = json.loads(args.packages_json.read_text())
     fetch_failures = json.loads(args.flake_json.read_text())
     number, state = load_state()
 
-    errors = {overlay_unit(n): ("script", r["error"]) for n, r in overlays.items() if r["status"] == "failed"}
+    errors = {package_unit(n): ("script", r["error"]) for n, r in packages.items() if r["status"] == "failed"}
     errors |= {name: ("fetch", error) for name, error in fetch_failures.items()}
     for unit, (kind, error) in errors.items():
         summary = error.strip().splitlines()[-1].strip()[:200] if error.strip() else kind
@@ -424,7 +423,7 @@ def cmd_nightly(args) -> None:
         if e["kind"] in UPDATE_KINDS and unit not in errors:
             clear(state, unit, "It updates again.")
 
-    units = changed_units("origin/main", overlay_versions=overlays)
+    units = changed_units("origin/main", package_versions=packages)
     meta = {
         "date": today(),
         "units": units,
@@ -449,7 +448,7 @@ def cmd_nightly(args) -> None:
         return
 
     run("git", "checkout", "-B", BRANCH)
-    run("git", "add", "flake.lock", "overlays")
+    run("git", "add", "flake.lock", "pkgs")
     subprocess.run(
         ["git", "commit", "-q", "-F", "-"], cwd=ROOT, input=render_commit(meta), text=True, check=True
     )
@@ -468,7 +467,7 @@ def cmd_nightly(args) -> None:
             "--base",
             "main",
             "--title",
-            "chore(update): update inputs and overlays",
+            "chore(update): update inputs and packages",
             "--body",
             body,
             "--label",
@@ -579,7 +578,7 @@ def attribute(failures: list[Failure], units: list[str], base_ref: str) -> None:
             shutil.rmtree(tmp, ignore_errors=True)
 
     # A unit is a direct cause when reverting it removes the failed package by name (other
-    # version or gone); a unit that only re-hashes it (e.g. nixpkgs under an overlay) is blamed
+    # version or gone); a unit that only re-hashes it (e.g. nixpkgs under a pkgs/ package) is blamed
     # only when no direct cause exists.
     with ThreadPoolExecutor(max_workers=2) as pool:
         for unit, variant in pool.map(try_unit, units):
@@ -667,7 +666,7 @@ def cmd_triage(args) -> None:
         if not changed_units(base_ref):
             gh("pr", "close", str(pr["number"]), "--comment", "Every update was held back tonight.", bot=True)
             return
-        run("git", "add", "flake.lock", "overlays")
+        run("git", "add", "flake.lock", "pkgs")
         subprocess.run(
             ["git", "commit", "-q", "--amend", "-F", "-"],
             cwd=ROOT,
@@ -716,12 +715,12 @@ def cmd_landed(args) -> None:
 
 def cmd_prepare_fix(args) -> None:
     unit = args.unit
-    if is_overlay(unit):
-        name = unit.removeprefix("overlays/")
+    if is_package(unit):
+        name = unit.removeprefix("pkgs/")
         out = Path(tempfile.mkstemp(suffix=".json")[1])
         run(
             sys.executable,
-            str(Path(__file__).with_name("update_overlays.py")),
+            str(Path(__file__).with_name("update_packages.py")),
             "--only",
             name,
             "--json",
@@ -819,9 +818,9 @@ def cmd_fix_rules(args) -> None:
         subject = run("git", "log", "-1", "--format=%s", commits[0]).strip()
         files = run("git", "diff", "--name-only", f"{commits[0]}^", commits[0]).split()
         if not subject.startswith("chore(update): bump") or any(
-            f != "flake.lock" and not f.startswith("overlays/") for f in files
+            f != "flake.lock" and not f.startswith("pkgs/") for f in files
         ):
-            reasons.append("first commit is not a plain `chore(update): bump` of flake.lock/overlays")
+            reasons.append("first commit is not a plain `chore(update): bump` of flake.lock/pkgs")
 
     files = run("git", "diff", "--name-only", f"{fix}^", fix).split()
     if bad := [f for f in files if not f.startswith(FIX_ALLOWED)]:
@@ -855,7 +854,7 @@ def main() -> None:
     s = sub.add_parser("flake-update")
     s.add_argument("--json", type=Path, required=True)
     s = sub.add_parser("nightly")
-    s.add_argument("--overlays-json", type=Path, required=True)
+    s.add_argument("--packages-json", type=Path, required=True)
     s.add_argument("--flake-json", type=Path, required=True)
     s = sub.add_parser("triage")
     s.add_argument("--run-id", type=int, required=True)

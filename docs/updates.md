@@ -7,19 +7,19 @@ it is `.github/scripts/update_bot.py` driven by four workflows.
 
 1. **`update.yml`** (00:00 UTC) resets `auto/update` from `main`, runs
    `nix flake update` (input by input if that fails, holding back inputs that
-   can't be fetched) and `update_overlays.py`, formats, and force-pushes one
+   can't be fetched) and `update_packages.py`, formats, and force-pushes one
    commit. The single PR on that branch is created or refreshed, and auto-merge
    (rebase) is enabled. `CI gate` is the only thing that has to pass.
 2. **`update-triage.yml`** runs when CI fails on `auto/update`:
    - takes the root failed derivations from the failed jobs' logs (`Cannot
 build … builder failed`, plus `update-triage: timeout-inflight` markers that
      `ci-build.sh` prints when the 100 min step timeout hits);
-   - for each updated _unit_ (a root flake input, or `overlays/<name>`), reverts
+   - for each updated _unit_ (a root flake input, or `pkgs/<name>`), reverts
      only that unit in a worktree and re-evaluates. A unit is the culprit when
      reverting it makes the failed `.drv` drop out of the host's closure (or
      makes a failed eval succeed). Only evals, no builds: a few minutes in total;
    - reverts the culprits (flake inputs are grafted back from `main`'s lock,
-     overlays checked out from `main`), amends the commit, force-pushes. CI
+     packages checked out from `main`), amends the commit, force-pushes. CI
      re-runs and the rest automerges. Capped at 3 passes per day;
    - nothing attributable: re-runs the failed jobs once, then comments on the
      status issue with an @-mention.
@@ -37,7 +37,7 @@ A unit held back on consecutive nights escalates:
 | --------- | --------- | -------------------------------------------- |
 | `build`   | 3 nights  | issue `Update held back: <unit>` + fix agent |
 | `eval`    | 3 nights  | same                                         |
-| `script`  | 3 nights  | same (an overlay updater failed)             |
+| `script`  | 3 nights  | same (a package updater failed)              |
 | `timeout` | 7 nights  | issue labeled `needs-human` only; no agent   |
 | `fetch`   | 7 nights  | same (an input could not be fetched)         |
 
@@ -63,8 +63,8 @@ holding an update back is already the bot's job.
 Auto-merge is enabled on an `auto/fix-*` PR only if both checks pass:
 
 1. **Hard rules** (`update_bot.py fix-rules`): an optional bump commit
-   (flake.lock/overlays only) plus one fix commit. The fix commit may only
-   touch `modules/ overlays/ hosts/ lib/ flake.nix`, at most 3 files and 40 lines.
+   (flake.lock/pkgs only) plus one fix commit. The fix commit may only
+   touch `modules/ pkgs/ hosts/ lib/ flake.nix`, at most 3 files and 40 lines.
    It may not add `enable = false`/`allowBroken`/`allowInsecure`, remove
    `fireproof.*` lines, touch flake.lock, or change a flake `url`.
 2. **Review agent**: a separate, read-only Claude run that approves only
@@ -83,7 +83,7 @@ Otherwise the PR gets `needs-review` and an @-mention.
 
 ## Local use
 
-- `just update-overlays [name…]` runs the overlay updaters.
+- `just update-packages [name…]` runs the `pkgs/` updaters.
 - `GITHUB_TOKEN=$(gh auth token) GITHUB_REPOSITORY=nickolaj-jepsen/nixos
 python3 .github/scripts/update_bot.py triage --run-id <id> --dry-run`, run
   from a checkout of `auto/update`, prints the attribution without pushing or

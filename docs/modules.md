@@ -73,7 +73,8 @@ standalone guard, so an osConfig read fails CI.
 
 - Theme: `let c = config.fireproof.theme.colors; in { background = c.bg; border = "#${c.accent}"; }`
   (values have no `#` prefix).
-- Unstable packages: `pkgs.unstable.<pkg>` (overlay on the pkgs set).
+- Unstable packages: `pkgs.unstable.<pkg>` (overlay on the pkgs set; shares the
+  host's `nixpkgs.config`).
 - `fpLib` (see below): `mkVirtualHost { port; websockets?; host?; extraConfig?; extraLocations?; }`,
   `mkPostgresDB { name; login?; authentication?; }`,
   `mkDarwinGuiPackage pkgs linuxPkg` — see `lib/default.nix`.
@@ -98,11 +99,15 @@ home-manager and the overlays):
 
 - **Script**: `modules/scripts/`, `pkgs.writeShellApplication`, include
   `set -euo pipefail`.
-- **Overlay**: `overlays/<name>.nix` (auto-imported). If it pins a version
-  by hand, add an updater to `UPDATERS` in `.github/scripts/update_overlays.py`
-  (finds the latest release, prefetches the hash, rewrites the file; list the
-  files it touches) and try it with `just update-overlays <name>`. See
-  `docs/updates.md`.
+- **Package** not in nixpkgs (or replacing it): `pkgs/<name>/package.nix`, a
+  plain `callPackage` file (`unstable` and `inputs` are in scope too). It
+  becomes `pkgs.<name>` on every host and `nix build .#<name>`. Keep its pins
+  updated: a source that tracks a branch is a `flake = false` input (bumped
+  like any input); one that tracks releases gets an updater in `UPDATERS` in
+  `.github/scripts/update_packages.py` (finds the latest release, prefetches
+  the hash, rewrites `pkgs/<name>/`), tried with `just update-packages <name>`.
+  See `docs/updates.md`. Tweaks to an existing package stay in the leaf that
+  uses it (`.override`/`.overrideAttrs`).
 - **Agent skill**: skills for the coding agents flow through the
   `fireproof.agents.skills` registry (`attrsOf path`, merged across leaves).
   Own skills: repo-root `skills/<name>/SKILL.md` (auto-registered by

@@ -1,4 +1,4 @@
-# One update PR per night: flake inputs + overlays on `auto/update`, automerged
+# One update PR per night: flake inputs + pkgs/ on `auto/update`, automerged
 # once `CI gate` passes. Failures are handled by update-triage.yml; see docs/updates.md.
 #
 # Gated by repo settings: a ruleset on `main` requiring `CI gate` (fmt.yml),
@@ -36,8 +36,8 @@ jobs:
         env:
           # Authenticated GitHub API calls: avoids the anonymous rate limit when fetching inputs.
           NIX_CONFIG: access-tokens = github.com=${{ github.token }}
-      - name: Update overlays
-        run: python3 .github/scripts/update_overlays.py --json "$RUNNER_TEMP/overlays.json"
+      - name: Update packages
+        run: python3 .github/scripts/update_packages.py --json "$RUNNER_TEMP/packages.json"
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Format
@@ -46,7 +46,7 @@ jobs:
         run: |
           python3 .github/scripts/update_bot.py ensure-labels
           python3 .github/scripts/update_bot.py nightly \
-            --overlays-json "$RUNNER_TEMP/overlays.json" --flake-json "$RUNNER_TEMP/flake.json"
+            --packages-json "$RUNNER_TEMP/packages.json" --flake-json "$RUNNER_TEMP/flake.json"
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}

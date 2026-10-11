@@ -1,7 +1,7 @@
 # Agent support for the notes vault: the official CLI, a /notes skill for other repos,
 # and vault-scoped skills plus git snapshot hooks for sessions run inside the vault.
 # Conventions live in the vault's own AGENTS.md.
-{
+{inputs, ...}: {
   flake.modules.homeManager.obsidian-agents = {
     config,
     lib,
@@ -77,15 +77,9 @@
       };
     };
 
-    kepano = pkgs.fetchFromGitHub {
-      owner = "kepano";
-      repo = "obsidian-skills";
-      rev = "3ccff5338ea700537839b21900aa5358a0402c98";
-      hash = "sha256-kyH07EVmwIEC/q6i91Kz8mPE78j9ITga2NZUpU1+nHU=";
-    };
     vaultSkills =
       lib.genAttrs ["inbox" "check" "meeting"] (name: ./skills + "/${name}")
-      // lib.genAttrs ["obsidian-markdown" "obsidian-bases" "obsidian-cli"] (name: "${kepano}/skills/${name}");
+      // lib.genAttrs ["obsidian-markdown" "obsidian-bases" "obsidian-cli"] (name: "${inputs.obsidian-skills}/skills/${name}");
   in {
     config = lib.mkIf config.fireproof.desktop.enable {
       programs.obsidian.cli.enable = true;

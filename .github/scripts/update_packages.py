@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Bump the manually fetched packages in overlays/ to their latest upstream release.
+"""Bump the hand-pinned packages in pkgs/ to their latest upstream release.
 
-Each overlay has an updater that finds the latest version, prefetches the new
-hash with `nix store prefetch-file` and rewrites the overlay in place. One
-overlay failing to update never stops the others.
+Each package with an updater gets its latest version looked up, the new hash
+prefetched with `nix store prefetch-file`, and pkgs/<name>/ rewritten in place.
+One package failing to update never stops the others.
 
-Usage: update_overlays.py [--only NAME ...] [--json PATH]
+Usage: update_packages.py [--only NAME ...] [--json PATH]
 
 --json writes `{name: {"status": "updated"|"unchanged"|"failed", "old", "new",
-"error"}}` for every overlay that ran. Exits 0 even when an updater fails; the
+"error"}}` for every package that ran. Exits 0 even when an updater fails; the
 caller reads the failures from the JSON.
 """
 
@@ -21,11 +21,11 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-OVERLAYS = ROOT / "overlays"
+PKGS = ROOT / "pkgs"
 
 
 def fetch(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "nixos-update-overlays"})
+    req = urllib.request.Request(url, headers={"User-Agent": "nixos-update-packages"})
     with urllib.request.urlopen(req, timeout=120) as resp:
         return resp.read()
 
@@ -40,13 +40,12 @@ def github_latest_release(repo: str) -> dict:
     return json.loads(out)
 
 
-def prefetch(url: str) -> str:
-    out = subprocess.run(
-        ["nix", "store", "prefetch-file", "--json", "--hash-type", "sha256", url],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
+def prefetch(url: str, unpack: bool = False) -> str:
+    """SRI sha256 of `url`; with `unpack`, of the unpacked archive (what fetchzip/fetchFromGitHub pin)."""
+    cmd = ["nix", "store", "prefetch-file", "--json", "--hash-type", "sha256", url]
+    if unpack:
+        cmd.insert(3, "--unpack")
+    out = subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
     return json.loads(out)["hash"]
 
 
@@ -81,7 +80,7 @@ def version_key(v: str) -> list:
 
 
 def update_claude_code() -> tuple[str, str]:
-    path = OVERLAYS / "claude-code-manifest.zst.json"
+    path = PKGS / "claude-code" / "manifest.zst.json"
     old = json.loads(path.read_text())["version"]
     new = fetch("https://downloads.claude.ai/claude-code-releases/latest").decode().strip()
     if new != old:
@@ -95,7 +94,7 @@ def update_claude_code() -> tuple[str, str]:
 
 
 def update_bambu_studio() -> tuple[str, str]:
-    path = OVERLAYS / "bambu-studio.nix"
+    path = PKGS / "bambu-studio" / "package.nix"
     text = path.read_text()
     old = read_field(text, r'^\s*version = "([^"]+)";')
     release = github_latest_release("bambulab/BambuStudio")
@@ -110,24 +109,24 @@ def update_bambu_studio() -> tuple[str, str]:
         raise RuntimeError(f"no unique Ubuntu 24.04 AppImage in {new}: {names}")
     asset = assets[0]
     ubuntu_version = asset["name"].removeprefix("BambuStudio_ubuntu").removesuffix(".AppImage")
-    # The overlay builds the URL from a template; fail rather than ship a 404.
+    # The package builds the URL from a template; fail rather than ship a 404.
     expected = (
         f"https://github.com/bambulab/BambuStudio/releases/download/v{new}/"
         f"BambuStudio_ubuntu{ubuntu_version}.AppImage"
     )
     if asset["browser_download_url"] != expected:
         raise RuntimeError(
-            f"asset URL {asset['browser_download_url']} no longer matches the overlay's template"
+            f"asset URL {asset['browser_download_url']} no longer matches the package's template"
         )
     text = replace_once(text, r'^\s*version = "([^"]+)";', new)
-    text = replace_once(text, r'^\s*ubuntu_version = "([^"]+)";', ubuntu_version)
-    text = replace_once(text, r'^\s*sha256 = "([^"]+)";', prefetch(expected))
+    text = replace_once(text, r'^\s*ubuntuVersion = "([^"]+)";', ubuntu_version)
+    text = replace_once(text, r'^\s*hash = "([^"]+)";', prefetch(expected))
     path.write_text(text)
     return old, new
 
 
 def update_claude_desktop() -> tuple[str, str]:
-    path = OVERLAYS / "claude-desktop.nix"
+    path = PKGS / "claude-desktop" / "package.nix"
     text = path.read_text()
     old = read_field(text, r'^\s*version = "([^"]+)";')
     index = fetch(
@@ -146,18 +145,38 @@ def update_claude_desktop() -> tuple[str, str]:
         return old, new
     expected_file = f"pool/main/c/claude-desktop/claude-desktop_{new}_amd64.deb"
     if latest["Filename"] != expected_file:
-        raise RuntimeError(f"index Filename {latest['Filename']} no longer matches the overlay's URL")
+        raise RuntimeError(f"index Filename {latest['Filename']} no longer matches the package's URL")
     text = replace_once(text, r'^\s*version = "([^"]+)";', new)
     text = replace_once(text, r'^\s*hash = "([^"]+)";', sri_from_hex(latest["SHA256"]))
     path.write_text(text)
     return old, new
 
 
-# name -> (updater, files it rewrites); the files are what update_bot.py reverts to hold one back.
+def update_github_release(name: str, repo: str) -> tuple[str, str]:
+    """For a package whose `version` is the release tag and whose src is fetchFromGitHub at it."""
+    path = PKGS / name / "package.nix"
+    text = path.read_text()
+    old = read_field(text, r'^\s*version = "([^"]+)";')
+    new = github_latest_release(repo)["tag_name"]
+    if new == old:
+        return old, new
+    text = replace_once(text, r'^\s*version = "([^"]+)";', new)
+    text = replace_once(
+        text,
+        r'^\s*hash = "([^"]+)";',
+        prefetch(f"https://github.com/{repo}/archive/{new}.tar.gz", unpack=True),
+    )
+    path.write_text(text)
+    return old, new
+
+
+# pkgs/<name> -> updater; update_bot.py holds one back by reverting that directory.
 UPDATERS = {
-    "claude-code": (update_claude_code, ["overlays/claude-code-manifest.zst.json"]),
-    "bambu-studio": (update_bambu_studio, ["overlays/bambu-studio.nix"]),
-    "claude-desktop": (update_claude_desktop, ["overlays/claude-desktop.nix"]),
+    "claude-code": update_claude_code,
+    "bambu-studio": update_bambu_studio,
+    "claude-desktop": update_claude_desktop,
+    "ha-bambulab": lambda: update_github_release("ha-bambulab", "greghesp/ha-bambulab"),
+    "zwift-hass": lambda: update_github_release("zwift-hass", "snicker/zwift_hass"),
 }
 
 
@@ -169,9 +188,8 @@ def main() -> None:
 
     results = {}
     for name in args.only or UPDATERS:
-        updater, _files = UPDATERS[name]
         try:
-            old, new = updater()
+            old, new = UPDATERS[name]()
             status = "updated" if old != new else "unchanged"
             results[name] = {"status": status, "old": old, "new": new}
             print(f"{name}: {old} -> {new}" if old != new else f"{name}: {old} (latest)")

@@ -9,7 +9,7 @@ on:
         description: Held-back issue number
         required: true
       unit:
-        description: Held-back unit (flake input name or overlays/<name>)
+        description: Held-back unit (flake input name or pkgs/<name>)
         required: true
 
 concurrency:
@@ -53,14 +53,15 @@ jobs:
             (`${{ inputs.unit }}`) that breaks the build and has been held back for
             several nights. Read it with `gh issue view ${{ inputs.issue }}`. The
             update itself is already applied as the last commit on this checkout
-            (unless the overlay updater is what fails); your job is what comes after it.
+            (unless the package updater is what fails); your job is what comes after it.
 
             1. Reproduce: build or evaluate only the failing derivation, never a whole
-               host (e.g. `nix build .#nixosConfigurations.<host>.pkgs.<pkg>` or the
-               attribute path that leads to it). The runner has no private cache.
+               host: `nix build .#<name>` for a package in pkgs/, otherwise e.g.
+               `nix build .#nixosConfigurations.<host>.pkgs.<pkg>` or the attribute path
+               that leads to it. The runner has no private cache.
             2. Decide the verdict:
                - `fix-pr`: the cause is in this repo (renamed/removed option or package,
-                 overlay URL/asset/hash change, patch that no longer applies, updater
+                 pkgs/ URL/asset/hash change, patch that no longer applies, updater
                  script out of date). Make the smallest change that fixes it and verify
                  it builds. Leave the change uncommitted in the working tree.
                - `upstream`: the cause is in nixpkgs or the third-party flake and will
@@ -69,7 +70,7 @@ jobs:
                - `needs-human`: unclear, risky, or needs a decision. Explain. Change nothing.
             3. Never: disable features (`enable = false`), add allowBroken/allowInsecure,
                pin or re-pin a flake input, edit flake.lock, refactor, or edit .github/
-               (except .github/scripts/update_overlays.py when the updater itself fails;
+               (except .github/scripts/update_packages.py when the updater itself fails;
                such a PR always goes to human review).
                Holding the update back is already the bot's job; a workaround pin is not a fix.
 

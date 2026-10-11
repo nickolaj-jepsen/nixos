@@ -59,7 +59,7 @@ nixpkgs binary off the Mac: `fpLib.mkDarwinGuiPackage` for
 `home.packages`. HM halves that can't run on macOS (niri, dms, gtk, clipboard,
 Linux-only apps) gate additionally on `pkgs.stdenv.isLinux`. Mac-only apps
 (karabiner, bitwarden, linear, …) ship a `darwin` half only. `claude-desktop`
-has no nixpkgs build: cask on darwin, repackaged `.deb` overlay on Linux.
+has no nixpkgs build: cask on darwin, repackaged `.deb` in `pkgs/` on Linux.
 nixos halves never evaluate on darwin — no guard needed.
 
 ## New host / install

@@ -36,8 +36,8 @@ must be `git add`ed or flake eval ignores them.
 ## Read before touching
 
 - `docs/modules.md` — creating/editing leaves under `modules/`: gating rules,
-  option cascade, new toggles, theme/unstable/fpLib, overlays, scripts,
-  agent skills.
+  option cascade, new toggles, theme/unstable/fpLib, own packages (`pkgs/`),
+  scripts, agent skills.
 - `docs/hosts.md` — anything under `hosts/`: card shape, classes
   (nixos/home/darwin), cross-platform app packaging, new-host/bootstrap.
 - `docs/secrets.md` — anything under `secrets/`: rekey stores, secret-write

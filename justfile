@@ -369,10 +369,10 @@ new-host hostname username:
 update input='':
     {{ nixcmd }} flake update {{ input }}
 
-[doc("Bump hand-pinned overlay packages (all, or the named ones)")]
+[doc("Bump the hand-pinned packages in pkgs/ (all, or the named ones)")]
 [group('maintenance')]
-update-overlays *names:
-    python3 .github/scripts/update_overlays.py {{ prepend("--only ", names) }}
+update-packages *names:
+    python3 .github/scripts/update_packages.py {{ prepend("--only ", names) }}
 
 [doc('Format all files using treefmt')]
 [group('maintenance')]

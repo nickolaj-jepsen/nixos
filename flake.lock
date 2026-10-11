@@ -796,23 +796,7 @@
         "type": "github"
       }
     },
-    "nixpkgs-unstable_held1": {
-      "locked": {
-        "lastModified": 1791179034,
-        "narHash": "sha256-Ni0LBydzaCi8oek12r4mVreuFHqYlM1eTD6SfiENKfw=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "494ce7fd23ff6a5dff39e1fb11e9b6f2ac74bf25",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_held1": {
+    "nixpkgs": {
       "locked": {
         "lastModified": 1791143449,
         "narHash": "sha256-9+n3ReS2y9xS199LoJjKUWHwZrISGHWgkD/LUZTDZyA=",
@@ -824,6 +808,22 @@
       "original": {
         "owner": "nixos",
         "ref": "nixos-26.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs-unstable": {
+      "locked": {
+        "lastModified": 1791179034,
+        "narHash": "sha256-Ni0LBydzaCi8oek12r4mVreuFHqYlM1eTD6SfiENKfw=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "494ce7fd23ff6a5dff39e1fb11e9b6f2ac74bf25",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -870,6 +870,22 @@
       "original": {
         "owner": "karaolidis",
         "repo": "nix-obsidian-extensions",
+        "type": "github"
+      }
+    },
+    "obsidian-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789483437,
+        "narHash": "sha256-kyH07EVmwIEC/q6i91Kz8mPE78j9ITga2NZUpU1+nHU=",
+        "owner": "kepano",
+        "repo": "obsidian-skills",
+        "rev": "3ccff5338ea700537839b21900aa5358a0402c98",
+        "type": "github"
+      },
+      "original": {
+        "owner": "kepano",
+        "repo": "obsidian-skills",
         "type": "github"
       }
     },
@@ -1021,15 +1037,17 @@
         "nix-index-database": "nix-index-database",
         "nix-vscode-extensions": "nix-vscode-extensions",
         "nixos-wsl": "nixos-wsl",
-        "nixpkgs": "nixpkgs_held1",
-        "nixpkgs-unstable": "nixpkgs-unstable_held1",
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-unstable": "nixpkgs-unstable",
         "nvf": "nvf",
         "obsidian-extensions": "obsidian-extensions",
+        "obsidian-skills": "obsidian-skills",
         "paseo": "paseo",
         "pi": "pi",
         "treefmt-nix": "treefmt-nix",
         "walldye": "walldye",
-        "zero-x-cb-media": "zero-x-cb-media"
+        "zero-x-cb-media": "zero-x-cb-media",
+        "zwift-client": "zwift-client"
       }
     },
     "rust-analyzer-src": {
@@ -1250,6 +1268,22 @@
       "original": {
         "owner": "nickolaj-jepsen",
         "repo": "0xCB-media",
+        "type": "github"
+      }
+    },
+    "zwift-client": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779809516,
+        "narHash": "sha256-c6v/D7JxF0xdg5YiHig6DZA2tcZdEUI2UIKZc22CDFY=",
+        "owner": "nickolaj-jepsen",
+        "repo": "zwift-client",
+        "rev": "fb8ec414ef8447b86881ce60da2bacb0c951d1b2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nickolaj-jepsen",
+        "repo": "zwift-client",
         "type": "github"
       }
     }

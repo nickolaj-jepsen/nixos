@@ -13,7 +13,7 @@
         ./lib/flake-module.nix
         ./hosts
         ./installer
-        ./overlays
+        ./pkgs
         # Every file under ./modules is a self-declaring dendritic module that sets
         # flake.modules.{nixos,homeManager}.<name>. import-tree auto-collects them
         # all; each leaf self-gates with lib.mkIf config.fireproof.<feature>.enable.
@@ -76,7 +76,7 @@
     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
 
     # Recursively imports every `.nix` file under a directory (skipping any
-    # `_`-prefixed path), so module/host/overlay trees are auto-imported
+    # `_`-prefixed path), so module/host trees are auto-imported
     # instead of maintained as hand-written `imports = [ … ]` lists.
     import-tree.url = "github:vic/import-tree";
 
@@ -106,6 +106,9 @@
     obsidian-extensions.url = "github:karaolidis/nix-obsidian-extensions";
     obsidian-extensions.inputs.nixpkgs.follows = "nixpkgs";
     obsidian-extensions.inputs.treefmt-nix.follows = "treefmt-nix";
+    # Vault skills (modules/programs/obsidian/agents.nix), tracked at HEAD.
+    obsidian-skills.url = "github:kepano/obsidian-skills";
+    obsidian-skills.flake = false;
 
     nvf.url = "github:NotAShelf/nvf";
     nvf.inputs.nixpkgs.follows = "nixpkgs";
@@ -133,6 +136,10 @@
 
     zero-x-cb-media.url = "github:nickolaj-jepsen/0xCB-media";
     zero-x-cb-media.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Library for pkgs/zwift-hass, tracked at HEAD.
+    zwift-client.url = "github:nickolaj-jepsen/zwift-client";
+    zwift-client.flake = false;
 
     # Only the NixOS module is used; the package comes from pkgs.unstable (cached).
     paseo.url = "github:getpaseo/paseo";
