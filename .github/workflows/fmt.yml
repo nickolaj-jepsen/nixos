@@ -39,6 +39,7 @@ jobs:
           echo "list=$list" >> "$GITHUB_OUTPUT"
           echo "Matrix: $list"
 
+  # What `nix flake check` covers minus the real hosts, which the build jobs already evaluate.
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -49,12 +50,22 @@ jobs:
           attic-endpoint: https://attic.${{ secrets.HOMELAB_DOMAIN }}/
           attic-cache: nixos
           attic-token: ${{ secrets.ATTIC_TOKEN }}
-      - name: Run nix flake check
-        run: nix flake check
+      - name: Build checks
+        run: .github/scripts/ci-build.sh ".#checks.x86_64-linux"
+      # shell: bash for pipefail; --no-eval-cache: parallel evals otherwise stall on its SQLite lock.
+      - name: Evaluate bootstrap hosts, packages and dev shells
+        shell: bash
+        run: |
+          nix eval --json .#nixosConfigurations --apply builtins.attrNames \
+            | jq -r '.[] | select(startswith("bootstrap"))' \
+            | xargs -P 4 -I{} nix eval --no-eval-cache ".#nixosConfigurations.{}.config.system.build.toplevel.drvPath"
+          nix eval --json .#packages.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
+          nix eval --json .#devShells.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
 
   # --skip-cached (in ci-build.sh): a host already in attic passes without pulling its closure onto the runner.
+  # Not gated on fmt: the gate still requires it, and waiting would add its runtime to every build.
   build:
-    needs: [hosts, fmt]
+    needs: [hosts]
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -72,11 +83,8 @@ jobs:
         run: .github/scripts/ci-build.sh ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
 
   # The darwin host can't build on Linux (aarch64-darwin), so it gets its own
-  # macOS runner instead of a matrix slot. Free on a public repo; needs [fmt]
-  # keeps a broken-format PR from spinning it up. Mark this
-  # job as a required status check on `main` so a broken Mac config blocks merge.
+  # macOS runner instead of a matrix slot (free on a public repo).
   darwin:
-    needs: [fmt]
     runs-on: macos-latest
     timeout-minutes: 120
     steps:
