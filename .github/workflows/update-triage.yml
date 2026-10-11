@@ -1,6 +1,7 @@
 # Keeps the nightly update PR mergeable: when CI fails on `auto/update`, finds
-# which updates caused it, holds those back and pushes the rest. When the PR
-# merges, clears held-back state for the updates that landed. See docs/updates.md.
+# which updates caused it, holds those back and pushes the rest. When it or an
+# auto/fix-* PR merges, clears held-back state for the updates that landed.
+# See docs/updates.md.
 name: Update triage
 on:
   workflow_run:
@@ -44,7 +45,8 @@ jobs:
   landed:
     if: >-
       github.event_name == 'pull_request' && github.event.pull_request.merged &&
-      github.event.pull_request.head.ref == 'auto/update' &&
+      (github.event.pull_request.head.ref == 'auto/update' ||
+       startsWith(github.event.pull_request.head.ref, 'auto/fix-')) &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10

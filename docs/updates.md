@@ -51,6 +51,7 @@ applies the held-back update as a `chore(update): bump <unit>` commit, then
 Claude (`claude-code-action`, `CLAUDE_CODE_OAUTH_TOKEN`) returns a verdict:
 
 - `fix-pr`: a minimal fix on `auto/fix-<unit>`, PR referencing the issue;
+  merging it lands the bump too, so `landed` clears the unit and closes the issue;
 - `upstream`: cites the upstream issue, no PR; the issue closes when it lands;
 - `needs-human`: explains, @-mentions the owner.
 

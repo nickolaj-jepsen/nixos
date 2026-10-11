@@ -6,7 +6,7 @@ Subcommands (see docs/updates.md for the flow):
   nightly --packages-json P --flake-json P
                                  commit the current tree to auto/update and open/refresh its PR
   triage --run-id ID             attribute a failed CI run on auto/update to updated units and hold them back
-  landed --pr N                  clear held-back state for units that landed with a merged update PR
+  landed --pr N                  clear held-back state for units that landed with a merged update or fix PR
   prepare-fix --unit U           bump one unit on the current branch so the fix agent works on the new version
   finish-fix --issue N --unit U  act on the fix agent's verdict (env VERDICT holds its JSON)
   fix-rules                      check the hard automerge rules for an auto/fix-* branch
@@ -699,18 +699,29 @@ def cmd_triage(args) -> None:
 
 
 def cmd_landed(args) -> None:
-    pr = gh_json("pr", "view", str(args.pr), "--json", "body")
-    meta = extract(pr["body"])
+    pr = gh_json("pr", "view", str(args.pr), "--json", "body,headRefName")
     number, state = load_state()
     if number is None:
         return
-    for unit, e in list(state["units"].items()):
-        if e["kind"] not in UPDATE_KINDS and unit not in meta.get("held", {}):
+    if pr["headRefName"].startswith(FIX_PREFIX):
+        # A fix PR carries its unit's bump (prepare-fix), so that unit landed with it.
+        slug = pr["headRefName"].removeprefix(FIX_PREFIX)
+        landed = [u for u in state["units"] if fix_slug(u) == slug]
+    else:
+        held = extract(pr["body"]).get("held", {})
+        landed = [u for u in state["units"] if u not in held]
+    for unit in landed:
+        if state["units"][unit]["kind"] not in UPDATE_KINDS:
             clear(state, unit, f"Landed in #{args.pr}.")
     save_state(number, state)
 
 
 # --- fix agent ---------------------------------------------------------------
+
+
+def fix_slug(unit: str) -> str:
+    """The unit's fix branch is FIX_PREFIX + this."""
+    return re.sub(r"[^a-z0-9-]+", "-", unit.lower()).strip("-")
 
 
 def cmd_prepare_fix(args) -> None:
@@ -759,7 +770,7 @@ def cmd_finish_fix(args) -> None:
         gh("issue", "comment", issue, "--body", f"{ping}**Fix agent verdict: {decision}**\n\n{summary}")
         return
 
-    slug = re.sub(r"[^a-z0-9-]+", "-", args.unit.lower()).strip("-")
+    slug = fix_slug(args.unit)
     branch = f"{FIX_PREFIX}{slug}"
     title = verdict.get("title") or f"fix({slug}): make the {args.unit} update build"
     run("git", "checkout", "-B", branch)
