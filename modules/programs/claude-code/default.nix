@@ -167,9 +167,13 @@
             repo = "Digital-Udvikling/skills";
           };
         };
-        enabledPlugins = lib.mkIf cfg.work.enable {
-          "ao-skills@ao-agent-skills" = true;
-        };
+        enabledPlugins =
+          {
+            "cc-plugin-you-should-know@builtin" = true;
+          }
+          // lib.optionalAttrs cfg.work.enable {
+            "ao-skills@ao-agent-skills" = true;
+          };
         permissions = {
           # Only commands that are frequent AND slow to classify earn a rule: in
           # auto mode an allow rule buys determinism, not safety. Omitted on
@@ -205,10 +209,11 @@
             # NPM / PNPM
             "Bash(npm run:*)"
             "Bash(npm test:*)"
-            "Bash(npm install:*)"
+            # Bare installs only: with args they add packages (or -g) and run their install scripts.
+            "Bash(npm install)"
             "Bash(pnpm run:*)"
             "Bash(pnpm test:*)"
-            "Bash(pnpm install:*)"
+            "Bash(pnpm install)"
             "Bash(pnpm exec:*)"
             # Uv
             "Bash(uv sync)"
@@ -220,8 +225,6 @@
             "Bash(nix flake metadata:*)"
             "Bash(nix eval:*)"
             "Bash(nix build:*)"
-            "Bash(nix develop:*)"
-            "Bash(nix repl:*)"
             # Just
             "Bash(just:*)"
             # DS
@@ -237,6 +240,13 @@
           ask = [
             "Bash(just switch:*)"
             "Bash(just boot:*)"
+            "Bash(just home-switch:*)"
+            "Bash(just darwin-switch:*)"
+            "Bash(just deploy-remote:*)"
+            "Bash(just bootstrap-flash:*)"
+            "Bash(just gc:*)"
+            # Prints plaintext to the transcript, sidestepping the agenix Read denies.
+            "Bash(just decrypt:*)"
             "Bash(gh pr merge:*)"
           ];
           # Read rules cover the file tools only — Bash can still cat these. agenix
@@ -246,6 +256,7 @@
             "Read(//run/user/*/agenix/**)"
             "Read(~/.ssh/id_*)"
             "Read(~/.claude/.credentials.json)"
+            "Read(~/.claude-work/.credentials.json)"
             "Read(**/.env)"
           ];
         };

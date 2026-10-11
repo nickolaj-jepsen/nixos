@@ -1,7 +1,7 @@
 ---
 name: pr
 description: Create a pull request from the current branch.
-allowed-tools: Read, Grep, Glob, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(git checkout -b:*), Bash(git switch:*), Bash(git remote:*), Bash(git rev-parse:*), Bash(git show:*), Bash(gh pr *), Bash(git push:*)
+allowed-tools: Read, Grep, Glob, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(git checkout -b:*), Bash(git switch:*), Bash(git remote:*), Bash(git rev-parse:*), Bash(git show:*), Bash(gh pr *), Bash(git push -u origin HEAD)
 disable-model-invocation: true
 ---
 
@@ -20,4 +20,4 @@ If you're on the default branch, create a new branch first using `git checkout -
 If the branch hasn't been pushed yet, push it with `git push -u origin HEAD` first.
 If a PR already exists for this branch, inform the user instead of creating a duplicate.
 
-Before creating the PR, MAKE SURE to present you title and body to the user and ask for confirmation. If the user requests changes to the title or body, allow them to edit it before proceeding.
+Before creating the PR, MAKE SURE to present your title and body to the user and ask for confirmation. If the user requests changes to the title or body, allow them to edit it before proceeding.

@@ -1,7 +1,7 @@
 ---
 name: commit
 description: Create a git commit message and commit the changes.
-allowed-tools: Read, Edit, Grep, Glob, Bash(git commit:*), Bash(gh pr edit:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git branch:*), Bash(git checkout -b:*), Bash(git switch:*), Bash(git stash:*), Bash(git fetch:*), Bash(git rebase:*), Bash(git merge:*), Bash(git cherry-pick:*), Bash(git worktree:*), Bash(git reset:*), Bash(git show:*)
+allowed-tools: Read, Edit, Grep, Glob, Bash(git commit:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git restore --staged:*), Bash(git show:*)
 disable-model-invocation: true
 ---
 
@@ -18,4 +18,4 @@ When creating a commit message, follow these guidelines:
 
 When committing very large changes, try to break them down into smaller commits that each represent a single logical change. This makes it easier to review and understand the history of the project.
 
-Now, analyze the current git status and diff to generate an appropriate commit message following the above guidelines, and then stage the changes and create the commit. If there are any issues with the git status or diff (e.g. merge conflicts, unstaged changes), provide a clear explanation of the problem and how to resolve it instead of creating a commit.
+Now, analyze the current git status and diff to generate an appropriate commit message following the above guidelines, and then stage the changes and create the commit. If there are any issues with the git status or diff (e.g. merge conflicts, a rebase in progress), provide a clear explanation of the problem and how to resolve it instead of creating a commit.
