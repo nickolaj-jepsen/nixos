@@ -1,0 +1,87 @@
+# Gatekeeper for the fix agent's PRs: deterministic hard rules first, then a
+# separate read-only Claude review. Only when both approve is auto-merge enabled;
+# otherwise the PR is labeled `needs-review` and the owner is pinged.
+name: Update fix review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+concurrency:
+  group: update-fix-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'auto/fix-') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Hard rules
+        id: rules
+        run: python3 .github/scripts/update_bot.py fix-rules
+      - name: Review with Claude
+        id: claude
+        if: steps.rules.outputs.ok == 'true'
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            You review a PR (#${{ github.event.pull_request.number }}) written by an
+            automated fix agent for this NixOS flake's nightly update bot. You did not
+            write it. Inspect it with `git log origin/main..HEAD` and `git show`, and
+            read the held-back issue it references (`gh pr view`, `gh issue view`).
+
+            Approve only if ALL hold:
+            - it fixes exactly the failure described in the issue, nothing else;
+            - it is minimal and preserves behavior: no feature disabled or removed,
+              no option semantics changed, no workaround that hides the failure;
+            - it follows the surrounding code's conventions (read AGENTS.md).
+
+            Otherwise answer needs-review. When in doubt, needs-review: a human
+            reading it costs little, a silently merged bad change costs more.
+          claude_args: |
+            --max-turns 25
+            --allowedTools "Read,Glob,Grep,Bash(git log:*),Bash(git show:*),Bash(git diff:*),Bash(gh pr view:*),Bash(gh issue view:*)"
+            --json-schema '{"type":"object","properties":{"decision":{"type":"string","enum":["approve","needs-review"]},"reason":{"type":"string"}},"required":["decision","reason"]}'
+      - name: Enable auto-merge or ask for review
+        if: always() && steps.rules.outcome == 'success'
+        run: |
+          review=${REVIEW:-null}
+          decision=$(jq -r '.decision // "needs-review"' <<<"$review")
+          reason=$(jq -r '.reason // "The review agent did not return a decision."' <<<"$review")
+          if [ "$RULES_OK" != true ]; then
+            reason="Hard rules failed: $(jq -r 'join("; ")' <<<"$RULES_REASONS")"
+            decision=needs-review
+          fi
+          if [ "$decision" = approve ]; then
+            required=$(GH_TOKEN=$BOT_TOKEN gh api "repos/$GITHUB_REPOSITORY/rules/branches/main" \
+              --jq 'any(.[]; .type == "required_status_checks")')
+            [ "$required" = true ] || { echo "::error::main has no required status checks"; exit 1; }
+            gh pr comment "$PR" --body "**Review agent: approve.** Auto-merging once CI passes. $reason"
+            gh pr edit "$PR" --remove-label needs-review || true
+            GH_TOKEN=$BOT_TOKEN gh pr merge --auto --rebase "$PR"
+          else
+            gh pr edit "$PR" --add-label needs-review
+            GH_TOKEN=$BOT_TOKEN gh pr merge --disable-auto "$PR" || true
+            gh pr comment "$PR" --body "@$GITHUB_REPOSITORY_OWNER **needs review**, not auto-merging. $reason"
+          fi
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          RULES_OK: ${{ steps.rules.outputs.ok }}
+          RULES_REASONS: ${{ steps.rules.outputs.reasons }}
+          REVIEW: ${{ steps.claude.outputs.structured_output }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}

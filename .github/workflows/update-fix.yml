@@ -1,0 +1,90 @@
+# Claude triages an update that has been held back for days: it opens a fix PR
+# (auto/fix-*, reviewed by update-fix-review.yml), or labels the issue
+# `upstream` / `needs-human`. Dispatched by update_bot.py once per failure signature.
+name: Update fix agent
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Held-back issue number
+        required: true
+      unit:
+        description: Held-back unit (flake input name or overlays/<name>)
+        required: true
+
+concurrency:
+  group: update-fix-${{ inputs.unit }}
+  cancel-in-progress: true
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+    steps:
+      # No persisted credentials: the agent's shell must not see a push token.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Apply the held-back update
+        run: python3 .github/scripts/update_bot.py prepare-fix --unit "$UNIT"
+        env:
+          UNIT: ${{ inputs.unit }}
+          GH_TOKEN: ${{ github.token }}
+      - name: Run Claude
+        id: claude
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            You are the fix agent for this NixOS flake's nightly update bot. Read
+            AGENTS.md and docs/updates.md first.
+
+            Issue #${{ inputs.issue }} in ${{ github.repository }} describes an update
+            (`${{ inputs.unit }}`) that breaks the build and has been held back for
+            several nights. Read it with `gh issue view ${{ inputs.issue }}`. The
+            update itself is already applied as the last commit on this checkout
+            (unless the overlay updater is what fails); your job is what comes after it.
+
+            1. Reproduce: build or evaluate only the failing derivation, never a whole
+               host (e.g. `nix build .#nixosConfigurations.<host>.pkgs.<pkg>` or the
+               attribute path that leads to it). The runner has no private cache.
+            2. Decide the verdict:
+               - `fix-pr`: the cause is in this repo (renamed/removed option or package,
+                 overlay URL/asset/hash change, patch that no longer applies, updater
+                 script out of date). Make the smallest change that fixes it and verify
+                 it builds. Leave the change uncommitted in the working tree.
+               - `upstream`: the cause is in nixpkgs or the third-party flake and will
+                 be fixed there. Look for the upstream issue/PR (`gh search issues`,
+                 web) and cite it. Change nothing.
+               - `needs-human`: unclear, risky, or needs a decision. Explain. Change nothing.
+            3. Never: disable features (`enable = false`), add allowBroken/allowInsecure,
+               pin or re-pin a flake input, edit flake.lock, refactor, or edit .github/
+               (except .github/scripts/update_overlays.py when the updater itself fails;
+               such a PR always goes to human review).
+               Holding the update back is already the bot's job; a workaround pin is not a fix.
+
+            Return the verdict, a commit-style title for a fix-pr (`fix(<scope>): ...`),
+            and a short markdown summary of the cause, evidence and fix.
+          claude_args: |
+            --max-turns 60
+            --allowedTools "Read,Edit,Write,Glob,Grep,WebFetch,WebSearch,Bash(nix:*),Bash(nix-store:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(gh issue view:*),Bash(gh search:*),Bash(gh pr view:*),Bash(gh api:*),Bash(gh run view:*)"
+            --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["fix-pr","upstream","needs-human"]},"title":{"type":"string"},"summary":{"type":"string"}},"required":["verdict","summary"]}'
+      - name: Act on the verdict
+        if: always() && steps.claude.outcome != 'skipped'
+        run: python3 .github/scripts/update_bot.py finish-fix --issue "$ISSUE" --unit "$UNIT"
+        env:
+          ISSUE: ${{ inputs.issue }}
+          UNIT: ${{ inputs.unit }}
+          VERDICT: ${{ steps.claude.outputs.structured_output }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}

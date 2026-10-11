@@ -8,7 +8,6 @@
       enable = true;
       package = pkgs.unstable.gh;
       extensions = [
-        pkgs.gh-aw
         pkgs.unstable.gh-poi
         pkgs.unstable.gh-dash
         pkgs.unstable.gh-stack

@@ -1,0 +1,48 @@
+# One update PR per night: flake inputs + overlays on `auto/update`, automerged
+# once `CI gate` passes. Failures are handled by update-triage.yml; see docs/updates.md.
+#
+# Gated by repo settings: a ruleset on `main` requiring `CI gate` (fmt.yml),
+# "Allow auto-merge", and BOT_TOKEN (fine-grained PAT: contents, pull-requests,
+# issues write) — GITHUB_TOKEN pushes get no CI run, so without it the PR sits open.
+name: Update
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: update-bot
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          token: ${{ secrets.BOT_TOKEN }}
+      - uses: ./.github/actions/setup-nix
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Update flake inputs
+        run: nix flake update
+      - name: Update overlays
+        run: python3 .github/scripts/update_overlays.py --json "$RUNNER_TEMP/overlays.json"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Format
+        run: nix fmt
+      - name: Commit, push and refresh the PR
+        run: |
+          python3 .github/scripts/update_bot.py ensure-labels
+          python3 .github/scripts/update_bot.py nightly --overlays-json "$RUNNER_TEMP/overlays.json"
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}

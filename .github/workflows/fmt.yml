@@ -52,7 +52,7 @@ jobs:
       - name: Run nix flake check
         run: nix flake check
 
-  # --skip-cached: a host already in attic passes without pulling its closure onto the runner.
+  # --skip-cached (in ci-build.sh): a host already in attic passes without pulling its closure onto the runner.
   build:
     needs: [hosts, fmt]
     runs-on: ubuntu-latest
@@ -69,10 +69,7 @@ jobs:
           attic-cache: nixos
           attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Build ${{ matrix.host }}
-        run: |
-          nix run --inputs-from . nixpkgs#nix-fast-build -- \
-            --skip-cached --no-nom --no-link --eval-workers 1 \
-            --flake ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
+        run: .github/scripts/ci-build.sh ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
 
   # The darwin host can't build on Linux (aarch64-darwin), so it gets its own
   # macOS runner instead of a matrix slot. Free on a public repo; needs [fmt]
@@ -90,10 +87,7 @@ jobs:
           attic-cache: nixos
           attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Build macbook
-        run: |
-          nix run --inputs-from . nixpkgs#nix-fast-build -- \
-            --skip-cached --no-nom --no-link --eval-workers 1 \
-            --flake ".#darwinConfigurations.macbook.system"
+        run: .github/scripts/ci-build.sh ".#darwinConfigurations.macbook.system"
 
   # The required check on `main`: a stable name, unlike the matrix jobs. Skipped counts as failed.
   gate:

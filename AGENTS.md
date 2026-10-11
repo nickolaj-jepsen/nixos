@@ -42,6 +42,8 @@ must be `git add`ed or flake eval ignores them.
   (nixos/home/darwin), cross-platform app packaging, new-host/bootstrap.
 - `docs/secrets.md` — anything under `secrets/`: rekey stores, secret-write
   vs secret-edit, YubiKey needs.
+- `docs/updates.md` — the nightly update bot (`.github/`): one automerged PR,
+  hold-back of breaking updates, Claude fix agent + review gate.
 - `docs/homelab.md` — adding a homelab service: containers, shared
   postgres/mariadb, glance dashboard.
 - `docs/fireproof-options.md` — generated reference of all `fireproof.*`

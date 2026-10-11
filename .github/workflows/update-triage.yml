@@ -1,0 +1,61 @@
+# Keeps the nightly update PR mergeable: when CI fails on `auto/update`, finds
+# which updates caused it, holds those back and pushes the rest. When the PR
+# merges, clears held-back state for the updates that landed. See docs/updates.md.
+name: Update triage
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [auto/update]
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+concurrency:
+  group: update-bot
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.BOT_TOKEN }}
+      - uses: ./.github/actions/setup-nix
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Attribute failures and hold back the culprits
+        run: python3 .github/scripts/update_bot.py triage --run-id "${{ github.event.workflow_run.id }}"
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+  landed:
+    if: >-
+      github.event_name == 'pull_request' && github.event.pull_request.merged &&
+      github.event.pull_request.head.ref == 'auto/update' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Clear state for landed updates
+        run: python3 .github/scripts/update_bot.py landed --pr "${{ github.event.pull_request.number }}"
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}

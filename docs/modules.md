@@ -98,12 +98,11 @@ home-manager and the overlays):
 
 - **Script**: `modules/scripts/`, `pkgs.writeShellApplication`, include
   `set -euo pipefail`.
-- **Overlay**: `overlays/<name>.nix` (auto-imported). Add update instructions
-  in `.github/workflows/update-overlays.md` (a gh-aw file), then
-  `gh aw compile update-overlays`. The agent has no Nix; hashes come from
-  `.github/scripts/nix-hash.py` (`file` for fetchurl, `unpack` for
-  fetchFromGitHub, `sri` for a hex digest), so describe the URL to hash, not
-  a nix command.
+- **Overlay**: `overlays/<name>.nix` (auto-imported). If it pins a version
+  by hand, add an updater to `UPDATERS` in `.github/scripts/update_overlays.py`
+  (finds the latest release, prefetches the hash, rewrites the file; list the
+  files it touches) and try it with `just update-overlays <name>`. See
+  `docs/updates.md`.
 - **Agent skill**: skills for the coding agents flow through the
   `fireproof.agents.skills` registry (`attrsOf path`, merged across leaves).
   Own skills: repo-root `skills/<name>/SKILL.md` (auto-registered by
