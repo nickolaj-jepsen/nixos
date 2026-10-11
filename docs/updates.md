@@ -7,9 +7,10 @@ it is `.github/scripts/update_bot.py` driven by four workflows.
 
 1. **`update.yml`** (00:00 UTC) resets `auto/update` from `main`, runs
    `nix flake update` (input by input if that fails, holding back inputs that
-   can't be fetched) and `update_packages.py`, formats, and force-pushes one
-   commit. The single PR on that branch is created or refreshed, and auto-merge
-   (rebase) is enabled. `CI gate` is the only thing that has to pass.
+   can't be fetched), the cache gate (below) and `update_packages.py`, formats,
+   and force-pushes one commit. The single PR on that branch is created or
+   refreshed, and auto-merge (rebase) is enabled. `CI gate` is the only thing
+   that has to pass.
 2. **`update-triage.yml`** runs when CI fails on `auto/update`:
    - takes the root failed derivations from the failed jobs' logs (`Cannot
 build … builder failed`, plus `update-triage: timeout-inflight` markers that
@@ -40,9 +41,21 @@ A unit held back on consecutive nights escalates:
 | `script`  | 3 nights  | same (a package updater failed)              |
 | `timeout` | 7 nights  | issue labeled `needs-human` only; no agent   |
 | `fetch`   | 7 nights  | same (an input could not be fetched)         |
+| `cache`   | 7 nights  | same (the cache gate held the input back)    |
 
-Timeouts are almost always the CUDA cache lagging behind `nixpkgs-unstable`, so
-they aren't something code can fix.
+Timeouts mean something big wasn't in any cache, so they aren't something code
+can fix.
+
+## Cache gate
+
+`CACHE_GATED` in `update_bot.py` maps an input to a package and the binary
+cache that has to serve it: `nixpkgs-cuda` to `llama-cpp-cuda` on
+cache.nixos-cuda.org, which can trail `nixos-unstable` by a day. After
+updating, the bot evaluates the package; if the cache has no narinfo for it, the
+input goes back to `main`'s lock as a `cache` hold instead of CI compiling CUDA
+for 100 minutes. The hold clears itself the night the cache catches up. Seven
+nights in a row usually means the package no longer matches the cache's build
+(an override in `pkgs/llama-cpp-cuda`), which is what the issue is for.
 
 ## Fix agent (`update-fix.yml`)
 
@@ -84,6 +97,9 @@ Otherwise the PR gets `needs-review` and an @-mention.
 
 ## Local use
 
+- `just update [input]` runs `nix flake update` and then the cache gate
+  (`update_bot.py cache-gate`, against `HEAD`'s lock), so a local switch
+  doesn't compile CUDA either.
 - `just update-packages [name…]` runs the `pkgs/` updaters.
 - `GITHUB_TOKEN=$(gh auth token) GITHUB_REPOSITORY=nickolaj-jepsen/nixos
 python3 .github/scripts/update_bot.py triage --run-id <id> --dry-run`, run

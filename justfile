@@ -364,10 +364,11 @@ new-host hostname username:
     echo "Edit hosts/{{ hostname }}/host.nix to enable features via fireproof.*.enable — see modules/base/fireproof.nix."
     echo "Add \"{{ hostname }}\" to trustedHosts in modules/system/ssh.nix so the other hosts accept its SSH key."
 
-[doc("Update flake.lock")]
+[doc("Update flake.lock; cache-gated inputs (nixpkgs-cuda) stay put until their build is cached")]
 [group('maintenance')]
 update input='':
     {{ nixcmd }} flake update {{ input }}
+    python3 .github/scripts/update_bot.py cache-gate
 
 [doc("Bump the hand-pinned packages in pkgs/ (all, or the named ones)")]
 [group('maintenance')]

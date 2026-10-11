@@ -2,7 +2,9 @@
 """Nightly update bot: one PR per day, quarantine of breaking updates, escalation to Claude.
 
 Subcommands (see docs/updates.md for the flow):
-  flake-update --json PATH       nix flake update, falling back to per-input so one bad fetch can't block the rest
+  flake-update --json PATH       nix flake update, falling back to per-input so one bad fetch can't block the rest,
+                                 then the cache gate
+  cache-gate                     hold CACHE_GATED inputs at HEAD's lock until their build is cached (`just update`)
   nightly --packages-json P --flake-json P
                                  commit the current tree to auto/update and open/refresh its PR
   triage --run-id ID             attribute a failed CI run on auto/update to updated units and hold them back
@@ -29,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -43,11 +46,15 @@ STATE_LABEL = "update-status"
 HELD_LABEL = "update-held"
 VERDICT_LABELS = ["fix-pr", "upstream", "needs-human"]
 # Nights in a row a unit may be held back before an issue is opened.
-THRESHOLDS = {"build": 3, "eval": 3, "script": 3, "fetch": 7, "timeout": 7}
-# Failures before CI (an updater or fetch failing); tracked by `nightly`, not by `landed`.
-UPDATE_KINDS = {"script", "fetch"}
+THRESHOLDS = {"build": 3, "eval": 3, "script": 3, "fetch": 7, "timeout": 7, "cache": 7}
+# Failures before CI (an updater, a fetch or the cache gate); tracked by `nightly`, not by `landed`.
+UPDATE_KINDS = {"script", "fetch", "cache"}
 # Missing caches and unreachable upstreams aren't fixable in code, so no fix agent.
-UNFIXABLE_KINDS = {"timeout", "fetch"}
+UNFIXABLE_KINDS = {"timeout", "fetch", "cache"}
+# Input -> (attr, cache): the input only advances once the cache can serve attr, so CI never compiles it.
+CACHE_GATED = {
+    "nixpkgs-cuda": ("packages.x86_64-linux.llama-cpp-cuda", "https://cache.nixos-cuda.org"),
+}
 MAX_TRIAGE_PASSES = 3
 META_RE = re.compile(r"<!-- update-bot\n(.*?)\n-->", re.S)
 
@@ -387,11 +394,48 @@ def enable_automerge(pr: int) -> None:
     gh("pr", "merge", "--auto", "--rebase", str(pr), bot=True)
 
 
+# --- cache gate --------------------------------------------------------------
+
+
+def cache_miss(attr: str, cache: str) -> str | None:
+    """Why `cache` can't serve `attr`'s output yet; None if it can or `attr` fails to evaluate (CI triage owns that)."""
+    try:
+        out = run("nix", "eval", "--raw", f".#{attr}.outPath")
+    except RuntimeError as e:
+        print(f"{attr} doesn't evaluate; leaving it to CI:\n{e}")
+        return None
+    url = f"{cache}/{Path(out).name.split('-', 1)[0]}.narinfo"
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, method="HEAD"), timeout=60).close()
+    except OSError as e:
+        return f"{cache} can't serve {out} yet ({e})"
+    return None
+
+
+def gate_cached_inputs(base_ref: str) -> dict[str, str]:
+    """Revert each CACHE_GATED input that moved since `base_ref` to its locked rev there unless its build
+    is cached; return {input: reason} for the reverted ones."""
+    base, held = read_lock(base_ref), {}
+    for name, (attr, cache) in CACHE_GATED.items():
+        cand = read_lock(None)
+        ref, bref = root_inputs(cand).get(name), root_inputs(base).get(name)
+        if not (isinstance(ref, str) and isinstance(bref, str)) or (
+            cand["nodes"][ref].get("locked") == base["nodes"][bref].get("locked")
+        ):
+            continue
+        if reason := cache_miss(attr, cache):
+            write_lock(graft_input(cand, base, name), ROOT)
+            held[name] = reason
+            print(f"{name}: held at {describe_locked(base['nodes'][bref])}: {reason}")
+    return held
+
+
 # --- nightly -----------------------------------------------------------------
 
 
 def cmd_flake_update(args) -> None:
-    """Update all inputs; if that fails, update them one by one and record the ones that fail."""
+    """Update all inputs; if that fails, update them one by one. Record the inputs that fail to update
+    or that the cache gate holds back as {input: [kind, error]}."""
     failures = {}
     p = subprocess.run(["nix", "flake", "update"], cwd=ROOT, capture_output=True, text=True)
     if p.returncode != 0:
@@ -403,18 +447,19 @@ def cmd_flake_update(args) -> None:
                 continue
             q = subprocess.run(["nix", "flake", "update", name], cwd=ROOT, capture_output=True, text=True)
             if q.returncode != 0:
-                failures[name] = "\n".join(q.stderr.strip().splitlines()[-20:])
-                print(f"{name}: FAILED\n{failures[name]}")
+                failures[name] = ["fetch", "\n".join(q.stderr.strip().splitlines()[-20:])]
+                print(f"{name}: FAILED\n{failures[name][1]}")
+    failures |= {name: ["cache", reason] for name, reason in gate_cached_inputs("HEAD").items()}
     args.json.write_text(json.dumps(failures, indent=2) + "\n")
 
 
 def cmd_nightly(args) -> None:
     packages = json.loads(args.packages_json.read_text())
-    fetch_failures = json.loads(args.flake_json.read_text())
+    flake_failures = json.loads(args.flake_json.read_text())
     number, state = load_state()
 
     errors = {package_unit(n): ("script", r["error"]) for n, r in packages.items() if r["status"] == "failed"}
-    errors |= {name: ("fetch", error) for name, error in fetch_failures.items()}
+    errors |= {name: (kind, error) for name, (kind, error) in flake_failures.items()}
     for unit, (kind, error) in errors.items():
         summary = error.strip().splitlines()[-1].strip()[:200] if error.strip() else kind
         hold(state, unit, kind, summary, hashlib.sha1(f"{kind}|{summary}".encode()).hexdigest()[:12])
@@ -879,6 +924,7 @@ def main() -> None:
     s.add_argument("--unit", required=True)
     sub.add_parser("fix-rules")
     sub.add_parser("ensure-labels")
+    sub.add_parser("cache-gate")
     args = p.parse_args()
     {
         "flake-update": cmd_flake_update,
@@ -889,6 +935,7 @@ def main() -> None:
         "finish-fix": cmd_finish_fix,
         "fix-rules": cmd_fix_rules,
         "ensure-labels": lambda _a: ensure_labels(),
+        "cache-gate": lambda _a: gate_cached_inputs("HEAD"),
     }[args.cmd](args)
 
 

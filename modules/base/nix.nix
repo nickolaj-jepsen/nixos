@@ -7,7 +7,7 @@
   # Binary caches + their keys, shared by the nixos `nix.settings` path and the
   # darwin path (which writes them into Determinate's /etc/nix/nix.custom.conf).
   mkCaches = config: let
-    # Only llm.nix's CUDA llama-cpp is served from there.
+    # Only pkgs/llama-cpp-cuda is served from there.
     cuda = config.fireproof.dev.llm.enable;
   in {
     substituters =

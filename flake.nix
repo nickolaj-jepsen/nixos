@@ -29,6 +29,8 @@
     # nixos-* only advances once Hydra has built + tested it; release-* is the raw dev branch.
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    # Only for pkgs/llama-cpp-cuda; the update bot holds it back until cache.nixos-cuda.org has that build.
+    nixpkgs-cuda.url = "github:nixos/nixpkgs/nixos-unstable";
 
     nix-index-database.url = "github:nix-community/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";

@@ -16,9 +16,6 @@
     models = (import ./_llm-models.nix).${toString cfg.vramGiB};
     modelDir = "${config.home.homeDirectory}/models";
     filePath = f: "${modelDir}/${f.file}";
-    # Stock build so it substitutes from cache.nixos-cuda.org; any change here (capabilities, src pin) means a local CUDA compile.
-    llama-cpp = pkgs.unstable.llama-cpp.override {cudaSupport = true;};
-
     # --parallel defaults to auto in b10612+ and multiplies the KV/recurrent-state
     # caches per slot — without pinning it to 1 the MTP config OOMs on load.
     #
@@ -31,7 +28,7 @@
     # ${PORT} is llama-swap's macro, not Nix's.
     serverCmd = m:
       lib.concatStringsSep "\n" ([
-          "${llama-cpp}/bin/llama-server"
+          "${pkgs.llama-cpp-cuda}/bin/llama-server"
           "--model ${filePath m.weights}"
           "--host 127.0.0.1"
           "--port \${PORT}"
@@ -87,7 +84,7 @@
     config = lib.mkIf (cfg.enable && pkgs.stdenv.isLinux) {
       home.packages = [
         # Pulled in by the service anyway; also gives llama-bench for retuning.
-        llama-cpp
+        pkgs.llama-cpp-cuda
         llm-fetch
       ];
 
