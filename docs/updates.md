@@ -6,7 +6,8 @@ it is `.github/scripts/update_bot.py` driven by four workflows.
 ## Flow
 
 1. **`update.yml`** (00:00 UTC) resets `auto/update` from `main`, runs
-   `nix flake update` and `update_overlays.py`, formats, and force-pushes one
+   `nix flake update` (input by input if that fails, holding back inputs that
+   can't be fetched) and `update_overlays.py`, formats, and force-pushes one
    commit. The single PR on that branch is created or refreshed, and auto-merge
    (rebase) is enabled. `CI gate` is the only thing that has to pass.
 2. **`update-triage.yml`** runs when CI fails on `auto/update`:
@@ -38,6 +39,7 @@ A unit held back on consecutive nights escalates:
 | `eval`    | 3 nights  | same                                         |
 | `script`  | 3 nights  | same (an overlay updater failed)             |
 | `timeout` | 7 nights  | issue labeled `needs-human` only; no agent   |
+| `fetch`   | 7 nights  | same (an input could not be fetched)         |
 
 Timeouts are almost always the CUDA cache lagging behind `nixpkgs-unstable`, so
 they aren't something code can fix.
