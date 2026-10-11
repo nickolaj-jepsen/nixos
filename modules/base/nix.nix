@@ -118,7 +118,7 @@ in {
         extra-substituters = caches.substituters;
         extra-trusted-substituters = caches.substituters;
         extra-trusted-public-keys = caches.trusted-public-keys;
-        extra-trusted-users = ["@admin" config.fireproof.username];
+        extra-trusted-users = [config.fireproof.username];
       }
       // tuning;
   in {
