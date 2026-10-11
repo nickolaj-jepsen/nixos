@@ -136,8 +136,11 @@
       };
     };
 
-    # Touch ID (and Apple Watch) for sudo; add `.reattach = true` to also work under tmux.
-    security.pam.services.sudo_local.touchIdAuth = true;
+    # Touch ID (and Apple Watch) for sudo; reattach makes it work inside tmux/zellij too.
+    security.pam.services.sudo_local = {
+      touchIdAuth = true;
+      reattach = true;
+    };
 
     # screencapture.location won't create its target; macOS silently falls back to
     # the Desktop when the dir is missing.
