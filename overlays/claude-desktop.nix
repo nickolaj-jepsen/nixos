@@ -53,6 +53,7 @@ _: {
           nspr
           nss
           pango
+          pipewire # claude-native-binding.node
           systemdLibs # libudev
         ];
 
