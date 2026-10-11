@@ -12,18 +12,19 @@
       arguments = ["--stdin-filepath" "{buffer_path}"];
     };
   in {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux) {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.zed-editor = {
         userSettings = {
           # General
-          auto_update = false; # Managed by Nix
+          # nixpkgs pins the Linux build; the darwin cask updates itself (brew upgrade skips it).
+          auto_update = pkgs.stdenv.isDarwin;
           telemetry = {
             diagnostics = false;
             metrics = false;
           };
           restore_on_startup = "last_session";
           proxy = "";
-          window_decorations = "client";
+          window_decorations = lib.mkIf pkgs.stdenv.isLinux "client";
           use_system_window_tabs = false;
           bottom_dock_layout = "contained";
 

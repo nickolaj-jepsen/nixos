@@ -2,14 +2,13 @@
   flake.modules.homeManager.zed-theme = {
     config,
     lib,
-    pkgs,
     ...
   }: let
     c = config.fireproof.theme.colors;
     hex = name: "#${c.${name}}";
     hexA = name: alpha: "#${c.${name}}${alpha}";
   in {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux) {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.zed-editor = {
         userSettings.theme = "Flexoki Fireproof";
 

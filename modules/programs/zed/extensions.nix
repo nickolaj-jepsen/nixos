@@ -1,6 +1,6 @@
-# Zed editor. On darwin a Homebrew cask (HM-managed settings/extensions/theme are
-# Linux-only — the HM module pins the nixpkgs build); Linux uses the nixpkgs build.
-{
+# Zed editor. On darwin the binary is a Homebrew cask and HM manages config only;
+# Linux uses the nixpkgs build.
+{fpLib, ...}: {
   flake.modules.darwin.zed-editor = {
     config,
     lib,
@@ -16,11 +16,28 @@
     lib,
     pkgs,
     ...
-  }: {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux) {
+  }: let
+    languageServers = with pkgs; [
+      # Nix
+      nil
+
+      # Python
+      ruff
+      pyrefly
+
+      # JS / TS / JSON / CSS / HTML
+      typescript-language-server
+      oxfmt
+      vscode-langservers-extracted
+
+      # YAML
+      yaml-language-server
+    ];
+  in {
+    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.zed-editor = {
         enable = true;
-        package = pkgs.unstable.zed-editor;
+        package = fpLib.mkDarwinGuiPackage pkgs pkgs.unstable.zed-editor;
         installRemoteServer = true;
 
         extensions = [
@@ -49,23 +66,12 @@
           "mcp-server-linear"
         ];
 
-        extraPackages = with pkgs; [
-          # Nix
-          nil
-
-          # Python
-          ruff
-          pyrefly
-
-          # JS / TS / JSON / CSS / HTML
-          typescript-language-server
-          oxfmt
-          vscode-langservers-extracted
-
-          # YAML
-          yaml-language-server
-        ];
+        extraPackages = lib.optionals pkgs.stdenv.isLinux languageServers;
       };
+
+      # extraPackages wraps the nixpkgs build; the cask can't be wrapped, but Zed
+      # loads the login shell's PATH on macOS.
+      home.packages = lib.optionals pkgs.stdenv.isDarwin languageServers;
     };
   };
 }
