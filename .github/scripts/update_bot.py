@@ -417,7 +417,7 @@ def cmd_nightly(args) -> None:
     errors = {overlay_unit(n): ("script", r["error"]) for n, r in overlays.items() if r["status"] == "failed"}
     errors |= {name: ("fetch", error) for name, error in fetch_failures.items()}
     for unit, (kind, error) in errors.items():
-        summary = error.strip().splitlines()[-1][:200] if error.strip() else kind
+        summary = error.strip().splitlines()[-1].strip()[:200] if error.strip() else kind
         hold(state, unit, kind, summary, hashlib.sha1(f"{kind}|{summary}".encode()).hexdigest()[:12])
         escalate(state, unit, f"```\n{error[-6000:]}\n```")
     for unit, e in list(state["units"].items()):
@@ -497,10 +497,16 @@ class Failure:
     drv: str | None = None
     excerpt: str = ""
     units: set[str] = field(default_factory=set)
+    # Units whose revert only re-hashes the failed drv (same name): it merely depends on them.
+    weak: set[str] = field(default_factory=set)
 
     @property
     def name(self) -> str:
-        return re.sub(r"^/nix/store/[a-z0-9]{32}-|\.drv$", "", self.drv) if self.drv else self.job
+        return drv_name(self.drv) if self.drv else self.job
+
+
+def drv_name(path: str) -> str:
+    return re.sub(r"^/nix/store/[a-z0-9]{32}-|\.drv$", "", path)
 
 
 def clean_log(raw: str) -> list[str]:
@@ -572,6 +578,9 @@ def attribute(failures: list[Failure], units: list[str], base_ref: str) -> None:
             run("git", "worktree", "remove", "--force", str(tree), check=False)
             shutil.rmtree(tmp, ignore_errors=True)
 
+    # A unit is a direct cause when reverting it removes the failed package by name (other
+    # version or gone); a unit that only re-hashes it (e.g. nixpkgs under an overlay) is blamed
+    # only when no direct cause exists.
     with ThreadPoolExecutor(max_workers=2) as pool:
         for unit, variant in pool.map(try_unit, units):
             for f in failures:
@@ -579,9 +588,12 @@ def attribute(failures: list[Failure], units: list[str], base_ref: str) -> None:
                     if f.drv:
                         in_cand = cand[a][0] is not None and f.drv in cand[a][0]
                         if in_cand and variant[a] is not None and f.drv not in variant[a]:
-                            f.units.add(unit)
+                            names = {drv_name(p) for p in variant[a] if p.endswith(".drv")}
+                            (f.weak if f.name in names else f.units).add(unit)
                     elif cand[a][0] is None and variant[a] is not None:
                         f.units.add(unit)
+    for f in failures:
+        f.units = f.units or f.weak
 
 
 def cmd_triage(args) -> None:
