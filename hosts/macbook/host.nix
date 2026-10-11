@@ -24,5 +24,10 @@
   };
 
   darwin.system.stateVersion = 7;
-  homeManager.home.stateVersion = "24.11";
+  homeManager = {
+    home.stateVersion = "24.11";
+    # Real app copies Spotlight indexes (vscode); the default only from stateVersion 25.11.
+    targets.darwin.copyApps.enable = true;
+    targets.darwin.linkApps.enable = false;
+  };
 }

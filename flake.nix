@@ -54,14 +54,6 @@
       flake = false;
     };
 
-    # Trampolines so nix-built .app bundles (vscode) show up in Spotlight/Dock.
-    mac-app-util.url = "github:hraban/mac-app-util";
-    mac-app-util.inputs.nixpkgs.follows = "nixpkgs";
-    mac-app-util.inputs.treefmt-nix.follows = "treefmt-nix";
-    mac-app-util.inputs.cl-nix-lite.inputs.nixpkgs.follows = "nixpkgs";
-    mac-app-util.inputs.cl-nix-lite.inputs.flake-parts.follows = "flake-parts";
-    mac-app-util.inputs.cl-nix-lite.inputs.treefmt-nix.follows = "treefmt-nix";
-
     # Plain git: gitlab: resolves the branch through GitLab's API, which sits behind a Cloudflare challenge since 2026-10-11.
     firefox-addons.url = "git+https://gitlab.com/rycee/nur-expressions.git?shallow=1&dir=pkgs/firefox-addons";
     firefox-addons.inputs.nixpkgs.follows = "nixpkgs";
