@@ -21,6 +21,8 @@
       # Casks come from the program leaves' flake.modules.darwin.<app> halves.
       # Prune undeclared brew packages (without zapping data); review before first switch.
       onActivation.cleanup = "uninstall";
+      # Move casks to the pinned tap's version; brew still skips self-updating ones.
+      onActivation.upgrade = true;
     };
   };
 }
