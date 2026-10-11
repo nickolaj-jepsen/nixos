@@ -29,10 +29,6 @@
     download-buffer-size = 524288000;
     max-substitution-jobs = 32;
 
-    # Free store mid-build before ENOSPC, independent of gc.nix age-based GC.
-    min-free = 3221225472;
-    max-free = 8589934592;
-
     # Global only (Nix has no per-substituter retry); default 5 spams warnings when attic is down.
     download-attempts = 3;
   };
@@ -41,6 +37,11 @@
     mkCaches config
     // tuning
     // {
+      # Free store mid-build before ENOSPC, independent of gc.nix age-based GC.
+      # NixOS-only: on darwin Determinate's collector already owns free space.
+      min-free = 3221225472;
+      max-free = 8589934592;
+
       # Trusted = passwordless root-equivalent, so the one deploy user, not all of @wheel.
       trusted-users = [
         "root"

@@ -18,19 +18,32 @@
     };
   };
 
-  # nix-darwin: same GC + optimise (no boot.loader; launchd default interval).
-  # Inert under Determinate Nix (nix.enable = false), which runs its own GC.
+  # darwin: Determinate Nix collects garbage itself (nix.nix), but generations stay
+  # GC roots until expired, so expire them here and leave the collecting to it.
   flake.modules.darwin.gc = {
-    config,
-    lib,
-    ...
-  }:
-    lib.mkIf config.nix.enable {
-      nix.gc = {
-        automatic = true;
-        options = "--delete-older-than 7d";
-      };
-
-      nix.optimise.automatic = true;
+    launchd.daemons.expire-system-generations = {
+      # Determinate's nix-env, matching its daemon; launchd's PATH has no nix.
+      script = "/nix/var/nix/profiles/default/bin/nix-env -p /nix/var/nix/profiles/system --delete-generations 7d";
+      serviceConfig.StartCalendarInterval = [
+        {
+          Weekday = 7;
+          Hour = 3;
+          Minute = 15;
+        }
+      ];
     };
+  };
+
+  flake.modules.homeManager.gc = {
+    lib,
+    pkgs,
+    ...
+  }: {
+    # HM picks its profile dir at activation, so let its own expirer find it.
+    services.home-manager.autoExpire = lib.mkIf pkgs.stdenv.isDarwin {
+      enable = true;
+      timestamp = "-7 days";
+      frequency = "weekly";
+    };
+  };
 }
