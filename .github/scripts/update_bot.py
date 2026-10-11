@@ -2,7 +2,9 @@
 """Nightly update bot: one PR per day, quarantine of breaking updates, escalation to Claude.
 
 Subcommands (see docs/updates.md for the flow):
-  nightly --overlays-json PATH   commit the current tree to auto/update and open/refresh its PR
+  flake-update --json PATH       nix flake update, falling back to per-input so one bad fetch can't block the rest
+  nightly --overlays-json P --flake-json P
+                                 commit the current tree to auto/update and open/refresh its PR
   triage --run-id ID             attribute a failed CI run on auto/update to updated units and hold them back
   landed --pr N                  clear held-back state for units that landed with a merged update PR
   prepare-fix --unit U           bump one unit on the current branch so the fix agent works on the new version
@@ -41,7 +43,11 @@ STATE_LABEL = "update-status"
 HELD_LABEL = "update-held"
 VERDICT_LABELS = ["fix-pr", "upstream", "needs-human"]
 # Nights in a row a unit may be held back before an issue is opened.
-THRESHOLDS = {"build": 3, "eval": 3, "script": 3, "timeout": 7}
+THRESHOLDS = {"build": 3, "eval": 3, "script": 3, "fetch": 7, "timeout": 7}
+# Failures before CI (an updater or fetch failing); tracked by `nightly`, not by `landed`.
+UPDATE_KINDS = {"script", "fetch"}
+# Missing caches and unreachable upstreams aren't fixable in code, so no fix agent.
+UNFIXABLE_KINDS = {"timeout", "fetch"}
 MAX_TRIAGE_PASSES = 3
 META_RE = re.compile(r"<!-- update-bot\n(.*?)\n-->", re.S)
 
@@ -292,13 +298,9 @@ def escalate(state: dict, unit: str, details: str) -> None:
     e = state["units"][unit]
     if len(e["nights"]) < THRESHOLDS[e["kind"]]:
         return
-    fixable = e["kind"] != "timeout"
+    fixable = e["kind"] not in UNFIXABLE_KINDS
     if not e.get("issue"):
-        ping = (
-            ""
-            if fixable
-            else f"\n\n@{owner()} this needs a human: a missing binary cache isn't fixable in code."
-        )
+        ping = "" if fixable else f"\n\n@{owner()} this needs a human; the fix agent can't help here."
         body = (
             f"`{unit}` has been held back from the nightly update for {len(e['nights'])} nights "
             f"(since {e['nights'][0]}).\n\n**Reason:** {e['kind']}: {e['summary']}\n\n{details}{ping}\n\n"
@@ -346,8 +348,10 @@ def render_commit(meta: dict) -> str:
         lines += ["Updated:"] + [f"- {u}: {v['old']} -> {v['new']}" for u, v in sorted(meta["units"].items())]
     if meta["held"]:
         lines += ["", "Held back:"] + [f"- {u}: {k}" for u, k in sorted(meta["held"].items())]
-    if meta["script_failures"]:
-        lines += ["", "Overlay updater failed:"] + [f"- {u}" for u in sorted(meta["script_failures"])]
+    if meta["update_failures"]:
+        lines += ["", "Failed to update:"] + [
+            f"- {u}: {k}" for u, k in sorted(meta["update_failures"].items())
+        ]
     return "\n".join(lines) + "\n"
 
 
@@ -356,11 +360,9 @@ def render_pr_body(meta: dict, state: dict) -> str:
     if meta["units"]:
         lines += ["| Updated | From | To |", "| --- | --- | --- |"]
         lines += [f"| `{u}` | {v['old']} | {v['new']} |" for u, v in sorted(meta["units"].items())]
-    if meta["held"] or meta["script_failures"]:
+    if meta["held"] or meta["update_failures"]:
         lines += ["", "**Held back** (retried tomorrow):", ""]
-        for u, k in sorted(
-            {**meta["held"], **{f"overlays/{n}": "script" for n in meta["script_failures"]}}.items()
-        ):
+        for u, k in sorted({**meta["held"], **meta["update_failures"]}.items()):
             e = state["units"].get(u, {})
             n = len(e.get("nights", [])) or 1
             issue = f", #{e['issue']}" if e.get("issue") else ""
@@ -389,25 +391,45 @@ def enable_automerge(pr: int) -> None:
 # --- nightly -----------------------------------------------------------------
 
 
+def cmd_flake_update(args) -> None:
+    """Update all inputs; if that fails, update them one by one and record the ones that fail."""
+    failures = {}
+    p = subprocess.run(["nix", "flake", "update"], cwd=ROOT, capture_output=True, text=True)
+    if p.returncode != 0:
+        print(f"nix flake update failed, retrying input by input:\n{p.stderr}")
+        run("git", "checkout", "--", "flake.lock")
+        lock = read_lock(None)
+        for name, ref in sorted(root_inputs(lock).items()):
+            if not isinstance(ref, str) or lock["nodes"][ref].get("locked", {}).get("type") == "path":
+                continue
+            q = subprocess.run(["nix", "flake", "update", name], cwd=ROOT, capture_output=True, text=True)
+            if q.returncode != 0:
+                failures[name] = "\n".join(q.stderr.strip().splitlines()[-20:])
+                print(f"{name}: FAILED\n{failures[name]}")
+    args.json.write_text(json.dumps(failures, indent=2) + "\n")
+
+
 def cmd_nightly(args) -> None:
     overlays = json.loads(args.overlays_json.read_text())
+    fetch_failures = json.loads(args.flake_json.read_text())
     number, state = load_state()
 
-    script_failures = {n: r["error"] for n, r in overlays.items() if r["status"] == "failed"}
-    for name, error in script_failures.items():
-        hold(state, overlay_unit(name), "script", error[:200], hashlib.sha1(error.encode()).hexdigest()[:12])
-        escalate(state, overlay_unit(name), f"```\n{error}\n```")
-    for name, r in overlays.items():
-        unit = overlay_unit(name)
-        if r["status"] != "failed" and state["units"].get(unit, {}).get("kind") == "script":
-            clear(state, unit, "The overlay updater works again.")
+    errors = {overlay_unit(n): ("script", r["error"]) for n, r in overlays.items() if r["status"] == "failed"}
+    errors |= {name: ("fetch", error) for name, error in fetch_failures.items()}
+    for unit, (kind, error) in errors.items():
+        summary = error.strip().splitlines()[-1][:200] if error.strip() else kind
+        hold(state, unit, kind, summary, hashlib.sha1(f"{kind}|{summary}".encode()).hexdigest()[:12])
+        escalate(state, unit, f"```\n{error[-6000:]}\n```")
+    for unit, e in list(state["units"].items()):
+        if e["kind"] in UPDATE_KINDS and unit not in errors:
+            clear(state, unit, "It updates again.")
 
     units = changed_units("origin/main", overlay_versions=overlays)
     meta = {
         "date": today(),
         "units": units,
         "held": {},
-        "script_failures": sorted(script_failures),
+        "update_failures": {u: k for u, (k, _e) in errors.items()},
         "passes": 0,
     }
     save_state(number, state)
@@ -672,7 +694,7 @@ def cmd_landed(args) -> None:
     if number is None:
         return
     for unit, e in list(state["units"].items()):
-        if e["kind"] != "script" and unit not in meta.get("held", {}):
+        if e["kind"] not in UPDATE_KINDS and unit not in meta.get("held", {}):
             clear(state, unit, f"Landed in #{args.pr}.")
     save_state(number, state)
 
@@ -818,8 +840,11 @@ def cmd_fix_rules(args) -> None:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("flake-update")
+    s.add_argument("--json", type=Path, required=True)
     s = sub.add_parser("nightly")
     s.add_argument("--overlays-json", type=Path, required=True)
+    s.add_argument("--flake-json", type=Path, required=True)
     s = sub.add_parser("triage")
     s.add_argument("--run-id", type=int, required=True)
     s.add_argument("--dry-run", action="store_true", help="attribute only; no pushes or GitHub writes")
@@ -834,6 +859,7 @@ def main() -> None:
     sub.add_parser("ensure-labels")
     args = p.parse_args()
     {
+        "flake-update": cmd_flake_update,
         "nightly": cmd_nightly,
         "triage": cmd_triage,
         "landed": cmd_landed,

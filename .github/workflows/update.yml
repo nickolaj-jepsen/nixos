@@ -32,7 +32,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
       - name: Update flake inputs
-        run: nix flake update
+        run: python3 .github/scripts/update_bot.py flake-update --json "$RUNNER_TEMP/flake.json"
+        env:
+          # Authenticated GitHub API calls: avoids the anonymous rate limit when fetching inputs.
+          NIX_CONFIG: access-tokens = github.com=${{ github.token }}
       - name: Update overlays
         run: python3 .github/scripts/update_overlays.py --json "$RUNNER_TEMP/overlays.json"
         env:
@@ -42,7 +45,8 @@ jobs:
       - name: Commit, push and refresh the PR
         run: |
           python3 .github/scripts/update_bot.py ensure-labels
-          python3 .github/scripts/update_bot.py nightly --overlays-json "$RUNNER_TEMP/overlays.json"
+          python3 .github/scripts/update_bot.py nightly \
+            --overlays-json "$RUNNER_TEMP/overlays.json" --flake-json "$RUNNER_TEMP/flake.json"
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
