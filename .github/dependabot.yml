@@ -1,0 +1,16 @@
+# Keeps the SHA-pinned actions current; flake inputs and pkgs/ are the update bot's job (docs/updates.md).
+# Dependabot PRs get Dependabot secrets, not Actions secrets: HOMELAB_DOMAIN and ATTIC_TOKEN must exist
+# there too, or the build jobs run without attic.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/setup-nix
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore(ci)

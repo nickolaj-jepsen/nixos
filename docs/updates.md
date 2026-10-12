@@ -86,6 +86,13 @@ Auto-merge is enabled on an `auto/fix-*` PR only if both checks pass:
 
 Otherwise the PR gets `needs-review` and an @-mention.
 
+## GitHub Actions pins
+
+Actions are pinned by SHA with the tag in a comment. `.github/dependabot.yml`
+opens one grouped PR a week to bump them (not automerged). Dependabot PRs only
+see Dependabot secrets, so `HOMELAB_DOMAIN` and `ATTIC_TOKEN` have to be added
+there as well, or the build jobs run without attic and likely time out.
+
 ## Tokens and notifications
 
 - `BOT_TOKEN` (fine-grained PAT; contents, pull-requests, issues write) pushes
