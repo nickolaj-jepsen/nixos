@@ -48,6 +48,38 @@ factor hostname=`hostname -s` target='':
     fi
     install -m644 "$report" "hosts/{{ hostname }}/facter.json"
 
+[doc('Evaluate a host (any class) without building it; prints its drvPath in seconds')]
+[group('tools')]
+eval hostname=`hostname -s`:
+    @{{ nixcmd }} eval --raw .#hostDrvPaths.{{ hostname }} && echo
+
+[doc('Prove a refactor changes nothing: compare every host drvPath with a git ref')]
+[group('tools')]
+same-drvs ref='HEAD':
+    #!/usr/bin/env -S bash -euo pipefail
+    # Both sides as plain path: flakes (tracked files only), so only content can differ.
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    mkdir "$tmp/base" "$tmp/work"
+    git archive {{ ref }} | tar -x -C "$tmp/base"
+    git ls-files -z | tar --null -T - -c | tar -x -C "$tmp/work"
+    # Spelled out rather than .#hostDrvPaths, so it works against refs from before that output.
+    drvs() {
+        local f="path:$1"
+        {
+            {{ nixcmd }} eval --json "$f#nixosConfigurations" --apply 'cs: builtins.mapAttrs (_: c: c.config.system.build.toplevel.drvPath) (removeAttrs cs (builtins.filter (n: builtins.substring 0 9 n == "bootstrap") (builtins.attrNames cs)))'
+            {{ nixcmd }} eval --json "$f#darwinConfigurations" --apply 'builtins.mapAttrs (_: c: c.system.drvPath)'
+            {{ nixcmd }} eval --json "$f#homeConfigurations" --apply 'builtins.mapAttrs (_: c: c.activationPackage.drvPath)'
+        } | jq -S -s add
+    }
+    drvs "$tmp/base" > "$tmp/base.json"
+    drvs "$tmp/work" > "$tmp/work.json"
+    if diff -u "$tmp/base.json" "$tmp/work.json"; then
+        echo "All hosts evaluate to the same derivations as {{ ref }}."
+    else
+        exit 1
+    fi
+
 [doc('Wrapper for nixos-rebuild switch')]
 [group("deploy")]
 switch hostname=`hostname -s` target='' *ARGS="":

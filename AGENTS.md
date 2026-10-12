@@ -10,6 +10,8 @@ All operations use `just`; run `just` for the full list.
 ```bash
 just switch [host]       # Rebuild + switch (NEEDS EXPLICIT USER APPROVAL, same for `just boot`)
 just test                # Apply temporarily (reverts on reboot)
+just eval [host]         # drvPath only (any class, ~30s): the first check after an edit
+just same-drvs [ref]     # Every host's drvPath vs a git ref: proves a refactor is a no-op
 just build-system        # Build without switching — use this to verify builds
 just diff                # Preview changes vs current system
 just fmt                 # Format all files (ALWAYS run before finishing)
