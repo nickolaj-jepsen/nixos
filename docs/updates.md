@@ -92,6 +92,8 @@ Actions are pinned by SHA with the tag in a comment. `.github/dependabot.yml`
 opens one grouped PR a week to bump them (not automerged). Dependabot PRs only
 see Dependabot secrets, so `HOMELAB_DOMAIN` and `ATTIC_TOKEN` have to be added
 there as well, or the build jobs run without attic and likely time out.
+The Determinate Nix version CI installs is pinned separately (`source-tag` in
+`.github/actions/setup-nix/action.yml`); bump that one by hand.
 
 ## Tokens and notifications
 

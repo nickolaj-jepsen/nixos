@@ -21,6 +21,9 @@ runs:
     - name: Install Nix
       uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       with:
+        # The action installs the newest Determinate Nix unless told otherwise, so a Nix release could
+        # break the nightly with nothing in flake.lock for triage to blame. Bump by hand (Dependabot can't).
+        source-tag: v3.23.1
         # IFD breaks cross-platform eval (darwin from Linux).
         extra-conf: |
           allow-import-from-derivation = false
