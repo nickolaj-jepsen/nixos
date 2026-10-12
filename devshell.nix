@@ -12,7 +12,7 @@
         alejandra # Nix formatter
         nix-diff # Compare derivations
         nix-tree # Visualize dependencies
-        nvd # Nix version diff
+        dix # Closure version diff (`just diff`), much faster than nvd
         nix-output-monitor # Pretty `nix build` output for `just build`
         nurl # Generate Nix fetcher calls from URLs
 

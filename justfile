@@ -156,10 +156,10 @@ home-switch hostname target='':
 darwin-build hostname=`hostname -s` *ARGS="":
     @just build darwinConfigurations."{{ hostname }}".system {{ ARGS }}
 
-[doc('Preview changes vs the current Mac system (nvd diff; run ON the Mac)')]
+[doc('Preview changes vs the current Mac system (dix diff; run ON the Mac)')]
 [group("deploy")]
 darwin-diff hostname=`hostname -s`: (darwin-build hostname)
-    nvd diff /run/current-system {{ justfile_directory() }}/result
+    dix /run/current-system {{ justfile_directory() }}/result
 
 # First-time bootstrap on a fresh Mac (run ON the Mac):
 #   1. Install Nix (Determinate or upstream) with flakes enabled.
@@ -450,10 +450,10 @@ gc days='7': (_confirm "Delete generations and store paths older than " + days +
 tree *ARGS=("--derivation .#nixosConfigurations." + shell("hostname -s") + ".config.system.build.toplevel"):
     nix-tree {{ ARGS }}
 
-[doc("Run nix-diff between current system")]
+[doc("Build a host and show its package changes vs the running system (dix)")]
 [group("tools")]
 diff hostname=`hostname -s`: (build-system hostname)
-    nvd diff /run/current-system {{ justfile_directory() }}/result
+    dix /run/current-system {{ justfile_directory() }}/result
 
 [doc('List system generations')]
 [group('tools')]
