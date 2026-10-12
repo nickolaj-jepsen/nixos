@@ -10,7 +10,7 @@ Subcommands (see docs/updates.md for the flow):
   triage --run-id ID             attribute a failed CI run on auto/update to updated units and hold them back
   landed --pr N                  clear held-back state for units that landed with a merged update or fix PR
   prepare-fix --unit U           bump one unit on the current branch so the fix agent works on the new version
-  finish-fix --issue N --unit U  act on the fix agent's verdict (env VERDICT holds its JSON)
+  finish-fix --issue N --unit U  act on the fix agent's verdict and patch (env VERDICT, PATCH); trusted job only
   fix-rules                      check the hard automerge rules for an auto/fix-* branch
 
 A "unit" is one revertible update: a root flake input (by name) or a package
@@ -21,6 +21,7 @@ Environment: BOT_TOKEN (PAT; pushes and PRs, so CI runs) and GITHUB_TOKEN
 """
 
 import argparse
+import base64
 import copy
 import datetime
 import hashlib
@@ -58,7 +59,8 @@ CACHE_GATED = {
 MAX_TRIAGE_PASSES = 3
 META_RE = re.compile(r"<!-- update-bot\n(.*?)\n-->", re.S)
 
-FIX_ALLOWED = ("modules/", "pkgs/", "hosts/", "lib/", "flake.nix")
+# Not flake.nix/flake.lock: CI runs binaries from the locked inputs, with secrets, before any review.
+FIX_ALLOWED = ("modules/", "pkgs/", "hosts/", "lib/")
 FIX_MAX_FILES = 3
 FIX_MAX_LINES = 40
 FIX_FORBIDDEN_ADDED = [
@@ -769,8 +771,8 @@ def fix_slug(unit: str) -> str:
     return re.sub(r"[^a-z0-9-]+", "-", unit.lower()).strip("-")
 
 
-def cmd_prepare_fix(args) -> None:
-    unit = args.unit
+def bump(unit: str) -> None:
+    """Commit `unit`'s held-back update as `chore(update): bump <unit>`; nothing if its updater fails."""
     if is_package(unit):
         name = unit.removeprefix("pkgs/")
         out = Path(tempfile.mkstemp(suffix=".json")[1])
@@ -792,13 +794,66 @@ def cmd_prepare_fix(args) -> None:
         run("git", "commit", "-q", "-m", f"chore(update): bump {unit}")
 
 
+def cmd_prepare_fix(args) -> None:
+    bump(args.unit)
+    set_output(head=run("git", "rev-parse", "HEAD").strip())
+
+
+def fenced(text: str, lang: str = "") -> str:
+    """`text` in a code fence longer than any backtick run in it, so untrusted text can't close it."""
+    fence = "`" * max(3, 1 + max(map(len, re.findall(r"`+", text)), default=0))
+    return f"{fence}{lang}\n{text}\n{fence}"
+
+
+def apply_fix(unit: str, patch: bytes) -> str | None:
+    """Stage the agent's `patch` on a fresh bump of `unit`; return why it can't be pushed, else None.
+
+    The bump runs first because nothing from the patched tree may run here (this job holds BOT_TOKEN).
+    """
+    if not patch.strip():
+        return "Claimed a fix but changed nothing."
+    bump(unit)
+    p = subprocess.run(["git", "apply", "--index", "-"], cwd=ROOT, input=patch, capture_output=True)
+    if p.returncode != 0:
+        return f"Its patch doesn't apply to a fresh bump of `{unit}`:\n\n{fenced(p.stderr.decode(errors='replace'))}"
+    # --no-renames: a rename out of .github/ must show its old path too.
+    files = run("git", "diff", "--cached", "--no-renames", "--name-only").split()
+    if bad := [f for f in files if not f.startswith(FIX_ALLOWED)]:
+        return (
+            f"It touches {', '.join(f'`{f}`' for f in bad)}, outside `{' '.join(FIX_ALLOWED)}`. "
+            "Not pushed: CI would run that with secrets before any review."
+        )
+    return None
+
+
 def cmd_finish_fix(args) -> None:
-    verdict = json.loads(os.environ.get("VERDICT") or "{}")
-    decision = verdict.get("verdict", "needs-human")
-    summary = verdict.get("summary", "The fix agent returned no verdict.")
-    dirty = bool(run("git", "status", "--porcelain").strip())
-    if decision == "fix-pr" and not dirty:
-        decision, summary = "needs-human", f"Claimed a fix but changed nothing.\n\n{summary}"
+    """Act on the fix agent's verdict (env VERDICT, JSON) and patch (env PATCH, base64 `git diff` against
+    its bump). Both come from the agent's job, which the agent could fully control: treat them as data and
+    run this from a trusted checkout of the commit the agent started from.
+    """
+    try:
+        verdict = json.loads(os.environ.get("VERDICT") or "{}")
+    except json.JSONDecodeError:
+        verdict = {}
+    if not isinstance(verdict, dict):
+        verdict = {}
+    decision = verdict.get("verdict")
+    decision = decision if decision in VERDICT_LABELS else "needs-human"
+    summary = str(verdict.get("summary") or "The fix agent returned no verdict.")
+    if decision == "fix-pr":
+        raw = os.environ.get("PATCH") or ""
+        try:
+            patch = base64.b64decode(raw, validate=True)
+        except ValueError:
+            patch, reason = b"", f"Its patch couldn't be handed over ({raw[:40]!r}, e.g. over the size cap)."
+        else:
+            reason = apply_fix(args.unit, patch)
+        if reason:
+            decision = "needs-human"
+            summary = f"{reason}\n\n{summary}"
+            if patch.strip():
+                text = patch.decode(errors="replace")[:20000]
+                summary += f"\n\n<details><summary>The agent's patch</summary>\n\n{fenced(text, 'diff')}\n</details>"
 
     issue = str(args.issue)
     gh(
@@ -817,10 +872,8 @@ def cmd_finish_fix(args) -> None:
 
     slug = fix_slug(args.unit)
     branch = f"{FIX_PREFIX}{slug}"
-    title = verdict.get("title") or f"fix({slug}): make the {args.unit} update build"
+    title = str(verdict.get("title") or f"fix({slug}): make the {args.unit} update build")
     run("git", "checkout", "-B", branch)
-    run("nix", "fmt", check=False)
-    run("git", "add", "-A")
     subprocess.run(
         ["git", "commit", "-q", "-F", "-"],
         cwd=ROOT,
@@ -872,13 +925,13 @@ def cmd_fix_rules(args) -> None:
     fix = commits[-1] if commits else "HEAD"
     if len(commits) == 2:
         subject = run("git", "log", "-1", "--format=%s", commits[0]).strip()
-        files = run("git", "diff", "--name-only", f"{commits[0]}^", commits[0]).split()
+        files = run("git", "diff", "--no-renames", "--name-only", f"{commits[0]}^", commits[0]).split()
         if not subject.startswith("chore(update): bump") or any(
             f != "flake.lock" and not f.startswith("pkgs/") for f in files
         ):
             reasons.append("first commit is not a plain `chore(update): bump` of flake.lock/pkgs")
 
-    files = run("git", "diff", "--name-only", f"{fix}^", fix).split()
+    files = run("git", "diff", "--no-renames", "--name-only", f"{fix}^", fix).split()
     if bad := [f for f in files if not f.startswith(FIX_ALLOWED)]:
         reasons.append(f"touches paths outside the allowlist: {', '.join(bad)}")
     if len(files) > FIX_MAX_FILES:
@@ -896,9 +949,6 @@ def cmd_fix_rules(args) -> None:
     for pat in FIX_FORBIDDEN_REMOVED:
         if any(re.search(pat, line) for line in removed):
             reasons.append(f"removes a line matching `{pat}`")
-    flake_diff = run("git", "diff", "-U0", f"{fix}^", fix, "--", "flake.nix")
-    if re.search(r"^[+-].*\burl\s*=", flake_diff, re.M):
-        reasons.append("re-pins a flake input")
 
     print(json.dumps({"ok": not reasons, "reasons": reasons}))
     set_output(ok=str(not reasons).lower(), reasons=json.dumps(reasons))

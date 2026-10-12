@@ -68,19 +68,27 @@ Claude (`claude-code-action`, `CLAUDE_CODE_OAUTH_TOKEN`) returns a verdict:
 - `upstream`: cites the upstream issue, no PR; the issue closes when it lands;
 - `needs-human`: explains, @-mentions the owner.
 
-The agent gets no push token. The workflow commits and pushes its changes after
-it exits. Workaround pins, `enable = false` and `allowBroken` are off-limits:
-holding an update back is already the bot's job.
+Workaround pins, `enable = false` and `allowBroken` are off-limits: holding an
+update back is already the bot's job.
+
+The agent can run anything in its job (`nix run`), so that job holds no push
+token and nothing from it is trusted. It hands its verdict and its changes (a
+`git diff`) to a second job, `publish`, as data. On a fresh runner and a
+checkout of the commit the agent started from, `publish` redoes the bump,
+applies the diff with `git apply` and runs nothing from the patched tree. It
+pushes only if every changed path is under `modules/ pkgs/ hosts/ lib/`; CI runs a
+branch's scripts and flake inputs with secrets before any review. Anything else,
+e.g. a fix to `update_packages.py`, goes on the issue as a diff, as `needs-human`.
 
 ## Fix review gate (`update-fix-review.yml`)
 
 Auto-merge is enabled on an `auto/fix-*` PR only if both checks pass:
 
-1. **Hard rules** (`update_bot.py fix-rules`): an optional bump commit
-   (flake.lock/pkgs only) plus one fix commit. The fix commit may only
-   touch `modules/ pkgs/ hosts/ lib/ flake.nix`, at most 3 files and 40 lines.
-   It may not add `enable = false`/`allowBroken`/`allowInsecure`, remove
-   `fireproof.*` lines, touch flake.lock, or change a flake `url`.
+1. **Hard rules** (`update_bot.py fix-rules`, main's copy): an optional bump
+   commit (flake.lock/pkgs only) plus one fix commit. The fix commit may only
+   touch `modules/ pkgs/ hosts/ lib/`, at most 3 files and 40 lines. It may not
+   add `enable = false`/`allowBroken`/`allowInsecure` or remove `fireproof.*`
+   lines.
 2. **Review agent**: a separate, read-only Claude run that approves only
    minimal, behavior-preserving fixes.
 

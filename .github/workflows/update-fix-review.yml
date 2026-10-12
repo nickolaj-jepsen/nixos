@@ -28,9 +28,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
+      # main's copy of the scripts: the branch's own could be rewritten to pass.
       - name: Hard rules
         id: rules
-        run: python3 .github/scripts/update_bot.py fix-rules
+        run: |
+          git checkout origin/main -- .github/scripts
+          python3 .github/scripts/update_bot.py fix-rules
       - name: Review with Claude
         id: claude
         if: steps.rules.outputs.ok == 'true'
