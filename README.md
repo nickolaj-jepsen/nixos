@@ -46,6 +46,9 @@ just gc
 # Deploy to a remote host (via nixos-rebuild --target-host)
 just switch hostname user@remote
 
+# Undo the last switch, locally or on a remote host
+just rollback [user@remote]
+
 # Fresh install on a new machine (via nixos-anywhere)
 just deploy-remote hostname user@remote
 

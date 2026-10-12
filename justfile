@@ -64,6 +64,18 @@ switch hostname=`hostname -s` target='' *ARGS="":
             --sudo {{ ARGS }}
     fi
 
+[doc('Switch back to the previous system generation, here or on a remote target')]
+[group("deploy")]
+rollback target='':
+    #!/usr/bin/env -S bash -e
+    target="{{ target }}"
+    if [ -z "$target" ]; then
+        sudo nixos-rebuild switch --rollback
+        just _failed-units
+    else
+        nixos-rebuild switch --rollback --target-host "$target" --sudo
+    fi
+
 [doc('Wrapper for nixos-rebuild boot')]
 [group("deploy")]
 boot hostname=`hostname -s` *ARGS="":
@@ -135,6 +147,11 @@ darwin-diff hostname=`hostname -s`: (darwin-build hostname)
 [group("deploy")]
 darwin-switch hostname=`hostname -s` *ARGS="":
     sudo darwin-rebuild switch --flake .#{{ hostname }} {{ ARGS }}
+
+[doc('Switch the Mac back to its previous generation (run ON the Mac)')]
+[group("deploy")]
+darwin-rollback:
+    sudo darwin-rebuild --rollback
 
 [doc('Use nixos-anywhere to deploy to a remote host')]
 [group('deploy')]
