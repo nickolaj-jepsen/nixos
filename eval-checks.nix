@@ -5,6 +5,9 @@
 # already covers (bootstrap ISOs, packages, the devshell), so CI evaluates each
 # real host once instead of twice.
 #
+# darwin-eval: the Mac evaluates from Linux (pure, IFD off), so a darwin eval error
+# fails `just check` and an agent's local run, not only the macOS runner.
+#
 # host-invariants: what every real host must keep. The update PR automerges, so
 # an input whose module adds a binary cache or widens trust would otherwise ship
 # unseen; the toggle asserts catch a refactor that quietly drops a feature.
@@ -62,6 +65,9 @@ in {
         lib.mapAttrsToList (n: c: "${n} ${c.config.system.build.toplevel.drvPath}") bootstrap
         ++ lib.mapAttrsToList (n: p: "packages.${n} ${p.drvPath}") config.packages
         ++ lib.mapAttrsToList (n: d: "devShells.${n} ${d.drvPath}") config.devShells
+      )));
+      checks.darwin-eval = pkgs.writeText "darwin-eval" (builtins.unsafeDiscardStringContext (lib.concatLines (
+        lib.mapAttrsToList (n: c: "${n} ${c.system.drvPath}") flake.darwinConfigurations
       )));
       checks.host-invariants = assert lib.all (n: invariants n hosts.${n}) (lib.attrNames hosts); pkgs.emptyFile;
     };
