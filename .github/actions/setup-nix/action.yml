@@ -27,6 +27,8 @@ runs:
         # IFD breaks cross-platform eval (darwin from Linux).
         extra-conf: |
           allow-import-from-derivation = false
+          # Triage and the fix agent read failures from the job log; 25 lines often cuts off the cause.
+          log-lines = 100
           extra-substituters = https://nix-community.cachix.org https://cache.nixos-cuda.org
           extra-trusted-public-keys = nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs= cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=
 
