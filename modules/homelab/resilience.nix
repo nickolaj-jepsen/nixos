@@ -14,6 +14,9 @@
         RebootWatchdogSec = "10min";
       };
       boot.kernel.sysctl."kernel.panic" = 10; # seconds until reboot
+
+      # Disk-backed /tmp on a box that reboots every few months: start each boot with it empty.
+      boot.tmp.cleanOnBoot = true;
     };
   };
 }
