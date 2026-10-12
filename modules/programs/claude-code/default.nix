@@ -242,6 +242,8 @@
             "Bash(just boot:*)"
             "Bash(just home-switch:*)"
             "Bash(just darwin-switch:*)"
+            "Bash(just rollback:*)"
+            "Bash(just darwin-rollback:*)"
             "Bash(just deploy-remote:*)"
             "Bash(just bootstrap-flash:*)"
             "Bash(just gc:*)"
