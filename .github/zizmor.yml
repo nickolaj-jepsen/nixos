@@ -1,0 +1,4 @@
+rules:
+  # Wants `./.github/actions/setup-nix` spelled as a self-repository ref; purely stylistic here.
+  self-repository:
+    disable: true

@@ -9,6 +9,9 @@ updates:
       - /.github/actions/setup-nix
     schedule:
       interval: weekly
+    # Let a compromised or broken release be yanked before it lands here.
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]

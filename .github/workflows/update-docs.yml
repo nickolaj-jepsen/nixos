@@ -22,7 +22,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked] git-auto-commit pushes the regenerated docs
         with:
           # The `main` ruleset blocks GITHUB_TOKEN pushes; the owner's PAT bypasses it.
           token: ${{ secrets.BOT_TOKEN || github.token }}

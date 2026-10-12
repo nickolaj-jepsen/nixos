@@ -84,9 +84,7 @@ def update_claude_code() -> tuple[str, str]:
     old = json.loads(path.read_text())["version"]
     new = fetch("https://downloads.claude.ai/claude-code-releases/latest").decode().strip()
     if new != old:
-        manifest = json.loads(
-            fetch(f"https://downloads.claude.ai/claude-code-releases/{new}/manifest.zst.json")
-        )
+        manifest = json.loads(fetch(f"https://downloads.claude.ai/claude-code-releases/{new}/manifest.zst.json"))
         if manifest.get("version") != new:
             raise RuntimeError(f"manifest for {new} reports version {manifest.get('version')}")
         path.write_text(json.dumps(manifest, indent=2) + "\n")
@@ -101,9 +99,7 @@ def update_bambu_studio() -> tuple[str, str]:
     new = release["tag_name"].removeprefix("v")
     if new == old:
         return old, new
-    assets = [
-        a for a in release["assets"] if re.fullmatch(r"BambuStudio_ubuntu24\.04-.+\.AppImage", a["name"])
-    ]
+    assets = [a for a in release["assets"] if re.fullmatch(r"BambuStudio_ubuntu24\.04-.+\.AppImage", a["name"])]
     if len(assets) != 1:
         names = ", ".join(a["name"] for a in release["assets"])
         raise RuntimeError(f"no unique Ubuntu 24.04 AppImage in {new}: {names}")
@@ -111,13 +107,10 @@ def update_bambu_studio() -> tuple[str, str]:
     ubuntu_version = asset["name"].removeprefix("BambuStudio_ubuntu").removesuffix(".AppImage")
     # The package builds the URL from a template; fail rather than ship a 404.
     expected = (
-        f"https://github.com/bambulab/BambuStudio/releases/download/v{new}/"
-        f"BambuStudio_ubuntu{ubuntu_version}.AppImage"
+        f"https://github.com/bambulab/BambuStudio/releases/download/v{new}/BambuStudio_ubuntu{ubuntu_version}.AppImage"
     )
     if asset["browser_download_url"] != expected:
-        raise RuntimeError(
-            f"asset URL {asset['browser_download_url']} no longer matches the package's template"
-        )
+        raise RuntimeError(f"asset URL {asset['browser_download_url']} no longer matches the package's template")
     text = replace_once(text, r'^\s*version = "([^"]+)";', new)
     text = replace_once(text, r'^\s*ubuntuVersion = "([^"]+)";', ubuntu_version)
     text = replace_once(text, r'^\s*hash = "([^"]+)";', prefetch(expected))

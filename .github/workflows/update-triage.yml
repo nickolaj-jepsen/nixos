@@ -4,7 +4,8 @@
 # See docs/updates.md.
 name: Update triage
 on:
-  workflow_run:
+  # Same-repo only: `branches` limits it to auto/update, which only BOT_TOKEN pushes.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: [CI]
     types: [completed]
     branches: [auto/update]
@@ -26,7 +27,7 @@ jobs:
       issues: write
       actions: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked] triage amends and force-pushes auto/update
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -56,6 +57,8 @@ jobs:
       pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Clear state for landed updates
         run: python3 .github/scripts/update_bot.py landed --pr "${{ github.event.pull_request.number }}"
         env:

@@ -130,11 +130,7 @@ def ensure_labels() -> None:
 
 
 def read_lock(ref: str | None, tree: Path = ROOT) -> dict:
-    text = (
-        (tree / "flake.lock").read_text()
-        if ref is None
-        else run("git", "show", f"{ref}:flake.lock", cwd=tree)
-    )
+    text = (tree / "flake.lock").read_text() if ref is None else run("git", "show", f"{ref}:flake.lock", cwd=tree)
     return json.loads(text)
 
 
@@ -258,9 +254,7 @@ def render_state(state: dict) -> str:
         for unit, e in sorted(state["units"].items()):
             issue = f"#{e['issue']}" if e.get("issue") else ""
             nights = f"{len(e['nights'])}/{THRESHOLDS[e['kind']]}"
-            lines.append(
-                f"| `{unit}` | {e['kind']}: {e.get('summary', '')} | {e['nights'][0]} | {nights} | {issue} |"
-            )
+            lines.append(f"| `{unit}` | {e['kind']}: {e.get('summary', '')} | {e['nights'][0]} | {nights} | {issue} |")
     else:
         lines.append("Nothing is held back. 🎉")
     return "\n".join(lines) + "\n\n" + embed(state)
@@ -355,9 +349,7 @@ def render_commit(meta: dict) -> str:
     if meta["held"]:
         lines += ["", "Held back:"] + [f"- {u}: {k}" for u, k in sorted(meta["held"].items())]
     if meta["update_failures"]:
-        lines += ["", "Failed to update:"] + [
-            f"- {u}: {k}" for u, k in sorted(meta["update_failures"].items())
-        ]
+        lines += ["", "Failed to update:"] + [f"- {u}: {k}" for u, k in sorted(meta["update_failures"].items())]
     return "\n".join(lines) + "\n"
 
 
@@ -377,9 +369,7 @@ def render_pr_body(meta: dict, state: dict) -> str:
 
 
 def find_update_pr() -> dict | None:
-    prs = gh_json(
-        "pr", "list", "--head", BRANCH, "--state", "open", "--json", "number,body,headRefOid", bot=True
-    )
+    prs = gh_json("pr", "list", "--head", BRANCH, "--state", "open", "--json", "number,body,headRefOid", bot=True)
     return prs[0] if prs else None
 
 
@@ -388,9 +378,7 @@ def enable_automerge(pr: int) -> None:
     repo = os.environ["GITHUB_REPOSITORY"]
     rules = gh_json("api", f"repos/{repo}/rules/branches/main", bot=True)
     if not any(r["type"] == "required_status_checks" for r in rules):
-        raise RuntimeError(
-            f"main has no required status checks; leaving PR #{pr} open instead of auto-merging"
-        )
+        raise RuntimeError(f"main has no required status checks; leaving PR #{pr} open instead of auto-merging")
     gh("pr", "merge", "--auto", "--rebase", str(pr), bot=True)
 
 
@@ -494,9 +482,7 @@ def cmd_nightly(args) -> None:
 
     run("git", "checkout", "-B", BRANCH)
     run("git", "add", "flake.lock", "pkgs")
-    subprocess.run(
-        ["git", "commit", "-q", "-F", "-"], cwd=ROOT, input=render_commit(meta), text=True, check=True
-    )
+    subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=ROOT, input=render_commit(meta), text=True, check=True)
     run("git", "push", "--force", "origin", BRANCH)
 
     body = render_pr_body(meta, state)
@@ -586,18 +572,14 @@ def job_attrs(job: str) -> list[str] | None:
     if job == "darwin":
         return ["darwinConfigurations.macbook.system"]
     if job == "check":
-        names = json.loads(
-            run("nix", "eval", "--json", ".#checks.x86_64-linux", "--apply", "builtins.attrNames")
-        )
+        names = json.loads(run("nix", "eval", "--json", ".#checks.x86_64-linux", "--apply", "builtins.attrNames"))
         return [f"checks.x86_64-linux.{n}" for n in names]
     return None
 
 
 def instantiate(tree: Path, attr: str) -> tuple[set[str] | None, str]:
     """Return the drv closure of `attr` evaluated in `tree` (None if eval fails) and nix's stderr."""
-    p = subprocess.run(
-        ["nix", "eval", "--raw", f".#{attr}.drvPath"], cwd=tree, capture_output=True, text=True
-    )
+    p = subprocess.run(["nix", "eval", "--raw", f".#{attr}.drvPath"], cwd=tree, capture_output=True, text=True)
     if p.returncode != 0:
         return None, p.stderr
     return set(run("nix-store", "-qR", p.stdout.strip()).split()), p.stderr
@@ -685,11 +667,7 @@ def cmd_triage(args) -> None:
 
     number, state = load_state()
     for unit, fs in held.items():
-        kind = (
-            "timeout"
-            if all(f.kind == "timeout" for f in fs)
-            else next(f.kind for f in fs if f.kind != "timeout")
-        )
+        kind = "timeout" if all(f.kind == "timeout" for f in fs) else next(f.kind for f in fs if f.kind != "timeout")
         names = sorted({f.name for f in fs})
         jobs = sorted({f.job for f in fs})
         summary = f"{', '.join(names[:3])}{' …' if len(names) > 3 else ''} ({', '.join(jobs)})"

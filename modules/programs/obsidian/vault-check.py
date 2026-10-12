@@ -3,6 +3,7 @@
 Usage: obsidian-vault-check [--orphans] [vault]. Prints one problem per line as
 `path: problem` and exits 1 if there are any. Read-only.
 """
+
 import os
 import re
 import sys
@@ -10,8 +11,22 @@ import sys
 import yaml
 
 # Mirrors the Linter's yaml-key-sort priority list in plugins.nix.
-KEY_ORDER = ["created", "area", "tags", "kind", "status", "date", "event", "attendees",
-             "project", "started", "ended", "source", "servings", "summary"]
+KEY_ORDER = [
+    "created",
+    "area",
+    "tags",
+    "kind",
+    "status",
+    "date",
+    "event",
+    "attendees",
+    "project",
+    "started",
+    "ended",
+    "source",
+    "servings",
+    "summary",
+]
 KNOWN_KEYS = set(KEY_ORDER) | {"aliases", "cssclasses"}
 AREAS = {"personal", "work"}
 # Folder -> (required keys, {key: allowed values})
@@ -44,7 +59,7 @@ def split_frontmatter(text):
     if not m:
         return None, text
     # BaseLoader keeps scalars as written, so dates stay strings to check.
-    return yaml.load(m.group(1), Loader=yaml.BaseLoader) or {}, text[m.end():]
+    return yaml.load(m.group(1), Loader=yaml.BaseLoader) or {}, text[m.end() :]
 
 
 def check_frontmatter(path, fm, problems):
@@ -81,8 +96,7 @@ def check_frontmatter(path, fm, problems):
         problems.append(f"{path}: `summary` should be a single line")
 
     ranked = [k for k in fm if k in KEY_ORDER]
-    if ranked != sorted(ranked, key=KEY_ORDER.index) or any(
-            k not in KEY_ORDER for k in list(fm)[:len(ranked)]):
+    if ranked != sorted(ranked, key=KEY_ORDER.index) or any(k not in KEY_ORDER for k in list(fm)[: len(ranked)]):
         problems.append(f"{path}: frontmatter keys out of Linter order ({', '.join(fm)})")
 
 
