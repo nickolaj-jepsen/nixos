@@ -61,6 +61,9 @@
     mac-app-util.inputs.cl-nix-lite.inputs.nixpkgs.follows = "nixpkgs";
     mac-app-util.inputs.cl-nix-lite.inputs.flake-parts.follows = "flake-parts";
     mac-app-util.inputs.cl-nix-lite.inputs.treefmt-nix.follows = "treefmt-nix";
+    mac-app-util.inputs.cl-nix-lite.inputs.systems.follows = "systems";
+    # Its default `url = "flake-utils"` is a registry lookup, one more fetch that can fail on update.
+    mac-app-util.inputs.flake-utils.url = "github:numtide/flake-utils";
 
     # Plain git: gitlab: resolves the branch through GitLab's API, which sits behind a Cloudflare challenge since 2026-10-11.
     firefox-addons.url = "git+https://gitlab.com/rycee/nur-expressions.git?shallow=1&dir=pkgs/firefox-addons";
@@ -68,6 +71,7 @@
 
     nixos-wsl.url = "github:nix-community/NixOS-WSL/main";
     nixos-wsl.inputs.nixpkgs.follows = "nixpkgs";
+    nixos-wsl.inputs.flake-compat.follows = "flake-compat";
 
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
@@ -77,6 +81,13 @@
 
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
+
+    # Shared by inputs that each pinned their own copy; only consumed by their non-flake default.nix.
+    flake-compat = {
+      url = "github:NixOS/flake-compat";
+      flake = false;
+    };
+    systems.url = "github:nix-systems/default";
 
     # Recursively imports every `.nix` file under a directory (skipping any
     # `_`-prefixed path), so module/host trees are auto-imported
@@ -92,6 +103,7 @@
     pi.inputs.nixpkgs-x86_64-darwin.follows = "nixpkgs";
     pi.inputs.bun2nix-x86_64-darwin.follows = "pi/bun2nix";
     pi.inputs.bun2nix.inputs.treefmt-nix.follows = "treefmt-nix";
+    pi.inputs.bun2nix.inputs.systems.follows = "systems";
 
     agenix.url = "github:ryantm/agenix";
     agenix.inputs.nixpkgs.follows = "nixpkgs";
@@ -99,6 +111,8 @@
     agenix-rekey.inputs.nixpkgs.follows = "nixpkgs";
     agenix-rekey.inputs.treefmt-nix.follows = "treefmt-nix";
     agenix-rekey.inputs.flake-parts.follows = "flake-parts";
+    agenix-rekey.inputs.flake-compat.follows = "flake-compat";
+    agenix-rekey.inputs.pre-commit-hooks.inputs.flake-compat.follows = "flake-compat";
 
     nix-vscode-extensions.url = "github:nix-community/nix-vscode-extensions";
     nix-vscode-extensions.inputs.nixpkgs.follows = "nixpkgs";
@@ -113,13 +127,19 @@
 
     nvf.url = "github:NotAShelf/nvf";
     nvf.inputs.nixpkgs.follows = "nixpkgs";
+    # Its own pin is on git.lix.systems: a non-GitHub host the update bot would otherwise fetch nightly.
+    nvf.inputs.flake-compat.follows = "flake-compat";
 
     niri.url = "github:sodiboo/niri-flake";
     niri.inputs.nixpkgs.follows = "nixpkgs";
     niri.inputs.nixpkgs-stable.follows = "nixpkgs";
+    # Only niri-unstable is used (modules/desktop/niri); point the stable sources at it so they are never fetched.
+    niri.inputs.niri-stable.follows = "niri/niri-unstable";
+    niri.inputs.xwayland-satellite-stable.follows = "niri/xwayland-satellite-unstable";
 
     dank-material-shell.url = "github:AvengeMedia/DankMaterialShell";
     dank-material-shell.inputs.nixpkgs.follows = "nixpkgs";
+    dank-material-shell.inputs.flake-compat.follows = "flake-compat";
     dms-plugin-registry.url = "github:AvengeMedia/dms-plugin-registry";
     dms-plugin-registry.inputs.nixpkgs.follows = "nixpkgs";
     walldye.url = "github:nickolaj-jepsen/walldye";
@@ -137,6 +157,7 @@
 
     zero-x-cb-media.url = "github:nickolaj-jepsen/0xCB-media";
     zero-x-cb-media.inputs.nixpkgs.follows = "nixpkgs";
+    zero-x-cb-media.inputs.flake-utils.inputs.systems.follows = "systems";
 
     # Library for pkgs/zwift-hass, tracked at HEAD.
     zwift-client.url = "github:nickolaj-jepsen/zwift-client";
