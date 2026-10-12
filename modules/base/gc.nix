@@ -20,6 +20,7 @@
 
   # darwin: Determinate Nix collects garbage itself (nix.nix), but generations stay
   # GC roots until expired, so expire them here and leave the collecting to it.
+  # Embedded HM keeps no profile of its own; its generations ride in the system's.
   flake.modules.darwin.gc = {
     launchd.daemons.expire-system-generations = {
       # Determinate's nix-env, matching its daemon; launchd's PATH has no nix.
@@ -31,19 +32,6 @@
           Minute = 15;
         }
       ];
-    };
-  };
-
-  flake.modules.homeManager.gc = {
-    lib,
-    pkgs,
-    ...
-  }: {
-    # HM picks its profile dir at activation, so let its own expirer find it.
-    services.home-manager.autoExpire = lib.mkIf pkgs.stdenv.isDarwin {
-      enable = true;
-      timestamp = "-7 days";
-      frequency = "weekly";
     };
   };
 }
