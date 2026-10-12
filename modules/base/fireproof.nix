@@ -126,6 +126,8 @@ let
           default = "nickolaj@fireproof.website";
           description = "Contact email registered with the ACME provider.";
         };
+        # Enabling needs its two secrets first (docs/ci.md).
+        ci-runner.enable = lib.mkEnableOption "self-hosted GitHub Actions runners for this repo's CI builds";
       };
 
       hardware = {

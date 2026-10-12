@@ -25,6 +25,13 @@ jobs:
     timeout-minutes: 10
     outputs:
       list: ${{ steps.list.outputs.list }}
+      # Builds go to the homelab runner (docs/ci.md) when it's switched on, and only for code that
+      # reaches every host anyway: pushes to main and the update bot's PR. Other PRs, agent-written
+      # ones included, stay on hosted runners.
+      homelab: >-
+        ${{ vars.HOMELAB_RUNNER == 'true' && (github.event_name == 'push' || (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.head_ref == 'auto/update')) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: ./.github/actions/setup-nix
@@ -66,6 +73,7 @@ jobs:
   # Not gated on fmt: the gate still requires it, and waiting would add its runtime to every build.
   build:
     needs: [hosts]
+    if: needs.hosts.outputs.homelab != 'true' || vars.HOMELAB_RUNNER != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -81,6 +89,29 @@ jobs:
           attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Build ${{ matrix.host }}
         run: .github/scripts/ci-build.sh ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
+
+  # `build` on the homelab runner. It references no secrets, so none reach the homelab: Nix is
+  # already there, and the host's post-build-hook pushes to attic with its own token. The variable
+  # is checked again because re-running failed jobs reuses `hosts`' old output.
+  build-homelab:
+    name: build (${{ matrix.host }})
+    needs: [hosts]
+    if: needs.hosts.outputs.homelab == 'true' && vars.HOMELAB_RUNNER == 'true'
+    runs-on: homelab
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJson(needs.hosts.outputs.list) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Build ${{ matrix.host }}
+        run: .github/scripts/ci-build.sh ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
+        env:
+          # setup-nix's IFD ban; the homelab's own nix.conf allows IFD.
+          NIX_CONFIG: allow-import-from-derivation = false
 
   # The darwin host can't build on Linux (aarch64-darwin), so it gets its own
   # macOS runner instead of a matrix slot (free on a public repo).
@@ -101,13 +132,16 @@ jobs:
   gate:
     name: CI gate
     if: always()
-    needs: [fmt, check, build, darwin]
+    needs: [fmt, check, build, build-homelab, darwin]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # Exactly one of build/build-homelab runs; the other is skipped by its `if`.
       - name: Require every job to have succeeded
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          RESULTS: >-
+            ${{ needs.fmt.result }} ${{ needs.check.result }} ${{ needs.darwin.result }}
+            ${{ needs.build-homelab.result == 'skipped' && needs.build.result || needs.build-homelab.result }}
         run: |
           echo "Job results: $RESULTS"
           for r in $RESULTS; do [ "$r" = success ] || exit 1; done

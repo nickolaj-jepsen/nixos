@@ -44,6 +44,8 @@ must be `git add`ed or flake eval ignores them.
   vs secret-edit, YubiKey needs.
 - `docs/updates.md` — the nightly update bot (`.github/`): one automerged PR,
   hold-back of breaking updates, Claude fix agent + review gate.
+- `docs/ci.md` — the CI workflow and the self-hosted homelab runner: routing,
+  kill switch, enabling it, security invariants.
 - `docs/homelab.md` — adding a homelab service: containers, shared
   postgres/mariadb, glance dashboard.
 - `docs/fireproof-options.md` — generated reference of all `fireproof.*`
