@@ -21,6 +21,9 @@
           enable = true;
           servers = {
             figma.url = "https://mcp.figma.com/mcp";
+            # Option/package lookups per channel (26.05 vs unstable), HM and nix-darwin options.
+            # Unstable for 3.x, which folds the lookups into two tools.
+            nixos.command = lib.getExe pkgs.unstable.mcp-nixos;
             # npx, not pkgs.snyk: `snyk mcp` lives in the Go CLI the npm package fetches.
             snyk = {
               command = "${pkgs.nodejs}/bin/npx";

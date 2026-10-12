@@ -39,6 +39,9 @@ jobs:
         env:
           UNIT: ${{ inputs.unit }}
           GH_TOKEN: ${{ github.token }}
+      # Built up front so the MCP server starts within Claude's startup timeout.
+      - name: Build mcp-nixos
+        run: nix build --inputs-from . nixpkgs-unstable#mcp-nixos -o "$RUNNER_TEMP/mcp-nixos"
       - name: Run Claude
         id: claude
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
@@ -54,6 +57,10 @@ jobs:
             several nights. Read it with `gh issue view ${{ inputs.issue }}`. The
             update itself is already applied as the last commit on this checkout
             (unless the package updater is what fails); your job is what comes after it.
+
+            The `nixos` MCP server looks up packages and options per channel (26.05 and
+            unstable), Home Manager and nix-darwin options, and version history; use it
+            for renamed or removed options and packages instead of guessing.
 
             1. Reproduce: build or evaluate only the failing derivation, never a whole
                host: `nix build .#<name>` for a package in pkgs/, otherwise e.g.
@@ -78,7 +85,8 @@ jobs:
             and a short markdown summary of the cause, evidence and fix.
           claude_args: |
             --max-turns 60
-            --allowedTools "Read,Edit,Write,Glob,Grep,WebFetch,WebSearch,Bash(nix:*),Bash(nix-store:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(gh issue view:*),Bash(gh search:*),Bash(gh pr view:*),Bash(gh api:*),Bash(gh run view:*)"
+            --mcp-config '{"mcpServers":{"nixos":{"command":"${{ runner.temp }}/mcp-nixos/bin/mcp-nixos"}}}'
+            --allowedTools "mcp__nixos,Read,Edit,Write,Glob,Grep,WebFetch,WebSearch,Bash(nix:*),Bash(nix-store:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(gh issue view:*),Bash(gh search:*),Bash(gh pr view:*),Bash(gh api:*),Bash(gh run view:*)"
             --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["fix-pr","upstream","needs-human"]},"title":{"type":"string"},"summary":{"type":"string"}},"required":["verdict","summary"]}'
       - name: Act on the verdict
         if: always() && steps.claude.outcome != 'skipped'
