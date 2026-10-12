@@ -35,6 +35,10 @@
 
     # Global only (Nix has no per-substituter retry); default 5 spams warnings when attic is down.
     download-attempts = 3;
+    # Unreachable attic (homelab down, off the tailnet) would otherwise stall each path on curl's
+    # default connect timeout; fallback then builds locally instead of failing. CI doesn't use this.
+    connect-timeout = 5;
+    fallback = true;
   };
 
   mkSettings = config:
@@ -123,8 +127,13 @@ in {
   in {
     nixpkgs.config.allowUnfree = true;
     nix.enable = false;
-    # toString joins lists with spaces, matching nix.conf's list syntax.
-    environment.etc."nix/nix.custom.conf".text =
-      lib.concatStrings (lib.mapAttrsToList (k: v: "${k} = ${toString v}\n") conf);
+    # toString joins lists with spaces, matching nix.conf's list syntax (but renders true as "1").
+    environment.etc."nix/nix.custom.conf".text = let
+      value = v:
+        if lib.isBool v
+        then lib.boolToString v
+        else toString v;
+    in
+      lib.concatStrings (lib.mapAttrsToList (k: v: "${k} = ${value v}\n") conf);
   };
 }
