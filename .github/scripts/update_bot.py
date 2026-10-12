@@ -190,6 +190,16 @@ def describe_locked(node: dict) -> str:
     return f"{rev} ({date})"
 
 
+def compare_url(old: dict, new: dict) -> str | None:
+    """GitHub compare view between two locked revs of the same GitHub repo."""
+    a, b = old.get("locked", {}), new.get("locked", {})
+    if not (a.get("type") == b.get("type") == "github" and a.get("rev") and b.get("rev")):
+        return None
+    if (a["owner"].lower(), a["repo"].lower()) != (b["owner"].lower(), b["repo"].lower()):
+        return None
+    return f"https://github.com/{b['owner']}/{b['repo']}/compare/{a['rev']}...{b['rev']}"
+
+
 # --- units -----------------------------------------------------------------
 
 
@@ -214,6 +224,8 @@ def changed_units(base_ref: str, tree: Path = ROOT, package_versions: dict | Non
             continue
         if bnode.get("locked") != cnode.get("locked"):
             units[name] = {"old": describe_locked(bnode), "new": describe_locked(cnode)}
+            if url := compare_url(bnode, cnode):
+                units[name]["compare"] = url
     for name in UPDATERS:
         if run("git", "diff", "--name-only", base_ref, "--", package_unit(name), cwd=tree).strip():
             v = (package_versions or {}).get(name, {})
@@ -357,7 +369,9 @@ def render_pr_body(meta: dict, state: dict) -> str:
     lines = [f"Nightly update for {meta['date']}. Automerges once `CI gate` passes.", ""]
     if meta["units"]:
         lines += ["| Updated | From | To |", "| --- | --- | --- |"]
-        lines += [f"| `{u}` | {v['old']} | {v['new']} |" for u, v in sorted(meta["units"].items())]
+        for u, v in sorted(meta["units"].items()):
+            to = f"[{v['new']}]({v['compare']})" if v.get("compare") else v["new"]
+            lines.append(f"| `{u}` | {v['old']} | {to} |")
     if meta["held"] or meta["update_failures"]:
         lines += ["", "**Held back** (retried tomorrow):", ""]
         for u, k in sorted({**meta["held"], **meta["update_failures"]}.items()):
