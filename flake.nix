@@ -93,7 +93,7 @@
     # Recursively imports every `.nix` file under a directory (skipping any
     # `_`-prefixed path), so module/host trees are auto-imported
     # instead of maintained as hand-written `imports = [ … ]` lists.
-    import-tree.url = "github:vic/import-tree";
+    import-tree.url = "github:denful/import-tree";
 
     # Follows ours: the closure override in modules/programs/pi.nix already misses
     # pi.cachix.org, so a private nixpkgs only bought duplicate nodejs/icu/glibc.

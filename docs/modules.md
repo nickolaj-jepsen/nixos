@@ -6,7 +6,7 @@ Read this before creating or restructuring anything under `modules/`.
 
 Every `.nix` file under `modules/` is a flake-parts module declaring
 `flake.modules.{nixos,homeManager,darwin}.<name>` — not a bare NixOS module.
-[import-tree](https://github.com/vic/import-tree) auto-collects them all
+[import-tree](https://github.com/denful/import-tree) auto-collects them all
 (no `imports` lists to edit); `_`-prefixed paths are skipped (helper/fragment
 files). The host builder imports **every** leaf into **every** host, so each
 leaf must self-gate:
