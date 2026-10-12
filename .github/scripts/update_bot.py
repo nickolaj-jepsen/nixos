@@ -365,7 +365,7 @@ def render_commit(meta: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_pr_body(meta: dict, state: dict) -> str:
+def render_pr_body(meta: dict, state: dict, versions: str = "") -> str:
     lines = [f"Nightly update for {meta['date']}. Automerges once `CI gate` passes.", ""]
     if meta["units"]:
         lines += ["| Updated | From | To |", "| --- | --- | --- |"]
@@ -379,6 +379,8 @@ def render_pr_body(meta: dict, state: dict) -> str:
             n = len(e.get("nights", [])) or 1
             issue = f", #{e['issue']}" if e.get("issue") else ""
             lines.append(f"- `{u}`: {k}: {e.get('summary', '')} (night {n}/{THRESHOLDS[k]}{issue})")
+    if versions:
+        lines += ["", versions]
     return "\n".join(lines) + "\n\n" + embed(meta)
 
 
@@ -499,7 +501,12 @@ def cmd_nightly(args) -> None:
     subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=ROOT, input=render_commit(meta), text=True, check=True)
     run("git", "push", "--force", "origin", BRANCH)
 
-    body = render_pr_body(meta, state)
+    try:
+        versions = version_diff("origin/main")
+    except Exception as e:  # informational only: never let it block the update
+        print(f"::warning::package version diff failed: {e}")
+        versions = ""
+    body = render_pr_body(meta, state, versions)
     if pr:
         gh("pr", "edit", str(pr["number"]), "--body", body, bot=True)
         number = pr["number"]
@@ -523,6 +530,72 @@ def cmd_nightly(args) -> None:
         ).strip()
         number = int(url.rsplit("/", 1)[1])
     enable_automerge(number)
+
+
+# --- package version diff ----------------------------------------------------
+
+# Every host CI builds; evaluated (not built) on both sides, so it works with --skip-cached.
+DIFF_ATTRS = ["darwinConfigurations.macbook.system"]
+MAX_VERSION_ROWS = 80
+# Fetched sources share their package's name ("foo-1.2.tar.gz") and would double every row.
+SOURCE_SUFFIX = re.compile(r"\.(tar(\.\w+)?|tgz|zip|patch|diff|crate|whl|gem|jar|deb|AppImage)$")
+
+
+def parse_drv_name(name: str) -> tuple[str, str]:
+    """builtins.parseDrvName: the version starts at the first '-' not followed by a letter."""
+    m = re.search(r"-(?=[^a-zA-Z])", name)
+    return (name[: m.start()], name[m.end() :]) if m else (name, "")
+
+
+def closure_versions(tree: Path, attrs: list[str]) -> dict[str, set[str]] | None:
+    """pname -> versions across the drv closures of `attrs` in `tree` (None if any fails to eval)."""
+    versions: dict[str, set[str]] = {}
+    for attr in attrs:
+        closure, _err = instantiate(tree, attr)
+        if closure is None:
+            return None
+        for path in closure:
+            if not path.endswith(".drv"):
+                continue
+            pname, version = parse_drv_name(drv_name(path))
+            if version and not SOURCE_SUFFIX.search(version):
+                versions.setdefault(pname, set()).add(version)
+    return versions
+
+
+def version_diff(base_ref: str) -> str:
+    """A collapsed markdown table of package versions that differ between `base_ref` and HEAD."""
+    hosts = json.loads(run("nix", "eval", "--json", ".#nixosConfigurations", "--apply", "builtins.attrNames"))
+    attrs = [
+        f"nixosConfigurations.{h}.config.system.build.toplevel" for h in hosts if not h.startswith("bootstrap")
+    ] + DIFF_ATTRS
+    # A plain export, not a worktree: update.yml's checkout is shallow, and nix can't read a
+    # shallow worktree's objects.
+    base = Path(tempfile.mkdtemp(prefix="versions-"))
+    try:
+        archive = subprocess.run(["git", "archive", base_ref], cwd=ROOT, capture_output=True, check=True)
+        subprocess.run(["tar", "-x", "-C", str(base)], input=archive.stdout, check=True)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            old, new = pool.map(lambda tree: closure_versions(tree, attrs), [base, ROOT])
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+    if old is None or new is None:
+        return ""  # an eval failure is CI's to report, with a better message
+    rows = []
+    for pname in sorted(old.keys() | new.keys()):
+        a, b = old.get(pname, set()), new.get(pname, set())
+        if a != b:
+            rows.append(f"| `{pname}` | {', '.join(sorted(a - b)) or '–'} | {', '.join(sorted(b - a)) or '–'} |")
+    if not rows:
+        return ""
+    more = [f"\n…and {len(rows) - MAX_VERSION_ROWS} more."] if len(rows) > MAX_VERSION_ROWS else []
+    return "\n".join(
+        [f"<details><summary>Package versions ({len(rows)} changed across all hosts)</summary>", ""]
+        + ["| Package | From | To |", "| --- | --- | --- |"]
+        + rows[:MAX_VERSION_ROWS]
+        + more
+        + ["", "</details>"]
+    )
 
 
 # --- triage ------------------------------------------------------------------

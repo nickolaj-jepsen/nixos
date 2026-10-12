@@ -9,7 +9,9 @@ it is `.github/scripts/update_bot.py` driven by four workflows.
    `nix flake update` (input by input if that fails, holding back inputs that
    can't be fetched), the cache gate (below) and `update_packages.py`, formats,
    and force-pushes one commit. The single PR on that branch is created or
-   refreshed, and auto-merge (rebase) is enabled. `CI gate` is the only thing
+   refreshed (each GitHub input links its compare view, and a collapsed table
+   lists package versions that differ from `main`, evaluated per host), and
+   auto-merge (rebase) is enabled. `CI gate` is the only thing
    that has to pass.
 2. **`update-triage.yml`** runs when CI fails on `auto/update`:
    - takes the root failed derivations from the failed jobs' logs (`Cannot
