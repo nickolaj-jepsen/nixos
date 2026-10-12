@@ -3,16 +3,21 @@
     # mkDefault: a generation costs ~60 MB of ESP, so 10 overflows a 512 MB ESP; those hosts cap it lower.
     boot.loader.systemd-boot.configurationLimit = lib.mkDefault 10;
 
-    nix.gc = {
-      automatic = true;
-      dates = "weekly";
-      options = "--delete-older-than 7d";
+    # nh rather than nix.gc: `--delete-older-than` alone leaves a host that sat idle for a week with no
+    # generation to roll back to. --no-gcroots keeps nix.gc's behaviour of leaving result/.direnv roots be.
+    programs.nh = {
+      enable = true;
+      clean = {
+        enable = true;
+        dates = "weekly";
+        extraArgs = "--keep 5 --keep-since 7d --no-gcroots";
+      };
     };
 
     nix.optimise.automatic = true;
 
-    # nixpkgs already idles nix-optimise, but not nix-gc.
-    systemd.services.nix-gc.serviceConfig = {
+    # nixpkgs already idles nix-optimise, but not nh-clean.
+    systemd.services.nh-clean.serviceConfig = {
       CPUSchedulingPolicy = "idle";
       IOSchedulingClass = "idle";
     };

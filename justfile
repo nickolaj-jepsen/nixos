@@ -387,8 +387,13 @@ check:
 
 [doc('Collect garbage and delete old generations')]
 [group('maintenance')]
-gc days='7': (_confirm "Delete generations and store paths older than " + days + " days?")
-    sudo nix-collect-garbage --delete-older-than {{ days }}d
+gc days='7': (_confirm "Delete generations and store paths older than " + days + " days (keeping the last 5)?")
+    #!/usr/bin/env -S bash -e
+    if command -v nh >/dev/null 2>&1; then
+        sudo nh clean all --keep 5 --keep-since {{ days }}d --no-gcroots
+    else
+        sudo nix-collect-garbage --delete-older-than {{ days }}d
+    fi
     sudo nix-store --optimise
 
 [doc("Run nix-tree")]

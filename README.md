@@ -36,7 +36,7 @@ just fmt
 # Validate configuration (flake check)
 just check
 
-# Maintenance: Collect garbage and delete old generations
+# Maintenance: Collect garbage and delete old generations (keeps the last 5)
 just gc
 ```
 
