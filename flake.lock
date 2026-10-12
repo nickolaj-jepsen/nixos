@@ -196,11 +196,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1791687633,
-        "narHash": "sha256-RPGDUgqwN/VFBncZvdCuG2y0HxB67vpze0Lf6AgWkro=",
+        "lastModified": 1791775386,
+        "narHash": "sha256-+D5rbRYYZJwfNTGmtUy5aaB6seBqvP1L4+PdT033SA4=",
         "owner": "AvengeMedia",
         "repo": "dms-plugin-registry",
-        "rev": "0af39503cb830db485148ce9fa30fcd65c6774e3",
+        "rev": "99b5ac5f61ee2fb122ff0efcc18cdeca7b6e8cda",
         "type": "github"
       },
       "original": {
@@ -239,10 +239,10 @@
       },
       "locked": {
         "dir": "pkgs/firefox-addons",
-        "lastModified": 1791259366,
-        "narHash": "sha256-Zxes2DL+6i3S5WKVNOhM96wwFiGivLUam5+tqIp6Sdk=",
+        "lastModified": 1791691571,
+        "narHash": "sha256-btJ4vVIAyQp3BqlARGdbJb9iq3WD7/KTSj0QW5DmvLM=",
         "ref": "refs/heads/master",
-        "rev": "509b29bbfd176bab4bb5ebe7b090eae97bde91ad",
+        "rev": "17a8cf0be701c3f264e42c8465368a0cc602bb18",
         "shallow": true,
         "type": "git",
         "url": "https://gitlab.com/rycee/nur-expressions.git"
@@ -442,11 +442,11 @@
     "homebrew-cask": {
       "flake": false,
       "locked": {
-        "lastModified": 1791759692,
-        "narHash": "sha256-FaduWr1+m5BDuvoBg1Kf+I88iqBuxrmOK1rgAhGOtEA=",
+        "lastModified": 1791775134,
+        "narHash": "sha256-BChZfPTzfqEydfnQzQME6mYMaS9/ejUmUUpAX6kCF5M=",
         "owner": "homebrew",
         "repo": "homebrew-cask",
-        "rev": "3b3b3f613ffc75cf876b1a6e14558f8b7e075d22",
+        "rev": "4ad501ce94089cf76da3973c69fadfc1cbb557c8",
         "type": "github"
       },
       "original": {
@@ -458,11 +458,11 @@
     "homebrew-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1791759166,
-        "narHash": "sha256-CTmc8ZjbcXdWlvkmySECvkK7++S6/SHTWCWH7aYf7bc=",
+        "lastModified": 1791775613,
+        "narHash": "sha256-UISiFlPZQYxbBZHuRaXCKmXXbJhRPzZQKQpL9iXJaWY=",
         "owner": "homebrew",
         "repo": "homebrew-core",
-        "rev": "bec279f45df55a8614102936e9c911572e772c74",
+        "rev": "9d0b334ea85c385f4b51b3380791dfeda1189206",
         "type": "github"
       },
       "original": {
@@ -822,11 +822,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1791758848,
-        "narHash": "sha256-E/ZJn+aLIKJUPH46D2tzPvva/JnRyWK5bp3Y2zAwq9c=",
+        "lastModified": 1791773880,
+        "narHash": "sha256-0OKU8MMXSgD5Cc8/SPyO0dKnuWXvxRXeMUhk6Nfhw/8=",
         "owner": "getpaseo",
         "repo": "paseo",
-        "rev": "166aabd57b3f6c69f6a6f65b621aba167e7e3be8",
+        "rev": "a310444c67f9f93150582db6dbaa3df2ee94ce7a",
         "type": "github"
       },
       "original": {
