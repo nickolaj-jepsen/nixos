@@ -35,6 +35,9 @@ the whole host:
 - `nixos` → `nixosConfigurations.<h>` via `nixosSystem`. The host builder
   defines `home-manager.users.<fireproof.username>` and routes all homeManager
   leaves + the card's `shared`/`homeManager` buckets into `sharedModules`.
+  `switch`/`test` refuse to run on a machine whose hostname isn't `<h>`
+  (`modules/system/switch-guards.nix`); renaming a host goes through
+  `just boot` and a reboot.
 - `home` → `homeConfigurations.<h>` via `mkHome` in `hosts/default.nix` (standalone HM, no
   NixOS eval; `osConfig = null`). Example: `dev-ao`. Activate with
   `just home-switch <h> [user@target]`; the target needs the user in
