@@ -93,6 +93,8 @@ in {
       Slice = "nix-build.slice";
       # scx schedulers ignore CPUWeight but honour nice; under EEVDF this only competes inside the slice.
       Nice = 19;
+      # Inherited by builds: if the kernel OOM killer fires (MemoryHigh only throttles), a build goes first.
+      OOMScoreAdjust = 250;
     };
 
     # Nix ≥2.30 builds here, not /tmp; zram absorbs overflow.
