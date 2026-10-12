@@ -6,7 +6,9 @@ Services are native NixOS services by default, gated on
 `fireproof.homelab.enable` (leaf authoring rules: `docs/modules.md`). Every
 new service gets a dashboard link in `modules/homelab/glance/_home-page.nix`
 (behind SSO it also needs a loopback `check-url`, or the monitor only probes
-the Zitadel login), and its vhost via `fpLib.mkVirtualHost`. A service using
+the Zitadel login), and its vhost via `fpLib.mkVirtualHost`.
+`checks.glance-coverage` fails on a vhost with no link (infra vhosts are
+exempted in `eval-checks.nix`). A service using
 `/mnt/data` also sets
 `systemd.services.<unit>.unitConfig.RequiresMountsFor = ["/mnt/data"];` in its
 own leaf, or it runs against an empty dir when a data disk is missing. Ports stay on `127.0.0.1`: an open one

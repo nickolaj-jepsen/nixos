@@ -8,6 +8,9 @@
 # darwin-eval: the Mac evaluates from Linux (pure, IFD off), so a darwin eval error
 # fails `just check` and an agent's local run, not only the macOS runner.
 #
+# glance-coverage: docs/homelab.md's "every service gets a dashboard link", as a
+# check: each nginx vhost on a Glance host must appear in a dashboard url/check-url.
+#
 # host-invariants: what every real host must keep. The update PR automerges, so
 # an input whose module adds a binary cache or widens trust would otherwise ship
 # unseen; the toggle asserts catch a refactor that quietly drops a feature.
@@ -33,6 +36,46 @@
     "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
     "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
   ];
+
+  # Vhosts that need no dashboard link.
+  dashboardExempt = c: let
+    d = c.fireproof.homelab.domain;
+  in [
+    # Infrastructure, not apps.
+    "glance.${d}"
+    "oauth2-proxy.${d}"
+    "status.localhost"
+    "preview.bmtomrermontage.dk"
+    # Had no link when this check landed; add one to _home-page.nix or keep them listed.
+    "bazarr.${d}"
+    "bitwarden.${d}"
+    "immich.${d}"
+  ];
+  dashboardUrls = v:
+    if lib.isAttrs v
+    then
+      lib.concatLists (lib.mapAttrsToList (k: x:
+        if lib.elem k ["url" "check-url"] && lib.isString x
+        then [x]
+        else dashboardUrls x)
+      v)
+    else if lib.isList v
+    then lib.concatMap dashboardUrls v
+    else [];
+  urlHost = u: let
+    m = builtins.match "[a-z]+://([^/:]+).*" u;
+  in
+    if m == null
+    then u
+    else lib.head m;
+  glanceCoverage = name: host: let
+    c = host.config;
+    linked = map urlHost (dashboardUrls c.services.glance.settings.pages);
+    missing = lib.subtractLists (linked ++ dashboardExempt c) (lib.attrNames c.services.nginx.virtualHosts);
+  in
+    !c.services.glance.enable
+    || lib.assertMsg (missing == [])
+    "${name}: no Glance link for ${lib.concatStringsSep ", " missing} (add one in modules/homelab/glance/_home-page.nix)";
 
   invariants = name: host: let
     c = host.config;
@@ -69,6 +112,7 @@ in {
       checks.darwin-eval = pkgs.writeText "darwin-eval" (builtins.unsafeDiscardStringContext (lib.concatLines (
         lib.mapAttrsToList (n: c: "${n} ${c.system.drvPath}") flake.darwinConfigurations
       )));
+      checks.glance-coverage = assert lib.all (n: glanceCoverage n hosts.${n}) (lib.attrNames hosts); pkgs.emptyFile;
       checks.host-invariants = assert lib.all (n: invariants n hosts.${n}) (lib.attrNames hosts); pkgs.emptyFile;
     };
 }
