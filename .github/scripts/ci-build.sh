@@ -22,4 +22,9 @@ if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
       echo "update-triage: timeout-inflight $drv"
   done
 fi
+
+# Non-blocking: deprecations show up on the run summary before a nixpkgs bump turns them into errors.
+grep -oE "(evaluation warning|trace: warning): .*" "$log" | sort -u | while read -r w; do
+  echo "::warning title=Evaluation warning ($attr)::$w"
+done
 exit "$status"
