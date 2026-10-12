@@ -58,8 +58,12 @@ jobs:
           attic-endpoint: https://attic.${{ secrets.HOMELAB_DOMAIN }}/
           attic-cache: nixos
           attic-token: ${{ secrets.ATTIC_TOKEN }}
-      - name: Run nix flake check
-        run: nix flake check
+      # Not `nix flake check`: that evaluates every host again on top of the build matrix.
+      # checks.flake-eval (eval-checks.nix) covers what it added: bootstrap ISOs, packages, devshell.
+      - name: Build checks
+        run: .github/scripts/ci-build.sh ".#checks.x86_64-linux"
+        env:
+          BUILD_TIMEOUT: 25m
 
   # --skip-cached (in ci-build.sh): a host already in attic passes without pulling its closure onto the runner.
   build:
