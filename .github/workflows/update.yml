@@ -7,7 +7,9 @@
 name: Update
 on:
   schedule:
-    - cron: "0 0 * * *"
+    # Off the top of the hour: GitHub delays 00:00 UTC schedules by 3-5h. Stay after
+    # 00:00 UTC, since held-back "nights" are keyed on the UTC date.
+    - cron: "23 0 * * *"
   workflow_dispatch:
 
 concurrency:

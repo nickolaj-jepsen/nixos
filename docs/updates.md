@@ -5,7 +5,7 @@ it is `.github/scripts/update_bot.py` driven by four workflows.
 
 ## Flow
 
-1. **`update.yml`** (00:00 UTC) resets `auto/update` from `main`, runs
+1. **`update.yml`** (00:23 UTC, off the hour so GitHub doesn't delay it by hours) resets `auto/update` from `main`, runs
    `nix flake update` (input by input if that fails, holding back inputs that
    can't be fetched), the cache gate (below) and `update_packages.py`, formats,
    and force-pushes one commit. The single PR on that branch is created or
