@@ -74,6 +74,15 @@ in {
       };
     # `<nixpkgs>` resolves through the pinned registry instead of a stale channel.
     nix.channel.enable = false;
+    # Leftovers from before channels were disabled make every nix command warn; activation runs tmpfiles --remove.
+    systemd.tmpfiles.rules = let
+      home = config.users.users.${config.fireproof.username}.home;
+    in [
+      "R /root/.nix-defexpr/channels* - - - - -"
+      "R /nix/var/nix/profiles/per-user/root/channels* - - - - -"
+      "R ${home}/.nix-defexpr/channels* - - - - -"
+      "R ${home}/.local/state/nix/profiles/channels* - - - - -"
+    ];
 
     # `batch` rather than `idle` so a pegged CPU can't starve a rebuild; best-effort IO because BFQ enforces `idle` strictly.
     nix.daemonCPUSchedPolicy = "batch";
