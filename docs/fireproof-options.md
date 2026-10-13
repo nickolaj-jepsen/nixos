@@ -933,6 +933,38 @@ string
 
 
 
+## fireproof\.homelab\.ci-runner\.enable
+
+
+
+Whether to enable self-hosted GitHub Actions runners for this repo’s CI builds\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.homelab\.domain
 
 
