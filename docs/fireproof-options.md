@@ -1,4 +1,92 @@
+## fireproof\.agents\.lspServers
+
+Language servers by name, configured for every coding agent that speaks LSP\.
+
+
+
+*Type:*
+attribute set of (submodule)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.agents\.lspServers\.\<name>\.args
+
+
+
+Arguments passed to the server\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.agents\.lspServers\.\<name>\.command
+
+
+
+Store path of the server binary; agents spawn it with whatever PATH the terminal had\.
+
+
+
+*Type:*
+string
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.agents\.lspServers\.\<name>\.extensionToLanguage
+
+
+
+LSP language id by file extension (with the leading dot)\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.agents\.skills
+
+
 
 Agent skill directories by skill name, installed for every coding agent\.
 

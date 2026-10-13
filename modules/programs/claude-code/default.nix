@@ -30,6 +30,17 @@
           --arg warn "$(printf '\033[33m')" \
           --arg reset "$(printf '\033[0m')" '
             def pct: (.context_window.used_percentage // 0);
+            # resets_at is epoch seconds per the docs; the ISO branch is a guard, not a known format.
+            def hhmm: (if type == "number" then . else sub("\\.[0-9]+"; "") | fromdateiso8601 end)
+              | strflocaltime("%H:%M");
+            # Plan limits are absent on API-key sessions and before the first response.
+            def limit($label; $window; $withReset):
+              ($window.used_percentage // 0) as $p
+              | if $p < 70 then empty
+                else "\($warn)\($label) \($p | floor)%"
+                  + (if $withReset then (try " ↻\($window.resets_at | hhmm)" catch "") else "" end)
+                  + $reset
+                end;
             [
               (if $profile == "work" then "\($warn)work\($reset)" else empty end),
               .model.display_name,
@@ -37,14 +48,39 @@
               (if .fast_mode then "fast" else empty end),
               (if pct > 80
                then "\($warn)\(pct)%\($reset)"
-               else "\($dim)\(pct)%\($reset)" end)
+               else "\($dim)\(pct)%\($reset)" end),
+              limit("5h"; .rate_limits.five_hour; true),
+              limit("7d"; .rate_limits.seven_day; false)
             ] | join("\($dim) · \($reset)")
           '
       '';
     };
 
+    # Loads the cwd's direnv/nix-direnv env into the Bash tool, which otherwise
+    # keeps the env of the shell claude was launched from.
+    direnvHook = pkgs.writeShellApplication {
+      name = "claude-direnv";
+      runtimeInputs = [config.programs.direnv.package];
+      text = ''
+        [ -n "''${CLAUDE_ENV_FILE:-}" ] || exit 0
+        # A blocked or missing .envrc exports nothing; don't surface it as a hook error on every cd.
+        direnv export bash >>"$CLAUDE_ENV_FILE" 2>/dev/null || true
+      '';
+    };
+
+    direnvHooks = [
+      {
+        hooks = [
+          {
+            type = "command";
+            command = lib.getExe direnvHook;
+          }
+        ];
+      }
+    ];
+
     # claude-code resolves the checker off PATH by bare name, so it has to be a
-    # real package rather than a store path like the LSP servers below. hunspell
+    # real package rather than a store path like the LSP servers. hunspell
     # over aspell because only it takes several dictionaries at once (`-d a,b`).
     spellChecker = pkgs.hunspell.withDicts (d: [d.en_US d.da_DK]);
 
@@ -98,52 +134,105 @@
       skills = config.fireproof.agents.skills;
       commandsDir = ./commands;
 
-      # Real go-to-definition/find-references/diagnostics instead of grep. Gated on
-      # neovim's full tier (modules/programs/neovim.nix), which already carries
-      # nil/pyrefly/tsserver; rust-analyzer replaces the hand-installed
-      # rust-analyzer-lsp plugin. Store paths, not bare names — claude-code spawns
-      # these itself and inherits whatever PATH the terminal had.
-      lspServers = lib.mkIf config.fireproof.neovim.full.enable {
-        nix = {
-          command = lib.getExe pkgs.nil;
-          extensionToLanguage.".nix" = "nix";
-        };
-        python = {
-          command = lib.getExe pkgs.pyrefly;
-          args = ["lsp"];
-          extensionToLanguage = {
-            ".py" = "python";
-            ".pyi" = "python";
-          };
-        };
-        typescript = {
-          command = lib.getExe pkgs.typescript-language-server;
-          args = ["--stdio"];
-          extensionToLanguage = {
-            ".ts" = "typescript";
-            ".mts" = "typescript";
-            ".cts" = "typescript";
-            ".tsx" = "typescriptreact";
-            ".js" = "javascript";
-            ".mjs" = "javascript";
-            ".cjs" = "javascript";
-            ".jsx" = "javascriptreact";
-          };
-        };
-        rust = {
-          command = lib.getExe pkgs.rust-analyzer;
-          extensionToLanguage.".rs" = "rust";
-        };
-      };
+      # The fireproof.agents.lspServers registry (agent-lsp.nix); its rust-analyzer
+      # replaces the hand-installed rust-analyzer-lsp plugin.
+      lspServers = config.fireproof.agents.lspServers;
 
       settings = {
         tui = "fullscreen";
-        voiceEnabled = true;
+        voice.enabled = true;
         useAutoModeDuringPlan = true;
         skipAutoPermissionPrompt = true;
+        # Drives niri's urgency hint; desktop toasts come from the Notification hook.
         preferredNotifChannel = "terminal_bell";
-        # Global, not per-model — the only knob; /effort still overrides per session.
+        # /effort saves per model under modelSettings, but settings.json is a
+        # read-only store symlink, so those picks only last the session. Keys are
+        # aliases, resolved like /model, so they follow new model releases; the
+        # top-level level is the legacy default for models not listed.
         effortLevel = "high";
+        modelSettings = {
+          opus.effortLevel = "high";
+          fable.effortLevel = "xhigh";
+          sonnet.effortLevel = "medium";
+        };
+        hooks =
+          {
+            SessionStart = direnvHooks;
+            CwdChanged = direnvHooks;
+          }
+          # macOS has desktop.enable too, but no notification daemon for notify-send.
+          // lib.optionalAttrs (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
+            Notification = [
+              {
+                matcher = "permission_prompt|idle_prompt|elicitation_dialog";
+                hooks = [
+                  {
+                    type = "command";
+                    command = "${lib.getExe pkgs.agent-notify} 'Claude Code'";
+                  }
+                ];
+              }
+            ];
+          };
+        # Context for the auto-mode classifier, adapted from /auto-mode-setup
+        # (run per-project) to every project and host. Replaces the built-in
+        # environment wholesale, like the setup's own output: no "$defaults".
+        autoMode.environment = let
+          work = config.fireproof.work.enable;
+          onWork = lib.optional work;
+        in
+          [
+            "### Org-wide"
+            (
+              if work
+              then "- **Organization**: Digital-Udvikling (GitHub org of the user's employer) for work repos; everything else is personal"
+              else "- **Organization**: None configured (personal machine)"
+            )
+            "- **Cloud provider(s)**: None configured"
+            "- **Repository visibility**: github.com/nickolaj-jepsen/nixos (~/nixos) is PUBLIC; a push there is publishing, so only that repo's own work belongs in it and secrets or personal/work data never do"
+            "- **Internal sharing / snippet hosting**: None configured; public paste/gist services are outside the trust boundary"
+            "- **Secrets management**: agenix-rekey. Age-encrypted `*.age` files under ~/nixos/secrets (master identity secrets/yubikey-identity.txt, YubiKey-backed) decrypt at activation to /run/agenix and /run/user/<uid>/agenix. Edited only via `just secret-edit`/`secret-generate`/`secret-rekey`; decrypted contents are never printed, copied or committed. CI secrets: ATTIC_TOKEN, BOT_TOKEN, CLAUDE_CODE_OAUTH_TOKEN, HOMELAB_DOMAIN"
+            "- **Default / protected branches**: `main` is the default and protected branch of ~/nixos (plus one ruleset); a nightly update bot opens an automerged PR against it"
+            "- **CI/CD deploy targets**: None configured; hosts are activated by hand with `just switch`/`boot`/`home-switch`/`darwin-switch` (this machine) or `just deploy-remote` (another host), all of which change a live system"
+            "- **Network posture**: ordinary internet access plus a Tailscale tailnet"
+            "- **Host containment**: None; Claude Code runs unsandboxed with the user's full privileges on their own workstations (NixOS, nix-darwin or standalone home-manager)"
+            (
+              "- **Source control**: github.com/nickolaj-jepsen (personal)"
+              + lib.optionalString work " and github.com/Digital-Udvikling (work)"
+            )
+            (
+              if work
+              then "- **Trusted internal domains**: aortl.net (work internal services, e.g. insight.mcp.aortl.net, metabase.aortl.net)"
+              else "- **Trusted internal domains**: None configured"
+            )
+            "- **Trusted cloud buckets**: None configured"
+            (
+              if work
+              then "- **Key internal services**: work Linear, Sentry, Grafana, Metabase and GrowthBook (via MCP); a homelab Grafana"
+              else "- **Key internal services**: a homelab Grafana"
+            )
+            "- **Internal package registry**: an attic Nix binary cache on the homelab (attic.<HOMELAB_DOMAIN>)"
+            "- **Sensitive data locations & audiences**: ~/nixos/secrets/** (`*.age`, secrets/yubikey-identity.txt), /run/agenix, /run/user/*/agenix, ~/.ssh, ~/.claude/.credentials.json, ~/.claude-work/.credentials.json, `.env` files; share only with audiences cleared at the [named+specifics] bar"
+            "- **Data retention / declassification**: None configured"
+            "- **Sensitive remote targets**: any namespace, host, context or container whose name carries prod or production as a whole word or name segment; ~/nixos/secrets/k8s/ao-prod.age is encrypted material, not a live target"
+            (
+              if work
+              then "- **Protected deployment namespaces / environments**: `ao-prod` (work Kubernetes); otherwise fall back to the Sensitive remote targets heuristic"
+              else "- **Protected deployment namespaces / environments**: None configured; fall back to the Sensitive remote targets heuristic"
+            )
+            "- **Protected IaC scopes**: IAM, RBAC, networking, quota and node-pool resources; anything whose name or tag carries prod or production as a whole word or name segment"
+            "### User-specific"
+            (
+              "- **Primary use of Claude Code**: the user's own Nix system configuration (flakes, home-manager, agenix) and hobby projects"
+              + lib.optionalString work "; on this host also software development for Digital-Udvikling"
+            )
+            "- **Trusted repo**: ~/nixos (PUBLIC, see Repository visibility) and the user's own checkouts under ~/dev"
+            "- **Org-specific CLIs**: `just` (task runner in ~/nixos), agenix/age (secrets)"
+          ]
+          ++ onWork "- **Org-specific CLIs (work)**: `ds` (Digital-Udvikling repositories only), `kubectl` (work clusters)"
+          ++ [
+            "- routine under ~/nixos: `nix eval`/`build`/`fmt`/`flake check`, `just build-system`/`diff`/`fmt`/`check`/`docs`, and commits on local branches"
+          ];
         # Underlines misspelled words in the prompt input. Colour is left to the
         # theme's error colour, like the statusline above. Only ever read from
         # user settings — a spellcheck block in a repo's .claude/ is ignored.

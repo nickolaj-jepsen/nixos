@@ -56,6 +56,30 @@ let
         description = "Agent skill directories by skill name, installed for every coding agent.";
       };
 
+      # Same pattern for language servers (registered by agent-lsp.nix); each
+      # agent leaf maps them to its own schema.
+      agents.lspServers = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule {
+          options = {
+            command = lib.mkOption {
+              type = lib.types.str;
+              description = "Store path of the server binary; agents spawn it with whatever PATH the terminal had.";
+            };
+            args = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [];
+              description = "Arguments passed to the server.";
+            };
+            extensionToLanguage = lib.mkOption {
+              type = lib.types.attrsOf lib.types.str;
+              description = "LSP language id by file extension (with the leading dot).";
+            };
+          };
+        });
+        default = {};
+        description = "Language servers by name, configured for every coding agent that speaks LSP.";
+      };
+
       # Everyday GUI apps gate on desktop.enable (plus dev/work where relevant)
       # with no toggle of their own; only the opt-in extras under desktop above
       # have one. A leaf adds a Homebrew cask in its flake.modules.darwin
