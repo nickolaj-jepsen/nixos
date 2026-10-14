@@ -17,6 +17,7 @@
     fireproof.dev.clickhouse.enable = false; # headless server: no need for the clickhouse client
     # Work-owned server gets no personal tokens.
     fireproof.dev.pi.enable = false;
+    fireproof.dev.opencode.enable = false;
     fireproof.dev.mcp.homelab.enable = false;
     fireproof.work.enable = true;
     fireproof.claude-code.work.enable = true;

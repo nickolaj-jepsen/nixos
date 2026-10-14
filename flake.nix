@@ -85,6 +85,11 @@
     pi.inputs.bun2nix-x86_64-darwin.follows = "pi/bun2nix";
     pi.inputs.bun2nix.inputs.treefmt-nix.follows = "treefmt-nix";
 
+    # Tracks `dev`: nixpkgs is still on 1.x. Upstream pins nixpkgs-unstable, whose
+    # bun its node_modules hash is computed against; there's no binary cache.
+    opencode.url = "github:anomalyco/opencode";
+    opencode.inputs.nixpkgs.follows = "nixpkgs-unstable";
+
     agenix.url = "github:ryantm/agenix";
     agenix.inputs.nixpkgs.follows = "nixpkgs";
     agenix-rekey.url = "github:oddlama/agenix-rekey";

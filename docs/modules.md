@@ -120,6 +120,8 @@ home-manager and the overlays):
   they are Claude Code plugin marketplaces fetched at runtime
   (`extraKnownMarketplaces`/`enabledPlugins` in
   `modules/programs/claude-code/default.nix`), so they reach Claude Code only.
+  opencode (`modules/programs/opencode.nix`) gets no skills of its own: v2
+  discovers `~/.claude/skills`, so linking them again would load them twice.
 - **Pi extension**: one `.ts` file in `modules/programs/pi/extensions/`, a
   local pi package (`"pi": {"extensions": ["./*.ts"]}`) built by the pi leaf
   and listed in `settings.packages`. The build runs `tsc --noEmit` against the
@@ -132,6 +134,7 @@ pi-extensions-dev` links `node_modules` into the folder for editor types and
 - **Agent language servers**: the `fireproof.agents.lspServers` registry
   (`command`/`args`/`extensionToLanguage`), filled by
   `modules/programs/agent-lsp.nix`; claude-code uses it as-is and copilot
-  maps it to its `fileExtensions` schema. Desktop toasts for agent
+  maps it to its `fileExtensions` schema; opencode 2.x starts no language
+  servers. Desktop toasts for agent
   `Notification` hooks go through `pkgs.agent-notify <app name>`, since both
   CLIs send the same payload.

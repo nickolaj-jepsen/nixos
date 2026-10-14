@@ -49,7 +49,7 @@ let
       # Registry: leaves register skills next to the feature they document (e.g.
       # git.nix registers gh-stack from the extension's own source — third-party
       # skills are referenced upstream, never vendored); the agent leaves
-      # (claude-code, copilot, pi) consume the merged set.
+      # (claude-code, copilot, pi; opencode via ~/.claude/skills) consume the merged set.
       agents.skills = lib.mkOption {
         type = lib.types.attrsOf lib.types.path;
         default = {};
@@ -99,9 +99,10 @@ let
           homelab.enable = cascade config.fireproof.dev.mcp.enable "Enable the homelab Grafana MCP server and its token secret";
         };
         pi.enable = cascade config.fireproof.dev.enable "Enable the pi coding agent with the lazypi extension roster";
+        opencode.enable = cascade config.fireproof.dev.enable "Enable the opencode 2.x coding agent";
         llm = {
           enable = lib.mkEnableOption ''
-            local LLM serving (llama-swap + CUDA llama.cpp) and its pi provider.
+            local LLM serving (llama-swap + CUDA llama.cpp) and its pi/opencode providers.
             Off by default rather than following dev.enable: it needs a ≥12GB
             NVIDIA GPU, which macbook and dev-ao don't have
           '';

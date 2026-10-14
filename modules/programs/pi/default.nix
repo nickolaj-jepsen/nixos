@@ -74,7 +74,7 @@ in {
       programs.pi.coding-agent = {
         enable = true;
         package = pi;
-        # Shared with claude-code and copilot (agents.nix); keep it agent-agnostic.
+        # Shared with claude-code, copilot (agents.nix) and opencode; keep it agent-agnostic.
         rules = builtins.readFile ../agent-context.md;
         # The fireproof.agents.skills registry, linked into one dir.
         skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];

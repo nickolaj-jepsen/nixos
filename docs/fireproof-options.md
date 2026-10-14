@@ -621,7 +621,7 @@ true
 
 
 
-Whether to enable local LLM serving (llama-swap + CUDA llama\.cpp) and its pi provider\.
+Whether to enable local LLM serving (llama-swap + CUDA llama\.cpp) and its pi/opencode providers\.
 Off by default rather than following dev\.enable: it needs a ≥12GB
 NVIDIA GPU, which macbook and dev-ao don’t have
 \.
@@ -706,6 +706,30 @@ true
 
 
 Enable the homelab Grafana MCP server and its token secret
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.opencode\.enable
+
+
+
+Enable the opencode 2\.x coding agent
 
 
 

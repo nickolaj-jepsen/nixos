@@ -722,7 +722,7 @@
         "type": "github"
       }
     },
-    "nixpkgs-cuda_held1": {
+    "nixpkgs-cuda": {
       "locked": {
         "lastModified": 1791179034,
         "narHash": "sha256-Ni0LBydzaCi8oek12r4mVreuFHqYlM1eTD6SfiENKfw=",
@@ -812,6 +812,26 @@
       "original": {
         "owner": "kepano",
         "repo": "obsidian-skills",
+        "type": "github"
+      }
+    },
+    "opencode": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs-unstable"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792014060,
+        "narHash": "sha256-FsdIjm41ppKqBDmIcOQ9a1cvi9pqLWWJE5ITdciMVm4=",
+        "owner": "anomalyco",
+        "repo": "opencode",
+        "rev": "7291f3e07a66fe66c5b8b608071aad2ef6f27e49",
+        "type": "github"
+      },
+      "original": {
+        "owner": "anomalyco",
+        "repo": "opencode",
         "type": "github"
       }
     },
@@ -943,11 +963,12 @@
         "nix-vscode-extensions": "nix-vscode-extensions",
         "nixos-wsl": "nixos-wsl",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-cuda": "nixpkgs-cuda_held1",
+        "nixpkgs-cuda": "nixpkgs-cuda",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nvf": "nvf",
         "obsidian-extensions": "obsidian-extensions",
         "obsidian-skills": "obsidian-skills",
+        "opencode": "opencode",
         "pi": "pi",
         "treefmt-nix": "treefmt-nix",
         "walldye": "walldye",
