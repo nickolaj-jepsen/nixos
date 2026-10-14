@@ -28,7 +28,7 @@ export default function (pi: ExtensionAPI) {
         : [ctx.ui.theme.fg("dim", `stashed (ctrl+s restores): ${preview(stash)}`)],
     );
 
-  // Overrides the ctrl+s save actions only in the editor; the model/thinking/session pickers keep theirs.
+  // Editor-only; the pickers' ctrl+s save actions are moved to alt+s in ../default.nix.
   pi.registerShortcut("ctrl+s", {
     description: "Stash the prompt until the next submit",
     handler: (ctx) => {

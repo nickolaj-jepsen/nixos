@@ -90,6 +90,10 @@ in {
           theme = "system";
           # Keeps the version and key hints; drops the loaded-resource listing.
           quietStartup = "header";
+          # Loads the cwd's direnv/nix-direnv env into the bash tool, which
+          # otherwise keeps the env pi was launched with. Blocked or missing
+          # .envrc files export nothing.
+          shellCommandPrefix = ''eval "$(${lib.getExe config.programs.direnv.package} export bash 2>/dev/null)"'';
         };
         settings.packages = [
           # extension-settings must load before powerbar (its settings panel).
@@ -99,8 +103,6 @@ in {
           "npm:@juicesharp/rpiv-todo@2.13.8"
           # Kagi search/extract; far cheaper in context than pi-web-access.
           "npm:@mjakl/pi-kagi-api@0.1.0"
-          # Claude Code CLI login as model provider — no API key in the flake.
-          "npm:pi-claude-cli@0.3.1"
           # guardrails
           "npm:@gotgenes/pi-permission-system@40.2.0"
           # context diet
@@ -187,22 +189,51 @@ in {
         };
       };
 
+      # Frees ctrl+s for extensions/stash.ts. These only act in pickers, but pi's
+      # conflict check ignores view and would warn at every startup.
+      home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
+        "app.thinking.save" = "alt+s";
+        "app.session.toggleSort" = "alt+s";
+        "app.models.save" = "alt+s";
+      };
+
       # Nix-owned (read-only), so pi's "persist globally" approval won't stick;
       # session approvals still work.
       home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
         permission = {
           "*" = "allow";
+          # Gates bash too, and matches symlink targets, so the agenix-backed
+          # ~/.ssh keys and ~/.pi/agent/*-api-key are covered. `agenix*` also catches
+          # the agenix.d/<gen> dirs the /run/agenix symlinks resolve to.
           path = {
             "*.env" = "deny";
             "*.env.*" = "deny";
             "*.env.example" = "allow";
+            "/run/agenix*" = "deny";
+            "/run/user/*/agenix*" = "deny";
+            "~/.ssh/id_*" = "deny";
+            "~/.claude/.credentials.json" = "deny";
+            "~/.claude-work/.credentials.json" = "deny";
           };
           bash = {
+            # Explicit, or the top-level "*" still applies but warns at startup.
+            "*" = "allow";
             "rm -rf /" = "deny";
             "sudo rm *" = "deny";
             "rm -rf *" = "ask";
             "sudo *" = "ask";
             "git push --force*" = "ask";
+            # Mirrors claude-code's ask list: these touch the live system or the outside world.
+            "just switch *" = "ask";
+            "just boot *" = "ask";
+            "just home-switch *" = "ask";
+            "just darwin-switch *" = "ask";
+            "just deploy-remote *" = "ask";
+            "just bootstrap-flash *" = "ask";
+            "just gc *" = "ask";
+            # Prints plaintext secrets to the transcript.
+            "just decrypt *" = "ask";
+            "gh pr merge *" = "ask";
           };
         };
       };
