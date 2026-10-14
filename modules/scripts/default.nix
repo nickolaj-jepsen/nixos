@@ -125,6 +125,23 @@
             procps
           ];
         })
+      ]
+      # Shadows the system xdg-open (per-user profile precedes it on PATH) so Ghostty link clicks land in VS Code.
+      ++ lib.optionals (config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux) [
+        (lib.hiPrio (pkgs.writeShellApplication {
+          name = "xdg-open";
+          runtimeInputs = with pkgs; [
+            procps
+            gawk
+            coreutils
+            file
+            git
+            libnotify
+          ];
+          text =
+            builtins.replaceStrings ["@xdgOpen@"] ["${pkgs.xdg-utils}/bin/xdg-open"]
+            (builtins.readFile ./ghostty-xdg-open.bash);
+        }))
       ];
   };
 }
