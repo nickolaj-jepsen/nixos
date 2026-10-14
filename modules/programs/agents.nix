@@ -6,6 +6,9 @@
     ...
   }: {
     config = lib.mkIf config.fireproof.dev.enable {
+      # On PATH for pi's extensions/notify.ts; the CLI hooks below use its store path.
+      home.packages = lib.optional (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) pkgs.agent-notify;
+
       # Copilot reads this dir as user hooks, in Claude Code's nested format. Not
       # the module's `settings`: that writes config.json, which Copilot now
       # owns as mutable state (trusted folders); user settings.json is herdr's.
