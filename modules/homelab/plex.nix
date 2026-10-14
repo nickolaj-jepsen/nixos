@@ -8,7 +8,7 @@
     cfg = config.fireproof.homelab;
     domain = "plex.${cfg.domain}";
   in {
-    config = lib.mkIf config.fireproof.homelab.enable {
+    config = lib.mkIf (cfg.enable && cfg.plex.enable) {
       systemd.services.plex.unitConfig.RequiresMountsFor = ["/mnt/data"];
 
       services.nginx.virtualHosts."${domain}" = fpLib.mkVirtualHost {

@@ -99,7 +99,6 @@ let
           homelab.enable = cascade config.fireproof.dev.mcp.enable "Enable the homelab Grafana MCP server and its token secret";
         };
         pi.enable = cascade config.fireproof.dev.enable "Enable the pi coding agent with the lazypi extension roster";
-        paseo.enable = lib.mkEnableOption "the Paseo daemon, for driving coding agents from the phone app";
         llm = {
           enable = lib.mkEnableOption ''
             local LLM serving (llama-swap + CUDA llama.cpp) and its pi provider.
@@ -150,6 +149,7 @@ let
           default = "nickolaj@fireproof.website";
           description = "Contact email registered with the ACME provider.";
         };
+        plex.enable = lib.mkEnableOption "Plex Media Server. Off by default: kept only until everyone has moved to Jellyfin";
       };
 
       hardware = {

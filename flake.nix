@@ -134,10 +134,6 @@
     zwift-client.url = "github:nickolaj-jepsen/zwift-client";
     zwift-client.flake = false;
 
-    # Only the NixOS module is used; the package comes from pkgs.unstable (cached).
-    paseo.url = "github:getpaseo/paseo";
-    paseo.inputs.nixpkgs.follows = "nixpkgs";
-
     # Overridden at build time by `just bootstrap-iso <host>` to inject the
     # decrypted host SSH key into a host-specific bootstrap ISO. The default
     # points at an empty directory so the flake evaluates without any override.

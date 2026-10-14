@@ -725,38 +725,6 @@ true
 
 
 
-## fireproof\.dev\.paseo\.enable
-
-
-
-Whether to enable the Paseo daemon, for driving coding agents from the phone app\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.dev\.pi\.enable
 
 
@@ -1038,6 +1006,38 @@ string
 
 ```nix
 "nickolaj.com"
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.homelab\.plex\.enable
+
+
+
+Whether to enable Plex Media Server\. Off by default: kept only until everyone has moved to Jellyfin\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
 ```
 
 *Declared by:*
