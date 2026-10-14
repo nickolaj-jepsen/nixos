@@ -120,6 +120,15 @@ home-manager and the overlays):
   they are Claude Code plugin marketplaces fetched at runtime
   (`extraKnownMarketplaces`/`enabledPlugins` in
   `modules/programs/claude-code/default.nix`), so they reach Claude Code only.
+- **Pi extension**: one `.ts` file in `modules/programs/pi/extensions/`, a
+  local pi package (`"pi": {"extensions": ["./*.ts"]}`) built by the pi leaf
+  and listed in `settings.packages`. The build runs `tsc --noEmit` against the
+  pi that ships, so a type error fails `just build-system`. npm dependencies go
+  in its `package.json` + lockfile (`npm install --package-lock-only`; read via
+  `importNpmLock`, no hash to bump); never add pi's own packages
+  (`@earendil-works/*`, `typebox`), which are linked from pi. `just
+pi-extensions-dev` links `node_modules` into the folder for editor types and
+  `pi -e modules/programs/pi/extensions/<name>.ts` without a rebuild.
 - **Agent language servers**: the `fireproof.agents.lspServers` registry
   (`command`/`args`/`extensionToLanguage`), filled by
   `modules/programs/agent-lsp.nix`; claude-code uses it as-is and copilot

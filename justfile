@@ -421,6 +421,11 @@ nurl *ARGS="--help":
 why-depends package hostname=`hostname -s`:
     {{ nixcmd }} why-depends --all .#nixosConfigurations.{{ hostname }}.config.system.build.toplevel .#nixosConfigurations.{{ hostname }}.pkgs.{{ package }}
 
+[doc("Link the built pi extensions' node_modules into the repo, for editor types and `pi -e`")]
+[group("tools")]
+pi-extensions-dev:
+    cd modules/programs/pi/extensions && {{ nixcmd }} build {{ justfile_directory() }}#pi-extensions --out-link result && ln -sfn result/node_modules node_modules
+
 [doc('Remove build results and temporary files')]
 [group('tools')]
 clean:

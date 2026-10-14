@@ -1,5 +1,5 @@
 # llama-swap entries per VRAM tier (fireproof.dev.llm.vramGiB), shared by
-# llm.nix (serving) and pi.nix (provider). Every tier reuses the id
+# llm.nix (serving) and pi/default.nix (provider). Every tier reuses the id
 # "qwen3.8-27b" for its default entry so clients don't care which host they hit.
 #
 # q4_0 KV on the 27B: 32k at q8_0 needs ~14.1 GiB on the 16 GiB tier and OOM'd

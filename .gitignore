@@ -7,3 +7,4 @@ result
 **/id_rsa
 .aider*
 __pycache__/
+modules/programs/pi/extensions/node_modules
