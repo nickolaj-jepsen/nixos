@@ -5,11 +5,10 @@
     pkgs,
     ...
   }: let
-    inherit (config.fireproof) username;
     c = config.fireproof.theme.colors;
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
-      home.file.".config/DankMaterialShell/colors.json".text = builtins.toJSON {
+      xdg.configFile."DankMaterialShell/colors.json".text = builtins.toJSON {
         name = "custom";
         primary = "#${c.accent}";
         primaryText = "#${c.whiteAlt}";
@@ -37,7 +36,7 @@
 
       programs.dank-material-shell.settings = {
         currentThemeName = "custom";
-        customThemeFile = "/home/${username}/.config/DankMaterialShell/colors.json";
+        customThemeFile = "${config.xdg.configHome}/DankMaterialShell/colors.json";
         widgetColorMode = "default";
 
         # colors.json is dark-only; a portal light/dark flip would mislabel the dark colors as "light"

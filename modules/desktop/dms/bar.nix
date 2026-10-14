@@ -7,6 +7,7 @@
   }: let
     inherit (config.fireproof) monitors;
 
+    # Sub-keys of disabled features (border*, widgetOutline*, gothCorner*, autoHideDelay, popupGapsManual) are left out.
     commonBarSettings = {
       enabled = true;
       position = 0;
@@ -19,33 +20,19 @@
       squareCorners = true;
       noBackground = false;
       gothCornersEnabled = false;
-      gothCornerRadiusOverride = false;
-      gothCornerRadiusValue = 12;
       borderEnabled = false;
-      borderColor = "primary";
-      borderOpacity = 1;
-      borderThickness = 2;
       widgetOutlineEnabled = false;
-      widgetOutlineColor = "primary";
-      widgetOutlineOpacity = 1;
-      widgetOutlineThickness = 1;
       fontScale = 1;
       autoHide = false;
-      autoHideDelay = 250;
       openOnOverview = false;
       visible = true;
       popupGapsAuto = true;
-      popupGapsManual = 4;
       maximizeDetection = true;
     };
 
     primaryMonitor = fpLib.primaryMonitor monitors;
     primaryX = primaryMonitor.position.x or 0;
-
-    # Partition secondary monitors into left and right by x position relative to primary
     secondaryMonitors = fpLib.secondaryMonitors monitors;
-    leftMonitors = builtins.filter (m: m.position.x <= primaryX) secondaryMonitors;
-    rightMonitors = builtins.filter (m: m.position.x > primaryX) secondaryMonitors;
 
     primaryBar =
       commonBarSettings
@@ -53,8 +40,7 @@
         id = "default";
         name = "Primary Bar";
 
-        # Primary sits flush against the screen edge, so it gets a slightly roomier,
-        # rounded treatment; the secondaries keep the flat square defaults above.
+        # Primary sits flush against the screen edge, so it gets a roomier, rounded treatment.
         attachToScreenEdge = true;
         squareCorners = false;
         innerPadding = 0;
@@ -64,11 +50,7 @@
         # Ignored while attachToScreenEdge is set (DMS forces 0); kept for when it isn't.
         spacing = 2;
 
-        screenPreferences = [
-          {
-            name = primaryMonitor.name or "";
-          }
-        ];
+        screenPreferences = [{name = primaryMonitor.name or "";}];
         showOnLastDisplay = true;
         leftWidgets = [
           "launcherButton"
@@ -77,12 +59,10 @@
           "dankActions:variant_ndw"
           "runningApps"
         ];
-        centerWidgets = [
-          "focusedWindow"
-        ];
+        centerWidgets = ["focusedWindow"];
         rightWidgets =
-          ["music"]
-          ++ [
+          [
+            "music"
             "systemTray"
             "cpuUsage"
             "diskUsage"
@@ -92,46 +72,20 @@
           ++ ["notificationButton"];
       };
 
-    leftSecondaryBar =
-      commonBarSettings
-      // {
-        id = "secondary-left";
-        name = "Secondary Bar (Left)";
-        screenPreferences =
-          builtins.map (monitor: {
-            inherit (monitor) name;
-          })
-          leftMonitors;
-        showOnLastDisplay = false;
-        leftWidgets = [];
-        centerWidgets = [];
-        rightWidgets = [
-          "workspaceSwitcher"
-        ];
-      };
-
-    rightSecondaryBar =
-      commonBarSettings
-      // {
-        id = "secondary-right";
-        name = "Secondary Bar (Right)";
-        screenPreferences =
-          builtins.map (monitor: {
-            inherit (monitor) name;
-          })
-          rightMonitors;
-        showOnLastDisplay = false;
-        leftWidgets = [
-          "workspaceSwitcher"
-        ];
-        centerWidgets = [];
-        rightWidgets = [];
-      };
-
-    # Only include secondary bars if they have monitors assigned
-    secondaryBars =
-      (lib.optional (leftMonitors != []) leftSecondaryBar)
-      ++ (lib.optional (rightMonitors != []) rightSecondaryBar);
+    # One bar per side of the primary, with the workspace switcher on the edge facing it.
+    secondaryBar = side: onSide: let
+      screens = builtins.filter (m: onSide m.position.x) secondaryMonitors;
+    in
+      lib.optional (screens != []) (commonBarSettings
+        // {
+          id = "secondary-${lib.toLower side}";
+          name = "Secondary Bar (${side})";
+          screenPreferences = map (m: {inherit (m) name;}) screens;
+          showOnLastDisplay = false;
+          leftWidgets = lib.optional (side == "Right") "workspaceSwitcher";
+          centerWidgets = [];
+          rightWidgets = lib.optional (side == "Left") "workspaceSwitcher";
+        });
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.dank-material-shell.settings = {
@@ -147,7 +101,7 @@
         runningAppsCurrentWorkspace = true;
         runningAppsGroupByApp = true;
 
-        barConfigs = [primaryBar] ++ secondaryBars;
+        barConfigs = [primaryBar] ++ secondaryBar "Left" (x: x <= primaryX) ++ secondaryBar "Right" (x: x > primaryX);
       };
     };
   };

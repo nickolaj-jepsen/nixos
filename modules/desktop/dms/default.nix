@@ -22,9 +22,17 @@
     sessionEnforced = jsonFormat.generate "dms-session-enforced.json" {
       weatherCoordinates = "56.1496278,10.2134046";
     };
-    sessionDefaults = jsonFormat.generate "dms-session-defaults.json" {
-      wallpaperPath = "${config.xdg.dataHome}/backgrounds/dither-moon.png";
-    };
+    wallpaper = dir: "${config.xdg.dataHome}/${dir}/dither-moon.png";
+    # Odd transforms are 90°/270° (niri-outputs multiplies by 90).
+    portraitMonitors = lib.filter (m: m.name != null && m.transform != null && lib.mod m.transform 2 == 1) config.fireproof.monitors;
+    sessionDefaults = jsonFormat.generate "dms-session-defaults.json" ({
+        wallpaperPath = wallpaper "backgrounds";
+      }
+      // lib.optionalAttrs (portraitMonitors != []) {
+        perMonitorWallpaper = true;
+        # Unlisted monitors fall back to wallpaperPath.
+        monitorWallpapers = lib.genAttrs (map (m: m.name) portraitMonitors) (_: wallpaper "backgrounds-portrait");
+      });
   in {
     imports = [
       inputs.dank-material-shell.homeModules.dank-material-shell
@@ -32,6 +40,16 @@
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.dank-material-shell = {
         enable = true;
+
+        # Lock-screen wallpaper blur is a hardcoded Theme constant with no setting.
+        package = inputs.dank-material-shell.packages.${pkgs.stdenv.hostPlatform.system}.dms-shell.overrideAttrs (old: {
+          postInstall =
+            (old.postInstall or "")
+            + ''
+              substituteInPlace $out/share/quickshell/dms/Common/Theme.qml \
+                --replace-fail "lockScreenBlur: 0.8" "lockScreenBlur: 0"
+            '';
+        });
 
         enableDynamicTheming = false;
         # DMS VPN only drives NetworkManager connections.
@@ -45,13 +63,10 @@
           # Must match SettingsData.qml schema version, else a per-start migration runs silently; re-pin after `just update`.
           configVersion = 16;
 
-          # Enable blur on DMS's layer-shell surfaces. Blur only shows through
-          # translucency, so popupTransparency must be < 1 — the default 1.0 is solid
-          # and hides it entirely.
+          # Blur only shows through translucency; the default popupTransparency of 1 hides it.
           blurEnabled = true;
           popupTransparency = 0.46;
-          # DMS outlines every blurred surface by default; the outline fights the
-          # near-black palette, so drop it (blurBorderColor/Opacity are then dead keys).
+          # The default outline on blurred surfaces fights the near-black palette.
           blurBorderEnabled = false;
 
           clockFormat = "24h";
@@ -81,10 +96,8 @@
         };
       };
 
-      # niri defaults blur to xray (blurs the wallpaper — near-black here, so popouts
-      # look solid); force xray off so DMS's layers blur the windows behind them.
-      # niri-flake can't express background-effect, so append the rule and re-validate
-      # against niri-unstable (its default niri-stable predates it, would reject it).
+      # niri's default xray blur only shows the near-black wallpaper; blur the windows behind DMS instead.
+      # niri-flake can't express background-effect, and its niri-stable validator predates it.
       xdg.configFile.niri-config.source = lib.mkForce (
         pkgs.runCommand "niri-config.kdl" {
           config =
@@ -114,13 +127,6 @@
           old=$(${jq} -c 'objects' "$file" 2>/dev/null) && [ -n "$old" ] || old='{}'
         fi
         new=$(${jq} -s --argjson old "$old" '.[0] * $old * .[1]' ${sessionDefaults} ${sessionEnforced})
-        # DMS saves resolved /nix/store paths, which go stale on rebuild; point them back at the stable dir.
-        wp=$(${jq} -r '.wallpaperPath // ""' <<<"$new")
-        if [[ $wp == /nix/store/* ]]; then
-          bg=${config.xdg.dataHome}/backgrounds
-          [ -e "${config.xdg.dataFile.backgrounds.source}/''${wp##*/}" ] && wp="$bg/''${wp##*/}" || wp=$(${jq} -r .wallpaperPath ${sessionDefaults})
-          new=$(${jq} --arg wp "$wp" '.wallpaperPath = $wp' <<<"$new")
-        fi
         run mkdir -p "$(dirname "$file")"
         run rm -f "$file"
         run install -m644 /dev/stdin "$file" <<<"$new"
