@@ -2,12 +2,34 @@
   flake.modules.nixos.arr = {
     config,
     lib,
+    pkgs,
     ...
   }: let
     inherit (config.fireproof) username;
     cfg = config.fireproof.homelab;
     user = "media";
     group = "media";
+
+    # Live WAL-mode DBs that restic must not copy; arr-db-dump snapshots them instead.
+    dumpDir = "/var/backup/arr";
+    mediaDb = path: {
+      inherit path;
+      resticPath = path;
+      runAs = ["User=${user}"];
+    };
+    dbs = {
+      radarr = mediaDb "${config.services.radarr.dataDir}/radarr.db";
+      sonarr = mediaDb "${config.services.sonarr.dataDir}/sonarr.db";
+      lidarr = mediaDb "${config.services.lidarr.dataDir}/lidarr.db";
+      bazarr = mediaDb "${config.services.bazarr.dataDir}/db/bazarr.db";
+      sabnzbd = mediaDb "/var/lib/sabnzbd/admin/history1.db";
+      prowlarr = {
+        path = "${config.services.prowlarr.dataDir}/prowlarr.db";
+        resticPath = "/var/lib/private/prowlarr/prowlarr.db";
+        # DynamicUser: /var/lib/private is root-only, so reach the DB through a StateDirectory mount (reuses the dir owner's uid).
+        runAs = ["DynamicUser=yes" "User=prowlarr" "StateDirectory=prowlarr"];
+      };
+    };
 
     mkArrVHost = port:
       fpLib.mkVirtualHost {
@@ -37,9 +59,32 @@
         sabnzbd = mkMonitor "sabnzbd" "SABnzbd" "http://127.0.0.1:${toString config.services.sabnzbd.settings.misc.port}";
       };
 
-      systemd.services = lib.genAttrs ["bazarr" "lidarr" "radarr" "sabnzbd" "sonarr"] (_: {
-        unitConfig.RequiresMountsFor = ["/mnt/data"];
-      });
+      systemd.services =
+        lib.genAttrs ["bazarr" "lidarr" "radarr" "sabnzbd" "sonarr"] (_: {
+          unitConfig.RequiresMountsFor = ["/mnt/data"];
+        })
+        // {
+          # Restore: stop the app, delete <db>*, `sqlite3 <db> < <name>.sql`, chown to the app's user.
+          arr-db-dump = {
+            serviceConfig = {
+              Type = "oneshot";
+              UMask = "0077";
+            };
+            # As the DB's owner: a root sqlite3 can leave a root-owned -shm the app can't open.
+            script = lib.concatStrings (lib.mapAttrsToList (name: db: ''
+                systemd-run --wait --pipe --quiet --collect ${lib.concatMapStringsSep " " (p: "-p ${p}") db.runAs} \
+                  ${lib.getExe pkgs.sqlite} ${db.path} .dump > ${dumpDir}/${name}.sql.tmp
+                mv ${dumpDir}/${name}.sql.tmp ${dumpDir}/${name}.sql
+              '')
+              dbs);
+            preStart = "install -d -m700 ${dumpDir}";
+          };
+          # wants, not requires: a failed dump must not skip the file backup.
+          restic-backups-homelab = {
+            wants = ["arr-db-dump.service"];
+            after = ["arr-db-dump.service"];
+          };
+        };
 
       # for linux ISOs
       # ids pinned: containers run as media via a numeric --user, which a null uid breaks.
@@ -80,15 +125,20 @@
             "/var/lib/private/prowlarr"
             "/var/lib/sabnzbd"
             "/var/lib/bazarr"
+            dumpDir
           ];
-          exclude = [
-            # arrs logs and media cover
-            "/var/lib/*/.config/*/logs/"
-            "/var/lib/*/.config/*/MediaCover/"
-            "/var/lib/private/prowlarr/logs/"
-            "/var/lib/sabnzbd/Downloads/"
-            "/var/lib/sabnzbd/logs/"
-          ];
+          exclude =
+            lib.mapAttrsToList (_: db: "${db.resticPath}*") dbs
+            ++ [
+              # arrs logs and media cover
+              "/var/lib/*/.config/*/logs.db*"
+              "/var/lib/private/prowlarr/logs.db*"
+              "/var/lib/*/.config/*/logs/"
+              "/var/lib/*/.config/*/MediaCover/"
+              "/var/lib/private/prowlarr/logs/"
+              "/var/lib/sabnzbd/Downloads/"
+              "/var/lib/sabnzbd/logs/"
+            ];
         };
 
         sabnzbd = {
