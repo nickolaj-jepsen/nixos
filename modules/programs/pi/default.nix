@@ -138,48 +138,54 @@ in {
 
       # Not the module's `models` option — it only writes once, never updates.
       home.file.".pi/agent/models.json".text = builtins.toJSON {
-        providers = lib.optionalAttrs config.fireproof.dev.llm.enable {
-          # Served by llama-swap (modules/programs/llm.nix), which unloads one
-          # entry to load the other — switching costs a ~15s reload.
-          local = {
-            baseUrl = "http://127.0.0.1:9292/v1";
-            api = "openai-completions";
-            # llama-swap is loopback-only and default-allow; the field still has
-            # to be set for pi to treat the provider as configured.
-            apiKey = "local";
-            compat = {
-              supportsStore = false;
-              supportsDeveloperRole = false;
-              # llama.cpp drops top-level reasoning_effort (upstream PR #26941);
-              # the depth is pinned server-side per llama-swap entry instead.
-              supportsReasoningEffort = false;
-              maxTokensField = "max_tokens";
-              supportsStrictMode = false;
-              thinkingFormat = "deepseek";
-              sendSessionAffinityHeaders = false;
-              # Merges with the server's --chat-template-kwargs rather than
-              # replacing it, so the thinking toggle works and effort survives.
-              chatTemplateArgs.enable_thinking = {"$var" = "thinking.enabled";};
+        providers =
+          {
+            # Not OPENCODE_API_KEY: the pay-per-token Zen provider (`opencode`)
+            # reads that too and would list its models next to the Go ones.
+            opencode-go.apiKey = "!cat ${config.age.secrets.opencode-go-api-key.path}";
+          }
+          // lib.optionalAttrs config.fireproof.dev.llm.enable {
+            # Served by llama-swap (modules/programs/llm.nix), which unloads one
+            # entry to load the other — switching costs a ~15s reload.
+            local = {
+              baseUrl = "http://127.0.0.1:9292/v1";
+              api = "openai-completions";
+              # llama-swap is loopback-only and default-allow; the field still has
+              # to be set for pi to treat the provider as configured.
+              apiKey = "local";
+              compat = {
+                supportsStore = false;
+                supportsDeveloperRole = false;
+                # llama.cpp drops top-level reasoning_effort (upstream PR #26941);
+                # the depth is pinned server-side per llama-swap entry instead.
+                supportsReasoningEffort = false;
+                maxTokensField = "max_tokens";
+                supportsStrictMode = false;
+                thinkingFormat = "deepseek";
+                sendSessionAffinityHeaders = false;
+                # Merges with the server's --chat-template-kwargs rather than
+                # replacing it, so the thinking toggle works and effort survives.
+                chatTemplateArgs.enable_thinking = {"$var" = "thinking.enabled";};
+              };
+              models =
+                lib.mapAttrsToList (id: m: {
+                  inherit id;
+                  inherit (m) name;
+                  reasoning = true;
+                  # mmproj isn't loaded — no VRAM left for the vision tower.
+                  input = ["text"];
+                  contextWindow = m.ctx;
+                  maxTokens = 8192;
+                  cost = {
+                    input = 0;
+                    output = 0;
+                    cacheRead = 0;
+                    cacheWrite = 0;
+                  };
+                })
+                (import ../_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
             };
-            models =
-              lib.mapAttrsToList (id: m: {
-                inherit id;
-                inherit (m) name;
-                reasoning = true;
-                # mmproj isn't loaded — no VRAM left for the vision tower.
-                input = ["text"];
-                contextWindow = m.ctx;
-                maxTokens = 8192;
-                cost = {
-                  input = 0;
-                  output = 0;
-                  cacheRead = 0;
-                  cacheWrite = 0;
-                };
-              })
-              (import ../_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
           };
-        };
       };
 
       # Frees ctrl+s for extensions/stash.ts. These only act in pickers, but pi's

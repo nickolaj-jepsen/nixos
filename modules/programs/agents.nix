@@ -56,6 +56,11 @@
           path = "${config.home.homeDirectory}/.pi/agent/tensorx-api-key";
           mode = "0600";
         };
+        age.secrets.opencode-go-api-key = {
+          rekeyFile = ../../secrets/opencode-go-api-key.age;
+          path = "${config.home.homeDirectory}/.pi/agent/opencode-go-api-key";
+          mode = "0600";
+        };
       })
     ]);
   };

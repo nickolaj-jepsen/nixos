@@ -220,7 +220,13 @@
             else "tensorx/z-ai/glm-5.3";
           # Remote, so titling a session never evicts the local model from llama-swap.
           agents.title.model = "tensorx/z-ai/glm-5.3-flash";
-          providers = lib.optionalAttrs llm.enable {inherit local;} // {inherit tensorx;};
+          providers =
+            lib.optionalAttrs llm.enable {inherit local;}
+            // {
+              inherit tensorx;
+              # The built-in catalog supplies the models; only the key is ours.
+              opencode-go.settings.apiKey = "{file:${config.age.secrets.opencode-go-api-key.path}}";
+            };
         }
         // lib.optionalAttrs (config.programs.mcp.enable && config.programs.mcp.servers != {}) {
           mcp.servers = lib.mapAttrs (_: mcpServer) config.programs.mcp.servers;
