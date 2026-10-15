@@ -68,8 +68,8 @@
       # Firefox ≥137 blocklists VA-API on NVIDIA; without this YouTube decodes AV1/VP9 on the CPU.
       programs.firefox.profiles.default.settings."media.hardware-video-decoding.force-enabled" = true;
 
-      # btop is enabled globally in core.nix; on NVIDIA hosts use the build that
-      # links NVML so the GPU panel (util/VRAM/temp/power) populates.
+      # On NVIDIA hosts use the btop build that links NVML so the GPU panel
+      # (util/VRAM/temp/power) populates.
       programs.btop.package = pkgs.btop-cuda;
 
       # Per-process VRAM, which btop's GPU panel doesn't break down.

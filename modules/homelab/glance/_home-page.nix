@@ -34,7 +34,7 @@ in {
           title = "Storage";
           title-url = "https://fireproof.grafana.net/alerting/list";
           cache = "1m";
-          # Written every 5 min by storage-status.service (modules/homelab/storage-status.nix).
+          # Written by storage-status.service.
           url = "http://127.0.0.1:${toString statusPort}/storage.json";
           template = templates.storage-status;
         }

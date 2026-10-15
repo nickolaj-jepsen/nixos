@@ -19,7 +19,7 @@ in {
       owner = username;
     };
 
-    # ssh-agent now lives in the home-manager half (services.ssh-agent) so it
+    # ssh-agent runs from the home-manager half (services.ssh-agent) so it
     # covers standalone home hosts too; keep gcr from hijacking SSH_AUTH_SOCK.
     services.gnome.gcr-ssh-agent.enable = false;
 
@@ -34,7 +34,7 @@ in {
 
   # darwin: place the host identity at ~/.ssh (so HM-side agenix can decrypt) and
   # harden the native macOS sshd. Remote Login itself is enabled once by hand
-  # (`systemsetup -setremotelogin on`; see the macbook bootstrap notes) — this
+  # (`systemsetup -setremotelogin on`; see the Mac bootstrap notes in the justfile) — this
   # only manages its config. macOS Includes sshd_config.d/* at the top of
   # sshd_config and is socket-activated (a fresh sshd per connection), so a 000-
   # drop-in wins first-match and applies to the next connection without a reload.
@@ -165,7 +165,7 @@ in {
         };
     };
 
-    # The agent itself (was NixOS programs.ssh.startAgent) — ungated so every
+    # The agent itself, ungated so every
     # host/user gets one, including the standalone home host. Same %t/ssh-agent
     # socket; sets home.sessionVariables.SSH_AUTH_SOCK for shells.
     services.ssh-agent.enable = true;

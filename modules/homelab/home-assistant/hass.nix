@@ -75,7 +75,7 @@
         websockets = true;
       };
 
-      # stopIfChanged/RestartSec/start limit: see mqtt.nix.
+      # stopIfChanged/RestartSec/start limit: same reasons as systemd.services.mosquitto.
       systemd.services.home-assistant = {
         after = ["mosquitto.service"];
         wants = ["mosquitto.service"];
@@ -83,7 +83,7 @@
         startLimitIntervalSec = 120;
         startLimitBurst = 5;
         serviceConfig.RestartSec = "5s";
-        # Feeds rest_command.discord's !env_var; the #sys-info webhook is declared in nextcloud.nix.
+        # Feeds rest_command.discord's !env_var.
         serviceConfig.EnvironmentFile = config.age.secrets.discord-webhook-sys-info.path;
       };
 

@@ -1,7 +1,6 @@
 # Registers language servers into the fireproof.agents.lspServers registry, so
 # agents get real go-to-definition/find-references/diagnostics instead of grep.
-# Gated on neovim's full tier (modules/programs/neovim.nix), which already
-# carries nil/pyrefly/tsserver.
+# Gated on neovim's full tier, which already carries most of these servers.
 {
   flake.modules.homeManager.agent-lsp = {
     config,

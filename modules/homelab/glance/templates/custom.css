@@ -140,7 +140,7 @@
   display: none;
 }
 
-/* Storage widget (storage-status.tpl); --storage-warn is set from the theme in default.nix. */
+/* Storage widget; --storage-warn is injected from the theme palette, not defined here. */
 .storage-row {
   display: flex;
   align-items: center;

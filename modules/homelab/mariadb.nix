@@ -37,7 +37,7 @@
 
       services.restic.backups.homelab.paths = [config.services.mysqlBackup.location];
 
-      # Run by restic instead of its own timer (see postgres.nix).
+      # Run by restic instead, so each snapshot pairs the files with a same-moment dump.
       systemd.timers.mysql-backup.enable = false;
       systemd.services = {
         restic-backups-homelab = {

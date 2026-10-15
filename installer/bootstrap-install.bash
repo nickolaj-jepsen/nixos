@@ -127,7 +127,7 @@ else
     echo
     echo "Existing disk layout for ${HOST}: ${LAYOUT_FILES[*]}"
     if [ "${LAYOUT_FILES[*]}" != "${DISKO}" ]; then
-        # A template would merge with it rather than replace it (e.g. homelab's disks.nix).
+        # A template would merge with a hand-written layout rather than replace it.
         echo "Keeping it; to change the layout, edit those files and rebuild the ISO."
     elif confirm "Replace it with a template?"; then
         PICK_DISKO=1

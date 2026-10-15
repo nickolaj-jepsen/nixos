@@ -40,7 +40,7 @@
         };
       };
 
-      # Snapshot right before restic reads it instead of on the module's own 23:00 timer.
+      # Snapshot right before restic reads it instead of on the module's own timer.
       systemd.services.restic-backups-homelab = {
         wants = ["backup-vaultwarden.service"];
         after = ["backup-vaultwarden.service"];

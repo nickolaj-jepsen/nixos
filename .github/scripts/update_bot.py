@@ -1,17 +1,7 @@
 #!/usr/bin/env python3
 """Nightly update bot: one PR per day, quarantine of breaking updates, escalation to Claude.
 
-Subcommands (see docs/updates.md for the flow):
-  flake-update --json PATH       nix flake update, falling back to per-input so one bad fetch can't block the rest,
-                                 then the cache gate
-  cache-gate                     hold CACHE_GATED inputs at HEAD's lock until their build is cached (`just update`)
-  nightly --packages-json P --flake-json P
-                                 commit the current tree to auto/update and open/refresh its PR
-  triage --run-id ID             attribute a failed CI run on auto/update to updated units and hold them back
-  landed --pr N                  clear held-back state for units that landed with a merged update or fix PR
-  prepare-fix --unit U           bump one unit on the current branch so the fix agent works on the new version
-  finish-fix --issue N --unit U  act on the fix agent's verdict and patch (env VERDICT, PATCH); trusted job only
-  fix-rules                      check the hard automerge rules for an auto/fix-* branch
+Subcommands: see --help; the flow is in docs/updates.md.
 
 A "unit" is one revertible update: a root flake input (by name) or a package
 with an updater (`pkgs/<name>`). State lives in the pinned `update-status` issue.
@@ -957,24 +947,27 @@ def cmd_fix_rules(args) -> None:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("flake-update")
+    s = sub.add_parser(
+        "flake-update",
+        help="nix flake update, falling back to per-input so one bad fetch can't block the rest, then the cache gate",
+    )
     s.add_argument("--json", type=Path, required=True)
-    s = sub.add_parser("nightly")
+    s = sub.add_parser("nightly", help="commit the current tree to auto/update and open/refresh its PR")
     s.add_argument("--packages-json", type=Path, required=True)
     s.add_argument("--flake-json", type=Path, required=True)
-    s = sub.add_parser("triage")
+    s = sub.add_parser("triage", help="attribute a failed CI run on auto/update to updated units and hold them back")
     s.add_argument("--run-id", type=int, required=True)
     s.add_argument("--dry-run", action="store_true", help="attribute only; no pushes or GitHub writes")
-    s = sub.add_parser("landed")
+    s = sub.add_parser("landed", help="clear held-back state for units that landed with a merged update or fix PR")
     s.add_argument("--pr", type=int, required=True)
-    s = sub.add_parser("prepare-fix")
+    s = sub.add_parser("prepare-fix", help="bump one unit on the current branch so the fix agent works on the new version")
     s.add_argument("--unit", required=True)
-    s = sub.add_parser("finish-fix")
+    s = sub.add_parser("finish-fix", help="act on the fix agent's verdict and patch (env VERDICT, PATCH); trusted job only")
     s.add_argument("--issue", type=int, required=True)
     s.add_argument("--unit", required=True)
-    sub.add_parser("fix-rules")
-    sub.add_parser("ensure-labels")
-    sub.add_parser("cache-gate")
+    sub.add_parser("fix-rules", help="check the hard automerge rules for an auto/fix-* branch")
+    sub.add_parser("ensure-labels", help="create or update the bot's GitHub labels")
+    sub.add_parser("cache-gate", help="hold CACHE_GATED inputs at HEAD's lock until their build is cached")
     args = p.parse_args()
     {
         "flake-update": cmd_flake_update,

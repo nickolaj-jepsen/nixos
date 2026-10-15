@@ -14,8 +14,7 @@ The vault is `~/obsidian/notes`: plain markdown with YAML frontmatter. Read its
   never run git write commands in it. If the answer suggests a change, say so; I make
   changes from a session inside the vault.
 - Search with `rg -i`. Notes are in Danish or English, so try words in both. Narrow by
-  folder and frontmatter (`area`, `project`, `date`, `status`, `summary`) before
-  reading whole notes.
+  folder and frontmatter before reading whole notes.
 - If Obsidian is running, `obsidian-cli vault=notes <command>` adds
   `backlinks file=<name>`, `search query=<text>` and `base:query path=Bases/<name>.base`
   (the saved views). Optional; plain files are enough.

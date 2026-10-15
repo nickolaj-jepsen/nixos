@@ -14,19 +14,19 @@ $PR <command> -h                                   # full flags per command
 
 ## Commands
 
-| Command                                                                         | Use                                                                                                                                         |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search "<q>" [-c CAT] [-f ID=VAL]… [-n N] [--no-extract]`                      | Free-text search. Returns products, the filters PriceRunner applied, and `facets` (filter ids + option ids) to refine with.                 |
-| `categories [REGEX] [--kind cl\|sub\|tree]`                                     | Category tree (cached 7 days). Find the `cl` id for a product type.                                                                         |
-| `filters CAT`                                                                   | Every filter id available in a category (`PRICE`, `BRAND`, `RATING`, numeric spec ids…) with type.                                          |
-| `facets CAT ID… [-g REGEX] [-f …]`                                              | Option ids + product counts for those filters; ranges get min/max buckets. Pass `-f` to see counts under current filters.                   |
-| `list CAT [--sub SUB] [-q TEXT] [-f …] [-s SORT] [-n N]`                        | Browse a category, sorted (`PRICE_ASC`, `PRICE_DESC`, `RATING`, `POPULARITY`, `PRICE_DROP`, `TREND`, `NAME`). Also returns `subcategories`. |
-| `offers PRODUCT [--international] [--used] [--all-stock] [--sort total\|price]` | Shop offers, default Danish in-stock new, cheapest incl. shipping first.                                                                    |
-| `history PRODUCT [-i ONE_WEEK…INFINITE_DAYS] [-m MERCHANT] [-p POINTS]`         | Daily lowest price: current, all-time-in-window low/high/median, `currentPercentile` (0 = cheapest ever seen), downsampled series.          |
-| `info PRODUCT`                                                                  | Lowest national/international price, review score, pro reviews with pros/cons.                                                              |
-| `compare PRODUCT… [--all]`                                                      | Spec table; by default only rows that differ.                                                                                               |
-| `similar PRODUCT [-n N]`                                                        | Alternatives in the same category.                                                                                                          |
-| `deals [-c CAT] [--min-drop PCT] [-f …] [-s SORT]`                              | Current price drops.                                                                                                                        |
+| Command              | Use                                                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `search "<q>"`       | Free-text search. Returns products, the filters PriceRunner applied, and `facets` (filter ids + option ids) to refine with.        |
+| `categories [REGEX]` | Category tree. Find the `cl` id for a product type.                                                                                |
+| `filters CAT`        | Every filter id available in a category (`PRICE`, `BRAND`, `RATING`, numeric spec ids…) with type.                                 |
+| `facets CAT ID…`     | Option ids + product counts for those filters; ranges get min/max buckets. Pass `-f` to see counts under current filters.          |
+| `list CAT`           | Browse a category with filters and sorting. Also returns `subcategories`.                                                          |
+| `offers PRODUCT`     | Shop offers, default Danish in-stock new, cheapest incl. shipping first.                                                           |
+| `history PRODUCT`    | Daily lowest price: current, all-time-in-window low/high/median, `currentPercentile` (0 = cheapest ever seen), downsampled series. |
+| `info PRODUCT`       | Lowest national/international price, review score, pro reviews with pros/cons.                                                     |
+| `compare PRODUCT…`   | Spec table; by default only rows that differ.                                                                                      |
+| `similar PRODUCT`    | Alternatives in the same category.                                                                                                 |
+| `deals`              | Current price drops.                                                                                                               |
 
 `PRODUCT` accepts a bare id (`3216399795`), `94-3216399795`, or a pricerunner.dk `/pl/` URL.
 

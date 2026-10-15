@@ -2,11 +2,10 @@
 # reader, OPDS, and a native KOReader kosync endpoint for two-way read-progress
 # sync.
 #
-# Docker-only upstream (Spring Boot), so the app runs as an OCI container (the
-# homelab's first; docker backend is set fleet-wide in programs/docker.nix). It only
-# speaks MySQL/MariaDB, so it uses the shared native MariaDB engine
-# (modules/homelab/mariadb.nix) — declaring its database and a TCP password user
-# here, and reaching host MariaDB over the docker bridge gateway.
+# Docker-only upstream (Spring Boot), so the app runs as an OCI container. It only
+# speaks MySQL/MariaDB, so it uses the shared native MariaDB engine — declaring its
+# database and a TCP password user here, and reaching host MariaDB over the docker
+# bridge gateway.
 #
 # The shared /mnt/data/books library is mounted read-only with DISK_TYPE=NETWORK so
 # Grimmory only indexes it — it never rewrites files and so can't fight Shelfmark or

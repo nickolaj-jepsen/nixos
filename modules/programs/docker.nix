@@ -15,7 +15,7 @@
     virtualisation.docker = {
       enable = true;
       enableOnBoot = lib.mkDefault false;
-      # Only where / really is btrfs: WSL's VHD and the ext4-plain template aren't.
+      # Hosts whose / isn't btrfs (e.g. WSL) keep the default driver.
       storageDriver = lib.mkIf ((config.fileSystems."/".fsType or null) == "btrfs") "btrfs";
     };
     virtualisation.oci-containers = {

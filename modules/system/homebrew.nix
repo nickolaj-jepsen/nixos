@@ -5,7 +5,7 @@
     # nix-homebrew owns the brew install + pinned taps; homebrew.* (below) the casks.
     nix-homebrew = {
       enable = true;
-      # Only for an Intel-only brew/cask (Rosetta /usr/local prefix); none today.
+      # Only needed for an Intel-only brew/cask (Rosetta /usr/local prefix).
       enableRosetta = false;
       user = config.fireproof.username;
       mutableTaps = false;

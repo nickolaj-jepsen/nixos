@@ -46,18 +46,15 @@ let
       claude-code.work.enable =
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
-      # Registry: leaves register skills next to the feature they document (e.g.
-      # git.nix registers gh-stack from the extension's own source — third-party
-      # skills are referenced upstream, never vendored); the agent leaves
-      # (claude-code, copilot, pi; opencode via ~/.claude/skills) consume the merged set.
+      # Registry: leaves register skills next to the feature they document; third-party
+      # skills are referenced from their upstream source, never vendored.
       agents.skills = lib.mkOption {
         type = lib.types.attrsOf lib.types.path;
         default = {};
         description = "Agent skill directories by skill name, installed for every coding agent.";
       };
 
-      # Same pattern for language servers (registered by agent-lsp.nix); each
-      # agent leaf maps them to its own schema.
+      # Same registry pattern for language servers; each agent leaf maps them to its own schema.
       agents.lspServers = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {
           options = {

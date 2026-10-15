@@ -10,7 +10,7 @@
     fireproof.desktop.snapcast.enable = true;
     fireproof.dev.enable = true;
     fireproof.dev.clickhouse.enable = false; # query ao's ClickHouse over SSH; no local client needed on desktop
-    fireproof.dev.llm.enable = true; # RTX 5070 Ti: the 16 GiB / sm_120 defaults
+    fireproof.dev.llm.enable = true; # RTX 5070 Ti (16 GiB): relies on the vramGiB default
     fireproof.work.enable = true;
     fireproof.scripts.tunnel-home.enable = true;
     fireproof.hardware.nvidia.enable = true;

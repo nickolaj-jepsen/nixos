@@ -169,7 +169,7 @@
 in {
   # nixos-class only: home/darwin-class hosts have no install ISO for installer/ to fan out over.
   config.flake.hostNames = nixosHosts;
-  # home-check.nix validates the disko templates against the same card shape.
+  # Exported so checks.disko-templates can hold the templates to the same card shape.
   config.flake.hostCardKeys = cardKeys;
 
   config.flake.nixosConfigurations =

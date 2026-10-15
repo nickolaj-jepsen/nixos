@@ -14,9 +14,7 @@
         ./hosts
         ./installer
         ./pkgs
-        # Every file under ./modules is a self-declaring dendritic module that sets
-        # flake.modules.{nixos,homeManager}.<name>. import-tree auto-collects them
-        # all; each leaf self-gates with lib.mkIf config.fireproof.<feature>.enable.
+        # Every file under ./modules is a self-gating dendritic leaf; see docs/modules.md.
         (inputs.import-tree ./modules)
       ];
       systems = [
@@ -104,7 +102,7 @@
     obsidian-extensions.url = "github:karaolidis/nix-obsidian-extensions";
     obsidian-extensions.inputs.nixpkgs.follows = "nixpkgs";
     obsidian-extensions.inputs.treefmt-nix.follows = "treefmt-nix";
-    # Vault skills (modules/programs/obsidian/agents.nix), tracked at HEAD.
+    # Obsidian vault agent skills, tracked at HEAD.
     obsidian-skills.url = "github:kepano/obsidian-skills";
     obsidian-skills.flake = false;
 
@@ -135,7 +133,7 @@
     zero-x-cb-media.url = "github:nickolaj-jepsen/0xCB-media";
     zero-x-cb-media.inputs.nixpkgs.follows = "nixpkgs";
 
-    # Library for pkgs/zwift-hass, tracked at HEAD.
+    # Python library for the Zwift Home Assistant integration, tracked at HEAD.
     zwift-client.url = "github:nickolaj-jepsen/zwift-client";
     zwift-client.flake = false;
 

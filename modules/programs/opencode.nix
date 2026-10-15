@@ -206,7 +206,7 @@
               [ -e script/native-arch.ts ] || cp -r ${inputs.opencode}/script .
             '';
         });
-        # Shared with claude-code, copilot and pi; keep it agent-agnostic.
+        # Shared by every agent; keep it agent-agnostic.
         context = builtins.readFile ./agent-context.md;
       };
 

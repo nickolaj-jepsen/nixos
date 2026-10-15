@@ -1,6 +1,5 @@
 # Obsidian vaults synced by Self-hosted LiveSync against the homelab CouchDB
-# (modules/homelab/obsidian-sync.nix). App settings are Nix-managed and read-only;
-# plugins (plugins.nix) and LiveSync (livesync.nix) live beside this file.
+# (modules/homelab/obsidian-sync.nix). App settings are Nix-managed and read-only.
 # `notes` is the working vault; `legacy` is the pre-2026 vault, kept as a read-only archive.
 {fpLib, ...}: {
   flake.modules.homeManager.obsidian = {

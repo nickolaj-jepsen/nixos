@@ -46,14 +46,14 @@
             curve = "ease-out-quad";
           };
         };
-        # Theme the overview (opened constantly via Mod+A) to the Flexoki bg and
+        # Theme the overview (opened constantly) to the Flexoki bg and
         # zoom out a touch so the 3-monitor bird's-eye fits comfortably.
         overview = {
           backdrop-color = "#${c.bg}";
           zoom = 0.45;
         };
         # Built-in Print/Ctrl+Print/Alt+Print only copy to the clipboard; the
-        # satty script (Mod+Print) owns the save-to-disk path. Avoids a growing
+        # satty screenshot script owns the save-to-disk path. Avoids a growing
         # ~/Pictures/Screenshots folder of captures you never asked to keep.
         screenshot-path = null;
         layout = {
@@ -119,7 +119,7 @@
             ];
             variable-refresh-rate = true;
           }
-          # Floating windows (Mod+S) get a soft drop shadow so the state reads at
+          # Floating windows get a soft drop shadow so the state reads at
           # a glance against the otherwise flat Flexoki theme.
           {
             matches = [{is-floating = true;}];

@@ -1,4 +1,4 @@
-# Included by installer/default.nix only for host-baked variants.
+# Host-baked ISOs only: bootstrap-install reads the /etc/iso-bootstrap payload.
 {
   inputs,
   pkgs,

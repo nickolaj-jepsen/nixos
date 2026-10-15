@@ -26,7 +26,7 @@
       });
 
       # for linux ISOs
-      # ids pinned — romm.nix's docker run --user expects these exact values.
+      # ids pinned: containers run as media via a numeric --user, which a null uid breaks.
       users.groups."${group}" = {
         gid = 988;
         members = [username];

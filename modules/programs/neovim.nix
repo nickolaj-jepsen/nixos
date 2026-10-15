@@ -81,7 +81,7 @@
         };
 
         # nvf defaults diagnostics to underline-only; surface them with signs +
-        # current-line virtual_lines (needs nvim >=0.11; we ship 0.12).
+        # current-line virtual_lines (needs nvim >=0.11).
         diagnostics = {
           enable = true;
           config = {

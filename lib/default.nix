@@ -94,7 +94,7 @@ in {
     }
     // lib.optionalAttrs (authentication != null) {inherit authentication;};
 
-  # Split store (.rekey/.rekey-hm): `agenix rekey` deletes files a node doesn't own in its localStorageDir, so the host's two nodes must not share a dir.
+  # `store` must be unique per rekey node: `agenix rekey` deletes files a node doesn't own in its localStorageDir.
   mkAgenixRekey = {
     hostname,
     store,

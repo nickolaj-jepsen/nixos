@@ -1,4 +1,4 @@
-# Opt-in: laptop uses NetworkManager, WSL/minilab manage networking elsewhere.
+# Opt-in: not for hosts on NetworkManager or whose networking is managed outside NixOS.
 {
   flake.modules.nixos.networkd = {
     config,

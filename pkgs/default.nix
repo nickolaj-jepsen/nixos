@@ -8,8 +8,8 @@
 }: let
   names = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ./.));
 
-  # The overlay stack, shared by the nixos/darwin overlay modules and by mkHome (so a
-  # standalone home-manager build gets pkgs.unstable etc. too).
+  # One overlay stack for every pkgs instance, so a standalone home-manager build
+  # gets pkgs.unstable etc. too.
   overlayList = [
     inputs.nix-vscode-extensions.overlays.default
     inputs.obsidian-extensions.overlays.default

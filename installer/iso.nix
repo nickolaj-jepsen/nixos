@@ -56,9 +56,7 @@
 
     '';
 in {
-  # Upstream minimal installation ISO as the base. The bootstrap-install
-  # command + source baking are added by installer/default.nix only for
-  # host-baked variants.
+  # Upstream minimal installation ISO as the base.
   imports = [
     "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
   ];

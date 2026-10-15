@@ -1,10 +1,7 @@
-# dev-ao — the work dev server (dev.ao), a headless home-manager-only host.
-# class = "home" routes it through buildHome (standalone home-manager, no NixOS
-# eval) into flake.homeConfigurations.dev-ao, which home-check.nix builds in
-# `just check` as the standalone-HM portability guard. Not deployed yet; on
-# deploy the runtime decrypt identity (~/.ssh/id_rsa — see the homeManager
-# override below) must be provisioned out-of-band, since a home host has no root
-# eval to place it.
+# dev-ao — the work dev server (dev.ao), a headless home-manager-only host and
+# the standalone-HM portability guard (checks.dev-ao-home builds it). Not
+# deployed yet; on deploy the age.identityPaths key must be provisioned
+# out-of-band, since a home host has no root eval to place it.
 {
   class = "home";
 

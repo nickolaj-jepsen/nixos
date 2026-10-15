@@ -10,7 +10,7 @@
 }: {
   perSystem = {pkgs, ...}: let
     # Reuse a fully-evaluated host so option declarations from every module
-    # (base, desktop, homelab, theme, ...) are aggregated, not just one file.
+    # are aggregated, not just one file.
     eval = inputs.self.nixosConfigurations.desktop;
 
     # Flake source path in the store, e.g. /nix/store/xxxx-source — strip it so

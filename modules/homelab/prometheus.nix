@@ -1,6 +1,6 @@
 {
-  # These exporters are scraped + remote_written to Grafana Cloud by Alloy
-  # (modules/homelab/alloy.nix); there is no local Prometheus server.
+  # These exporters are scraped + remote_written to Grafana Cloud by Alloy; there is
+  # no local Prometheus server.
   flake.modules.nixos.prometheus = {
     config,
     lib,

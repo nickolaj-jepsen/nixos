@@ -92,7 +92,7 @@ nixos halves never evaluate on darwin — no guard needed.
 
 One tailnet per host — nothing switches profiles
 (`modules/system/tailscale.nix`, gated on `fireproof.tailscale.enable`; off
-only for desktop-wsl, which rides the Windows client).
+on WSL, which rides the Windows client).
 
 - **Auto-login** (`fireproof.tailscale.autoLogin`, defaults to `enable`):
   `secrets/tailscale-authkey.age` holds an OAuth client secret (admin console →
@@ -100,7 +100,7 @@ only for desktop-wsl, which rides the Windows client).
   tag needs a `tagOwners` entry in the ACL first). `tailscaled-autoconnect`
   enrols the host on first boot as a tagged node (no key expiry). These hosts
   trust `tailscale0` in the firewall.
-- **Manual login** (`autoLogin = false`, the `work` host): tailscaled with no
+- **Manual login** (`autoLogin = false`, e.g. the `work` host): tailscaled with no
   auth key — run `tailscale up` by hand. No secret is decrypted there, and
   `tailscale0` stays untrusted because the host may be pointed at a tailnet
   other than the personal one. The Mac is the same by nature: cask plus one

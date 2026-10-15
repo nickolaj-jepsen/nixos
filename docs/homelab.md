@@ -81,40 +81,20 @@ Pre-resync archive of every SRT: `/mnt/data/.subtitle-backup/`.
 
 ## Home Assistant + Zigbee (`modules/homelab/home-assistant/`)
 
-Files: `hass.nix` (HA package, components, config, Adaptive Lighting profiles,
-health template sensors), `_automations.nix` (every automation and script),
-`_dashboard.nix` (YAML dashboard), `_devices.nix` (Zigbee inventory and the
-entity-id contract every other file derives ids from, including the config-flow
-integrations' provisional ids), `_zwift.nix` and `_bambu.nix` (custom
-components), `mqtt.nix`
-(Mosquitto and Zigbee2MQTT settings, Zigbee groups, group sync), `health.nix`
-(readiness check and coordinator watchdog; both post to #sys-info only on a
-failed start or a watchdog restart),
-`_z2m-mqtt.nix` (root-only `z2m-mqtt sub|pub` broker client used by the units
-and for ops).
+`_devices.nix` is the Zigbee inventory and the entity-id contract every other
+file derives ids from, including the config-flow integrations' provisional ids.
+`_z2m-mqtt.nix` is the root-only `z2m-mqtt sub|pub` broker client used by the
+units and for ops.
 
-All logic is YAML rendered from Nix: automations, scripts, Adaptive Lighting,
-template sensors, the `rest_command.discord` notifier (#sys-info, via
-`!env_var DISCORD_WEBHOOK_SYS_INFO` from the `discord-webhook-sys-info` secret
-loaded as the unit's EnvironmentFile), the MeteoAlarm binary sensor (YAML platform; `province`
-is a regex on the alert's area name) and the dashboard. The UI owns only
-config-flow integrations (MQTT, mobile app, UniFi, Google, Spotify, Sleep as
-Android, MCP server, Zwift, Jellyfin, Bambu Lab), the registries (areas, the person's trackers, the enabled
-link-quality sensors, the Adaptive Lighting switch ids) and Assist exposure.
-Adaptive Lighting covers every room (`dev.alRooms`); the office runs AL's
-default floors and the other rooms sit slightly above them (`alExtra` in
-`hass.nix`). Automations that turn a room on pass `alLevel <room>`, the
-`brightness_pct` attribute of that room's AL switch, so a bulb comes up at the
-level AL is about to set instead of flashing its last level first; with the
-switch off it falls back to a fixed night/day level. AL composes fresh
-sleep-mode switch ids as `switch.adaptive_lighting_<room>_sleep_mode`; the
-four original rooms keep the hand-set `..._sleep_mode_<room>` ids
-(`dev.alLegacySleepIds`). After adding a room, check both ids on its device page.
-`zigbee2mqtt-error-report` logs the day's failed-command count at 18:15 and
-posts it to #sys-info only at 50 or more (the target is under 50). Persistent state used by automations lives
-in the `input_boolean`s listed under `dev.helpers` (sleep and guest mode, the
-motion latches, the Zwift ride and watching latches, the MQTT-recovery latch,
-the away-simulation flag). Phone pushes use the legacy
+All logic is YAML rendered from Nix. The UI owns only config-flow integrations
+(the ids automations rely on are pinned in `_devices.nix`), the registries
+(areas, the person's trackers, the enabled link-quality sensors, the Adaptive
+Lighting switch ids) and Assist exposure. After adding an Adaptive Lighting
+room (`dev.alRooms`), check its sleep-mode switch id on the device page (see
+`dev.alLegacySleepIds`). `zigbee2mqtt-error-report` (`health.nix`) posts the
+day's failed-command count to #sys-info only when it misses its target.
+Persistent state used by automations lives in the `input_boolean`s under
+`dev.helpers`. Phone pushes use the legacy
 `notify.mobile_app_<device>` action: the notify entity service takes no `data`,
 so channels, tags and actions need it. The stairs motion sensor's
 `illuminance_below_threshold_check: false` is a Z2M device option set over MQTT
@@ -199,10 +179,9 @@ tailnet can sync. The `obsidian-couchdb` fail2ban jail bans on that vhost's
   Keep LiveSync's hidden-file sync off. Customization sync is on so the phone
   can apply the Nix hosts' plugins/settings; never apply it on a Nix host.
   Templater's "trigger on file creation" is per-device localStorage, so the
-  package is patched to default it on. `plugin.js` is our own plugin:
-  Ctrl+Shift+P pipes each fenced code block through a Nix-pinned formatter
-  picked by the fence language, then runs the Linter; Ctrl+Enter opens the
-  Claude terminal or toggles focus between it and the note. LiveSync's own
+  package is patched to default it on. `plugin.js` is our own plugin
+  (code-block formatting with Nix-pinned formatters, Claude terminal toggle);
+  hotkeys are `settings.hotkeys` in `default.nix`. LiveSync's own
   `data.json` stays mutable: `obsidian-livesync-seed` (run on activation)
   writes the connection, E2EE and path-obfuscation settings only when the file
   is missing, so delete it to re-seed after a password change.
@@ -210,29 +189,26 @@ tailnet can sync. The `obsidian-couchdb` fail2ban jail bans on that vhost's
   phone must match the seeded E2EE + path obfuscation settings.
 - Agents (`agents.nix`): the notes vault's conventions are its own synced
   `AGENTS.md`. Nix adds the CLI (`obsidian-cli`), a global `/notes` skill
-  (explicit invocation only), and in the vault's `.claude/` the `/inbox`,
-  `/check`, `/meeting` and kepano skills plus hooks that git-snapshot the
-  vault on session start/end (a local, never-pushed repo; review agent edits
-  with `git log -p`) and lint changed notes through the running app.
-  Ctrl+Enter (Cmd on macOS) opens Claude below the note via the Terminal
-  plugin (`plugins.nix`). Hidden-file sync being off keeps `.git` and
+  (explicit invocation only), and in the vault's `.claude/` vault-scoped
+  skills plus hooks that git-snapshot the vault on session start/end (a
+  local, never-pushed repo; review agent edits with `git log -p`) and lint
+  changed notes through the running app. Claude opens below the note via the
+  Terminal plugin (`plugins.nix`). Hidden-file sync being off keeps `.git` and
   `.claude` local.
 
 ## Notifications and health
 
 Discord is for things that need doing. Routine results go to the journal, and
 status lives where it is looked at: the Glance **Storage** widget
-(`modules/homelab/storage-status.nix` writes `/var/lib/homelab-status/storage.json`
-every 5 min, served on the loopback `status.localhost` vhost) and the HA
+(`modules/homelab/storage-status.nix` writes `/var/lib/homelab-status/storage.json`,
+served on the loopback `status.localhost` vhost) and the HA
 dashboard's Zigbee Health section. A new sender should post on failure only;
 a "nothing happened" report belongs in the journal.
 
 - **#sys-urgent**: Grafana Cloud `severity=urgent` alerts (also emailed). The
   only channel worth push notifications.
-- **#sys-info**: Grafana `severity=info` alerts, the systemd health units
-  (`health.nix`, `nextcloud-healthcheck`) and HA (weather warnings, unreachable
-  Zigbee devices, the monthly Zigbee report). Webhook secret
-  `discord-webhook-sys-info`.
+- **#sys-info**: Grafana `severity=info` alerts and every in-repo sender
+  (grep for its webhook secret, `discord-webhook-sys-info`).
 - **arr channel**: health issues from Sonarr/Radarr/Lidarr/Prowlarr, configured
   in each app (Settings, Connect), errors only (`includeHealthWarnings` off).
 

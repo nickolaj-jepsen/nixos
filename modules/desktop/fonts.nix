@@ -1,6 +1,6 @@
 {
-  # Ghostty, VS Code, and the fish/bobthefish prompt all request "Hack Nerd Font"
-  # by name; without it macOS silently falls back and the prompt glyphs render as
+  # Terminal, editor and prompt configs request "Hack Nerd Font" by name;
+  # without it macOS silently falls back and the prompt glyphs render as
   # tofu. macOS reads font files directly, so fonts.packages (-> /Library/Fonts)
   # is enough — no fontconfig.
   flake.modules.darwin.fonts = {

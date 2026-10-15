@@ -50,12 +50,11 @@ All `fireproof.*` options are declared centrally in
 all module classes. Children default to their parent
 (`desktop.chromium.enable` → `desktop.enable`; `hardware.physical` →
 `!wsl.enable`; …), so hosts set parent toggles and override exceptions — this
-cascade IS the composition layer. Opt-in extras (`hardware.nvidia`,
-`dev.llm`, `desktop.{bambu-studio,snapcast,oxcbMedia,lan-mouse}`)
+cascade IS the composition layer. Opt-in extras (`lib.mkEnableOption`)
 default off. Full reference: `docs/fireproof-options.md` (`just docs`).
 
 New toggle: add `fireproof.<feature>.enable = lib.mkEnableOption "…";` (or a
-cascading `cascade config.fireproof.<parent>.enable "…"`, the helper at the top of that file) to
+cascading `cascade config.fireproof.<parent>.enable "…"`, the `cascade` helper in that file) to
 `modules/base/fireproof.nix`; hosts enable it via
 `shared.fireproof.<feature>.enable = true`.
 
@@ -75,9 +74,8 @@ standalone guard, so an osConfig read fails CI.
   (values have no `#` prefix).
 - Unstable packages: `pkgs.unstable.<pkg>` (overlay on the pkgs set; shares the
   host's `nixpkgs.config`).
-- `fpLib` (see below): `mkVirtualHost { port; websockets?; host?; extraConfig?; extraLocations?; }`,
-  `mkPostgresDB { name; login?; authentication?; }`,
-  `mkDarwinGuiPackage pkgs linuxPkg` — see `lib/default.nix`.
+- `fpLib` (see below): helpers such as `mkVirtualHost`, `mkPostgresDB` and
+  `mkDarwinGuiPackage`; signatures in `lib/default.nix`.
 
 ## `inputs` and `fpLib`
 
@@ -121,21 +119,17 @@ home-manager and the overlays):
   they are Claude Code plugin marketplaces fetched at runtime
   (`extraKnownMarketplaces`/`enabledPlugins` in
   `modules/programs/claude-code/default.nix`), so they reach Claude Code only.
-  opencode (`modules/programs/opencode.nix`) gets no skills of its own: v2
-  discovers `~/.claude/skills`, so linking them again would load them twice.
 - **Pi extension**: one `.ts` file in `modules/programs/pi/extensions/`, a
   local pi package (`"pi": {"extensions": ["./*.ts"]}`) built by the pi leaf
   and listed in `settings.packages`. The build runs `tsc --noEmit` against the
   pi that ships, so a type error fails `just build-system`. npm dependencies go
   in its `package.json` + lockfile (`npm install --package-lock-only`; read via
-  `importNpmLock`, no hash to bump); never add pi's own packages
-  (`@earendil-works/*`, `typebox`), which are linked from pi. `just
+  `importNpmLock`, no hash to bump); never add packages the pi leaf links in
+  from pi itself (`mkExtensions` in `modules/programs/pi/default.nix`). `just
 pi-extensions-dev` links `node_modules` into the folder for editor types and
   `pi -e modules/programs/pi/extensions/<name>.ts` without a rebuild.
 - **Agent language servers**: the `fireproof.agents.lspServers` registry
   (`command`/`args`/`extensionToLanguage`), filled by
-  `modules/programs/agent-lsp.nix`; claude-code uses it as-is and copilot
-  maps it to its `fileExtensions` schema; opencode 2.x starts no language
-  servers. Desktop toasts for agent
-  `Notification` hooks go through `pkgs.agent-notify <app name>`, since both
-  CLIs send the same payload.
+  `modules/programs/agent-lsp.nix`; each agent leaf maps it to its own
+  schema. Desktop toasts for agent notification hooks go through
+  `pkgs.agent-notify <app name>`.

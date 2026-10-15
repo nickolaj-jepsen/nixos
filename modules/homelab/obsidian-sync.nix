@@ -12,7 +12,7 @@
     domain = "obsidian.${cfg.domain}";
     accessLog = "/var/log/nginx/obsidian.access.log";
     # One CouchDB user per device, each a member of every vault database. The Nix
-    # hosts decrypt their own password HM-side (modules/programs/obsidian/livesync.nix).
+    # hosts decrypt their own password HM-side (homeManager.obsidian-livesync).
     devices = ["desktop" "laptop" "macbook" "minilab" "work" "phone"];
     vaults = ["legacy" "notes"];
     deviceSecret = device: "obsidian-livesync-${device}";

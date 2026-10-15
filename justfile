@@ -303,7 +303,7 @@ secret-generate:
 secret-rekey:
     #!/usr/bin/env -S bash -e
     {{ nixcmd }} run .#agenix-rekey.{{ system }}.rekey
-    # Stage rekeyed outputs (secrets/hosts/*/.rekey{,-hm}) + any new source secrets.
+    # Stage rekeyed outputs + any new source secrets.
     git add -- secrets
 
 [doc("Sets up configuration + SSH keys for a new host")]
@@ -324,7 +324,7 @@ new-host hostname username:
     cat > "hosts/{{ hostname }}/host.nix" <<'EOF'
     # {{ hostname }}'s host card: the feature toggles it enables + its facts. The
     # presence of this file is what makes hosts/{{ hostname }}/ a discovered host.
-    # Every host file is a card {shared?, nixos?, homeManager?}: enable features via
+    # Every host file is a card (shape: docs/hosts.md): enable features via
     # `shared.fireproof.<feature>.enable = true`, add nixos-specific settings under
     # `nixos` here or in sibling cards (e.g. system.nix), and host-specific
     # home-manager tweaks under `homeManager`.
@@ -360,11 +360,11 @@ new-host hostname username:
     echo "Secret rekeying..."
     just secret-rekey
 
-    echo "Host '{{ hostname }}' created and staged; it is discovered automatically (no hosts/default.nix edit needed)."
+    echo "Host '{{ hostname }}' created and staged; it is discovered automatically."
     echo "Edit hosts/{{ hostname }}/host.nix to enable features via fireproof.*.enable — see modules/base/fireproof.nix."
     echo "Add \"{{ hostname }}\" to trustedHosts in modules/system/ssh.nix so the other hosts accept its SSH key."
 
-[doc("Update flake.lock; cache-gated inputs (nixpkgs-cuda) stay put until their build is cached")]
+[doc("Update flake.lock; cache-gated inputs stay put until their build is cached")]
 [group('maintenance')]
 update input='':
     {{ nixcmd }} flake update {{ input }}

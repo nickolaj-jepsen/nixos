@@ -1,6 +1,5 @@
-# Desktop toast for coding agents (Claude Code and Copilot hooks, pi's notify.ts): `agent-notify <app name>`
-# reads the hook JSON on stdin. Claude Code and Copilot CLI send the same fields
-# (cwd, message), so one script serves them all.
+# Desktop toast for coding-agent hooks: `agent-notify <app name>` reads hook JSON
+# on stdin and uses its `cwd` and `message` fields.
 {
   lib,
   writeShellApplication,

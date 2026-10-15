@@ -4,72 +4,18 @@ Personal NixOS configuration using flakes, home-manager, and agenix for secret m
 
 ## Quick Start
 
-All common tasks are managed via `just`. Run `just` to see available commands.
-
-### System Operations
-
-```bash
-# Rebuild and switch to new configuration
-just switch
-
-# Rebuild and switch a specific host
-just switch desktop
-
-# Try out configuration without making it permanent (reverts on reboot)
-just test
-
-# Apply on next boot
-just boot
-
-# Build without switching
-just build-system
-
-# Update flake inputs
-just update
-
-# Compare current system with configuration
-just diff
-
-# Format configuration files
-just fmt
-
-# Validate configuration (flake check)
-just check
-
-# Maintenance: Collect garbage and delete old generations
-just gc
-```
-
-### Remote Deployment
+All common tasks are managed via `just`; run `just` to list every recipe with
+its description.
 
 ```bash
-# Deploy to a remote host (via nixos-rebuild --target-host)
-just switch hostname user@remote
-
-# Fresh install on a new machine (via nixos-anywhere)
-just deploy-remote hostname user@remote
-
-# Refresh hosts/<hostname>/facter.json from a running remote host (nixos-facter over ssh, never reinstalls)
-just factor hostname user@remote
-```
-
-### Tools & Debugging
-
-```bash
-# Open nix repl with flake loaded
-just repl
-
-# List system generations/history
-just history
-
-# Visualize dependency tree
-just tree
-
-# Build a live image of a host's own config (no host key baked in; to install a host, see bootstrap-iso below)
-just iso hostname
-
-# Generate the fireproof.* options reference (docs/fireproof-options.md)
-just docs
+just switch                  # Rebuild and switch this machine
+just switch desktop          # ...or a specific host
+just switch host user@remote # ...or a remote host (nixos-rebuild --target-host)
+just test                    # Apply until reboot
+just build-system            # Build without switching
+just update                  # Update flake inputs
+just fmt                     # Format everything
+just gc                      # Collect garbage and delete old generations
 ```
 
 ## Options Reference
@@ -162,34 +108,8 @@ This uses `nixos-anywhere` and is convenient when it works, but is fragile on fl
 
 Secrets are managed with [agenix](https://github.com/ryantm/agenix) + [agenix-rekey](https://github.com/oddlama/agenix-rekey), using a YubiKey as the master identity.
 
-### Structure
-
-```
-secrets/
-├── yubikey-identity.pub    # Master encryption key
-├── *.age                   # Global secrets
-└── hosts/<hostname>/
-    ├── id_ed25519.pub      # Host public key
-    ├── id_ed25519.age      # Host private key (encrypted)
-    ├── .rekey/             # Rekeyed nixos (root) secrets
-    └── .rekey-hm/          # Rekeyed home-manager (user) secrets
-```
-
-### Commands
-
-```bash
-# Edit a secret (PATH to the .age file, not a bare name)
-just secret-edit secrets/hosts/<host>/<name>.age
-
-# Rekey all secrets (after adding hosts/secrets)
-just secret-rekey
-
-# Decrypt a file to stdout
-just decrypt <file.age>
-
-# Run rage with yubikey
-just age -e <file> -o <output.age>
-```
+Layout, commands and YubiKey requirements are in
+[docs/secrets.md](docs/secrets.md); `just` lists the secret recipes.
 
 ## Development
 
@@ -204,59 +124,17 @@ nix develop
 
 ### Formatting
 
-Code is formatted using `treefmt-nix` with:
-
-- **alejandra** - Nix formatter
-- **deadnix** - Remove unused Nix code
-- **statix** - Nix linter
-- **oxfmt** - JSON/YAML/Markdown
-- **just** - Justfile formatter
-- **fish_indent** - Fish scripts
+Code is formatted with `treefmt-nix`; the formatters are configured in
+[formatter.nix](formatter.nix).
 
 ```bash
-nix fmt
-```
-
-### Useful Tools
-
-```bash
-# Explore dependency tree
-just tree
-
-# Generate Nix fetcher from URL
-just nurl https://github.com/owner/repo
+just fmt
 ```
 
 ## Theme
 
 Heavily inspired by / stolen from [Flexoki](https://stephango.com/flexoki)
 
-| Name        | Hex     |
-| ----------- | ------- |
-| bg          | #1C1B1A |
-| bg-alt      | #282726 |
-| fg          | #DAD8CE |
-| fg-alt      | #B7B5AC |
-| muted       | #878580 |
-| ui          | #343331 |
-| ui-alt      | #403E3C |
-| black       | #100F0F |
-| accent      | #CF6A4C |
-| red         | #D14D41 |
-| red-alt     | #AF3029 |
-| orange      | #DA702C |
-| orange-alt  | #BC5215 |
-| yellow      | #D0A215 |
-| yellow-alt  | #AD8301 |
-| green       | #879A39 |
-| green-alt   | #66800B |
-| cyan        | #3AA99F |
-| cyan-alt    | #24837B |
-| blue        | #4385BE |
-| blue-alt    | #205EA6 |
-| purple      | #8B7EC8 |
-| purple-alt  | #5E409D |
-| magenta     | #CE5D97 |
-| magenta-alt | #A02F6F |
-| white       | #DAD8CE |
-| white-alt   | #F2F0E5 |
+The palette is the `fireproof.theme.colors` options in
+[modules/base/theme.nix](modules/base/theme.nix); defaults are listed in
+[docs/fireproof-options.md](docs/fireproof-options.md).

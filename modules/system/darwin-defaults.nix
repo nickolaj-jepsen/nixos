@@ -1,6 +1,6 @@
 {fpLib, ...}: {
   # macOS preference defaults tuned to feel closer to a Linux desktop. Darwin-only
-  # leaf, so it lands on every darwin host (just macbook) with no gate needed.
+  # leaf, so it lands on every darwin host with no gate needed.
   flake.modules.darwin.darwin-defaults = {config, ...}: let
     c = config.fireproof.theme.colors;
   in {

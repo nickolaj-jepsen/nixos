@@ -40,7 +40,7 @@
 
           workspace = {
             # Pinned to the fixed niri workspaces (Mod+q/w/e/r/t -> "01".."05"),
-            # mirroring the compositor binds in the overlay.
+            # mirroring the focus-workspace binds in niri/binds.nix.
             q = {
               static = "01";
               name = "browser";

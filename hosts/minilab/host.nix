@@ -1,5 +1,3 @@
-# snapcast toggle + its turntable capture live in the co-located snapcast.nix;
-# oxcb-media needs only its enable toggle (module defaults suffice).
 {
   shared = {
     fireproof.hostname = "minilab";

@@ -21,7 +21,7 @@
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       # Copied, not linked: DMS saves the resolved path of a picked wallpaper, which must survive rebuilds and GC.
-      # The defaults live in dms/default.nix.
+      # Which one is the default is set by DMS's wallpaperPath/monitorWallpapers.
       home.activation.dmsBackgrounds = lib.hm.dag.entryAfter ["linkGeneration"] (lib.concatStrings (lib.mapAttrsToList (dir: src: ''
           run ${lib.getExe pkgs.rsync} -rLt --delete --chmod=u+w ${src}/ ${config.xdg.dataHome}/${dir}/
         '')

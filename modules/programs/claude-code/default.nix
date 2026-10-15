@@ -121,16 +121,14 @@
 
     home.packages = [spellChecker] ++ lib.optional cfg.work.enable claudeWorkWrapper;
 
-    # Shared with copilot (agents.nix) and pi; keep it agent-agnostic.
+    # Shared by every agent; keep it agent-agnostic.
     programs.claude-code.context = builtins.readFile ../agent-context.md;
 
     programs.claude-code = {
       enable = true;
       package = pkgs.claude-code;
       enableMcpIntegration = true;
-      # The fireproof.agents.skills registry: repo-root skills/ (registered by
-      # agent-skills.nix; see skills/README.md) plus skills registered by
-      # feature leaves. One file per command (commands/<name>.md).
+      # The fireproof.agents.skills registry. One file per command (commands/<name>.md).
       skills = config.fireproof.agents.skills;
       commandsDir = ./commands;
 
@@ -233,9 +231,9 @@
           ++ [
             "- routine under ~/nixos: `nix eval`/`build`/`fmt`/`flake check`, `just build-system`/`diff`/`fmt`/`check`/`docs`, and commits on local branches"
           ];
-        # Underlines misspelled words in the prompt input. Colour is left to the
-        # theme's error colour, like the statusline above. Only ever read from
-        # user settings — a spellcheck block in a repo's .claude/ is ignored.
+        # Underlines misspelled words in the prompt input, in the theme's error
+        # colour. Only ever read from user settings — a spellcheck block in a
+        # repo's .claude/ is ignored.
         spellcheck = {
           enabled = true;
           checker = "hunspell";

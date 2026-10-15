@@ -57,7 +57,7 @@
               if [ -z "$ha" ] || [ -z "$z2m" ]; then post "⚠️ $msg"; fi
               # Deliberately exit 0: the Discord post and the journal line are the signal. A
               # non-zero exit would leave the unit failed, so every later switch ends in
-              # "units failed" — the symptom the oauth2-proxy gate in this branch removed.
+              # "units failed".
             '';
           });
         };

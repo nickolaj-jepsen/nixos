@@ -9,7 +9,7 @@
   update = n: "update.${slug n}";
   actionTopic = n: "zigbee2mqtt/${n}/action";
 
-  # Zigbee groups (ids/names declared in mqtt.nix); one multicast per command.
+  # Zigbee groups (ids pinned in mqtt.nix's groupIds); one multicast per command.
   groups = {
     office = "Office - Lights";
     stairs = "Stairs - Lights";
@@ -119,15 +119,15 @@
   };
   batteryDevices = remotes // sensors;
 
-  # `unavailable` means gone: routers are pinged every 10 min, battery devices time out after 25 h.
+  # `unavailable` means gone, per Zigbee2MQTT's `availability` timeouts.
   routerEntities =
     map light (lib.subtractLists wallSwitched allLights)
     ++ map switch (lib.attrValues outlets);
   batteryEntities = lib.mapAttrsToList (n: _: battery n) batteryDevices;
   updateEntities = map update (allLights ++ lib.attrValues outlets ++ lib.attrNames batteryDevices);
-  # Adaptive Lighting profiles (hass.nix). The first four rooms keep sleep-mode switch
-  # ids set by hand in the entity registry; AL composes a fresh one from the device
-  # name plus "Sleep Mode". Verify on the device page after adding a room.
+  # Adaptive Lighting rooms. alLegacySleepIds keep sleep-mode switch ids set by hand in
+  # the entity registry; AL composes a fresh one from the device name plus "Sleep Mode".
+  # Verify on the device page after adding a room.
   alRooms = ["office" "stairs" "living_room" "bedroom" "entrance" "bathroom"];
   alLegacySleepIds = ["office" "stairs" "living_room" "bedroom"];
   alSwitch = r: "switch.adaptive_lighting_${r}";
@@ -181,7 +181,7 @@
     bridgeState = "binary_sensor.zigbee2mqtt_bridge_connection_state";
     permitJoin = "switch.zigbee2mqtt_bridge_permit_join";
     restart = "button.zigbee2mqtt_bridge_restart";
-    health = "sensor.zigbee2mqtt_health"; # mqtt sensor declared in hass.nix from bridge/health
+    health = "sensor.zigbee2mqtt_health"; # hand-declared mqtt sensor on bridge/health, not discovered
   };
   unifi = {
     firmware = "update.dream_machine_firmware";
@@ -195,6 +195,6 @@
     zwiftRide = "input_boolean.zwift_ride"; # set by ride mode; the fan-off path only acts while it is on
     watchingManual = "input_boolean.watching_manual"; # a Kitchen switch press during playback owns the room for the session
     mqttTriggersArmed = "input_boolean.mqtt_triggers_armed"; # cleared at start, set after a successful reload
-    awaySimulation = "input_boolean.away_simulation"; # on after 24 h away; dashboard + the evening pattern
+    awaySimulation = "input_boolean.away_simulation"; # on after 24 h away
   };
 }
