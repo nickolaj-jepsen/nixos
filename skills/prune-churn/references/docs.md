@@ -112,7 +112,7 @@ Keep a line only if **both** hold: an agent doing a task would not pick it up fr
 
 - The few commands an agent must run (verify, test, format, the one to use instead of the obvious one), each with what the manifest can't hold: `needs explicit approval`, `slow`, `run before finishing`, `pass a path, not a name`.
 - Traps and non-inferable invariants ("every file under `modules/` is auto-imported, so gate it").
-- Non-default tooling and environment quirks (uv/pnpm, "NixOS: no apt").
+- Non-default tooling and environment quirks (uv/pnpm, "no global installs; use the devshell").
 - Approval and safety gates (never force-push, deploys need sign-off). Restate these one line each in the entry file even if canonical elsewhere; agents don't reliably follow pointers.
 - Settled decisions the code can't show, as the rule plus the rejected alternative.
 - A short routing table: topic → doc by name.

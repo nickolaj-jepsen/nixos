@@ -15,10 +15,12 @@ This bounds every entry below. A wrong abstraction converts shotgun surgery (one
 Each structure finding in the report carries:
 
 - **Sites**: every `path:symbol` that must move together, not just the one in scope.
-- **Evidence**: tag-along counts when mined, commits that edited all sites at once, or a drift bug. With none, say "no co-change evidence" and rank it last.
-- **Shape**: the smallest change that removes the coupling, and what a future change then touches. No shape that fails the guard above.
+- **Evidence**: tag-along counts when mined, commits that edited all sites at once, or a drift bug. With none, say "no co-change evidence".
+- **Shape**: the smallest change that removes the coupling, and what a future change then touches. No shape that fails the guard above, and none that adds co-change of its own (a check that forces a second file into every commit).
 
-Title each finding by the coupling ("agent guardrails are hand-copied per agent leaf"), not by the symptom at one site ("opencode has no guardrails"). A site that has drifted from its copies is evidence for the finding, not a separate bug report.
+Title each finding by the coupling ("currency formatting is hand-copied in three components"), not by the symptom at one site ("checkout shows the wrong currency"). A site that has drifted from its copies is evidence for the finding, not a separate bug report.
+
+Findings with no co-change evidence, no duplicated knowledge and no silent failure mode go last, under **Considered, low**, one line each (sites + why it's low); they rarely survive review and full entries bury the ones that will.
 
 ## Patterns
 
@@ -57,7 +59,7 @@ A helper, validation rule, regex or constant written again instead of reused; a 
 
 - **Tell**: near-identical names across modules (`format_date`, `formatDate`, `fmt_date`); the same regex, URL, magic number or validation rule defined twice (grep the literal); a new function calling most of the same non-builtin functions as an existing one; clone-detector hits (jscpd, PMD CPD, pylint `duplicate-code`); files that co-change with no import between them.
 - **Do**: in `diff`, before keeping a new helper, grep for an existing one; if it fits, call it and delete the new copy. A business rule the change copied is unified now. Report: each copy, how they already differ, commits that patched more than one; shape: the canonical home and which copies collapse into it.
-- **Keep when**: architecture- or framework-mandated skeletons (module wrappers, handler signatures, leaf boilerplate); tests (DAMP beats DRY there); near-fit helpers whose reuse would couple unrelated domains; duplication across service or team boundaries where a shared library costs more; copies that already differ on purpose.
+- **Keep when**: architecture- or framework-mandated skeletons (module wrappers, handler signatures, plugin boilerplate); tests (DAMP beats DRY there); near-fit helpers whose reuse would couple unrelated domains; duplication across service or team boundaries where a shared library costs more; copies that already differ on purpose.
 
 ### Duplicated values across code, config and CI
 
@@ -72,7 +74,7 @@ One literal (project version, runtime version, port, URL, timeout, image tag) in
 Adding a module means editing a shared list: `index.ts` barrels of `export * from`, `__init__.py`/`mod.rs` re-exports, plugin/command/route arrays, central import lists, docs nav (`mkdocs.yml`, sidebars).
 
 - **Tell**: top-churn files that are mostly import/export/list lines; `index.(ts|js)` of only re-exports; siblings importing through `./index`; import cycles through a barrel; arrays of imported symbols growing with module count; commits that add a file and also edit the registry in the same directory.
-- **Do**: in `diff`, if the repo already discovers by convention (globbing, filesystem routing, auto-imported leaves), don't add a manual registration; import directly instead of through an internal barrel. Report: the hub, the share of feature commits that touch it (tag-along count); shape: filesystem globbing, `import.meta.glob`, entry points or a generated registry, so a feature is one new file.
+- **Do**: in `diff`, if the repo already discovers by convention (globbing, filesystem routing, auto-imported modules), don't add a manual registration; import directly instead of through an internal barrel. Report: the hub, the share of feature commits that touch it (tag-along count); shape: filesystem globbing, `import.meta.glob`, entry points or a generated registry, so a feature is one new file.
 - **Keep when**: a package's public entry point; framework-required index files; order or priority matters; explicitness aids security review; a short list in a small codebase. Prefer globbing or codegen over registration by import side effect or decorator, which causes ordering bugs and defeats tree-shaking.
 
 ### Speculative indirection

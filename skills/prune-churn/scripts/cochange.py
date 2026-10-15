@@ -31,7 +31,7 @@ SNAPSHOT = re.compile(r"__snapshots__/|\.snap$|(^|/)(golden|testdata|fixtures)/"
 AGENT = re.compile(r"(^|/)(AGENTS|CLAUDE|GEMINI)\.md$|(^|/)\.cursor(rules$|/)|copilot-instructions\.md$")
 DOC = re.compile(r"\.(md|mdx|rst|adoc)$")
 # Stems shared by unrelated files in different dirs (default.nix, index.ts, SKILL.md, ...).
-GENERIC = {"index", "default", "__init__", "mod", "main", "lib", "readme", "skill", "host", "types", "utils", "config", "package"}
+GENERIC = {"index", "default", "__init__", "mod", "main", "lib", "readme", "skill", "types", "utils", "config", "package"}
 
 
 def kind(path):
