@@ -71,6 +71,7 @@
           interactiveShellInit = ''
             ${builtins.readFile ./k8s.fish}
             ${builtins.readFile ./wt.fish}
+            ${builtins.readFile ./stash.fish}
 
             # fzf.fish: reuse the delta diff highlighter.
             # Leave Ctrl-R to fish's native history (--history= disables fzf.fish's
