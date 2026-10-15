@@ -34,6 +34,9 @@ claude plugin install skills@nickolaj-jepsen
   the load-bearing why. Run it after generating code.
 - **prune-hard** — the harsh sibling: deletes by default and keeps only the traps,
   for private code where the reader is you and git history.
+- **prune-churn** — remove tests, docs, comments and structure that must be edited
+  whenever something else changes: mock-echo tests, broad snapshots, inventory docs,
+  hand-synced registries. Ranks churn hotspots from git history.
 - **avoid-ai-tropes** — catalog of AI writing tells to check human-facing prose
   against and rewrite. Sourced from [tropes.fyi](https://tropes.fyi) by
   [ossama.is](https://ossama.is); credited in the skill file.

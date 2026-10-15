@@ -19,3 +19,12 @@ Repository-local instructions and existing conventions take precedence over thes
 
 - Comment only non-obvious intent, constraints, gotchas, or tradeoffs. Keep comments to one line when possible.
 - Docstrings define the symbol's behavior, parameters, return value, errors, and invariants. Do not restate the signature or describe callers; guidance on when to call it is fine.
+
+## Avoiding churn
+
+Don't write anything that must be edited when unrelated code changes:
+
+- Point to a source of truth by name (symbol, file, command), never by line number or position; don't describe callers, and don't copy lists, counts, or tours of things defined elsewhere into comments or docs.
+- Tests assert observable outcomes through public interfaces: no asserting calls on in-repo mocks, no tests that echo their own mock, no broad snapshots, no assertions on copy text or styling unless that is the requirement.
+- Reuse the existing definition or registry instead of adding another hand-synced copy, but don't abstract two copies that may diverge.
+- When a test fails after your change, fix the code or the behaviour, not the assertion, unless the behaviour change was intended.

@@ -10,16 +10,9 @@
   "plugins": [
     {
       "name": "skills",
-      "description": "grill-me, prune-comments, prune-hard, avoid-ai-tropes and pricerunner",
+      "description": "Agent skills from nickolaj-jepsen/nixos",
       "source": "./",
-      "strict": false,
-      "skills": [
-        "./skills/avoid-ai-tropes",
-        "./skills/grill-me",
-        "./skills/pricerunner",
-        "./skills/prune-comments",
-        "./skills/prune-hard"
-      ]
+      "strict": false
     }
   ]
 }
