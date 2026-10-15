@@ -30,11 +30,12 @@ claude plugin install skills@nickolaj-jepsen
 
 - **grill-me** — interview yourself relentlessly about a plan or design until every
   branch of the decision tree is resolved. Good before committing to an approach.
-- **prune-comments** — strip redundant or over-long comments and docstrings down to
-  the load-bearing why. Run it after generating code.
+- **prune-comments** — strip redundant, over-long or coupled comments and docstrings
+  (file/line references, caller lists, change narration) down to the load-bearing
+  why. Run it after generating code.
 - **prune-hard** — the harsh sibling: deletes by default and keeps only the traps,
   for private code where the reader is you and git history.
-- **prune-churn** — remove tests, docs, comments and structure that must be edited
+- **prune-churn** — remove tests, docs and structure that must be edited
   whenever something else changes: mock-echo tests, broad snapshots, inventory docs,
   hand-synced registries. Ranks churn hotspots from git history.
 - **avoid-ai-tropes** — catalog of AI writing tells to check human-facing prose

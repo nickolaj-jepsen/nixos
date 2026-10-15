@@ -7,7 +7,7 @@ For every block that restates something the code defines, take the first option 
 3. **Execute**: only if a doc-test runner is already configured. Otherwise trim or delete instead.
 4. **Keep as prose**: only what code can't express, such as why, constraints, rejected alternatives, invariants and absences ("core never imports the HTTP layer").
 
-Skip generated output (`<!-- generated -->`, `[[[cog`, files a `docs` recipe writes); edit the generator's source instead. Help text in code (`--help` strings, justfile `[doc]`) is the source of truth to point at, not a finding. Comments and docstrings go to `comments.md`. Plain wordiness with no coupling belongs to `prune-comments`/`prune-hard`; don't catalog it here.
+Skip generated output (`<!-- generated -->`, `[[[cog`, files a `docs` recipe writes); edit the generator's source instead. Help text in code (`--help` strings, justfile `[doc]`) is the source of truth to point at, not a finding. Comments, docstrings and plain wordiness with no coupling belong to `prune-comments`/`prune-hard`; don't catalog them here.
 
 Judge line by line, never by heading: a section titled `Architecture` can hold the one trap worth keeping. When a finding needs another file changed (the canonical copy, the instruction file), edit only this file if the other side already holds the fact; otherwise report it and leave both.
 

@@ -109,7 +109,7 @@ Unused functions, exports, files, commented-out blocks; exports nobody imports; 
 - **Do**: in `diff`, when the change replaces a path, delete the old one; tests and docs that cover only it go in the verdict for their own pass. Don't add exports the change doesn't import. Report: each unused symbol with the tool output, tests that only cover it, cross-package internal imports; shape: delete, un-export, or route through the owner's public entry point.
 - **Keep when**: public library API unused internally; entry points reached by reflection, plugins, framework conventions, config or CLI registration; a kill-switch path kept for rollback; code the branch's own later commits start using. `ERA001` hits that are illustrative examples or commands get reviewed, not auto-deleted.
 
-Unused dependencies and finished feature flags are `repo.md` findings. Comment-only clutter in these files (restating code, verbose docstrings) is `prune-comments`/`prune-hard` territory; coupling comments go to `comments.md`.
+Unused dependencies and finished feature flags are `repo.md` findings. Comments in these files, coupled or verbose, are `prune-comments`/`prune-hard` territory.
 
 ## Sources
 

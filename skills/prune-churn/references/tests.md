@@ -1,6 +1,6 @@
 # Tests
 
-A test is churn when it must be edited for a change that leaves behaviour intact: a refactor, one more registry item, a reworded string, a new field, a dependency bump. The cure is almost always the same: assert the observable outcome, not the path to it. Verbose comments inside test files are `prune-comments`/`prune-hard` territory; skip them here.
+A test is churn when it must be edited for a change that leaves behaviour intact: a refactor, one more registry item, a reworded string, a new field, a dependency bump. The cure is almost always the same: assert the observable outcome, not the path to it. Comments inside test files are `prune-comments`/`prune-hard` territory; skip them here.
 
 ## Delete or rewrite
 
