@@ -74,8 +74,13 @@ in {
       programs.pi.coding-agent = {
         enable = true;
         package = pi;
-        # Shared by every agent; keep it agent-agnostic.
-        rules = builtins.readFile ../agent-context.md;
+        # agent-context.md is shared by every agent; keep it agent-agnostic.
+        rules = ''
+          ${builtins.readFile ../agent-context.md}
+          ## Pi
+
+          - For a deterministic multi-agent script (Claude Code `Workflow` style), call `tools.SubagentWorkflow` from codemode; it is not declared to you, so read `await describeTool("SubagentWorkflow")` first.
+        '';
         # The fireproof.agents.skills registry, linked into one dir.
         skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
         # Nix-built pi can't self-update; extension-update notices still show.
@@ -94,6 +99,8 @@ in {
           # otherwise keeps the env pi was launched with. Blocked or missing
           # .envrc files export nothing.
           shellCommandPrefix = ''eval "$(${lib.getExe config.programs.direnv.package} export bash 2>/dev/null)"'';
+          # extensions/codemode-only.ts moves the expensive tools behind it.
+          defaultTools = ["+codemode"];
         };
         settings.packages = [
           # extension-settings must load before powerbar (its settings panel).
@@ -110,6 +117,8 @@ in {
           # ui
           "npm:@juanibiapina/pi-powerbar@0.16.0"
           "npm:@ayulab/pi-rewind@0.4.6"
+          # agents
+          "npm:@tintinweb/pi-subagents@0.22.0"
           # own, from ./extensions
           "${mkExtensions pkgs pi}"
         ];
@@ -194,6 +203,12 @@ in {
         "app.thinking.save" = "alt+s";
         "app.session.toggleSort" = "alt+s";
         "app.models.save" = "alt+s";
+      };
+
+      # Compact roughly halves Agent's declaration. `/agents` writes project
+      # settings only, so this file can stay read-only.
+      home.file.".pi/agent/subagents.json".text = builtins.toJSON {
+        toolDescriptionMode = "compact";
       };
 
       # Nix-owned (read-only), so pi's "persist globally" approval won't stick;
