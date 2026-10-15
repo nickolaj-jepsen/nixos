@@ -71,8 +71,6 @@
           interactiveShellInit = ''
             ${builtins.readFile ./k8s.fish}
             ${builtins.readFile ./wt.fish}
-            ${builtins.readFile ./stash.fish}
-            ${builtins.readFile ./suspend.fish}
 
             # fzf.fish: reuse the delta diff highlighter.
             # Leave Ctrl-R to fish's native history (--history= disables fzf.fish's
@@ -85,8 +83,8 @@
 
           plugins = [
             {
-              name = "bobthefish";
-              inherit (pkgs.fishPlugins.bobthefish) src;
+              name = "firethefish";
+              src = ./firethefish;
             }
             {
               name = "fzf-fish";

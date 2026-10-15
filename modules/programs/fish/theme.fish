@@ -36,10 +36,3 @@ set -U fish_pager_color_secondary_prefix
 set -U fish_pager_color_secondary_description
 set -U fish_color_host_remote
 set -U fish_color_option
-
-# Bobthefish config
-set -g theme_date_timezone Europe/Copenhagen
-set -g theme_date_format "+%a %H:%M"
-set -g theme_nerd_fonts yes
-set -g theme_color_scheme terminal
-set -g theme_display_user ssh
