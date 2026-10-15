@@ -18,6 +18,8 @@ Each structure finding in the report carries:
 - **Evidence**: tag-along counts when mined, commits that edited all sites at once, or a drift bug. With none, say "no co-change evidence" and rank it last.
 - **Shape**: the smallest change that removes the coupling, and what a future change then touches. No shape that fails the guard above.
 
+Title each finding by the coupling ("agent guardrails are hand-copied per agent leaf"), not by the symptom at one site ("opencode has no guardrails"). A site that has drifted from its copies is evidence for the finding, not a separate bug report.
+
 ## Patterns
 
 ### Wrong abstraction already in place

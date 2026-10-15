@@ -20,7 +20,7 @@ Judge line by line, never by heading: a section titled `Architecture` can hold t
   - Bullets or table rows that map 1:1 to files in a directory, enum members, registry keys or subcommands (compare with `ls` or the enum).
   - Counts of code-derivable nouns (`12 providers`, `three output modes`, `5 hosts`). Algorithm terms (`two-phase`, `three-way merge`) are not counts.
 - **Do**: replace the list with the rule that generates it plus a pointer. Delete counts outright. If a self-listing command exists, point to it.
-- **Keep when**: the set is stable by definition (HTTP verbs); a landing page where the curated pitch is the product (still drop the count); a template repo whose layout is the deliverable; a codemap of stable top-level boundaries that says what each is _for_ and what it must not touch, not one line per file.
+- **Keep when**: the set is stable by definition (HTTP verbs); a user-facing README's quickstart of the few most-used commands (trim the deep cuts and add the pointer, but never cut it to the pointer alone); a landing page where the curated pitch is the product (still drop the count); a template repo whose layout is the deliverable; a codemap of stable top-level boundaries that says what each is _for_ and what it must not touch, not one line per file.
 
 ```markdown
 <!-- before -->
