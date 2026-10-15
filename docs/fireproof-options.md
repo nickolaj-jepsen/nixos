@@ -621,9 +621,9 @@ true
 
 
 
-Whether to enable local LLM serving (llama-swap + CUDA llama\.cpp) and its pi/opencode providers\.
+Whether to enable local LLM serving (llama-swap + CUDA llama\.cpp)\.
 Off by default rather than following dev\.enable: it needs a ≥12GB
-NVIDIA GPU, which macbook and dev-ao don’t have
+NVIDIA GPU
 \.
 
 
@@ -889,7 +889,7 @@ true
 
 
 
-Whether this is a physical machine (not WSL/VM)\. Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub, firmware/fwupd and removable-media automount\.
+Whether this is a physical machine (not WSL/VM)\. Gates baseline hardware hygiene for physical machines\.
 
 
 
@@ -1007,6 +1007,150 @@ string
 ```nix
 "nickolaj@fireproof.website"
 ```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.homelab\.dashboard\.monitors
+
+
+
+Glance home-page monitor entries, set by each service leaf\.
+
+
+
+*Type:*
+attribute set of (submodule)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.homelab\.dashboard\.monitors\.\<name>\.altStatusCodes
+
+
+
+Extra HTTP status codes that count as up\.
+
+
+
+*Type:*
+list of signed integer
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.homelab\.dashboard\.monitors\.\<name>\.checkUrl
+
+
+
+URL Glance probes instead of url\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.homelab\.dashboard\.monitors\.\<name>\.group
+
+
+
+Dashboard section; the renderer orders sections and sorts by title within each\.
+
+
+
+*Type:*
+one of “home”, “media”, “downloads”, “infra”
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.homelab\.dashboard\.monitors\.\<name>\.icon
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"sh:jellyfin"
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.homelab\.dashboard\.monitors\.\<name>\.title
+
+
+
+This option has no description\.
+
+
+
+*Type:*
+string
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.homelab\.dashboard\.monitors\.\<name>\.url
+
+
+
+Link opened from the dashboard; also probed unless checkUrl is set\.
+
+
+
+*Type:*
+string
 
 *Declared by:*
  - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
@@ -2433,6 +2577,78 @@ string
 
 ```nix
 "AD8301"
+```
+
+*Declared by:*
+ - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+
+
+
+## fireproof\.theme\.font\.package
+
+
+
+Font package providing ` family ` and ` monoFamily `
+
+
+
+*Type:*
+package
+
+
+
+*Default:*
+
+```nix
+pkgs.nerd-fonts.hack
+```
+
+*Declared by:*
+ - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+
+
+
+## fireproof\.theme\.font\.family
+
+
+
+Font family for terminals and editors
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"Hack Nerd Font"
+```
+
+*Declared by:*
+ - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+
+
+
+## fireproof\.theme\.font\.monoFamily
+
+
+
+Strictly monospaced variant of ` family `, for UIs that need fixed-width glyphs
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"Hack Nerd Font Mono"
 ```
 
 *Declared by:*
