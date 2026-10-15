@@ -22,6 +22,13 @@
         '';
       };
 
+      fireproof.homelab.dashboard.monitors.zitadel = {
+        title = "Zitadel";
+        url = "https://${zitadelDomain}";
+        icon = "sh:zitadel";
+        group = "infra";
+      };
+
       services.postgresql = fpLib.mkPostgresDB {
         name = "zitadel";
         login = true;

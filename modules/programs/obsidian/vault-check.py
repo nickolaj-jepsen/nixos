@@ -9,9 +9,7 @@ import sys
 
 import yaml
 
-# Mirrors the Linter's yaml-key-sort priority list in plugins.nix.
-KEY_ORDER = ["created", "area", "tags", "kind", "status", "date", "event", "attendees",
-             "project", "started", "ended", "source", "servings", "summary"]
+# KEY_ORDER is injected from _key-order.nix.
 KNOWN_KEYS = set(KEY_ORDER) | {"aliases", "cssclasses"}
 AREAS = {"personal", "work"}
 # Folder -> (required keys, {key: allowed values})

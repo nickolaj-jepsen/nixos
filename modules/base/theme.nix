@@ -1,6 +1,10 @@
 # Flexoki-inspired (https://stephango.com/flexoki); emitted to both classes so HM can read colors without an osConfig bridge.
 let
-  themeOptions = {lib, ...}: let
+  themeOptions = {
+    lib,
+    pkgs,
+    ...
+  }: let
     mkColorOption = default: description:
       lib.mkOption {
         type = lib.types.str;
@@ -43,10 +47,29 @@ let
       magenta = mkColorOption "CE5D97" "Magenta";
       magentaAlt = mkColorOption "A02F6F" "Dark magenta";
     };
+
+    options.fireproof.theme.font = {
+      package = lib.mkOption {
+        type = lib.types.package;
+        default = pkgs.nerd-fonts.hack;
+        defaultText = lib.literalExpression "pkgs.nerd-fonts.hack";
+        description = "Font package providing `family` and `monoFamily`";
+      };
+      family = lib.mkOption {
+        type = lib.types.str;
+        default = "Hack Nerd Font";
+        description = "Font family for terminals and editors";
+      };
+      monoFamily = lib.mkOption {
+        type = lib.types.str;
+        default = "Hack Nerd Font Mono";
+        description = "Strictly monospaced variant of `family`, for UIs that need fixed-width glyphs";
+      };
+    };
   };
 in {
   flake.modules.nixos.theme = themeOptions;
   flake.modules.homeManager.theme = themeOptions;
-  # Emitted to darwin too so shared cards' theme colors type-check there.
+  # Emitted to darwin too so shared cards' theme options type-check there.
   flake.modules.darwin.theme = themeOptions;
 }

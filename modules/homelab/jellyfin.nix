@@ -18,6 +18,13 @@
         '';
       };
 
+      fireproof.homelab.dashboard.monitors.jellyfin = {
+        title = "Jellyfin";
+        url = "https://${domain}";
+        icon = "sh:jellyfin";
+        group = "media";
+      };
+
       # Grant the media user access to GPU devices for hardware transcoding
       users.users.media.extraGroups = ["video" "render"];
 

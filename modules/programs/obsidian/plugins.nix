@@ -195,22 +195,7 @@
               };
               yaml-key-sort = {
                 enabled = true;
-                yaml-key-priority-sort-order = lib.concatStringsSep "\n" [
-                  "created"
-                  "area"
-                  "tags"
-                  "kind"
-                  "status"
-                  "date"
-                  "event"
-                  "attendees"
-                  "project"
-                  "started"
-                  "ended"
-                  "source"
-                  "servings"
-                  "summary"
-                ];
+                yaml-key-priority-sort-order = lib.concatStringsSep "\n" (import ./_key-order.nix);
                 priority-keys-at-start-of-yaml = true;
                 yaml-sort-order-for-other-keys = "None";
               };
@@ -248,7 +233,7 @@
               successExitCodes = ["0" "SIGINT" "SIGTERM"];
               terminalOptions = {
                 documentOverride = null;
-                fontFamily = "Hack Nerd Font Mono";
+                fontFamily = config.fireproof.theme.font.monoFamily;
               };
               useWin32Conhost = true;
             };

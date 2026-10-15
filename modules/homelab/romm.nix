@@ -112,6 +112,13 @@
         '';
       };
 
+      fireproof.homelab.dashboard.monitors.romm = {
+        title = "RomM";
+        url = "https://${domain}";
+        icon = "sh:romm";
+        group = "media";
+      };
+
       # only unrecoverable state: art rescans, DB is already in postgresqlBackup
       services.restic.backups.homelab.paths = [
         "${stateDir}/data/assets"

@@ -1,9 +1,23 @@
 {
   cfg,
+  lib,
   services,
   templates,
 }: let
   statusPort = (builtins.head services.nginx.virtualHosts."status.localhost".listen).port;
+
+  groupOrder = ["home" "media" "downloads" "infra"];
+  toSite = m:
+    {
+      inherit (m) title url icon;
+      same-tab = true;
+    }
+    // lib.optionalAttrs (m.checkUrl != null) {check-url = m.checkUrl;}
+    // lib.optionalAttrs (m.altStatusCodes != []) {alt-status-codes = m.altStatusCodes;};
+  monitorSites = lib.concatMap (group:
+    map toSite (lib.sort (a: b: lib.toLower a.title < lib.toLower b.title)
+      (lib.filter (m: m.group == group) (lib.attrValues cfg.dashboard.monitors))))
+  groupOrder;
 in {
   name = "Home";
   columns = [
@@ -121,149 +135,7 @@ in {
         {
           type = "monitor";
           cache = "5m";
-          # SSO-gated sites need a loopback check-url; the public URL only reaches the Zitadel login.
-          sites =
-            [
-              {
-                title = "Home Assistant";
-                url = "https://ha.${cfg.domain}";
-                icon = "sh:home-assistant";
-                same-tab = true;
-              }
-              {
-                title = "Nextcloud";
-                url = "https://nextcloud.${cfg.domain}";
-                icon = "sh:nextcloud";
-                same-tab = true;
-              }
-              {
-                title = "Zigbee2MQTT";
-                url = "https://zigbee.${cfg.domain}";
-                check-url = "http://127.0.0.1:${toString services.zigbee2mqtt.settings.frontend.port}";
-                icon = "sh:zigbee2mqtt";
-                same-tab = true;
-              }
-            ]
-            ++ (
-              if services.plex.enable
-              then [
-                {
-                  title = "Plex";
-                  url = "https://plex.${cfg.domain}";
-                  icon = "sh:plex";
-                  same-tab = true;
-                  alt-status-codes = [401];
-                }
-              ]
-              else []
-            )
-            ++ [
-              {
-                title = "Jellyfin";
-                url = "https://jellyfin.${cfg.domain}";
-                icon = "sh:jellyfin";
-                same-tab = true;
-              }
-              {
-                title = "Navidrome";
-                url = "https://navidrome.${cfg.domain}";
-                check-url = "http://127.0.0.1:${toString services.navidrome.settings.Port}/ping";
-                icon = "sh:navidrome";
-                same-tab = true;
-              }
-              {
-                title = "Audiobookshelf";
-                url = "https://audiobookshelf.${cfg.domain}";
-                icon = "sh:audiobookshelf";
-                same-tab = true;
-              }
-              {
-                title = "Grimmory";
-                url = "https://grimmory.${cfg.domain}";
-                icon = "sh:booklore";
-                same-tab = true;
-              }
-              {
-                title = "RomM";
-                url = "https://romm.${cfg.domain}";
-                icon = "sh:romm";
-                same-tab = true;
-              }
-              {
-                title = "Shelfmark";
-                url = "https://shelfmark.${cfg.domain}";
-                check-url = "http://127.0.0.1:${toString services.shelfmark.environment.FLASK_PORT}";
-                icon = "sh:calibre-web-automated-book-downloader";
-                same-tab = true;
-              }
-              {
-                title = "Sonarr";
-                url = "https://sonarr.${cfg.domain}";
-                check-url = "http://127.0.0.1:${toString services.sonarr.settings.server.port}/ping";
-                icon = "sh:sonarr";
-                same-tab = true;
-              }
-              {
-                title = "Radarr";
-                url = "https://radarr.${cfg.domain}";
-                check-url = "http://127.0.0.1:${toString services.radarr.settings.server.port}/ping";
-                icon = "sh:radarr";
-                same-tab = true;
-              }
-              {
-                title = "Lidarr";
-                url = "https://lidarr.${cfg.domain}";
-                check-url = "http://127.0.0.1:${toString services.lidarr.settings.server.port}/ping";
-                icon = "sh:lidarr";
-                same-tab = true;
-              }
-              {
-                title = "SABnzbd";
-                url = "https://sabnzbd.${cfg.domain}";
-                check-url = "http://127.0.0.1:${toString services.sabnzbd.settings.misc.port}";
-                icon = "sh:sabnzbd";
-                same-tab = true;
-              }
-              {
-                title = "Prowlarr";
-                url = "https://prowlarr.${cfg.domain}";
-                check-url = "http://127.0.0.1:${toString services.prowlarr.settings.server.port}/ping";
-                icon = "sh:prowlarr";
-                same-tab = true;
-              }
-              {
-                title = "Attic";
-                url = "https://attic.${cfg.domain}";
-                icon = "sh:nix";
-                same-tab = true;
-                alt-status-codes = [404];
-              }
-              {
-                title = "Obsidian Sync";
-                url = "https://obsidian.${cfg.domain}/_utils/";
-                check-url = "http://127.0.0.1:${toString services.couchdb.port}/_up";
-                icon = "si:obsidian";
-                same-tab = true;
-              }
-              {
-                title = "Zitadel";
-                url = "https://sso.${cfg.domain}";
-                icon = "sh:zitadel";
-                same-tab = true;
-              }
-              {
-                title = "Grafana";
-                url = "https://fireproof.grafana.net/a/grafana-setupguide-app/home";
-                icon = "si:grafana";
-                same-tab = true;
-              }
-              {
-                title = "BM CMS";
-                url = "https://cms.bmtomrermontage.dk/admin";
-                icon = "sh:payload";
-                same-tab = true;
-              }
-            ];
+          sites = monitorSites;
         }
         {
           type = "group";

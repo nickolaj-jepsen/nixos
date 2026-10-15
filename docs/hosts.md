@@ -51,7 +51,8 @@ only.
 
 ## Cross-platform apps
 
-The darwin host opts into the whole GUI roster with `desktop.enable = true`,
+Everyday GUI apps have no toggle of their own: they gate on `desktop.enable`
+(plus `dev`/`work` where relevant). The darwin host opts into the whole GUI roster with `desktop.enable = true`,
 same as Linux. A cross-platform app leaf carries a `flake.modules.darwin.<app>`
 half adding a `homebrew.casks` entry, and its homeManager half must keep the
 nixpkgs binary off the Mac: `fpLib.mkDarwinGuiPackage` for
@@ -71,18 +72,42 @@ nixos halves never evaluate on darwin — no guard needed.
   SSH key.
 - Physical install: `just bootstrap-iso <h>` bakes the host key + this flake
   into `~/.cache/bootstrap-iso/<h>.iso` and purges the key's copies from the
-  Nix store; `just bootstrap-flash <h> /dev/sdX`; target boots and runs
-  `bootstrap-install`. Wipe the stick afterwards (it holds the key). The
-  installer lives in `installer/` (a self-contained corner owning
-  `nixosConfigurations.bootstrap{,-<host>}`, not a host). Host-baked images
-  run no sshd; only the generic `bootstrap` image allows root password SSH,
-  for `just deploy-remote`.
+  Nix store. It refuses to build until every secret the host declares is
+  rekeyed (re-run `just secret-rekey` after enabling features that add
+  secrets). Push first: the installer re-attaches git history at the commit
+  the ISO was built from. `just bootstrap-flash <h> /dev/sdX` builds, flashes
+  and deletes the ISO. The installer lives in `installer/` (a self-contained
+  corner owning `nixosConfigurations.bootstrap{,-<host>}`, not a host).
+- On the target, the MOTD lists the steps: `nmtui` for WiFi, then
+  `bootstrap-install`. It picks the disko layout (below), regenerates
+  `facter.json` if missing (prompting before overwriting one, and adding a
+  `facter.nix` card if no host file references it), lists every disk it will
+  wipe before the final confirmation, prompts for the LUKS passphrase only if
+  the layout uses LUKS, and places the host SSH key before activation so
+  agenix can decrypt secrets (including the user password) during install.
+  It copies the flake to `~/nixos` with git history, so after reboot
+  `cd ~/nixos && git status` shows the new host files to commit and push.
+  Then wipe or reflash the stick: it still holds the host's private key.
+  Upload `secrets/hosts/<h>/id_ed25519.pub` to GitHub to push from the host.
+- LUKS hosts can skip the initrd passphrase prompt by enrolling the TPM2 (no
+  config change; the systemd initrd ships TPM2 support):
+  `sudo systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=7 /dev/disk/by-partlabel/disk-main-luks`.
+  With Secure Boot disabled, a stolen powered-off machine then boots straight
+  in (a stolen drive stays protected); add `--tpm2-with-pin=yes` for a short
+  PIN instead, or roll back with `systemd-cryptenroll --wipe-slot=tpm2 <device>`.
+- Remote install: `just deploy-remote <h> user@remote` runs nixos-anywhere
+  against a target already booted into Linux with SSH (cloud VM, recovery
+  shell). Fragile on flaky networks or hosts that auto-reboot during kexec,
+  so prefer the ISO for physical machines. Host-baked images run no sshd; the
+  generic `bootstrap` image allows root SSH with password `nixos` and makes a
+  suitable target.
 - Disko templates: `hosts/_templates/disko/<name>.nix` are host cards
   (`{ nixos.disko.devices = …; }`) with `device = "@@DISK@@";` as the
   sentinel; `checks.disko-templates` (`home-check.nix`) enforces that shape.
   The installer keeps an existing layout (any host file defining
   `disko.devices`) and offers the templates when there is none, or to replace
-  one that lives in `disk-configuration.nix`.
+  one that lives in `disk-configuration.nix`. Write that card before
+  `just bootstrap-iso` to skip the prompt.
 - `just factor <h> [user@target]` rewrites `hosts/<h>/facter.json` by running
   nixos-facter locally or over ssh; it never reinstalls. `modules/base/nix.nix`
   sizes Nix `max-jobs`/`cores` and the tmpfs build dir from it, so a host

@@ -16,6 +16,14 @@
         websockets = true;
       };
 
+      fireproof.homelab.dashboard.monitors.plex = {
+        title = "Plex";
+        url = "https://${domain}";
+        icon = "sh:plex";
+        group = "media";
+        altStatusCodes = [401];
+      };
+
       services.plex = {
         enable = true;
         package = pkgs.unstable.plex;

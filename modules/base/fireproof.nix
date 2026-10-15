@@ -77,14 +77,7 @@ let
         description = "Language servers by name, configured for every coding agent that speaks LSP.";
       };
 
-      # Everyday GUI apps gate on desktop.enable (plus dev/work where relevant)
-      # with no toggle of their own; only the opt-in extras under desktop above
-      # have one. A leaf adds a Homebrew cask in its flake.modules.darwin
-      # half and installs the nixpkgs build in its homeManager half; Mac-only apps
-      # (karabiner, bitwarden, handy, …) ship a darwin half only. Home-manager
-      # halves that can't run on macOS gate additionally on pkgs.stdenv.isLinux,
-      # so desktop.enable on the darwin macbook mirrors the Linux desktop minus
-      # the Linux-only DE (niri, dms, gtk, …).
+      # Cross-platform GUI app packaging: docs/hosts.md "Cross-platform apps".
 
       dev = {
         enable = lib.mkEnableOption "development tools and applications";
@@ -99,9 +92,9 @@ let
         opencode.enable = cascade config.fireproof.dev.enable "Enable the opencode 2.x coding agent";
         llm = {
           enable = lib.mkEnableOption ''
-            local LLM serving (llama-swap + CUDA llama.cpp) and its pi/opencode providers.
+            local LLM serving (llama-swap + CUDA llama.cpp).
             Off by default rather than following dev.enable: it needs a ≥12GB
-            NVIDIA GPU, which macbook and dev-ao don't have
+            NVIDIA GPU
           '';
           vramGiB = lib.mkOption {
             type = lib.types.enum [12 16];
@@ -148,10 +141,42 @@ let
           description = "Contact email registered with the ACME provider.";
         };
         plex.enable = lib.mkEnableOption "Plex Media Server. Off by default: kept only until everyone has moved to Jellyfin";
+        dashboard.monitors = lib.mkOption {
+          type = lib.types.attrsOf (lib.types.submodule {
+            options = {
+              title = lib.mkOption {type = lib.types.str;};
+              url = lib.mkOption {
+                type = lib.types.str;
+                description = "Link opened from the dashboard; also probed unless checkUrl is set.";
+              };
+              icon = lib.mkOption {
+                type = lib.types.str;
+                example = "sh:jellyfin";
+              };
+              group = lib.mkOption {
+                type = lib.types.enum ["home" "media" "downloads" "infra"];
+                description = "Dashboard section; the renderer orders sections and sorts by title within each.";
+              };
+              # SSO-gated sites need a loopback check-url; the public URL only reaches the Zitadel login.
+              checkUrl = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "URL Glance probes instead of url.";
+              };
+              altStatusCodes = lib.mkOption {
+                type = lib.types.listOf lib.types.int;
+                default = [];
+                description = "Extra HTTP status codes that count as up.";
+              };
+            };
+          });
+          default = {};
+          description = "Glance home-page monitor entries, set by each service leaf.";
+        };
       };
 
       hardware = {
-        physical = cascade (!config.fireproof.wsl.enable) "Whether this is a physical machine (not WSL/VM). Enables baseline hardware hygiene: SMART monitoring, thermald, zram, btrfs scrub, firmware/fwupd and removable-media automount.";
+        physical = cascade (!config.fireproof.wsl.enable) "Whether this is a physical machine (not WSL/VM). Gates baseline hardware hygiene for physical machines.";
         zram = cascade config.fireproof.hardware.physical "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
         nvidia.enable = lib.mkEnableOption "NVIDIA GPU support (open kernel module + VA-API video offload)";
         laptop = lib.mkEnableOption "laptop-specific configurations and tools";

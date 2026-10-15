@@ -21,8 +21,9 @@
 
     check = pkgs.writers.writePython3Bin "obsidian-vault-check" {
       libraries = [pkgs.python3Packages.pyyaml];
-      flakeIgnore = ["E501"];
-    } (builtins.readFile ./vault-check.py);
+      # E402: the injected KEY_ORDER line precedes the imports.
+      flakeIgnore = ["E501" "E402"];
+    } "KEY_ORDER = [${lib.concatMapStringsSep ", " builtins.toJSON (import ./_key-order.nix)}]\n${builtins.readFile ./vault-check.py}";
 
     # Local, never-pushed history: an undo log that keeps agent edits apart from synced ones.
     snapshot = pkgs.writeShellApplication {

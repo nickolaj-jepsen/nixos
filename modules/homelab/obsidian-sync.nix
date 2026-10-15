@@ -11,9 +11,15 @@
     couch = config.services.couchdb;
     domain = "obsidian.${cfg.domain}";
     accessLog = "/var/log/nginx/obsidian.access.log";
-    # One CouchDB user per device, each a member of every vault database. The Nix
-    # hosts decrypt their own password HM-side (homeManager.obsidian-livesync).
-    devices = ["desktop" "laptop" "macbook" "minilab" "work" "phone"];
+    # One CouchDB user per device (every secrets/obsidian/*.age but the E2EE passphrase),
+    # each a member of every vault database. The Nix hosts decrypt their own password
+    # HM-side (homeManager.obsidian-livesync).
+    devices = lib.pipe (builtins.readDir ../../secrets/obsidian) [
+      builtins.attrNames
+      (lib.filter (lib.hasSuffix ".age"))
+      (map (lib.removeSuffix ".age"))
+      (lib.remove "passphrase")
+    ];
     vaults = ["legacy" "notes"];
     deviceSecret = device: "obsidian-livesync-${device}";
   in {
@@ -124,6 +130,14 @@
             '';
           });
         };
+      };
+
+      fireproof.homelab.dashboard.monitors.obsidian-sync = {
+        title = "Obsidian Sync";
+        url = "https://${domain}/_utils/";
+        checkUrl = "http://127.0.0.1:${toString couch.port}/_up";
+        icon = "si:obsidian";
+        group = "infra";
       };
 
       services.nginx.virtualHosts.${domain} = fpLib.mkVirtualHost {

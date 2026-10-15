@@ -51,8 +51,7 @@
           appearance = {
             theme = "obsidian";
             accentColor = "#${c.accent}";
-            # Same as Ghostty.
-            monospaceFontFamily = "Hack Nerd Font Mono";
+            monospaceFontFamily = config.fireproof.theme.font.monoFamily;
           };
           # Border's card layout (enabled via Style Settings in plugins.nix) gives the island look; the fireproof snippet colors it.
           themes = [pkgs.obsidianThemes.border];

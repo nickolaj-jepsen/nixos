@@ -53,11 +53,11 @@
             show = "auto";
           };
 
-          # Font (matches VSCode config)
-          buffer_font_family = "Hack Nerd Font";
+          # Font
+          buffer_font_family = config.fireproof.theme.font.family;
           buffer_font_size = 14;
           buffer_line_height.custom = 1.5;
-          ui_font_family = "Hack Nerd Font";
+          ui_font_family = config.fireproof.theme.font.family;
           ui_font_size = 14;
 
           # Editor behavior

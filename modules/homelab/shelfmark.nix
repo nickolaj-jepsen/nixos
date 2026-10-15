@@ -20,6 +20,14 @@
       # Gate behind SSO: Shelfmark's own auth is unset until configured in-app.
       services.oauth2-proxy.nginx.virtualHosts."${domain}".allowed_groups = ["arr"];
 
+      fireproof.homelab.dashboard.monitors.shelfmark = {
+        title = "Shelfmark";
+        url = "https://${domain}";
+        checkUrl = "http://127.0.0.1:${toString port}";
+        icon = "sh:calibre-web-automated-book-downloader";
+        group = "downloads";
+      };
+
       services.shelfmark = {
         enable = true;
         environment = {

@@ -59,6 +59,13 @@
         };
       };
 
+      fireproof.homelab.dashboard.monitors.bm-cms = {
+        title = "BM CMS";
+        url = "https://${domain}/admin";
+        icon = "sh:payload";
+        group = "infra";
+      };
+
       services.nginx.appendHttpConfig = ''
         limit_req_zone $binary_remote_addr zone=bmcmslogin:10m rate=5r/m;
       '';

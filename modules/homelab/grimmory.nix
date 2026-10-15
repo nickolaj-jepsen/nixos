@@ -118,6 +118,13 @@
       # NB: no oauth2-proxy gate — KOReader's OPDS + kosync auth can't do the OIDC
       # browser flow, so the vhost relies on Grimmory's own per-user credentials.
 
+      fireproof.homelab.dashboard.monitors.grimmory = {
+        title = "Grimmory";
+        url = "https://${domain}";
+        icon = "sh:booklore";
+        group = "media";
+      };
+
       services.restic.backups.homelab.paths = ["${stateDir}/data"];
     };
   };

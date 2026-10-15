@@ -189,7 +189,7 @@
             "- **Cloud provider(s)**: None configured"
             "- **Repository visibility**: github.com/nickolaj-jepsen/nixos (~/nixos) is PUBLIC; a push there is publishing, so only that repo's own work belongs in it and secrets or personal/work data never do"
             "- **Internal sharing / snippet hosting**: None configured; public paste/gist services are outside the trust boundary"
-            "- **Secrets management**: agenix-rekey. Age-encrypted `*.age` files under ~/nixos/secrets (master identity secrets/yubikey-identity.txt, YubiKey-backed) decrypt at activation to /run/agenix and /run/user/<uid>/agenix. Edited only via `just secret-edit`/`secret-generate`/`secret-rekey`; decrypted contents are never printed, copied or committed. CI secrets: ATTIC_TOKEN, BOT_TOKEN, CLAUDE_CODE_OAUTH_TOKEN, HOMELAB_DOMAIN"
+            "- **Secrets management**: agenix-rekey. Age-encrypted `*.age` files under ~/nixos/secrets (master identity secrets/yubikey-identity.pub, YubiKey-backed) decrypt at activation to /run/agenix and /run/user/<uid>/agenix. Edited only via `just secret-edit`/`secret-generate`/`secret-rekey`; decrypted contents are never printed, copied or committed. CI secrets: the repository secrets referenced in .github/workflows"
             "- **Default / protected branches**: `main` is the default and protected branch of ~/nixos (plus one ruleset); a nightly update bot opens an automerged PR against it"
             "- **CI/CD deploy targets**: None configured; hosts are activated by hand with `just switch`/`boot`/`home-switch`/`darwin-switch` (this machine) or `just deploy-remote` (another host), all of which change a live system"
             "- **Network posture**: ordinary internet access plus a Tailscale tailnet"
@@ -210,7 +210,7 @@
               else "- **Key internal services**: a homelab Grafana"
             )
             "- **Internal package registry**: an attic Nix binary cache on the homelab (attic.<HOMELAB_DOMAIN>)"
-            "- **Sensitive data locations & audiences**: ~/nixos/secrets/** (`*.age`, secrets/yubikey-identity.txt), /run/agenix, /run/user/*/agenix, ~/.ssh, ~/.claude/.credentials.json, ~/.claude-work/.credentials.json, `.env` files; share only with audiences cleared at the [named+specifics] bar"
+            "- **Sensitive data locations & audiences**: ~/nixos/secrets/** (`*.age`), /run/agenix, /run/user/*/agenix, ~/.ssh, ~/.claude/.credentials.json, ~/.claude-work/.credentials.json, `.env` files; share only with audiences cleared at the [named+specifics] bar"
             "- **Data retention / declassification**: None configured"
             "- **Sensitive remote targets**: any namespace, host, context or container whose name carries prod or production as a whole word or name segment; ~/nixos/secrets/k8s/ao-prod.age is encrypted material, not a live target"
             (

@@ -136,13 +136,6 @@ in {
         mode = "0600";
       };
 
-      # extensions/tensorx.ts reads the key from this fixed spot in the agent dir.
-      age.secrets.tensorx-api-key = {
-        rekeyFile = ../../../secrets/tensorx-api-key.age;
-        path = "${config.home.homeDirectory}/.pi/agent/tensorx-api-key";
-        mode = "0600";
-      };
-
       # Not the module's `models` option — it only writes once, never updates.
       home.file.".pi/agent/models.json".text = builtins.toJSON {
         providers = lib.optionalAttrs config.fireproof.dev.llm.enable {

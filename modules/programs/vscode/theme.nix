@@ -14,7 +14,7 @@
         "window.controlsStyle" = "hidden"; # niri manages the window
 
         # Font
-        "editor.fontFamily" = "'Hack Nerd Font', 'Hack', 'monospace', monospace";
+        "editor.fontFamily" = "'${config.fireproof.theme.font.family}', 'monospace', monospace";
         "editor.fontSize" = 14;
         "editor.lineHeight" = 1.5;
         "editor.fontLigatures" = false;

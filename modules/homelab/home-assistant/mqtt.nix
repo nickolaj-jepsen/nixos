@@ -37,6 +37,7 @@
           members = dev.allLights;
         };
       };
+    memberCount = lib.foldl' (n: g: n + lib.length g.members) 0 (lib.attrValues zigbeeGroups);
     desiredGroupsJson = pkgs.writeText "zigbee-groups.json" (builtins.toJSON (
       lib.mapAttrs' (_: g: lib.nameValuePair g.friendly_name g.members) zigbeeGroups
     ));
@@ -69,6 +70,14 @@
       services.nginx.virtualHosts."zigbee.${cfg.domain}" = fpLib.mkVirtualHost {
         port = zigbee2mqttPort;
         websockets = true;
+      };
+
+      fireproof.homelab.dashboard.monitors.zigbee2mqtt = {
+        title = "Zigbee2MQTT";
+        url = "https://zigbee.${cfg.domain}";
+        checkUrl = "http://127.0.0.1:${toString zigbee2mqttPort}";
+        icon = "sh:zigbee2mqtt";
+        group = "home";
       };
 
       # Loopback only: both users hold `readwrite #`.
@@ -113,8 +122,8 @@
         after = ["zigbee2mqtt.service"];
         serviceConfig = {
           Type = "oneshot";
-          # Worst case: 30 x 10 s bridge wait + 34 members x ~48 s (see -W below).
-          TimeoutStartSec = "45min";
+          # Worst case: 30 x 10 s bridge wait + ~48 s per group member (see -W below).
+          TimeoutStartSec = toString (300 + 48 * memberCount);
           ExecStart = lib.getExe (pkgs.writeShellApplication {
             name = "zigbee2mqtt-groups-sync";
             runtimeInputs = [z2mMqtt pkgs.jq pkgs.coreutils];

@@ -99,7 +99,7 @@
             "terminal.integrated.defaultProfile.linux" = "fish";
             "terminal.integrated.smoothScrolling" = true;
             "terminal.integrated.cursorBlinking" = true;
-            "terminal.integrated.fontFamily" = "'Hack Nerd Font Mono', monospace";
+            "terminal.integrated.fontFamily" = "'${config.fireproof.theme.font.monoFamily}', monospace";
             "terminal.integrated.scrollback" = 10000;
 
             # Remote

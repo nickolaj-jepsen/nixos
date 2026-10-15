@@ -75,6 +75,13 @@
         websockets = true;
       };
 
+      fireproof.homelab.dashboard.monitors.home-assistant = {
+        title = "Home Assistant";
+        url = "https://ha.${cfg.domain}";
+        icon = "sh:home-assistant";
+        group = "home";
+      };
+
       # stopIfChanged/RestartSec/start limit: same reasons as systemd.services.mosquitto.
       systemd.services.home-assistant = {
         after = ["mosquitto.service"];

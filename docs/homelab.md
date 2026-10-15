@@ -4,8 +4,9 @@ Read this before adding or reworking a service under `modules/homelab/`.
 
 Services are native NixOS services by default, gated on
 `fireproof.homelab.enable` (leaf authoring rules: `docs/modules.md`). Every
-new service gets a dashboard link in `modules/homelab/glance/_home-page.nix`
-(behind SSO it also needs a loopback `check-url`, or the monitor only probes
+new service sets its Glance dashboard link,
+`fireproof.homelab.dashboard.monitors.<name>`, inside its own leaf's gate
+(behind SSO it also needs a loopback `checkUrl`, or the monitor only probes
 the Zitadel login), and its vhost via `fpLib.mkVirtualHost`. A service using
 `/mnt/data` also sets
 `systemd.services.<unit>.unitConfig.RequiresMountsFor = ["/mnt/data"];` in its
@@ -146,8 +147,9 @@ A service declares its own DB against them:
   container connecting over TCP needs a
   `systemd.services.mysql.postStart = lib.mkAfter` hook to provision a
   password user. `mariadb.nix` binds `0.0.0.0` and opens 3306 on `docker0`;
-  containers reach it via `--add-host=host.docker.internal:host-gateway`.
-  Consumer example: `grimmory.nix`.
+  containers reach it via `--add-host=host.docker.internal:host-gateway`, and
+  native socket consumers ignore both. The firewall's default deny still blocks
+  3306 on the LAN/WAN NICs. Consumer example: `grimmory.nix`.
 
 ## Obsidian sync (`obsidian-sync.nix` + `modules/programs/obsidian/`)
 
@@ -158,11 +160,13 @@ tailnet can sync. The `obsidian-couchdb` fail2ban jail bans on that vhost's
 
 - Vaults: `~/obsidian/<name>` on every desktop host, one CouchDB database
   each. The name lists live in both files; add a vault to both.
-- Devices: one CouchDB user per device (`devices` in `obsidian-sync.nix`),
-  password in `secrets/obsidian/<device>.age`, declared by the homelab and by
-  that host's HM half (a shared generator). The phone has no Nix:
-  `just secret-edit secrets/obsidian/phone.age` shows its password. Revoke a
-  device by dropping it from `devices` (then delete its `_users` doc).
+- Devices: one CouchDB user per `secrets/obsidian/<device>.age` (every file
+  but `passphrase.age`; `devices` in `obsidian-sync.nix` reads the directory),
+  declared by the homelab and by that host's HM half (a shared generator). A
+  new Nix host's HM half creates its file via `just secret-generate`. The
+  phone has no Nix: `just secret-edit secrets/obsidian/phone.age` shows its
+  password. Revoke a device by deleting its `.age` file (then its `_users`
+  doc).
 - `secrets/obsidian/passphrase.age` is the vault E2EE passphrase every device
   shares; the server never sees it. Changing it means a remote rebuild.
 - `couchdb-obsidian-provision` creates the users and databases. Device users

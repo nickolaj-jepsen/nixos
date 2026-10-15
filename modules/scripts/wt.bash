@@ -4,37 +4,21 @@ set -euo pipefail
 # wt: manage git worktrees. Discovery is git-driven (every worktree registered
 # to the repo, wherever it lives), with the dirs under <repo>/.claude/worktrees/
 # scanned on top to surface orphans (Claude's home, the only dir we know to scan).
-#
-# Verbs:
-#   list                       Show every worktree with state (incl. a (main) row).
-#   create <name> [<base>]     Create <repo>/.claude/worktrees/<name> on a new
-#                              branch <name> off <base> (default: <default>).
-#                              Prints the new worktree's path on stdout.
-#   cd [<name>]                Print a worktree's path (fzf picker if no name);
-#                              the fish wrapper cd's the shell into it.
-#   clean [--dry-run] [<name>] Remove safely-removable worktrees. No name: clean
-#                              every safe one (never main, never one parked on
-#                              <default>). With name: clean that one.
-#   apply [--dry-run] [<name>] Land the worktree's branch: rebase onto
-#                              <default>, remove the worktree, fast-forward
-#                              <default>, and delete the branch.
-#                              Requires the main checkout on a clean <default>.
-#   diff [<name>]              Review the worktree's diff (committed +
-#                              uncommitted) vs <default> in diffnav --watch.
-#   smerge [<name>]            Open the worktree in Sublime Merge.
-#   code [<name>]              Open the worktree in VS Code.
 
 usage() {
     cat >&2 <<'EOF'
 Usage:
-  wt list
-  wt create <name> [<base>]
-  wt cd [<name>]
-  wt clean [--dry-run] [<name>]
-  wt apply [--dry-run] [<name>]
-  wt diff [<name>]
-  wt smerge [<name>]
-  wt code [<name>]
+  wt list                        Show every worktree with state (incl. a (main) row).
+  wt create <name> [<base>]      Create .claude/worktrees/<name> on a new branch <name>
+                                 off <base> (default: <default>); prints its path.
+  wt cd [<name>]                 Print a worktree's path (fzf picker if no name).
+  wt clean [--dry-run] [<name>]  Remove safely-removable worktrees; no name cleans every
+                                 safe one (never main, never one parked on <default>).
+  wt apply [--dry-run] [<name>]  Rebase onto <default>, remove the worktree, fast-forward
+                                 <default>, delete the branch. Needs main on clean <default>.
+  wt diff [<name>]               Review the diff (committed + uncommitted) vs <default>.
+  wt smerge [<name>]             Open the worktree in Sublime Merge.
+  wt code [<name>]               Open the worktree in VS Code.
 EOF
 }
 

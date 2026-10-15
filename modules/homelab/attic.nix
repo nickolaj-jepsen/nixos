@@ -24,6 +24,14 @@
         '';
       };
 
+      fireproof.homelab.dashboard.monitors.attic = {
+        title = "Attic";
+        url = "https://${domain}";
+        icon = "sh:nix";
+        group = "infra";
+        altStatusCodes = [404];
+      };
+
       services.postgresql = fpLib.mkPostgresDB {
         name = "atticd";
         login = true;

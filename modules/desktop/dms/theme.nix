@@ -45,7 +45,7 @@
         cornerRadius = 8;
 
         fontFamily = "Inter Variable";
-        monoFontFamily = "Hack Nerd Font Mono";
+        monoFontFamily = config.fireproof.theme.font.monoFamily;
         fontWeight = 400;
         fontScale = 1;
         textRenderType = 1; # Native (FreeType) — matches the rest of the desktop's hinting

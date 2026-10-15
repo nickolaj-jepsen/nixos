@@ -12,7 +12,7 @@
       inherit ((lib.head config.services.mosquitto.listeners)) port;
     };
     haPort = config.services.home-assistant.config.http.server_port;
-    # Reuses the #sys-info webhook declared in nextcloud.nix (same homelab gate).
+    # #sys-info webhook, declared in notify.nix.
     discordEnv = config.age.secrets.discord-webhook-sys-info.path;
     discordPost = ''
       post() { jq -nc --arg c "$1" '{content: $c}' | curl -fsS -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK_SYS_INFO" >/dev/null || true; }

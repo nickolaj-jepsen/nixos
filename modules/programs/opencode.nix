@@ -210,14 +210,6 @@
         context = builtins.readFile ./agent-context.md;
       };
 
-      # Identical to pi's definition so the two merge: opencode's {file:} expands
-      # only `~/`, and the default secretsDir spelling is a shell expression.
-      age.secrets.tensorx-api-key = {
-        rekeyFile = ../../secrets/tensorx-api-key.age;
-        path = "${config.home.homeDirectory}/.pi/agent/tensorx-api-key";
-        mode = "0600";
-      };
-
       xdg.configFile."opencode/opencode.json".text = builtins.toJSON ({
           "$schema" = "https://opencode.ai/config.json";
           # Nix owns the binary.

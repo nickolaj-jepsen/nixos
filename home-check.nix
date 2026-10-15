@@ -1,7 +1,6 @@
-# Build the dev-ao standalone home-manager host in `just check` (nix flake
+# Build every home-manager host's activationPackage in `just check` (nix flake
 # check): a home-manager half that starts reading osConfig (null standalone) or
-# a non-shared option fails CI here, not just on a future deploy. dev-ao is a real discovered host
-# (hosts/dev-ao), so this only forces its activationPackage on the build host.
+# a non-shared option fails CI here, not just on a future deploy.
 #
 # disko-templates: bootstrap-install copies a template verbatim into a host dir,
 # where it must pass the host collector, so check the card shape at eval time.
@@ -28,7 +27,8 @@ in {
     ...
   }:
     lib.optionalAttrs (system == "x86_64-linux") {
-      checks.dev-ao-home = config.flake.homeConfigurations.dev-ao.activationPackage;
-      checks.disko-templates = assert lib.all checkTemplate templates; pkgs.emptyFile;
+      checks =
+        lib.mapAttrs' (name: hc: lib.nameValuePair "${name}-home" hc.activationPackage) config.flake.homeConfigurations
+        // {disko-templates = assert lib.all checkTemplate templates; pkgs.emptyFile;};
     };
 }

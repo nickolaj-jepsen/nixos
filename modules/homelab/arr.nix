@@ -21,6 +21,22 @@
       };
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
+      fireproof.homelab.dashboard.monitors = let
+        mkMonitor = name: title: checkUrl: {
+          inherit title checkUrl;
+          url = "https://${name}.${cfg.domain}";
+          icon = "sh:${name}";
+          group = "downloads";
+        };
+        arrPing = name: "http://127.0.0.1:${toString config.services.${name}.settings.server.port}/ping";
+      in {
+        sonarr = mkMonitor "sonarr" "Sonarr" (arrPing "sonarr");
+        radarr = mkMonitor "radarr" "Radarr" (arrPing "radarr");
+        lidarr = mkMonitor "lidarr" "Lidarr" (arrPing "lidarr");
+        prowlarr = mkMonitor "prowlarr" "Prowlarr" (arrPing "prowlarr");
+        sabnzbd = mkMonitor "sabnzbd" "SABnzbd" "http://127.0.0.1:${toString config.services.sabnzbd.settings.misc.port}";
+      };
+
       systemd.services = lib.genAttrs ["bazarr" "lidarr" "radarr" "sabnzbd" "sonarr"] (_: {
         unitConfig.RequiresMountsFor = ["/mnt/data"];
       });

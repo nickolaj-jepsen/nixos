@@ -31,7 +31,7 @@
             if pkgs.stdenv.isDarwin
             then 14
             else 11;
-          font-family = "Hack Nerd Font";
+          font-family = config.fireproof.theme.font.family;
           # The single-instance handoff intermittently yields shell-less transparent windows.
           gtk-single-instance = false;
           window-inherit-font-size = false;

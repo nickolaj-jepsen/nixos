@@ -1,14 +1,5 @@
-# Shared MariaDB engine for the homelab, mirroring the native postgres service
-# (postgres.nix): always-on, with logical backups folded into the restic set. A
-# service adds its own database the way postgres consumers do — append to
-# services.mysql.ensureDatabases and services.mysqlBackup.databases. ensureUsers only
-# does socket auth, so a containerized service that connects over TCP also provisions
-# its password user in a `systemd.services.mysql.postStart = lib.mkAfter` hook (see
-# grimmory.nix).
-#
-# bind-address + the docker0 firewall hole let container consumers reach it over the
-# bridge gateway (host.docker.internal:host-gateway); native socket consumers ignore
-# both. The firewall's default deny still blocks 3306 on the LAN/WAN NICs.
+# bind-address 0.0.0.0 relies on the firewall's default deny to keep 3306 off the
+# LAN/WAN NICs; docker0 is the only hole. Adding a database: docs/homelab.md.
 {
   flake.modules.nixos.mariadb = {
     config,

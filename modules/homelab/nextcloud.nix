@@ -13,7 +13,13 @@
         owner = "nextcloud";
         group = "nextcloud";
       };
-      age.secrets.discord-webhook-sys-info.rekeyFile = ../../secrets/hosts/homelab/discord-webhook-sys-info.age;
+
+      fireproof.homelab.dashboard.monitors.nextcloud = {
+        title = "Nextcloud";
+        url = "https://${config.services.nextcloud.hostName}";
+        icon = "sh:nextcloud";
+        group = "home";
+      };
 
       services = {
         restic.backups.homelab.paths = [config.services.nextcloud.home];

@@ -18,6 +18,13 @@
         websockets = true;
       };
 
+      fireproof.homelab.dashboard.monitors.audiobookshelf = {
+        title = "Audiobookshelf";
+        url = "https://${domain}";
+        icon = "sh:audiobookshelf";
+        group = "media";
+      };
+
       services.audiobookshelf = {
         enable = true;
         inherit port;

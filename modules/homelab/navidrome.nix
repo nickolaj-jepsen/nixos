@@ -36,6 +36,14 @@
         };
       };
 
+      fireproof.homelab.dashboard.monitors.navidrome = {
+        title = "Navidrome";
+        url = "https://${domain}";
+        checkUrl = "http://127.0.0.1:${toString port}/ping";
+        icon = "sh:navidrome";
+        group = "media";
+      };
+
       services.navidrome = {
         enable = true;
         package = pkgs.unstable.navidrome;

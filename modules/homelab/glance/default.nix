@@ -29,13 +29,21 @@
     };
 
     homePage = import ./_home-page.nix {
-      inherit cfg templates;
+      inherit cfg lib templates;
       inherit (config) services;
     };
     workPage = import ./_work-page.nix {inherit templates;};
   in {
     config = lib.mkIf config.fireproof.homelab.enable {
       age.secrets.glance-env.rekeyFile = ../../../secrets/hosts/homelab/glance-env.age;
+
+      # Grafana Cloud has no leaf here to own its entry.
+      fireproof.homelab.dashboard.monitors.grafana = {
+        title = "Grafana";
+        url = "https://fireproof.grafana.net/a/grafana-setupguide-app/home";
+        icon = "si:grafana";
+        group = "infra";
+      };
 
       services.glance = {
         enable = true;
