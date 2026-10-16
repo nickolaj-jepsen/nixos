@@ -545,6 +545,30 @@ true
 
 
 
+## fireproof\.dev\.ai-usage\.enable
+
+
+
+Enable ai-usage, the agent subscription quota CLI (and its DMS bar widget on desktops)
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.dev\.clickhouse\.enable
 
 
