@@ -64,6 +64,9 @@
           [
             "music"
             "systemTray"
+          ]
+          ++ lib.optional config.fireproof.dev.ai-usage.enable "aiUsage"
+          ++ [
             "cpuUsage"
             "diskUsage"
             "controlCenterButton"

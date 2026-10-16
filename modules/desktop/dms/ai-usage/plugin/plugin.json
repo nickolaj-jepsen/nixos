@@ -1,0 +1,12 @@
+{
+  "id": "aiUsage",
+  "name": "AI Usage",
+  "description": "Agent subscription quota windows from ai-usage, as pace-colored rings",
+  "version": "1.0.0",
+  "author": "fireproof",
+  "type": "widget",
+  "capabilities": ["dankbar-widget"],
+  "component": "./AiUsageWidget.qml",
+  "icon": "speed",
+  "permissions": ["settings_read"]
+}
