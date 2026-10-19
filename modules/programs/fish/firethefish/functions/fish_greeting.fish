@@ -43,7 +43,7 @@ function fish_greeting
 
     set -l common
     set -l real_pwd (builtin pwd -P 2>/dev/null | string collect); or set real_pwd $PWD
-    __ftf_in_repo $real_pwd; and command -q git
+    __ftf_in_repo $real_pwd >/dev/null; and command -q git
     and set common (command git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
     if set -q common[1]
         set -l repo

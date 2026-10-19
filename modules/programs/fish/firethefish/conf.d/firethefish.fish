@@ -16,11 +16,25 @@ if string match -qr '^\d+ \d+ ' -- "$__ftf_nest"; and test "$nest[3]" = "$scope"
 end
 set -gx __ftf_nest $__ftf_depth $SHLVL $scope
 
+# nix shell sets no marker, so name the store bin dirs it put on PATH beyond those of the fish that ran it.
+set -g __ftf_nix_pkgs
+if set -q __ftf_store_path; and not set -q IN_NIX_SHELL[1]
+    # Exported lists arrive space-joined.
+    set -l parent (string split ' ' -- "$__ftf_store_path")
+    for p in (string match -- '/nix/store/*' $PATH)
+        contains -- $p $parent; and continue
+        set -l pkg (string match -rg '^/nix/store/[a-z0-9]{32}-(.+?)(?:-\d[^/]*)?/bin$' -- $p)
+        set -q pkg[1]; and not contains -- $pkg $__ftf_nix_pkgs; and set -a __ftf_nix_pkgs $pkg
+    end
+end
+set -gx __ftf_store_path (string match -- '/nix/store/*' $PATH)
+
 # An empty Enter fires no fish_postexec, so this marks $status and $CMD_DURATION as belonging to this prompt.
 set -g __ftf_ran 0
 function __ftf_on_preexec --on-event fish_preexec
     set -e __ftf_job_stopped
     set -g __ftf_last_pid $last_pid
+    set -gx __ftf_store_path (string match -- '/nix/store/*' $PATH)
 end
 function __ftf_on_postexec --on-event fish_postexec
     # Blank or comment-only lines, launching or suspending a job all leave the previous $status in place.

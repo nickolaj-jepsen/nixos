@@ -42,6 +42,10 @@
         rebase.autoStash = "true";
         rerere.enabled = true;
         init.defaultBranch = "main";
+        # The fish prompt's `git status` runs with --no-optional-locks, so other git commands keep this cache fresh.
+        core.untrackedCache = true;
+        # Linux git has no builtin fsmonitor daemon.
+        core.fsmonitor = pkgs.stdenv.hostPlatform.isDarwin;
         alias.fixup = "!git log -n 50 --pretty=format:'%h %s' --no-merges | ${lib.getExe pkgs.fzf} | cut -c -7 | xargs -o git commit --fixup";
       };
       includes = [

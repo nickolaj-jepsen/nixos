@@ -154,13 +154,19 @@ function __ftf_prompt_direnv -a real_pwd
 end
 
 function __ftf_prompt_nix
-    set -q IN_NIX_SHELL[1]; or return
-    __ftf_start_segment brblue black --bold
     set -l label
-    if not set -q DIRENV_DIR
-        set label $name
-        test "$label" = nix-shell; and set label $__ftf_nix_dir
+    if set -q IN_NIX_SHELL[1]
+        if not set -q DIRENV_DIR
+            set label $name
+            test "$label" = nix-shell; and set label $__ftf_nix_dir
+        end
+    else if set -q __ftf_nix_pkgs[1]
+        set label $__ftf_nix_pkgs
+        set -q label[4]; and set label $label[1..2] +(math (count $label) - 2)
+    else
+        return
     end
+    __ftf_start_segment brblue black --bold
     echo -n (string join ' ' \uF313 $label)' '
 end
 
@@ -196,19 +202,25 @@ function __ftf_path_segment -a dir level
     echo -n "$dir "
 end
 
-function __ftf_repo_scan -a real_pwd -d 'Print repo root, git dir, common dir, short HEAD and porcelain status lines when real_pwd is inside a work tree'
-    set -l rp
-    # Outside a work tree (no repo, inside .git, bare repo) rev-parse fails and the path is shown alone.
+function __ftf_repo_scan -a real_pwd -d 'Print repo root, git dir, common dir and porcelain status lines when real_pwd is inside a work tree'
     # Its output is newline-separated, so a path containing a newline can't be read back.
-    not string match -q \*\n\* -- $real_pwd; and __ftf_in_repo $real_pwd; and command -q git
-    and set rp (command git rev-parse --path-format=absolute --show-toplevel --absolute-git-dir --git-common-dir --short HEAD 2>/dev/null)
-    set -q rp[3]; and string match -q -- "$rp[1]/*" "$real_pwd/"; or return
+    string match -q \*\n\* -- $real_pwd; and return
+    set -l dotgit (__ftf_in_repo $real_pwd); or return
+    command -q git; or return
+    # The paths change only with the directory or the .git it resolves to, so rev-parse runs once per change.
+    set -l key "$real_pwd" "$dotgit" "$GIT_DIR" "$GIT_WORK_TREE" "$GIT_COMMON_DIR"
+    if test "$key" != "$__ftf_rp_key"
+        set -g __ftf_rp_key "$key"
+        set -g __ftf_rp (command git rev-parse --path-format=absolute --show-toplevel --absolute-git-dir --git-common-dir 2>/dev/null)
+    end
+    # Outside a work tree (inside .git, bare repo) rev-parse fails and the path is shown alone.
+    set -q __ftf_rp[3]; and string match -q -- "$__ftf_rp[1]/*" "$real_pwd/"; or return
     set -l lines (command git --no-optional-locks status --porcelain=v2 --branch 2>/dev/null); or return
-    printf '%s\n' $rp[1..3] "$rp[4]" $lines
+    printf '%s\n' $__ftf_rp[1..3] $lines
 end
 
-function __ftf_git_parse -a gitdir commondir short_head -d 'Print the git segment as six lines: colors, glyphs, branch, state, arrows, stale mark'
-    set -l lines $argv[4..]
+function __ftf_git_parse -a gitdir commondir -d 'Print the git segment as six lines: colors, glyphs, branch, state, arrows, stale mark'
+    set -l lines $argv[3..]
     set -l head (string replace -rf '^# branch\.head ' '' -- $lines)
     set -l ab (string match -rg '^# branch\.ab \+(\d+) -(\d+)$' -- $lines)
     set -l xy (string replace -rf '^[12] (..) .*' '$1' -- $lines)
@@ -262,12 +274,25 @@ function __ftf_git_parse -a gitdir commondir short_head -d 'Print the git segmen
     set -l branch
     if test "$head" = '(detached)'
         set -a glyphs 
-        set branch $short_head
+        set branch (string replace -rf '^# branch\.oid ' '' -- $lines | string sub -l 7)
     else
         set -a glyphs 
-        set -q __ftf_default_branches
-        or set -g __ftf_default_branches main master (command git config --get init.defaultBranch)
-        contains -- $head $__ftf_default_branches; or set branch $head
+        set -l remotes origin
+        set -q upstream[1]; and set -p remotes (string split -m1 -f1 / -- $upstream)
+        set -l default
+        for remote in $remotes
+            # A remote's HEAD symref is always a loose file, except under reftable.
+            set -l f $commondir/refs/remotes/$remote/HEAD
+            test -f $f; or continue
+            set default (string replace -f -- "ref: refs/remotes/$remote/" '' <$f)
+            break
+        end
+        if not set -q default[1]
+            set -q __ftf_default_branches
+            or set -g __ftf_default_branches main master (command git config --get init.defaultBranch)
+            set default $__ftf_default_branches
+        end
+        contains -- $head $default; or set branch $head
     end
 
     set -l state $op
