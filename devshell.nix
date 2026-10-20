@@ -6,10 +6,10 @@
   }: {
     devShells.default = pkgs.mkShell {
       name = "nixos-config";
+      # treefmt plus every formatter `nix fmt` runs, at the same versions.
+      inputsFrom = [config.treefmt.build.devShell];
       packages = with pkgs; [
         # Nix tools
-        nil # Nix LSP
-        alejandra # Nix formatter
         nix-diff # Compare derivations
         nix-tree # Visualize dependencies
         nvd # Nix version diff
@@ -18,21 +18,12 @@
 
         # Secrets management
         config.agenix-rekey.package # `agenix rekey|edit|generate`
-        age
         rage # Used by `just age`
         age-plugin-yubikey # YubiKey plugin discovered via PATH by rage
 
-        # Deployment
         just
-
-        # Git
-        git
+        python3 # `just update` / `just update-packages` scripts (stdlib only)
       ];
-
-      shellHook = ''
-        echo "🔧 NixOS Configuration Development Shell"
-        echo "   Run 'just' to see available commands"
-      '';
     };
   };
 }
