@@ -82,7 +82,51 @@
     # claude-code resolves the checker off PATH by bare name, so it has to be a
     # real package rather than a store path like the LSP servers. hunspell
     # over aspell because only it takes several dictionaries at once (`-d a,b`).
-    spellChecker = pkgs.hunspell.withDicts (d: [d.en_US d.da_DK]);
+    dictionaries = ["en_US" "da_DK"];
+    spellChecker = pkgs.hunspell.withDicts (d: map (name: d.${name}) dictionaries);
+    # Mutable: the spellfix picker adds words to it. hunspell neither creates a
+    # missing personal dictionary nor saves into one, so activation touches it.
+    personalDictionary = "${config.xdg.configHome}/hunspell/personal.dic";
+
+    # Validated and tested against the claude-code that runs it, so a bump that
+    # breaks its API (or drops the keybinding action it borrows) fails the build.
+    spellfix = pkgs.stdenvNoCC.mkDerivation {
+      name = "claude-code-spellfix";
+      src = ./mods/spellfix;
+      nativeBuildInputs = [ccfg.package];
+      buildPhase = ''
+        runHook preBuild
+        export HOME="$TMPDIR"
+        claude plugin validate .
+        claude plugin test .
+        runHook postBuild
+      '';
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out
+        cp -r .claude-plugin hooks types $out/
+        runHook postInstall
+      '';
+    };
+
+    # ctrl+q presses spellfix's band button, which borrows this action; a
+    # single modified key reaches a plugin Button only from the Global context.
+    keybindings = {
+      "$schema" = "https://www.schemastore.org/claude-code-keybindings.json";
+      bindings = [
+        {
+          context = "Global";
+          bindings."ctrl+q" = "app:toggleDiffNoiseFilter";
+        }
+      ];
+    };
+
+    # `claude plugin test` refuses any option before `plugin`, and the
+    # home-manager wrapper always prepends --plugin-dir.
+    claudeEntry = pkgs.writeShellScript "claude" ''
+      if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
+      exec -a "$0" ${ccfg.finalPackage}/bin/claude "$@"
+    '';
 
     claudeWorkWrapper = pkgs.writeShellApplication {
       name = "claude-work";
@@ -99,7 +143,7 @@
     # output-styles) would otherwise silently never reach the work profile.
     # `plugins` is shared mutable state, so it is always mirrored.
     mirroredNames =
-      ["settings.json" "CLAUDE.md" "plugins"]
+      ["settings.json" "CLAUDE.md" "plugins" "keybindings.json"]
       ++ lib.optional (ccfg.skills != {}) "skills"
       ++ lib.optional (ccfg.outputStyles != {}) "output-styles"
       ++ lib.concatMap (name: lib.optional (ccfg.${name} != {} || ccfg."${name}Dir" != null) name)
@@ -114,10 +158,20 @@
     # Mutes warning about installMethod by placing the wrapped binary in ~/.local/bin
     home.file = lib.mkMerge [
       {
-        ".local/bin/claude".source = "${config.programs.claude-code.finalPackage}/bin/claude";
+        ".local/bin/claude".source = claudeEntry;
+        # Replaces any hand-made file: bindings live in `keybindings` above.
+        ".claude/keybindings.json" = {
+          text = builtins.toJSON keybindings;
+          force = true;
+        };
       }
       workFiles
     ];
+
+    home.activation.hunspellPersonalDictionary = lib.hm.dag.entryAfter ["writeBoundary"] ''
+      run mkdir -p ${lib.escapeShellArg (dirOf personalDictionary)}
+      [ -e ${lib.escapeShellArg personalDictionary} ] || run touch ${lib.escapeShellArg personalDictionary}
+    '';
 
     home.packages = [spellChecker] ++ lib.optional cfg.work.enable claudeWorkWrapper;
 
@@ -237,7 +291,13 @@
         spellcheck = {
           enabled = true;
           checker = "hunspell";
-          language = "en_US,da_DK";
+          language = lib.concatStringsSep "," dictionaries;
+        };
+        # ctrl+q picks fixes for the words the underline flags (mods/spellfix).
+        pluginConfigs.spellfix.options = {
+          hunspell = lib.getExe spellChecker;
+          dictionaries = lib.concatStringsSep "," dictionaries;
+          inherit personalDictionary;
         };
         statusLine = {
           type = "command";
@@ -245,6 +305,10 @@
         };
         env = {
           CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
+          # Not programs.claude-code.plugins: the env block also reaches desktop-app sessions.
+          CLAUDE_CODE_PLUGIN_DIRS = "${spellfix}";
+          # hunspell's personal dictionary for the underline's checker too.
+          WORDLIST = personalDictionary;
         };
         # Private repo, so fetched by Claude Code at runtime with the user's git
         # credentials rather than as a flake input; no access just means no plugin.

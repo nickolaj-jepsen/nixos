@@ -1,0 +1,26 @@
+{
+  "name": "spellfix",
+  "version": "1.0.0",
+  "description": "Pick fixes for misspelled words in the prompt draft with hunspell and Haiku",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "hunspell": {
+      "type": "string",
+      "title": "hunspell",
+      "description": "The hunspell executable to run",
+      "default": "hunspell"
+    },
+    "dictionaries": {
+      "type": "string",
+      "title": "Dictionaries",
+      "description": "Comma-separated hunspell dictionaries, as -d takes them",
+      "default": "en_US"
+    },
+    "personalDictionary": {
+      "type": "string",
+      "title": "Personal dictionary",
+      "description": "An existing word list file the picker's add key writes to (hunspell -p); empty turns adding off",
+      "default": ""
+    }
+  }
+}

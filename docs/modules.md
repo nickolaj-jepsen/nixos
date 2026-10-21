@@ -129,6 +129,14 @@ home-manager and the overlays):
   from pi itself (`mkExtensions` in `modules/programs/pi/default.nix`). `just
 pi-extensions-dev` links `node_modules` into the folder for editor types and
   `pi -e modules/programs/pi/extensions/<name>.ts` without a rebuild.
+- **Claude Code mod**: a plugin folder with a hooks module in
+  `modules/programs/claude-code/mods/<name>/`. The claude-code leaf builds it
+  with `claude plugin validate` and `claude plugin test` against the
+  claude-code that runs it, so an API break fails `just build-system`, and
+  loads it through `CLAUDE_CODE_PLUGIN_DIRS` in the settings `env`. The build
+  can't run `tsc`: the API types only exist once a session loads the folder,
+  so `claude --plugin-dir <folder>` lays them into its gitignored
+  `.claude-plugin/types/` for the editor and `tsc -p <folder>`.
 - **Agent language servers**: the `fireproof.agents.lspServers` registry
   (`command`/`args`/`extensionToLanguage`), filled by
   `modules/programs/agent-lsp.nix`; each agent leaf maps it to its own
