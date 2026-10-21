@@ -65,6 +65,19 @@ let
         default = "Hack Nerd Font Mono";
         description = "Strictly monospaced variant of `family`, for UIs that need fixed-width glyphs";
       };
+      sans = {
+        package = lib.mkOption {
+          type = lib.types.package;
+          default = pkgs.nunito-sans;
+          defaultText = lib.literalExpression "pkgs.nunito-sans";
+          description = "Font package providing `sans.family`";
+        };
+        family = lib.mkOption {
+          type = lib.types.str;
+          default = "Nunito Sans";
+          description = "Proportional font family for UI text";
+        };
+      };
     };
   };
 in {

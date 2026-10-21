@@ -44,7 +44,7 @@
 
         cornerRadius = 8;
 
-        fontFamily = "Inter Variable";
+        fontFamily = config.fireproof.theme.font.sans.family;
         monoFontFamily = config.fireproof.theme.font.monoFamily;
         fontWeight = 400;
         fontScale = 1;
