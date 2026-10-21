@@ -263,10 +263,14 @@
           <figure class="light">${logoImg 16 (findLogo "flame-color-light.svg")}</figure>
         </div>
         <div class="flame-colors">
-          <span>Flame colors, taken from the palette</span>
+          <span>Flame colors</span>
           ${lib.concatStrings (lib.mapAttrsToList (name: hex: let
           source = paletteName hex;
-        in ''<code><i style="background: var(--fp-${name})"></i>${copyToken name}${lib.optionalString (source != null) " = ${kebab source}"}</code>'')
+        in ''<code><i style="background: var(--fp-${name})"></i>${copyToken name}${
+            if source != null
+            then " = ${kebab source}"
+            else copyHex hex
+          }</code>'')
         brandTokens)}
         </div>
         <h3 class="sub">All variants, click to download</h3>

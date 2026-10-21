@@ -91,8 +91,9 @@
     # The outer layer leads with the accent so the mark and the UI read as one family.
     options.fireproof.theme.brand.flame = {
       outer = mkPaletteRef "accent" "Logo flame outer layer; also the \"fire\" in the wordmark";
-      mid = mkPaletteRef "orange" "Logo flame middle layer";
-      core = mkPaletteRef "yellow" "Logo flame core";
+      # Brand-only lighter steps of orange and yellow: pixel art reads by lightness, and the palette's own are too close to accent.
+      mid = mkColorOption "F5923A" "Logo flame middle layer";
+      core = mkColorOption "F5D15C" "Logo flame core";
     };
 
     options.fireproof.theme.designSystem = lib.mkOption {

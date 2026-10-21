@@ -26,7 +26,8 @@ bundle: `tokens.css`, `tokens.json`, `logo/`, `fonts/` and a specimen
   and `font.monoFamily` must match the files' family exactly or the build
   fails.
 - `checks.py` fails the build when a pair in its `REQUIRED` list drops below
-  its contrast ratio. Hues that sit too close only warn, on the page and in the
+  its contrast ratio, or when touching flame layers get too close to tell
+  apart. Hues that sit too close only warn, on the page and in the
   build log (`nix build -L`).
 - `.#design-system` is read from the desktop host, so it exists only on
   x86_64-linux.
@@ -35,8 +36,10 @@ bundle: `tokens.css`, `tokens.json`, `logo/`, `fonts/` and a specimen
 
 - Dark only. There is no light palette; the `-light` logo variants use `bg` as
   ink.
-- The flame takes its colors from the palette (`accent`, `orange`, `yellow`),
-  so the mark follows the accent. Set `brand.flame.*` to pin it instead.
+- The flame's outer layer and the wordmark's "fire" are `accent`, so the mark
+  follows the accent. The middle and core are brand-only colors, lighter than
+  the palette's orange and yellow, because pixel art reads by lightness and
+  `orange` sits too close to `accent` to show as its own layer.
 - No webfonts. The bundle ships the theme's own font files, which makes the
   page about 12 MB, mostly Hack Nerd Font.
 - Nunito Sans is its own package (`pkgs/nunito-sans`) because
@@ -47,8 +50,7 @@ bundle: `tokens.css`, `tokens.json`, `logo/`, `fonts/` and a specimen
 Not started, most useful first:
 
 - Pull `accent` away from `red` and `orange`. The Contrast section shows them
-  under 0.06 apart, so the primary button reads as an error or warning, and
-  the flame's outer and middle layers blend.
+  under 0.06 apart, so the primary button reads as an error or warning.
 - Lift `red` (`error`, `removed`) to 4.5:1 on `bg`; it is 3.97:1, so error
   text fails WCAG AA.
 - Move the remaining hue-for-meaning reads to `semantic.*` (niri's urgent

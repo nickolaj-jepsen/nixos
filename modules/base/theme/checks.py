@@ -18,6 +18,8 @@ REQUIRED = [("fg", "bg", 7.0), ("accent", "bg", 4.5)]
 TEXT = ["fg", "fgAlt", "muted", "accent"]
 # OKLab distance below which two colors read as one at a glance.
 CLOSE = 0.1
+# Touching flame layers, which must stay CLOSE apart for the mark to read.
+FLAME = [("outer", "mid"), ("mid", "core")]
 
 
 def kebab(name: str) -> str:
@@ -67,6 +69,7 @@ def grade(ratio: float) -> tuple[str, str]:
 def main() -> None:
     tokens = json.load(open(sys.argv[1]))
     colors, semantic = tokens["colors"], tokens["semantic"]
+    flame = tokens["brand"]["flame"]
 
     failures = [
         f"{kebab(fg)} on {kebab(bg)} is {contrast(colors[fg], colors[bg]):.2f}:1, needs {need:g}:1"
@@ -105,16 +108,25 @@ def main() -> None:
     )
     for d, a, b in close:
         print(f"warning: {kebab(a)} and {kebab(b)} are {d:.3f} apart in OKLab", file=sys.stderr)
+
+    blended = [
+        f"flame-{a} and flame-{b} are {distance(flame[a], flame[b]):.3f} apart, need {CLOSE:g}"
+        for a, b in FLAME
+        if distance(flame[a], flame[b]) < CLOSE
+    ]
+    if blended:
+        sys.exit("design system flame check failed:\n  " + "\n  ".join(blended))
     pairs = "".join(
         f'<div class="check">{label(a)}{label(b)}<span class="ratio fail">{d:.3f}<em>&Delta;E</em></span></div>'
         for d, a, b in close
     ) or f'<p class="lede">No two are closer than {CLOSE:g}.</p>'
 
     required = " or ".join(f"{kebab(fg)} on {kebab(bg)} drops below {need:g}:1" for fg, bg, need in REQUIRED)
+    layers = " and ".join(f"{a}/{b}" for a, b in FLAME)
     print(f"""<p class="lede">WCAG contrast of text colors. The build fails if {required}.</p>
 <div class="checks"><div class="check head"><span></span><span></span><span>on bg</span><span>on bg-alt</span></div>{rows}</div>
 <h3 class="sub">Hues that read as one</h3>
-<p class="lede">OKLab distance between the accent and semantic colors, listed when below {CLOSE:g}.</p>
+<p class="lede">OKLab distance between the accent and semantic colors, listed when below {CLOSE:g}. The flame's {layers} layers must stay {CLOSE:g} apart or the build fails.</p>
 <div class="checks pairs">{pairs}</div>""")
 
 
