@@ -1,6 +1,8 @@
-# Flexoki-inspired (https://stephango.com/flexoki); emitted to both classes so HM can read colors without an osConfig bridge.
-let
+# Flexoki-inspired (https://stephango.com/flexoki); emitted to every class so HM can read colors without an osConfig bridge.
+{inputs, ...}: let
   themeOptions = {
+    config,
+    options,
     lib,
     pkgs,
     ...
@@ -48,6 +50,25 @@ let
       magentaAlt = mkColorOption "A02F6F" "Dark magenta";
     };
 
+    # Fixed brand identity, deliberately not derived from the palette above.
+    options.fireproof.theme.brand.flame = {
+      outer = mkColorOption "F46200" "Logo flame outer layer; also the \"fire\" in the wordmark";
+      mid = mkColorOption "FF8000" "Logo flame middle layer";
+      core = mkColorOption "FFD500" "Logo flame core";
+    };
+
+    options.fireproof.theme.designSystem = lib.mkOption {
+      type = lib.types.package;
+      readOnly = true;
+      default = import ./_design-system.nix {
+        inherit lib pkgs;
+        theme = {inherit (config.fireproof.theme) colors brand font;};
+        descriptions = lib.mapAttrs (_: opt: opt.description) options.fireproof.theme.colors;
+      };
+      defaultText = lib.literalMD "built from the other `fireproof.theme` options";
+      description = "Design-system bundle: `tokens.css`, `tokens.json`, `logo/*.svg`, `fonts/` and a specimen `index.html`";
+    };
+
     options.fireproof.theme.font = {
       package = lib.mkOption {
         type = lib.types.package;
@@ -85,4 +106,18 @@ in {
   flake.modules.homeManager.theme = themeOptions;
   # Emitted to darwin too so shared cards' theme options type-check there.
   flake.modules.darwin.theme = themeOptions;
+
+  # Taken from a host so it reflects the theme actually in effect; Linux-only, like that host.
+  perSystem = {
+    lib,
+    system,
+    ...
+  }: {
+    packages = let
+      inherit (inputs.self.nixosConfigurations) desktop;
+    in
+      lib.optionalAttrs (system == desktop.pkgs.stdenv.hostPlatform.system) {
+        design-system = desktop.config.fireproof.theme.designSystem;
+      };
+  };
 }
