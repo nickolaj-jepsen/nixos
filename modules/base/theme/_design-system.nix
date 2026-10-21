@@ -137,12 +137,17 @@
     else colors.fg
   }";
 
-  chip = name: ''<div class="chip" style="background: var(--fp-${kebab name}); color: ${ink name}"><code>${kebab name}</code><code>#${colors.${name}}</code></div>'';
+  # The page script copies `data-copy` on click.
+  copy = value: label: ''<button class="copy" data-copy="${value}" title="Copy ${value}">${label}</button>'';
+  copyToken = token: copy "var(--fp-${token})" token;
+  copyHex = hex: copy "#${hex}" "#${hex}";
+
+  chip = name: ''<div class="chip" style="background: var(--fp-${kebab name}); color: ${ink name}">${copyToken (kebab name)}${copyHex colors.${name}}</div>'';
 
   brandColor = name: ''
     <article class="brand-color" style="background: var(--fp-${kebab name}); color: ${ink name}">
       <span class="sample">Aa</span>
-      <div><h3>${kebab name}</h3><p>${descriptions.colors.${name}}</p><code>--fp-${kebab name} &middot; #${colors.${name}}</code></div>
+      <div><h3>${copyToken (kebab name)}</h3><p>${descriptions.colors.${name}}</p>${copyHex colors.${name}}</div>
       <div class="companions">${lib.concatMapStrings chip (companions name)}</div>
     </article>
   '';
@@ -154,7 +159,7 @@
   hueCard = name: ''
     <article class="hue">
       ${lib.concatMapStrings chip ([name] ++ companions name)}
-      <p>${lib.concatMapStrings (role: "<code>${role}</code>") (roles name)}</p>
+      <p>${lib.concatMapStrings (role: ''<a href="#role-${role}">${role}</a>'') (roles name)}</p>
     </article>
   '';
 
@@ -162,7 +167,7 @@
     hex = semantic.${role};
     source = paletteName hex;
   in ''
-    <div class="role" id="role-${role}"><i style="background: var(--fp-${role})"></i><div><strong>${role}</strong><span>${descriptions.semantic.${role}}</span><code>${lib.optionalString (source != null) "${kebab source} &middot; "}#${hex}</code></div></div>
+    <div class="role" id="role-${role}"><i style="background: var(--fp-${role})"></i><div><strong>${copyToken role}</strong><span>${descriptions.semantic.${role}}</span><code>${lib.optionalString (source != null) "${kebab source} &middot; "}#${hex}</code></div></div>
   '';
 
   # Sorted by hue like the palette, so roles sharing a color line up across groups.
@@ -170,10 +175,11 @@
     <div><h3 class="sub">${group.title}</h3>${lib.concatMapStrings roleRow (lib.sort (a: b: hueAngle semantic.${a} < hueAngle semantic.${b}) group.roles)}</div>
   '';
 
+  sectionId = s: lib.toLower (lib.replaceStrings [" "] ["-"] s.title);
   sections = list:
     lib.concatStrings (lib.imap1 (i: s: ''
-        <section>
-          <header><span>${lib.fixedWidthNumber 2 i}</span><h2>${s.title}</h2></header>
+        <section id="${sectionId s}">
+          <header><a href="#${sectionId s}">${lib.fixedWidthNumber 2 i}</a><h2>${s.title}</h2></header>
           ${s.body}
         </section>
       '')
@@ -182,6 +188,97 @@
   typeRow = label: style: text: ''<div class="type-row"><code>${label}</code><p style="${style}">${text}</p></div>'';
 
   hero = findLogo "lockup-color.svg";
+
+  sectionList = [
+    {
+      title = "Brand colors";
+      body = ''
+        <p class="lede">Every color is a <code>--fp-</code> custom property in <a href="tokens.css">tokens.css</a>. Click a name to copy its <code>var()</code>, or a hex value to copy it.</p>
+        <div class="brand-colors">${lib.concatMapStrings brandColor primary}</div>
+      '';
+    }
+    {
+      title = "Neutrals";
+      body = ''<div class="ramp">${lib.concatMapStrings chip neutrals}</div>'';
+    }
+    {
+      title = "Hues";
+      body = ''<div class="hues">${lib.concatMapStrings hueCard hues}</div>'';
+    }
+    {
+      title = "Semantic";
+      body = ''
+        <p class="lede">What a color means. Consumers showing status or VCS state read <code>fireproof.theme.semantic</code>, never a raw hue.</p>
+        <div class="roles">${lib.concatMapStrings roleGroup semanticGroups}</div>
+      '';
+    }
+    {
+      title = "Contrast";
+      # Filled in by checks.py, which can do the color math Nix can't.
+      body = "@checks@";
+    }
+    {
+      title = "Type";
+      body = ''
+          <p class="lede">The sizes are examples; there are no type-scale tokens yet.</p>
+          <p class="family">${font.sans.family} <span>for UI and prose</span></p>
+          ${typeRow "56 / 800" "font-size: 56px; font-weight: 800; line-height: 1.05" "Fireproof"}
+          ${typeRow "32 / 700" "font-size: 32px; font-weight: 700; line-height: 1.2" "Every host, one theme"}
+          ${typeRow "20 / 600" "font-size: 20px; font-weight: 600" "Colors flow from a single module"}
+          ${typeRow "16 / 400" "font-size: 16px" "The quick brown fox jumps over the lazy dog. 0123456789"}
+          ${typeRow "13 / 400" "font-size: 13px; color: var(--fp-muted)" "Muted caption text for metadata and hints"}
+          <p class="family">${font.monoFamily} <span>for code and terminals, with Nerd Font icons</span></p>
+          <pre class="code prompt"><span style="color: var(--fp-blue)">&#xf313;</span> ~/nixos <span style="color: var(--fp-purple)">&#xe725; feat/design-system</span> <span style="color: var(--fp-green)">&#xf00c;</span> <span style="color: var(--fp-muted)">&#xf017; 4s</span></pre>
+          <pre class="code"><span class="c"># a module leaf reading the theme</span>
+        <span class="k">let</span>
+          c = config.fireproof.theme.colors;
+          s = config.fireproof.theme.semantic;
+        <span class="k">in</span> {
+          background = c.bg;
+          error = <span class="s">"#''${s.error}"</span>;
+          opacity = <span class="n">0.95</span>;
+        }</pre>
+      '';
+    }
+    {
+      title = "In use";
+      body = ''
+        <div class="demo">
+          <div class="buttons"><button class="primary">Rebuild</button><button>Diff</button><button class="ghost">Cancel</button></div>
+          <div class="alert" style="--tone: var(--fp-error)"><strong>Build failed</strong> attribute 'foo' missing</div>
+          <div class="alert" style="--tone: var(--fp-warning)"><strong>Warning</strong> option renamed, update hosts/desktop</div>
+          <div class="alert" style="--tone: var(--fp-success)"><strong>Switched</strong> desktop is on generation 412</div>
+          <div class="alert" style="--tone: var(--fp-info)"><strong>Info</strong> 3 inputs have updates, <a href="#">see the changelog</a></div>
+          <pre class="code diff"><span style="color: var(--fp-modified)">@@ modules/desktop/dms/theme.nix @@</span>
+        <span style="color: var(--fp-removed)">-        warning = "#''${c.yellow}";</span>
+        <span style="color: var(--fp-added)">+        warning = "#''${s.warning}";</span></pre>
+        </div>
+      '';
+    }
+    {
+      title = "Logo";
+      body = ''
+        <div class="logo-feature">
+          <figure>${logoImg 16 (findLogo "flame-color.svg")}</figure>
+          <figure class="light">${logoImg 16 (findLogo "flame-color-light.svg")}</figure>
+        </div>
+        <div class="flame-colors">
+          <span>Flame colors, taken from the palette</span>
+          ${lib.concatStrings (lib.mapAttrsToList (name: hex: let
+          source = paletteName hex;
+        in ''<code><i style="background: var(--fp-${name})"></i>${copyToken name}${lib.optionalString (source != null) " = ${kebab source}"}</code>'')
+        brandTokens)}
+        </div>
+        <h3 class="sub">All variants, click to download</h3>
+        ${lib.concatMapStrings (layout: ''
+            <div class="variants">${lib.concatMapStrings (logo: ''
+              <a href="logo/${logo.name}" download><figure class="${lib.optionalString (lib.hasSuffix "light" logo.treatment) "light"}">${logoImg 3 logo}<figcaption>${logo.name}</figcaption></figure></a>
+            '') (lib.filter (logo: logo.layout == layout) logos)}</div>
+          '')
+          layouts}
+      '';
+    }
+  ];
 
   indexHtml = pkgs.writeText "index.html" ''
     <!doctype html>
@@ -200,94 +297,20 @@
       ${logoImg 8 hero}
       <p>Colors, type and marks for fireproof machines, generated from <code>fireproof.theme</code>.</p>
       <nav><a href="tokens.css">tokens.css</a><a href="tokens.json">tokens.json</a></nav>
+      <nav class="toc">${lib.concatMapStrings (s: ''<a href="#${sectionId s}">${s.title}</a>'') sectionList}</nav>
     </header>
 
-    ${sections [
-      {
-        title = "Brand colors";
-        body = ''<div class="brand-colors">${lib.concatMapStrings brandColor primary}</div>'';
-      }
-      {
-        title = "Neutrals";
-        body = ''<div class="ramp">${lib.concatMapStrings chip neutrals}</div>'';
-      }
-      {
-        title = "Hues";
-        body = ''<div class="hues">${lib.concatMapStrings hueCard hues}</div>'';
-      }
-      {
-        title = "Semantic";
-        body = ''
-          <p class="lede">What a color means. Consumers showing status or VCS state read <code>fireproof.theme.semantic</code>, never a raw hue.</p>
-          <div class="roles">${lib.concatMapStrings roleGroup semanticGroups}</div>
-        '';
-      }
-      {
-        title = "Contrast";
-        # Filled in by checks.py, which can do the color math Nix can't.
-        body = "@checks@";
-      }
-      {
-        title = "Type";
-        body = ''
-            <p class="family">${font.sans.family} <span>for UI and prose</span></p>
-            ${typeRow "56 / 800" "font-size: 56px; font-weight: 800; line-height: 1.05" "Fireproof"}
-            ${typeRow "32 / 700" "font-size: 32px; font-weight: 700; line-height: 1.2" "Every host, one theme"}
-            ${typeRow "20 / 600" "font-size: 20px; font-weight: 600" "Colors flow from a single module"}
-            ${typeRow "16 / 400" "font-size: 16px" "The quick brown fox jumps over the lazy dog. 0123456789"}
-            ${typeRow "13 / 400" "font-size: 13px; color: var(--fp-muted)" "Muted caption text for metadata and hints"}
-            <p class="family">${font.monoFamily} <span>for code and terminals</span></p>
-            <pre class="code"><span class="c"># a module leaf reading the theme</span>
-          <span class="k">let</span>
-            c = config.fireproof.theme.colors;
-            s = config.fireproof.theme.semantic;
-          <span class="k">in</span> {
-            background = c.bg;
-            error = <span class="s">"#''${s.error}"</span>;
-            opacity = <span class="n">0.95</span>;
-          }</pre>
-        '';
-      }
-      {
-        title = "In use";
-        body = ''
-          <div class="demo">
-            <div class="buttons"><button class="primary">Rebuild</button><button>Diff</button><button class="ghost">Cancel</button></div>
-            <div class="alert" style="--tone: var(--fp-error)"><strong>Build failed</strong> attribute 'foo' missing</div>
-            <div class="alert" style="--tone: var(--fp-warning)"><strong>Warning</strong> option renamed, update hosts/desktop</div>
-            <div class="alert" style="--tone: var(--fp-success)"><strong>Switched</strong> desktop is on generation 412</div>
-            <div class="alert" style="--tone: var(--fp-info)"><strong>Info</strong> 3 inputs have updates, <a href="#">see the changelog</a></div>
-            <pre class="code diff"><span style="color: var(--fp-modified)">@@ modules/desktop/dms/theme.nix @@</span>
-          <span style="color: var(--fp-removed)">-        warning = "#''${c.yellow}";</span>
-          <span style="color: var(--fp-added)">+        warning = "#''${s.warning}";</span></pre>
-          </div>
-        '';
-      }
-      {
-        title = "Logo";
-        body = ''
-          <div class="logo-feature">
-            <figure>${logoImg 6 hero}</figure>
-            <figure class="light">${logoImg 6 (findLogo "lockup-color-light.svg")}</figure>
-          </div>
-          <div class="flame-colors">
-            <span>Flame colors, taken from the palette</span>
-            ${lib.concatStrings (lib.mapAttrsToList (name: hex: let
-            source = paletteName hex;
-          in ''<code><i style="background: var(--fp-${name})"></i>--fp-${name}${lib.optionalString (source != null) " = ${kebab source}"}</code>'')
-          brandTokens)}
-          </div>
-          <h3 class="sub">All variants</h3>
-          ${lib.concatMapStrings (layout: ''
-              <div class="variants">${lib.concatMapStrings (logo: ''
-                <figure class="${lib.optionalString (lib.hasSuffix "light" logo.treatment) "light"}">${logoImg 3 logo}<figcaption>${logo.name}</figcaption></figure>
-              '') (lib.filter (logo: logo.layout == layout) logos)}</div>
-            '')
-            layouts}
-        '';
-      }
-    ]}
+    ${sections sectionList}
     </main>
+    <script>
+      document.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-copy]");
+        if (!button) return;
+        await navigator.clipboard.writeText(button.dataset.copy);
+        button.classList.add("copied");
+        setTimeout(() => button.classList.remove("copied"), 1200);
+      });
+    </script>
     </body>
     </html>
   '';
