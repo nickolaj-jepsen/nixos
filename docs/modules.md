@@ -72,7 +72,8 @@ standalone guard, so an osConfig read fails CI.
 ## Snippets
 
 - Theme: `let c = config.fireproof.theme.colors; in { background = c.bg; border = "#${c.accent}"; }`
-  (values have no `#` prefix).
+  (values have no `#` prefix). For meaning (error, warning, added, …) read
+  `config.fireproof.theme.semantic.*`, not a raw hue.
 - Brand assets: `config.fireproof.theme.designSystem` is a bundle built from the
   theme (`tokens.css`, `logo/<layout>-<treatment>.svg`, `index.html`); `nix
 build .#design-system` to preview. Layouts are the templates in

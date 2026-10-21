@@ -13,6 +13,14 @@
         inherit default description;
         example = default;
       };
+    # Defaults to a palette entry, so overriding the palette carries through.
+    mkPaletteRef = color: description:
+      lib.mkOption {
+        type = lib.types.str;
+        default = config.fireproof.theme.colors.${color};
+        defaultText = lib.literalExpression "config.fireproof.theme.colors.${color}";
+        inherit description;
+      };
   in {
     options.fireproof.theme.colors = {
       bg = mkColorOption "1C1B1A" "Primary background color";
@@ -26,23 +34,22 @@
       uiAlt = mkColorOption "403E3C" "Alternative UI element background";
 
       black = mkColorOption "100F0F" "Black (darkest)";
-      white = mkColorOption "DAD8CE" "White (same as fg)";
       whiteAlt = mkColorOption "F2F0E5" "Bright white";
 
       accent = mkColorOption "CF6A4C" "Primary accent color";
       accentContainer = mkColorOption "6B3528" "Dark container tone derived from accent";
 
-      red = mkColorOption "D14D41" "Red (errors, destructive)";
+      red = mkColorOption "D14D41" "Red";
       redAlt = mkColorOption "AF3029" "Dark red";
-      orange = mkColorOption "DA702C" "Orange (warnings)";
+      orange = mkColorOption "DA702C" "Orange";
       orangeAlt = mkColorOption "BC5215" "Dark orange";
-      yellow = mkColorOption "D0A215" "Yellow (caution)";
+      yellow = mkColorOption "D0A215" "Yellow";
       yellowAlt = mkColorOption "AD8301" "Dark yellow";
-      green = mkColorOption "879A39" "Green (success)";
+      green = mkColorOption "879A39" "Green";
       greenAlt = mkColorOption "66800B" "Dark green";
       cyan = mkColorOption "3AA99F" "Cyan";
       cyanAlt = mkColorOption "24837B" "Dark cyan";
-      blue = mkColorOption "4385BE" "Blue (info, links)";
+      blue = mkColorOption "4385BE" "Blue";
       blueAlt = mkColorOption "205EA6" "Dark blue";
       purple = mkColorOption "8B7EC8" "Purple";
       purpleAlt = mkColorOption "5E409D" "Dark purple";
@@ -50,11 +57,26 @@
       magentaAlt = mkColorOption "A02F6F" "Dark magenta";
     };
 
-    # Fixed brand identity, deliberately not derived from the palette above.
+    # What a color means; consumers showing status or VCS state read these, not raw hues.
+    options.fireproof.theme.semantic = {
+      error = mkPaletteRef "red" "Errors and destructive actions";
+      warning = mkPaletteRef "orange" "Warnings";
+      success = mkPaletteRef "green" "Success and confirmations";
+      info = mkPaletteRef "blue" "Informational messages";
+      hint = mkPaletteRef "cyan" "Hints and suggestions";
+      link = mkPaletteRef "blue" "Links";
+      added = mkPaletteRef "green" "Added lines and files";
+      modified = mkPaletteRef "yellow" "Modified lines and files";
+      removed = mkPaletteRef "red" "Removed lines and files";
+      renamed = mkPaletteRef "cyan" "Renamed files";
+      conflict = mkPaletteRef "magenta" "Merge conflicts";
+    };
+
+    # The outer layer leads with the accent so the mark and the UI read as one family.
     options.fireproof.theme.brand.flame = {
-      outer = mkColorOption "F46200" "Logo flame outer layer; also the \"fire\" in the wordmark";
-      mid = mkColorOption "FF8000" "Logo flame middle layer";
-      core = mkColorOption "FFD500" "Logo flame core";
+      outer = mkPaletteRef "accent" "Logo flame outer layer; also the \"fire\" in the wordmark";
+      mid = mkPaletteRef "orange" "Logo flame middle layer";
+      core = mkPaletteRef "yellow" "Logo flame core";
     };
 
     options.fireproof.theme.designSystem = lib.mkOption {
@@ -62,8 +84,10 @@
       readOnly = true;
       default = import ./_design-system.nix {
         inherit lib pkgs;
-        theme = {inherit (config.fireproof.theme) colors brand font;};
-        descriptions = lib.mapAttrs (_: opt: opt.description) options.fireproof.theme.colors;
+        theme = {inherit (config.fireproof.theme) colors semantic brand font;};
+        descriptions = lib.mapAttrs (_: lib.mapAttrs (_: opt: opt.description)) {
+          inherit (options.fireproof.theme) colors semantic;
+        };
       };
       defaultText = lib.literalMD "built from the other `fireproof.theme` options";
       description = "Design-system bundle: `tokens.css`, `tokens.json`, `logo/*.svg`, `fonts/` and a specimen `index.html`";

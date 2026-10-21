@@ -161,6 +161,61 @@ section > header h2 {
   color: var(--fp-fg-alt);
 }
 
+.lede {
+  max-width: 60ch;
+  margin: -12px 0 24px;
+  color: var(--fp-fg-alt);
+}
+.lede code {
+  color: var(--fp-accent);
+}
+.roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 8px 24px;
+}
+.role {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--fp-ui);
+}
+.role i {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+.role strong {
+  display: block;
+  font-size: 15px;
+}
+.role span {
+  font-size: 13px;
+  color: var(--fp-muted);
+}
+.role code {
+  font-size: 12px;
+  color: var(--fp-fg-alt);
+}
+.hue p code {
+  margin-right: 8px;
+  font-size: 12px;
+  color: var(--fp-fg);
+}
+.hue p:empty::before {
+  content: "no semantic role";
+  color: var(--fp-muted);
+}
+.demo a {
+  color: var(--fp-link);
+}
+.diff {
+  margin-top: 12px;
+  background: var(--fp-bg);
+}
+
 .family {
   margin: 0 0 12px;
   font-size: 18px;

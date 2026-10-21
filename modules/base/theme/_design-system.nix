@@ -5,10 +5,10 @@
   lib,
   pkgs,
   theme,
-  # Option descriptions of `theme.colors`, shown on the swatches.
+  # Option descriptions of `theme.colors` and `theme.semantic`, shown on the page.
   descriptions,
 }: let
-  inherit (theme) colors brand font;
+  inherit (theme) colors semantic brand font;
 
   kebab = lib.stringAsChars (c:
     if lib.elem c lib.upperChars
@@ -19,7 +19,7 @@
   paletteTokens = lib.mapAttrs' (name: lib.nameValuePair (kebab name)) colors;
   # Logo colors; the page's "brand colors" are the primary palette entries below.
   brandTokens = lib.concatMapAttrs (group: lib.mapAttrs' (name: lib.nameValuePair "${group}-${kebab name}")) brand;
-  colorTokens = paletteTokens // brandTokens;
+  colorTokens = paletteTokens // semantic // brandTokens;
 
   fontTokens = {
     sans = ''"${font.sans.family}", sans-serif'';
@@ -35,6 +35,7 @@
 
   tokensJson = pkgs.writeText "tokens.json" (builtins.toJSON {
     colors = lib.mapAttrs (_: hex: "#${hex}") colors;
+    semantic = lib.mapAttrs (_: hex: "#${hex}") semantic;
     brand = lib.mapAttrsRecursive (_: hex: "#${hex}") brand;
     font = {
       sans = font.sans.family;
@@ -139,24 +140,36 @@
   brandColor = name: ''
     <article class="brand-color" style="background: var(--fp-${kebab name}); color: ${ink name}">
       <span class="sample">Aa</span>
-      <div><h3>${kebab name}</h3><p>${descriptions.${name}}</p><code>--fp-${kebab name} &middot; #${colors.${name}}</code></div>
+      <div><h3>${kebab name}</h3><p>${descriptions.colors.${name}}</p><code>--fp-${kebab name} &middot; #${colors.${name}}</code></div>
       <div class="companions">${lib.concatMapStrings chip (companions name)}</div>
     </article>
   '';
 
+  # Semantic roles whose value is this palette color.
+  roles = name: lib.attrNames (lib.filterAttrs (_: hex: hex == colors.${name}) semantic);
+  paletteName = hex: lib.findFirst (name: colors.${name} == hex) null roots;
+
   hueCard = name: ''
     <article class="hue">
       ${lib.concatMapStrings chip ([name] ++ companions name)}
-      <p>${descriptions.${name}}</p>
+      <p>${lib.concatMapStrings (role: "<code>${role}</code>") (roles name)}</p>
     </article>
   '';
 
-  section = number: title: body: ''
-    <section>
-      <header><span>${number}</span><h2>${title}</h2></header>
-      ${body}
-    </section>
+  roleRow = role: hex: let
+    source = paletteName hex;
+  in ''
+    <div class="role"><i style="background: var(--fp-${role})"></i><div><strong>${role}</strong><span>${descriptions.semantic.${role}}</span></div><code>${lib.optionalString (source != null) "${kebab source} &middot; "}#${hex}</code></div>
   '';
+
+  sections = list:
+    lib.concatStrings (lib.imap1 (i: s: ''
+        <section>
+          <header><span>${lib.fixedWidthNumber 2 i}</span><h2>${s.title}</h2></header>
+          ${s.body}
+        </section>
+      '')
+      list);
 
   typeRow = label: style: text: ''<div class="type-row"><code>${label}</code><p style="${style}">${text}</p></div>'';
 
@@ -181,61 +194,86 @@
       <nav><a href="tokens.css">tokens.css</a><a href="tokens.json">tokens.json</a></nav>
     </header>
 
-    ${section "01" "Brand colors" ''
-      <div class="brand-colors">${lib.concatMapStrings brandColor primary}</div>
-    ''}
-
-    ${section "02" "Neutrals" ''
-      <div class="ramp">${lib.concatMapStrings chip neutrals}</div>
-    ''}
-
-    ${section "03" "Hues" ''
-      <div class="hues">${lib.concatMapStrings hueCard hues}</div>
-    ''}
-
-    ${section "04" "Type" ''
-        <p class="family">${font.sans.family} <span>for UI and prose</span></p>
-        ${typeRow "56 / 800" "font-size: 56px; font-weight: 800; line-height: 1.05" "Fireproof"}
-        ${typeRow "32 / 700" "font-size: 32px; font-weight: 700; line-height: 1.2" "Every host, one theme"}
-        ${typeRow "20 / 600" "font-size: 20px; font-weight: 600" "Colors flow from a single module"}
-        ${typeRow "16 / 400" "font-size: 16px" "The quick brown fox jumps over the lazy dog. 0123456789"}
-        ${typeRow "13 / 400" "font-size: 13px; color: var(--fp-muted)" "Muted caption text for metadata and hints"}
-        <p class="family">${font.monoFamily} <span>for code and terminals</span></p>
-        <pre class="code"><span class="c"># a module leaf reading the theme</span>
-      <span class="k">let</span> c = config.fireproof.theme.colors; <span class="k">in</span> {
-        background = c.bg;
-        border = <span class="s">"#''${c.accent}"</span>;
-        opacity = <span class="n">0.95</span>;
-      }</pre>
-    ''}
-
-    ${section "05" "In use" ''
-      <div class="demo">
-        <div class="buttons"><button class="primary">Rebuild</button><button>Diff</button><button class="ghost">Cancel</button></div>
-        <div class="alert" style="--tone: var(--fp-red)"><strong>Build failed</strong> attribute 'foo' missing</div>
-        <div class="alert" style="--tone: var(--fp-orange)"><strong>Warning</strong> option renamed, update hosts/desktop</div>
-        <div class="alert" style="--tone: var(--fp-green)"><strong>Switched</strong> desktop is on generation 412</div>
-        <div class="alert" style="--tone: var(--fp-blue)"><strong>Info</strong> 3 inputs have updates</div>
-      </div>
-    ''}
-
-    ${section "06" "Logo" ''
-      <div class="logo-feature">
-        <figure>${logoImg 6 hero}</figure>
-        <figure class="light">${logoImg 6 (findLogo "lockup-color-light.svg")}</figure>
-      </div>
-      <div class="flame-colors">
-        <span>Flame colors, for the mark only</span>
-        ${lib.concatStrings (lib.mapAttrsToList (name: hex: ''<code><i style="background: var(--fp-${name})"></i>--fp-${name} #${hex}</code>'') brandTokens)}
-      </div>
-      <h3 class="sub">All variants</h3>
-      ${lib.concatMapStrings (layout: ''
-          <div class="variants">${lib.concatMapStrings (logo: ''
-            <figure class="${lib.optionalString (lib.hasSuffix "light" logo.treatment) "light"}">${logoImg 3 logo}<figcaption>${logo.name}</figcaption></figure>
-          '') (lib.filter (logo: logo.layout == layout) logos)}</div>
-        '')
-        layouts}
-    ''}
+    ${sections [
+      {
+        title = "Brand colors";
+        body = ''<div class="brand-colors">${lib.concatMapStrings brandColor primary}</div>'';
+      }
+      {
+        title = "Neutrals";
+        body = ''<div class="ramp">${lib.concatMapStrings chip neutrals}</div>'';
+      }
+      {
+        title = "Hues";
+        body = ''<div class="hues">${lib.concatMapStrings hueCard hues}</div>'';
+      }
+      {
+        title = "Semantic";
+        body = ''
+          <p class="lede">What a color means. Consumers showing status or VCS state read <code>fireproof.theme.semantic</code>, never a raw hue.</p>
+          <div class="roles">${lib.concatStrings (lib.mapAttrsToList roleRow semantic)}</div>
+        '';
+      }
+      {
+        title = "Type";
+        body = ''
+            <p class="family">${font.sans.family} <span>for UI and prose</span></p>
+            ${typeRow "56 / 800" "font-size: 56px; font-weight: 800; line-height: 1.05" "Fireproof"}
+            ${typeRow "32 / 700" "font-size: 32px; font-weight: 700; line-height: 1.2" "Every host, one theme"}
+            ${typeRow "20 / 600" "font-size: 20px; font-weight: 600" "Colors flow from a single module"}
+            ${typeRow "16 / 400" "font-size: 16px" "The quick brown fox jumps over the lazy dog. 0123456789"}
+            ${typeRow "13 / 400" "font-size: 13px; color: var(--fp-muted)" "Muted caption text for metadata and hints"}
+            <p class="family">${font.monoFamily} <span>for code and terminals</span></p>
+            <pre class="code"><span class="c"># a module leaf reading the theme</span>
+          <span class="k">let</span>
+            c = config.fireproof.theme.colors;
+            s = config.fireproof.theme.semantic;
+          <span class="k">in</span> {
+            background = c.bg;
+            error = <span class="s">"#''${s.error}"</span>;
+            opacity = <span class="n">0.95</span>;
+          }</pre>
+        '';
+      }
+      {
+        title = "In use";
+        body = ''
+          <div class="demo">
+            <div class="buttons"><button class="primary">Rebuild</button><button>Diff</button><button class="ghost">Cancel</button></div>
+            <div class="alert" style="--tone: var(--fp-error)"><strong>Build failed</strong> attribute 'foo' missing</div>
+            <div class="alert" style="--tone: var(--fp-warning)"><strong>Warning</strong> option renamed, update hosts/desktop</div>
+            <div class="alert" style="--tone: var(--fp-success)"><strong>Switched</strong> desktop is on generation 412</div>
+            <div class="alert" style="--tone: var(--fp-info)"><strong>Info</strong> 3 inputs have updates, <a href="#">see the changelog</a></div>
+            <pre class="code diff"><span style="color: var(--fp-modified)">@@ modules/desktop/dms/theme.nix @@</span>
+          <span style="color: var(--fp-removed)">-        warning = "#''${c.yellow}";</span>
+          <span style="color: var(--fp-added)">+        warning = "#''${s.warning}";</span></pre>
+          </div>
+        '';
+      }
+      {
+        title = "Logo";
+        body = ''
+          <div class="logo-feature">
+            <figure>${logoImg 6 hero}</figure>
+            <figure class="light">${logoImg 6 (findLogo "lockup-color-light.svg")}</figure>
+          </div>
+          <div class="flame-colors">
+            <span>Flame colors, taken from the palette</span>
+            ${lib.concatStrings (lib.mapAttrsToList (name: hex: let
+            source = paletteName hex;
+          in ''<code><i style="background: var(--fp-${name})"></i>--fp-${name}${lib.optionalString (source != null) " = ${kebab source}"}</code>'')
+          brandTokens)}
+          </div>
+          <h3 class="sub">All variants</h3>
+          ${lib.concatMapStrings (layout: ''
+              <div class="variants">${lib.concatMapStrings (logo: ''
+                <figure class="${lib.optionalString (lib.hasSuffix "light" logo.treatment) "light"}">${logoImg 3 logo}<figcaption>${logo.name}</figcaption></figure>
+              '') (lib.filter (logo: logo.layout == layout) logos)}</div>
+            '')
+            layouts}
+        '';
+      }
+    ]}
     </main>
     </body>
     </html>

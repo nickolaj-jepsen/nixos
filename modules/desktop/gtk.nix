@@ -26,6 +26,7 @@
     ...
   }: let
     c = config.fireproof.theme.colors;
+    s = config.fireproof.theme.semantic;
 
     themeCss = ''
       @define-color bg #${c.bg};
@@ -53,7 +54,6 @@
       @define-color purple-alt #${c.purpleAlt};
       @define-color magenta #${c.magenta};
       @define-color magenta-alt #${c.magentaAlt};
-      @define-color white #${c.white};
       @define-color white-alt #${c.whiteAlt};
 
       /* Adwaita stuff */
@@ -94,18 +94,18 @@
       @define-color thumbnail_bg_color @bg-alt;
       @define-color thumbnail_fg_color @fg;
 
-      @define-color warning_bg_color @red;
+      @define-color warning_bg_color #${s.warning};
       @define-color warning_fg_color @fg;
-      @define-color warning_color @red;
-      @define-color error_bg_color @red;
+      @define-color warning_color #${s.warning};
+      @define-color error_bg_color #${s.error};
       @define-color error_fg_color @fg;
-      @define-color error_color @red;
-      @define-color success_bg_color @green;
+      @define-color error_color #${s.error};
+      @define-color success_bg_color #${s.success};
       @define-color success_fg_color @fg;
-      @define-color success_color @green;
-      @define-color destructive_bg_color @red;
+      @define-color success_color #${s.success};
+      @define-color destructive_bg_color #${s.error};
       @define-color destructive_fg_color @fg;
-      @define-color destructive_color @red;
+      @define-color destructive_color #${s.error};
     '';
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
