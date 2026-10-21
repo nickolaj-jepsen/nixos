@@ -93,8 +93,9 @@
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.dank-material-shell.settings = {
         launcherStyle = "spotlight";
-        launcherLogoMode = "os";
-        launcherLogoContrast = 1;
+        # No launcherLogoColorOverride: it would flatten the flame to one color.
+        launcherLogoMode = "custom";
+        launcherLogoCustomPath = "${config.fireproof.theme.designSystem}/logo/flame-color.svg";
 
         # Bar draws its own background; the global drop shadow just muddies the edge.
         barElevationEnabled = false;
