@@ -34,7 +34,9 @@ def main() -> None:
         shutil.copyfile(path, out)
         print(
             f'@font-face {{ font-family: "{family}"; src: url("fonts/{out.name}") '
-            f'format("{FORMATS[path.suffix]}"); font-weight: {weight}; font-style: {style}; }}'
+            f'format("{FORMATS[path.suffix]}"); font-weight: {weight}; font-style: {style}; '
+            # The bundle's fonts are large; show fallback text instead of nothing while they load.
+            "font-display: swap; }"
         )
         matched += 1
     if not matched:
