@@ -171,13 +171,16 @@ section > header h2 {
 }
 .roles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 8px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 32px 24px;
+}
+.roles .sub {
+  margin: 0 0 8px;
 }
 .role {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
-  align-items: center;
+  grid-template-columns: 28px 1fr;
+  align-items: start;
   gap: 14px;
   padding: 12px 0;
   border-top: 1px solid var(--fp-ui);
@@ -191,11 +194,14 @@ section > header h2 {
   display: block;
   font-size: 15px;
 }
-.role span {
+.role span,
+.role code {
+  display: block;
   font-size: 13px;
   color: var(--fp-muted);
 }
 .role code {
+  margin-top: 2px;
   font-size: 12px;
   color: var(--fp-fg-alt);
 }

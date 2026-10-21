@@ -19,6 +19,9 @@ bundle: `tokens.css`, `tokens.json`, `logo/`, `fonts/` and a specimen
   `<name>Container` attach to `<name>`, low-chroma colors are neutrals, the rest
   are hues. Only the brand trio (`bg`, `fg`, `accent`) is hand-picked, in
   `_design-system.nix`.
+- Semantic roles are declared inside `semanticGroups` in `default.nix`, which
+  the specimen uses for its columns. A new role goes into one of the groups,
+  not straight into `options.fireproof.theme.semantic`.
 - Font files are picked by family name (`font-faces.py`): `font.sans.family`
   and `font.monoFamily` must match the files' family exactly or the build
   fails.

@@ -21,6 +21,34 @@
         defaultText = lib.literalExpression "config.fireproof.theme.colors.${color}";
         inherit description;
       };
+
+    # Declared in groups so the specimen can show them that way; the option paths stay flat.
+    semanticGroups = [
+      {
+        title = "Status";
+        roles = {
+          error = mkPaletteRef "red" "Errors and destructive actions";
+          warning = mkPaletteRef "orange" "Warnings";
+          success = mkPaletteRef "green" "Success and confirmations";
+          info = mkPaletteRef "blue" "Informational messages";
+          hint = mkPaletteRef "cyan" "Hints and suggestions";
+        };
+      }
+      {
+        title = "Version control";
+        roles = {
+          added = mkPaletteRef "green" "Added lines and files";
+          modified = mkPaletteRef "yellow" "Modified lines and files";
+          removed = mkPaletteRef "red" "Removed lines and files";
+          renamed = mkPaletteRef "cyan" "Renamed files";
+          conflict = mkPaletteRef "magenta" "Merge conflicts";
+        };
+      }
+      {
+        title = "Interface";
+        roles.link = mkPaletteRef "blue" "Links";
+      }
+    ];
   in {
     options.fireproof.theme.colors = {
       bg = mkColorOption "1C1B1A" "Primary background color";
@@ -58,19 +86,7 @@
     };
 
     # What a color means; consumers showing status or VCS state read these, not raw hues.
-    options.fireproof.theme.semantic = {
-      error = mkPaletteRef "red" "Errors and destructive actions";
-      warning = mkPaletteRef "orange" "Warnings";
-      success = mkPaletteRef "green" "Success and confirmations";
-      info = mkPaletteRef "blue" "Informational messages";
-      hint = mkPaletteRef "cyan" "Hints and suggestions";
-      link = mkPaletteRef "blue" "Links";
-      added = mkPaletteRef "green" "Added lines and files";
-      modified = mkPaletteRef "yellow" "Modified lines and files";
-      removed = mkPaletteRef "red" "Removed lines and files";
-      renamed = mkPaletteRef "cyan" "Renamed files";
-      conflict = mkPaletteRef "magenta" "Merge conflicts";
-    };
+    options.fireproof.theme.semantic = lib.mergeAttrsList (map (group: group.roles) semanticGroups);
 
     # The outer layer leads with the accent so the mark and the UI read as one family.
     options.fireproof.theme.brand.flame = {
@@ -88,6 +104,7 @@
         descriptions = lib.mapAttrs (_: lib.mapAttrs (_: opt: opt.description)) {
           inherit (options.fireproof.theme) colors semantic;
         };
+        semanticGroups = map (group: group // {roles = lib.attrNames group.roles;}) semanticGroups;
       };
       defaultText = lib.literalMD "built from the other `fireproof.theme` options";
       description = "Design-system bundle: `tokens.css`, `tokens.json`, `logo/*.svg`, `fonts/` and a specimen `index.html`";

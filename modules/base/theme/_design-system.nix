@@ -7,6 +7,8 @@
   theme,
   # Option descriptions of `theme.colors` and `theme.semantic`, shown on the page.
   descriptions,
+  # [{title, roles}]: the semantic role names in the groups to show them in.
+  semanticGroups,
 }: let
   inherit (theme) colors semantic brand font;
 
@@ -156,10 +158,16 @@
     </article>
   '';
 
-  roleRow = role: hex: let
+  roleRow = role: let
+    hex = semantic.${role};
     source = paletteName hex;
   in ''
-    <div class="role"><i style="background: var(--fp-${role})"></i><div><strong>${role}</strong><span>${descriptions.semantic.${role}}</span></div><code>${lib.optionalString (source != null) "${kebab source} &middot; "}#${hex}</code></div>
+    <div class="role" id="role-${role}"><i style="background: var(--fp-${role})"></i><div><strong>${role}</strong><span>${descriptions.semantic.${role}}</span><code>${lib.optionalString (source != null) "${kebab source} &middot; "}#${hex}</code></div></div>
+  '';
+
+  # Sorted by hue like the palette, so roles sharing a color line up across groups.
+  roleGroup = group: ''
+    <div><h3 class="sub">${group.title}</h3>${lib.concatMapStrings roleRow (lib.sort (a: b: hueAngle semantic.${a} < hueAngle semantic.${b}) group.roles)}</div>
   '';
 
   sections = list:
@@ -211,7 +219,7 @@
         title = "Semantic";
         body = ''
           <p class="lede">What a color means. Consumers showing status or VCS state read <code>fireproof.theme.semantic</code>, never a raw hue.</p>
-          <div class="roles">${lib.concatStrings (lib.mapAttrsToList roleRow semantic)}</div>
+          <div class="roles">${lib.concatMapStrings roleGroup semanticGroups}</div>
         '';
       }
       {
