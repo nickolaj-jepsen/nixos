@@ -1,0 +1,45 @@
+name: Design system
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "modules/base/theme/**"
+      - "pkgs/nunito-sans/**"
+      # .#design-system is read from the desktop host, and its font packages from the lock.
+      - "hosts/desktop/**"
+      - "flake.lock"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: ./.github/actions/setup-nix
+      - name: Build design system
+        run: |
+          out=$(nix build --no-link --print-out-paths .#design-system)
+          cp -rL --no-preserve=mode "$out" _site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
