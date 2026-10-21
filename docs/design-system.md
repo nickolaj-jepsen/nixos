@@ -1,0 +1,56 @@
+# Design system
+
+`fireproof.theme` (`modules/base/theme/`) is the single source for colors, fonts
+and the logo. `config.fireproof.theme.designSystem` renders it into a static
+bundle: `tokens.css`, `tokens.json`, `logo/`, `fonts/` and a specimen
+`index.html`. `just design-system` previews it with live rebuilds;
+`.github/workflows/pages.yml` publishes it to GitHub Pages from `main`.
+
+## Traps
+
+- Token names are derived from option names (`colors.bgAlt` → `--fp-bg-alt`,
+  `semantic.error` → `--fp-error`, `brand.flame.outer` → `--fp-flame-outer`).
+  Renaming an option renames its token and breaks anything reading
+  `tokens.css`.
+- Templates in `brand/` may only use the `@flameOuter@`, `@flameMid@`,
+  `@flameCore@` and `@ink@` placeholders and need a `0 0 W H` viewBox; the build
+  fails otherwise. A new template becomes a new row of logo variants on its own.
+- The specimen groups colors by rule, not by list: `<name>Alt` and
+  `<name>Container` attach to `<name>`, low-chroma colors are neutrals, the rest
+  are hues. Only the brand trio (`bg`, `fg`, `accent`) is hand-picked, in
+  `_design-system.nix`.
+- Font files are picked by family name (`font-faces.py`): `font.sans.family`
+  and `font.monoFamily` must match the files' family exactly or the build
+  fails.
+- `.#design-system` is read from the desktop host, so it exists only on
+  x86_64-linux.
+
+## Decisions
+
+- Dark only. There is no light palette; the `-light` logo variants use `bg` as
+  ink.
+- The flame takes its colors from the palette (`accent`, `orange`, `yellow`),
+  so the mark follows the accent. Set `brand.flame.*` to pin it instead.
+- No webfonts. The bundle ships the theme's own font files, which makes the
+  page about 12 MB, mostly Hack Nerd Font.
+- Nunito Sans is its own package (`pkgs/nunito-sans`) because
+  `google-fonts.override` fetches the whole ~3 GB google/fonts tree.
+
+## Roadmap
+
+Not started, most useful first:
+
+- Build-time contrast checks (e.g. `fg`/`bg` ≥ 7:1, `accent`/`bg` ≥ 4.5:1),
+  with the ratios shown on the specimen.
+- Separate the flame layers: `accent` and `orange` are close, so the outer and
+  middle layers blend.
+- Move the remaining hue-for-meaning reads to `semantic.*` (niri's urgent
+  border, Glance's storage warning).
+- Shape and type tokens: corner radius (DMS hard-codes 8) and the type scale.
+- A light palette, with `tokens.css` emitting both modes.
+- PNG/ICO exports for favicons and plymouth.
+- Glance reading `tokens.css`, with the flame as favicon.
+- woff2-compress the bundled fonts.
+- Logo shapes as Nix data, so layouts compose from the flame and the two
+  words.
+- A claude.ai Design System artifact, published from the bundle by a skill.

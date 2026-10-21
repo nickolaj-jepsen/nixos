@@ -74,10 +74,8 @@ standalone guard, so an osConfig read fails CI.
 - Theme: `let c = config.fireproof.theme.colors; in { background = c.bg; border = "#${c.accent}"; }`
   (values have no `#` prefix). For meaning (error, warning, added, …) read
   `config.fireproof.theme.semantic.*`, not a raw hue.
-- Brand assets: `config.fireproof.theme.designSystem` is a bundle built from the
-  theme (`tokens.css`, `logo/<layout>-<treatment>.svg`, `index.html`);
-  `just design-system` previews it with live rebuilds. Layouts are the
-  templates in `modules/base/theme/brand/`.
+- Brand assets (logo SVGs, `tokens.css`): `config.fireproof.theme.designSystem`;
+  see `docs/design-system.md`.
 - Unstable packages: `pkgs.unstable.<pkg>` (overlay on the pkgs set; shares the
   host's `nixpkgs.config`).
 - `fpLib` (see below): helpers such as `mkVirtualHost`, `mkPostgresDB` and
