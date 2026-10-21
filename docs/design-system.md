@@ -25,6 +25,9 @@ bundle: `tokens.css`, `tokens.json`, `logo/`, `fonts/` and a specimen
 - Font files are picked by family name (`font-faces.py`): `font.sans.family`
   and `font.monoFamily` must match the files' family exactly or the build
   fails.
+- `checks.py` fails the build when a pair in its `REQUIRED` list drops below
+  its contrast ratio. Hues that sit too close only warn, on the page and in the
+  build log (`nix build -L`).
 - `.#design-system` is read from the desktop host, so it exists only on
   x86_64-linux.
 
@@ -43,10 +46,11 @@ bundle: `tokens.css`, `tokens.json`, `logo/`, `fonts/` and a specimen
 
 Not started, most useful first:
 
-- Build-time contrast checks (e.g. `fg`/`bg` ≥ 7:1, `accent`/`bg` ≥ 4.5:1),
-  with the ratios shown on the specimen.
-- Separate the flame layers: `accent` and `orange` are close, so the outer and
-  middle layers blend.
+- Pull `accent` away from `red` and `orange`. The Contrast section shows them
+  under 0.06 apart, so the primary button reads as an error or warning, and
+  the flame's outer and middle layers blend.
+- Lift `red` (`error`, `removed`) to 4.5:1 on `bg`; it is 3.97:1, so error
+  text fails WCAG AA.
 - Move the remaining hue-for-meaning reads to `semantic.*` (niri's urgent
   border, Glance's storage warning).
 - Shape and type tokens: corner radius (DMS hard-codes 8) and the type scale.

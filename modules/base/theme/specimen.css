@@ -214,6 +214,56 @@ section > header h2 {
   content: "no semantic role";
   color: var(--fp-muted);
 }
+.checks {
+  display: grid;
+}
+.check {
+  display: grid;
+  grid-template-columns: 28px 1fr 112px 112px;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--fp-ui);
+}
+.pairs .check {
+  grid-template-columns: 28px 1fr 28px 1fr 112px;
+}
+.check.head {
+  padding: 0 0 8px;
+  border: 0;
+  font-size: 13px;
+  color: var(--fp-muted);
+}
+.check i {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+.check strong {
+  display: block;
+  font-size: 15px;
+}
+.check div span {
+  font-size: 13px;
+  color: var(--fp-muted);
+}
+.ratio {
+  font: 15px var(--fp-font-mono);
+}
+.ratio em {
+  margin-left: 8px;
+  font: 600 11px var(--fp-font-sans);
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fp-muted);
+}
+.ratio.large em {
+  color: var(--fp-warning);
+}
+.ratio.fail em {
+  color: var(--fp-error);
+}
 .demo a {
   color: var(--fp-link);
 }
@@ -406,6 +456,19 @@ figure.light figcaption {
   .type-row {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+  .check {
+    grid-template-columns: 28px 1fr 88px 88px;
+  }
+  .ratio em {
+    display: block;
+    margin: 0;
+  }
+  .pairs .check {
+    grid-template-columns: 28px 1fr 28px 1fr;
+  }
+  .pairs .ratio {
+    grid-column: 1 / -1;
   }
   .variants {
     grid-template-columns: repeat(2, 1fr);

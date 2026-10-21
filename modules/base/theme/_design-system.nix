@@ -223,6 +223,11 @@
         '';
       }
       {
+        title = "Contrast";
+        # Filled in by checks.py, which can do the color math Nix can't.
+        body = "@checks@";
+      }
+      {
         title = "Type";
         body = ''
             <p class="family">${font.sans.family} <span>for UI and prose</span></p>
@@ -303,6 +308,7 @@ in
       cat ${tokensCss}
     } > $out/tokens.css
     cp ${tokensJson} $out/tokens.json
-    cp ${indexHtml} $out/index.html
+    checks=$(python3 -I ${./checks.py} ${tokensJson})
+    substitute ${indexHtml} $out/index.html --replace-fail @checks@ "$checks"
     cp ${./specimen.css} $out/specimen.css
   ''
