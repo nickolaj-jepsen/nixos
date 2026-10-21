@@ -176,6 +176,22 @@ docs:
     install -m 644 "$out" docs/fireproof-options.md
     echo "Wrote docs/fireproof-options.md"
 
+[doc('Serve the design-system bundle on localhost, rebuilding on theme edits (preview only; Pages deploys from CI)')]
+[group('tools')]
+design-system port='8000':
+    #!/usr/bin/env -S bash -euo pipefail
+    export site=$(mktemp -d)
+    trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$site"' EXIT
+    # Copied out of the store: every store file has mtime 1, so http.server would answer each reload with a stale 304.
+    sync() {
+        out=$({{ nixcmd }} build --no-link --print-out-paths .#design-system) || return
+        rm -rf "${site:?}"/* && cp -rL --no-preserve=mode "$out"/. "$site" && echo "rebuilt $out"
+    }
+    export -f sync
+    sync
+    python3 -m http.server -d "$site" -b 127.0.0.1 {{ port }} &
+    {{ nixcmd }} run --inputs-from . nixpkgs#watchexec -- --postpone -w modules/base/theme -w pkgs/nunito-sans -- bash -c sync
+
 [doc('Build a host-specific bootstrap ISO (host SSH key + repo baked in) into ~/.cache/bootstrap-iso/')]
 [group('deploy')]
 bootstrap-iso hostname:
