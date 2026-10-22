@@ -1,87 +1,55 @@
 {
-  config,
   pkgs,
   lib,
   inputs,
   ...
-}: let
-  targetHost = config.installer.targetHost;
-  hostBaked = targetHost != "";
-
-  motd =
-    if hostBaked
-    then ''
-
-      === NixOS bootstrap ISO — target host: ${targetHost} ===
-
-      Next steps:
-        1. nmtui              # connect WiFi (skip if wired)
-        2. bootstrap-install  # format disk + install NixOS (auto-elevates)
-
-      After install: reboot, then `cd ~/nixos && git status` to review
-      any live-generated configs (facter.json, disk-configuration.nix).
-      Then wipe or reflash this stick: it holds ${targetHost}'s private host key.
-
-    ''
-    else ''
-
-      === NixOS bootstrap ISO (generic) ===
-
-      This ISO is not built for a specific host — `bootstrap-install` is
-      not installed. To produce a host-specific install ISO, run on a
-      machine with the YubiKey present:
-
-        just bootstrap-iso <hostname>
-        just bootstrap-flash <hostname> /dev/sdX
-
-    '';
-
-  # `services.getty.helpLine` is what shows at the TTY login prompt
-  # (BEFORE the user logs in and sees the MOTD). Upstream sets it to a
-  # passwd/wpa_supplicant blurb that's wrong for our flow.
-  helpLine =
-    if hostBaked
-    then ''
-
-      Bootstrap ISO for host: ${targetHost}
-      Log in as 'nixos' (no password), then:
-        1. nmtui                  - connect WiFi if wired isn't up
-        2. bootstrap-install      - format disk + install NixOS
-
-    ''
-    else ''
-
-      Generic bootstrap ISO. Build a host-specific ISO via
-      `just bootstrap-iso <hostname>` for an automated install.
-
-    '';
-in {
+}: {
   # Upstream minimal installation ISO as the base.
   imports = [
     "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
   ];
 
-  users.motd = motd;
-  services.getty.helpLine = lib.mkForce helpLine;
+  users.motd = ''
 
-  # Disable systemd-boot as we're using ISO bootloader
-  boot.loader.systemd-boot.enable = lib.mkForce false;
+    === NixOS installer (generic) ===
 
-  # Password root SSH is what `just deploy-remote` (nixos-anywhere) logs into on the
-  # generic image; a host-baked image carries the host key and installs at the console.
+    This image installs no host of its own. Either drive `nixos-anywhere` from a
+    machine with this flake checked out
+
+      just deploy-remote <host> root@<this-machine>   # FORMATS this disk
+
+    or install by hand: nmtui for WiFi, then the host's disko config followed by
+    nixos-install. See docs/hosts.md.
+
+  '';
+
+  # `services.getty.helpLine` is what shows at the TTY login prompt (BEFORE the user
+  # logs in and sees the MOTD). Upstream sets it to a passwd/wpa_supplicant blurb
+  # that's wrong for this flow.
+  services.getty.helpLine = lib.mkForce ''
+
+    Generic installer. Log in as 'nixos' (no password): nmtui for WiFi, then
+    either `nixos-install` by hand or `just deploy-remote` over ssh.
+
+  '';
+
+  # Password root SSH is what `just deploy-remote` (nixos-anywhere) logs into.
   services.openssh = {
-    enable = !hostBaked;
-    settings = lib.mkIf (!hostBaked) {
+    enable = true;
+    settings = {
       PermitRootLogin = lib.mkForce "yes";
       PasswordAuthentication = lib.mkForce true;
       KbdInteractiveAuthentication = lib.mkForce true;
     };
   };
 
-  users.users.root = lib.mkIf (!hostBaked) {
+  users.users.root = {
     initialHashedPassword = lib.mkForce null;
     initialPassword = lib.mkForce "nixos";
   };
+
+  # Disable systemd-boot as we're using ISO bootloader
+  boot.loader.systemd-boot.enable = lib.mkForce false;
 
   networking.networkmanager.enable = true;
   networking.wireless.enable = lib.mkForce false; # Conflicts with networkmanager

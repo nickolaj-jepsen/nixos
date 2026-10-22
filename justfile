@@ -1,8 +1,5 @@
 nixcmd := "nix --experimental-features 'nix-command flakes'"
 
-# Built bootstrap ISOs carry a private host key, so they live outside the repo and the world-readable store.
-bootstrap_iso_dir := cache_directory() / "bootstrap-iso"
-
 # Current Nix system double (e.g. x86_64-linux, aarch64-darwin); agenix-rekey is per-system.
 system := `nix --experimental-features 'nix-command flakes' eval --impure --raw --expr 'builtins.currentSystem'`
 
@@ -162,11 +159,6 @@ deploy-remote hostname target: (_confirm "Deploy " + hostname + " to " + target 
         --extra-files "$temp" \
         --target-host "{{ target }}"
 
-[doc("Build a live image of a host's own config (no host key baked in; to install a host, use bootstrap-iso)")]
-[group('tools')]
-iso hostname:
-    {{ nixcmd }} build .#nixosConfigurations.{{ hostname }}.config.system.build.images.iso-installer
-
 [doc('Generate Markdown reference for the fireproof.* options into docs/')]
 [group('tools')]
 docs:
@@ -175,75 +167,6 @@ docs:
     out=$({{ nixcmd }} build --no-link --print-out-paths .#fireproof-docs)
     install -m 644 "$out" docs/fireproof-options.md
     echo "Wrote docs/fireproof-options.md"
-
-[doc('Build a host-specific bootstrap ISO (host SSH key + repo baked in) into ~/.cache/bootstrap-iso/')]
-[group('deploy')]
-bootstrap-iso hostname:
-    #!/usr/bin/env -S bash -e
-    if [ ! -f "secrets/hosts/{{ hostname }}/id_ed25519.age" ]; then
-        echo "No host key for '{{ hostname }}'. Run: just new-host {{ hostname }} <username>"
-        exit 1
-    fi
-    if [ ! -d "hosts/{{ hostname }}" ]; then
-        echo "Host '{{ hostname }}' not in ./hosts/. Run: just new-host {{ hostname }} <username>"
-        exit 1
-    fi
-
-    # nixos-install is the first thing to force the rekeyed files, and on the target that is after disko has wiped the disk.
-    {{ nixcmd }} eval --raw ".#nixosConfigurations.{{ hostname }}.config" --apply 'c: builtins.deepSeq (map (s: toString s.file) (builtins.attrValues c.age.secrets ++ builtins.concatMap (u: builtins.attrValues (u.age.secrets or {})) (builtins.attrValues c.home-manager.users))) "ok"' >/dev/null ||
-        { echo "Secrets for {{ hostname }} aren't all rekeyed. Run: just secret-rekey"; exit 1; }
-
-    temp=$(mktemp -d)
-    # Everything built on the payload is a world-readable copy of the key, so purge on every exit, not only success.
-    # Images drop their references: take outputs from the dependent .drvs, since `store delete` refuses a partial set.
-    purge() {
-        [ -f "$temp/payload/id_ed25519" ] || return 0
-        rm -f "$temp/result"
-        local payload closure built
-        if payload=$({{ nixcmd }} store add --dry-run --name source "$temp/payload") &&
-            closure=$(nix-store --query --referrers-closure "$payload" 2>/dev/null) &&
-            built=$(nix-store --query --outputs $(grep '\.drv$' <<<"$closure") </dev/null) &&
-            {{ nixcmd }} store delete $closure $built; then
-            echo "Purged the plaintext host key from the Nix store."
-        elif [ -e "$payload" ]; then
-            echo "Warning: couldn't purge the plaintext host key from the Nix store (see above)." >&2
-        fi
-    }
-    trap 'purge; rm -rf "$temp"' EXIT
-
-    echo "Decrypting host SSH key (touch YubiKey if prompted)..."
-    install -d -m700 "$temp/payload"
-    just age -d "secrets/hosts/{{ hostname }}/id_ed25519.age" > "$temp/payload/id_ed25519"
-    chmod 600 "$temp/payload/id_ed25519"
-    cp "secrets/hosts/{{ hostname }}/id_ed25519.pub" "$temp/payload/id_ed25519.pub"
-    override="--override-input bootstrap-payload path:$temp/payload"
-
-    echo "Building bootstrap ISO for {{ hostname }}..."
-    just build "nixosConfigurations.bootstrap-{{ hostname }}.config.system.build.isoImage" \
-        $override --out-link "$temp/result"
-    iso="{{ bootstrap_iso_dir }}/{{ hostname }}.iso"
-    install -d -m700 "{{ bootstrap_iso_dir }}"
-    install -m600 "$temp"/result/iso/*.iso "$iso"
-    echo "ISO built: $iso"
-    echo "It holds the private host key: delete it once flashed (bootstrap-flash does)."
-
-[doc('Flash a host-specific bootstrap ISO to a USB drive')]
-[group('deploy')]
-bootstrap-flash hostname device: (_confirm "Flash bootstrap ISO for " + hostname + " to " + device + "? This will ERASE ALL DATA on " + device + ".")
-    #!/usr/bin/env -S bash -e
-    if [ ! -b "{{ device }}" ]; then
-        echo "Error: {{ device }} is not a block device"
-        exit 1
-    fi
-
-    just bootstrap-iso {{ hostname }}
-
-    iso_file="{{ bootstrap_iso_dir }}/{{ hostname }}.iso"
-    echo "Flashing $iso_file to {{ device }}..."
-    sudo dd if="$iso_file" of="{{ device }}" bs=4M status=progress oflag=sync
-    rm -f "$iso_file"
-    echo "Done! You can now boot from {{ device }}"
-    echo "Wipe or reflash it after the install: it holds the host's private key."
 
 [doc('Runs (r)age with yubikey identity')]
 [group('secret')]

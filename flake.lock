@@ -49,20 +49,6 @@
         "type": "github"
       }
     },
-    "bootstrap-payload": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
-        "path": "./installer/empty-payload",
-        "type": "path"
-      },
-      "original": {
-        "narHash": "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
-        "path": "./installer/empty-payload",
-        "type": "path"
-      },
-      "parent": []
-    },
     "brew-src": {
       "flake": false,
       "locked": {
@@ -722,7 +708,7 @@
         "type": "github"
       }
     },
-    "nixpkgs-cuda_held1": {
+    "nixpkgs-cuda": {
       "locked": {
         "lastModified": 1791179034,
         "narHash": "sha256-Ni0LBydzaCi8oek12r4mVreuFHqYlM1eTD6SfiENKfw=",
@@ -944,7 +930,6 @@
       "inputs": {
         "agenix": "agenix",
         "agenix-rekey": "agenix-rekey",
-        "bootstrap-payload": "bootstrap-payload",
         "dank-material-shell": "dank-material-shell",
         "disko": "disko",
         "dms-plugin-registry": "dms-plugin-registry",
@@ -963,7 +948,7 @@
         "nix-vscode-extensions": "nix-vscode-extensions",
         "nixos-wsl": "nixos-wsl",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-cuda": "nixpkgs-cuda_held1",
+        "nixpkgs-cuda": "nixpkgs-cuda",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nvf": "nvf",
         "obsidian-extensions": "obsidian-extensions",
