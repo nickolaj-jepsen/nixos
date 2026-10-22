@@ -304,7 +304,6 @@ in {
             "just home-switch *" = "ask";
             "just darwin-switch *" = "ask";
             "just deploy-remote *" = "ask";
-            "just bootstrap-flash *" = "ask";
             "just gc *" = "ask";
             # Prints plaintext secrets to the transcript.
             "just decrypt *" = "ask";

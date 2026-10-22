@@ -30,9 +30,9 @@ jobs:
       - uses: ./.github/actions/setup-nix
       - id: list
         name: Enumerate nixosConfigurations
-        # Exclude bootstrap-* hosts: those build installer ISOs and aren't worth
-        # the matrix slot on every PR. The real hosts are all that's needed for
-        # the build gate.
+        # Exclude the installer image (`bootstrap`): it builds an ISO and isn't
+        # worth the matrix slot on every PR. The real hosts are all that's needed
+        # for the build gate.
         run: |
           list=$(nix eval --json .#nixosConfigurations --apply builtins.attrNames \
             | jq -c '[ .[] | select(startswith("bootstrap") | not) ]')
@@ -53,7 +53,7 @@ jobs:
       - name: Build checks
         run: .github/scripts/ci-build.sh ".#checks.x86_64-linux"
       # shell: bash for pipefail; --no-eval-cache: parallel evals otherwise stall on its SQLite lock.
-      - name: Evaluate bootstrap hosts, packages and dev shells
+      - name: Evaluate the installer image, packages and dev shells
         shell: bash
         run: |
           nix eval --json .#nixosConfigurations --apply builtins.attrNames \

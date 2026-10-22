@@ -366,7 +366,6 @@
             "Bash(just home-switch:*)"
             "Bash(just darwin-switch:*)"
             "Bash(just deploy-remote:*)"
-            "Bash(just bootstrap-flash:*)"
             "Bash(just gc:*)"
             # Prints plaintext to the transcript, sidestepping the agenix Read denies.
             "Bash(just decrypt:*)"
