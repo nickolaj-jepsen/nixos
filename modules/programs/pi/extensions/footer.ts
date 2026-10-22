@@ -436,19 +436,10 @@ export default function (pi: ExtensionAPI) {
 
     const alias = model ? modelAlias(model) : "no model";
     const providerTag = model ? (PROVIDER_TAGS[model.provider] ?? model.provider) : "";
-    const providerPrefix = providerTag ? `(${providerTag}) ` : "";
-    const modelText = providerPrefix + alias;
-
-    const modelPart = (text = modelText): Part =>
-      text === modelText
-        ? {
-            id: "model",
-            text,
-            color: "muted",
-            styled: (t) =>
-              (providerPrefix ? t.fg("dim", providerPrefix) : "") + t.fg("muted", alias),
-          }
-        : { id: "model", text, color: "muted" };
+    const providerPart: Part | undefined = providerTag
+      ? { id: "provider", text: providerTag, color: "muted" }
+      : undefined;
+    const aliasPart = (text = alias): Part => ({ id: "model", text, color: "muted" });
 
     const effortPart =
       model?.reasoning && thinking
@@ -508,8 +499,10 @@ export default function (pi: ExtensionAPI) {
     let showWindow = true;
     let branchMode: "full" | "glyph" | "none" = "full";
 
-    const build = (modelTextOverride?: string) => {
-      const required: Part[] = [modelPart(modelTextOverride)];
+    const build = (aliasOverride?: string) => {
+      const required: Part[] = [];
+      if (providerPart) required.push(providerPart);
+      required.push(aliasPart(aliasOverride));
       if (effortPart) required.push(effortPart);
       required.push(contextPart(showWindow));
       const left = [...required, ...optional];
@@ -554,14 +547,16 @@ export default function (pi: ExtensionAPI) {
 
     let modelOverride: string | undefined;
     if (!fits()) {
-      const fixed = effortPart
-        ? [effortPart.text, contextPart(showWindow).text]
-        : [contextPart(showWindow).text];
+      const fixed = [
+        ...(providerPart ? [providerPart.text] : []),
+        ...(effortPart ? [effortPart.text] : []),
+        contextPart(showWindow).text,
+      ];
       const restWidth = visibleWidth(fixed.join(SEP)) + visibleWidth(SEP);
       const maxModelWidth = innerWidth - restWidth;
       if (maxModelWidth > 0) {
-        // Keep the provider tag; only the alias tail has to give.
-        modelOverride = truncateToWidth(modelText, maxModelWidth, "…");
+        // The provider is its own field and stays; only the alias truncates.
+        modelOverride = truncateToWidth(alias, maxModelWidth, "…");
       }
     }
 
