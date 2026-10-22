@@ -165,6 +165,14 @@ in {
         mode = "0600";
       };
 
+      # The Cost API that ai-usage reads the credit spend from rejects the API key
+      # above, so it gets an org-level one. Read by ai-usage, never by pi.
+      age.secrets.anthropic-admin-key = {
+        rekeyFile = ../../../secrets/anthropic-admin-key.age;
+        path = "${config.home.homeDirectory}/.pi/agent/anthropic-admin-key";
+        mode = "0600";
+      };
+
       # Not the module's `models` option — it only writes once, never updates.
       home.file.".pi/agent/models.json".text = builtins.toJSON {
         providers =
