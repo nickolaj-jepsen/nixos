@@ -37,15 +37,40 @@ the whole host:
   leaves + the card's `shared`/`homeManager` buckets into `sharedModules`.
 - `home` → `homeConfigurations.<h>` via `mkHome` in `hosts/default.nix` (standalone HM, no
   NixOS eval; `osConfig = null`). Example: `dev-ao`. Activate with
-  `just home-switch <h> [user@target]`; the target needs the user in
+  `just switch <h> [user@target]`; the target needs the user in
   `trusted-users`. HM services that assume system bits (e.g. an ssh-agent)
   must self-provide them in HM or the host card.
 - `darwin` → `darwinConfigurations.<h>` via nix-darwin + embedded HM. Example:
   `macbook`. nix-darwin system config (homebrew, …) goes in the `darwin`
-  bucket. Activate ON the Mac with `just darwin-switch`; first-time bootstrap
-  notes live in the justfile.
+  bucket. Activate ON the Mac with `just switch`; the first switch on a fresh
+  Mac is below.
+
+`just build`/`switch`/`diff` take any host: they read `config.flake.hostMeta`
+(class, rebuild tool, activation attrpath) and run that verb. `boot`/`test` are
+nixos-only (they refuse other classes), and `switch` pushes only nixos hosts to
+a remote target.
 
 `home`/`darwin` hosts assert their `nixos` bucket empty.
+
+## First switch on a fresh Mac
+
+Run ON the Mac:
+
+1. Install Nix (Determinate or upstream) with flakes enabled.
+2. `sudo ssh-keygen -A` — create `/etc/ssh/ssh_host_ed25519_key`.
+3. Replace `secrets/hosts/<h>/id_ed25519.{pub,age}` with this Mac's real host
+   key (the committed pub is a placeholder), then `just secret-rekey`
+   (YubiKey). If `<h>` isn't in `trustedHosts` (`modules/system/ssh.nix`) yet,
+   add it now that the real key is committed, and switch the other hosts so
+   they accept it.
+4. `nix run nix-darwin/nix-darwin-26.05#darwin-rebuild -- switch --flake .#<h>`
+   (before the Mac has `darwin-rebuild` on `PATH`). nix-homebrew installs
+   Homebrew itself on that first switch (slow); review
+   `homebrew.onActivation.cleanup` first.
+5. `sudo systemsetup -setremotelogin on` — enable sshd (Remote Login). Nix
+   manages the hardening drop-in + `authorized_keys`, but not the on/off bit.
+   Confirm Settings > General > Sharing > Remote Login access is "All users"
+   (or includes the user). Key-only auth; reach it over Tailscale/LAN.
 
 ## Cross-platform apps
 

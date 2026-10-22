@@ -1,4 +1,4 @@
-# First deploy needs an on-Mac bootstrap (host key + rekey); see the justfile darwin-switch recipe.
+# First deploy needs an on-Mac bootstrap (host key + rekey); see "First switch on a fresh Mac" in docs/hosts.md.
 {
   class = "darwin";
 

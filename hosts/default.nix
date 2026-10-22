@@ -166,9 +166,45 @@
   nixosHosts = lib.filter (n: hostClassOf n == "nixos") discovered;
   homeHosts = lib.filter (n: hostClassOf n == "home") discovered;
   darwinHosts = lib.filter (n: hostClassOf n == "darwin") discovered;
+
+  # Everything `just` needs to build/switch/diff a host, so the class names live
+  # here only: a new class lands in this table and the justfile needs no edit.
+  hostMeta = name: let
+    class = hostClassOf name;
+  in {
+    inherit class;
+    tool =
+      {
+        nixos = "nixos-rebuild";
+        darwin = "darwin-rebuild";
+        home = "nix run .#home-manager --";
+      }
+      .${
+        class
+      };
+    # The home class activates as the user; the other two are system-wide.
+    root = class != "home";
+    activation =
+      {
+        nixos = "nixosConfigurations.${name}.config.system.build.toplevel";
+        darwin = "darwinConfigurations.${name}.system";
+        home = "homeConfigurations.${name}.activationPackage";
+      }
+      .${
+        class
+      };
+  };
 in {
+  config.flake.hostMeta = lib.genAttrs discovered hostMeta;
   # Exported so checks.disko-templates can hold the templates to the same card shape.
   config.flake.hostCardKeys = cardKeys;
+
+  # The pinned home-manager CLI (the rev homeConfigurations build with), so a
+  # home-class `just switch` can never mix versions.
+  config.flake.apps.x86_64-linux.home-manager = {
+    type = "app";
+    program = "${inputs.home-manager.packages.x86_64-linux.home-manager}/bin/home-manager";
+  };
 
   config.flake.nixosConfigurations =
     lib.genAttrs nixosHosts (name: buildHost (hostDir name));

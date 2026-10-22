@@ -123,7 +123,7 @@ home-manager and the overlays):
 - **Pi extension**: one `.ts` file in `modules/programs/pi/extensions/`, a
   local pi package (`"pi": {"extensions": ["./*.ts"]}`) built by the pi leaf
   and listed in `settings.packages`. The build runs `tsc --noEmit` against the
-  pi that ships, so a type error fails `just build-system`. npm dependencies go
+  pi that ships, so a type error fails `just build`. npm dependencies go
   in its `package.json` + lockfile (`npm install --package-lock-only`; read via
   `importNpmLock`, no hash to bump); never add packages the pi leaf links in
   from pi itself (`mkExtensions` in `modules/programs/pi/default.nix`). `just
@@ -132,7 +132,7 @@ dev-setup` links `node_modules` into the folder for editor types and
 - **Claude Code mod**: a plugin folder with a hooks module in
   `modules/programs/claude-code/mods/<name>/`. The claude-code leaf builds it
   with `claude plugin validate` and `claude plugin test` against the
-  claude-code that runs it, so an API break fails `just build-system`, and
+  claude-code that runs it, so an API break fails `just build`, and
   loads it through `CLAUDE_CODE_PLUGIN_DIRS` in the settings `env`. The build
   can't run `tsc`: the API types only exist once an interactive session loads
   the folder, so `just dev-setup` runs one to lay them into each mod's

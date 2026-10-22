@@ -8,11 +8,12 @@ All common tasks are managed via `just`; run `just` to list every recipe with
 its description.
 
 ```bash
-just switch                  # Rebuild and switch this machine
+just switch                  # Rebuild and switch this machine (any host class)
 just switch desktop          # ...or a specific host
-just switch host user@remote # ...or a remote host (nixos-rebuild --target-host)
+just switch host user@remote # ...or push a nixos host to a remote (nixos-rebuild --target-host)
 just test                    # Apply until reboot
-just build-system            # Build without switching
+just build                   # Build without switching
+just diff                    # ...and diff the build against the running system
 just update                  # Update flake inputs
 just fmt                     # Format everything
 just gc                      # Collect garbage and delete old generations

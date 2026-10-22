@@ -1,81 +1,88 @@
+# `[script]` recipes run under this interpreter; one-liners stay shell recipes.
+set script-interpreter := ["bash", "-eu", "-o", "pipefail"]
+# Every recipe prints its own error; `[exit-message]` opts a long command back in.
+set no-exit-message
+
 nixcmd := "nix --experimental-features 'nix-command flakes'"
 
 # Current Nix system double (e.g. x86_64-linux, aarch64-darwin); agenix-rekey is per-system.
 system := `nix --experimental-features 'nix-command flakes' eval --impure --raw --expr 'builtins.currentSystem'`
 
-@_default:
+[default]
+[doc('List the recipes')]
+list:
     just --list
 
+# A host's routing facts from the flake, space separated: class, rebuild tool, needs-root, activation attrpath.
 [private]
-_confirm message:
-    #!/usr/bin/env -S bash -e
-    read -p "{{ message }} (y/N) " -n 1 -r
-    echo
-    [[ $REPLY =~ ^[Yy]$ ]] || { echo "Aborted"; exit 1; }
-
-[doc("Build a flake output")]
-[group('tools')]
-build target *ARGS="":
-    @if command -v nom >/dev/null 2>&1; then \
-        nom build {{ justfile_directory() }}#{{ target }} {{ ARGS }}; \
-    else \
-        nix build {{ justfile_directory() }}#{{ target }} {{ ARGS }}; \
-    fi
-
-[doc('Build a nixos configuration')]
-[group('deploy')]
-build-system hostname=`hostname -s` *ARGS="":
-    @just build nixosConfigurations."{{ hostname }}".config.system.build.toplevel {{ ARGS }}
-
-[doc('Write hosts/<host>/facter.json from nixos-facter, run here or over ssh on a running target (never reinstalls)')]
-[group('deploy')]
-factor hostname=`hostname -s` target='':
-    #!/usr/bin/env -S bash -e
-    target="{{ target }}"
-    if [ ! -d "hosts/{{ hostname }}" ]; then
-        echo "Error: Host '{{ hostname }}' does not exist in ./hosts/"
+[script]
+_meta hostname:
+    if ! [[ '{{ hostname }}' =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        echo "Not a host name: '{{ hostname }}'" >&2
         exit 1
     fi
-    report=$(mktemp)
-    trap 'rm -f "$report"' EXIT
-    if [ -z "$target" ]; then
-        sudo {{ nixcmd }} run nixpkgs#nixos-facter > "$report"
-    else
-        ssh "$target" "sudo {{ nixcmd }} run nixpkgs#nixos-facter" > "$report"
+    meta=$({{ nixcmd }} eval --raw .#hostMeta --apply 'm: let h = m."{{ hostname }}" or null; in if h == null then "" else "${h.class} ${h.tool} ${if h.root then "1" else "0"} ${h.activation}"')
+    if [ -z "$meta" ]; then
+        echo "No host '{{ hostname }}' in hosts/ (no host.nix card)." >&2
+        exit 1
     fi
-    install -m644 "$report" "hosts/{{ hostname }}/facter.json"
+    echo "$meta"
 
-[doc('Wrapper for nixos-rebuild switch')]
-[group("deploy")]
+# NixOS-only verbs: say so instead of failing on a missing flake attribute.
+[private]
+[script]
+_require-nixos hostname verb:
+    read -r class _ <<<"$(just _meta {{ hostname }})"
+    if [ "$class" != nixos ]; then
+        echo "{{ hostname }} is a $class-class host: '{{ verb }}' is nixos-only — use 'just switch'." >&2
+        exit 1
+    fi
+
+[doc('Build a host (this machine by default), whatever its class')]
+[exit-message]
+[group('host')]
+[script]
+build hostname=`hostname -s` *ARGS="":
+    read -r _ _ _ activation <<<"$(just _meta {{ hostname }})"
+    $(command -v nom || echo nix) build ".#$activation" {{ ARGS }}
+
+[arg('target', pattern='[a-zA-Z0-9._@:+-]*')]
+[doc('Build + activate a host (this machine by default); a nixos host can also be pushed to target=user@host')]
+[group('host')]
+[script]
 switch hostname=`hostname -s` target='' *ARGS="":
-    #!/usr/bin/env -S bash -e
-    target="{{ target }}"
-    if [ -z "$target" ]; then
-        sudo nixos-rebuild switch --flake .#{{ hostname }} {{ ARGS }}
-        just _failed-units
-    else
-        nixos-rebuild switch \
-            --flake .#{{ hostname }} \
-            --use-substitutes \
-            --target-host {{ target }} \
-            --sudo {{ ARGS }}
+    read -r class tool root _ <<<"$(just _meta {{ hostname }})"
+    if [ -n '{{ target }}' ]; then
+        if [ "$class" != nixos ]; then
+            echo "Only a nixos host switches remotely: run 'just switch {{ hostname }}' on {{ target }} itself." >&2
+            exit 1
+        fi
+        nixos-rebuild switch --flake .#{{ hostname }} --use-substitutes --target-host '{{ target }}' --sudo {{ ARGS }}
+        exit 0
     fi
+    if [ "$root" = 1 ]; then sudo="sudo"; else sudo=""; fi
+    $sudo $tool switch --flake .#{{ hostname }} {{ ARGS }}
+    if [ "$class" = nixos ]; then just _failed-units; fi
 
-[doc('Wrapper for nixos-rebuild boot')]
-[group("deploy")]
+[doc('Build + activate a host at next boot (nixos hosts only)')]
+[group('host')]
+[script]
 boot hostname=`hostname -s` *ARGS="":
+    just _require-nixos {{ hostname }} boot
     sudo nixos-rebuild boot --flake .#{{ hostname }} {{ ARGS }}
 
-[doc('Wrapper for nixos-rebuild test')]
-[group("deploy")]
+[doc('Build + activate a host until reboot (nixos hosts only)')]
+[group('host')]
+[script]
 test hostname=`hostname -s` *ARGS="":
+    just _require-nixos {{ hostname }} test
     sudo nixos-rebuild test --flake .#{{ hostname }} {{ ARGS }}
-    @just _failed-units
+    just _failed-units
 
 # Activation can succeed while units fail; surface them instead of leaving them to be found later.
 [private]
+[script]
 _failed-units:
-    #!/usr/bin/env -S bash -e
     for scope in --system --user; do
         failed=$(systemctl "$scope" --failed --no-legend --plain | awk '{print $1}')
         if [ -n "$failed" ]; then
@@ -85,112 +92,82 @@ _failed-units:
         fi
     done
 
-[doc('Build a home-manager host (class = "home") activation package')]
-[group("deploy")]
-home-build hostname *ARGS="":
-    @just build homeConfigurations."{{ hostname }}".activationPackage {{ ARGS }}
-
-[doc('Activate a home-manager host: locally (run ON the host as its user), or push to a remote target over ssh')]
-[group("deploy")]
-home-switch hostname target='':
-    #!/usr/bin/env -S bash -e
-    target="{{ target }}"
-    out=$({{ nixcmd }} build --no-link --print-out-paths \
-        "{{ justfile_directory() }}#homeConfigurations.{{ hostname }}.activationPackage")
-    if [ -z "$target" ]; then
-        "$out/activate"
-    else
-        {{ nixcmd }} copy --to "ssh://$target" "$out"
-        ssh "$target" "$out/activate"
+[doc('Diff a host build against the running system (nvd)')]
+[group('host')]
+[script]
+diff hostname=`hostname -s`: (build hostname)
+    read -r class _ _ _ <<<"$(just _meta {{ hostname }})"
+    current=/run/current-system
+    if [ "$class" = home ]; then
+        current="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager"
+        if [ ! -e "$current" ]; then
+            echo "No home-manager generation for $USER yet: run 'just switch' first." >&2
+            exit 1
+        fi
     fi
+    nvd diff "$current" result
 
-[doc('Build a nix-darwin host (class = "darwin") — aarch64-darwin, so run ON the Mac')]
-[group("deploy")]
-darwin-build hostname=`hostname -s` *ARGS="":
-    @just build darwinConfigurations."{{ hostname }}".system {{ ARGS }}
+[doc('Run nix-tree on a host (this machine by default)')]
+[group('host')]
+[script]
+tree hostname=`hostname -s` *ARGS="":
+    read -r _ _ _ activation <<<"$(just _meta {{ hostname }})"
+    nix-tree --derivation ".#$activation" {{ ARGS }}
 
-[doc('Preview changes vs the current Mac system (nvd diff; run ON the Mac)')]
-[group("deploy")]
-darwin-diff hostname=`hostname -s`: (darwin-build hostname)
-    nvd diff /run/current-system {{ justfile_directory() }}/result
+[arg('package', pattern='[a-zA-Z0-9._+-]+')]
+[doc('Show why a package is in a nixos host closure (this machine by default)')]
+[group('host')]
+[script]
+why-depends package hostname=`hostname -s`:
+    just _require-nixos {{ hostname }} why-depends
+    read -r _ _ _ activation <<<"$(just _meta {{ hostname }})"
+    {{ nixcmd }} why-depends --all ".#$activation" ".#nixosConfigurations.{{ hostname }}.pkgs.{{ package }}"
 
-# First-time bootstrap on a fresh Mac (run ON the Mac):
-#   1. Install Nix (Determinate or upstream) with flakes enabled.
-#   2. sudo ssh-keygen -A                      # create /etc/ssh/ssh_host_ed25519_key
-#   3. Replace secrets/hosts/<h>/id_ed25519.{pub,age} with this Mac's real host key
-#      (the committed pub is a placeholder), then `just secret-rekey` (YubiKey).
-#      If <h> isn't in trustedHosts (modules/system/ssh.nix) yet, add it now that the
-#      real key is committed, and switch the other hosts so they accept it.
-#   4. nix run nix-darwin/nix-darwin-26.05#darwin-rebuild -- switch --flake .#<h>
-#   nix-homebrew installs Homebrew itself on the first switch (slow); review
-#   homebrew.onActivation.cleanup first.
-#   5. sudo systemsetup -setremotelogin on     # enable sshd (Remote Login); nix
-#      manages the hardening drop-in + authorized_keys, but not the on/off bit.
-#      Confirm Settings > General > Sharing > Remote Login access is "All users"
-#      (or includes the user). Key-only auth; reach it over Tailscale/LAN.
-[doc('Build + activate a nix-darwin host (run ON the Mac; see bootstrap notes in the justfile for the first run)')]
-[group("deploy")]
-darwin-switch hostname=`hostname -s` *ARGS="":
-    sudo darwin-rebuild switch --flake .#{{ hostname }} {{ ARGS }}
+[arg('username', pattern='[a-z_][a-z0-9_-]*')]
+[doc('Set up configuration + SSH keys for a new host')]
+[group('install')]
+new-host hostname username:
+    scripts/new-host.sh {{ hostname }} {{ username }}
 
-[doc('Use nixos-anywhere to deploy to a remote host')]
-[group('deploy')]
-deploy-remote hostname target: (_confirm "Deploy " + hostname + " to " + target + "? This will FORMAT disks on the target.")
-    #!/usr/bin/env -S bash -e
-    # Untracked files are invisible to the flake.
-    git add -- "hosts/{{ hostname }}" "secrets/hosts/{{ hostname }}"
+[arg('target', pattern='[a-zA-Z0-9._@:+-]+')]
+[confirm("Deploy " + hostname + " to " + target + "? This will FORMAT disks on the target.")]
+[doc('Install a host over ssh with nixos-anywhere (formats the target disks)')]
+[group('install')]
+deploy-remote hostname target:
+    scripts/deploy-remote.sh {{ hostname }} {{ target }}
 
-    temp=$(mktemp -d)
-    trap "rm -rf $temp" EXIT
-
-
-    install -d -m755 "$temp/etc/ssh"
-
-    # Copy ssh key to decrypt agenix secrets
-    just age -d "./secrets/hosts/{{ hostname }}/id_ed25519.age" > "$temp/etc/ssh/ssh_host_ed25519_key"
-    chmod 600 "$temp/etc/ssh/ssh_host_ed25519_key"
-
-    cp "./secrets/hosts/{{ hostname }}/id_ed25519.pub" "$temp/etc/ssh/ssh_host_ed25519_key.pub"
-
-    # Deploy
-    {{ nixcmd }} run github:nix-community/nixos-anywhere -- \
-        --flake .#{{ hostname }} \
-        --disk-encryption-keys /luks-password <(just age -d ./secrets/luks-password.age) \
-        --extra-files "$temp" \
-        --target-host "{{ target }}"
-
-[doc('Generate Markdown reference for the fireproof.* options into docs/')]
-[group('tools')]
-docs:
-    #!/usr/bin/env -S bash -e
-    mkdir -p docs
-    out=$({{ nixcmd }} build --no-link --print-out-paths .#fireproof-docs)
-    install -m 644 "$out" docs/fireproof-options.md
-    echo "Wrote docs/fireproof-options.md"
+[arg('target', pattern='[a-zA-Z0-9._@:+-]*')]
+[doc('Write hosts/<host>/facter.json from nixos-facter, run here or over ssh on a running target (never reinstalls)')]
+[group('install')]
+factor hostname=`hostname -s` target='':
+    scripts/factor.sh {{ hostname }} '{{ target }}'
 
 [doc('Runs (r)age with yubikey identity')]
 [group('secret')]
 age *ARGS="--help":
-    @rage {{ ARGS }} -i ./secrets/yubikey-identity.pub
+    rage {{ ARGS }} -i ./secrets/yubikey-identity.pub
 
+[arg('file', pattern='[a-zA-Z0-9._/-]+')]
 [doc('Decrypt a file to stdout')]
 [group('secret')]
 decrypt file:
     just age -d {{ file }}
 
+[arg('file', pattern='[a-zA-Z0-9._/-]+')]
 [doc('Edit an encrypted secret in $EDITOR (PATH to the .age file) and stage it')]
 [group('secret')]
+[script]
 secret-edit file:
-    #!/usr/bin/env -S bash -e
     {{ nixcmd }} run .#agenix-rekey.{{ system }}.edit-view edit "{{ file }}"
     # Stage it: `nix` flake eval ignores git-untracked files, so a new secret is invisible until added.
     if [ -f "{{ file }}" ]; then git add -- "{{ file }}"; fi
 
 # rm first: secret-edit would decrypt the old file to prefill, needing a touch.
+[arg('file', pattern='[a-zA-Z0-9._/-]+')]
 [doc('Write a secret from stdin, no $EDITOR (PATH to the .age file) - for agents/scripts. Needs no YubiKey; refuses to overwrite unless force=1')]
 [group('secret')]
+[script]
 secret-write file force="":
-    #!/usr/bin/env -S bash -e
     if [ -t 0 ]; then
         echo "Error: expects the plaintext secret on stdin, e.g. printf 'KEY=value\n' | just secret-write {{ file }}" >&2
         exit 1
@@ -202,7 +179,7 @@ secret-write file force="":
     fi
     umask 077
     temp=$(mktemp -d)
-    trap "rm -rf $temp" EXIT
+    trap 'rm -rf $temp' EXIT
     cat > "$temp/plaintext"
     if [ ! -s "$temp/plaintext" ]; then
         echo "Error: stdin was empty; refusing to write an empty secret." >&2
@@ -216,79 +193,24 @@ secret-write file force="":
 
 [doc('Create secrets that declare a `generator` and have no file yet (no YubiKey) - follow with secret-rekey')]
 [group('secret')]
+[script]
 secret-generate:
-    #!/usr/bin/env -S bash -e
     {{ nixcmd }} run .#agenix-rekey.{{ system }}.generate
     git add -- secrets
 
 [doc('Rekey all secrets - needed when adding secrets/hosts')]
 [group('secret')]
+[script]
 secret-rekey:
-    #!/usr/bin/env -S bash -e
     {{ nixcmd }} run .#agenix-rekey.{{ system }}.rekey
     # Stage rekeyed outputs + any new source secrets.
     git add -- secrets
 
-[doc("Sets up configuration + SSH keys for a new host")]
-[group('maintenance')]
-new-host hostname username:
-    #!/usr/bin/env -S bash -e
-    if [ -d "hosts/{{ hostname }}" ]; then
-        echo "Error: Host '{{ hostname }}' already exists."
-        exit 1
-    fi
-
-    temp=$(mktemp -d)
-    trap "rm -rf $temp" EXIT
-
-    echo "Setting up folders"
-    mkdir -p "secrets/hosts/{{ hostname }}"
-    mkdir -p "hosts/{{ hostname }}"
-    cat > "hosts/{{ hostname }}/host.nix" <<'EOF'
-    # {{ hostname }}'s host card: the feature toggles it enables + its facts. The
-    # presence of this file is what makes hosts/{{ hostname }}/ a discovered host.
-    # Every host file is a card (shape: docs/hosts.md): enable features via
-    # `shared.fireproof.<feature>.enable = true`, add nixos-specific settings under
-    # `nixos` here or in sibling cards (e.g. system.nix), and host-specific
-    # home-manager tweaks under `homeManager`.
-    {
-      shared = {
-        fireproof.hostname = "{{ hostname }}";
-        fireproof.username = "{{ username }}";
-        # Enable features, e.g.:
-        # fireproof.desktop.enable = true;
-        # fireproof.dev.enable = true;
-      };
-    }
-    EOF
-
-    release=$({{ nixcmd }} eval --inputs-from . --raw nixpkgs#lib.trivial.release)
-    cat > "hosts/{{ hostname }}/state-version.nix" <<EOF
-    # Install-time release; never bump.
-    {
-      nixos.system.stateVersion = "$release";
-      homeManager.home.stateVersion = "$release";
-    }
-    EOF
-
-    echo "Generating SSH key for {{ username }}@{{ hostname }}"
-    ssh-keygen -q -t ed25519 -f "$temp/id_ed25519" -C "{{ username }}@{{ hostname }}" -N ""
-    cp "$temp/id_ed25519.pub" "secrets/hosts/{{ hostname }}/id_ed25519.pub"
-
-    echo "Encrypting SSH key"
-    just age -e "$temp/id_ed25519" -o "secrets/hosts/{{ hostname }}/id_ed25519.age"
-
-    # Untracked files are invisible to the flake, so agenix-rekey would skip the new host.
-    git add -- "hosts/{{ hostname }}" "secrets/hosts/{{ hostname }}"
-    echo "Secret rekeying..."
-    just secret-rekey
-
-    echo "Host '{{ hostname }}' created and staged; it is discovered automatically."
-    echo "Edit hosts/{{ hostname }}/host.nix to enable features via fireproof.*.enable — see modules/base/fireproof.nix."
-    echo "Add \"{{ hostname }}\" to trustedHosts in modules/system/ssh.nix so the other hosts accept its SSH key."
-
+[arg('input', pattern='[a-zA-Z0-9._-]*')]
 [doc("Update flake.lock; cache-gated inputs stay put until their build is cached")]
+[exit-message]
 [group('maintenance')]
+[script]
 update input='':
     {{ nixcmd }} flake update {{ input }}
     python3 .github/scripts/update_bot.py cache-gate
@@ -304,91 +226,51 @@ fmt:
     {{ nixcmd }} fmt
 
 [doc('Run flake check to validate configuration')]
+[exit-message]
 [group('maintenance')]
 check:
     {{ nixcmd }} flake check
 
+[arg('days', pattern='[0-9]+')]
+[confirm("Delete generations and store paths older than " + days + " days?")]
 [doc('Collect garbage and delete old generations')]
 [group('maintenance')]
-gc days='7': (_confirm "Delete generations and store paths older than " + days + " days?")
+[script]
+gc days='7':
     sudo nix-collect-garbage --delete-older-than {{ days }}d
     sudo nix-store --optimise
 
-[doc("Run nix-tree")]
-[group("tools")]
-tree *ARGS=("--derivation .#nixosConfigurations." + shell("hostname -s") + ".config.system.build.toplevel"):
-    nix-tree {{ ARGS }}
-
-[doc("Run nix-diff between current system")]
-[group("tools")]
-diff hostname=`hostname -s`: (build-system hostname)
-    nvd diff /run/current-system {{ justfile_directory() }}/result
-
-[doc('List system generations')]
-[group('tools')]
-history:
-    sudo nix-env -p /nix/var/nix/profiles/system --list-generations
-
-[doc('Open nix repl with flake loaded')]
-[group('tools')]
-repl:
-    {{ nixcmd }} repl --expr 'builtins.getFlake "path:{{ justfile_directory() }}"'
-
-[doc("Run nurl")]
-[group("tools")]
-nurl *ARGS="--help":
-    nurl {{ ARGS }}
-
-[doc("Show why a package is in the closure")]
-[group("tools")]
-why-depends package hostname=`hostname -s`:
-    {{ nixcmd }} why-depends --all .#nixosConfigurations.{{ hostname }}.config.system.build.toplevel .#nixosConfigurations.{{ hostname }}.pkgs.{{ package }}
-
-# Links the built pi extensions' node_modules into the repo, for editor types and `pi -e`.
-_dev-setup-pi:
-    cd modules/programs/pi/extensions && {{ nixcmd }} build {{ justfile_directory() }}#pi-extensions --out-link result && ln -sfn result/node_modules node_modules
-
-# Lays the Claude Code mods' API types into their gitignored .claude-plugin/types/, for editor types and `tsc -p`.
-_dev-setup-claude:
-    #!/usr/bin/env -S bash -e
-    mods=(modules/programs/claude-code/mods/*/.claude-plugin)
-    args=()
-    for m in "${mods[@]}"; do
-        rm -rf "$m/types"
-        args+=(--plugin-dir "$(realpath "$m/..")")
-    done
-    # Only an interactive session lays them, so run one on a throwaway pty until it has. The store copies in
-    # CLAUDE_CODE_PLUGIN_DIRS would otherwise load beside the folders under the same names.
-    if [ "$(uname)" = Darwin ]; then
-        CLAUDE_CODE_PLUGIN_DIRS= script -q /dev/null claude "${args[@]}" </dev/null >/dev/null 2>&1 &
-    else
-        CLAUDE_CODE_PLUGIN_DIRS= script -qec "claude ${args[*]@Q}" /dev/null </dev/null >/dev/null 2>&1 &
-    fi
-    pid=$!
-    trap 'kill $pid 2>/dev/null || true' EXIT
-    for _ in $(seq 60); do
-        laid=0
-        for m in "${mods[@]}"; do
-            [ -f "$m/types/tsconfig.json" ] && [ -f "$m/types/claude-code/index.d.ts" ] && laid=$((laid + 1))
-        done
-        if [ "$laid" = "${#mods[@]}" ]; then
-            sleep 1
-            echo "Laid types for $laid mods; restart the editor's TypeScript server to pick them up"
-            exit 0
-        fi
-        sleep 1
-    done
-    echo "Timed out waiting for Claude Code to lay the mod types" >&2
-    exit 1
-
-[doc("Set up what development needs but git ignores: direnv, the pi extensions' node_modules, the mods' types")]
-[group("tools")]
-dev-setup: _dev-setup-direnv _dev-setup-pi _dev-setup-claude
-
-_dev-setup-direnv:
-    @if command -v direnv >/dev/null 2>&1; then direnv allow {{ justfile_directory() }}; fi
-
 [doc('Remove build results and temporary files')]
-[group('tools')]
+[group('maintenance')]
 clean:
     rm -rf result result-*
+
+[doc('Generate Markdown reference for the fireproof.* options into docs/')]
+[group('dev')]
+[script]
+docs:
+    mkdir -p docs
+    out=$({{ nixcmd }} build --no-link --print-out-paths .#fireproof-docs)
+    install -m 644 "$out" docs/fireproof-options.md
+    echo "Wrote docs/fireproof-options.md"
+
+[doc("Set up what development needs but git ignores: direnv, the pi extensions' node_modules, the mods' types")]
+[group('dev')]
+[parallel]
+dev-setup: _dev-setup-direnv _dev-setup-pi _dev-setup-claude
+
+[private]
+_dev-setup-direnv:
+    if command -v direnv >/dev/null 2>&1; then direnv allow .; fi
+
+# Links the built pi extensions' node_modules into the repo, for editor types and `pi -e`.
+[private]
+[script]
+[working-directory('modules/programs/pi/extensions')]
+_dev-setup-pi:
+    {{ nixcmd }} build {{ justfile_directory() }}#pi-extensions --out-link result
+    ln -sfn result/node_modules node_modules
+
+[private]
+_dev-setup-claude:
+    scripts/dev-setup-claude.sh

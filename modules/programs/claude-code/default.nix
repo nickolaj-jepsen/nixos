@@ -216,7 +216,7 @@
             "- **Internal sharing / snippet hosting**: None configured; public paste/gist services are outside the trust boundary"
             "- **Secrets management**: agenix-rekey. Age-encrypted `*.age` files under ~/nixos/secrets (master identity secrets/yubikey-identity.pub, YubiKey-backed) decrypt at activation to /run/agenix and /run/user/<uid>/agenix. Edited only via `just secret-edit`/`secret-generate`/`secret-rekey`; decrypted contents are never printed, copied or committed. CI secrets: the repository secrets referenced in .github/workflows"
             "- **Default / protected branches**: `main` is the default and protected branch of ~/nixos (plus one ruleset); a nightly update bot opens an automerged PR against it"
-            "- **CI/CD deploy targets**: None configured; hosts are activated by hand with `just switch`/`boot`/`home-switch`/`darwin-switch` (this machine) or `just deploy-remote` (another host), all of which change a live system"
+            "- **CI/CD deploy targets**: None configured; hosts are activated by hand with `just switch`/`boot` (this machine) or `just deploy-remote` (another host), all of which change a live system"
             "- **Network posture**: ordinary internet access plus a Tailscale tailnet"
             "- **Host containment**: None; Claude Code runs unsandboxed with the user's full privileges on their own workstations (NixOS, nix-darwin or standalone home-manager)"
             (
@@ -254,7 +254,7 @@
           ]
           ++ onWork "- **Org-specific CLIs (work)**: `ds` (Digital-Udvikling repositories only), `kubectl` (work clusters)"
           ++ [
-            "- routine under ~/nixos: `nix eval`/`build`/`fmt`/`flake check`, `just build-system`/`diff`/`fmt`/`check`/`docs`, and commits on local branches"
+            "- routine under ~/nixos: `nix eval`/`build`/`fmt`/`flake check`, `just build`/`diff`/`fmt`/`check`/`docs`, and commits on local branches"
           ];
         # Underlines misspelled words in the prompt input, in the theme's error
         # colour. Only ever read from user settings — a spellcheck block in a
@@ -363,8 +363,6 @@
           ask = [
             "Bash(just switch:*)"
             "Bash(just boot:*)"
-            "Bash(just home-switch:*)"
-            "Bash(just darwin-switch:*)"
             "Bash(just deploy-remote:*)"
             "Bash(just gc:*)"
             # Prints plaintext to the transcript, sidestepping the agenix Read denies.
