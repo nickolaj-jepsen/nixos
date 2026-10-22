@@ -181,31 +181,34 @@
       };
     };
 
-    mcpServer = s:
-      if s ? url
-      then {
-        type = "remote";
-        inherit (s) url;
-      }
-      else
-        {
-          type = "local";
-          command = [s.command] ++ (s.args or []);
-        }
-        // lib.optionalAttrs (s ? env) {environment = s.env;};
+    mcpServer = s: let
+      enabled =
+        if (s.enabled or null) != null
+        then s.enabled
+        else !(s.disabled or false);
+    in
+      lib.optionalAttrs enabled (
+        if (s.url or null) != null
+        then
+          {
+            type = "remote";
+            inherit (s) url;
+          }
+          // lib.optionalAttrs (s.headers != {}) {inherit (s) headers;}
+        else
+          {
+            type = "local";
+            command = [s.command] ++ (s.args or []);
+          }
+          // lib.optionalAttrs (s.env != {}) {
+            environment = lib.hm.mcp.renderEnv (path: "{file:${path}}") s.env;
+          }
+      );
   in {
     config = lib.mkIf config.fireproof.dev.opencode.enable {
       programs.opencode = {
         enable = true;
-        # The CLI build imports the root script/ dir, which upstream's src fileset
-        # omits (anomalyco/opencode#55491); drop once #55494 lands.
-        package = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.opencode.overrideAttrs (old: {
-          postPatch =
-            (old.postPatch or "")
-            + ''
-              [ -e script/native-arch.ts ] || cp -r ${inputs.opencode}/script .
-            '';
-        });
+        package = inputs.opencode.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
         # Shared by every agent; keep it agent-agnostic.
         context = builtins.readFile ./agent-context.md;
       };
@@ -229,7 +232,7 @@
             };
         }
         // lib.optionalAttrs (config.programs.mcp.enable && config.programs.mcp.servers != {}) {
-          mcp.servers = lib.mapAttrs (_: mcpServer) config.programs.mcp.servers;
+          mcp.servers = lib.filterAttrs (_: v: v != {}) (lib.mapAttrs (_: mcpServer) config.programs.mcp.servers);
         });
     };
   };
