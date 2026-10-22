@@ -1,4 +1,4 @@
-{
+{self, ...}: {
   perSystem = {
     config,
     pkgs,
@@ -6,7 +6,8 @@
   }: {
     devShells.default = pkgs.mkShell {
       name = "nixos-config";
-      # treefmt plus every formatter `nix fmt` runs, at the same versions.
+      # treefmt plus every formatter `nix fmt` runs, at the same versions — including
+      # `just` itself, which the justfile's `minimum-version` needs newer than 26.05's.
       inputsFrom = [config.treefmt.build.devShell];
       packages = with pkgs; [
         # Nix tools
@@ -21,7 +22,8 @@
         rage # Used by `just age`
         age-plugin-yubikey # YubiKey plugin discovered via PATH by rage
 
-        just
+        # Same just as treefmt's, named so a lost formatter can't take `just` with it.
+        (self.lib.just system)
         python3 # `just update` / `just update-packages` scripts (stdlib only)
       ];
     };

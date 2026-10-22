@@ -34,6 +34,11 @@ in {
 
   flake.lib.overlays = overlayList;
 
+  # The just the justfile needs (≥1.55 for `minimum-version`, `default-script`,
+  # `default-list`); nixpkgs 26.05 still ships 1.51. The devshell, treefmt and the
+  # ask-list check all format/parse with this one.
+  flake.lib.just = system: (import inputs.nixpkgs-unstable {inherit system;}).just;
+
   flake.nixosModules.overlays = _: {
     nixpkgs.overlays = overlayList;
   };
@@ -49,6 +54,12 @@ in {
       overlays = overlayList;
     };
   in {
-    packages = lib.filterAttrs (_: lib.meta.availableOn pkgs.stdenv.hostPlatform) (lib.genAttrs names (name: pkgs.${name}));
+    packages =
+      lib.filterAttrs (_: lib.meta.availableOn pkgs.stdenv.hostPlatform) (lib.genAttrs names (name: pkgs.${name}))
+      // {
+        # Escape hatch when the `just` on PATH predates the justfile's `minimum-version`:
+        # `nix run .#just -- switch`. Same version as the devshell's.
+        inherit ((import inputs.nixpkgs-unstable {inherit system;})) just;
+      };
   };
 }

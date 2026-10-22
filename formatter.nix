@@ -1,14 +1,25 @@
-{inputs, ...}: {
+{
+  inputs,
+  self,
+  ...
+}: {
   imports = [inputs.treefmt-nix.flakeModule];
 
-  perSystem = {config, ...}: {
+  perSystem = {
+    config,
+    system,
+    ...
+  }: {
     treefmt = {
       projectRootFile = "flake.nix";
       programs = {
         deadnix.enable = true;
         alejandra.enable = true;
         statix.enable = true;
-        just.enable = true;
+        just = {
+          enable = true;
+          package = self.lib.just system;
+        };
         oxfmt.enable = true;
         fish_indent.enable = true;
       };
