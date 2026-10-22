@@ -74,6 +74,11 @@ in {
     # Shared with the Claude Code spellchecker (lib/default.nix), so a word
     # learned in one agent's picker is known to the other.
     spellChecker = fpLib.mkHunspell pkgs;
+    # Static flexoki theme; see _theme.nix for why `system` isn't used.
+    theme = pkgs.writeText "fireproof.json" (builtins.toJSON (import ./_theme.nix {
+      inherit lib;
+      colors = config.fireproof.theme.colors;
+    }));
   in {
     imports = [inputs.pi.homeModules.default];
 
@@ -91,6 +96,7 @@ in {
         '';
         # The fireproof.agents.skills registry, linked into one dir.
         skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
+        themes = [theme];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
         # Read at launch, so the key never lands in the Nix store.
@@ -107,8 +113,8 @@ in {
           defaultProvider = "opencode-go";
           defaultModel = "deepseek-v4.1-flash";
           defaultThinkingLevel = "high";
-          # Follows the terminal palette and its light/dark switches.
-          theme = "system";
+          # Pinned, not `system`, so the accent is the desktop accent.
+          theme = "fireproof";
           # Keeps the version and key hints; drops the loaded-resource listing.
           quietStartup = "header";
           # Loads the cwd's direnv/nix-direnv env into the bash tool, which
