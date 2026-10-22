@@ -4,6 +4,7 @@
  * top-level files, so this is the one entry point.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { createActions } from "./chrome/actions.ts";
 import { createEditorChrome } from "./chrome/editor.ts";
 import { createFooter } from "./chrome/footer.ts";
 import { drawGauge } from "./chrome/gauge.ts";
@@ -12,8 +13,9 @@ import { createState } from "./chrome/state.ts";
 
 export default function (pi: ExtensionAPI) {
   const state = createState();
+  const actions = createActions(state);
   const identity = createIdentity(pi, state);
-  createFooter(pi, state);
+  createFooter(pi, state, actions);
   const editor = createEditorChrome(state, {
     top: identity.drawTop,
     bottom: (width, hidden, border) => drawGauge(state, width, hidden, border),

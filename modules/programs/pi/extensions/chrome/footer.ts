@@ -11,10 +11,12 @@ import type {
   ReadonlyFooterDataProvider,
   Theme,
 } from "@earendil-works/pi-coding-agent";
+import type { TuiMouseEvent } from "@earendil-works/pi-tui";
+import type { createActions } from "./actions.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { formatCost } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
-import type { Part } from "./layout.ts";
+import { hitTest, isPlainClick, type Part, type Region } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage, usageAlarm } from "./usage.ts";
@@ -64,10 +66,15 @@ const sanitize = (text: string) =>
     .replace(/ +/g, " ")
     .trim();
 
-export const createFooter = (pi: ExtensionAPI, state: ChromeState) => {
+export const createFooter = (
+  pi: ExtensionAPI,
+  state: ChromeState,
+  actions: ReturnType<typeof createActions>,
+) => {
   const git = createGit(state);
   const usage = createUsage(state);
   const stats = createStats();
+  let regions: Region[] = [];
 
   const renderLine = (
     width: number,
@@ -75,7 +82,10 @@ export const createFooter = (pi: ExtensionAPI, state: ChromeState) => {
     footerData: ReadonlyFooterDataProvider,
   ): string => {
     const ctx = state.ctx;
-    if (!ctx) return "";
+    if (!ctx) {
+      regions = [];
+      return "";
+    }
     const model = ctx.model;
     const s = stats.statsFor(ctx, model);
     const thinking = ctx.thinkingLevel ?? pi.getThinkingLevel();
@@ -109,16 +119,21 @@ export const createFooter = (pi: ExtensionAPI, state: ChromeState) => {
         ? `${Math.round(s.speed)} t/s`
         : undefined;
 
-    return layoutFooter(width, theme, {
-      provider: tag ? { id: "provider", text: tag, color: "dim" } : undefined,
+    const result = layoutFooter(width, theme, {
+      provider: tag
+        ? { id: "provider", text: tag, color: "dim", action: actions.model }
+        : undefined,
       model: {
         id: "model",
         text: model ? modelAlias(model) : "no model",
         color: "muted",
         tight: true,
+        action: actions.model,
       },
       effort:
-        model?.reasoning && thinking ? { id: "effort", text: thinking, color: "muted" } : undefined,
+        model?.reasoning && thinking
+          ? { id: "effort", text: thinking, color: "muted", action: actions.effort }
+          : undefined,
       statuses: [...footerData.getExtensionStatuses()]
         .filter(([key]) => key !== "pi-cache-stats")
         .sort(([a], [b]) => a.localeCompare(b))
@@ -129,7 +144,9 @@ export const createFooter = (pi: ExtensionAPI, state: ChromeState) => {
       cost: costText ? { id: "cost", text: costText, color: "dim" } : undefined,
       speed: speedText ? { id: "speed", text: speedText, color: "dim" } : undefined,
       git: git.view,
-    }).line;
+    });
+    regions = result.regions;
+    return result.line;
   };
 
   const track = (ctx: ExtensionContext) => {
@@ -150,6 +167,15 @@ export const createFooter = (pi: ExtensionAPI, state: ChromeState) => {
       return {
         render: (width: number) => [renderLine(width, theme, footerData)],
         invalidate: () => {},
+        handleMouse: (event: TuiMouseEvent) => {
+          const ctx = state.ctx;
+          const action = isPlainClick(event) ? hitTest(regions, event.x) : undefined;
+          if (!ctx || !action) return undefined;
+          void Promise.resolve()
+            .then(() => action(ctx))
+            .catch(() => {});
+          return { handled: true };
+        },
         dispose: () => {
           unsubscribe();
           git.dispose();
