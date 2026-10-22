@@ -1,5 +1,5 @@
 # Always-on; the claude-work wrapper is gated by claude-code.work.enable.
-{
+{fpLib, ...}: {
   flake.modules.homeManager.claude-code = {
     pkgs,
     config,
@@ -82,11 +82,11 @@
     # claude-code resolves the checker off PATH by bare name, so it has to be a
     # real package rather than a store path like the LSP servers. hunspell
     # over aspell because only it takes several dictionaries at once (`-d a,b`).
-    dictionaries = ["en_US" "da_DK"];
-    spellChecker = pkgs.hunspell.withDicts (d: map (name: d.${name}) dictionaries);
+    dictionaries = fpLib.hunspellLanguages;
+    spellChecker = fpLib.mkHunspell pkgs;
     # Mutable: the spellfix picker adds words to it. hunspell neither creates a
     # missing personal dictionary nor saves into one, so activation touches it.
-    personalDictionary = "${config.xdg.configHome}/hunspell/personal.dic";
+    personalDictionary = fpLib.hunspellPersonalDictionary config;
 
     # Validated and tested against the claude-code that runs it, so a bump that
     # breaks its API (or drops the keybinding action spellfix borrows) fails the build.
@@ -303,7 +303,7 @@
           hunspell = lib.getExe spellChecker;
           dictionaries = lib.concatStringsSep "," dictionaries;
           inherit personalDictionary;
-          fixLog = "${config.xdg.dataHome}/spellfix/fixes.json";
+          fixLog = fpLib.spellfixLog config;
         };
         statusLine = {
           type = "command";

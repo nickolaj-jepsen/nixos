@@ -16,6 +16,10 @@
   in
     builtins.filter (m: m != primary) (activeMonitors monitors);
 
+  # Shared by the Claude Code underline and the spellfix pickers in Claude Code
+  # and pi: hunspell over both languages, one personal word list, one fix log.
+  hunspellLanguages = ["en_US" "da_DK"];
+
   # Byte (0-255) of a 6-digit hex string at nibble offset i (0=R, 2=G, 4=B).
   hexByteAt = hex: i: let
     digit = c:
@@ -43,7 +47,11 @@
   in
     digit (builtins.substring i 1 hex) * 16 + digit (builtins.substring (i + 1) 1 hex);
 in {
-  inherit primaryMonitor primaryMonitorName secondaryMonitors;
+  inherit primaryMonitor primaryMonitorName secondaryMonitors hunspellLanguages;
+
+  mkHunspell = pkgs: pkgs.hunspell.withDicts (d: map (name: d.${name}) hunspellLanguages);
+  hunspellPersonalDictionary = config: "${config.xdg.configHome}/hunspell/personal.dic";
+  spellfixLog = config: "${config.xdg.dataHome}/spellfix/fixes.json";
 
   # The `programs.<app>.package` an HM GUI leaf should install: null on darwin
   # (the binary comes from a homebrew cask, so HM manages config only — nixpkgs

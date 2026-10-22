@@ -10,7 +10,11 @@
 #
 # Own extensions live in ./extensions, a local pi package: each `.ts` file
 # there is one extension. See docs/modules.md.
-{inputs, ...}: let
+{
+  fpLib,
+  inputs,
+  ...
+}: let
   # node-gyp leaves config.gypi/Makefiles naming the npm-deps cache, python and
   # -dev outputs, which pins ~600 MB of build inputs into the runtime closure.
   mkPi = pkgs:
@@ -67,6 +71,9 @@ in {
     ...
   }: let
     pi = mkPi pkgs;
+    # Shared with the Claude Code spellchecker (lib/default.nix), so a word
+    # learned in one agent's picker is known to the other.
+    spellChecker = fpLib.mkHunspell pkgs;
   in {
     imports = [inputs.pi.homeModules.default];
 
@@ -87,6 +94,13 @@ in {
         environment.PI_SKIP_VERSION_CHECK.value = "1";
         # Read at launch, so the key never lands in the Nix store.
         environment.KAGI_API_KEY.file = config.age.secrets.kagi-api-key.path;
+        # Spellfix (extensions/spellfix.ts) shares its dictionary and fix log
+        # with the Claude Code mod. Haiku keeps the one batch call cheap.
+        environment.PI_SPELLFIX_HUNSPELL.value = lib.getExe spellChecker;
+        environment.PI_SPELLFIX_DICTS.value = lib.concatStringsSep "," fpLib.hunspellLanguages;
+        environment.PI_SPELLFIX_PERSONAL.value = fpLib.hunspellPersonalDictionary config;
+        environment.PI_SPELLFIX_LOG.value = fpLib.spellfixLog config;
+        environment.PI_SPELLFIX_MODEL.value = "anthropic/claude-haiku-5-5";
         settings = {
           # The model picker's "save as default" reverts at launch; change it here.
           defaultProvider = "tensorx";
@@ -136,6 +150,10 @@ in {
           config.programs.mcp.servers;
         };
       };
+
+      # The extension spawns its own hunspell; keep the package in the profile too
+      # so the same dictionaries are available outside pi.
+      home.packages = [spellChecker];
 
       # Literal path: the wrapper single-quotes it, so the default secretsDir
       # spelling would reach `cat` unexpanded. It's a symlink into secretsDir.
