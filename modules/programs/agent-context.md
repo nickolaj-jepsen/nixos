@@ -13,6 +13,9 @@ Repository-local instructions and existing conventions take precedence over thes
 - Prefer rebase over merge — even when asked to "merge" — unless a merge over rebase is explicitly requested.
 - Never discard uncommitted work or force-push without approval.
 - Prefer `gh` for GitHub operations (PRs, issues, API).
+- Git worktrees live in `~/worktrees/<repo>/<name>`, created with `wt create <name>`
+  (it prints the path); `git worktree add` anywhere else is blocked. `wt` also
+  lists, diffs, lands and cleans them.
 - In Digital-Udvikling repositories, use `ds` when it supports the operation; check `ds --help` when uncertain.
 
 ## Code style

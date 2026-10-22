@@ -217,6 +217,10 @@
           "$schema" = "https://opencode.ai/config.json";
           # Nix owns the binary.
           update = "disable";
+          # Refuses `git worktree add` outside ~/worktrees/<repo>/; the layout and
+          # the check live in `wt guard` (modules/scripts/wt.bash), shared with the
+          # Claude Code and pi adapters. A store path, so no plugin install step.
+          plugins = ["file://${./opencode/worktree-guard.js}"];
           model =
             if llm.enable
             then "local/qwen3.8-27b"

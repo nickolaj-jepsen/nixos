@@ -45,6 +45,15 @@
       }
     ];
 
+    # A PreToolUse hook that refuses `git worktree add` outside ~/worktrees/<repo>/.
+    # The layout and the check live in `wt guard`, so pi and opencode enforce the
+    # same rule; this only adds Claude's hook contract around it.
+    worktreeGuard = pkgs.writeShellApplication {
+      name = "claude-worktree-guard";
+      runtimeInputs = [pkgs.jq pkgs.coreutils];
+      text = builtins.readFile ./worktree-guard.sh;
+    };
+
     # claude-code resolves the checker off PATH by bare name, so it has to be a
     # real package rather than a store path like the LSP servers. hunspell
     # over aspell because only it takes several dictionaries at once (`-d a,b`).
@@ -182,6 +191,17 @@
           {
             SessionStart = direnvHooks;
             CwdChanged = direnvHooks;
+            PreToolUse = [
+              {
+                matcher = "Bash";
+                hooks = [
+                  {
+                    type = "command";
+                    command = lib.getExe worktreeGuard;
+                  }
+                ];
+              }
+            ];
           }
           # macOS has desktop.enable too, but no notification daemon for notify-send.
           // lib.optionalAttrs (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {

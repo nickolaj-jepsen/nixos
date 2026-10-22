@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# wt: manage git worktrees. Discovery is git-driven (every worktree registered
-# to the repo, wherever it lives), with the dirs under <repo>/.claude/worktrees/
-# scanned on top to surface orphans (Claude's home, the only dir we know to scan).
+# wt: manage git worktrees. Worktrees live in <root>/<repo>/<name> (root: see
+# WORKTREE_ROOT below), never inside the checkout itself. Discovery stays
+# git-driven (every worktree registered to the repo, wherever it lives), with
+# <root>/<repo>/ and the legacy <repo>/.claude/worktrees/ scanned on top to
+# surface orphans git no longer tracks.
+#
+# `wt guard` is the same layout from the other side: agent hooks call it to
+# refuse `git worktree add` that would escape the root.
 
 usage() {
     cat >&2 <<'EOF'
 Usage:
   wt list                        Show every worktree with state (incl. a (main) row).
-  wt create <name> [<base>]      Create .claude/worktrees/<name> on a new branch <name>
-                                 off <base> (default: <default>); prints its path.
+  wt create <name> [<base>]      Create <root>/<repo>/<name> on a new branch <name> off
+                                 <base> (default: <default>); prints its path.
   wt cd [<name>]                 Print a worktree's path (fzf picker if no name).
   wt clean [--dry-run] [<name>]  Remove safely-removable worktrees; no name cleans every
                                  safe one (never main, never one parked on <default>).
@@ -19,6 +24,11 @@ Usage:
   wt diff [<name>]               Review the diff (committed + uncommitted) vs <default>.
   wt smerge [<name>]             Open the worktree in Sublime Merge.
   wt code [<name>]               Open the worktree in VS Code.
+  wt migrate [--dry-run]         Move this repo's worktrees that live outside the root into
+                                 <root>/<repo>/.
+  wt names                       Print every worktree name, one per line (shell completions).
+  wt guard <command>             Exit 1 with a reason when <command> runs `git worktree add`
+                                 outside the root, else exit 0. Agent hooks call this.
 EOF
 }
 
@@ -45,6 +55,53 @@ find_default_branch() {
         fi
     done
     die "could not determine default branch (no origin/HEAD, no main, no master)"
+}
+
+# --- layout -----------------------------------------------------------------
+
+# One folder per repo, one dir per worktree. Outside the checkout on purpose: a
+# repo never contains its own siblings, so rg/builds/editors don't walk them.
+WORKTREE_ROOT="${WT_WORKTREE_ROOT:-$HOME/worktrees}"
+
+# Directory name of a repo: the checkout holding the shared .git, which is the
+# same for every worktree of it, so creating from a worktree still lands right.
+repo_key() {
+    local common
+    common=$(git -C "${1:-.}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+    common="${common%/.git}"
+    basename "$common"
+}
+
+worktree_dir() {
+    local key
+    key=$(repo_key "$1") || return 1
+    printf '%s/%s\n' "$WORKTREE_ROOT" "$key"
+}
+
+# Lexical normalisation of a path that need not exist yet: no symlink resolution.
+normpath() {
+    local p="$1" part
+    local -a parts=()
+    [[ "$p" == /* ]] || p="$PWD/$p"
+    local IFS=/
+    for part in $p; do
+        case "$part" in
+            ''|.) ;;
+            ..) if (( ${#parts[@]} )); then unset 'parts[-1]'; fi ;;
+            *) parts+=("$part") ;;
+        esac
+    done
+    printf '/%s\n' "$(IFS=/; printf '%s' "${parts[*]}")"
+}
+
+# True when <path> (relative to PWD) stays inside <dir>/.
+in_worktree_root() {
+    local abs
+    [[ -n "$2" ]] || return 1
+    # An unexpanded variable could resolve anywhere, so refuse instead of guessing.
+    [[ "$2" == *'$'* ]] && return 1
+    abs=$(normpath "$2")
+    [[ "$abs" == "$(normpath "$1")"/* ]]
 }
 
 declare -A REG_BRANCH REG_LOCKED
@@ -98,16 +155,18 @@ require_main_on_clean_default() {
 # --- core data --------------------------------------------------------------
 
 # Emit one TSV row per worktree: every registered worktree (main first), plus
-# orphan dirs under <main>/.claude/worktrees/ that git no longer tracks.
+# orphan dirs under the root that git no longer tracks.
 # Fields: name path registered branch state ahead behind locked age_seconds safe_clean is_main
 # 'name' is the path basename; basenames shared across worktrees are
 # disambiguated to <parent>/<base> on the colliding rows only.
 gather_worktrees() {
     local main="$1" default_branch="$2"
-    local wt_dir="$main/.claude/worktrees"
+    local wt_dir scan_dir
+    wt_dir=$(worktree_dir "$main")
 
     # Path set: every registered worktree (main first so it heads the listing),
-    # then orphan dirs under .claude/worktrees/ git doesn't know about.
+    # then orphan dirs under the root and under the pre-root .claude/worktrees/
+    # git doesn't know about (still surfaced so `wt clean` can reap them).
     local -A seen=()
     local -a paths=()
     local p
@@ -116,14 +175,15 @@ gather_worktrees() {
         [[ -n "${seen[$p]+s}" ]] && continue
         paths+=("$p"); seen["$p"]=1
     done
-    if [[ -d "$wt_dir" ]]; then
-        for p in "$wt_dir"/*/; do
+    for scan_dir in "$wt_dir" "$main/.claude/worktrees"; do
+        [[ -d "$scan_dir" ]] || continue
+        for p in "$scan_dir"/*/; do
             [[ -d "$p" ]] || continue
             p="${p%/}"
             [[ -n "${seen[$p]+s}" ]] && continue
             paths+=("$p"); seen["$p"]=1
         done
-    fi
+    done
 
     # Tally basenames so colliding ones can be disambiguated below.
     local -A base_count=()
@@ -301,10 +361,11 @@ cmd_create() {
     [[ -n "$name" ]] || { usage; exit 1; }
 
     # Branch keeps <name> verbatim (slashes allowed); the dir basename flattens
-    # them so the worktree path stays one level under .claude/worktrees/.
+    # them so the worktree path stays one level under the root.
     local branch="$name"
     local dir_name="${name//\//-}"
-    local wt_dir="$MAIN_WT/.claude/worktrees"
+    local wt_dir
+    wt_dir=$(worktree_dir "$MAIN_WT") || die "not inside a git repository"
     local path="$wt_dir/$dir_name"
 
     [[ -e "$path" ]] && die "'$path' already exists"
@@ -849,6 +910,235 @@ cmd_code() {
     : "${branch:-}" "${state:-}" "${ahead:-}" "${behind:-}" "${locked:-}" "${age_s:-}" "${safe_clean:-}"
 }
 
+cmd_names() {
+    local rows
+    rows=$(gather_worktrees "$MAIN_WT" "$DEFAULT_BRANCH")
+    [[ -n "$rows" ]] || return 0
+    printf '%s\n' "$rows" | cut -d $'\x1f' -f1
+}
+
+# Move this repo's worktrees that predate the root into it. git does the moving,
+# so branches and registrations come along; anything dirty, locked, or orphaned
+# is reported and left where it is.
+cmd_migrate() {
+    local dry_run=0
+    while (( $# > 0 )); do
+        case "$1" in
+            --dry-run) dry_run=1; shift ;;
+            *)         die "unknown flag: $1" ;;
+        esac
+    done
+
+    local wt_dir
+    wt_dir=$(worktree_dir "$MAIN_WT")
+
+    local rows
+    rows=$(gather_worktrees "$MAIN_WT" "$DEFAULT_BRANCH")
+
+    (( dry_run == 1 )) || mkdir -p "$wt_dir"
+
+    local moved=0 skipped=0
+    local name path reg branch state ahead behind locked age_s safe_clean is_main dest
+    while IFS=$'\x1f' read -r name path reg branch state ahead behind locked age_s safe_clean is_main; do
+        [[ -n "$path" ]] || continue
+        if (( is_main == 1 )); then continue; fi
+        if [[ "$path" == "$wt_dir"/* ]]; then continue; fi
+
+        if (( reg == 0 )); then
+            info "left orphan $path in place — inspect it, then 'wt clean' or move it yourself"
+            skipped=$(( skipped + 1 ))
+            continue
+        fi
+
+        dest="$wt_dir/$name"
+        if [[ -e "$dest" ]]; then
+            info "skipped $name: $dest already exists"
+            skipped=$(( skipped + 1 ))
+            continue
+        fi
+
+        if (( dry_run == 1 )); then
+            info "would move $path -> $dest"
+            moved=$(( moved + 1 ))
+            continue
+        fi
+
+        if git -C "$MAIN_WT" worktree move "$path" "$dest" 2>/dev/null; then
+            info "moved $name -> $dest"
+            moved=$(( moved + 1 ))
+        else
+            info "skipped $name: git would not move it (locked, or holds submodules); unlock with: git -C '$MAIN_WT' worktree unlock '$path'"
+            skipped=$(( skipped + 1 ))
+        fi
+    done <<<"$rows"
+
+    if (( dry_run == 1 )); then
+        info "would move $moved, $skipped left"
+    elif (( moved > 0 )); then
+        git -C "$MAIN_WT" worktree prune
+        info "moved $moved into $wt_dir, $skipped left alone"
+    else
+        info "nothing to move, $skipped left alone"
+    fi
+
+    : "${branch:-}" "${state:-}" "${ahead:-}" "${behind:-}" "${locked:-}" "${age_s:-}" "${safe_clean:-}"
+}
+
+# --- guard ------------------------------------------------------------------
+
+# Split a shell command into words, dropping quotes and turning each command
+# separator into a __SEP__ token. Expansions are not evaluated: a $var path stays
+# literal, so the guard refuses it rather than guess.
+shell_tokens() {
+    local s="$1" n=${#1} i=0 word="" have=0 c q
+    while (( i < n )); do
+        c=${s:i:1}
+        case "$c" in
+            ' '|$'\t'|$'\r')
+                if (( have )); then printf '%s\x1f' "$word"; word=""; have=0; fi
+                ;;
+            $'\n'|';'|'|'|'&'|'('|')')
+                if (( have )); then printf '%s\x1f' "$word"; word=""; have=0; fi
+                printf '\x1f__SEP__\x1f'
+                ;;
+            "'"|'"')
+                q="$c"
+                i=$(( i + 1 ))
+                while (( i < n )) && [[ "${s:i:1}" != "$q" ]]; do
+                    # A backslash only escapes inside double quotes.
+                    if [[ "$q" == '"' && "${s:i:1}" == "\\" ]] && (( i + 1 < n )); then i=$(( i + 1 )); fi
+                    word+="${s:i:1}"
+                    i=$(( i + 1 ))
+                done
+                have=1
+                ;;
+            \\)
+                i=$(( i + 1 ))
+                word+="${s:i:1}"
+                have=1
+                ;;
+            *)
+                word+="$c"
+                have=1
+                ;;
+        esac
+        i=$(( i + 1 ))
+    done
+    if (( have )); then printf '%s\x1f' "$word"; fi
+}
+
+# Parse a `git [global opts] worktree add [opts] <path>` call that starts at
+# arr[start]. Sets ADD_FOUND, ADD_PATH, ADD_BRANCH (-b/-B value) and ADD_END.
+parse_git_add() {
+    local -n arr="$1"
+    local i=$2 n=${#arr[@]} t
+    ADD_FOUND=0 ADD_PATH="" ADD_BRANCH="" ADD_END=$(( i + 1 ))
+
+    i=$(( i + 1 ))
+    while (( i < n )); do
+        t="${arr[i]}"
+        case "$t" in
+            __SEP__) return 0 ;;
+            -C|-c) i=$(( i + 2 )); continue ;;
+            --git-dir=*|--work-tree=*|--exec-path=*|--namespace=*|--config-env=*|--super-prefix=*)
+                i=$(( i + 1 )); continue ;;
+            -p|-P|--paginate|--no-pager|--bare|--no-replace-objects|--literal-pathspecs|--glob-pathspecs|--noglob-pathspecs|--icase-pathspecs|--no-optional-locks|--no-advice)
+                i=$(( i + 1 )); continue ;;
+            -*) i=$(( i + 1 )); continue ;;
+        esac
+        break
+    done
+
+    [[ "${arr[i]:-}" == worktree && "${arr[i+1]:-}" == add ]] || return 0
+
+    i=$(( i + 2 ))
+    while (( i < n )); do
+        t="${arr[i]}"
+        case "$t" in
+            __SEP__) break ;;
+            --)
+                i=$(( i + 1 ))
+                if (( i < n )) && [[ "${arr[i]}" != __SEP__ ]]; then
+                    ADD_PATH="${arr[i]}"
+                    i=$(( i + 1 ))
+                fi
+                break
+                ;;
+            -b|-B) ADD_BRANCH="${arr[i+1]:-}"; i=$(( i + 2 )); continue ;;
+            --reason) i=$(( i + 2 )); continue ;;
+            -*) i=$(( i + 1 )); continue ;;
+        esac
+        ADD_PATH="$t"
+        i=$(( i + 1 ))
+        break
+    done
+
+    ADD_FOUND=1
+    ADD_END=$i
+}
+
+guard_reason() {
+    local dir="$1" path="$2" branch="${3:-}" name="<name>"
+    if [[ -n "$path" && "$path" != *'$'* ]]; then
+        name=$(basename "$path")
+    fi
+    [[ -n "$branch" ]] || branch="<branch>"
+    cat <<EOF
+Blocked: git worktree add outside the shared worktree root.
+Worktrees live in $WORKTREE_ROOT/<repo>/, never inside a checkout, so they don't pile up.
+Use one of:
+  wt create $name <base>                 # new branch off <base> (default: the default branch)
+  git worktree add $dir/$name $branch    # keeps the branch you asked for
+EOF
+}
+
+# Exit 1 with a reason when <command> would create a worktree outside the root,
+# exit 0 when it stays inside (or there is no repo to steer).
+cmd_guard() {
+    (( $# == 1 )) || return 0
+
+    local cmd="$1" dir
+    dir=$(worktree_dir .) || return 0
+
+    local -a toks=()
+    local tok
+    while IFS= read -r -d $'\x1f' tok; do toks+=("$tok"); done < <(shell_tokens "$cmd")
+
+    local i=0 n=${#toks[@]} at_start=1 block=0 offender=""
+    while (( i < n )); do
+        tok="${toks[i]}"
+        if [[ "$tok" == __SEP__ ]]; then
+            at_start=1
+            i=$(( i + 1 ))
+            continue
+        fi
+        if (( at_start )); then
+            case "$tok" in
+                *=*) i=$(( i + 1 )); continue ;;
+                command|builtin|exec|nohup|time|nice|sudo|env) i=$(( i + 1 )); continue ;;
+                git|*/git)
+                    parse_git_add toks "$i"
+                    if (( ADD_FOUND )); then
+                        if ! in_worktree_root "$dir" "$ADD_PATH"; then
+                            block=1
+                            offender="$ADD_PATH"
+                        fi
+                        i=$ADD_END
+                        at_start=0
+                        continue
+                    fi
+                    ;;
+            esac
+            at_start=0
+        fi
+        i=$(( i + 1 ))
+    done
+
+    (( block )) || return 0
+    guard_reason "$dir" "$offender" "$ADD_BRANCH"
+    return 1
+}
+
 # --- main -------------------------------------------------------------------
 
 if (( $# == 0 )); then
@@ -857,6 +1147,14 @@ if (( $# == 0 )); then
 fi
 
 verb="$1"; shift
+
+# Guard runs inside agent hooks, which may sit outside any repo, and exit 1 means
+# "blocked" — so it must not go through the repo-required prelude below.
+if [[ "$verb" == guard ]]; then
+    cmd_guard "$@"
+    exit $?
+fi
+
 MAIN_WT=$(find_main_worktree)
 DEFAULT_BRANCH=$(find_default_branch "$MAIN_WT")
 build_registration_maps "$MAIN_WT"
@@ -870,6 +1168,8 @@ case "$verb" in
     diff)            cmd_diff "$@" ;;
     smerge)          cmd_smerge "$@" ;;
     code)            cmd_code "$@" ;;
+    migrate)         cmd_migrate "$@" ;;
+    names)           cmd_names "$@" ;;
     -h|--help|help)  usage ;;
     *)               usage; exit 1 ;;
 esac
