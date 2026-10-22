@@ -21,11 +21,6 @@
           enable = true;
           servers = {
             figma.url = "https://mcp.figma.com/mcp";
-            # npx, not pkgs.snyk: `snyk mcp` lives in the Go CLI the npm package fetches.
-            snyk = {
-              command = "${pkgs.nodejs}/bin/npx";
-              args = ["-y" "snyk@1.1307.3" "mcp" "-t" "stdio"];
-            };
           };
         };
       }
