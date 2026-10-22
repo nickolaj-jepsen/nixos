@@ -5,8 +5,11 @@
     ...
   }: let
     c = config.fireproof.theme.colors;
+    s = config.fireproof.theme.semantic;
     hex = name: "#${c.${name}}";
     hexA = name: alpha: "#${c.${name}}${alpha}";
+    sem = name: "#${s.${name}}";
+    semA = name: alpha: "#${s.${name}}${alpha}";
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.zed-editor = {
@@ -97,7 +100,7 @@
                 # Drop targets, search
                 "drop_target.background" = hexA "accent" "33";
                 "search.match_background" = hexA "accent" "44";
-                "link_text.hover" = hex "blue";
+                "link_text.hover" = sem "link";
 
                 # Icons
                 icon = "#dedede";
@@ -107,38 +110,38 @@
                 "icon.accent" = hex "accent";
 
                 # Status indicators
-                error = hex "red";
-                "error.background" = hexA "red" "22";
-                "error.border" = hex "red";
-                warning = hex "yellow";
-                "warning.background" = hexA "yellow" "22";
-                "warning.border" = hex "yellow";
-                success = hex "green";
-                "success.background" = hexA "green" "22";
-                "success.border" = hex "green";
-                info = hex "blue";
-                "info.background" = hexA "blue" "22";
-                "info.border" = hex "blue";
-                hint = hex "cyan";
-                "hint.background" = hexA "cyan" "22";
-                "hint.border" = hex "cyan";
+                error = sem "error";
+                "error.background" = semA "error" "22";
+                "error.border" = sem "error";
+                warning = sem "warning";
+                "warning.background" = semA "warning" "22";
+                "warning.border" = sem "warning";
+                success = sem "success";
+                "success.background" = semA "success" "22";
+                "success.border" = sem "success";
+                info = sem "info";
+                "info.background" = semA "info" "22";
+                "info.border" = sem "info";
+                hint = sem "hint";
+                "hint.background" = semA "hint" "22";
+                "hint.border" = sem "hint";
 
                 # Git/file status (matches VSCode gitDecoration mapping)
-                created = hex "green";
-                "created.background" = hexA "green" "22";
-                "created.border" = hex "green";
-                modified = hex "yellow";
-                "modified.background" = hexA "yellow" "22";
-                "modified.border" = hex "yellow";
-                deleted = hex "red";
-                "deleted.background" = hexA "red" "22";
-                "deleted.border" = hex "red";
-                renamed = hex "cyan";
-                "renamed.background" = hexA "cyan" "22";
-                "renamed.border" = hex "cyan";
-                conflict = hex "magenta";
-                "conflict.background" = hexA "magenta" "22";
-                "conflict.border" = hex "magenta";
+                created = sem "added";
+                "created.background" = semA "added" "22";
+                "created.border" = sem "added";
+                modified = sem "modified";
+                "modified.background" = semA "modified" "22";
+                "modified.border" = sem "modified";
+                deleted = sem "removed";
+                "deleted.background" = semA "removed" "22";
+                "deleted.border" = sem "removed";
+                renamed = sem "renamed";
+                "renamed.background" = semA "renamed" "22";
+                "renamed.border" = sem "renamed";
+                conflict = sem "conflict";
+                "conflict.background" = semA "conflict" "22";
+                "conflict.border" = sem "conflict";
                 ignored = hex "muted";
                 "ignored.background" = hexA "muted" "22";
                 "ignored.border" = hex "muted";

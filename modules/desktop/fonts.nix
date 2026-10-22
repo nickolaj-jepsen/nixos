@@ -9,29 +9,28 @@
     ...
   }: {
     config = lib.mkIf config.fireproof.desktop.enable {
-      fonts.packages = [config.fireproof.theme.font.package];
+      fonts.packages = [
+        config.fireproof.theme.font.package
+        config.fireproof.theme.font.sans.package
+      ];
     };
   };
 
   flake.modules.nixos.fonts = {
     config,
     lib,
-    pkgs,
     ...
   }: {
     config = lib.mkIf config.fireproof.desktop.enable {
       fonts.enableDefaultPackages = true;
       fonts.packages = [
         config.fireproof.theme.font.package
-        # DMS theme.nix requests "Inter Variable" as the shell UI font; without
-        # this the whole bar/launcher/control-center silently falls back to
-        # DejaVu Sans. The `inter` package registers the "Inter Variable" family.
-        pkgs.inter
+        config.fireproof.theme.font.sans.package
       ];
       # Pin generic-family fallbacks so apps asking for "sans-serif"/"monospace"
       # (GTK/Qt, web defaults) resolve to our fonts rather than fontconfig's guess.
       fonts.fontconfig.defaultFonts = {
-        sansSerif = ["Inter"];
+        sansSerif = [config.fireproof.theme.font.sans.family];
         monospace = [config.fireproof.theme.font.monoFamily];
         emoji = ["Noto Color Emoji"];
       };

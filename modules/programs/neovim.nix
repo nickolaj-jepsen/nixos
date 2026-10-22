@@ -63,7 +63,7 @@
             base04 = "#${c.fgAlt}";
             base05 = "#${c.fg}";
             base06 = "#${c.whiteAlt}";
-            base07 = "#${c.white}";
+            base07 = "#${c.fg}";
             base08 = "#${c.red}";
             base09 = "#${c.orange}";
             base0A = "#${c.yellow}";

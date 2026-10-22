@@ -6,6 +6,7 @@
     ...
   }: let
     c = config.fireproof.theme.colors;
+    s = config.fireproof.theme.semantic;
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       xdg.configFile."DankMaterialShell/colors.json".text = builtins.toJSON {
@@ -27,10 +28,10 @@
         surfaceVariantText = "#${c.fgAlt}";
         surfaceTint = "#${c.accent}";
         outline = "#${c.muted}";
-        error = "#${c.red}";
-        warning = "#${c.yellow}";
-        info = "#${c.blue}";
-        success = "#${c.green}";
+        error = "#${s.error}";
+        warning = "#${s.warning}";
+        info = "#${s.info}";
+        success = "#${s.success}";
         # matugen_type omitted: dead key with dynamic theming off / fixed palette
       };
 
@@ -44,7 +45,7 @@
 
         cornerRadius = 8;
 
-        fontFamily = "Inter Variable";
+        fontFamily = config.fireproof.theme.font.sans.family;
         monoFontFamily = config.fireproof.theme.font.monoFamily;
         fontWeight = 400;
         fontScale = 1;

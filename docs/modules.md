@@ -46,7 +46,7 @@ Rules:
 ## Options: nested + cascading
 
 All `fireproof.*` options are declared centrally in
-`modules/base/fireproof.nix` (theme in `modules/base/theme.nix`), emitted to
+`modules/base/fireproof.nix` (theme in `modules/base/theme/`), emitted to
 all module classes. Children default to their parent
 (`desktop.chromium.enable` → `desktop.enable`; `hardware.physical` →
 `!wsl.enable`; …), so hosts set parent toggles and override exceptions — this
@@ -72,7 +72,10 @@ standalone guard, so an osConfig read fails CI.
 ## Snippets
 
 - Theme: `let c = config.fireproof.theme.colors; in { background = c.bg; border = "#${c.accent}"; }`
-  (values have no `#` prefix).
+  (values have no `#` prefix). For meaning (error, warning, added, …) read
+  `config.fireproof.theme.semantic.*`, not a raw hue.
+- Brand assets (logo SVGs, `tokens.css`): `config.fireproof.theme.designSystem`;
+  see `docs/design-system.md`.
 - Unstable packages: `pkgs.unstable.<pkg>` (overlay on the pkgs set; shares the
   host's `nixpkgs.config`).
 - `fpLib` (see below): helpers such as `mkVirtualHost`, `mkPostgresDB` and

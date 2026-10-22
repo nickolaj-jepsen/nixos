@@ -5,6 +5,7 @@
     ...
   }: let
     c = config.fireproof.theme.colors;
+    s = config.fireproof.theme.semantic;
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.vscode.profiles.default.userSettings = {
@@ -64,9 +65,9 @@
           "editorGroupHeader.tabsBackground" = "#${c.bg}";
           "editorWidget.background" = "#${c.bgAlt}";
           "editorWidget.border" = "#${c.ui}";
-          "editorGutter.addedBackground" = "#${c.green}";
-          "editorGutter.modifiedBackground" = "#${c.blue}";
-          "editorGutter.deletedBackground" = "#${c.red}";
+          "editorGutter.addedBackground" = "#${s.added}";
+          "editorGutter.modifiedBackground" = "#${s.modified}";
+          "editorGutter.deletedBackground" = "#${s.removed}";
 
           # Tabs
           "tab.activeBackground" = "#${c.bgAlt}";
@@ -156,16 +157,16 @@
           "breadcrumb.activeSelectionForeground" = "#${c.fg}";
 
           # Git decorations (matching default VSCode conventions)
-          "gitDecoration.addedResourceForeground" = "#${c.green}";
-          "gitDecoration.modifiedResourceForeground" = "#${c.yellow}";
-          "gitDecoration.deletedResourceForeground" = "#${c.red}";
-          "gitDecoration.renamedResourceForeground" = "#${c.cyan}";
-          "gitDecoration.untrackedResourceForeground" = "#${c.green}";
+          "gitDecoration.addedResourceForeground" = "#${s.added}";
+          "gitDecoration.modifiedResourceForeground" = "#${s.modified}";
+          "gitDecoration.deletedResourceForeground" = "#${s.removed}";
+          "gitDecoration.renamedResourceForeground" = "#${s.renamed}";
+          "gitDecoration.untrackedResourceForeground" = "#${s.added}";
           "gitDecoration.ignoredResourceForeground" = "#${c.muted}";
-          "gitDecoration.conflictingResourceForeground" = "#${c.magenta}";
+          "gitDecoration.conflictingResourceForeground" = "#${s.conflict}";
           "gitDecoration.submoduleResourceForeground" = "#${c.blue}";
-          "gitDecoration.stageModifiedResourceForeground" = "#${c.yellow}";
-          "gitDecoration.stageDeletedResourceForeground" = "#${c.red}";
+          "gitDecoration.stageModifiedResourceForeground" = "#${s.modified}";
+          "gitDecoration.stageDeletedResourceForeground" = "#${s.removed}";
 
           # Peek view
           "peekView.border" = "#${c.accent}";
@@ -183,7 +184,7 @@
           # Minimap
           "minimap.findMatchHighlight" = "#${c.accent}";
           "minimap.selectionHighlight" = "#${c.accent}44";
-          "minimap.errorHighlight" = "#${c.red}";
+          "minimap.errorHighlight" = "#${s.error}";
 
           # Command palette / quick input
           "quickInput.background" = "#${c.bgAlt}";
@@ -191,8 +192,8 @@
           "quickInputTitle.background" = "#${c.ui}";
 
           # Diff editor
-          "diffEditor.insertedTextBackground" = "#${c.green}22";
-          "diffEditor.removedTextBackground" = "#${c.red}22";
+          "diffEditor.insertedTextBackground" = "#${s.added}22";
+          "diffEditor.removedTextBackground" = "#${s.removed}22";
 
           # Focus borders
           "focusBorder" = "#${c.accent}88";

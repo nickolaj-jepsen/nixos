@@ -22,7 +22,8 @@
         dockIndicatorStyle = "line";
 
         dockLauncherEnabled = true;
-        dockLauncherLogoMode = "os";
+        dockLauncherLogoMode = "custom";
+        dockLauncherLogoCustomPath = "${config.fireproof.theme.designSystem}/logo/flame-color.svg";
       };
     };
   };
