@@ -125,7 +125,7 @@ in {
           # Kagi search/extract; cheaper in context than a full web-access extension.
           "npm:@mjakl/pi-kagi-api@0.1.0"
           # guardrails
-          "npm:@gotgenes/pi-permission-system@40.2.0"
+          "npm:@gotgenes/pi-permission-system@41.0.0"
           # context diet
           "npm:pi-cache-optimizer@2.8.24"
           # ui
@@ -278,9 +278,18 @@ in {
           bash = {
             # Explicit, or the top-level "*" still applies but warns at startup.
             "*" = "allow";
+            # Bash rules are last-match-wins and Nix sorts these keys, so the
+            # generic allow above stays first and narrower rules follow it.
+            # Relative cleanup is routine; the destructive shapes still prompt.
+            "rm * $*" = "ask";
+            "rm * .*" = "ask";
+            "rm * /" = "deny";
+            "rm * /?*" = "ask";
+            "rm * /tmp/*" = "allow";
+            "rm * /tmp/..*" = "ask";
+            "rm * ~*" = "ask";
             "rm -rf /" = "deny";
             "sudo rm *" = "deny";
-            "rm -rf *" = "ask";
             "sudo *" = "ask";
             "git push --force*" = "ask";
             # Mirrors claude-code's ask list: these touch the live system or the outside world.
