@@ -61,24 +61,16 @@ const BRANCH_GLYPH = "\uf418";
 const DETACHED_GLYPH = "\uf417";
 const WORKTREE_GLYPH = "\uf1bb";
 
-// Display-only patterns applied to catalog names, so new models in the same
-// families shorten without an edit. Explicit aliases below win for exceptions.
+// Long, well-known lab names only; Qwen, Claude, GLM, Kimi, Nemotron and
+// LongCat keep their catalog names.
 const MODEL_ALIAS_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\s*-\s*/g, " "],
   [/\bDeepSeek\b/gi, "DS"],
   [/\bMiniMax\b/gi, "MM"],
-  [/\bQwen(?=\d|\s)/gi, "QW "],
-  [/\bClaude\s+/gi, ""],
-  [/\s*\bFlash\b/gi, " \uf0e7"],
-  [/\s*\bFree\b/gi, ""],
-  [/\s*\bPreview\b/gi, ""],
 ];
 
-// Exceptions the patterns cannot express; add an entry here when a model
-// needs a name of its own.
-const MODEL_ALIASES: Record<string, string> = {
-  "qwen/qwen3.8-flash-next": "QW 3.8 Next",
-};
+// Exceptions the patterns cannot express; add an entry when a model needs a
+// name of its own.
+const MODEL_ALIASES: Record<string, string> = {};
 
 const modelAlias = (model: ActiveModel): string => {
   const explicit = MODEL_ALIASES[model.id];
