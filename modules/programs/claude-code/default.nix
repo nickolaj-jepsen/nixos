@@ -12,48 +12,14 @@
     homeDir = config.home.homeDirectory;
 
     # Surfaces session state that settings.json can't pin (model, effort as
-    # changed by /effort, fast mode) plus which profile is running — claude-work shares this
+    # changed by /effort, fast mode), git state and the last response's
+    # throughput, plus which profile is running — claude-work shares this
     # file and CLAUDE.md by symlink, so nothing else distinguishes the two.
     # ANSI codes only, so the ghostty Flexoki palette stays authoritative.
     statusLine = pkgs.writeShellApplication {
       name = "claude-statusline";
-      runtimeInputs = [pkgs.jq];
-      text = ''
-        profile=personal
-        case "''${CLAUDE_CONFIG_DIR:-}" in
-          *.claude-work) profile=work ;;
-        esac
-
-        jq -r \
-          --arg profile "$profile" \
-          --arg dim "$(printf '\033[2m')" \
-          --arg warn "$(printf '\033[33m')" \
-          --arg reset "$(printf '\033[0m')" '
-            def pct: (.context_window.used_percentage // 0);
-            # resets_at is epoch seconds per the docs; the ISO branch is a guard, not a known format.
-            def hhmm: (if type == "number" then . else sub("\\.[0-9]+"; "") | fromdateiso8601 end)
-              | strflocaltime("%H:%M");
-            # Plan limits are absent on API-key sessions and before the first response.
-            def limit($label; $window; $withReset):
-              ($window.used_percentage // 0) as $p
-              | if $p < 70 then empty
-                else "\($warn)\($label) \($p | floor)%"
-                  + (if $withReset then (try " ↻\($window.resets_at | hhmm)" catch "") else "" end)
-                  + $reset
-                end;
-            [
-              (if $profile == "work" then "\($warn)work\($reset)" else empty end),
-              .model.display_name,
-              (.effort.level // empty),
-              (if .fast_mode then "fast" else empty end),
-              (if pct > 80
-               then "\($warn)\(pct)%\($reset)"
-               else "\($dim)\(pct)%\($reset)" end),
-              limit("5h"; .rate_limits.five_hour; true),
-              limit("7d"; .rate_limits.seven_day; false)
-            ] | join("\($dim) · \($reset)")
-          '
-      '';
+      runtimeInputs = [pkgs.jq pkgs.git pkgs.coreutils];
+      text = builtins.readFile ./statusline.sh;
     };
 
     # Loads the cwd's direnv/nix-direnv env into the Bash tool, which otherwise
