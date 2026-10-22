@@ -15,6 +15,7 @@
       cp -r ${./plugin} $out
       chmod -R u+w $out
       sed 's/<svg /<svg fill="#fff" /' ${simpleIcon "claude" "sha256-LW/aeesY3czKNbeZ7rPOzg36vCJSDOOxCr0lZo35+pM="} > $out/icons/claude.svg
+      sed 's/<svg /<svg fill="#fff" /' ${simpleIcon "anthropic" "sha256-HMWZ9uvOIBbcOIz4TlSlLGsTSHZVx+JDVU1lTHvOGII="} > $out/icons/anthropic.svg
       sed 's/<svg /<svg fill="#fff" /' ${simpleIcon "githubcopilot" "sha256-xyweABjoSzEoxaGsQ+wr4TWsbsTrnA6hjtdkFtI/KvM="} > $out/icons/copilot.svg
     '';
   in {

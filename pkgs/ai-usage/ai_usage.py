@@ -1,4 +1,6 @@
-"""Print quota windows for AI agent subscriptions, as a table or as JSON.
+"""Print quota windows (and credit allowance spend) for AI agent subscriptions.
+
+Output is a table, or JSON with --json.
 
 Providers come from $XDG_CONFIG_HOME/ai-usage/config.json (written by the
 ai-usage home-manager leaf). Each provider's last result is cached per id for
@@ -18,6 +20,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlencode
 
 CACHE_TTL = timedelta(minutes=2)
 # Bump when the cached entry shape changes, so an upgrade discards old entries.
@@ -47,16 +50,37 @@ def month_before(t):
     return t.replace(year=year, month=month, day=min(t.day, calendar.monthrange(year, month)[1]))
 
 
+def credit_arrival(day, year, month):
+    return datetime(year, month, min(day, calendar.monthrange(year, month)[1]), tzinfo=timezone.utc)
+
+
+def credit_cycle(day, t):
+    """The cycle containing `t`: credits arrive each month at `day`, clamped to its last."""
+    year, month = t.year, t.month
+    if credit_arrival(day, year, month) <= t:
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    resets = credit_arrival(day, year, month)
+    prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
+    return credit_arrival(day, prev_year, prev_month), resets
+
+
 def money(amount, currency):
     text = f"{amount:.2f}".removesuffix(".00")
     symbol = CURRENCY_SYMBOLS.get(currency)
     return f"{symbol}{text}" if symbol else f"{text} {currency}".rstrip()
 
 
-def window(label, used_pct, resets_at, length, ring=None, detail=None):
+def keeps(p, key):
+    """A provider's `windows` list, when present, is the allowlist of raw window keys."""
+    wanted = p.get("windows")
+    return not wanted or key in wanted
+
+
+def window(label, used_pct, resets_at, length, ring=None, detail=None, starts=None):
     """A quota window; `length` is a timedelta, or "month" for a calendar month."""
     resets = parse_time(resets_at) if isinstance(resets_at, str) else resets_at
-    starts = month_before(resets) if length == "month" else resets - length
+    if starts is None:
+        starts = month_before(resets) if length == "month" else resets - length
     return {
         "label": label,
         "usedPct": round(float(used_pct), 1),
@@ -124,6 +148,8 @@ def fetch_claude(p):
         ("seven_day_opus", "7d Opus", timedelta(days=7), None),
         ("seven_day_sonnet", "7d Sonnet", timedelta(days=7), None),
     ]:
+        if not keeps(p, key):
+            continue
         w = data.get(key)
         if w and w.get("utilization") is not None and w.get("resets_at"):
             windows.append(window(label, w["utilization"], w["resets_at"], length, ring))
@@ -142,10 +168,10 @@ def fetch_claude(p):
 
 
 def fetch_opencode_go(p):
-    key = Path(p["keyFile"]).read_text().strip()
+    token = Path(p["keyFile"]).read_text().strip()
     data = http_json(
         "https://opencode.ai/zen/go/v1/usage",
-        {"Authorization": f"Bearer {key}", "User-Agent": "ai-usage"},
+        {"Authorization": f"Bearer {token}", "User-Agent": "ai-usage"},
     )
     usage = data.get("usage") or {}
     windows = []
@@ -154,10 +180,68 @@ def fetch_opencode_go(p):
         ("weekly", "7d", timedelta(days=7), "inner"),
         ("monthly", "month", "month", None),
     ]:
+        if not keeps(p, key):
+            continue
         w = usage.get(key)
         if w and w.get("percent") is not None and w.get("resetsAt"):
             windows.append(window(label, w["percent"], w["resetsAt"], length, ring))
     return {"windows": windows, "overage": None}
+
+
+def anthropic_spend(token, starts, ends):
+    """Organization spend in USD over [starts, ends), following pagination."""
+    # Amounts are decimal strings in dollars (the reference response carries five
+    # decimals), despite the guide calling them cents.
+    headers = {"x-api-key": token, "anthropic-version": "2023-06-01", "User-Agent": "ai-usage"}
+    total, page = 0.0, None
+    while True:
+        query = {
+            "starting_at": starts.isoformat(),
+            "ending_at": ends.isoformat(),
+            "bucket_width": "1d",
+            "limit": 31,
+        }
+        if page:
+            query["page"] = page
+        data = http_json(
+            "https://api.anthropic.com/v1/organizations/cost_report?" + urlencode(query), headers
+        )
+        for bucket in data.get("data") or []:
+            for result in bucket.get("results") or []:
+                total += float(result.get("amount") or 0)
+        page = data.get("next_page")
+        if not data.get("has_more") or not page:
+            return total
+
+
+def fetch_anthropic_credits(p):
+    """Spend against the platform credit allowance that arrives each Max cycle.
+
+    Lasts until a balance endpoint exists; the credits expire at the end of the
+    cycle, so `allowance - spend` is what is left to burn.
+    """
+    token = Path(p["keyFile"]).read_text().strip()
+    allowance = float(p["allowance"])
+    currency = p.get("currency", "USD")
+    t = now()
+    starts, resets = credit_cycle(int(p["creditDay"]), t)
+    try:
+        spent = anthropic_spend(token, starts, t)
+    except FetchError as e:
+        if str(e) in ("HTTP 401", "HTTP 403"):
+            raise FetchError(f"cost report rejected the key ({e}); it needs org-level access") from e
+        raise
+    used = spent / allowance * 100 if allowance else 0
+    detail = f"{money(spent, currency)} of {money(allowance, currency)} spent"
+    return {
+        "windows": [window("credit", used, resets, "month", "outer", detail, starts)],
+        "overage": None,
+        "credit": {
+            "remaining": round(max(0.0, allowance - spent), 2),
+            "allowance": allowance,
+            "currency": currency,
+        },
+    }
 
 
 def fetch_copilot(p):
@@ -192,6 +276,7 @@ def fetch_copilot(p):
 
 FETCHERS = {
     "claude": fetch_claude,
+    "anthropic-credits": fetch_anthropic_credits,
     "opencode-go": fetch_opencode_go,
     "copilot": fetch_copilot,
 }
@@ -286,6 +371,7 @@ def collect(config, refresh):
             "error": e.get("error"),
             "windows": [pace(w, t) for w in e.get("windows", [])],
             "overage": e.get("overage"),
+            "credit": e.get("credit"),
         })
     return {"generatedAt": t.isoformat(), "providers": out}
 
