@@ -3,9 +3,9 @@
     fireproof.hostname = "homelab";
 
     fireproof.dev.enable = true;
-    # headless: skip the heavy editor/agent layers
+    # headless: skip the heavy editor layer and the second agent
     fireproof.neovim.full.enable = false;
-    fireproof.dev.pi.enable = false;
+    fireproof.dev.pi.enable = true;
     fireproof.dev.opencode.enable = false;
     fireproof.homelab.enable = true;
     fireproof.networkd.enable = true;
