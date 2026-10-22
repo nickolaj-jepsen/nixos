@@ -145,13 +145,39 @@ in {
         mode = "0600";
       };
 
+      age.secrets.anthropic-api-key = {
+        rekeyFile = ../../../secrets/anthropic-api-key.age;
+        path = "${config.home.homeDirectory}/.pi/agent/anthropic-api-key";
+        mode = "0600";
+      };
+
       # Not the module's `models` option — it only writes once, never updates.
       home.file.".pi/agent/models.json".text = builtins.toJSON {
         providers =
           {
-            # Not OPENCODE_API_KEY: the pay-per-token Zen provider (`opencode`)
-            # reads that too and would list its models next to the Go ones.
+            # One secret: Zen and Go share an OpenCode account key. Zen's paid
+            # models never reach /model, since extensions/curated-models.ts
+            # replaces its catalog.
+            opencode.apiKey = "!cat ${config.age.secrets.opencode-go-api-key.path}";
             opencode-go.apiKey = "!cat ${config.age.secrets.opencode-go-api-key.path}";
+            # API credits, not the Max subscription: run /login anthropic and
+            # that stored OAuth credential would take precedence over this.
+            anthropic.apiKey = "!cat ${config.age.secrets.anthropic-api-key.path}";
+            tensorx = {
+              baseUrl = "https://api.tensorx.ai/v1";
+              api = "openai-completions";
+              apiKey = "!cat ${config.age.secrets.tensorx-api-key.path}";
+              compat = {
+                supportsStore = false;
+                supportsDeveloperRole = false;
+                supportsReasoningEffort = true;
+                maxTokensField = "max_tokens";
+                supportsStrictMode = false;
+                thinkingFormat = "openai";
+                sendSessionAffinityHeaders = true;
+              };
+              models = import ./_tensorx-models.nix;
+            };
           }
           // lib.optionalAttrs config.fireproof.dev.llm.enable {
             # Served by llama-swap (modules/programs/llm.nix), which unloads one

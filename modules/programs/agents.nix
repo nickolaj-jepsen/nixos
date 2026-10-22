@@ -50,7 +50,7 @@
       }
 
       (lib.mkIf (config.fireproof.dev.pi.enable || config.fireproof.dev.opencode.enable) {
-        # Literal path in pi's agent dir: pi's extensions/tensorx.ts reads it there, and opencode's {file:} expands only `~/`.
+        # Literal path in pi's agent dir: pi's models.json reads it there, and opencode's {file:} expands only `~/`.
         age.secrets.tensorx-api-key = {
           rekeyFile = ../../secrets/tensorx-api-key.age;
           path = "${config.home.homeDirectory}/.pi/agent/tensorx-api-key";
