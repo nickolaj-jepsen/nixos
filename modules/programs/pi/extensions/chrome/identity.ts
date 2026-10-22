@@ -12,22 +12,21 @@
  * compaction boundary, which bounds the cost of a feature that only has to help
  * you pick a window.
  *
- * The border belongs to the editor, and `spellfix.ts` already installs one, so
- * this wraps whatever editor factory is installed after startup instead of
- * replacing it (see `ensureInstalled`). `alt`/`shift` clicking passes through so
- * the transcript stays selectable. The label never becomes the session name if
- * you already ran `/name`; the first model label becomes it once so `/resume`
- * shows something useful.
+ * The border belongs to the editor; the wrapper in `editor.ts` calls `drawTop`
+ * for the border row. The label never becomes the session name if you already
+ * ran `/name`; the first model label becomes it once so `/resume` shows
+ * something useful.
  */
 import { homedir } from "node:os";
 import { basename, relative, sep } from "node:path";
 import {
-  CustomEditor,
   copyToClipboard,
   type ExtensionAPI,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import type { Region } from "./layout.ts";
+import type { ChromeState } from "./state.ts";
 
 type Phase = "working" | "idle" | "waiting" | "failed";
 type Source = "name" | "prompt" | "cwd" | "model" | "manual";
@@ -131,9 +130,7 @@ const shortPath = (cwd: string) => {
   return parts.length <= 2 ? `/${parts.join("/")}` : `/${parts[0]}/…/${parts[parts.length - 1]}`;
 };
 
-export default function (pi: ExtensionAPI) {
-  let ctxRef: ExtensionContext | undefined;
-  let tuiRef: { requestRender(): void } | undefined;
+export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   let timer: ReturnType<typeof setInterval> | undefined;
   let spinTimer: ReturnType<typeof setInterval> | undefined;
   let spin = 0;
@@ -151,7 +148,7 @@ export default function (pi: ExtensionAPI) {
   // branch leaf that produced them rather than persisted.
   let derivedCache: { leaf: string | null; text: string; source: Source } | undefined;
 
-  const sessionId = () => ctxRef?.sessionManager.getSessionId() ?? "";
+  const sessionId = () => state.ctx?.sessionManager.getSessionId() ?? "";
   const shortId = () => sessionId().slice(0, 8);
 
   const setPhase = (next: Phase) => {
@@ -223,7 +220,7 @@ export default function (pi: ExtensionAPI) {
   };
 
   const paint = () => {
-    const ctx = ctxRef;
+    const ctx = state.ctx;
     if (!ctx) return;
     if (ctx.mode === "tui" && ctx.hasUI) {
       // Every tool call repaints; only rewrite the title when it changed, so the
@@ -234,7 +231,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.setTitle(title);
       }
     }
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
   };
 
   /**
@@ -261,24 +258,24 @@ export default function (pi: ExtensionAPI) {
    * Detail is shed before the label is shortened, and the path outlives the
    * session id because the path answers the glance question.
    */
-  const borderSides = (width: number, overflow: string, border: (text: string) => string) => {
-    const ctx = ctxRef;
+  const borderSides = (width: number, hidden: number, border: (text: string) => string) => {
+    const ctx = state.ctx;
     if (!ctx) return { left: "", right: "" };
     const theme = ctx.ui.theme;
     const { text } = currentLabel(ctx);
     const age = formatAge(Date.now() - since);
-    const state = stateWord(phase);
+    const stateText = stateWord(phase);
     const id = shortId();
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
     // so it belongs next to the label rather than in the session detail.
-    const hint = overflow ? ` ↑${overflow}` : "";
+    const hint = hidden > 0 ? ` ↑${hidden}` : "";
     const rows: string[][] = [
-      [shortPath(cwd), age, state, id],
-      [shortPath(cwd), state, id],
-      [shortPath(cwd), state],
+      [shortPath(cwd), age, stateText, id],
+      [shortPath(cwd), stateText, id],
+      [shortPath(cwd), stateText],
       // State outlives the path: it is the part that asks you to look.
-      [state, id],
-      [state],
+      [stateText, id],
+      [stateText],
       [shortPath(cwd)],
       [],
     ];
@@ -291,8 +288,8 @@ export default function (pi: ExtensionAPI) {
     for (const row of rows) {
       const parts = row.filter(Boolean);
       const sized = parts.map((part) =>
-        part === state
-          ? theme.fg(state === "failed" ? "error" : "warning", part)
+        part === stateText
+          ? theme.fg(stateText === "failed" ? "error" : "warning", part)
           : theme.fg("dim", part),
       );
       const right = parts.length > 0 ? ` ${sized.join(separator)}${tail}` : "";
@@ -307,87 +304,14 @@ export default function (pi: ExtensionAPI) {
     return { left: "", right: "" };
   };
 
-  const TAB = /\x1b\[[0-9;]*[A-Za-z]/g;
-
-  /** Pi reports scrolled editor content as `↑ N more` in its own border. */
-  const overflowOf = (line: string) => /↑\s*(\d+)\s*more/.exec(line.replace(TAB, ""))?.[1];
-
-  const drawBorder = (
+  const drawTop = (
     width: number,
-    overflow: string,
+    hidden: number,
     border: (text: string) => string,
-  ): string => {
-    const { left, right } = borderSides(width, overflow, border);
+  ): { line: string; regions: Region[] } => {
+    const { left, right } = borderSides(width, hidden, border);
     const fill = Math.max(0, width - visibleWidth(left) - visibleWidth(right));
-    return left + (fill > 0 ? border("─".repeat(fill)) : "") + right;
-  };
-
-  /**
-   * Replace the editor's top border without owning the editor: a proxy forwards
-   * everything pi wires up (submit, text, keybindings, border color) and only
-   * `render` and `handleMouse` are intercepted.
-   */
-  const decorate = (
-    inner: { render(width: number): string[]; handleMouse?(event: TuiMouseEvent): unknown },
-    tui: { requestRender(): void },
-  ) => {
-    tuiRef = tui;
-    return new Proxy(inner, {
-      get(target, property) {
-        if (property === "render") {
-          return (width: number) => {
-            const lines = target.render(width);
-            if (!ctxRef || width <= 0 || lines.length === 0) return lines;
-            // Resolved per render: pi assigns its own border color after the
-            // factory returns, and that is the one that tracks the editor mode.
-            const color = (target as { borderColor?: (text: string) => string }).borderColor;
-            const border =
-              typeof color === "function" ? color.bind(target) : (text: string) => text;
-            lines[0] = drawBorder(width, overflowOf(lines[0] ?? "") ?? "", border);
-            return lines;
-          };
-        }
-        if (property === "handleMouse") {
-          return (event: TuiMouseEvent) => {
-            // Only the border row: the input area keeps its click-to-place-cursor.
-            const plain = event.button === "left" && !event.alt && !event.shift && !event.ctrl;
-            if (event.type === "click" && plain && event.y === 0) {
-              if (ctxRef) void relabel(ctxRef, true);
-              return { handled: true };
-            }
-            return target.handleMouse?.(event);
-          };
-        }
-        return Reflect.get(target, property, target);
-      },
-      set(target, property, value) {
-        return Reflect.set(target, property, value, target);
-      },
-      has(target, property) {
-        return Reflect.has(target, property);
-      },
-    });
-  };
-
-  let installed: ((...args: never[]) => unknown) | undefined;
-
-  /**
-   * Another extension (the spellchecker) installs pi's custom editor, and only
-   * one factory can exist, so this runs after the startup handlers and wraps
-   * whatever it finds. When nothing installed one, it supplies the default.
-   */
-  const ensureInstalled = (ctx: ExtensionContext) => {
-    if (ctx.mode !== "tui" || !ctx.hasUI) return;
-    const previous = ctx.ui.getEditorComponent();
-    if (previous && previous === installed) return;
-    const factory = (tui: never, theme: never, keybindings: never) => {
-      const inner = previous
-        ? previous(tui, theme, keybindings)
-        : new CustomEditor(tui, theme, keybindings, { embedWorkingStatus: true });
-      return decorate(inner as never, tui);
-    };
-    installed = factory as never;
-    ctx.ui.setEditorComponent(factory as never);
+    return { line: left + (fill > 0 ? border("─".repeat(fill)) : "") + right, regions: [] };
   };
 
   const model = (ctx: ExtensionContext) => {
@@ -611,7 +535,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_start", (_event, ctx) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     cwd = ctx.cwd;
     phase = "idle";
     phaseBeforePrompt = "idle";
@@ -639,12 +563,6 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
-    // The spellchecker installs its editor from its own `session_start`, so
-    // wait until every startup handler has run before wrapping what it left.
-    setTimeout(() => {
-      if (ctxRef === ctx) ensureInstalled(ctx);
-    }, 0).unref?.();
-
     if (timer) clearInterval(timer);
     timer = setInterval(paint, TICK_MS);
     // A print/RPC run must not be held open by a timer nobody looks at.
@@ -654,18 +572,16 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("agent_start", (_event, ctx) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     cwd = ctx.cwd;
     since = Date.now();
     setPhase("working");
-    // A second chance for the wrapper, in case an editor was installed late.
-    ensureInstalled(ctx);
     startSpinner();
     paint();
   });
 
   pi.on("agent_settled", (_event, ctx) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     since = Date.now();
     // Failure is sticky until the next run starts.
     setPhase(phase === "failed" ? "failed" : "idle");
@@ -674,7 +590,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("ui_prompt_start", (_event, ctx) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     since = Date.now();
     phaseBeforePrompt = phase;
     setPhase("waiting");
@@ -682,14 +598,14 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("ui_prompt_end", (_event, ctx) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     since = Date.now();
     setPhase(phaseBeforePrompt);
     paint();
   });
 
   pi.on("message_end", (event, ctx) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     cwd = ctx.cwd;
     derivedCache = undefined;
     if (event.message.role === "assistant" && event.message.stopReason === "error") {
@@ -699,12 +615,12 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("tool_execution_end", (_event, ctx) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     paint();
   });
 
   pi.on("session_compact", (_event, ctx) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     derivedCache = undefined;
     // Compaction already paid for a summary, so the marginal label is cheap and
     // the work has usually moved on by the time one happens.
@@ -713,7 +629,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_info_changed", (_event, ctx) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     derivedCache = undefined;
     paint();
     repaintSoon();
@@ -725,12 +641,14 @@ export default function (pi: ExtensionAPI) {
     stopSpinner();
     if (repaintTimer) clearTimeout(repaintTimer);
     repaintTimer = undefined;
-    tuiRef = undefined;
-    if (ctxRef?.mode === "tui" && ctxRef.hasUI) {
+    state.tui = undefined;
+    if (state.ctx?.mode === "tui" && state.ctx.hasUI) {
       // Leave an honest title for the shell prompt that follows; the fish title
       // takes over from here, but a crash-free exit should not show a stale run.
-      const { text } = currentLabel(ctxRef);
-      ctxRef.ui.setTitle(`${text} · ${shortPath(cwd)}`);
+      const { text } = currentLabel(state.ctx);
+      state.ctx.ui.setTitle(`${text} · ${shortPath(cwd)}`);
     }
   });
-}
+
+  return { drawTop, relabel };
+};

@@ -24,9 +24,10 @@ import type {
   ThemeColor,
 } from "@earendil-works/pi-coding-agent";
 import { getCapabilities, hyperlink, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { formatCost, formatTokens } from "./format.ts";
+import type { ChromeState } from "./state.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
-type Renderer = { requestRender(): void };
 
 type Stats = {
   cost: number;
@@ -147,23 +148,6 @@ const sanitize = (text: string) =>
     .replace(/ +/g, " ")
     .trim();
 
-const formatTokens = (count: number) => {
-  if (count < 1000) return count.toString();
-  if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
-  if (count < 1000000) return `${Math.round(count / 1000)}k`;
-  if (count < 10000000) {
-    const millions = count / 1000000;
-    return `${Number.isInteger(millions) ? millions : millions.toFixed(1)}M`;
-  }
-  return `${Math.round(count / 1000000)}M`;
-};
-
-const formatCost = (cost: number) => {
-  if (cost === 0) return "$0.00";
-  if (cost < 0.01) return `$${cost.toFixed(3)}`;
-  return `$${cost.toFixed(2)}`;
-};
-
 const addUsage = (
   totals: { cost: number; cacheRead: number },
   usage: { cacheRead: number; cost?: { total: number } } | undefined,
@@ -213,9 +197,7 @@ const readStep = (numFile: string, endFile: string) => {
   return num && end ? `${num}/${end}` : undefined;
 };
 
-export default function (pi: ExtensionAPI) {
-  let ctxRef: ExtensionContext | undefined;
-  let tuiRef: Renderer | undefined;
+export const createFooter = (pi: ExtensionAPI, state: ChromeState) => {
   let statsCache:
     | { sessionId: string; leafId: string | null; modelKey: string; stats: Stats }
     | undefined;
@@ -256,7 +238,7 @@ export default function (pi: ExtensionAPI) {
     execFile("ai-usage", ["--json"], { timeout: 5000, maxBuffer: 1 << 20 }, (error, stdout) => {
       usageBusy = false;
       usage = { providers: error ? [] : readUsage(stdout), at: Date.now() };
-      tuiRef?.requestRender();
+      state.tui?.requestRender();
     });
   };
 
@@ -443,7 +425,7 @@ export default function (pi: ExtensionAPI) {
   const setPr = (pr: PrRef | null) => {
     if (currentPr?.number === pr?.number && currentPr?.state === pr?.state) return;
     currentPr = pr;
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
   };
 
   const refreshPr = async (state: GitState, paths: GitPaths, force: boolean) => {
@@ -567,7 +549,7 @@ export default function (pi: ExtensionAPI) {
         prDirty = false;
         prRequestKey = "";
         setPr(null);
-        tuiRef?.requestRender();
+        state.tui?.requestRender();
         return;
       }
       const status = await runGit(cwd, ["status", "--porcelain=v2", "--branch"]);
@@ -583,7 +565,7 @@ export default function (pi: ExtensionAPI) {
         (!previous.upstream && gitState.upstream);
       prDirty = false;
       void refreshPr(gitState, paths, force);
-      tuiRef?.requestRender();
+      state.tui?.requestRender();
     } finally {
       gitBusy = false;
       if (gitQueued) {
@@ -602,7 +584,7 @@ export default function (pi: ExtensionAPI) {
   };
 
   const track = (ctx: ExtensionContext) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     refreshUsage();
     if (ctx.cwd === activeCwd) return;
     activeCwd = ctx.cwd;
@@ -740,7 +722,7 @@ export default function (pi: ExtensionAPI) {
     theme: Theme,
     footerData: ReadonlyFooterDataProvider,
   ): string => {
-    const ctx = ctxRef;
+    const ctx = state.ctx;
     if (!ctx || width <= PAD * 2) return "";
     const innerWidth = width - PAD * 2;
 
@@ -821,7 +803,7 @@ export default function (pi: ExtensionAPI) {
       if (providerPart) required.push(providerPart);
       required.push(aliasPart(aliasOverride));
       if (effortPart) required.push(effortPart);
-      required.push(contextPart(showWindow));
+      if (!state.gaugeActive) required.push(contextPart(showWindow));
       const left = [...required, ...optional];
       const leftWidth = visibleWidth(left.map((part) => part.text).join(SEP));
       const right = branchView(gitState, currentPr, branchMode);
@@ -867,7 +849,7 @@ export default function (pi: ExtensionAPI) {
       const fixed = [
         ...(providerPart ? [providerPart.text] : []),
         ...(effortPart ? [effortPart.text] : []),
-        contextPart(showWindow).text,
+        ...(state.gaugeActive ? [] : [contextPart(showWindow).text]),
       ];
       const restWidth = visibleWidth(fixed.join(SEP)) + visibleWidth(SEP);
       const maxModelWidth = innerWidth - restWidth;
@@ -903,7 +885,7 @@ export default function (pi: ExtensionAPI) {
   const mountFooter = (ctx: ExtensionContext) => {
     if (ctx.mode !== "tui" || !ctx.hasUI) return;
     ctx.ui.setFooter((tui, theme, footerData) => {
-      tuiRef = tui;
+      state.tui = tui;
       const unsubscribe = footerData.onBranchChange(() => {
         scheduleGit(0);
         tui.requestRender();
@@ -915,14 +897,13 @@ export default function (pi: ExtensionAPI) {
         dispose: () => {
           unsubscribe();
           if (gitTimer) clearTimeout(gitTimer);
-          if (tuiRef === tui) tuiRef = undefined;
         },
       };
     });
   };
 
   pi.on("session_start", (_event, ctx) => {
-    ctxRef = ctx;
+    state.ctx = ctx;
     activeCwd = ctx.cwd;
     generation++;
     statsCache = undefined;
@@ -940,33 +921,33 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("model_select", (_event, ctx) => {
     track(ctx);
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
   });
 
   pi.on("thinking_level_select", (_event, ctx) => {
     track(ctx);
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
   });
 
   pi.on("message_end", (_event, ctx) => {
     track(ctx);
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
   });
 
   pi.on("turn_end", (_event, ctx) => {
     track(ctx);
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
     scheduleGit();
   });
 
   pi.on("agent_start", (_event, ctx) => {
     track(ctx);
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
   });
 
   pi.on("agent_end", (_event, ctx) => {
     track(ctx);
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
     scheduleGit();
   });
 
@@ -978,7 +959,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("tool_execution_end", (_event, ctx) => {
     track(ctx);
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
     scheduleGit();
   });
 
@@ -991,17 +972,17 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_compact", (_event, ctx) => {
     track(ctx);
     statsCache = undefined;
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
   });
 
   pi.on("session_tree", (_event, ctx) => {
     track(ctx);
     statsCache = undefined;
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
   });
 
   pi.on("session_info_changed", (_event, ctx) => {
     track(ctx);
-    tuiRef?.requestRender();
+    state.tui?.requestRender();
   });
-}
+};
