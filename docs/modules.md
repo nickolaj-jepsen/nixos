@@ -120,9 +120,10 @@ home-manager and the overlays):
   they are Claude Code plugin marketplaces fetched at runtime
   (`extraKnownMarketplaces`/`enabledPlugins` in
   `modules/programs/claude-code/default.nix`), so they reach Claude Code only.
-- **Pi extension**: one `.ts` file in `modules/programs/pi/extensions/`, a
-  local pi package (`"pi": {"extensions": ["./*.ts"]}`) built by the pi leaf
-  and listed in `settings.packages`. The build runs `tsc --noEmit` against the
+- **Pi extension**: one top-level `.ts` file in `modules/programs/pi/extensions/`
+  (it may import helpers from a subfolder such as `chrome/`, which pi does not
+  load on its own), a local pi package (`"pi": {"extensions": ["./*.ts"]}`)
+  built by the pi leaf and listed in `settings.packages`. The build runs `tsc --noEmit` against the
   pi that ships, so a type error fails `just build`. npm dependencies go
   in its `package.json` + lockfile (`npm install --package-lock-only`; read via
   `importNpmLock`, no hash to bump); never add packages the pi leaf links in
