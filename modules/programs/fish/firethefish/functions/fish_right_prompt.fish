@@ -72,9 +72,7 @@ end
 function __ftf_right_stash
     set -q __ftf_stash[1]; or return
     __ftf_pill yellow black
-    echo -n \uF0EA (string replace -a \n ' ⏎ ' -- $__ftf_stash[-1] | string shorten -m 24)
-    set -l n (count $__ftf_stash)
-    test $n -ge 2; and echo -n " ×$n"
+    echo -n \uF0EA (string replace -a \n ' ⏎ ' -- $__ftf_stash | string shorten -m 24)
     echo -n ' '
 end
 

@@ -37,6 +37,7 @@ function __ftf_on_preexec --on-event fish_preexec
     set -gx __ftf_store_path (string match -- '/nix/store/*' $PATH)
 end
 function __ftf_on_postexec --on-event fish_postexec
+    __ftf_job_unstash $argv[1]
     # Blank or comment-only lines, launching or suspending a job all leave the previous $status in place.
     string match -qr '^\s*(#.*)?$' -- $argv[1]; and return
     # The text alone can't tell `&` from `\&` or a commented `&`; a new $last_pid confirms a launch.
@@ -114,6 +115,7 @@ or functions -c fish_job_summary __ftf_default_job_summary
 function fish_job_summary -a job_id is_foreground cmd_line signal_or_end_name
     if test "$signal_or_end_name" = STOPPED
         set -g __ftf_job_stopped
+        set -g __ftf_job_stash $job_id
         set -l name (string split -f1 ' ' -- $cmd_line)
         # Claude Code always prints a blank line and two suspend notices; wipe them (assumes no line wrap).
         test "$name" = claude
