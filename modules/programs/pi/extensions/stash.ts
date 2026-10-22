@@ -19,7 +19,7 @@ const preview = (text: string) => {
 export default function (pi: ExtensionAPI) {
   let stash: string | undefined;
 
-  // A widget rather than setStatus: powerbar replaces the footer and drops unregistered statuses.
+  // A widget rather than setStatus so the preview keeps its own line.
   const showStash = (ctx: ExtensionContext) =>
     ctx.ui.setWidget(
       WIDGET_KEY,

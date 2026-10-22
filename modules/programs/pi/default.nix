@@ -117,8 +117,6 @@ in {
           defaultTools = ["+codemode"];
         };
         settings.packages = [
-          # extension-settings must load before powerbar (its settings panel).
-          "npm:@juanibiapina/pi-extension-settings@0.10.0"
           # core
           "npm:@juicesharp/rpiv-ask-user-question@2.13.8"
           "npm:@juicesharp/rpiv-todo@2.13.8"
@@ -129,7 +127,6 @@ in {
           # context diet
           "npm:pi-cache-optimizer@2.8.24"
           # ui
-          "npm:@juanibiapina/pi-powerbar@0.16.0"
           "npm:@ayulab/pi-rewind@0.4.6"
           # agents
           "npm:@tintinweb/pi-subagents@0.22.0"
