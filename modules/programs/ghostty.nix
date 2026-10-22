@@ -48,7 +48,7 @@
           # Drop the desktop notification fired on every clipboard copy.
           app-notifications = "no-clipboard-copy";
           notify-on-command-finish = "unfocused";
-          notify-on-command-finish-action = "bell,notify";
+          notify-on-command-finish-action = "bell";
           notify-on-command-finish-after = "30s";
           # niri clips windows to 8px rounded corners; pad the cell grid so
           # glyphs don't touch the clipped edge, and extend the bg into the pad.
