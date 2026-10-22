@@ -1,10 +1,12 @@
 /**
- * One calm line under the editor: model and context first, diagnostics only
- * when they mean something, and the fish-style git segment on the right.
+ * One calm line under the editor: model and context first, the active
+ * provider's remaining quota next, diagnostics only when they mean something,
+ * and the fish-style git segment on the right.
  *
- * Cost, cache health and speed come from session entries; the branch comes
- * from asynchronously refreshed `git status --porcelain=v2`, so rendering
- * never waits on a subprocess.
+ * Cost, cache health and speed come from session entries; quota comes from
+ * `ai-usage --json`, whose provider ids match pi's; the branch comes from
+ * asynchronously refreshed `git status --porcelain=v2`, so rendering never
+ * waits on a subprocess.
  */
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -27,6 +29,20 @@ type Stats = {
   cacheHit: number | undefined;
   speed: number | undefined;
 };
+
+type UsageWindow = {
+  label: string;
+  usedPct: number;
+  pace: "under" | "over" | "exhausted";
+};
+
+type UsageProvider = {
+  id: string;
+  windows: UsageWindow[];
+  credit?: { remaining: number; allowance: number } | null;
+};
+
+type Usage = { providers: UsageProvider[]; at: number };
 
 type Part = {
   id: string;
@@ -57,6 +73,12 @@ const PAD = 2;
 // rate noisy. Only show diagnostics once the sample means something.
 const MIN_SPEED_OUTPUT_TOKENS = 100;
 const MIN_CACHE_PROMPT_TOKENS = 2000;
+// ai-usage caches for 2 minutes; poll no faster than this, and only on events.
+const USAGE_TTL_MS = 60_000;
+// Two windows fit the line; the rest, with resets and projections, live in the
+// DMS popout.
+const USAGE_WINDOWS = 2;
+const USAGE_LABELS: Record<string, string> = { month: "mo" };
 const BRANCH_GLYPH = "\uf418";
 const DETACHED_GLYPH = "\uf417";
 const WORKTREE_GLYPH = "\uf1bb";
@@ -179,6 +201,28 @@ export default function (pi: ExtensionAPI) {
   let gitTimer: ReturnType<typeof setTimeout> | undefined;
   let activeCwd = "";
   let generation = 0;
+
+  let usage: Usage | undefined;
+  let usageBusy = false;
+
+  const readUsage = (stdout: string): UsageProvider[] => {
+    try {
+      return (JSON.parse(stdout) as { providers?: UsageProvider[] }).providers ?? [];
+    } catch {
+      return [];
+    }
+  };
+
+  const refreshUsage = () => {
+    if (usageBusy || (usage && Date.now() - usage.at < USAGE_TTL_MS)) return;
+    usageBusy = true;
+    // Not on PATH when the ai-usage feature is off; that just hides the segment.
+    execFile("ai-usage", ["--json"], { timeout: 5000, maxBuffer: 1 << 20 }, (error, stdout) => {
+      usageBusy = false;
+      usage = { providers: error ? [] : readUsage(stdout), at: Date.now() };
+      tuiRef?.requestRender();
+    });
+  };
 
   const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): Stats => {
     const totals = { cost: 0, cacheRead: 0 };
@@ -360,6 +404,7 @@ export default function (pi: ExtensionAPI) {
 
   const track = (ctx: ExtensionContext) => {
     ctxRef = ctx;
+    refreshUsage();
     if (ctx.cwd === activeCwd) return;
     activeCwd = ctx.cwd;
     generation++;
@@ -417,6 +462,54 @@ export default function (pi: ExtensionAPI) {
       text: plain(false),
       color: stateColor,
       styled: (theme) => plain(true, theme),
+    };
+  };
+
+  // Only the active model's provider: a Claude turn says nothing about Go's limits.
+  const usageView = (model: ActiveModel): Part | undefined => {
+    const provider = usage?.providers.find((p) => p.id === model.provider);
+    if (!provider) return undefined;
+
+    const spans: { label: string; text: string; color: ThemeColor }[] = [];
+    if (provider.credit) {
+      // Credits are money rather than a share of a window, and they expire with
+      // the cycle: the remainder decides whether the next request runs.
+      const { remaining, allowance } = provider.credit;
+      const share = allowance > 0 ? remaining / allowance : 1;
+      const pace = provider.windows[0]?.pace;
+      const color: ThemeColor =
+        share <= 0.05 || pace === "exhausted"
+          ? "error"
+          : share <= 0.2 || pace === "over"
+            ? "warning"
+            : "dim";
+      spans.push({ label: "", text: `${formatCost(remaining)} left`, color });
+    } else {
+      for (const w of provider.windows.slice(0, USAGE_WINDOWS)) {
+        const color: ThemeColor =
+          w.pace === "exhausted" ? "error" : w.pace === "over" ? "warning" : "dim";
+        spans.push({
+          label: USAGE_LABELS[w.label] ?? w.label,
+          text: `${Math.round(w.usedPct)}%`,
+          color,
+        });
+      }
+    }
+    if (spans.length === 0) return undefined;
+
+    return {
+      id: "usage",
+      text: spans.map((s) => (s.label ? `${s.label} ${s.text}` : s.text)).join(" · "),
+      color: "dim",
+      styled: (theme) =>
+        spans
+          .map(
+            (span, index) =>
+              (index > 0 ? theme.fg("dim", " · ") : "") +
+              (span.label ? theme.fg("dim", span.label + " ") : "") +
+              theme.fg(span.color, span.text),
+          )
+          .join(""),
     };
   };
 
@@ -483,6 +576,8 @@ export default function (pi: ExtensionAPI) {
       .filter(Boolean);
 
     const optional: Part[] = [];
+    const quota = model ? usageView(model) : undefined;
+    if (quota) optional.push(quota);
     if (costText) optional.push({ id: "cost", text: costText, color: "dim" });
     if (cacheText && cacheHit !== undefined) {
       optional.push({
@@ -527,7 +622,7 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
-    for (const id of ["speed", "cost", "cache"]) {
+    for (const id of ["speed", "cost", "cache", "usage"]) {
       if (fits()) break;
       const index = optional.findIndex((part) => part.id === id);
       if (index >= 0) optional.splice(index, 1);
@@ -613,6 +708,7 @@ export default function (pi: ExtensionAPI) {
     gitPathsCache = undefined;
     mountFooter(ctx);
     scheduleGit(0);
+    refreshUsage();
   });
 
   pi.on("model_select", (_event, ctx) => {
