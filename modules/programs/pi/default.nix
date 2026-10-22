@@ -86,7 +86,7 @@ in {
           ${builtins.readFile ../agent-context.md}
           ## Pi
 
-          - `SubagentWorkflow`, `get_subagent_result`, `steer_subagent`, and `kagi_extract` are hidden from the tool list; call them from codemode as `tools.<name>` and read `await describeTool("<name>")` first for their parameters.
+          - `SubagentWorkflow`, `get_subagent_result`, and `steer_subagent` are hidden from the tool list; call them from codemode as `tools.<name>` and read `await describeTool("<name>")` first for their parameters.
           - For a deterministic multi-agent script (Claude Code `Workflow` style), call `tools.SubagentWorkflow` from codemode.
         '';
         # The fireproof.agents.skills registry, linked into one dir.
@@ -94,7 +94,7 @@ in {
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
         # Read at launch, so the key never lands in the Nix store.
-        environment.KAGI_API_KEY.file = config.age.secrets.kagi-api-key.path;
+        environment.EXA_API_KEY.file = config.age.secrets.exa-api-key.path;
         # Spellfix (extensions/spellfix.ts) shares its dictionary and fix log
         # with the Claude Code mod. Haiku keeps the one batch call cheap.
         environment.PI_SPELLFIX_HUNSPELL.value = lib.getExe spellChecker;
@@ -122,8 +122,6 @@ in {
           # core
           "npm:@juicesharp/rpiv-ask-user-question@2.13.8"
           "npm:@juicesharp/rpiv-todo@2.13.8"
-          # Kagi search/extract; cheaper in context than a full web-access extension.
-          "npm:@mjakl/pi-kagi-api@0.1.0"
           # guardrails
           "npm:@gotgenes/pi-permission-system@41.0.0"
           # context diet
@@ -155,9 +153,9 @@ in {
 
       # Literal path: the wrapper single-quotes it, so the default secretsDir
       # spelling would reach `cat` unexpanded. It's a symlink into secretsDir.
-      age.secrets.kagi-api-key = {
-        rekeyFile = ../../../secrets/kagi-api-key.age;
-        path = "${config.home.homeDirectory}/.pi/agent/kagi-api-key";
+      age.secrets.exa-api-key = {
+        rekeyFile = ../../../secrets/exa-api-key.age;
+        path = "${config.home.homeDirectory}/.pi/agent/exa-api-key";
         mode = "0600";
       };
 

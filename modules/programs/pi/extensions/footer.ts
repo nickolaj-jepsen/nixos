@@ -212,6 +212,9 @@ export default function (pi: ExtensionAPI) {
           }
         } else if (message.role === "toolResult") {
           addUsage(totals, message.usage);
+          // Tools that bill their own API report it here, since no usage block carries it.
+          const spent = (message.details as { costUsd?: unknown } | undefined)?.costUsd;
+          if (typeof spent === "number") totals.cost += spent;
         }
       } else if ((entry.type === "compaction" || entry.type === "branch_summary") && entry.usage) {
         addUsage(totals, entry.usage);

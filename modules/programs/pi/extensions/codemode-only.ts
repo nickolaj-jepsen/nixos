@@ -9,7 +9,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const NAME = "codemode_only";
 // Point the model at each of these some other way, or it won't know they exist.
-const HIDDEN = ["SubagentWorkflow", "get_subagent_result", "steer_subagent", "kagi_extract"];
+const HIDDEN = ["SubagentWorkflow", "get_subagent_result", "steer_subagent"];
 
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
