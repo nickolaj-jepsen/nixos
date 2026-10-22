@@ -61,11 +61,12 @@ const BRANCH_GLYPH = "\uf418";
 const DETACHED_GLYPH = "\uf417";
 const WORKTREE_GLYPH = "\uf1bb";
 
-// Long, well-known lab names only; Qwen, Claude, GLM, Kimi, Nemotron and
-// LongCat keep their catalog names.
+// Long, well-known lab names only; Qwen, GLM, Kimi, Nemotron and LongCat keep
+// their catalog names. Claude is redundant next to the provider tag.
 const MODEL_ALIAS_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bDeepSeek\b/gi, "DS"],
   [/\bMiniMax\b/gi, "MM"],
+  [/\bClaude\s+/gi, ""],
 ];
 
 // Exceptions the patterns cannot express; add an entry when a model needs a
