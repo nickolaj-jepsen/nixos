@@ -86,7 +86,8 @@ in {
           ${builtins.readFile ../agent-context.md}
           ## Pi
 
-          - For a deterministic multi-agent script (Claude Code `Workflow` style), call `tools.SubagentWorkflow` from codemode; it is not declared to you, so read `await describeTool("SubagentWorkflow")` first.
+          - `SubagentWorkflow`, `get_subagent_result`, `steer_subagent`, and `kagi_extract` are hidden from the tool list; call them from codemode as `tools.<name>` and read `await describeTool("<name>")` first for their parameters.
+          - For a deterministic multi-agent script (Claude Code `Workflow` style), call `tools.SubagentWorkflow` from codemode.
         '';
         # The fireproof.agents.skills registry, linked into one dir.
         skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
@@ -103,8 +104,9 @@ in {
         environment.PI_SPELLFIX_MODEL.value = "anthropic/claude-haiku-5-5";
         settings = {
           # The model picker's "save as default" reverts at launch; change it here.
-          defaultProvider = "tensorx";
-          defaultModel = "qwen/qwen3.8-flash-next";
+          defaultProvider = "opencode-go";
+          defaultModel = "deepseek-v4.1-flash";
+          defaultThinkingLevel = "high";
           # Follows the terminal palette and its light/dark switches.
           theme = "system";
           # Keeps the version and key hints; drops the loaded-resource listing.
@@ -120,7 +122,7 @@ in {
           # core
           "npm:@juicesharp/rpiv-ask-user-question@2.13.8"
           "npm:@juicesharp/rpiv-todo@2.13.8"
-          # Kagi search/extract; far cheaper in context than pi-web-access.
+          # Kagi search/extract; cheaper in context than a full web-access extension.
           "npm:@mjakl/pi-kagi-api@0.1.0"
           # guardrails
           "npm:@gotgenes/pi-permission-system@40.2.0"
@@ -133,8 +135,7 @@ in {
           # own, from ./extensions
           "${mkExtensions pkgs pi}"
         ];
-        # Clears the `-builtin:mcp` that pi-mcp-adapter needed; `pi config`
-        # toggles of built-ins now revert at launch, like packages.
+        # Arrays replace wholesale, so `pi config` toggles of built-ins revert at launch.
         settings.extensions = [];
         # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
         # ~/.config/mcp/mcp.json. Merged at launch, so /mcp toggles persist.
@@ -250,6 +251,10 @@ in {
       # settings only, so this file can stay read-only.
       home.file.".pi/agent/subagents.json".text = builtins.toJSON {
         toolDescriptionMode = "compact";
+        # Subagent spend is otherwise missing from the footer and /cost.
+        reportUsage = true;
+        # Auto stands down if another extension provides a workflow tool.
+        workflowsEnabled = true;
       };
 
       # Nix-owned (read-only), so pi's "persist globally" approval won't stick;
