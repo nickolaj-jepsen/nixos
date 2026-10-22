@@ -1,0 +1,9 @@
+{
+  "name": "linear-issue",
+  "version": "1.0.0",
+  "description": "Drafts Linear issues for approval from the You should know card (Learn more, 3) or /linear",
+  "author": {
+    "name": "Nickolaj Jepsen"
+  },
+  "types": "./types/index.d.ts"
+}

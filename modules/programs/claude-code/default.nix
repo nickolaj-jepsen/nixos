@@ -89,25 +89,30 @@
     personalDictionary = "${config.xdg.configHome}/hunspell/personal.dic";
 
     # Validated and tested against the claude-code that runs it, so a bump that
-    # breaks its API (or drops the keybinding action it borrows) fails the build.
-    spellfix = pkgs.stdenvNoCC.mkDerivation {
-      name = "claude-code-spellfix";
-      src = ./mods/spellfix;
-      nativeBuildInputs = [ccfg.package];
-      buildPhase = ''
-        runHook preBuild
-        export HOME="$TMPDIR"
-        claude plugin validate .
-        claude plugin test .
-        runHook postBuild
-      '';
-      installPhase = ''
-        runHook preInstall
-        mkdir -p $out
-        cp -r .claude-plugin hooks types $out/
-        runHook postInstall
-      '';
-    };
+    # breaks its API (or drops the keybinding action spellfix borrows) fails the build.
+    mkMod = name:
+      pkgs.stdenvNoCC.mkDerivation {
+        name = "claude-code-${name}";
+        src = ./mods/${name};
+        nativeBuildInputs = [ccfg.package];
+        buildPhase = ''
+          runHook preBuild
+          export HOME="$TMPDIR"
+          claude plugin validate .
+          claude plugin test .
+          runHook postBuild
+        '';
+        installPhase = ''
+          runHook preInstall
+          mkdir -p $out
+          cp -r .claude-plugin hooks types $out/
+          runHook postInstall
+        '';
+      };
+    spellfix = mkMod "spellfix";
+    # Its button is spliced into the built-in you-should-know card by label; a
+    # card redesign only hides it, with a toast (mods/linear-issue).
+    linearIssue = mkMod "linear-issue";
 
     # ctrl+q presses spellfix's band button, which borrows this action; a
     # single modified key reaches a plugin Button only from the Global context.
@@ -307,7 +312,7 @@
         env = {
           CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
           # Not programs.claude-code.plugins: the env block also reaches desktop-app sessions.
-          CLAUDE_CODE_PLUGIN_DIRS = "${spellfix}";
+          CLAUDE_CODE_PLUGIN_DIRS = "${spellfix}:${linearIssue}";
           # hunspell's personal dictionary for the underline's checker too.
           WORDLIST = personalDictionary;
         };

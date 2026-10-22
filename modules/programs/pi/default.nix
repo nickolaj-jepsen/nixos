@@ -55,7 +55,7 @@
       '';
     };
 in {
-  # For `just pi-extensions-dev`, which links its node_modules into the repo for the editor.
+  # For `just dev-setup`, which links its node_modules into the repo for the editor.
   perSystem = {pkgs, ...}: {
     packages.pi-extensions = mkExtensions pkgs (mkPi pkgs);
   };

@@ -5,7 +5,7 @@
     "name": "Nickolaj Jepsen"
   },
   "metadata": {
-    "description": "Agent skills from nickolaj-jepsen/nixos"
+    "description": "Agent skills and Claude Code mods from nickolaj-jepsen/nixos"
   },
   "plugins": [
     {
@@ -13,6 +13,14 @@
       "description": "Agent skills from nickolaj-jepsen/nixos",
       "source": "./",
       "strict": false
+    },
+    {
+      "name": "spellfix",
+      "source": "./modules/programs/claude-code/mods/spellfix"
+    },
+    {
+      "name": "linear-issue",
+      "source": "./modules/programs/claude-code/mods/linear-issue"
     }
   ]
 }
