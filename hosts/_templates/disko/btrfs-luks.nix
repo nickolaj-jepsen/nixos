@@ -28,7 +28,7 @@
               content = {
                 type = "luks";
                 name = "crypted";
-                # Copied by bootstrap-install / deploy-remote
+                # nixos-anywhere passes this via --disk-encryption-keys
                 passwordFile = "/luks-password";
                 settings = {
                   allowDiscards = true;

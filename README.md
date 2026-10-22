@@ -27,20 +27,18 @@ regenerates it after each push to main.
 
 ## Installing on a New Machine
 
-New machines are installed from a host-specific bootstrap ISO: an install
-image with the new host's pre-rekeyed SSH key and a copy of this flake baked
-in. The target boots the USB and runs `bootstrap-install`, with no GitHub
-roundtrip and no manual rekeying on the target.
-
 ```bash
-just new-host <hostname> <username>          # card, SSH key, rekey (YubiKey)
-just bootstrap-iso <hostname>                # build the host's install ISO
-just bootstrap-flash <hostname> /dev/sdX     # flash it to USB
-bootstrap-install                            # on the target, after booting the USB
+just new-host <hostname> <username>       # card, SSH key, rekey (YubiKey)
+just deploy-remote <hostname> root@<ip>   # nixos-anywhere: formats the target's disks
 ```
 
-The full procedure, including disk layouts, TPM2 unlock and remote installs
-via nixos-anywhere, is in [docs/hosts.md](docs/hosts.md#new-host--install).
+`deploy-remote` installs onto a target already booted into a Linux with SSH:
+the generic installer image, any NixOS ISO, or a cloud VM. The target's disks
+come from the host's `hosts/<hostname>/` cards (see the disko templates), and
+nixos-anywhere wipes whatever is on them.
+
+The full procedure, including disk layouts, TPM2 unlock and installing to a
+fresh Mac, is in [docs/hosts.md](docs/hosts.md#new-host--install).
 
 ## Secret Management
 

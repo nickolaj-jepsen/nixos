@@ -167,8 +167,6 @@
   homeHosts = lib.filter (n: hostClassOf n == "home") discovered;
   darwinHosts = lib.filter (n: hostClassOf n == "darwin") discovered;
 in {
-  # nixos-class only: home/darwin-class hosts have no install ISO for installer/ to fan out over.
-  config.flake.hostNames = nixosHosts;
   # Exported so checks.disko-templates can hold the templates to the same card shape.
   config.flake.hostCardKeys = cardKeys;
 
