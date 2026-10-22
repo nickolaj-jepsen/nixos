@@ -79,14 +79,18 @@ def main() -> None:
     if failures:
         sys.exit("design system contrast check failed:\n  " + "\n  ".join(failures))
 
-    # Each distinct semantic color once, named after its palette entry, with the roles using it.
+    # Each distinct semantic color once, with the roles using it. It is named after its
+    # palette entry, or after its first role when it is a brand-only color.
+    hexes = {name: colors[name] for name in TEXT}
     found: dict[str, list[str]] = {}
     for role, hex_ in sorted(semantic.items()):
-        name = next((n for n, h in colors.items() if h == hex_), None)
-        if name is not None:
-            found.setdefault(name, []).append(role)
+        name = next((n for n, h in colors.items() if h == hex_), None) or next(
+            (n for n in found if hexes[n] == hex_), role
+        )
+        hexes[name] = hex_
+        found.setdefault(name, []).append(role)
     roles = {name: found.pop(name, []) for name in TEXT}
-    for name in sorted(found, key=lambda n: math.atan2(oklab(colors[n])[2], oklab(colors[n])[1]) % math.tau):
+    for name in sorted(found, key=lambda n: math.atan2(oklab(hexes[n])[2], oklab(hexes[n])[1]) % math.tau):
         roles[name] = found[name]
 
     def label(name: str) -> str:
@@ -94,7 +98,7 @@ def main() -> None:
         return f'<i style="background: var(--fp-{kebab(name)})"></i><div><strong>{kebab(name)}</strong>{sub}</div>'
 
     def ratio(fg: str, bg: str) -> str:
-        r = contrast(colors[fg], colors[bg])
+        r = contrast(hexes[fg], colors[bg])
         cls, text = grade(r)
         return f'<span class="ratio {cls}">{r:.2f}<em>{text}</em></span>'
 
@@ -102,9 +106,9 @@ def main() -> None:
 
     hues = [n for n in roles if n not in TEXT or n == "accent"]
     close = sorted(
-        (distance(colors[a], colors[b]), a, b)
+        (distance(hexes[a], hexes[b]), a, b)
         for a, b in combinations(hues, 2)
-        if distance(colors[a], colors[b]) < CLOSE
+        if distance(hexes[a], hexes[b]) < CLOSE
     )
     for d, a, b in close:
         print(f"warning: {kebab(a)} and {kebab(b)} are {d:.3f} apart in OKLab", file=sys.stderr)

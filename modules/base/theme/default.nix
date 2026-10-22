@@ -27,8 +27,10 @@
       {
         title = "Status";
         roles = {
-          error = mkPaletteRef "red" "Errors and destructive actions";
-          warning = mkPaletteRef "orange" "Warnings";
+          # Brand-only: the palette's red sits too close to accent and is under 4.5:1 on bg.
+          error = mkColorOption "F38183" "Errors and destructive actions";
+          # Not orange: it is nearly the accent, so warnings would read as brand.
+          warning = mkPaletteRef "yellow" "Warnings";
           success = mkPaletteRef "green" "Success and confirmations";
           info = mkPaletteRef "blue" "Informational messages";
           hint = mkPaletteRef "cyan" "Hints and suggestions";
@@ -39,7 +41,12 @@
         roles = {
           added = mkPaletteRef "green" "Added lines and files";
           modified = mkPaletteRef "yellow" "Modified lines and files";
-          removed = mkPaletteRef "red" "Removed lines and files";
+          removed = lib.mkOption {
+            type = lib.types.str;
+            default = config.fireproof.theme.semantic.error;
+            defaultText = lib.literalExpression "config.fireproof.theme.semantic.error";
+            description = "Removed lines and files";
+          };
           renamed = mkPaletteRef "cyan" "Renamed files";
           conflict = mkPaletteRef "magenta" "Merge conflicts";
         };

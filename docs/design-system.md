@@ -40,6 +40,10 @@ bundle: `tokens.css`, `tokens.json`, `logo/`, `fonts/` and a specimen
   follows the accent. The middle and core are brand-only colors, lighter than
   the palette's orange and yellow, because pixel art reads by lightness and
   `orange` sits too close to `accent` to show as its own layer.
+- `accent` sits between red and orange, so semantic colors keep clear of it
+  instead of the accent moving: warnings are `yellow`, and `error`/`removed`
+  are a brand-only lighter red (`F38183`), which also passes 4.5:1 on `bg`.
+  The palette's `red` and `orange` stay Flexoki for terminals and syntax.
 - No webfonts. The bundle ships the theme's own font files, which makes the
   page about 12 MB, mostly Hack Nerd Font.
 - Nunito Sans is its own package (`pkgs/nunito-sans`) because
@@ -49,10 +53,6 @@ bundle: `tokens.css`, `tokens.json`, `logo/`, `fonts/` and a specimen
 
 Not started, most useful first:
 
-- Pull `accent` away from `red` and `orange`. The Contrast section shows them
-  under 0.06 apart, so the primary button reads as an error or warning.
-- Lift `red` (`error`, `removed`) to 4.5:1 on `bg`; it is 3.97:1, so error
-  text fails WCAG AA.
 - Move the remaining hue-for-meaning reads to `semantic.*` (niri's urgent
   border, Glance's storage warning).
 - Shape and type tokens: corner radius (DMS hard-codes 8) and the type scale.
