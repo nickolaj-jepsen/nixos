@@ -83,6 +83,8 @@ let editor: SpellEditor | undefined;
 let unsubscribeInput: (() => void) | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let checkId = 0;
+/** Bumped on session start and shutdown: a ctx captured before the bump is unusable. */
+let sessionGen = 0;
 let suspended = false;
 let warnedHunspell = false;
 let warnedModel = false;
@@ -573,6 +575,7 @@ class SpellPicker implements Component {
 
   constructor(
     private readonly tui: TUI,
+    private readonly gen: number,
     private readonly ctx: ExtensionContext,
     private readonly ui: ExtensionUIContext,
     text: string,
@@ -582,8 +585,14 @@ class SpellPicker implements Component {
     this.text = text;
   }
 
+  /** The picker outlives its ctx when the session is replaced under it. */
+  private get live(): boolean {
+    return this.gen === sessionGen && !this.closed;
+  }
+
   async start() {
     this.flagged = await findMisses(this.ctx, this.text);
+    if (!this.live) return;
     const items: (Miss | Extra)[] = [...this.flagged];
     for (const extra of cachedExtras(this.text)) {
       if (!items.some((m) => m.start < extra.end && extra.start < m.end)) items.push(extra);
@@ -621,8 +630,10 @@ class SpellPicker implements Component {
     const item = this.item;
     if (!item || isExtra(item) || this.suggestions.has(item.word)) return;
     const log = await loadLog();
+    if (!this.live) return;
     const guess = topFix(log, item.word);
     const hunspell = await suggest(this.ctx, item.word);
+    if (!this.live) return;
     const list: Suggestion[] = [];
     if (guess) list.push({ word: guess, source: "history" });
     for (const word of hunspell) {
@@ -635,7 +646,7 @@ class SpellPicker implements Component {
   /** The model's batch for the draft at open; fixes found for words already gone are ignored. */
   private async runModel() {
     const result = await askModel(this.ctx, this.text, this.flagged, this.abort.signal);
-    if (this.closed) return;
+    if (!this.live) return;
     if (!result) {
       this.aiError = "no answer";
       this.aiDone = true;
@@ -658,6 +669,7 @@ class SpellPicker implements Component {
       .map(([word]) => word);
     if (correct.length) {
       await addWords(this.ctx, correct);
+      if (!this.live) return;
       for (const word of correct) this.added.add(word);
       this.items = this.items.filter((item) => !correct.includes(item.word));
     }
@@ -736,6 +748,7 @@ class SpellPicker implements Component {
       return;
     }
     await addWords(this.ctx, [item.word]);
+    if (!this.live) return;
     this.items = this.items.filter((m) => m !== item);
     this.index = Math.min(this.index, Math.max(0, this.items.length - 1));
     this.tui.requestRender();
@@ -747,7 +760,9 @@ class SpellPicker implements Component {
     if (words.length === 0) return;
     this.added.clear();
     await removeWords(this.ctx, words);
+    if (!this.live) return;
     this.items = await allMisses(this.ctx, this.text);
+    if (!this.live) return;
     this.index = Math.max(0, Math.min(this.index, this.items.length - 1));
     this.prefetch();
     this.tui.requestRender();
@@ -921,14 +936,18 @@ class SpellPicker implements Component {
 
 /* ------------------------------------------------------------------- wiring */
 
-function scheduleCheck(ctx: ExtensionContext) {
-  if (suspended) return;
+function scheduleCheck(gen: number, ctx: ExtensionContext) {
+  if (suspended || gen !== sessionGen) return;
   if (timer) clearTimeout(timer);
-  timer = setTimeout(() => void refreshCount(ctx), CHECK_DELAY_MS);
+  timer = setTimeout(() => {
+    timer = undefined;
+    void refreshCount(gen, ctx);
+  }, CHECK_DELAY_MS);
 }
 
 /** Updates the underline and the "N misspelled" widget from the draft. */
-async function refreshCount(ctx: ExtensionContext) {
+async function refreshCount(gen: number, ctx: ExtensionContext) {
+  if (gen !== sessionGen) return;
   const id = ++checkId;
   const text = ctx.ui.getEditorText();
   if (!text.trim()) {
@@ -937,7 +956,7 @@ async function refreshCount(ctx: ExtensionContext) {
     return;
   }
   const misses = await allMisses(ctx, text);
-  if (id !== checkId) return;
+  if (id !== checkId || gen !== sessionGen) return;
   editor?.setUnderlined(underlinedWords(misses));
   if (suspended) return;
   // The word still being typed waits until the cursor moves past it, as the underline does.
@@ -962,6 +981,7 @@ async function openPicker(ctx: ExtensionContext) {
     toast(ctx, "No misspellings", "info");
     return;
   }
+  const gen = sessionGen;
   const cursor = editor?.cursorOffset() ?? text.length;
   suspended = true;
   if (timer) clearTimeout(timer);
@@ -969,7 +989,7 @@ async function openPicker(ctx: ExtensionContext) {
   try {
     await ctx.ui.custom<PickerResult>(
       (tui, _theme, _kb, done) => {
-        const picker = new SpellPicker(tui, ctx, ctx.ui, text, cursor, done);
+        const picker = new SpellPicker(tui, gen, ctx, ctx.ui, text, cursor, done);
         void picker.start();
         return picker;
       },
@@ -980,7 +1000,7 @@ async function openPicker(ctx: ExtensionContext) {
     );
   } finally {
     suspended = false;
-    scheduleCheck(ctx);
+    if (gen === sessionGen) scheduleCheck(gen, ctx);
   }
 }
 
@@ -996,11 +1016,14 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_start", (_event, ctx) => {
+    sessionGen++;
+    const gen = sessionGen;
     ignored.clear();
     unadded.clear();
     batch = undefined;
     warnedHunspell = false;
     warnedModel = false;
+    suspended = false;
     if (ctx.mode !== "tui") return;
     // hunspell neither creates a missing personal dictionary nor saves into one.
     void ensurePersonal();
@@ -1012,23 +1035,25 @@ export default function (pi: ExtensionAPI) {
         editorTheme,
         keybindings,
         () => ctx.ui.theme,
-        () => scheduleCheck(ctx),
+        () => scheduleCheck(gen, ctx),
       );
       return editor;
     });
     // Also catches edits made without the custom editor, e.g. after another
     // extension replaces it: the picker then starts from the end of the draft.
     unsubscribeInput = ctx.ui.onTerminalInput(() => {
-      scheduleCheck(ctx);
+      scheduleCheck(gen, ctx);
       return undefined;
     });
-    scheduleCheck(ctx);
+    scheduleCheck(gen, ctx);
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
+    sessionGen++;
     if (timer) clearTimeout(timer);
     timer = undefined;
     checkId++;
+    suspended = false;
     unsubscribeInput?.();
     unsubscribeInput = undefined;
     editor = undefined;
