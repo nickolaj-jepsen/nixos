@@ -4,11 +4,16 @@
  *
  * Cost, cache health and speed come from session entries; the branch comes
  * from asynchronously refreshed `git status --porcelain=v2`, so rendering
- * never waits on a subprocess.
+ * never waits on a subprocess. A pull request for the branch replaces its name
+ * with a linked `#123`: the local gh-stack index answers synchronously, the
+ * GitHub API refines the state in the background, and the last answer is cached
+ * on disk so a fresh session paints before the network does.
  */
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -16,7 +21,7 @@ import type {
   Theme,
   ThemeColor,
 } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { getCapabilities, hyperlink, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
 type Renderer = { requestRender(): void };
@@ -37,10 +42,18 @@ type Part = {
 
 type GitPaths = { gitDir: string; commonDir: string };
 
+type PrKind = "open" | "draft" | "merged" | "closed";
+
+/** `state` is missing when only the local gh-stack index knew the pull request. */
+type PrRef = { number: number; url: string; state?: PrKind };
+
+type PrCacheEntry = { pr: PrRef | null; fetchedAt: number };
+
 type GitState = {
   branch: string | null;
   detached: boolean;
   oid: string;
+  upstream: boolean;
   worktree: boolean;
   staged: number;
   unstaged: number;
@@ -53,6 +66,19 @@ type GitState = {
 
 const SEP = " · ";
 const PAD = 2;
+// Each lookup is a ~0.5s GitHub round trip for a value that moves a few times a
+// day, so a cached answer is good enough until the branch or a gh command moves.
+const PR_TTL_MS = 60_000;
+const PR_RETRY_MS = 20_000;
+const PR_TIMEOUT_MS = 5000;
+const PR_CACHE_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+const PR_CACHE_FILE = join(
+  process.env.XDG_CACHE_HOME || join(homedir(), ".cache"),
+  "pi",
+  "pr-cache.json",
+);
+// Commands that can change which pull request a branch carries.
+const PR_COMMAND = /\bgh\s+pr\s+(create|merge|close|reopen|edit|ready)\b/;
 // A short reply is mostly time-to-first-token, and a small prompt makes a hit
 // rate noisy. Only show diagnostics once the sample means something.
 const MIN_SPEED_OUTPUT_TOKENS = 100;
@@ -180,6 +206,16 @@ export default function (pi: ExtensionAPI) {
   let activeCwd = "";
   let generation = 0;
 
+  let currentPr: PrRef | null = null;
+  let prRequestKey = "";
+  let prDirty = false;
+  let prCache: Record<string, PrCacheEntry> | undefined;
+  let ghMissing = false;
+  // Failures are not cached: a lookup that never reached GitHub says nothing
+  // about the branch, so it only backs off for a moment.
+  const prRetryAt = new Map<string, number>();
+  const prInFlight = new Set<string>();
+
   const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): Stats => {
     const totals = { cost: 0, cacheRead: 0 };
     let cacheHit: number | undefined;
@@ -260,6 +296,149 @@ export default function (pi: ExtensionAPI) {
       );
     });
 
+  const loadPrCache = (): Record<string, PrCacheEntry> => {
+    if (prCache) return prCache;
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(PR_CACHE_FILE, "utf8"));
+      prCache =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as Record<string, PrCacheEntry>)
+          : {};
+    } catch {
+      prCache = {};
+    }
+    return prCache;
+  };
+
+  const savePrCache = () => {
+    const cache = loadPrCache();
+    const cutoff = Date.now() - PR_CACHE_KEEP_MS;
+    for (const [key, entry] of Object.entries(cache)) {
+      if (!(entry?.fetchedAt > cutoff)) delete cache[key];
+    }
+    void mkdir(dirname(PR_CACHE_FILE), { recursive: true })
+      .then(() => writeFile(PR_CACHE_FILE, `${JSON.stringify(cache)}\n`))
+      .catch(() => {});
+  };
+
+  // gh-stack records the pull request each stacked branch carries, so this is
+  // the one answer that needs neither a subprocess nor the network. It is a
+  // cache of its own: an entry outlives the merge until the next `gh stack sync`.
+  const readStackPr = (paths: GitPaths, branch: string): PrRef | null => {
+    const dirs =
+      paths.gitDir === paths.commonDir ? [paths.commonDir] : [paths.commonDir, paths.gitDir];
+    for (const dir of dirs) {
+      try {
+        const data: unknown = JSON.parse(readFileSync(join(dir, "gh-stack"), "utf8"));
+        const stacks = (data as { stacks?: unknown })?.stacks;
+        if (!Array.isArray(stacks)) continue;
+        for (const stack of stacks) {
+          const branches = (stack as { branches?: unknown })?.branches;
+          if (!Array.isArray(branches)) continue;
+          for (const entry of branches) {
+            const { branch: name, pullRequest } = (entry ?? {}) as {
+              branch?: unknown;
+              pullRequest?: { number?: unknown; url?: unknown };
+            };
+            if (name !== branch) continue;
+            if (typeof pullRequest?.number === "number" && typeof pullRequest.url === "string") {
+              return { number: pullRequest.number, url: pullRequest.url };
+            }
+          }
+        }
+      } catch {}
+    }
+    return null;
+  };
+
+  /** Resolve a branch's pull request from the cached answer, the local index, or both. */
+  const resolvePr = (key: string, stack: PrRef | null): PrRef | null => {
+    const entry = loadPrCache()[key];
+    // A fresh API answer is authority, including "no pull request".
+    if (entry && Date.now() - entry.fetchedAt < PR_TTL_MS) return entry.pr;
+    return stack ?? entry?.pr ?? null;
+  };
+
+  const fetchPr = (cwd: string) =>
+    new Promise<{ pr: PrRef | null } | null>((resolve) => {
+      execFile(
+        "gh",
+        ["pr", "view", "--json", "number,url,state,isDraft"],
+        { cwd, timeout: PR_TIMEOUT_MS, maxBuffer: 1 << 16 },
+        (error, stdout, stderr) => {
+          if (error) {
+            // Without gh there is nothing to learn from retrying this session.
+            if (error.code === "ENOENT") ghMissing = true;
+            // These two are answers; anything else (offline, auth, timeout) is not.
+            const none = /no pull requests found|no git remotes found/.test(stderr);
+            resolve(none ? { pr: null } : null);
+            return;
+          }
+          try {
+            const data = JSON.parse(stdout) as {
+              number: number;
+              url: string;
+              state: string;
+              isDraft?: boolean;
+            };
+            const state: PrKind = data.isDraft
+              ? "draft"
+              : data.state === "MERGED"
+                ? "merged"
+                : data.state === "CLOSED"
+                  ? "closed"
+                  : "open";
+            resolve({ pr: { number: data.number, url: data.url, state } });
+          } catch {
+            resolve(null);
+          }
+        },
+      );
+    });
+
+  const setPr = (pr: PrRef | null) => {
+    if (currentPr?.number === pr?.number && currentPr?.state === pr?.state) return;
+    currentPr = pr;
+    tuiRef?.requestRender();
+  };
+
+  const refreshPr = async (state: GitState, paths: GitPaths, force: boolean) => {
+    if (!state.branch) {
+      prRequestKey = "";
+      setPr(null);
+      return;
+    }
+    const key = `${paths.commonDir}\0${state.branch}`;
+    prRequestKey = key;
+    const stack = readStackPr(paths, state.branch);
+    const cache = loadPrCache();
+    setPr(resolvePr(key, stack));
+    if (ghMissing) return;
+
+    // A branch that was never pushed has no pull request yet; one already known
+    // stays visible after its remote branch is deleted on merge.
+    if (!cache[key] && !state.upstream && !stack) return;
+    const now = Date.now();
+    if (!force && now - (cache[key]?.fetchedAt ?? 0) < PR_TTL_MS) return;
+    if (!force && now < (prRetryAt.get(key) ?? 0)) return;
+    if (prInFlight.has(key)) return;
+
+    const mine = generation;
+    prInFlight.add(key);
+    const result = await fetchPr(activeCwd);
+    prInFlight.delete(key);
+    if (result) {
+      cache[key] = { pr: result.pr, fetchedAt: Date.now() };
+      savePrCache();
+      prRetryAt.delete(key);
+    } else {
+      prRetryAt.set(key, Date.now() + PR_RETRY_MS);
+    }
+    // The cache keeps the answer either way; only the painted line can be stale.
+    if (mine !== generation || prRequestKey !== key) return;
+    setPr(resolvePr(key, stack));
+  };
+
   const resolveGitPaths = async (cwd: string): Promise<GitPaths | null> => {
     if (gitPathsCache?.cwd === cwd) return gitPathsCache.value;
     const output = await runGit(cwd, [
@@ -278,6 +457,7 @@ export default function (pi: ExtensionAPI) {
     let branch: string | null = null;
     let detached = false;
     let oid = "";
+    let upstream = false;
     let ahead = 0;
     let behind = 0;
     let staged = 0;
@@ -292,6 +472,8 @@ export default function (pi: ExtensionAPI) {
         else branch = head;
       } else if (line.startsWith("# branch.oid ")) {
         oid = line.slice("# branch.oid ".length);
+      } else if (line.startsWith("# branch.upstream ")) {
+        upstream = true;
       } else if (line.startsWith("# branch.ab ")) {
         const match = /\+(\d+) -(\d+)/.exec(line);
         if (match) {
@@ -313,6 +495,7 @@ export default function (pi: ExtensionAPI) {
       branch,
       detached,
       oid,
+      upstream,
       worktree: paths.gitDir !== paths.commonDir,
       staged,
       unstaged,
@@ -337,12 +520,25 @@ export default function (pi: ExtensionAPI) {
       if (mine !== generation) return;
       if (!paths) {
         gitState = null;
+        prDirty = false;
+        prRequestKey = "";
+        setPr(null);
         tuiRef?.requestRender();
         return;
       }
       const status = await runGit(cwd, ["status", "--porcelain=v2", "--branch"]);
       if (mine !== generation || !status) return;
+      const previous = gitState;
       gitState = parseStatus(status, paths);
+      // A branch switch or a first push changes which pull request the branch
+      // carries; everything else waits for the cached answer to expire.
+      const force =
+        prDirty ||
+        !previous ||
+        previous.branch !== gitState.branch ||
+        (!previous.upstream && gitState.upstream);
+      prDirty = false;
+      void refreshPr(gitState, paths, force);
       tuiRef?.requestRender();
     } finally {
       gitBusy = false;
@@ -368,11 +564,23 @@ export default function (pi: ExtensionAPI) {
     generation++;
     gitState = undefined;
     gitPathsCache = undefined;
+    prRequestKey = "";
+    currentPr = null;
     scheduleGit(0);
   };
 
+  const prColor = (pr: PrRef): ThemeColor =>
+    pr.state === "draft"
+      ? "muted"
+      : pr.state === "merged"
+        ? "success"
+        : pr.state === "closed"
+          ? "error"
+          : "accent";
+
   const branchView = (
     state: GitState | null | undefined,
+    pr: PrRef | null,
     mode: "full" | "glyph" | "none",
   ): Part | null => {
     // No fallback branch: `getGitBranch()` would show a bare name until the
@@ -391,10 +599,16 @@ export default function (pi: ExtensionAPI) {
     const dirtyColor: ThemeColor | undefined =
       state.unstaged > 0 ? "error" : state.staged > 0 ? "warning" : undefined;
 
-    const spans: { text: string; color: ThemeColor; attached?: boolean }[] = [];
+    const spans: { text: string; color: ThemeColor; attached?: boolean; url?: string }[] = [];
     if (state.worktree) spans.push({ text: WORKTREE_GLYPH, color: "muted" });
-    spans.push({ text: glyph, color: stateColor });
-    if (mode === "full" && name) spans.push({ text: name, color: "muted" });
+    // The `#` marks the pull request, so the branch glyph would be noise there,
+    // and the number is already the short form narrow widths fall back to.
+    if (pr) {
+      spans.push({ text: `#${pr.number}`, color: prColor(pr), url: pr.url });
+    } else {
+      spans.push({ text: glyph, color: stateColor });
+      if (mode === "full" && name) spans.push({ text: name, color: "muted" });
+    }
     if (dirtyColor) spans.push({ text: "*", color: dirtyColor, attached: true });
     if (state.operation) spans.push({ text: state.operation, color: "accent" });
     if (state.untracked > 0) spans.push({ text: "?", color: "warning" });
@@ -410,7 +624,12 @@ export default function (pi: ExtensionAPI) {
       spans
         .map((span, index) => {
           const space = index > 0 && !span.attached ? " " : "";
-          const body = withColor && theme ? theme.fg(span.color, span.text) : span.text;
+          const colored = withColor && theme ? theme.fg(span.color, span.text) : span.text;
+          // Only painted lines link, so the width computed from `text` stays true.
+          const body =
+            withColor && span.url && getCapabilities().hyperlinks
+              ? hyperlink(colored, span.url)
+              : colored;
           return space + body;
         })
         .join("");
@@ -510,7 +729,7 @@ export default function (pi: ExtensionAPI) {
       required.push(contextPart(showWindow));
       const left = [...required, ...optional];
       const leftWidth = visibleWidth(left.map((part) => part.text).join(SEP));
-      const right = branchView(gitState, branchMode);
+      const right = branchView(gitState, currentPr, branchMode);
       const rightWidth = right ? visibleWidth(right.text) : 0;
       return { left, leftWidth, right, rightWidth, gap: innerWidth - leftWidth - rightWidth };
     };
@@ -614,6 +833,11 @@ export default function (pi: ExtensionAPI) {
     statsCache = undefined;
     gitState = undefined;
     gitPathsCache = undefined;
+    prRequestKey = "";
+    prDirty = false;
+    currentPr = null;
+    ghMissing = false;
+    prRetryAt.clear();
     mountFooter(ctx);
     scheduleGit(0);
   });
@@ -650,13 +874,20 @@ export default function (pi: ExtensionAPI) {
     scheduleGit();
   });
 
+  // A pull request created or merged a moment ago should not wait out the TTL.
+  pi.on("tool_execution_start", (event) => {
+    const command = event.toolName === "bash" ? event.args?.command : undefined;
+    if (typeof command === "string" && PR_COMMAND.test(command)) prDirty = true;
+  });
+
   pi.on("tool_execution_end", (_event, ctx) => {
     track(ctx);
     tuiRef?.requestRender();
     scheduleGit();
   });
 
-  pi.on("user_bash", (_event, ctx) => {
+  pi.on("user_bash", (event, ctx) => {
+    if (PR_COMMAND.test(event.command)) prDirty = true;
     track(ctx);
     scheduleGit();
   });
