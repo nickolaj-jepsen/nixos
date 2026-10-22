@@ -298,6 +298,7 @@
           hunspell = lib.getExe spellChecker;
           dictionaries = lib.concatStringsSep "," dictionaries;
           inherit personalDictionary;
+          fixLog = "${config.xdg.dataHome}/spellfix/fixes.json";
         };
         statusLine = {
           type = "command";
