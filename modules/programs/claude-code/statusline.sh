@@ -172,14 +172,25 @@ git_segment() {
 
 git_seg=$(git_segment "$cwd" "$worktree")
 
+# Claude renders the status line with a built-in indent, so padding to the raw
+# terminal width would push the git segment past the edge. Leave room for that
+# indent plus a small right margin.
+cols=${COLUMNS:-0}
+case "$cols" in
+  ''|*[!0-9]*) cols=0 ;;
+esac
+if [ "$cols" -gt 6 ]; then target=$((cols - 6)); else target=0; fi
+
 jq -r \
   --arg profile "$profile" \
   --arg dim "$dim" \
   --arg warn "$warn" \
   --arg reset "$reset" \
   --arg speed "$speed" \
-  --arg git "$git_seg" '
+  --arg git "$git_seg" \
+  --argjson target "$target" '
     def pct: (.context_window.used_percentage // 0);
+    def vlen: gsub("\u001b\\[[0-9;]*m"; "") | length;
     # resets_at is epoch seconds per the docs; the ISO branch is a guard, not a known format.
     def hhmm: (if type == "number" then . else sub("\\.[0-9]+"; "") | fromdateiso8601 end)
       | strflocaltime("%H:%M");
@@ -201,7 +212,16 @@ jq -r \
        else "\($dim)\(pct)%\($reset)" end),
       (if $speed != "" then "\($dim)\($speed) t/s\($reset)" else empty end),
       limit("5h"; .rate_limits.five_hour; true),
-      limit("7d"; .rate_limits.seven_day; false),
-      (if $git != "" then $git else empty end)
-    ] | join("\($dim) · \($reset)")
+      limit("7d"; .rate_limits.seven_day; false)
+    ] | join("\($dim) · \($reset)") as $base
+    | if $git == "" then $base
+      else
+        ($base | vlen) as $baseLen
+        | ($git | vlen) as $gitLen
+        | ($target - $baseLen - $gitLen) as $gap
+        | if $target > 0 and $gap >= 2
+          then $base + (" " * $gap) + $git
+          else $base + "\($dim) · \($reset)" + $git
+          end
+      end
   ' <<<"$input"
