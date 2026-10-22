@@ -34,8 +34,9 @@ in {
 
   # darwin: place the host identity at ~/.ssh (so HM-side agenix can decrypt) and
   # harden the native macOS sshd. Remote Login itself is enabled once by hand
-  # (`systemsetup -setremotelogin on`; see the Mac bootstrap notes in the justfile) — this
-  # only manages its config. macOS Includes sshd_config.d/* at the top of
+  # (`systemsetup -setremotelogin on`; see "First switch on a fresh Mac" in
+  # docs/hosts.md) — this only manages its config. macOS Includes
+  # sshd_config.d/* at the top of
   # sshd_config and is socket-activated (a fresh sshd per connection), so a 000-
   # drop-in wins first-match and applies to the next connection without a reload.
   flake.modules.darwin.ssh = {config, ...}: let

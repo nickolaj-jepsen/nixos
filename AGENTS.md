@@ -8,7 +8,7 @@ lives in `modules/programs/claude-code`, vscode in `modules/programs/vscode`.
 All operations use `just`; run `just` for the full list.
 
 ```bash
-just build-system        # Verify builds with this, not switch
+just build [host]        # Verify builds with this, not switch
 just switch [host]       # NEEDS EXPLICIT USER APPROVAL, same for `just boot`
 just fmt                 # ALWAYS run before finishing
 just check               # Full flake check (slow, use sparingly)
