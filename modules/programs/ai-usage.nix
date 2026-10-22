@@ -38,12 +38,8 @@
         name = "Anthropic";
         short = "A";
         icon = "anthropic";
-        keyFile = config.age.secrets.anthropic-admin-key.path;
-        # The Max 20x plan's monthly platform credits; they expire at the end of
-        # each cycle, so spend since the cycle started is what's left to burn.
-        allowance = 200;
-        # Console showed the next drop as the month's last day.
-        creditDay = 31;
+        sessionKeyFile = config.age.secrets.anthropic-console-session.path;
+        orgId = "16cf6a94-7fae-421d-9ea6-29787833a032";
       }
       ++ lib.optional hasOpencodeGo {
         id = "opencode-go";
@@ -67,6 +63,16 @@
     config = lib.mkIf fp.dev.ai-usage.enable {
       home.packages = [pkgs.ai-usage];
       xdg.configFile."ai-usage/config.json".text = builtins.toJSON {inherit providers;};
+
+      # The Console's browser `sessionKey` cookie (sk-ant-sid…), the only auth its
+      # credit balance endpoint takes. Expires about monthly or on Console logout;
+      # refresh with `just secret-write <file> force=1`. Literal path: the default
+      # secretsDir spelling holds an unexpanded variable, and config.json is literal.
+      age.secrets.anthropic-console-session = lib.mkIf fp.dev.pi.enable {
+        rekeyFile = ../../secrets/anthropic-console-session.age;
+        path = "${config.xdg.configHome}/ai-usage/anthropic-console-session";
+        mode = "0600";
+      };
     };
   };
 }

@@ -1,4 +1,4 @@
-"""Print quota windows (and credit allowance spend) for AI agent subscriptions.
+"""Print quota windows (and credit balances) for AI agent subscriptions.
 
 Output is a table, or JSON with --json.
 
@@ -20,7 +20,6 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import urlencode
 
 CACHE_TTL = timedelta(minutes=2)
 # Bump when the cached entry shape changes, so an upgrade discards old entries.
@@ -48,20 +47,6 @@ def month_before(t):
     year, month = (t.year, t.month - 1) if t.month > 1 else (t.year - 1, 12)
     # Clamp to the shorter month (e.g. 31 Mar -> 28/29 Feb).
     return t.replace(year=year, month=month, day=min(t.day, calendar.monthrange(year, month)[1]))
-
-
-def credit_arrival(day, year, month):
-    return datetime(year, month, min(day, calendar.monthrange(year, month)[1]), tzinfo=timezone.utc)
-
-
-def credit_cycle(day, t):
-    """The cycle containing `t`: credits arrive each month at `day`, clamped to its last."""
-    year, month = t.year, t.month
-    if credit_arrival(day, year, month) <= t:
-        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
-    resets = credit_arrival(day, year, month)
-    prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
-    return credit_arrival(day, prev_year, prev_month), resets
 
 
 def money(amount, currency):
@@ -188,56 +173,40 @@ def fetch_opencode_go(p):
     return {"windows": windows, "overage": None}
 
 
-def anthropic_spend(token, starts, ends):
-    """Organization spend in USD over [starts, ends), following pagination."""
-    # Amounts are decimal strings in dollars (the reference response carries five
-    # decimals), despite the guide calling them cents.
-    headers = {"x-api-key": token, "anthropic-version": "2023-06-01", "User-Agent": "ai-usage"}
-    total, page = 0.0, None
-    while True:
-        query = {
-            "starting_at": starts.isoformat(),
-            "ending_at": ends.isoformat(),
-            "bucket_width": "1d",
-            "limit": 31,
-        }
-        if page:
-            query["page"] = page
-        data = http_json(
-            "https://api.anthropic.com/v1/organizations/cost_report?" + urlencode(query), headers
-        )
-        for bucket in data.get("data") or []:
-            for result in bucket.get("results") or []:
-                total += float(result.get("amount") or 0)
-        page = data.get("next_page")
-        if not data.get("has_more") or not page:
-            return total
-
-
 def fetch_anthropic_credits(p):
-    """Spend against the platform credit allowance that arrives each Max cycle.
+    """Live balance of the Console's promotional credit grants (the Max plan's API credit).
 
-    Lasts until a balance endpoint exists; the credits expire at the end of the
-    cycle, so `allowance - spend` is what is left to burn.
+    Anthropic has no API-key route to the balance, so this reads the Console's own
+    undocumented endpoint with the browser `sessionKey` cookie. The Admin cost report
+    is no substitute: it only covers finished UTC days.
     """
-    token = Path(p["keyFile"]).read_text().strip()
-    allowance = float(p["allowance"])
-    currency = p.get("currency", "USD")
-    t = now()
-    starts, resets = credit_cycle(int(p["creditDay"]), t)
+    session = Path(p["sessionKeyFile"]).read_text().strip()
     try:
-        spent = anthropic_spend(token, starts, t)
+        data = http_json(
+            f"https://platform.claude.com/api/organizations/{p['orgId']}/prepaid/credits",
+            {"Cookie": f"sessionKey={session}", "User-Agent": "ai-usage"},
+        )
     except FetchError as e:
         if str(e) in ("HTTP 401", "HTTP 403"):
-            raise FetchError(f"cost report rejected the key ({e}); it needs org-level access") from e
+            raise FetchError(f"console session rejected ({e}); refresh the sessionKey secret") from e
         raise
+    grants = data.get("promo_tranches") or []
+    if not grants:
+        raise FetchError("no credit grant")
+    # Minor units, like the top-level `amount`.
+    allowance = sum(g["granted_amount_minor_units"] for g in grants) / 100
+    remaining = sum(g["remaining_amount_minor_units"] for g in grants) / 100
+    currency = grants[0].get("currency") or "USD"
+    starts = min(parse_time(g["granted_at"]) for g in grants)
+    resets = min(parse_time(g["expires_at"]) for g in grants)
+    spent = allowance - remaining
     used = spent / allowance * 100 if allowance else 0
     detail = f"{money(spent, currency)} of {money(allowance, currency)} spent"
     return {
         "windows": [window("credit", used, resets, "month", "outer", detail, starts)],
         "overage": None,
         "credit": {
-            "remaining": round(max(0.0, allowance - spent), 2),
+            "remaining": round(remaining, 2),
             "allowance": allowance,
             "currency": currency,
         },
