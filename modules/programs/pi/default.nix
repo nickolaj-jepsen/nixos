@@ -295,6 +295,7 @@ in {
             # Mirrors claude-code's ask list: these touch the live system or the outside world.
             "just switch *" = "ask";
             "just boot *" = "ask";
+            "just test *" = "ask";
             "just deploy-remote *" = "ask";
             "just gc *" = "ask";
             # Prints plaintext secrets to the transcript.

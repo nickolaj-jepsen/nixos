@@ -49,6 +49,7 @@ build hostname=`hostname -s` *ARGS="":
 [arg('target', pattern='[a-zA-Z0-9._@:+-]*')]
 [doc('Build + activate a host (this machine by default); a nixos host can also be pushed to target=user@host')]
 [group('host')]
+[metadata('ask')]
 [script]
 switch hostname=`hostname -s` target='' *ARGS="":
     read -r class tool root _ <<<"$(just _meta {{ hostname }})"
@@ -66,6 +67,7 @@ switch hostname=`hostname -s` target='' *ARGS="":
 
 [doc('Build + activate a host at next boot (nixos hosts only)')]
 [group('host')]
+[metadata('ask')]
 [script]
 boot hostname=`hostname -s` *ARGS="":
     just _require-nixos {{ hostname }} boot
@@ -73,6 +75,7 @@ boot hostname=`hostname -s` *ARGS="":
 
 [doc('Build + activate a host until reboot (nixos hosts only)')]
 [group('host')]
+[metadata('ask')]
 [script]
 test hostname=`hostname -s` *ARGS="":
     just _require-nixos {{ hostname }} test
@@ -133,6 +136,7 @@ new-host hostname username:
 [confirm("Deploy " + hostname + " to " + target + "? This will FORMAT disks on the target.")]
 [doc('Install a host over ssh with nixos-anywhere (formats the target disks)')]
 [group('install')]
+[metadata('ask')]
 deploy-remote hostname target:
     scripts/deploy-remote.sh {{ hostname }} {{ target }}
 
@@ -150,6 +154,7 @@ age *ARGS="--help":
 [arg('file', pattern='[a-zA-Z0-9._/-]+')]
 [doc('Decrypt a file to stdout')]
 [group('secret')]
+[metadata('ask')]
 decrypt file:
     just age -d {{ file }}
 
@@ -235,6 +240,7 @@ check:
 [confirm("Delete generations and store paths older than " + days + " days?")]
 [doc('Collect garbage and delete old generations')]
 [group('maintenance')]
+[metadata('ask')]
 [script]
 gc days='7':
     sudo nix-collect-garbage --delete-older-than {{ days }}d

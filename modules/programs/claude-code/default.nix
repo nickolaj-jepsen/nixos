@@ -363,6 +363,7 @@
           ask = [
             "Bash(just switch:*)"
             "Bash(just boot:*)"
+            "Bash(just test:*)"
             "Bash(just deploy-remote:*)"
             "Bash(just gc:*)"
             # Prints plaintext to the transcript, sidestepping the agenix Read denies.
