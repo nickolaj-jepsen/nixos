@@ -172,14 +172,13 @@ git_segment() {
 
 git_seg=$(git_segment "$cwd" "$worktree")
 
-# Claude renders the status line with a built-in indent, so padding to the raw
-# terminal width would push the git segment past the edge. Leave room for that
-# indent plus a small right margin.
+# Claude renders the status line with a 2-cell built-in indent, so pad to the
+# width inside it and leave a 2-cell right margin.
 cols=${COLUMNS:-0}
 case "$cols" in
   ''|*[!0-9]*) cols=0 ;;
 esac
-if [ "$cols" -gt 6 ]; then target=$((cols - 6)); else target=0; fi
+if [ "$cols" -gt 4 ]; then target=$((cols - 4)); else target=0; fi
 
 jq -r \
   --arg profile "$profile" \
