@@ -61,6 +61,44 @@ const BRANCH_GLYPH = "\uf418";
 const DETACHED_GLYPH = "\uf417";
 const WORKTREE_GLYPH = "\uf1bb";
 
+// Display-only patterns applied to catalog names, so new models in the same
+// families shorten without an edit. Explicit aliases below win for exceptions.
+const MODEL_ALIAS_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\s*-\s*/g, " "],
+  [/\bDeepSeek\b/gi, "DS"],
+  [/\bMiniMax\b/gi, "MM"],
+  [/\bQwen(?=\d|\s)/gi, "QW "],
+  [/\bClaude\s+/gi, ""],
+  [/\s*\bFlash\b/gi, " \uf0e7"],
+  [/\s*\bFree\b/gi, ""],
+  [/\s*\bPreview\b/gi, ""],
+];
+
+// Exceptions the patterns cannot express; add an entry here when a model
+// needs a name of its own.
+const MODEL_ALIASES: Record<string, string> = {
+  "qwen/qwen3.8-flash-next": "QW 3.8 Next",
+};
+
+const modelAlias = (model: ActiveModel): string => {
+  const explicit = MODEL_ALIASES[model.id];
+  if (explicit) return explicit;
+  let alias = model.name || model.id;
+  for (const [pattern, replacement] of MODEL_ALIAS_PATTERNS) {
+    alias = alias.replace(pattern, replacement);
+  }
+  return alias.replace(/\s+/g, " ").trim() || model.name || model.id;
+};
+
+// Short provider tags; unknown providers fall back to their full id.
+const PROVIDER_TAGS: Record<string, string> = {
+  opencode: "zen",
+  "opencode-go": "go",
+  tensorx: "tx",
+  anthropic: "anth",
+  local: "\uf015",
+};
+
 const sanitize = (text: string) =>
   text
     .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
@@ -137,7 +175,6 @@ const readStep = (numFile: string, endFile: string) => {
 export default function (pi: ExtensionAPI) {
   let ctxRef: ExtensionContext | undefined;
   let tuiRef: Renderer | undefined;
-  let ambiguousNames: Set<string> | undefined;
   let statsCache:
     | { sessionId: string; leafId: string | null; modelKey: string; stats: Stats }
     | undefined;
@@ -215,23 +252,6 @@ export default function (pi: ExtensionAPI) {
     const stats = collectStats(ctx, model);
     statsCache = { sessionId, leafId, modelKey, stats };
     return stats;
-  };
-
-  const duplicateModelNames = (ctx: ExtensionContext): Set<string> => {
-    if (ambiguousNames) return ambiguousNames;
-    const available = ctx.modelRegistry.getAvailable();
-    const models = available.length > 0 ? available : ctx.modelRegistry.getAll();
-    const providers = new Map<string, Set<string>>();
-    for (const model of models) {
-      const name = model.name || model.id;
-      const set = providers.get(name) ?? new Set<string>();
-      set.add(model.provider);
-      providers.set(name, set);
-    }
-    ambiguousNames = new Set(
-      [...providers].filter(([, set]) => set.size > 1).map(([name]) => name),
-    );
-    return ambiguousNames;
   };
 
   const runGit = (cwd: string, args: string[]) =>
@@ -421,10 +441,10 @@ export default function (pi: ExtensionAPI) {
     const usage = ctx.getContextUsage();
     const thinking = ctx.thinkingLevel ?? pi.getThinkingLevel();
 
-    const name = model ? model.name || model.id : "no model";
-    const ambiguous = model ? duplicateModelNames(ctx).has(name) : false;
-    const suffix = model && ambiguous ? ` (${model.provider})` : "";
-    const modelText = name + suffix;
+    const alias = model ? modelAlias(model) : "no model";
+    const providerTag = model ? (PROVIDER_TAGS[model.provider] ?? model.provider) : "";
+    const providerPrefix = providerTag ? `(${providerTag}) ` : "";
+    const modelText = providerPrefix + alias;
 
     const modelPart = (text = modelText): Part =>
       text === modelText
@@ -432,7 +452,8 @@ export default function (pi: ExtensionAPI) {
             id: "model",
             text,
             color: "muted",
-            styled: (t) => t.fg("muted", name) + (suffix ? t.fg("dim", suffix) : ""),
+            styled: (t) =>
+              (providerPrefix ? t.fg("dim", providerPrefix) : "") + t.fg("muted", alias),
           }
         : { id: "model", text, color: "muted" };
 
@@ -546,8 +567,8 @@ export default function (pi: ExtensionAPI) {
       const restWidth = visibleWidth(fixed.join(SEP)) + visibleWidth(SEP);
       const maxModelWidth = innerWidth - restWidth;
       if (maxModelWidth > 0) {
-        // The provider hint is the first thing to go; the name itself is the identity.
-        modelOverride = truncateToWidth(name, maxModelWidth, "…");
+        // Keep the provider tag; only the alias tail has to give.
+        modelOverride = truncateToWidth(modelText, maxModelWidth, "…");
       }
     }
 
@@ -599,7 +620,6 @@ export default function (pi: ExtensionAPI) {
     ctxRef = ctx;
     activeCwd = ctx.cwd;
     generation++;
-    ambiguousNames = undefined;
     statsCache = undefined;
     gitState = undefined;
     gitPathsCache = undefined;
