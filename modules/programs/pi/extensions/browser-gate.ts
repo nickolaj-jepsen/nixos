@@ -10,6 +10,7 @@
  * session in the process (print mode), the browser stays blocked.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { markAgentPrompt } from "./lib/user-wait.ts";
 
 // Pi's tool-name spelling of the `chrome-devtools` server in the pi leaf's MCP config.
 const PREFIX = "mcp__chrome_devtools__";
@@ -53,7 +54,8 @@ export default function (pi: ExtensionAPI) {
     gate.approved = false;
     gate.asking = undefined;
     gate.owner = self;
-    gate.ask = (title, options) => ctx.ui.select(title, options);
+    // Marked: a subagent's ask has no tool call of this session in flight.
+    gate.ask = (title, options) => markAgentPrompt(ctx, () => ctx.ui.select(title, options));
   });
 
   pi.on("session_shutdown", () => {

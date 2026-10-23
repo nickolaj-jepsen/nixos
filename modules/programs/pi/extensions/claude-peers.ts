@@ -56,6 +56,7 @@ import {
   userFrame,
   writeRegistryEntry,
 } from "./claude-peers/protocol.ts";
+import { markAgentPrompt } from "./lib/user-wait.ts";
 
 const MESSAGE_TYPE = "claude-peer-message";
 const OWN_MODE: PermissionClass = "prompting";
@@ -231,12 +232,15 @@ export default function (pi: ExtensionAPI) {
     }
     if (decision === "hold") {
       receipt(replyTo, frame.msg_id, "held", "Held for approval by the pi user.");
+      const c = ctx;
       const approved =
-        ctx?.hasUI === true &&
-        (await ctx.ui.confirm(
-          `Deliver message from @${fromName}${env.fromMode === "bypass" ? " (a session that skips permission prompts)" : ""}?`,
-          env.body.slice(0, 2000),
-          { timeout: HOLD_DIALOG_MS },
+        c?.hasUI === true &&
+        (await markAgentPrompt(c, () =>
+          c.ui.confirm(
+            `Deliver message from @${fromName}${env.fromMode === "bypass" ? " (a session that skips permission prompts)" : ""}?`,
+            env.body.slice(0, 2000),
+            { timeout: HOLD_DIALOG_MS },
+          ),
         ));
       if (!approved) {
         receipt(replyTo, frame.msg_id, "denied", "The pi user did not approve this message.");
