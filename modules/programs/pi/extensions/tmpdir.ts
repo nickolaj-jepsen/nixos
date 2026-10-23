@@ -32,7 +32,7 @@ const scratchDir = () => {
   return dir;
 };
 
-const guideline = (dir: string) =>
+const section = (dir: string) =>
   `Your scratch dir is \`${dir}\` (also \`$TMPDIR\`): put throwaway files there, not in /tmp, ~ or the repo. Pi deletes it when this process exits, so don't clean it up yourself and don't keep anything there that must outlive the session.`;
 
 export default function (pi: ExtensionAPI) {
@@ -40,9 +40,9 @@ export default function (pi: ExtensionAPI) {
     scratchDir();
   });
 
+  // Custom sections render last, so the per-process path no longer changes the
+  // prompt prefix ahead of it, which other pi processes could share from cache.
   pi.on("before_agent_start", (event) => {
-    const line = guideline(scratchDir());
-    const guidelines = event.systemPromptOptions.promptGuidelines;
-    if (!guidelines.includes(line)) guidelines.push(line);
+    event.systemPromptOptions.sections.scratch_dir = section(scratchDir());
   });
 }
