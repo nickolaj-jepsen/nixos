@@ -339,6 +339,11 @@ function draftText(ctx: ExtensionContext): string {
   return editor?.getText() ?? ctx.ui.getEditorText();
 }
 
+/** pi's own test for a draft it runs as a shell command (`!cmd`, `!!cmd`). */
+function isShellDraft(text: string): boolean {
+  return text.trimStart().startsWith("!");
+}
+
 /** Puts back a draft read with `draftText`. */
 function writeDraft(ui: ExtensionUIContext, text: string) {
   if (editor) editor.replaceDraft(text);
@@ -884,7 +889,7 @@ async function refreshCount(gen: number, ctx: ExtensionContext) {
   if (gen !== sessionGen) return;
   const id = ++checkId;
   const text = draftText(ctx);
-  if (!text.trim()) {
+  if (!text.trim() || isShellDraft(text)) {
     editor?.setUnderlined(new Set());
     ctx.ui.setWidget("spellfix", undefined);
     return;
@@ -913,6 +918,10 @@ async function openPicker(ctx: ExtensionContext) {
   const text = draftText(ctx);
   if (!text.trim()) {
     toast(ctx, "No misspellings", "info");
+    return;
+  }
+  if (isShellDraft(text)) {
+    toast(ctx, "spellfix: shell commands aren't spellchecked", "info");
     return;
   }
   const gen = sessionGen;
