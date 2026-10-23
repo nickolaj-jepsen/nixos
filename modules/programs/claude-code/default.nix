@@ -108,13 +108,30 @@
       exec -a "$0" ${ccfg.finalPackage}/bin/claude "$@"
     '';
 
+    # Work-owned MCP servers ride in their own plugin, which only claude-work
+    # passes to the wrapper: the shared programs.mcp registry reaches every agent.
+    jsonFormat = pkgs.formats.json {};
+    workMcpJson = jsonFormat.generate "claude-work-mcp.json" {
+      mcpServers = lib.mapAttrs (name: server:
+        hmLib.mcp.transformMcpServer {
+          inherit server;
+          extraTransforms = [hmLib.mcp.addType (hmLib.mcp.wrapEnvFilesCommand {inherit pkgs name;})];
+        })
+      cfg.workMcpServers;
+    };
+    workMcpPlugin = pkgs.runCommand "claude-code-work-mcp" {} ''
+      install -Dm644 ${workMcpJson} $out/.mcp.json
+      install -Dm644 ${jsonFormat.generate "claude-work-mcp-plugin.json" {name = "claude-work-mcp";}} $out/.claude-plugin/plugin.json
+    '';
+    workMcpArgs = lib.optionals (cfg.workMcpServers != {}) ["--plugin-dir" workMcpPlugin];
+
     claudeWorkWrapper = pkgs.writeShellApplication {
       name = "claude-work";
       runtimeInputs = [config.programs.claude-code.finalPackage];
       text = ''
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
-        exec claude "$@"
+        exec claude ${lib.escapeShellArgs workMcpArgs} "$@"
       '';
     };
 

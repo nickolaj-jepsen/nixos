@@ -17,12 +17,7 @@
   in {
     config = lib.mkIf config.fireproof.dev.mcp.enable (lib.mkMerge [
       {
-        programs.mcp = {
-          enable = true;
-          servers = {
-            figma.url = "https://mcp.figma.com/mcp";
-          };
-        };
+        programs.mcp.enable = true;
       }
       (lib.mkIf config.fireproof.dev.mcp.homelab.enable {
         age.secrets.grafana-homelab-env = {
@@ -32,14 +27,17 @@
 
         programs.mcp.servers.grafana.command = toString (grafanaMcpWrapper "homelab" config.age.secrets.grafana-homelab-env.path);
       })
-      # Keeps work tokens off personal-only hosts.
-      (lib.mkIf config.fireproof.work.enable {
+      # Work-owned servers go to the claude-work plugin instead of
+      # programs.mcp.servers, which every agent reads. Also keeps the tokens off
+      # hosts without the work profile.
+      (lib.mkIf (config.fireproof.work.enable && config.fireproof.claude-code.work.enable) {
         age.secrets.grafana-mcp-env = {
           rekeyFile = ../../secrets/grafana-mcp-env.age;
           mode = "0600";
         };
 
-        programs.mcp.servers = {
+        fireproof.claude-code.workMcpServers = {
+          figma.url = "https://mcp.figma.com/mcp";
           linear.url = "https://mcp.linear.app/mcp";
           sentry.url = "https://mcp.sentry.dev/mcp";
           insight.url = "https://insight.mcp.aortl.net/mcp";

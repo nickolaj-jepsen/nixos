@@ -198,12 +198,8 @@ in {
         # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
         # ~/.config/mcp/mcp.json. Merged at launch, so /mcp toggles persist.
         mcp = let
-          shared = lib.mapAttrs (name: server:
-            # pi rejects the null/empty fields home-manager's option fills in.
-              lib.filterAttrs (_: v: v != null && v != {} && v != []) server
-              # Figma only accepts OAuth registrations from clients it knows.
-              // lib.optionalAttrs (name == "figma") {oauth.clientName = "Claude Code";})
-          config.programs.mcp.servers;
+          # pi rejects the null/empty fields home-manager's option fills in.
+          shared = lib.mapAttrs (_: lib.filterAttrs (_: v: v != null && v != {} && v != [])) config.programs.mcp.servers;
           servers = shared // lib.optionalAttrs hasBrowser {inherit chrome-devtools;};
         in
           lib.optionalAttrs (servers != {}) {mcpServers = servers;};

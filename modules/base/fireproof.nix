@@ -43,8 +43,19 @@ let
         lan-mouse.enable = lib.mkEnableOption "Lan Mouse — LAN keyboard/mouse sharing (edge-crossing KVM). On niri it uses the layer-shell capture backend (no input-capture portal needed)";
       };
 
-      claude-code.work.enable =
-        lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
+      claude-code = {
+        work.enable =
+          lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
+        workMcpServers = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+          description = ''
+            MCP servers only the claude-work wrapper loads. Work-owned services
+            stay out of programs.mcp.servers, which every agent (pi, opencode,
+            copilot, vscode and the personal claude) reads.
+          '';
+        };
+      };
 
       # Registry: leaves register skills next to the feature they document; third-party
       # skills are referenced from their upstream source, never vendored.
