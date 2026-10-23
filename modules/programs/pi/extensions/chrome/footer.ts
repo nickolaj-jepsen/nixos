@@ -17,11 +17,12 @@ import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
 import { agentParts } from "./agents.ts";
 import { createBackground } from "./background.ts";
+import { borderShown } from "./editor.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { formatCost, shortPath } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
 import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
-import type { Measurements, Meter } from "./measurements.ts";
+import { contextColor, type Measurements, type Meter } from "./measurements.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage, usageAlarm } from "./usage.ts";
@@ -35,8 +36,6 @@ const ICON_EFFORT = "\uf0e7";
 
 const CACHE_WARN_PCT = 90;
 const CACHE_ERROR_PCT = 50;
-const CONTEXT_WARN_PCT = 60;
-const CONTEXT_ERROR_PCT = 85;
 
 // Long, well-known lab names only; Qwen, GLM, Kimi, Nemotron and LongCat keep
 // their catalog names. Claude is redundant next to the provider tag.
@@ -168,14 +167,14 @@ export const createFooter = (
         color: s.cacheHit < CACHE_ERROR_PCT ? "error" : "warning",
       });
     }
-    // Only until the editor's top border carries it.
-    const percent = state.metersActive ? undefined : stats.contextFor(ctx, model)?.percent;
+    // The editor's top border carries the measurements whenever it is drawn.
+    const bordered = borderShown(state);
+    const percent = bordered ? undefined : stats.contextFor(ctx, model)?.percent;
     if (percent != null) {
       alarms.push({
         id: "context",
         text: `ctx ${Math.floor(percent)}%`,
-        color:
-          percent >= CONTEXT_ERROR_PCT ? "error" : percent >= CONTEXT_WARN_PCT ? "warning" : "dim",
+        color: contextColor(percent),
       });
     }
 
@@ -250,15 +249,11 @@ export const createFooter = (
         statuses,
         alarms,
         path: { id: "path", text: shortPath(ctx.cwd), color: "dim" },
-        // The editor's top border carries these; the footer only does until it is installed.
         cost:
-          costText && !state.metersActive
+          costText && !bordered
             ? { id: "cost", text: costText, color: "dim", action: actions.cost }
             : undefined,
-        speed:
-          speedText && !state.metersActive
-            ? { id: "speed", text: speedText, color: "dim" }
-            : undefined,
+        speed: speedText && !bordered ? { id: "speed", text: speedText, color: "dim" } : undefined,
         git: git.view,
       },
       state.hover,
