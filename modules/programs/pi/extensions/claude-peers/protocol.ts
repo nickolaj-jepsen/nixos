@@ -21,8 +21,9 @@ import {
 } from "node:fs";
 import { access, open, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { connect, createServer, type Server } from "node:net";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import path from "node:path";
+import { originalTmpdir } from "../lib/original-tmpdir.ts";
 
 export const PEER_PROTOCOL = 1;
 export const FEATURE_NOTIFY_IDLE = "notify_idle";
@@ -103,7 +104,8 @@ export function registryDirs(): string[] {
 
 /** Socket directory Claude itself binds in; reply addresses outside it are refused. */
 export function socketDir(): string {
-  const base = process.env.XDG_RUNTIME_DIR || process.env.CLAUDE_CODE_TMPDIR || tmpdir();
+  // Claude resolves tmpdir() without pi's TMPDIR override, so ours must too.
+  const base = process.env.XDG_RUNTIME_DIR || process.env.CLAUDE_CODE_TMPDIR || originalTmpdir();
   const dir = path.join(base, "cc-socks");
   const longest = path.join(dir, `${2 ** 22}-ffffffff.sock`);
   return longest.length <= MAX_SOCKET_PATH ? dir : `/tmp/cc-socks-${process.getuid?.() ?? 0}`;
