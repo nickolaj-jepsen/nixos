@@ -330,6 +330,11 @@ in {
         "app.thinking.save" = "alt+s";
         "app.session.toggleSort" = "alt+s";
         "app.models.save" = "alt+s";
+        # Unbound by pi. Plain alt+<key> belongs to zellij's default keybinds.
+        "app.session.new" = "alt+shift+n";
+        "app.session.resume" = "alt+shift+r";
+        "app.session.tree" = "alt+shift+t";
+        "app.session.fork" = "alt+shift+f";
       };
 
       # Claude Code puts the todo checklist on ctrl+t (pi's ctrl+t became alt+t
