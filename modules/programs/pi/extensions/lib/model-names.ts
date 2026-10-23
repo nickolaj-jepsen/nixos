@@ -1,14 +1,15 @@
 /**
  * How a model is named wherever pi shows one: the catalogue name with the
- * best-known lab names shortened, and a short tag for its provider. Shared by
- * the footer (chrome/footer.ts) and /models (model-labels.ts) so the two cannot
- * drift, and so `/models` says the same thing the footer will once selected.
+ * best-known lab names shortened, and the provider as a person reads it. Shared
+ * by the footer (chrome/footer.ts) and /models (model-labels.ts) so the two
+ * cannot drift, and so `/models` says the same thing the footer will once
+ * selected.
  */
 import type { Model } from "@earendil-works/pi-ai";
 
 /**
  * Long, well-known lab names only; Qwen, GLM, Kimi, Nemotron and LongCat keep
- * their catalog names. Claude is redundant next to the provider tag.
+ * their catalog names. Claude is redundant next to the spelled-out provider.
  */
 const ALIAS_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bDeepSeek\b/gi, "DS"],
@@ -16,21 +17,22 @@ const ALIAS_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bClaude\s+/gi, ""],
 ];
 
-/**
- * Short provider tags, two characters each so the column lines up in /models;
- * unknown providers keep their full id.
- */
-export const PROVIDER_TAGS: Record<string, string> = {
-  "opencode-go": "go",
-  synthetic: "sy",
-  tensorx: "tx",
-  anthropic: "an",
-  local: "sh",
-};
+/** Providers whose catalogue name is not what a person reads. */
+const PROVIDER_NAMES: Record<string, string> = { vm: "Virtual" };
 
-/** The name plus tag, e.g. `DS V4.1 Flash` and `go`. */
+/** What a model's provider is called: the catalogue name, or the id when pi has none. */
+type DisplayNames = { getProviderDisplayName(provider: string): string };
+
+/** The name as the catalogue spells it, e.g. `DeepSeek V4.1 Flash`. */
 export const modelName = (model: Model<any>): string => (model.name || model.id).trim();
-export const modelTag = (provider: string): string => PROVIDER_TAGS[provider] ?? provider;
+
+/** The provider as a person reads it, e.g. `OpenCode Go` and `Virtual`. */
+export const providerName = (provider: string, registry: DisplayNames): string =>
+  PROVIDER_NAMES[provider] ?? registry.getProviderDisplayName(provider);
+
+/** The provider squeezed for a narrow line: `OpenCode Go` collapses to its last word. */
+export const providerShortName = (name: string): string =>
+  name.slice(name.lastIndexOf(" ") + 1) || name;
 
 /** The name collapsed for a narrow line; the footer's second tier. */
 export const modelAlias = (model: Model<any>): string => {

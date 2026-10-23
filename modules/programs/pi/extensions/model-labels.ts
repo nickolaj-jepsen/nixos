@@ -23,7 +23,8 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { modelName, modelTag } from "./lib/model-names.ts";
+import { modelName, providerName } from "./lib/model-names.ts";
+import { setModelsClose } from "./lib/models-picker.ts";
 import { descriptionFor, LABELS, type Label, labelsFor } from "./model-labels/registry.ts";
 import { LADDERS, PROVIDER } from "./routers/kinds.ts";
 
@@ -32,6 +33,11 @@ const MARGIN_ROWS = 2;
 /** Lines the picker spends besides its model rows: two borders, scope, query, count, name, legend, hints and blanks. */
 const CHROME = 15;
 const MAX_NAME = 28;
+const MAX_PROVIDER = 18;
+/** Below this the provider column says less than the ellipsis costs. */
+const MIN_PROVIDER = 6;
+/** Columns the description is guaranteed before the provider column shrinks. */
+const MIN_DESCRIPTION = 12;
 const MAX_GLYPHS = 12;
 
 type Cost = { tier: number; text: string };
@@ -43,7 +49,8 @@ type Row = {
   /** What the model is searched by. */
   text: string;
   name: string;
-  tag: string;
+  /** The provider as a person reads it, e.g. `OpenCode Go`. */
+  provider: string;
   glyphs: string;
   cost: Cost;
   /** Context window, compacted for the column. */
@@ -121,17 +128,17 @@ export default function (pi: ExtensionAPI) {
     const labels = labelsFor(model, find(ctx));
     const description = descriptionFor(model);
     const name = modelName(model);
-    const tag = modelTag(model.provider);
+    const provider = providerName(model.provider, ctx.modelRegistry);
     return {
       model,
       labels,
       description,
       name,
-      tag,
+      provider,
       glyphs: labels.map((label) => LABELS[label].glyph).join(" "),
       cost: cost(ctx, model),
       context: contextText(model.contextWindow),
-      text: `${model.provider}/${model.id} ${model.name} ${labels.join(" ")} ${description}`,
+      text: `${model.provider}/${model.id} ${provider} ${model.name} ${labels.join(" ")} ${description}`,
     };
   };
 
@@ -158,8 +165,11 @@ export default function (pi: ExtensionAPI) {
     const picked = await ctx.ui.custom<Model<any> | undefined>((tui, theme, _keybindings, done) => {
       picker = new ModelPicker(tui, theme, available, scoped, ctx.model, (result) => {
         picker = undefined;
+        setModelsClose(undefined);
         done(result);
       });
+      // Told to the footer, so its click on the model name closes this instead of stacking a second one.
+      setModelsClose(() => picker?.cancel());
       return picker;
     });
     picker = undefined;
@@ -177,6 +187,9 @@ export default function (pi: ExtensionAPI) {
     description: "Pick a model, with its data-handling labels",
     handler: open,
   });
+  // A picker torn down with its session never reports back, and a stale handle
+  // would make the footer's click do nothing in the next one.
+  pi.on("session_start", () => setModelsClose(undefined));
 }
 
 /** Whether two catalogue entries name the same model. */
@@ -193,8 +206,6 @@ const pad = (text: string, plain: string, width: number) =>
 
 const padLeft = (text: string, plain: string, width: number) =>
   " ".repeat(Math.max(0, width - visibleWidth(plain))) + text;
-
-const tagText = (row: Row) => `[${row.tag}]`;
 
 /**
  * The picker, laid out like pi's built-in model selector: full-width border
@@ -284,9 +295,17 @@ class ModelPicker implements Component {
       MAX_GLYPHS,
       Math.max(0, ...rows.map((r) => visibleWidth(r.glyphs))),
     );
-    const tagWidth = Math.min(8, Math.max(0, ...rows.map((r) => visibleWidth(tagText(r)))));
+    const providerMax = Math.min(
+      MAX_PROVIDER,
+      Math.max(0, ...rows.map((r) => visibleWidth(r.provider))),
+    );
     const costWidth = Math.max(0, ...rows.map((r) => costGlyph(r.cost.tier).length));
     const contextWidth = Math.max(0, ...rows.map((r) => visibleWidth(r.context)));
+    // The column gives way before the name and the description do: when the rest of
+    // the row needs the space, it shrinks and a long provider name truncates.
+    const rest =
+      4 + nameWidth + 2 + contextWidth + 2 + costWidth + 2 + glyphWidth + 2 + MIN_DESCRIPTION;
+    const providerWidth = Math.min(providerMax, Math.max(MIN_PROVIDER, width - rest));
 
     // Stay inside the interactive area; the picker is not an overlay.
     const room = Math.max(3, this.tui.terminal.rows - MARGIN_ROWS - CHROME);
@@ -299,7 +318,7 @@ class ModelPicker implements Component {
             this.line(
               r,
               start + i === this.index,
-              { nameWidth, tagWidth, glyphWidth, costWidth, contextWidth },
+              { nameWidth, providerWidth, glyphWidth, costWidth, contextWidth },
               width,
             ),
           );
@@ -331,7 +350,7 @@ class ModelPicker implements Component {
       "",
       `  ${this.legend()}`,
       "",
-      theme.fg("dim", "  Enter to select · tab scope · Escape/Ctrl+C to cancel"),
+      theme.fg("dim", "  Enter to select   tab scope   Escape/Ctrl+C to cancel"),
       border,
     ];
   }
@@ -343,7 +362,7 @@ class ModelPicker implements Component {
 
   /** The selected model's name and list price, under the list as in the built-in selector. */
   private describe(row: Row): string {
-    return `${row.name} · ${row.cost.text}`;
+    return `${row.name}  ${row.cost.text}`;
   }
 
   /** Only the glyphs in scope, so a legend never explains marks that are not shown. */
@@ -353,7 +372,7 @@ class ModelPicker implements Component {
     const entries = (Object.keys(LABELS) as Label[])
       .filter((label) => present.has(label))
       .map((label) => `${glyph(theme, label)} ${theme.fg("dim", LABELS[label].meaning)}`);
-    return entries.join(theme.fg("dim", " · "));
+    return entries.join(theme.fg("dim", "   "));
   }
 
   private refilter() {
@@ -373,26 +392,36 @@ class ModelPicker implements Component {
     selected: boolean,
     columns: {
       nameWidth: number;
-      tagWidth: number;
+      providerWidth: number;
       glyphWidth: number;
       costWidth: number;
       contextWidth: number;
     },
     width: number,
   ) {
-    const { nameWidth, tagWidth, glyphWidth, costWidth, contextWidth } = columns;
+    const { nameWidth, providerWidth, glyphWidth, costWidth, contextWidth } = columns;
     const theme = this.theme;
     const cursor = selected ? theme.fg("accent", "→ ") : "  ";
-    const marker =
-      this.current && sameModel(row.model, this.current) ? theme.fg("accent", "✓ ") : "  ";
-    const name = selected ? theme.fg("accent", row.name) : theme.fg("text", row.name);
-    const tag = theme.fg("dim", tagText(row));
+    const current = this.current !== undefined && sameModel(row.model, this.current);
+    const marker = current ? theme.fg("accent", "✓ ") : "  ";
+    // Bold marks the model in use: with the provider column beside it, the check
+    // alone is too easy to lose.
+    const name = selected
+      ? theme.bold(theme.fg("accent", row.name))
+      : current
+        ? theme.bold(theme.fg("text", row.name))
+        : theme.fg("text", row.name);
+    const provider = padLeft(
+      theme.fg("dim", truncateToWidth(row.provider, providerWidth, "…")),
+      row.provider,
+      providerWidth,
+    );
     const glyphs = row.labels.map((label) => glyph(theme, label)).join(" ");
     const cost = costGlyph(row.cost.tier);
     const price = padLeft(theme.fg(costColor(row.cost.tier), cost), cost, costWidth);
     const context = padLeft(theme.fg("dim", row.context), row.context, contextWidth);
     const line =
-      `${cursor}${marker}${pad(name, row.name, nameWidth)}  ${pad(tag, tagText(row), tagWidth)}  ` +
+      `${cursor}${marker}${provider}  ${pad(name, row.name, nameWidth)}  ` +
       `${context}  ${price}  ${pad(glyphs, row.glyphs, glyphWidth)}  ${theme.fg("muted", row.description)}`;
     return truncateToWidth(line, width, "…", true);
   }

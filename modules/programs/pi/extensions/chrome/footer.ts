@@ -9,6 +9,7 @@ import {
   type ExtensionContext,
   type ReadonlyFooterDataProvider,
   type Theme,
+  VIRTUAL_MODEL_STATE_ENTRY,
 } from "@earendil-works/pi-coding-agent";
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
@@ -20,7 +21,7 @@ import { formatCost, shortPath } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
 import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";
-import { modelAlias, modelTag } from "../lib/model-names.ts";
+import { modelAlias, providerName, providerShortName } from "../lib/model-names.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage, usageAlarm } from "./usage.ts";
@@ -30,7 +31,6 @@ type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
 // Font Awesome range of the Nerd Font, present in every version of it. One space follows an icon:
 // these fonts draw the glyph into its own cells, so a second one reads as a gap.
-const ICON_MODEL = "\uf2db";
 const ICON_EFFORT = "\uf0e7";
 
 const CACHE_WARN_PCT = 90;
@@ -38,31 +38,46 @@ const CACHE_ERROR_PCT = 50;
 
 /**
  * Under a virtual selection (extensions/routers.ts), the physical model that
- * answered last on the branch; undefined for a physical selection or before
- * the first answer. Rescanned only when the leaf or selection moves.
+ * answered last on the branch, and the router's phase when its state carries
+ * one. Undefined for a physical selection or before the first answer. Rescanned
+ * only when the leaf or selection moves.
  */
 const createRouted = () => {
-  let cache:
-    | { leafId: string | null; selected: string; model: ActiveModel | undefined }
-    | undefined;
-  return (ctx: ExtensionContext): ActiveModel | undefined => {
+  type Routed = { model: ActiveModel; phase?: string };
+  let cache: { leafId: string | null; selected: string; routed: Routed | undefined } | undefined;
+  return (ctx: ExtensionContext): Routed | undefined => {
     const selected = ctx.model;
     if (selected?.api !== "pi-virtual") return undefined;
     const leafId = ctx.sessionManager.getLeafId();
     const key = `${selected.provider}/${selected.id}`;
-    if (cache && cache.leafId === leafId && cache.selected === key) return cache.model;
+    if (cache && cache.leafId === leafId && cache.selected === key) return cache.routed;
     let model: ActiveModel | undefined;
+    let phase: string | undefined;
+    let stateSeen = false;
     const branch = ctx.sessionManager.getBranch();
-    for (let i = branch.length - 1; i >= 0 && !model; i--) {
+    for (let i = branch.length - 1; i >= 0 && (!model || !stateSeen); i--) {
       const entry = branch[i];
-      if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+      // The latest state the router stored for this selection: the phase is the
+      // only field the footer reads, and only a router that keeps one shows it.
+      if (entry.type === "custom" && entry.customType === VIRTUAL_MODEL_STATE_ENTRY) {
+        if (stateSeen) continue;
+        const data = entry.data as
+          | { provider?: string; modelId?: string; state?: { phase?: unknown } }
+          | undefined;
+        if (data?.provider !== selected.provider || data.modelId !== selected.id) continue;
+        stateSeen = true;
+        phase = typeof data.state?.phase === "string" ? data.state.phase : undefined;
+        continue;
+      }
+      if (model || entry.type !== "message" || entry.message.role !== "assistant") continue;
       const { stopReason, provider, model: id } = entry.message;
       if (stopReason !== "error" && stopReason !== "aborted") {
         model = ctx.modelRegistry.find(provider, id);
       }
     }
-    cache = { leafId, selected: key, model };
-    return model;
+    const routed = model ? { model, phase } : undefined;
+    cache = { leafId, selected: key, routed };
+    return routed;
   };
 };
 
@@ -108,7 +123,7 @@ export const createFooter = (
   const measurements = (): Measurements => {
     const ctx = state.ctx;
     if (!ctx) return { context: undefined, meters: [] };
-    const model = routed(ctx) ?? ctx.model;
+    const model = routed(ctx)?.model ?? ctx.model;
     const { cost, speed } = meterTexts(ctx, model);
     const meters = [
       cost === undefined ? undefined : { id: "cost", text: cost, action: actions.cost },
@@ -128,12 +143,13 @@ export const createFooter = (
       return "";
     }
     const selected = ctx.model;
-    const routedTo = routed(ctx);
+    const route = routed(ctx);
+    const routedTo = route?.model;
+    const phase = route?.phase;
     // Provider, quota and stats follow the model that answers.
     const model = routedTo ?? selected;
     const s = stats.statsFor(ctx, model);
     const thinking = ctx.thinkingLevel ?? pi.getThinkingLevel();
-    const tag = model ? modelTag(model.provider) : "";
 
     const alarms: Part[] = [];
     const quota = model ? usageAlarm(usage.provider(model.provider)) : undefined;
@@ -164,6 +180,15 @@ export const createFooter = (
     const tone = model ? stageTone(model.provider, model.id) : "normal";
     const modelColor = tone === "alert" ? "error" : tone === "warn" ? "warning" : "dim";
 
+    // The selection names itself only while its router tracks a phase: that is the
+    // one thing about it the routed name cannot say.
+    const selection = selected && routedTo && phase ? selected.name || selected.id : undefined;
+    const modelText = model ? model.name || model.id : "no model";
+    // Before the first answer the selection is the name already on show, so its
+    // phase rides along instead of repeating it.
+    const phased = !selection && phase !== undefined && model === selected;
+    const provider = model ? providerName(model.provider, ctx.modelRegistry) : undefined;
+
     const statusEntries = [...footerData.getExtensionStatuses()]
       .filter(([key]) => key !== "pi-cache-stats")
       .sort(([a], [b]) => a.localeCompare(b));
@@ -192,31 +217,40 @@ export const createFooter = (
       width,
       theme,
       {
-        provider: tag
-          ? {
-              id: "provider",
-              text: /^\w/.test(tag) ? `${ICON_MODEL} ${tag}` : tag,
-              color: "dim",
-            }
-          : undefined,
-        // Only the model opens the selector; the provider is just a label.
+        // One phrase, one target: every part opens the picker and lights together.
+        selection:
+          selected && selection
+            ? {
+                id: "model",
+                text: selection,
+                color: "text",
+                bold: true,
+                action: actions.model,
+              }
+            : undefined,
+        phase:
+          selection && phase
+            ? { id: "model", text: `(${phase})`, color: "dim", tight: true, action: actions.model }
+            : undefined,
+        provider:
+          provider === undefined
+            ? undefined
+            : {
+                id: "model",
+                text: provider,
+                short: providerShortName(provider),
+                color: "dim",
+                action: actions.model,
+              },
         model: {
           id: "model",
-          text:
-            selected && routedTo
-              ? `${selected.name} \u2192 ${routedTo.name || routedTo.id}`
-              : model
-                ? model.name || model.id
-                : "no model",
-          short:
-            selected && routedTo
-              ? `${selected.name} \u2192 ${modelAlias(routedTo)}`
-              : model
-                ? modelAlias(model)
-                : undefined,
+          text: phased ? `${modelText} (${phase})` : modelText,
+          short: model ? modelAlias(model) : undefined,
           color: modelColor,
           bold: true,
-          tight: true,
+          styled: phased
+            ? (t) => t.bold(t.fg(modelColor, modelText)) + t.fg("dim", ` (${phase})`)
+            : undefined,
           action: actions.model,
         },
         // The effort wears the colour of the editor border, which is keyed to the same level.
