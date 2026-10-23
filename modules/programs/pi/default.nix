@@ -173,6 +173,23 @@ in {
           defaultProvider = "fp";
           defaultModel = "flash";
           defaultThinkingLevel = "high";
+          # /model opens on these and ctrl+p cycles them; its All tab still lists
+          # every model. A default outside the list would start on the first entry
+          # instead, so the virtual models lead.
+          enabledModels =
+            [
+              "fp/*"
+              "anthropic/claude-opus-5-5"
+              "anthropic/claude-sonnet-5-5"
+              "anthropic/claude-haiku-5-5"
+              "opencode-go/deepseek-v4.1-flash"
+              "opencode-go/glm-5.3"
+              "opencode-go/qwen3.8-flash"
+              "opencode-go/minimax-m3"
+              "opencode-go/kimi-k3"
+              "tensorx/*"
+            ]
+            ++ lib.optional config.fireproof.dev.llm.enable "local/*";
           # The defaults (reserve 16k, keep 20k) overrun a 32k window: compaction would
           # start at 16k, with the system prompt and tools already taking ~9k of it.
           compaction.modelOverrides = lib.optionalAttrs config.fireproof.dev.llm.enable (lib.mapAttrs' (id: m:
