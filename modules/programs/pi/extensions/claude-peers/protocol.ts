@@ -366,12 +366,19 @@ export function resolvePeer(peers: Peer[], to: string): Resolution {
   return { error: `no live session matches "${to}". Reachable: ${known}` };
 }
 
-// Claude neutralizes a closing tag in the body as `<\/…`; it also folds
-// lookalike characters, which this simpler escape does not.
-const tagInBody = new RegExp(`<(?=\\s*/?\\s*${TAG})`, "giu");
+/**
+ * `body` with the `<` of every `<tag` and `</tag` turned into `<\`, the way
+ * Claude keeps a body from closing its envelope. Claude also folds lookalike
+ * characters, which this simpler escape does not.
+ */
+export function escapeTag(body: string, tag: string): string {
+  return body.replace(new RegExp(`<(?=\\s*/?\\s*${tag})`, "giu"), "<\\");
+}
+
 const escapedTagInBody = new RegExp(`<\\\\(?=\\s*/?\\s*${TAG})`, "giu");
 
-function attr(value: string): string {
+/** `value` made safe for a double-quoted attribute, capped at 64 characters. */
+export function attr(value: string): string {
   const clean = value
     .replace(/["<>]/g, "")
     .replace(/[\p{Cf}\p{Cc}\p{Cs}\p{Zl}\p{Zp}]/gu, "")
@@ -397,7 +404,7 @@ export function buildEnvelope(e: Envelope): string {
   const name = e.fromName === undefined ? "" : attr(e.fromName);
   if (name) attrs.push(`from-name="${name}"`);
   if (e.fromMode) attrs.push(`from-mode="${e.fromMode}"`);
-  return `<${TAG}${attrs.map((a) => ` ${a}`).join("")}>\n${e.body.replace(tagInBody, "<\\")}\n</${TAG}>`;
+  return `<${TAG}${attrs.map((a) => ` ${a}`).join("")}>\n${escapeTag(e.body, TAG)}\n</${TAG}>`;
 }
 
 /** Parse an inbound envelope; content without one comes back as the body. */
