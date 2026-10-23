@@ -306,36 +306,56 @@ in {
                     cacheRead = 0.2;
                     cacheWrite = 0;
                   };
+                  compat = {
+                    supportsStore = false;
+                    supportsDeveloperRole = false;
+                    supportsStrictMode = true;
+                    maxTokensField = "max_tokens";
+                  };
                 }
               ];
             };
             # The plan serves k3.1-pro, which pi's bundled catalog predates too;
             # its `kimi-for-coding` id is K2.8 Preview, not this model.
-            kimi-coding.models = [
-              {
-                id = "k3.1-pro";
-                name = "Kimi K3.1 Pro";
-                reasoning = true;
-                input = ["text" "image"];
-                contextWindow = 1048576;
-                maxTokens = 131072;
-                cost = {
-                  input = 2;
-                  output = 10;
-                  cacheRead = 0.2;
-                  cacheWrite = 0;
-                };
-                thinkingLevelMap = {
-                  off = null;
-                  minimal = null;
-                  low = "low";
-                  medium = null;
-                  high = "high";
-                  xhigh = null;
-                  max = "max";
-                };
-              }
-            ];
+            kimi-coding = {
+              apiKey = "!cat ${config.age.secrets.kimi-coding-api-key.path}";
+              models = [
+                {
+                  id = "k3.1-pro";
+                  name = "Kimi K3.1 Pro";
+                  reasoning = true;
+                  input = ["text" "image"];
+                  contextWindow = 1048576;
+                  maxTokens = 131072;
+                  cost = {
+                    input = 2;
+                    output = 10;
+                    cacheRead = 0.2;
+                    cacheWrite = 0;
+                  };
+                  # The plan rejects the `developer` role and wants prior reasoning
+                  # replayed; without this the entry inherits pi's defaults.
+                  compat = {
+                    supportsStore = false;
+                    supportsDeveloperRole = false;
+                    supportsStrictMode = false;
+                    supportsReasoningEffort = true;
+                    maxTokensField = "max_tokens";
+                    thinkingFormat = "openai";
+                    requiresReasoningContentOnAssistantMessages = true;
+                  };
+                  thinkingLevelMap = {
+                    off = null;
+                    minimal = null;
+                    low = "low";
+                    medium = null;
+                    high = "high";
+                    xhigh = null;
+                    max = "max";
+                  };
+                }
+              ];
+            };
             # API credits, not the Max subscription: run /login anthropic and
             # that stored OAuth credential would take precedence over this.
             anthropic.apiKey = "!cat ${config.age.secrets.anthropic-api-key.path}";
