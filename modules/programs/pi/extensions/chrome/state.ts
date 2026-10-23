@@ -7,6 +7,11 @@ export type Action = (ctx: ExtensionContext) => void | Promise<void>;
 export type ChromeState = {
   /** Set once at session_start; its getters read the live session. */
   ctx: ExtensionContext | undefined;
+  /**
+   * Whether the session draws pi's TUI. A headless one (an in-process subagent,
+   * `pi -p`, RPC) shows none of this, so it runs no git, gh, ai-usage or label call.
+   */
+  live: boolean;
   tui: Renderer | undefined;
   /** pi copies its app keybinding handlers onto a CustomEditor, so clicks can reuse them. */
   editor: { actionHandlers?: Map<string, () => void> } | undefined;
@@ -27,6 +32,7 @@ export const createState = (): ChromeState => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const state: ChromeState = {
     ctx: undefined,
+    live: false,
     tui: undefined,
     editor: undefined,
     editorComponent: undefined,

@@ -272,7 +272,6 @@ export const createFooter = (
   };
 
   const mountFooter = (ctx: ExtensionContext) => {
-    if (ctx.mode !== "tui" || !ctx.hasUI) return;
     ctx.ui.setFooter((tui, theme, footerData) => {
       state.tui = tui;
       const unsubscribe = footerData.onBranchChange(() => {
@@ -307,16 +306,19 @@ export const createFooter = (
   };
 
   pi.on("session_start", (_event, ctx) => {
+    if (!state.live) return;
     git.start(ctx.cwd);
     mountFooter(ctx);
     usage.refresh();
   });
 
   const repaint = () => {
+    if (!state.live) return;
     usage.refresh();
     state.tui?.requestRender();
   };
   const repaintAndGit = () => {
+    if (!state.live) return;
     repaint();
     git.schedule();
   };

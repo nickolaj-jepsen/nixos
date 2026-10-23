@@ -18,6 +18,7 @@ export default function (pi: ExtensionAPI) {
   // builds a fresh runtime, and so a fresh instance of this, for every session.
   pi.on("session_start", (_event, ctx) => {
     state.ctx = ctx;
+    state.live = ctx.mode === "tui" && ctx.hasUI;
   });
   const actions = createActions(pi, state);
   const identity = createIdentity(pi, state);

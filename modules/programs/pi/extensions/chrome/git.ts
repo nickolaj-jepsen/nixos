@@ -379,12 +379,12 @@ export const createGit = (chrome: ChromeState) => {
       const changed = stateKey(previous) !== stateKey(next);
       gitState = next;
       // A branch switch or a first push changes which pull request the branch
-      // carries; everything else waits for the cached answer to expire.
+      // carries; everything else, a fresh session included, waits for the cached
+      // answer to expire, so panes on one branch share a lookup.
       const force =
         prDirty ||
-        !previous ||
-        previous.branch !== gitState.branch ||
-        (!previous.upstream && gitState.upstream);
+        (previous != null &&
+          (previous.branch !== gitState.branch || (!previous.upstream && gitState.upstream)));
       prDirty = false;
       void refreshPr(gitState, paths, force);
       if (changed) chrome.tui?.requestRender();
@@ -403,6 +403,7 @@ export const createGit = (chrome: ChromeState) => {
       gitTimer = undefined;
       void refreshGit().catch(() => {});
     }, delay);
+    gitTimer.unref?.();
   };
 
   // One poll at a time: the next one is armed when the previous refresh settles,

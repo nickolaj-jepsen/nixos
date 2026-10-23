@@ -215,15 +215,13 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
 
   const paint = () => {
     const ctx = state.ctx;
-    if (!ctx) return;
-    if (ctx.mode === "tui" && ctx.hasUI) {
-      // Every tool call repaints; only rewrite the title when it changed, so the
-      // titlebar does not flicker for a session that merely got older.
-      const title = renderTitle(ctx);
-      if (title !== paintedTitle) {
-        paintedTitle = title;
-        ctx.ui.setTitle(title);
-      }
+    if (!ctx || !state.live) return;
+    // Every tool call repaints; only rewrite the title when it changed, so the
+    // titlebar does not flicker for a session that merely got older.
+    const title = renderTitle(ctx);
+    if (title !== paintedTitle) {
+      paintedTitle = title;
+      ctx.ui.setTitle(title);
     }
     state.tui?.requestRender();
   };
@@ -391,7 +389,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   };
 
   const relabel = async (ctx: ExtensionContext, manual: boolean) => {
-    if (busy) return;
+    if (busy || !state.live) return;
     const name = explicitName();
     if (name) {
       if (manual) ctx.ui.notify(`identity: /name owns the label (${name})`, "warning");
@@ -576,8 +574,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       }
     }
 
+    if (!state.live) return;
     timer = setInterval(paint, TICK_MS);
-    // A print/RPC run must not be held open by a timer nobody looks at.
     timer.unref?.();
     paint();
     repaintSoon();
@@ -642,7 +640,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     if (repaintTimer) clearTimeout(repaintTimer);
     repaintTimer = undefined;
     state.tui = undefined;
-    if (state.ctx?.mode === "tui" && state.ctx.hasUI) {
+    if (state.ctx && state.live) {
       // Leave an honest title for the shell prompt that follows; the fish title
       // takes over from here, but a crash-free exit should not show a stale run.
       const { text } = currentLabel(state.ctx);
