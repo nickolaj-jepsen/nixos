@@ -83,6 +83,27 @@ export function withoutWords(text: string, words: readonly string[]): string {
     .join("\n");
 }
 
+/** The cased spellings worth trying for an all-lowercase `word`, capitalised first; none for any other word. */
+export function caseVariants(word: string): string[] {
+  if (word !== word.toLowerCase() || word === word.toUpperCase()) return [];
+  const [first = "", ...rest] = word;
+  return [`${first.toUpperCase()}${rest.join("")}`, word.toUpperCase()];
+}
+
+/**
+ * Turns a `correct` verdict on an all-lowercase word into a fix when one of its
+ * `caseVariants` is in `accepted` (the variants hunspell passes): `claude` or
+ * `i'm` is a casing slip, not a word for the personal dictionary. A model fix
+ * that differs only in case already stays a fix.
+ */
+export function recase(verdicts: Map<string, Verdict>, accepted: ReadonlySet<string>) {
+  for (const [word, v] of verdicts) {
+    if (v.kind !== "correct") continue;
+    const cased = caseVariants(word).find((c) => accepted.has(c));
+    if (cased) verdicts.set(word, { kind: "fix", word: cased });
+  }
+}
+
 /** The words `verdicts` calls correct, for the personal dictionary, minus those `skip` holds back. */
 export function autoAdds(
   verdicts: ReadonlyMap<string, Verdict>,

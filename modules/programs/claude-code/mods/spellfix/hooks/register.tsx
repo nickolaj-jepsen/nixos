@@ -6,6 +6,7 @@ import {
   addInput,
   autoAdds,
   candidates,
+  caseVariants,
   CHECK,
   checkPrompt,
   countPicks,
@@ -16,6 +17,7 @@ import {
   parseReply,
   parseSuggestions,
   placeExtras,
+  recase,
   replyBudget,
   shift,
   suggestInput,
@@ -113,6 +115,15 @@ async function findMisses($: EngineInterface, text: string): Promise<Miss[]> {
   if (stdout === undefined) return [];
   const bad = new Set(stdout.split("\n").filter(Boolean));
   return words.filter((w) => bad.has(w.word));
+}
+
+/** The words of `words` hunspell accepts; none when it fails. */
+async function knownWords($: EngineInterface, words: readonly string[]): Promise<Set<string>> {
+  if (words.length === 0) return new Set();
+  const stdout = await runHunspell($, "-l", `${words.join("\n")}\n`);
+  if (stdout === undefined) return new Set();
+  const bad = new Set(stdout.split("\n"));
+  return new Set(words.filter((w) => !bad.has(w)));
 }
 
 /** hunspell's misses plus the batch's extras for `text`, in draft order. */
@@ -214,6 +225,10 @@ async function runBatch($: EngineInterface, b: Batch, text: string) {
   });
   if (!r.isAnswered) $.ui.toast(`spellfix: Haiku failed: ${r.reason}`);
   const { verdicts, found } = parseReply(r.isAnswered ? r.text : "", text, distinct);
+  const variants = [...verdicts].flatMap(([word, v]) =>
+    v.kind === "correct" ? caseVariants(word) : [],
+  );
+  recase(verdicts, await knownWords($, variants));
   let extras = placeExtras(text, found, flagged);
   for (const e of b.edits) extras = extras.flatMap((x) => shift(x, e.start, e.end, e.delta) ?? []);
   b.result = { verdicts, extras };

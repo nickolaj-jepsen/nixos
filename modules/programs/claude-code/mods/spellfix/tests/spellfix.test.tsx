@@ -37,6 +37,7 @@ const DICT: Record<string, string[]> = {
   qiuck: ["quick", "quack"],
   recieve: ["receive"],
   Jepsen: ["Jensen"],
+  claude: ["clause"],
 };
 
 /** Haiku's batch reply: each marked word fixed to hunspell's first suggestion, unless `say` has its own line. */
@@ -294,6 +295,23 @@ test(
     expect(w.box.text).toBe("ask Jepsen about teh fox");
     // Taken back, it is flagged again and not re-added.
     expect(await band.find({ type: "Text", text: /Jepsen/ })).toBeDefined();
+    await band.unmount();
+  },
+);
+
+test(
+  "a lowercase word Haiku calls correct whose capitalised form passes is fixed, not added",
+  OPTIONS,
+  async ($, on) => {
+    const w = world(on, haikuSays({ claude: `<word text="claude" verdict="correct"/>` }));
+
+    await paste($, w, "ask claude about it");
+    const band = await openPicker($, w);
+    expect(personal(w).has("claude")).toBe(false);
+    expect((await band.find({ key: "ai" }))?.text).toContain("Claude");
+
+    await key($, w, "1");
+    expect(w.box.text).toBe("ask Claude about it");
     await band.unmount();
   },
 );
