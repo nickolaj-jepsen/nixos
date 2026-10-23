@@ -371,19 +371,30 @@ in {
         shellTools.bg_run.commandArgument = "command";
         permission = {
           "*" = "allow";
-          # Gates bash too, and matches symlink targets, so the agenix-backed
-          # ~/.ssh keys and ~/.pi/agent/*-api-key are covered. `agenix*` also catches
-          # the agenix.d/<gen> dirs the /run/agenix symlinks resolve to.
-          path = {
-            "*.env" = "deny";
-            "*.env.*" = "deny";
-            "*.env.example" = "allow";
-            "/run/agenix*" = "deny";
-            "/run/user/*/agenix*" = "deny";
-            "~/.ssh/id_*" = "deny";
-            "~/.claude/.credentials.json" = "deny";
-            "~/.claude-work/.credentials.json" = "deny";
-          };
+          # Gates bash too, and matches symlink targets as well as the path as
+          # typed. Every home-manager secret placed outside secretsDir is denied
+          # where it lands; the agenix globs cover secretsDir itself on both
+          # platforms, the agenix.d/<gen> dirs its symlinks resolve to, and
+          # system secrets under /run/agenix.
+          path =
+            {
+              "*.env" = "deny";
+              "*.env.*" = "deny";
+              "*.env.example" = "allow";
+              "*/agenix" = "deny";
+              "*/agenix/*" = "deny";
+              "*/agenix.d" = "deny";
+              "*/agenix.d/*" = "deny";
+              "~/.ssh/id_*" = "deny";
+              "~/.claude/.credentials.json" = "deny";
+              "~/.claude-work/.credentials.json" = "deny";
+              # /login and MCP OAuth tokens.
+              "~/.pi/agent/auth.json" = "deny";
+              "~/.pi/agent/mcp-auth.json" = "deny";
+            }
+            // lib.listToAttrs (map (secret: lib.nameValuePair secret.path "deny")
+              (lib.filter (secret: !lib.hasPrefix config.age.secretsDir secret.path)
+                (lib.attrValues config.age.secrets)));
           # Where a write lands is decided here, not by bash text: the package
           # also matches every bash path argument in its absolute spelling, so a
           # pattern can't tell `rm -rf build` from `rm -rf /abs/build`. Covers rm,
