@@ -71,6 +71,9 @@ in {
     ...
   }: let
     pi = mkPi pkgs;
+    # Instance for this host's palette: pi-background-tasks hardcodes its selection
+    # band (see pkgs/pi-packages), so the override keeps it on the theme colors.
+    piPackages = pkgs.pi-packages.override {themeColors = config.fireproof.theme.colors;};
     # Shared with the Claude Code spellchecker (lib/default.nix), so a word
     # learned in one agent's picker is known to the other.
     spellChecker = fpLib.mkHunspell pkgs;
@@ -202,7 +205,7 @@ in {
         # Local paths: pi loads the Nix-built tree as-is (see
         # pkgs/pi-packages for how the npm dependencies get there).
         settings.packages =
-          map (name: "${pkgs.pi-packages}/node_modules/${name}") thirdPartyPackages
+          map (name: "${piPackages}/node_modules/${name}") thirdPartyPackages
           # own, from ./extensions
           ++ ["${mkExtensions pkgs pi}"];
         # Arrays replace wholesale, so `pi config` toggles of built-ins revert at launch.
@@ -221,11 +224,11 @@ in {
         declared = lib.sort builtins.lessThan thirdPartyPackages;
       in [
         {
-          assertion = declared == lib.sort builtins.lessThan pkgs.pi-packages.packageNames;
+          assertion = declared == lib.sort builtins.lessThan piPackages.packageNames;
           message = ''
             The pi package roster in settings.packages and pkgs/pi-packages/package.json disagree.
-            Only here: ${lib.concatStringsSep ", " (lib.subtractLists pkgs.pi-packages.packageNames declared)}
-            Only in package.json: ${lib.concatStringsSep ", " (lib.subtractLists declared pkgs.pi-packages.packageNames)}
+            Only here: ${lib.concatStringsSep ", " (lib.subtractLists piPackages.packageNames declared)}
+            Only in package.json: ${lib.concatStringsSep ", " (lib.subtractLists declared piPackages.packageNames)}
           '';
         }
       ];
