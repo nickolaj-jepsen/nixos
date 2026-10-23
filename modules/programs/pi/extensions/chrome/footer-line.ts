@@ -33,6 +33,7 @@ export const layoutFooter = (
   width: number,
   theme: Theme,
   input: FooterInput,
+  hovered?: string,
 ): { line: string; regions: Region[] } => {
   if (width <= PAD * 2) return { line: "", regions: [] };
   const inner = width - PAD * 2;
@@ -91,10 +92,10 @@ export const layoutFooter = (
   }
 
   const pad = " ".repeat(PAD);
-  const left = paintParts(layout.left, theme, PAD);
+  const left = paintParts(layout.left, theme, PAD, hovered);
   const gitBlock = layout.git ? GIT_GAP + layout.gitWidth : 0;
   const fill = Math.max(0, inner - layout.leftWidth - layout.rightWidth - gitBlock);
-  const right = paintParts(layout.right, theme, PAD + layout.leftWidth + fill);
+  const right = paintParts(layout.right, theme, PAD + layout.leftWidth + fill, hovered);
   const git = layout.git
     ? " ".repeat(GIT_GAP) +
       (layout.git.styled ? layout.git.styled(theme) : theme.fg(layout.git.color, layout.git.text))

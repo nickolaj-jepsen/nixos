@@ -292,7 +292,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       if (room < MIN_LABEL_ROOM) continue;
       // The label wears the input's own border color (pi keys it to the
       // thinking level), so it reads as box chrome rather than prompt text.
-      const label = border(truncateToWidth(text, room, "…"));
+      const painted = border(truncateToWidth(text, room, "…"));
+      const label = state.hover === "label" ? theme.underline(painted) : painted;
       return { left: `${lead}${label}${theme.fg("dim", hint)} `, right };
     }
     return { left: "", right: "" };
