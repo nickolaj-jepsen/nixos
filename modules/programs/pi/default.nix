@@ -319,12 +319,24 @@ in {
           };
       };
 
-      # Frees ctrl+s for extensions/stash.ts. These only act in pickers, but pi's
-      # conflict check ignores view and would warn at every startup.
+      # Claude Code's defaults where pi leaves the key free: alt+p is its model
+      # picker and alt+t its thinking toggle. Frees ctrl+s for extensions/stash.ts
+      # and ctrl+t for the todo overlay below. The alt+s saves only act in
+      # pickers, but pi's conflict check ignores view and would warn at startup.
       home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
+        "$schema" = "https://pi.dev/schemas/keybindings.schema.json";
+        "app.model.select" = ["ctrl+l" "alt+p"];
+        "app.thinking.toggle" = "alt+t";
         "app.thinking.save" = "alt+s";
         "app.session.toggleSort" = "alt+s";
         "app.models.save" = "alt+s";
+      };
+
+      # Claude Code puts the todo checklist on ctrl+t (pi's ctrl+t became alt+t
+      # above). rpiv-todo only collapses and expands an overlay that is already
+      # showing, so the key does nothing while the list is empty.
+      home.file.".config/rpiv-todo/config.json".text = builtins.toJSON {
+        collapseKey = "ctrl+t";
       };
 
       # Compact roughly halves Agent's declaration. `/agents` writes project
