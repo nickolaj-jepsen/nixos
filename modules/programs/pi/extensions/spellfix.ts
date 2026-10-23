@@ -882,34 +882,22 @@ function scheduleCheck(gen: number, ctx: ExtensionContext) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     timer = undefined;
-    void refreshCount(gen, ctx);
+    void refreshUnderlines(gen, ctx);
   }, CHECK_DELAY_MS);
 }
 
-/** Updates the underline and the "N misspelled" widget from the draft. */
-async function refreshCount(gen: number, ctx: ExtensionContext) {
+/** Underlines the draft's misspellings. */
+async function refreshUnderlines(gen: number, ctx: ExtensionContext) {
   if (gen !== sessionGen) return;
   const id = ++checkId;
   const text = draftText(ctx);
   if (!text.trim() || isShellDraft(text)) {
     editor?.setUnderlined(new Set());
-    ctx.ui.setWidget("spellfix", undefined);
     return;
   }
   const misses = await allMisses(ctx, text);
   if (id !== checkId || gen !== sessionGen) return;
   editor?.setUnderlined(underlinedWords(misses));
-  if (suspended) return;
-  // The word still being typed is underlined but not counted until the cursor moves past it.
-  const cursor = editor?.cursorOffset() ?? Number.POSITIVE_INFINITY;
-  const count = misses.filter((m) => m.end !== cursor).length;
-  const theme = ctx.ui.theme;
-  ctx.ui.setWidget(
-    "spellfix",
-    count > 0
-      ? [theme.fg("error", `${count} misspelled`) + theme.fg("dim", " · ctrl+q")]
-      : undefined,
-  );
 }
 
 async function openPicker(ctx: ExtensionContext) {
@@ -930,7 +918,6 @@ async function openPicker(ctx: ExtensionContext) {
   const cursor = editor?.cursorOffset() ?? text.length;
   suspended = true;
   if (timer) clearTimeout(timer);
-  ctx.ui.setWidget("spellfix", undefined);
   try {
     await ctx.ui.custom<PickerResult>(
       (tui, _theme, _kb, done) => {
@@ -991,7 +978,7 @@ export default function (pi: ExtensionAPI) {
     scheduleCheck(gen, ctx);
   });
 
-  pi.on("session_shutdown", (_event, ctx) => {
+  pi.on("session_shutdown", () => {
     sessionGen++;
     if (timer) clearTimeout(timer);
     timer = undefined;
@@ -1001,7 +988,6 @@ export default function (pi: ExtensionAPI) {
     batch = undefined;
     if (provided) withdrawPromptEditor(provided);
     provided = undefined;
-    if (ctx.mode === "tui") ctx.ui.setWidget("spellfix", undefined);
   });
 
   // A submitted or cleared draft starts with a clean ignore list, as in the Claude Code mod.
