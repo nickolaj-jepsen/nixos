@@ -148,6 +148,11 @@ in {
         environment.PI_SPELLFIX_PERSONAL.value = fpLib.hunspellPersonalDictionary config;
         environment.PI_SPELLFIX_LOG.value = fpLib.spellfixLog config;
         environment.PI_SPELLFIX_MODEL.value = "anthropic/claude-haiku-5-5";
+        # You should know (extensions/you-should-know.ts) forks the session model,
+        # so a check is a cache read of the main request; PI_YSK_MODEL routes it
+        # elsewhere and gives that up. A local session must not check at all:
+        # llama-swap has one GPU, and the check would queue ahead of the turn.
+        environment.PI_YSK_SKIP_PROVIDERS.value = "local";
         # The fireproof.agents.lspServers registry, read by extensions/lsp.ts.
         environment.PI_LSP_SERVERS = lib.mkIf (config.fireproof.agents.lspServers != {}) {
           value = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
