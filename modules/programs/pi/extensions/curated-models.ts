@@ -15,12 +15,10 @@ type Chat = Extract<ProviderModelConfig, { reasoning: boolean }>;
 
 // Providers whose built-in catalog this replaces. TensorX is a models.json
 // provider (see _tensorx-models.nix), so it needs no filtering.
-const OVERRIDES = ["anthropic", "opencode", "opencode-go"] as const;
+const OVERRIDES = ["anthropic", "opencode-go"] as const;
 
 export const CURATED: Record<(typeof OVERRIDES)[number], readonly string[]> = {
   anthropic: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
-  // Nothing hand-picked: free models are the only Zen ones worth a picker entry.
-  opencode: [],
   "opencode-go": ["deepseek-v4.1-flash", "glm-5.3", "qwen3.8-flash", "minimax-m3", "kimi-k3"],
 };
 

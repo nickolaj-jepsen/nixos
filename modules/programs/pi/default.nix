@@ -247,10 +247,8 @@ in {
       home.file.".pi/agent/models.json".text = builtins.toJSON {
         providers =
           {
-            # One secret: Zen and Go share an OpenCode account key. Zen's paid
-            # models never reach /model, since extensions/curated-models.ts
-            # replaces its catalog.
-            opencode.apiKey = "!cat ${config.age.secrets.opencode-go-api-key.path}";
+            # No `opencode` (Zen) entry on purpose: its free models are free only
+            # inside opencode itself, and the Go subscription covers the paid ones.
             opencode-go.apiKey = "!cat ${config.age.secrets.opencode-go-api-key.path}";
             # API credits, not the Max subscription: run /login anthropic and
             # that stored OAuth credential would take precedence over this.

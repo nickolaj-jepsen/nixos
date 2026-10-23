@@ -58,7 +58,6 @@ const modelAlias = (model: ActiveModel): string => {
 
 // Short provider tags; unknown providers fall back to their full id.
 const PROVIDER_TAGS: Record<string, string> = {
-  opencode: "zen",
   "opencode-go": "go",
   tensorx: "tx",
   anthropic: "anth",
