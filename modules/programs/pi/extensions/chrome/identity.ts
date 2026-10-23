@@ -557,18 +557,9 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   });
 
   pi.on("session_start", (_event, ctx) => {
-    state.ctx = ctx;
     cwd = ctx.cwd;
-    phase = "idle";
-    phaseBeforePrompt = "idle";
-    since = Date.now();
-    busy = false;
-    paintedTitle = "";
-    derivedCache = undefined;
-
     // The last persisted label on this branch wins, so a resumed session paints
     // instantly and without a model call.
-    label = undefined;
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type === "custom" && entry.customType === CUSTOM_TYPE) {
         const data = entry.data as Partial<Label> | undefined;
@@ -585,7 +576,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       }
     }
 
-    if (timer) clearInterval(timer);
     timer = setInterval(paint, TICK_MS);
     // A print/RPC run must not be held open by a timer nobody looks at.
     timer.unref?.();
@@ -593,17 +583,14 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     repaintSoon();
   });
 
-  pi.on("agent_start", (_event, ctx) => {
-    state.ctx = ctx;
-    cwd = ctx.cwd;
+  pi.on("agent_start", () => {
     since = Date.now();
     setPhase("working");
     startSpinner();
     paint();
   });
 
-  pi.on("agent_settled", (_event, ctx) => {
-    state.ctx = ctx;
+  pi.on("agent_settled", () => {
     since = Date.now();
     // Failure is sticky until the next run starts.
     setPhase(phase === "failed" ? "failed" : "idle");
@@ -611,24 +598,20 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     paint();
   });
 
-  pi.on("ui_prompt_start", (_event, ctx) => {
-    state.ctx = ctx;
+  pi.on("ui_prompt_start", () => {
     since = Date.now();
     phaseBeforePrompt = phase;
     setPhase("waiting");
     paint();
   });
 
-  pi.on("ui_prompt_end", (_event, ctx) => {
-    state.ctx = ctx;
+  pi.on("ui_prompt_end", () => {
     since = Date.now();
     setPhase(phaseBeforePrompt);
     paint();
   });
 
-  pi.on("message_end", (event, ctx) => {
-    state.ctx = ctx;
-    cwd = ctx.cwd;
+  pi.on("message_end", (event) => {
     derivedCache = undefined;
     if (event.message.role === "assistant" && event.message.stopReason === "error") {
       setPhase("failed");
@@ -636,13 +619,9 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     paint();
   });
 
-  pi.on("tool_execution_end", (_event, ctx) => {
-    state.ctx = ctx;
-    paint();
-  });
+  pi.on("tool_execution_end", () => paint());
 
   pi.on("session_compact", (_event, ctx) => {
-    state.ctx = ctx;
     derivedCache = undefined;
     // Compaction already paid for a summary, so the marginal label is cheap and
     // the work has usually moved on by the time one happens.
@@ -650,8 +629,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     paint();
   });
 
-  pi.on("session_info_changed", (_event, ctx) => {
-    state.ctx = ctx;
+  pi.on("session_info_changed", () => {
     derivedCache = undefined;
     paint();
     repaintSoon();

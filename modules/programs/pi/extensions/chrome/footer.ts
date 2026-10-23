@@ -271,12 +271,6 @@ export const createFooter = (
     return result.line;
   };
 
-  const track = (ctx: ExtensionContext) => {
-    state.ctx = ctx;
-    usage.refresh();
-    git.retarget(ctx.cwd);
-  };
-
   const mountFooter = (ctx: ExtensionContext) => {
     if (ctx.mode !== "tui" || !ctx.hasUI) return;
     ctx.ui.setFooter((tui, theme, footerData) => {
@@ -313,24 +307,22 @@ export const createFooter = (
   };
 
   pi.on("session_start", (_event, ctx) => {
-    state.ctx = ctx;
-    stats.reset();
-    git.reset(ctx.cwd);
+    git.start(ctx.cwd);
     mountFooter(ctx);
     usage.refresh();
   });
 
-  const repaint = (_event: unknown, ctx: ExtensionContext) => {
-    track(ctx);
+  const repaint = () => {
+    usage.refresh();
     state.tui?.requestRender();
   };
-  const repaintAndGit = (_event: unknown, ctx: ExtensionContext) => {
-    repaint(_event, ctx);
+  const repaintAndGit = () => {
+    repaint();
     git.schedule();
   };
-  const rescan = (_event: unknown, ctx: ExtensionContext) => {
+  const rescan = () => {
     stats.reset();
-    repaint(_event, ctx);
+    repaint();
   };
 
   pi.on("model_select", repaint);
@@ -350,10 +342,9 @@ export const createFooter = (
     if (typeof command === "string" && PR_COMMAND.test(command)) git.markPrDirty();
   });
 
-  pi.on("user_bash", (event, ctx) => {
+  pi.on("user_bash", (event) => {
     if (PR_COMMAND.test(event.command)) git.markPrDirty();
-    track(ctx);
-    git.schedule();
+    repaintAndGit();
   });
 
   return { meters };

@@ -14,6 +14,11 @@ import { createState } from "./chrome/state.ts";
 
 export default function (pi: ExtensionAPI) {
   const state = createState();
+  // Registered before the modules, so their handlers already see the session. pi
+  // builds a fresh runtime, and so a fresh instance of this, for every session.
+  pi.on("session_start", (_event, ctx) => {
+    state.ctx = ctx;
+  });
   const actions = createActions(pi, state);
   const identity = createIdentity(pi, state);
   const footer = createFooter(pi, state, actions);

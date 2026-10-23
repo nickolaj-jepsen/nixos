@@ -5,6 +5,7 @@ export type Action = (ctx: ExtensionContext) => void | Promise<void>;
 
 /** State shared by the chrome modules; one instance per extension load. */
 export type ChromeState = {
+  /** Set once at session_start; its getters read the live session. */
   ctx: ExtensionContext | undefined;
   tui: Renderer | undefined;
   /** pi copies its app keybinding handlers onto a CustomEditor, so clicks can reuse them. */

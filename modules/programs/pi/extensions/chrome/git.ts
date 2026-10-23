@@ -120,7 +120,6 @@ export const createGit = (chrome: ChromeState) => {
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   let polling = false;
   let activeCwd = "";
-  let generation = 0;
 
   let currentPr: PrRef | null = null;
   let prRequestKey = "";
@@ -269,7 +268,6 @@ export const createGit = (chrome: ChromeState) => {
     if (!force && now < (prRetryAt.get(key) ?? 0)) return;
     if (prInFlight.has(key)) return;
 
-    const mine = generation;
     prInFlight.add(key);
     const result = await fetchPr(activeCwd);
     prInFlight.delete(key);
@@ -281,7 +279,7 @@ export const createGit = (chrome: ChromeState) => {
       prRetryAt.set(key, Date.now() + PR_RETRY_MS);
     }
     // The cache keeps the answer either way; only the painted line can be stale.
-    if (mine !== generation || prRequestKey !== key) return;
+    if (prRequestKey !== key) return;
     setPr(resolvePr(key, stack));
   };
 
@@ -362,11 +360,9 @@ export const createGit = (chrome: ChromeState) => {
       return;
     }
     gitBusy = true;
-    const mine = generation;
     const cwd = activeCwd;
     try {
       const paths = await resolveGitPaths(cwd);
-      if (mine !== generation) return;
       if (!paths) {
         const changed = gitState !== null;
         gitState = null;
@@ -377,7 +373,7 @@ export const createGit = (chrome: ChromeState) => {
         return;
       }
       const status = await runGit(cwd, ["status", "--porcelain=v2", "--branch"]);
-      if (mine !== generation || !status) return;
+      if (!status) return;
       const previous = gitState;
       const next = parseStatus(status, paths);
       const changed = stateKey(previous) !== stateKey(next);
@@ -502,28 +498,9 @@ export const createGit = (chrome: ChromeState) => {
     markPrDirty: () => {
       prDirty = true;
     },
-    /** New session: forget everything learned about the previous one. */
-    reset: (cwd: string) => {
+    /** Points this at the session's cwd, which never changes, and asks git once. */
+    start: (cwd: string) => {
       activeCwd = cwd;
-      generation++;
-      gitState = undefined;
-      gitPathsCache = undefined;
-      prRequestKey = "";
-      prDirty = false;
-      currentPr = null;
-      ghMissing = false;
-      prRetryAt.clear();
-      scheduleGit(0);
-    },
-    /** Same session, maybe a new cwd. */
-    retarget: (cwd: string) => {
-      if (cwd === activeCwd) return;
-      activeCwd = cwd;
-      generation++;
-      gitState = undefined;
-      gitPathsCache = undefined;
-      prRequestKey = "";
-      currentPr = null;
       scheduleGit(0);
     },
     dispose: () => {
