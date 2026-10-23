@@ -291,6 +291,9 @@ async function askModel(
           temperature: 0,
           timeoutMs: 20_000,
           signal,
+          // The opencode gateway, where the ctx.model fallback may route, rejects
+          // a request without the session header pi derives from this.
+          sessionId: ctx.sessionManager.getSessionId(),
         },
       )
       .result();
