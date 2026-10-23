@@ -139,8 +139,6 @@ in {
           - A result is not shown to the user: summarise it, and check an agent's claimed edits before reporting them done.
           - `SubagentWorkflow` is scripted fan-out, declared only on large-context models; where it is missing, `/workflow` carries the codemode call. Both routes need an explicit ask — a task that would merely benefit from parallelism is not one.
         '';
-        # The fireproof.agents.skills registry, linked into one dir.
-        skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
         themes = [theme];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
@@ -354,6 +352,12 @@ in {
         # Auto stands down if another extension provides a workflow tool.
         workflowsEnabled = true;
       };
+
+      # The fireproof.agents.skills registry, in pi's user skills dir rather than
+      # the module's `skills` (a --skill flag): pi-subagents builds each child
+      # session with its own resource loader, which scans this dir but never
+      # sees the main process's flags.
+      home.file.".pi/agent/skills".source = pkgs.linkFarm "pi-skills" config.fireproof.agents.skills;
 
       # `/workflow`: the opt-in the workflow tool asks for, in one line.
       home.file.".pi/agent/prompts/workflow.md".source = ./prompts/workflow.md;
