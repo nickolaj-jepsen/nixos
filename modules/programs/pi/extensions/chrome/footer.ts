@@ -1,10 +1,7 @@
 /**
- * The line under the editor: what is answering on the left (provider, model,
- * effort, other extensions' statuses), measurements right-aligned before git.
- * Measurements (context, cost, speed) live on the editor's top border;
- * alarms (quota running out, credit left, a cache miss) appear here only when
- * they say something. Layout and shedding live in `footer-line.ts`; git, usage
- * and stats in their own modules.
+ * The line under the editor: what is answering on the left, alarms and git on
+ * the right. Alarms appear only when they say something; the measurements live
+ * on the editor's top border and come here only while it is not drawn.
  */
 import {
   createLocalBashOperations,

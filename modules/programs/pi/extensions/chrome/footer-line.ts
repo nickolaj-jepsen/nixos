@@ -30,9 +30,7 @@ export type FooterInput = {
 
 /**
  * Words on the left, meters right-aligned before git. When the line does not
- * fit, parts give way in a fixed order: the model name shortens, then
- * statuses, path, speed, cost, branch name, provider, effort, git, model width (down
- * to MODEL_MIN) and alarms.
+ * fit, parts give way in the order of `steps`.
  */
 export const layoutFooter = (
   width: number,
