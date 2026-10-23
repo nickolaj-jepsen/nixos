@@ -164,8 +164,10 @@ in {
         # `attribution` feature rewrites Anthropic requests and rejects API-key credentials.
         environment.PI_BG_FEATURES.value = "process";
         environment.PI_BG_DISABLE_UPDATE_CHECK.value = "1";
-        # $SHELL is fish, which the package won't treat as POSIX.
+        # $SHELL is fish, which the package won't treat as POSIX. The path skips
+        # its /bin/bash probe, which on darwin finds Apple's bash 3.2.
         environment.PI_BG_POSIX_SHELL.value = "bash";
+        environment.PI_BG_POSIX_SHELL_PATH.value = lib.getExe pkgs.bash;
         settings = {
           # The model picker's "save as default" reverts at launch; change it here.
           # DeepSeek on OpenCode Go, bridging to Haiku while Go's quota is out
