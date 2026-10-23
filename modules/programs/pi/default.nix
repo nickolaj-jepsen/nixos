@@ -190,6 +190,8 @@ in {
           quietStartup = "header";
           # `/tree` opens on my prompts; ctrl+d still shows everything.
           treeFilterMode = "user-only";
+          # OSC 9;4 progress in ghostty's tab, for runs long enough to switch away from.
+          terminal.showTerminalProgress = true;
           # Loads the cwd's direnv/nix-direnv env into the bash tool, which
           # otherwise keeps the env pi was launched with. Blocked or missing
           # .envrc files export nothing.
