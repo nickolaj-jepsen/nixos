@@ -301,6 +301,8 @@ async function askModel(
     const reply = response.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("\n");
     return parseReply(reply, text, distinct);
   } catch (error) {
+    // Closing the picker aborts the call on purpose.
+    if (signal.aborted) return undefined;
     toast(
       ctx,
       `spellfix: ${model.provider}/${model.id} failed: ${
@@ -576,6 +578,10 @@ class SpellPicker implements Component {
       this.aiError = "no answer";
       this.aiDone = true;
       this.tui.requestRender();
+      if (this.pendingAll) {
+        this.pendingAll = false;
+        void this.fixAll();
+      }
       return;
     }
     const { verdicts, found } = answer;
