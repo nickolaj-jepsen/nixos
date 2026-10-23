@@ -352,6 +352,12 @@ in {
       # `/workflow`: the opt-in the workflow tool asks for, in one line.
       home.file.".pi/agent/prompts/workflow.md".source = ./prompts/workflow.md;
 
+      # Subagent roles, one file each (./agents): a pinned model and tool set per
+      # role, so a delegation can't inherit the router or spend the Anthropic
+      # credit, and a child starts no MCP servers.
+      home.file.".pi/agent/agents/verifier.md".source = ./agents/verifier.md;
+      home.file.".pi/agent/agents/reviewer.md".source = ./agents/reviewer.md;
+
       # Nix-owned (read-only), so pi's "persist globally" approval won't stick;
       # session approvals still work.
       home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
