@@ -112,10 +112,6 @@ in {
       "@juicesharp/rpiv-todo"
       # guardrails
       "@gotgenes/pi-permission-system"
-      # context diet
-      "pi-cache-optimizer"
-      # ui
-      "@ayulab/pi-rewind"
       # agents
       "@tintinweb/pi-subagents"
       # long builds/tests without blocking the turn
