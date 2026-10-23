@@ -16,7 +16,7 @@
  * file formats the same.
  */
 import { spawn } from "node:child_process";
-import { mkdir, open, readFile, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import type { Model, UserMessage } from "@earendil-works/pi-ai";
@@ -191,6 +191,13 @@ async function suggest(ctx: ExtensionContext, word: string): Promise<string[]> {
   return stdout === undefined ? [] : parseSuggestions(stdout, SUGGESTIONS);
 }
 
+/** Replaces `path` with `text` by renaming a temporary file over it, so no reader sees it half-written. */
+async function writeAtomic(path: string, text: string) {
+  const tmp = `${path}.${process.pid}.tmp`;
+  await writeFile(tmp, text);
+  await rename(tmp, path);
+}
+
 async function addWords(ctx: ExtensionContext, words: readonly string[]) {
   for (const word of words) ignored.add(word);
   if (!PERSONAL || words.length === 0) return;
@@ -206,7 +213,7 @@ async function removeWords(ctx: ExtensionContext, words: readonly string[]) {
   }
   if (!PERSONAL) return;
   try {
-    await writeFile(PERSONAL, withoutWords(await readFile(PERSONAL, "utf8"), words));
+    await writeAtomic(PERSONAL, withoutWords(await readFile(PERSONAL, "utf8"), words));
   } catch (error) {
     toast(ctx, `spellfix: couldn't edit ${PERSONAL}: ${String(error)}`, "error");
   }
@@ -236,7 +243,7 @@ function record(picks: readonly LogPick[]) {
       if (!log) return;
       const last = new Date().toISOString().slice(0, 10);
       await mkdir(dirname(FIX_LOG), { recursive: true });
-      await writeFile(FIX_LOG, formatLog(countPicks(log, picks, last)));
+      await writeAtomic(FIX_LOG, formatLog(countPicks(log, picks, last)));
     })
     .catch(() => undefined);
 }
