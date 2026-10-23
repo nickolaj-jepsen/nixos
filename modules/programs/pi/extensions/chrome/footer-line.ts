@@ -2,7 +2,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { paintParts, partsWidth, type Part, type Region } from "./layout.ts";
 
-export const PAD = 2;
+const PAD = 2;
 // Between the left zone and the right one.
 const ZONE_GAP = 2;
 // Git follows the path as one phrase (`~/nixos  branch`); the branch glyph is the separator.
@@ -30,9 +30,7 @@ export type FooterInput = {
 
 /**
  * Words on the left, meters right-aligned before git. When the line does not
- * fit, parts give way in a fixed order: the model name shortens, then
- * statuses, path, speed, cost, branch name, provider, effort, git, model width (down
- * to MODEL_MIN) and alarms.
+ * fit, parts give way in the order of `steps`.
  */
 export const layoutFooter = (
   width: number,

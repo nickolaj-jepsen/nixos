@@ -1,10 +1,7 @@
 /**
- * The line under the editor: what is answering on the left (provider, model,
- * effort, other extensions' statuses), measurements right-aligned before git.
- * Measurements (context, cost, speed) live on the editor's top border;
- * alarms (quota running out, credit left, a cache miss) appear here only when
- * they say something. Layout and shedding live in `footer-line.ts`; git, usage
- * and stats in their own modules.
+ * The line under the editor: what is answering on the left, alarms and git on
+ * the right. Alarms appear only when they say something; the measurements live
+ * on the editor's top border and come here only while it is not drawn.
  */
 import {
   createLocalBashOperations,
@@ -17,11 +14,12 @@ import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
 import { agentParts } from "./agents.ts";
 import { createBackground } from "./background.ts";
+import { borderShown } from "./editor.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { formatCost, shortPath } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
 import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
-import type { Meter } from "./measurements.ts";
+import { contextColor, type Measurements, type Meter } from "./measurements.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage, usageAlarm } from "./usage.ts";
@@ -35,8 +33,6 @@ const ICON_EFFORT = "\uf0e7";
 
 const CACHE_WARN_PCT = 90;
 const CACHE_ERROR_PCT = 50;
-const CONTEXT_WARN_PCT = 60;
-const CONTEXT_ERROR_PCT = 85;
 
 // Long, well-known lab names only; Qwen, GLM, Kimi, Nemotron and LongCat keep
 // their catalog names. Claude is redundant next to the provider tag.
@@ -46,13 +42,7 @@ const MODEL_ALIAS_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bClaude\s+/gi, ""],
 ];
 
-// Exceptions the patterns cannot express; add an entry when a model needs a
-// name of its own.
-const MODEL_ALIASES: Record<string, string> = {};
-
 const modelAlias = (model: ActiveModel): string => {
-  const explicit = MODEL_ALIASES[model.id];
-  if (explicit) return explicit;
   let alias = model.name || model.id;
   for (const [pattern, replacement] of MODEL_ALIAS_PATTERNS) {
     alias = alias.replace(pattern, replacement);
@@ -98,9 +88,12 @@ const createRouted = () => {
   };
 };
 
+// Any CSI (private and colon forms too), then OSC, DCS, PM and APC strings up to BEL or ST.
+const TERMINAL_SEQUENCE = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b[\]P^_][\s\S]*?(?:\x07|\x1b\\)/g;
+
 const sanitize = (text: string) =>
   text
-    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
+    .replace(TERMINAL_SEQUENCE, "")
     .replace(/[\r\n\t]+/g, " ")
     .replace(/ +/g, " ")
     .trim();
@@ -118,8 +111,7 @@ export const createFooter = (
   let regions: Region[] = [];
 
   /** Cost and speed as text; `undefined` when there is nothing worth showing. */
-  const meterTexts = (ctx: ExtensionContext) => {
-    const model = routed(ctx) ?? ctx.model;
+  const meterTexts = (ctx: ExtensionContext, model: ActiveModel | undefined) => {
     const s = stats.statsFor(ctx, model);
     const paid = (model?.cost.input ?? 0) > 0 || (model?.cost.output ?? 0) > 0;
     return {
@@ -134,15 +126,17 @@ export const createFooter = (
     };
   };
 
-  /** The measurements the editor's top border shows next to the context; the cost opens /cost. */
-  const meters = (): Meter[] => {
+  /** What the editor's top border shows: the context, then the meters; the cost opens /cost. */
+  const measurements = (): Measurements => {
     const ctx = state.ctx;
-    if (!ctx) return [];
-    const { cost, speed } = meterTexts(ctx);
-    return [
+    if (!ctx) return { context: undefined, meters: [] };
+    const model = routed(ctx) ?? ctx.model;
+    const { cost, speed } = meterTexts(ctx, model);
+    const meters = [
       cost === undefined ? undefined : { id: "cost", text: cost, action: actions.cost },
       speed === undefined ? undefined : { id: "speed", text: speed },
     ].filter((meter): meter is Meter => meter !== undefined);
+    return { context: stats.contextFor(ctx, model), meters };
   };
 
   const renderLine = (
@@ -173,18 +167,18 @@ export const createFooter = (
         color: s.cacheHit < CACHE_ERROR_PCT ? "error" : "warning",
       });
     }
-    // Only until the editor's top border carries it.
-    const percent = state.metersActive ? undefined : ctx.getContextUsage()?.percent;
+    // The editor's top border carries the measurements whenever it is drawn.
+    const bordered = borderShown(state);
+    const percent = bordered ? undefined : stats.contextFor(ctx, model)?.percent;
     if (percent != null) {
       alarms.push({
         id: "context",
         text: `ctx ${Math.floor(percent)}%`,
-        color:
-          percent >= CONTEXT_ERROR_PCT ? "error" : percent >= CONTEXT_WARN_PCT ? "warning" : "dim",
+        color: contextColor(percent),
       });
     }
 
-    const { cost: costText, speed: speedText } = meterTexts(ctx);
+    const { cost: costText, speed: speedText } = meterTexts(ctx, model);
 
     const statusEntries = [...footerData.getExtensionStatuses()]
       .filter(([key]) => key !== "pi-cache-stats")
@@ -255,15 +249,11 @@ export const createFooter = (
         statuses,
         alarms,
         path: { id: "path", text: shortPath(ctx.cwd), color: "dim" },
-        // The editor's top border carries these; the footer only does until it is installed.
         cost:
-          costText && !state.metersActive
+          costText && !bordered
             ? { id: "cost", text: costText, color: "dim", action: actions.cost }
             : undefined,
-        speed:
-          speedText && !state.metersActive
-            ? { id: "speed", text: speedText, color: "dim" }
-            : undefined,
+        speed: speedText && !bordered ? { id: "speed", text: speedText, color: "dim" } : undefined,
         git: git.view,
       },
       state.hover,
@@ -373,5 +363,5 @@ export const createFooter = (
     };
   });
 
-  return { meters };
+  return { measurements };
 };

@@ -21,8 +21,6 @@ export type ChromeState = {
   hover: string | undefined;
   /** Moves the hover; it lapses on its own because pi never reports the pointer leaving. */
   setHover(group: string | undefined): void;
-  /** Whether the editor wrapper has drawn the top border with the measurements; the footer shows them while false. */
-  metersActive: boolean;
 };
 
 // A resting pointer sends nothing, so this also bounds a hover whose exit pi never saw.
@@ -45,7 +43,6 @@ export const createState = (): ChromeState => {
       state.hover = group;
       state.tui?.requestRender();
     },
-    metersActive: false,
   };
   return state;
 };

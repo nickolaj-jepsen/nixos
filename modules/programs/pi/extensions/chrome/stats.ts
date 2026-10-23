@@ -5,8 +5,7 @@ type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
 export type Stats = {
   cost: number;
-  cacheRead: number;
-  /** Hit rate of the latest request that could have hit a warm cache. */
+  /** Hit rate of the latest request that could hit a warm cache, from a model that reports caching. */
   cacheHit: number | undefined;
   speed: number | undefined;
 };
@@ -16,55 +15,47 @@ export type Stats = {
 const MIN_SPEED_OUTPUT_TOKENS = 100;
 const MIN_CACHE_PROMPT_TOKENS = 2000;
 
-const addCacheRead = (totals: { cacheRead: number }, usage: { cacheRead: number } | undefined) => {
-  if (usage) totals.cacheRead += usage.cacheRead;
-};
-
 const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): Stats => {
-  const totals = { cost: 0, cacheRead: 0 };
+  let cost = 0;
   let cacheHit: number | undefined;
   let lastSpeed: { provider: string; model: string; value: number } | undefined;
   // The first request after a start, a model switch or a compaction can only
   // write the cache, so it says nothing about the hit rate.
   let warmModel: string | undefined;
+  // A provider that never reports cache usage would read as a permanent 0% hit rate.
+  const caching = new Set<string>();
 
   for (const entry of ctx.sessionManager.getEntries()) {
-    totals.cost += entryCost(entry);
-    if (entry.type === "usage") {
-      addCacheRead(totals, entry.usage);
-    } else if (entry.type === "message") {
-      const message = entry.message;
-      if (message.role === "assistant") {
-        addCacheRead(totals, message.usage);
-        const key = `${message.provider}/${message.model}`;
-        const prompt = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
-        if (key !== warmModel) {
-          warmModel = key;
-          cacheHit = undefined;
-        } else if (prompt >= MIN_CACHE_PROMPT_TOKENS) {
-          cacheHit = (message.usage.cacheRead / prompt) * 100;
-        }
-        if (
-          message.usage.output >= MIN_SPEED_OUTPUT_TOKENS &&
-          message.stopReason !== "error" &&
-          message.stopReason !== "aborted"
-        ) {
-          const seconds = (Date.parse(entry.timestamp) - message.timestamp) / 1000;
-          if (Number.isFinite(seconds) && seconds >= 0.5) {
-            lastSpeed = {
-              provider: message.provider,
-              model: message.model,
-              value: message.usage.output / seconds,
-            };
-          }
-        }
-      } else if (message.role === "toolResult") {
-        addCacheRead(totals, message.usage);
-      }
-    } else if (entry.type === "compaction" || entry.type === "branch_summary") {
-      addCacheRead(totals, entry.usage);
+    cost += entryCost(entry);
+    if (entry.type === "compaction" || entry.type === "branch_summary") {
       warmModel = undefined;
       cacheHit = undefined;
+      continue;
+    }
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    const message = entry.message;
+    const key = `${message.provider}/${message.model}`;
+    const prompt = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
+    if (message.usage.cacheRead + message.usage.cacheWrite > 0) caching.add(key);
+    if (key !== warmModel) {
+      warmModel = key;
+      cacheHit = undefined;
+    } else if (prompt >= MIN_CACHE_PROMPT_TOKENS) {
+      cacheHit = (message.usage.cacheRead / prompt) * 100;
+    }
+    // Not the entry's timestamp: pi persists a message up to minutes after its stream ends.
+    if (
+      message.durationMs !== undefined &&
+      message.durationMs >= 500 &&
+      message.usage.output >= MIN_SPEED_OUTPUT_TOKENS &&
+      message.stopReason !== "error" &&
+      message.stopReason !== "aborted"
+    ) {
+      lastSpeed = {
+        provider: message.provider,
+        model: message.model,
+        value: message.usage.output / (message.durationMs / 1000),
+      };
     }
   }
 
@@ -74,37 +65,43 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
       ? lastSpeed.value
       : undefined;
 
-  return { ...totals, cacheHit, speed };
+  return { cost, cacheHit: warmModel && caching.has(warmModel) ? cacheHit : undefined, speed };
 };
 
-/** Session cost, cache health and speed, rescanned only when the leaf or model moves. */
-export const createStats = () => {
-  let cache:
-    | { sessionId: string; leafId: string | null; modelKey: string; stats: Stats }
-    | undefined;
+// Entries are append-only and every append moves the leaf, so session, leaf and
+// model say whether a result computed from the session is still current.
+const sessionKey = (ctx: ExtensionContext, model: ActiveModel | undefined) =>
+  [
+    ctx.sessionManager.getSessionId(),
+    ctx.sessionManager.getLeafId(),
+    model ? `${model.provider}/${model.id}` : "",
+  ].join("\n");
 
-  const statsFor = (ctx: ExtensionContext, model: ActiveModel | undefined): Stats => {
-    // Entries are append-only and every append moves the leaf, so leaf + model
-    // is enough to know the scan is still current.
-    const sessionId = ctx.sessionManager.getSessionId();
-    const leafId = ctx.sessionManager.getLeafId();
-    const modelKey = model ? `${model.provider}/${model.id}` : "";
-    if (
-      cache &&
-      cache.sessionId === sessionId &&
-      cache.leafId === leafId &&
-      cache.modelKey === modelKey
-    ) {
-      return cache.stats;
-    }
-    const stats = collectStats(ctx, model);
-    cache = { sessionId, leafId, modelKey, stats };
-    return stats;
+const memoize = <T>(compute: (ctx: ExtensionContext, model: ActiveModel | undefined) => T) => {
+  let cache: { key: string; value: T } | undefined;
+  const get = (ctx: ExtensionContext, model: ActiveModel | undefined): T => {
+    const key = sessionKey(ctx, model);
+    if (cache?.key === key) return cache.value;
+    const value = compute(ctx, model);
+    cache = { key, value };
+    return value;
   };
+  return { get, reset: () => (cache = undefined) };
+};
+
+/**
+ * Session cost, cache health and speed, and pi's context usage, which rebuilds
+ * the session's projection on every call; both recomputed only when the leaf
+ * or model moves.
+ */
+export const createStats = () => {
+  const stats = memoize(collectStats);
+  const context = memoize((ctx) => ctx.getContextUsage());
 
   const reset = () => {
-    cache = undefined;
+    stats.reset();
+    context.reset();
   };
 
-  return { statsFor, reset };
+  return { statsFor: stats.get, contextFor: context.get, reset };
 };

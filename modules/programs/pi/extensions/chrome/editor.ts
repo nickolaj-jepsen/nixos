@@ -31,6 +31,18 @@ const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
 const plain = (line: string) => line.replace(ANSI, "");
 const topHidden = (line: string) => Number(/↑\s*(\d+)\s*more/.exec(plain(line))?.[1] ?? 0);
 
+const mounted = (state: ChromeState) => {
+  const children = (state.tui as { children?: Array<{ children?: unknown[] }> } | undefined)
+    ?.children;
+  return Array.isArray(children) ? children : [];
+};
+
+/** Which of the TUI's top-level containers holds the wrapped editor; -1 when none does. */
+const editorSlot = (state: ChromeState) =>
+  state.editorComponent === undefined
+    ? -1
+    : mounted(state).findIndex((child) => child.children?.includes(state.editorComponent));
+
 /**
  * Whether pi mounted a widget directly above the editor. It puts the
  * above-editor container immediately before the editor's own, seeded with a
@@ -39,13 +51,16 @@ const topHidden = (line: string) => Number(/↑\s*(\d+)\s*more/.exec(plain(line)
  * and must not appear on its own.
  */
 const widgetAbove = (state: ChromeState): boolean => {
-  const mounted = (state.tui as { children?: Array<{ children?: unknown[] }> } | undefined)
-    ?.children;
-  if (!Array.isArray(mounted)) return false;
-  const index = mounted.findIndex((child) => child.children?.includes(state.editorComponent));
+  const index = editorSlot(state);
   if (index <= 0) return false;
-  return (mounted[index - 1]?.children?.length ?? 0) > 1;
+  return (mounted(state)[index - 1]?.children?.length ?? 0) > 1;
 };
+
+/**
+ * Whether the top border is on screen: not before the wrapper is installed,
+ * after another factory replaced it, or while pi shows a dialog in its place.
+ */
+export const borderShown = (state: ChromeState) => editorSlot(state) >= 0;
 
 /**
  * Owns the editor's top border without owning the editor: spellfix supplies it
@@ -89,13 +104,6 @@ export const createEditorChrome = (state: ChromeState, painters: Painters): Edit
             const top = painters.top(width, topHidden(lines[lead] ?? ""), border, status);
             lines[lead] = top.line;
             topRegions = top.regions;
-
-            // The footer reads this flag to know whether the borders carry the measurements.
-            if (!state.metersActive) {
-              state.metersActive = true;
-              // Repaint after this frame, not inside it.
-              setTimeout(() => state.tui?.requestRender(), 0);
-            }
             return lines;
           };
         }
@@ -128,9 +136,6 @@ export const createEditorChrome = (state: ChromeState, painters: Painters): Edit
       },
       set(target, property, value) {
         return Reflect.set(target, property, value, target);
-      },
-      has(target, property) {
-        return Reflect.has(target, property);
       },
     });
     state.editorComponent = wrapper;

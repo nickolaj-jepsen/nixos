@@ -1,3 +1,4 @@
+import type { ContextUsage, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { formatTokens } from "./format.ts";
 import type { Action, ChromeState } from "./state.ts";
 
@@ -7,28 +8,35 @@ export type Segment = { text: string; id?: string; action?: Action };
 /** A measurement as the footer computes it, before painting. */
 export type Meter = { id: string; text: string; action?: Action };
 
+/** What the footer measured for the border: pi's context usage and the meters beside it. */
+export type Measurements = { context: ContextUsage | undefined; meters: readonly Meter[] };
+
 const WARN_PCT = 60;
 const ERROR_PCT = 85;
+
+/** Only a context fill worth acting on leaves the neutral color. */
+export const contextColor = (percent: number | undefined): ThemeColor =>
+  percent !== undefined && percent >= ERROR_PCT
+    ? "error"
+    : percent !== undefined && percent >= WARN_PCT
+      ? "warning"
+      : "dim";
 
 /**
  * The measurements for the editor's top border, from fullest to barest: context
  * with its window, then cost and speed, giving way from the right. Empty when
  * there is no model to measure.
  */
-export const measurementLevels = (state: ChromeState, meters: readonly Meter[]): Segment[][] => {
+export const measurementLevels = (
+  state: ChromeState,
+  { context: usage, meters }: Measurements,
+): Segment[][] => {
   const ctx = state.ctx;
   if (!ctx?.model) return [];
   const theme = ctx.ui.theme;
-  const usage = ctx.getContextUsage();
   const window = usage?.contextWindow || ctx.model.contextWindow || 0;
   const percent = usage?.percent == null ? undefined : Math.max(0, Math.min(100, usage.percent));
-  // Only a number worth acting on leaves the neutral color.
-  const color =
-    percent !== undefined && percent >= ERROR_PCT
-      ? "error"
-      : percent !== undefined && percent >= WARN_PCT
-        ? "warning"
-        : "dim";
+  const color = contextColor(percent);
 
   const pct = percent === undefined ? "?" : `${Math.floor(percent)}%`;
   const windowText = window > 0 ? ` / ${formatTokens(window)}` : "";
