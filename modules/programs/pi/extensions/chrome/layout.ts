@@ -10,15 +10,15 @@ export type Part = {
   /** Painted form; must have the same visible width as `text`. */
   styled?: (theme: Theme) => string;
   action?: Action;
-  /** Parts sharing a group light up together on hover; defaults to the part's own id. */
-  group?: string;
-  /** Painted bold when there is no `styled` form (so truncation keeps working). */
+  /** Painted bold when there is no `styled` form, so truncation keeps working. */
   bold?: boolean;
+  /** What `text` collapses to when the line is squeezed; the layout swaps it in. */
+  short?: string;
   /** Join to the previous part with one space instead of `GAP`. */
   tight?: boolean;
 };
 
-export type Region = { x0: number; x1: number; group: string; action: Action };
+export type Region = { x0: number; x1: number; id: string; action: Action };
 
 export const GAP = 2;
 
@@ -29,7 +29,7 @@ export const partsWidth = (parts: readonly Part[]) =>
 
 /**
  * Paints parts from column `x`, recording a click region for each part that has
- * an action. Clickable parts of the `hovered` group are underlined.
+ * an action. The clickable part whose id is `hovered` is lit.
  */
 export const paintParts = (parts: readonly Part[], theme: Theme, x: number, hovered?: string) => {
   let column = x;
@@ -40,13 +40,16 @@ export const paintParts = (parts: readonly Part[], theme: Theme, x: number, hove
     text += " ".repeat(join);
     column += join;
     const width = visibleWidth(part.text);
-    const group = part.group ?? part.id;
-    let body = part.styled
-      ? part.styled(theme)
-      : theme.fg(part.color, part.bold ? theme.bold(part.text) : part.text);
-    if (part.action && group === hovered) body = theme.underline(body);
+    const lit = part.action !== undefined && part.id === hovered;
+    // Hover brightens a dim part to the text colour; a part with its own colours goes bold.
+    const body = part.styled
+      ? lit
+        ? theme.bold(part.styled(theme))
+        : part.styled(theme)
+      : theme.fg(lit ? "text" : part.color, part.bold ? theme.bold(part.text) : part.text);
     text += body;
-    if (part.action) regions.push({ x0: column, x1: column + width, group, action: part.action });
+    if (part.action)
+      regions.push({ x0: column, x1: column + width, id: part.id, action: part.action });
     column += width;
   });
   return { text, regions };
@@ -57,7 +60,7 @@ const regionAt = (regions: readonly Region[], x: number) =>
 
 export const hitTest = (regions: readonly Region[], x: number) => regionAt(regions, x)?.action;
 
-export const hoverAt = (regions: readonly Region[], x: number) => regionAt(regions, x)?.group;
+export const hoverAt = (regions: readonly Region[], x: number) => regionAt(regions, x)?.id;
 
 /** Modified clicks and drags stay with pi, so the transcript remains selectable. */
 export const isPlainClick = (event: TuiMouseEvent) =>

@@ -57,7 +57,7 @@ export const drawGauge = (
       const extra = variant.window ? windowText : "";
       plain.push(pctText + extra);
       styled.push(
-        (alarm(pctText) ?? theme.fg("muted", pctText)) + (extra ? theme.fg("dim", extra) : ""),
+        (alarm(pctText) ?? theme.fg("dim", pctText)) + (extra ? theme.fg("dim", extra) : ""),
       );
     }
     const rightPlain = plain.length > 0 ? ` ${plain.join(" ── ")} ──` : "";

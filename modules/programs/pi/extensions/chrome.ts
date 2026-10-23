@@ -19,7 +19,6 @@ export default function (pi: ExtensionAPI) {
   const editor = createEditorChrome(state, {
     top: identity.drawTop,
     bottom: (width, hidden, border) => drawGauge(state, width, hidden, border),
-    topClick: (ctx) => identity.relabel(ctx, true),
   });
 
   // Spellfix installs its editor from its own session_start; wrap it once every startup handler ran.
@@ -28,6 +27,8 @@ export default function (pi: ExtensionAPI) {
       if (state.ctx === ctx) editor.ensureInstalled(ctx);
     }, 0).unref?.();
   });
+  // Leave the terminal's pointer as it was.
+  pi.on("session_shutdown", () => state.setHover(undefined));
   // A second chance, in case an editor was installed late.
   pi.on("agent_start", (_event, ctx) => editor.ensureInstalled(ctx));
 }

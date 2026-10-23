@@ -1,6 +1,6 @@
 import { CustomEditor, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
-import { hitTest, isPlainClick, type Region } from "./layout.ts";
+import { hitTest, hoverAt, isPlainClick, type Region } from "./layout.ts";
 import type { Action, ChromeState, Renderer } from "./state.ts";
 
 type Border = (text: string) => string;
@@ -15,8 +15,6 @@ type Inner = {
 export type Painters = {
   top: (width: number, hidden: number, border: Border) => { line: string; regions: Region[] };
   bottom: (width: number, hidden: number, border: Border) => string | undefined;
-  /** Clicks on the top border outside any region. */
-  topClick: Action;
 };
 
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
@@ -75,17 +73,18 @@ export const createEditorChrome = (state: ChromeState, painters: Painters) => {
           return (event: TuiMouseEvent) => {
             if (event.type === "move") {
               // Leaving the border downward is the only exit pi reports for it.
-              state.setHover(event.y === 0 ? "label" : undefined);
+              state.setHover(event.y === 0 ? hoverAt(topRegions, event.x) : undefined);
               return target.handleMouse?.(event);
             }
-            // Only the top border row: the input keeps its click-to-place-cursor.
-            if (event.y === 0 && isPlainClick(event)) {
-              const ctx = state.ctx;
-              const action = hitTest(topRegions, event.x) ?? painters.topClick;
-              if (ctx)
-                void Promise.resolve()
-                  .then(() => action(ctx))
-                  .catch(() => {});
+            // Only a control on the top border: the rest keeps pi's behaviour, including
+            // click-to-place-cursor in the input.
+            const action =
+              event.y === 0 && isPlainClick(event) ? hitTest(topRegions, event.x) : undefined;
+            const ctx = state.ctx;
+            if (action && ctx) {
+              void Promise.resolve()
+                .then(() => action(ctx))
+                .catch(() => {});
               return { handled: true };
             }
             return target.handleMouse?.(event);
