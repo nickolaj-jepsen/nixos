@@ -9,7 +9,22 @@ const appAction =
     else ctx.ui.notify(`chrome: press ${key}`, "info");
   };
 
-export const createActions = (state: ChromeState) => ({
-  model: appAction(state, "app.model.select", "ctrl+l"),
-  effort: appAction(state, "app.thinking.cycle", "shift+tab"),
-});
+export const createActions = (state: ChromeState) => {
+  const openModels = appAction(state, "app.model.select", "ctrl+l");
+  let pickerOpen = false;
+
+  return {
+    // A second click closes the picker; a picker is open while focus has left the prompt.
+    model: ((ctx) => {
+      const focus = state.tui?.getFocusedComponent?.();
+      if (pickerOpen && focus && focus !== state.editorComponent) {
+        (focus as { handleInput?(data: string): void }).handleInput?.("\x1b");
+        pickerOpen = false;
+        return;
+      }
+      pickerOpen = true;
+      return openModels(ctx);
+    }) as Action,
+    effort: appAction(state, "app.thinking.cycle", "shift+tab"),
+  };
+};

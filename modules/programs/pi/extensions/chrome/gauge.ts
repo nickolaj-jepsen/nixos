@@ -26,12 +26,14 @@ export const drawGauge = (
   const usage = ctx.getContextUsage();
   const window = usage?.contextWindow || ctx.model.contextWindow || 0;
   const percent = usage?.percent == null ? undefined : Math.max(0, Math.min(100, usage.percent));
-  const tone = (text: string) =>
+  // The bar is box chrome; only a number worth acting on leaves the neutral colors.
+  const alarm = (text: string) =>
     percent !== undefined && percent >= ERROR_PCT
       ? theme.fg("error", text)
       : percent !== undefined && percent >= WARN_PCT
         ? theme.fg("warning", text)
-        : border(text);
+        : undefined;
+  const tone = (text: string) => alarm(text) ?? border(text);
 
   const pctText = percent === undefined ? "?" : `${Math.floor(percent)}%`;
   const windowText = window > 0 ? ` / ${formatTokens(window)}` : "";
@@ -54,7 +56,9 @@ export const drawGauge = (
     if (variant.pct) {
       const extra = variant.window ? windowText : "";
       plain.push(pctText + extra);
-      styled.push(tone(pctText) + (extra ? theme.fg("dim", extra) : ""));
+      styled.push(
+        (alarm(pctText) ?? theme.fg("muted", pctText)) + (extra ? theme.fg("dim", extra) : ""),
+      );
     }
     const rightPlain = plain.length > 0 ? ` ${plain.join(" ── ")} ──` : "";
     const bar = width - visibleWidth(rightPlain);
