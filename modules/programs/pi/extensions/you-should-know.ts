@@ -129,6 +129,21 @@ function textOf(message: { content: readonly unknown[] }): string {
     .trim();
 }
 
+/** A message without its blocks' cache markers, for a tail no later request will read. */
+function unmarked(message: unknown): unknown {
+  if (message === null || typeof message !== "object") return message;
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return message;
+  return {
+    ...message,
+    content: content.map((block: unknown) => {
+      if (block === null || typeof block !== "object" || !("cache_control" in block)) return block;
+      const { cache_control: _, ...rest } = block as Record<string, unknown>;
+      return rest;
+    }),
+  };
+}
+
 /** Two provider messages are the same conversation step if they differ only in cache markers. */
 const sameMessage = (a: unknown, b: unknown) =>
   JSON.stringify(a, (key, value) => (key === "cache_control" ? undefined : value)) ===
@@ -230,7 +245,8 @@ export default function (pi: ExtensionAPI) {
   /**
    * Sends the main request back with one message appended. Everything before the
    * fork's own tail stays byte for byte what the provider cached, cache markers
-   * included; only the tail is paid at the input rate.
+   * included; only the tail is paid at the input rate. The tail loses its markers:
+   * nothing reads that entry back, and Anthropic allows only four.
    */
   function align(payload: unknown): unknown {
     const main = mainPayload;
@@ -262,7 +278,7 @@ export default function (pi: ExtensionAPI) {
     return {
       ...main,
       stream: fork.stream,
-      messages: [...mainMessages.slice(0, shared), ...forkMessages.slice(shared)],
+      messages: [...mainMessages.slice(0, shared), ...forkMessages.slice(shared).map(unmarked)],
     };
   }
 
