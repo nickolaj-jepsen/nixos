@@ -113,7 +113,8 @@ const readStep = (numFile: string, endFile: string) => {
 /** Git branch, status and pull request for the footer, refreshed off the render path. */
 export const createGit = (chrome: ChromeState) => {
   let gitState: GitState | null | undefined;
-  let gitPathsCache: { cwd: string; value: GitPaths | null } | undefined;
+  // Only a repository is cached: a plain directory can become one with `git init`.
+  let gitPaths: GitPaths | undefined;
   let gitBusy = false;
   let gitQueued = false;
   let gitTimer: ReturnType<typeof setTimeout> | undefined;
@@ -136,7 +137,8 @@ export const createGit = (chrome: ChromeState) => {
       execFile(
         "git",
         ["--no-optional-locks", "-C", cwd, ...args],
-        { timeout: 3000, maxBuffer: 1 << 20 },
+        // Porcelain lists every changed path; a big dirty tree outgrows 1 MiB.
+        { timeout: 3000, maxBuffer: 32 << 20 },
         (error, stdout) => resolve(error ? null : stdout),
       );
     });
@@ -284,7 +286,7 @@ export const createGit = (chrome: ChromeState) => {
   };
 
   const resolveGitPaths = async (cwd: string): Promise<GitPaths | null> => {
-    if (gitPathsCache?.cwd === cwd) return gitPathsCache.value;
+    if (gitPaths) return gitPaths;
     const output = await runGit(cwd, [
       "rev-parse",
       "--path-format=absolute",
@@ -292,9 +294,9 @@ export const createGit = (chrome: ChromeState) => {
       "--git-common-dir",
     ]);
     const [gitDir, commonDir] = output?.split("\n").filter(Boolean) ?? [];
-    const value = gitDir && commonDir ? { gitDir, commonDir } : null;
-    gitPathsCache = { cwd, value };
-    return value;
+    if (!gitDir || !commonDir) return null;
+    gitPaths = { gitDir, commonDir };
+    return gitPaths;
   };
 
   const parseStatus = (output: string, paths: GitPaths): GitState => {
@@ -373,7 +375,12 @@ export const createGit = (chrome: ChromeState) => {
         return;
       }
       const status = await runGit(cwd, ["status", "--porcelain=v2", "--branch"]);
-      if (!status) return;
+      // Keep the last state through a slow status; probe again in case the
+      // worktree itself is gone.
+      if (!status) {
+        gitPaths = undefined;
+        return;
+      }
       const previous = gitState;
       const next = parseStatus(status, paths);
       const changed = stateKey(previous) !== stateKey(next);
