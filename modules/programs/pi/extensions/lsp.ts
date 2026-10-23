@@ -6,12 +6,15 @@
  * Servers come from the fireproof.agents.lspServers registry, written to the
  * JSON file `PI_LSP_SERVERS` names. One server per (name, repo root) starts on
  * the first edit to a matching file and lives until the session ends.
+ *
+ * Diagnostics published after an edit's deadline (rust-analyzer's cargo check
+ * after didSave) are held and appended to the next tool result instead.
  */
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import type { ExtensionAPI, ToolResultEvent } from "@earendil-works/pi-coding-agent";
 
 interface ServerConfig {
   command: string;
@@ -47,6 +50,9 @@ class Server {
   private texts = new Map<string, string>();
   private diagnostics = new Map<string, Diagnostic[]>();
   private listeners = new Set<(uri: string) => void>();
+  private checking = new Set<string>();
+  private late = new Map<string, Diagnostic[]>();
+  private save?: { includeText?: boolean };
   readonly ready: Promise<void>;
   private readonly died: Promise<void>;
   dead = false;
@@ -71,10 +77,18 @@ class Server {
       rootUri,
       workspaceFolders: [{ uri: rootUri, name: root }],
       capabilities: {
-        textDocument: { publishDiagnostics: { versionSupport: true }, synchronization: {} },
+        textDocument: {
+          publishDiagnostics: { versionSupport: true },
+          synchronization: { didSave: true },
+        },
         workspace: { configuration: true, workspaceFolders: true },
       },
-    }).then(() => this.notify("initialized", {}));
+    }).then((result: any) => {
+      // rust-analyzer only runs cargo check on save, so without this its rustc errors never follow an edit.
+      const save = result?.capabilities?.textDocumentSync?.save;
+      if (save) this.save = save === true ? {} : save;
+      this.notify("initialized", {});
+    });
   }
 
   /** Syncs `text` for `path` and resolves with its diagnostics once they settle, or undefined. */
@@ -87,12 +101,15 @@ class Server {
     ]);
     if (!started || this.dead) return undefined;
     const uri = pathToFileURL(path).href;
+    // This result reports the document's current diagnostics, which supersede any held ones.
+    this.late.delete(uri);
     // Servers don't republish for an unchanged document, so waiting would only hit the deadline.
     if (this.texts.get(uri) === text) return this.diagnostics.get(uri);
     this.texts.set(uri, text);
     const version = (this.versions.get(uri) ?? 0) + 1;
     this.versions.set(uri, version);
     this.diagnostics.delete(uri);
+    this.checking.add(uri);
 
     const settled = new Promise<Diagnostic[] | undefined>((done) => {
       let quiet: NodeJS.Timeout | undefined;
@@ -100,6 +117,7 @@ class Server {
         clearTimeout(quiet);
         clearTimeout(deadline);
         this.listeners.delete(onPublish);
+        this.checking.delete(uri);
         done(result);
       };
       const onPublish = (published: string) => {
@@ -128,7 +146,18 @@ class Server {
         contentChanges: [{ text }],
       });
     }
+    if (this.save) {
+      const saved = this.save.includeText ? { text } : {};
+      this.notify("textDocument/didSave", { textDocument: { uri }, ...saved });
+    }
     return settled;
+  }
+
+  /** Returns, by file path, diagnostics published after their check settled, and forgets them. */
+  takeLate(): Map<string, Diagnostic[]> {
+    const late = new Map([...this.late].map(([uri, d]) => [fileURLToPath(uri), d]));
+    this.late.clear();
+    return late;
   }
 
   stop() {
@@ -199,9 +228,24 @@ class Server {
       if (version !== undefined && version !== this.versions.get(uri)) return;
       this.warm = true;
       this.diagnostics.set(uri, diagnostics);
-      for (const listener of this.listeners) listener(uri);
+      if (this.checking.has(uri)) {
+        for (const listener of this.listeners) listener(uri);
+      } else if (this.versions.has(uri)) {
+        this.late.set(uri, diagnostics);
+      }
     }
   }
+}
+
+function errorLines(diagnostics: Diagnostic[] | undefined): string[] {
+  const errors = (diagnostics ?? []).filter((d) => d.severity === 1);
+  const lines = errors.slice(0, MAX_LINES).map((d) => {
+    const { line, character } = d.range.start;
+    const source = d.source ? ` [${d.source}]` : "";
+    return `${line + 1}:${character + 1} ${d.message.split("\n")[0]}${source}`;
+  });
+  if (errors.length > MAX_LINES) lines.push(`… ${errors.length - MAX_LINES} more`);
+  return lines;
 }
 
 function repoRoot(file: string, fallback: string): string {
@@ -224,19 +268,21 @@ function loadConfig(): Record<string, ServerConfig> {
 export default function (pi: ExtensionAPI) {
   const configs = loadConfig();
   const servers = new Map<string, Server>();
+  // The errors last shown per file, so a late publish that repeats them stays quiet.
+  const shown = new Map<string, string>();
   if (Object.keys(configs).length === 0) return;
 
-  pi.on("tool_result", async (event, ctx) => {
+  async function checkEdit(event: ToolResultEvent, cwd: string): Promise<string | undefined> {
     if ((event.toolName !== "edit" && event.toolName !== "write") || event.isError) return;
     const { path } = event.input as { path?: unknown };
     if (typeof path !== "string") return;
-    const file = resolve(ctx.cwd, path);
+    const file = resolve(cwd, path);
     const ext = extname(file);
     const match = Object.entries(configs).find(([, config]) => ext in config.extensionToLanguage);
     if (!match) return;
     const [name, config] = match;
 
-    const root = repoRoot(file, ctx.cwd);
+    const root = repoRoot(file, cwd);
     const key = `${name}\0${root}`;
     let server = servers.get(key);
     if (!server || server.dead) {
@@ -254,16 +300,41 @@ export default function (pi: ExtensionAPI) {
     } catch {
       return;
     }
-    const errors = (diagnostics ?? []).filter((d) => d.severity === 1);
-    if (errors.length === 0) return;
+    const lines = errorLines(diagnostics);
+    shown.set(file, lines.join("\n"));
+    if (lines.length === 0) return;
+    return `LSP errors in ${relative(cwd, file) || file}:\n${lines.join("\n")}`;
+  }
 
-    const lines = errors.slice(0, MAX_LINES).map((d) => {
-      const { line, character } = d.range.start;
-      const source = d.source ? ` [${d.source}]` : "";
-      return `${line + 1}:${character + 1} ${d.message.split("\n")[0]}${source}`;
-    });
-    if (errors.length > MAX_LINES) lines.push(`… ${errors.length - MAX_LINES} more`);
-    const text = `\n\nLSP errors in ${relative(ctx.cwd, file) || file}:\n${lines.join("\n")}`;
+  function lateNotes(cwd: string): string[] {
+    const notes: string[] = [];
+    for (const server of servers.values()) {
+      for (const [file, diagnostics] of server.takeLate()) {
+        const lines = errorLines(diagnostics);
+        if (lines.join("\n") === (shown.get(file) ?? "")) continue;
+        shown.set(file, lines.join("\n"));
+        const name = relative(cwd, file) || file;
+        notes.push(
+          lines.length > 0
+            ? `Late LSP diagnostics for ${name}:\n${lines.join("\n")}`
+            : `Late LSP diagnostics for ${name}: no errors remain.`,
+        );
+      }
+    }
+    return notes;
+  }
+
+  pi.on("tool_result", async (event, ctx) => {
+    const notes: string[] = [];
+    const checked = await checkEdit(event, ctx.cwd);
+    if (checked) notes.push(checked);
+    // A codemode script, not the model, reads a nested result, and replacing content drops a
+    // structured one, so late notes wait for a result the model reads as text.
+    if (event.parentToolCallId === undefined && event.structuredContent === undefined) {
+      notes.push(...lateNotes(ctx.cwd));
+    }
+    if (notes.length === 0) return;
+    const text = `\n\n${notes.join("\n\n")}`;
     return { content: [...event.content, { type: "text", text }] };
   });
 
