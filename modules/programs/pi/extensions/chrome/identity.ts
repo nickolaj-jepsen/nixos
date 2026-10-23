@@ -26,6 +26,7 @@ import {
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { recordSideCall } from "../lib/usage-ledger.ts";
 import { shortPath } from "./format.ts";
+import type { BorderStatus } from "./editor.ts";
 import type { Region } from "./layout.ts";
 import type { Segment } from "./measurements.ts";
 
@@ -50,10 +51,6 @@ const CUSTOM_TYPE = "identity_label";
 const SHORTCUT = "alt+r";
 const DEFAULT_MODEL = "opencode-go/deepseek-v4.1-flash";
 const TICK_MS = 60_000;
-// Pi animates its own spinner in this border while working; ours keeps the
-// session feeling alive in the same spot, so the same cadence is fine.
-const SPIN_MS = 120;
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 // Worst case for a whole session; a relabel is a few hundred tokens, so this is
 // less a budget than a guard against a click loop.
 const CALL_CAP = 20;
@@ -126,8 +123,6 @@ const formatAge = (ms: number) => {
 
 export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   let timer: ReturnType<typeof setInterval> | undefined;
-  let spinTimer: ReturnType<typeof setInterval> | undefined;
-  let spin = 0;
   let cwd = process.cwd();
   let phase: Phase = "idle";
   // What to fall back to when a dialog closes; a dialog can open mid-run.
@@ -147,20 +142,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
 
   const setPhase = (next: Phase) => {
     phase = next;
-  };
-
-  const startSpinner = () => {
-    if (spinTimer) return;
-    spinTimer = setInterval(() => {
-      spin++;
-      paint();
-    }, SPIN_MS);
-    spinTimer.unref?.();
-  };
-
-  const stopSpinner = () => {
-    if (spinTimer) clearInterval(spinTimer);
-    spinTimer = undefined;
   };
 
   const persist = () => {
@@ -241,8 +222,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     repaintTimer.unref?.();
   };
 
-  const spinnerGlyph = () => SPINNER[spin % SPINNER.length]!;
-
   /**
    * One continuous line, inset like the footer's text: the leading and trailing
    * dashes stand in for its padding, and the detail is separated by the same
@@ -253,6 +232,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     width: number,
     hidden: number,
     border: (text: string) => string,
+    status: BorderStatus | undefined,
     levels: readonly Segment[][],
   ): { left: string; right: string; label?: { x0: number; x1: number }; controls: Region[] } => {
     const ctx = state.ctx;
@@ -269,9 +249,16 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     // Measurements give way before the state, which is the part that asks you to look.
     const rows: Segment[][] = [...levels.map((level) => [...stateSegment, ...level]), stateSegment];
     if (stateSegment.length > 0) rows.push([]);
-    const working = busy || phase === "working";
-    // pi's own shape: `── ⠋ Working`; the spinner takes the slot the label would.
-    const lead = working ? `${border("──")} ${theme.fg("accent", spinnerGlyph())} ` : border("── ");
+    // A retry, compaction or branch summary takes the label's slot: it carries
+    // the countdown and the key that cancels it.
+    const message = status && status.kind !== "working" ? status : undefined;
+    // pi's own shape, `── ⠋ Working`, with the label where its message would be.
+    const lead =
+      status?.kind === "working"
+        ? `${border("──")} ${status.renderSpinnerInBorder(width)} `
+        : busy && !message
+          ? `${border("──")} ${theme.fg("accent", WORK_GLYPH)} `
+          : border("── ");
     const separator = border(" ── ");
     const tail = border(" ──");
 
@@ -281,11 +268,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       // lead + label + hint + space, then the detail, then at least one dash.
       const room = width - visibleWidth(lead) - visibleWidth(hint) - 2 - visibleWidth(right);
       if (room < MIN_LABEL_ROOM) continue;
-      // The label wears the input's own border color (pi keys it to the
-      // thinking level), so it reads as box chrome rather than prompt text.
-      const shown = truncateToWidth(text, room, "…");
-      const label = state.hover === LABEL_ID ? theme.fg("text", shown) : border(shown);
-      const x0 = visibleWidth(lead);
       // Columns of the clickable measurements, counted from the start of `right`.
       const controls: Region[] = [];
       let column = 1;
@@ -302,6 +284,18 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
         }
         column += segmentWidth;
       });
+      if (message) {
+        return {
+          left: `${lead}${message.renderInBorder(room)}${theme.fg("dim", hint)} `,
+          right,
+          controls,
+        };
+      }
+      // The label wears the input's own border color (pi keys it to the
+      // thinking level), so it reads as box chrome rather than prompt text.
+      const shown = truncateToWidth(text, room, "…");
+      const label = state.hover === LABEL_ID ? theme.fg("text", shown) : border(shown);
+      const x0 = visibleWidth(lead);
       return {
         left: `${lead}${label}${theme.fg("dim", hint)} `,
         right,
@@ -316,9 +310,10 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     width: number,
     hidden: number,
     border: (text: string) => string,
+    status: BorderStatus | undefined,
     levels: readonly Segment[][] = [],
   ): { line: string; regions: Region[] } => {
-    const { left, right, label, controls } = borderSides(width, hidden, border, levels);
+    const { left, right, label, controls } = borderSides(width, hidden, border, status, levels);
     const fill = Math.max(0, width - visibleWidth(left) - visibleWidth(right));
     const rightStart = visibleWidth(left) + fill;
     return {
@@ -584,7 +579,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   pi.on("agent_start", () => {
     since = Date.now();
     setPhase("working");
-    startSpinner();
     paint();
   });
 
@@ -592,7 +586,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     since = Date.now();
     // Failure is sticky until the next run starts.
     setPhase(phase === "failed" ? "failed" : "idle");
-    stopSpinner();
     paint();
   });
 
@@ -636,7 +629,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   pi.on("session_shutdown", () => {
     if (timer) clearInterval(timer);
     timer = undefined;
-    stopSpinner();
     if (repaintTimer) clearTimeout(repaintTimer);
     repaintTimer = undefined;
     state.tui = undefined;

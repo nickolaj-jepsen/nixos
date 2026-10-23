@@ -25,8 +25,8 @@ export default function (pi: ExtensionAPI) {
   const footer = createFooter(pi, state, actions);
   wrapPromptEditor(
     createEditorChrome(state, {
-      top: (width, hidden, border) =>
-        identity.drawTop(width, hidden, border, measurementLevels(state, footer.meters())),
+      top: (width, hidden, border, status) =>
+        identity.drawTop(width, hidden, border, status, measurementLevels(state, footer.meters())),
     }),
   );
 
