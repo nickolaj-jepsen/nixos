@@ -303,10 +303,9 @@ export default function (pi: ExtensionAPI) {
   function onControlFrame(frame: Record<string, unknown>) {
     switch (frame.action) {
       case "rename":
-        if (typeof frame.name === "string" && frame.name.trim()) {
+        // Published through session_info_changed, sanitized like any other name.
+        if (typeof frame.name === "string" && frame.name.trim())
           pi.setSessionName(frame.name.trim());
-          void publish({ name: frame.name.trim(), nameSource: "user", nameSince: Date.now() });
-        }
         return;
       case "peer_message_status": {
         const name =
@@ -477,7 +476,15 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on("agent_start", async (_event, c) => {
     ctx = c;
-    if (isOwner()) await publish({ status: "busy", name: displayName() });
+    if (isOwner()) await publish({ status: "busy" });
+  });
+  pi.on("session_info_changed", async (event) => {
+    if (isOwner())
+      await publish({
+        name: displayName(),
+        nameSource: event.name ? "user" : "derived",
+        nameSince: Date.now(),
+      });
   });
   pi.on("agent_end", async (event) => {
     lastTurnText = oneLine(lastAssistantText(event.messages));
