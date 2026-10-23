@@ -1,7 +1,9 @@
 /**
  * Git branch, status and pull request for the footer, refreshed off the render
  * path: `git status --porcelain=v2` runs asynchronously, so rendering never
- * waits on a subprocess. A pull request for the branch replaces its name with a
+ * waits on a subprocess, and it is asked again on a timer as well as after
+ * pi's own events because other sessions share the checkout. A pull request for
+ * the branch replaces its name with a
  * linked `#123`: the local gh-stack index answers synchronously, the GitHub API
  * refines the state in the background, and the last answer is cached on disk so
  * a fresh session paints before the network does.
@@ -54,6 +56,10 @@ const PR_CACHE_FILE = join(
 );
 // Commands that can change which pull request a branch carries.
 export const PR_COMMAND = /\bgh\s+pr\s+(create|merge|close|reopen|edit|ready)\b/;
+// Pi emits events only for its own work, so a peer session, a subagent in this
+// checkout or an external formatter changes the tree silently. `git status` costs
+// milliseconds on a normal repo, and the busy guard keeps a slow one from stacking.
+const POLL_MS = 2000;
 const BRANCH_GLYPH = "\uf418";
 const DETACHED_GLYPH = "\uf417";
 const WORKTREE_GLYPH = "\uf1bb";
@@ -111,6 +117,8 @@ export const createGit = (chrome: ChromeState) => {
   let gitBusy = false;
   let gitQueued = false;
   let gitTimer: ReturnType<typeof setTimeout> | undefined;
+  let pollTimer: ReturnType<typeof setTimeout> | undefined;
+  let polling = false;
   let activeCwd = "";
   let generation = 0;
 
@@ -345,6 +353,9 @@ export const createGit = (chrome: ChromeState) => {
     };
   };
 
+  /** Serialized state, so a poll that learned nothing new does not repaint the TUI. */
+  const stateKey = (state: GitState | null | undefined) => (state ? JSON.stringify(state) : "");
+
   const refreshGit = async () => {
     if (gitBusy) {
       gitQueued = true;
@@ -357,17 +368,20 @@ export const createGit = (chrome: ChromeState) => {
       const paths = await resolveGitPaths(cwd);
       if (mine !== generation) return;
       if (!paths) {
+        const changed = gitState !== null;
         gitState = null;
         prDirty = false;
         prRequestKey = "";
         setPr(null);
-        chrome.tui?.requestRender();
+        if (changed) chrome.tui?.requestRender();
         return;
       }
       const status = await runGit(cwd, ["status", "--porcelain=v2", "--branch"]);
       if (mine !== generation || !status) return;
       const previous = gitState;
-      gitState = parseStatus(status, paths);
+      const next = parseStatus(status, paths);
+      const changed = stateKey(previous) !== stateKey(next);
+      gitState = next;
       // A branch switch or a first push changes which pull request the branch
       // carries; everything else waits for the cached answer to expire.
       const force =
@@ -377,7 +391,7 @@ export const createGit = (chrome: ChromeState) => {
         (!previous.upstream && gitState.upstream);
       prDirty = false;
       void refreshPr(gitState, paths, force);
-      chrome.tui?.requestRender();
+      if (changed) chrome.tui?.requestRender();
     } finally {
       gitBusy = false;
       if (gitQueued) {
@@ -393,6 +407,19 @@ export const createGit = (chrome: ChromeState) => {
       gitTimer = undefined;
       void refreshGit().catch(() => {});
     }, delay);
+  };
+
+  // One poll at a time: the next one is armed when the previous refresh settles,
+  // so a slow status cannot queue up behind itself.
+  const armPoll = () => {
+    if (!polling || pollTimer) return;
+    pollTimer = setTimeout(() => {
+      pollTimer = undefined;
+      void refreshGit()
+        .catch(() => {})
+        .finally(armPoll);
+    }, POLL_MS);
+    pollTimer.unref?.();
   };
 
   const prColor = (pr: PrRef): ThemeColor =>
@@ -467,6 +494,11 @@ export const createGit = (chrome: ChromeState) => {
   return {
     view: (mode: BranchMode): Part | null => branchView(gitState, currentPr, mode),
     schedule: scheduleGit,
+    /** Keep asking while the footer is on screen; stops on `dispose`. */
+    startPolling: () => {
+      polling = true;
+      armPoll();
+    },
     markPrDirty: () => {
       prDirty = true;
     },
@@ -495,7 +527,10 @@ export const createGit = (chrome: ChromeState) => {
       scheduleGit(0);
     },
     dispose: () => {
+      polling = false;
       if (gitTimer) clearTimeout(gitTimer);
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = undefined;
     },
   };
 };
