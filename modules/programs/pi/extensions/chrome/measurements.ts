@@ -1,5 +1,11 @@
 import { formatTokens } from "./format.ts";
-import type { ChromeState } from "./state.ts";
+import type { Action, ChromeState } from "./state.ts";
+
+/** One measurement on the border, painted; one with an action is a control lit on hover. */
+export type Segment = { text: string; id?: string; action?: Action };
+
+/** A measurement as the footer computes it, before painting. */
+export type Meter = { id: string; text: string; action?: Action };
 
 const WARN_PCT = 60;
 const ERROR_PCT = 85;
@@ -9,7 +15,7 @@ const ERROR_PCT = 85;
  * with its window, then cost and speed, giving way from the right. Empty when
  * there is no model to measure.
  */
-export const measurementLevels = (state: ChromeState, meters: readonly string[]): string[][] => {
+export const measurementLevels = (state: ChromeState, meters: readonly Meter[]): Segment[][] => {
   const ctx = state.ctx;
   if (!ctx?.model) return [];
   const theme = ctx.ui.theme;
@@ -26,9 +32,13 @@ export const measurementLevels = (state: ChromeState, meters: readonly string[])
 
   const pct = percent === undefined ? "?" : `${Math.floor(percent)}%`;
   const windowText = window > 0 ? ` / ${formatTokens(window)}` : "";
-  const context = theme.fg(color, pct) + (windowText ? theme.fg("dim", windowText) : "");
-  const bare = theme.fg(color, pct);
-  const extra = meters.map((text) => theme.fg("dim", text));
+  const context = { text: theme.fg(color, pct) + (windowText ? theme.fg("dim", windowText) : "") };
+  const bare = { text: theme.fg(color, pct) };
+  const extra = meters.map(({ id, text, action }) => ({
+    id,
+    action,
+    text: theme.fg(action && state.hover === id ? "text" : "dim", text),
+  }));
 
   return [
     ...Array.from({ length: extra.length + 1 }, (_, i) => [

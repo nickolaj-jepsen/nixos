@@ -55,5 +55,6 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState) => {
     backgroundTasks: command(state, pi, "/tasks"),
     dismissBackgroundTasks: dismissOverlay(state),
     agents: command(state, pi, "/agents"),
+    cost: command(state, pi, "/cost"),
   };
 };

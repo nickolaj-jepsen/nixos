@@ -7,6 +7,7 @@
  */
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
+import { usdUsage } from "./lib/usage-ledger.ts";
 
 const API = "https://api.exa.ai";
 // A call may spend at most this share of the window or of the free context.
@@ -17,6 +18,10 @@ const MAX_TOTAL_CHARS = 120_000;
 const DEFAULT_SEARCH_CHARS = 8_000;
 const MAX_PAGE_CHARS = 30_000;
 const MIN_PAGE_CHARS = 1_500;
+
+// Exa's fee as tool-result usage, which pi counts in the session total even under codemode.
+const fee = (costUsd: number | undefined) =>
+  costUsd !== undefined && costUsd > 0 ? { usage: usdUsage(costUsd) } : {};
 
 type Mode = "highlights" | "text" | "summary";
 
@@ -222,6 +227,7 @@ export default function (pi: ExtensionAPI) {
         return {
           content: [{ type: "text" as const, text: `No results for "${params.query}".` }],
           details: { numResults, mode, costUsd, truncated: [] },
+          ...fee(costUsd),
         };
       }
       const notes =
@@ -229,6 +235,7 @@ export default function (pi: ExtensionAPI) {
       return {
         content: [{ type: "text" as const, text: format(results, true) + footer(notes) }],
         details: { numResults, mode, costUsd, truncated },
+        ...fee(costUsd),
       };
     },
   });
@@ -302,11 +309,13 @@ export default function (pi: ExtensionAPI) {
         return {
           content: [{ type: "text" as const, text: `Nothing extracted.${footer(notes)}` }],
           details: { mode, costUsd, truncated, skipped, failed },
+          ...fee(costUsd),
         };
       }
       return {
         content: [{ type: "text" as const, text: format(results, false) + footer(notes) }],
         details: { mode, pages: results.length, costUsd, truncated, skipped, failed },
+        ...fee(costUsd),
       };
     },
   });

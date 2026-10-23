@@ -29,6 +29,8 @@ import type {
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { Component, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
 
+import { recordSideCall } from "./lib/usage-ledger.ts";
+
 type Miss = { word: string; start: number; end: number };
 /** A typo the model found that hunspell did not flag: a real word or one it skipped (`dense/recieve`). */
 type Extra = Miss & { fix: string };
@@ -74,6 +76,8 @@ const WORD_IN_TEXT = /[\p{L}]+(?:['’][\p{L}]+)*/gu;
 // safe to style without corrupting a sequence.
 const ESCAPE = /\x1b\[[0-9;:?]*[ -/]*[@-~]|\x1b_[^\x07]*\x07/g;
 
+/** Set at load; the batch call's spend is recorded through it. */
+let api: ExtensionAPI | undefined;
 /** Words skipped in the picker, forgotten once the draft is submitted or cleared. */
 const ignored = new Set<string>();
 // Auto-added words taken back with `u`; the model's "correct" leaves them flagged for this draft.
@@ -365,6 +369,7 @@ async function askModel(
         },
       )
       .result();
+    if (api) recordSideCall(api, "spellfix", response);
     if (response.stopReason === "error" || response.stopReason === "aborted") {
       throw new Error(response.errorMessage ?? response.stopReason);
     }
@@ -1005,6 +1010,7 @@ async function openPicker(ctx: ExtensionContext) {
 }
 
 export default function (pi: ExtensionAPI) {
+  api = pi;
   pi.registerShortcut("ctrl+q", {
     description: "Fix spelling in the prompt draft",
     handler: (ctx) => openPicker(ctx),

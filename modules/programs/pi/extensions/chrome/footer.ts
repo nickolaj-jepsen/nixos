@@ -20,6 +20,7 @@ import { layoutFooter } from "./footer-line.ts";
 import { formatCost, shortPath } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
 import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
+import type { Meter } from "./measurements.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage, usageAlarm } from "./usage.ts";
@@ -132,12 +133,15 @@ export const createFooter = (
     };
   };
 
-  /** The measurements the editor's top border shows next to the context. */
-  const meters = (): string[] => {
+  /** The measurements the editor's top border shows next to the context; the cost opens /cost. */
+  const meters = (): Meter[] => {
     const ctx = state.ctx;
     if (!ctx) return [];
     const { cost, speed } = meterTexts(ctx);
-    return [cost, speed].filter((text): text is string => text !== undefined);
+    return [
+      cost === undefined ? undefined : { id: "cost", text: cost, action: actions.cost },
+      speed === undefined ? undefined : { id: "speed", text: speed },
+    ].filter((meter): meter is Meter => meter !== undefined);
   };
 
   const renderLine = (
@@ -253,7 +257,7 @@ export const createFooter = (
         // The editor's top border carries these; the footer only does until it is installed.
         cost:
           costText && !state.metersActive
-            ? { id: "cost", text: costText, color: "dim" }
+            ? { id: "cost", text: costText, color: "dim", action: actions.cost }
             : undefined,
         speed:
           speedText && !state.metersActive

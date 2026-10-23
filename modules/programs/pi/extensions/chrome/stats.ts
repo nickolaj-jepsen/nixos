@@ -1,4 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { entryCost } from "../lib/usage-ledger.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
@@ -15,13 +16,8 @@ export type Stats = {
 const MIN_SPEED_OUTPUT_TOKENS = 100;
 const MIN_CACHE_PROMPT_TOKENS = 2000;
 
-const addUsage = (
-  totals: { cost: number; cacheRead: number },
-  usage: { cacheRead: number; cost?: { total: number } } | undefined,
-) => {
-  if (!usage) return;
-  totals.cost += usage.cost?.total ?? 0;
-  totals.cacheRead += usage.cacheRead;
+const addCacheRead = (totals: { cacheRead: number }, usage: { cacheRead: number } | undefined) => {
+  if (usage) totals.cacheRead += usage.cacheRead;
 };
 
 const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): Stats => {
@@ -33,12 +29,13 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
   let warmModel: string | undefined;
 
   for (const entry of ctx.sessionManager.getEntries()) {
+    totals.cost += entryCost(entry);
     if (entry.type === "usage") {
-      addUsage(totals, entry.usage);
+      addCacheRead(totals, entry.usage);
     } else if (entry.type === "message") {
       const message = entry.message;
       if (message.role === "assistant") {
-        addUsage(totals, message.usage);
+        addCacheRead(totals, message.usage);
         const key = `${message.provider}/${message.model}`;
         const prompt = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
         if (key !== warmModel) {
@@ -62,13 +59,10 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
           }
         }
       } else if (message.role === "toolResult") {
-        addUsage(totals, message.usage);
-        // Tools that bill their own API report it here, since no usage block carries it.
-        const spent = (message.details as { costUsd?: unknown } | undefined)?.costUsd;
-        if (typeof spent === "number") totals.cost += spent;
+        addCacheRead(totals, message.usage);
       }
     } else if (entry.type === "compaction" || entry.type === "branch_summary") {
-      if (entry.usage) addUsage(totals, entry.usage);
+      addCacheRead(totals, entry.usage);
       warmModel = undefined;
       cacheHit = undefined;
     }

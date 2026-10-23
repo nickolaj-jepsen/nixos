@@ -24,8 +24,10 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { recordSideCall } from "../lib/usage-ledger.ts";
 import { shortPath } from "./format.ts";
 import type { Region } from "./layout.ts";
+import type { Segment } from "./measurements.ts";
 
 // Hover id of the top-border label.
 const LABEL_ID = "label";
@@ -253,21 +255,21 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     width: number,
     hidden: number,
     border: (text: string) => string,
-    levels: readonly string[][],
-  ) => {
+    levels: readonly Segment[][],
+  ): { left: string; right: string; label?: { x0: number; x1: number }; controls: Region[] } => {
     const ctx = state.ctx;
-    if (!ctx) return { left: "", right: "", label: undefined };
+    if (!ctx) return { left: "", right: "", controls: [] };
     const theme = ctx.ui.theme;
     const { text } = currentLabel(ctx);
     const stateText = stateWord(phase);
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
     // so it belongs next to the label rather than in the session detail.
     const hint = hidden > 0 ? ` ↑${hidden}` : "";
-    const stateSegment = stateText
-      ? [theme.fg(stateText === "failed" ? "error" : "warning", stateText)]
+    const stateSegment: Segment[] = stateText
+      ? [{ text: theme.fg(stateText === "failed" ? "error" : "warning", stateText) }]
       : [];
     // Measurements give way before the state, which is the part that asks you to look.
-    const rows: string[][] = [...levels.map((level) => [...stateSegment, ...level]), stateSegment];
+    const rows: Segment[][] = [...levels.map((level) => [...stateSegment, ...level]), stateSegment];
     if (stateSegment.length > 0) rows.push([]);
     const working = busy || phase === "working";
     // pi's own shape: `── ⠋ Working`; the spinner takes the slot the label would.
@@ -276,7 +278,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     const tail = border(" ──");
 
     for (const row of rows) {
-      const right = row.length > 0 ? ` ${row.join(separator)}${tail}` : "";
+      const right =
+        row.length > 0 ? ` ${row.map((segment) => segment.text).join(separator)}${tail}` : "";
       // lead + label + hint + space, then the detail, then at least one dash.
       const room = width - visibleWidth(lead) - visibleWidth(hint) - 2 - visibleWidth(right);
       if (room < MIN_LABEL_ROOM) continue;
@@ -285,27 +288,50 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       const shown = truncateToWidth(text, room, "…");
       const label = state.hover === LABEL_ID ? theme.fg("text", shown) : border(shown);
       const x0 = visibleWidth(lead);
+      // Columns of the clickable measurements, counted from the start of `right`.
+      const controls: Region[] = [];
+      let column = 1;
+      row.forEach((segment, index) => {
+        if (index > 0) column += visibleWidth(separator);
+        const segmentWidth = visibleWidth(segment.text);
+        if (segment.id && segment.action) {
+          controls.push({
+            x0: column,
+            x1: column + segmentWidth,
+            id: segment.id,
+            action: segment.action,
+          });
+        }
+        column += segmentWidth;
+      });
       return {
         left: `${lead}${label}${theme.fg("dim", hint)} `,
         right,
         label: { x0, x1: x0 + visibleWidth(shown) },
+        controls,
       };
     }
-    return { left: "", right: "", label: undefined };
+    return { left: "", right: "", controls: [] };
   };
 
   const drawTop = (
     width: number,
     hidden: number,
     border: (text: string) => string,
-    levels: readonly string[][] = [],
+    levels: readonly Segment[][] = [],
   ): { line: string; regions: Region[] } => {
-    const { left, right, label } = borderSides(width, hidden, border, levels);
+    const { left, right, label, controls } = borderSides(width, hidden, border, levels);
     const fill = Math.max(0, width - visibleWidth(left) - visibleWidth(right));
+    const rightStart = visibleWidth(left) + fill;
     return {
       line: left + (fill > 0 ? border("─".repeat(fill)) : "") + right,
-      // Only the label is the control; the rest of the row is plain border.
-      regions: label ? [{ ...label, id: LABEL_ID, action: (ctx) => relabel(ctx, true) }] : [],
+      // The label and the measurements that carry an action; the rest is plain border.
+      regions: [
+        ...(label
+          ? [{ ...label, id: LABEL_ID, action: (ctx: ExtensionContext) => relabel(ctx, true) }]
+          : []),
+        ...controls.map((c) => ({ ...c, x0: rightStart + c.x0, x1: rightStart + c.x1 })),
+      ],
     };
   };
 
@@ -410,6 +436,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
           },
         )
         .result();
+      recordSideCall(pi, "session label", response);
       if (response.stopReason === "error" || response.stopReason === "aborted") {
         throw new Error(response.errorMessage ?? response.stopReason);
       }
@@ -460,7 +487,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       persisted
         ? `session: ${sessionId()}`
         : "session: ephemeral (--no-session), nothing to resume",
-      `labels: ${calls} call${calls === 1 ? "" : "s"} · ${formatCost(label?.costUsd ?? 0)} (not in the footer total)`,
+      `labels: ${calls} call${calls === 1 ? "" : "s"} · ${formatCost(label?.costUsd ?? 0)}`,
       persisted ? `resume: ${resumeCommand()}` : undefined,
     ]
       .filter(Boolean)

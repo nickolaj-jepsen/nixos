@@ -61,5 +61,10 @@ export const createUsageReader = (onUpdate?: () => void) => {
 
   const provider = (id: string) => usage?.providers.find((p) => p.id === id);
 
-  return { refresh, provider, known: () => usage !== undefined };
+  return {
+    refresh,
+    provider,
+    providers: () => usage?.providers ?? [],
+    known: () => usage !== undefined,
+  };
 };

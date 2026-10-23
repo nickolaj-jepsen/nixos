@@ -30,6 +30,8 @@ import type { Message, Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
+import { recordSideCall } from "./lib/usage-ledger.ts";
+
 // Read from the mod's own export map; see the reference notes for the extraction.
 const CHECK_EVERY = 6; // CHECK_EVERY: the step of a turn that may check
 const CLEAR_AFTER_PROMPTS = 2; // CLEAR_AFTER_PROMPTS: unanswered notes expire
@@ -323,9 +325,11 @@ export default function (pi: ExtensionAPI) {
           },
         )
         .result();
+      recordSideCall(pi, "you-should-know", response);
 
       detail = {
-        model: `${model.provider}/${model.id}`,
+        // The model that answered: a virtual selection names its router, not the model.
+        model: `${response.provider}/${response.model}`,
         aligned,
         input: response.usage.input,
         cacheRead: response.usage.cacheRead,
