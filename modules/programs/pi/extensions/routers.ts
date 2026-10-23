@@ -252,7 +252,10 @@ function editedThisTurn(messages: readonly Message[]): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message.role === "user") return false;
-    if (message.role === "toolResult" && EDIT_TOOLS.has(message.toolName) && !message.isError) {
+    if (message.role !== "toolResult") continue;
+    if (EDIT_TOOLS.has(message.toolName) && !message.isError) return true;
+    // A codemode script's edits only show up as nested calls; they count even if the script failed later.
+    if (message.nestedCalls?.calls.some((c) => EDIT_TOOLS.has(c.name) && c.status === "ok")) {
       return true;
     }
   }
