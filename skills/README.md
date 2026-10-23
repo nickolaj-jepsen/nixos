@@ -43,3 +43,6 @@ claude plugin install skills@nickolaj-jepsen
   [ossama.is](https://ossama.is); credited in the skill file.
 - **pricerunner** — search, filter and compare Danish prices on PriceRunner.dk via its
   unofficial frontend API: facet filters, categories, offers, price history, deals.
+- **pi-plugin-dev** — build and debug pi extensions by observation: tmux-driven TUI
+  sessions, color screenshots, session digests that replay the prompt and tool
+  loadout, and a replay provider so tool and error paths run without a model.
