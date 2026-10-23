@@ -1,26 +1,24 @@
 /**
- * Exa search and page fetch. Highlights are the default: Exa's extractor picks
- * the passages that answer the query on every request, so a per-result character
- * cap mostly trades quality for tokens that were never the problem. Result count
- * is the knob nothing server-side adapts, so it follows the active model's
- * context window and the space actually left in it.
- *
- * Both tools take explicit `numResults`/`maxChars` overrides so the model can
- * push past the sizing when recall is short, and neither is required to.
+ * Exa search and page fetch. Search returns highlights by default, which Exa
+ * sizes for relevance; fetch returns page text. Both cap the whole call to a
+ * share of the active model's context and split that share across results or
+ * pages, so the tools stay usable on small windows. `maxChars` changes the
+ * per-item cap, but the call total still wins.
  */
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
 
 const API = "https://api.exa.ai";
-// Under this much free context, results compete with the reasoning about them.
-const TIGHT_FREE_TOKENS = 60_000;
-const TIGHT_USED_PERCENT = 60;
+// A call may spend at most this share of the window or of the free context.
+const WINDOW_SHARE = 0.06;
+const FREE_SHARE = 0.25;
+const MIN_TOTAL_CHARS = 4_000;
+const MAX_TOTAL_CHARS = 120_000;
+const DEFAULT_SEARCH_CHARS = 8_000;
+const MAX_PAGE_CHARS = 30_000;
+const MIN_PAGE_CHARS = 1_500;
 
-// Exa list prices per 1k requests, so the footer can count search spend alongside
-// model spend. A plan other than pay-as-you-go makes these wrong.
-const SEARCH_PER_1K = { auto: 7, lite: 4, deep: 12 } as const;
-const EXTRA_RESULT_PER_1K = 1; // each result past the first 10
-const PAGE_PER_1K = 1; // contents, per page per content type
+type Mode = "highlights" | "text" | "summary";
 
 interface ExaResult {
   title?: string;
@@ -31,21 +29,37 @@ interface ExaResult {
   highlights?: string[];
 }
 
-/** Result count and text budget for the model in play; only its window knows what fits. */
-function budget(ctx: ExtensionToolContext) {
-  const window = ctx.model?.contextWindow ?? 200_000;
-  const usage = ctx.getContextUsage();
-  // `tokens` is null right after compaction, before the next response reports.
-  const free = usage?.tokens != null ? window - usage.tokens : window / 2;
-  const tight = free < TIGHT_FREE_TOKENS || (usage?.percent ?? 0) > TIGHT_USED_PERCENT;
-
-  if (tight) return { numResults: 3, maxChars: 1_500 };
-  if (window >= 500_000) return { numResults: 10, maxChars: 8_000 };
-  if (window >= 150_000) return { numResults: 8, maxChars: 5_000 };
-  return { numResults: 5, maxChars: 2_500 };
+interface ExaStatus {
+  id: string;
+  status: string;
 }
 
-async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+interface ExaResponse {
+  results?: ExaResult[];
+  statuses?: ExaStatus[];
+  costDollars?: { total?: number };
+}
+
+/** Total chars one call may add to the context, and the window used for result counts. */
+function contextBudget(ctx: ExtensionToolContext) {
+  const usage = ctx.getContextUsage();
+  const window = usage?.contextWindow ?? ctx.model?.contextWindow ?? 200_000;
+  const free = usage?.tokens == null ? window / 2 : Math.max(0, window - usage.tokens);
+  const share = Math.min(window * WINDOW_SHARE, free * FREE_SHARE) * 4;
+  return {
+    window,
+    total: Math.min(MAX_TOTAL_CHARS, Math.max(MIN_TOTAL_CHARS, Math.floor(share))),
+  };
+}
+
+const resultCount = (window: number) =>
+  window >= 500_000 ? 10 : window >= 150_000 ? 8 : window >= 64_000 ? 5 : 3;
+
+async function post<T extends ExaResponse>(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
   const key = process.env.EXA_API_KEY;
   // Points at the agenix secret, so say what is missing rather than how to curl it.
   if (!key) throw new Error("EXA_API_KEY is unset (secret: exa-api-key).");
@@ -63,14 +77,17 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
   return (await res.json()) as T;
 }
 
-/** `contents` for one mode. A cap is only sent when it was asked for, or when text needs bounding. */
-function contents(mode: "highlights" | "text" | "summary", cap: number | undefined, query: string) {
-  if (mode === "text") return { text: { maxCharacters: cap ?? 5_000 } };
+/** `contents` for one mode. `cap` is the share of the call budget for this item. */
+function contents(mode: Mode, cap: number, query: string) {
+  if (mode === "text") return { text: { maxCharacters: cap } };
   if (mode === "summary") return { summary: { query } };
-  return { highlights: cap === undefined ? (true as const) : { maxCharacters: cap } };
+  return { highlights: { maxCharacters: cap } };
 }
 
-const excerpt = (r: ExaResult) => (r.highlights?.join("\n…\n") ?? r.text ?? r.summary ?? "").trim();
+const excerpt = (r: ExaResult) => {
+  const highlights = r.highlights?.join("\n…\n").trim();
+  return highlights || r.text || r.summary || "";
+};
 
 /** One block per result: rank, title, bare URL for copying, then the evidence. */
 function format(results: ExaResult[], numbered: boolean) {
@@ -83,7 +100,25 @@ function format(results: ExaResult[], numbered: boolean) {
     .join("\n\n");
 }
 
-const modeParam = (fallback: string, detail: string) =>
+function truncatedUrl(r: ExaResult, mode: Mode, cap: number): string | undefined {
+  const cut =
+    mode === "text"
+      ? (r.text?.length ?? 0) >= cap
+      : mode === "highlights"
+        ? (r.highlights?.join("").length ?? 0) >= cap
+        : false;
+  return cut ? r.url : undefined;
+}
+
+function shortList(items: string[]): string {
+  return items.length <= 4
+    ? items.join(", ")
+    : `${items.slice(0, 3).join(", ")} and ${items.length - 3} more`;
+}
+
+const footer = (notes: string[]) => (notes.length > 0 ? `\n\n[${notes.join("; ")}]` : "");
+
+const modeParam = (fallback: Mode, detail: string) =>
   Type.Optional(
     Type.Union([Type.Literal("highlights"), Type.Literal("text"), Type.Literal("summary")], {
       description: `${detail} Defaults to "${fallback}".`,
@@ -91,11 +126,7 @@ const modeParam = (fallback: string, detail: string) =>
   );
 
 const capParam = (detail: string) =>
-  Type.Optional(
-    Type.Number({
-      description: `${detail} Unset by default so Exa sizes highlights to relevance; setting it caps every result at that many characters.`,
-    }),
-  );
+  Type.Optional(Type.Number({ minimum: 1, description: detail }));
 
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
@@ -104,38 +135,40 @@ export default function (pi: ExtensionAPI) {
     description:
       "Search the web through Exa and get back the passages that answer the query. Use it for anything outside the repo: current docs, APIs, releases, error messages, news.",
     promptSnippet:
-      "exa_search: web search returning query-relevant excerpts per result; exa_fetch reads URLs you already have.",
+      "Web search returning query-relevant excerpts per result; exa_fetch reads URLs you already have.",
     parameters: Type.Object({
       query: Type.String({
         description: "Natural-language query. Describe the page you want, not keywords.",
       }),
-      objective: Type.Optional(
-        Type.String({
-          description:
-            "The goal this search serves. Exa selects excerpts against it, so pass the task rather than repeating the query.",
-        }),
-      ),
+      objective: Type.String({
+        description:
+          "Goal for this search turn; say which documents should rank first, which should be excluded, and what specific facts or figures to pull from them.",
+      }),
       mode: modeParam(
         "highlights",
-        'Per result: "highlights" (excerpts chosen for the query), "text" (page body), "summary" (LLM digest).',
+        'Per result: "highlights" (excerpts chosen for the query), "text" (page body), "summary" (LLM digest; requires type "auto").',
       ),
       numResults: Type.Optional(
         Type.Number({
+          minimum: 1,
+          maximum: 100,
           description:
-            "Already sized to the active model's context window and free space, so leave it unset; set it when recall is too low or the answer is clearly not in these results.",
+            "Defaults to 3/5/8/10 by context window. More results means shorter excerpts under the call budget.",
         }),
       ),
-      maxChars: capParam("Per-result character budget."),
+      maxChars: capParam(
+        "Per-result character budget. Defaults to a share of the call budget; lower numResults for longer excerpts.",
+      ),
       type: Type.Optional(
-        Type.Union([Type.Literal("auto"), Type.Literal("lite"), Type.Literal("deep")], {
+        Type.Union([Type.Literal("auto"), Type.Literal("lite")], {
           description:
-            'Search mode. "auto" is the balanced default; "lite" skips live fetching for low latency; "deep" runs multi-step research and is much slower and pricier.',
+            'Search mode. "auto" is the balanced default; "lite" is cheaper and faster but serves content from Exa\'s index and does not support summary.',
         }),
       ),
       category: Type.Optional(
         Type.String({
           description:
-            "Restrict to a data type, e.g. news, research paper, company, pdf, personal site, github.",
+            "Canonical values: company, publication, news, personal site, financial report, people. Other strings are hints. company and people reject date filters.",
         }),
       ),
       includeDomains: Type.Optional(
@@ -149,12 +182,21 @@ export default function (pi: ExtensionAPI) {
       ),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const limits = budget(ctx);
+      const { window, total } = contextBudget(ctx);
       const mode = params.mode ?? "highlights";
-      const numResults = params.numResults ?? limits.numResults;
       const type = params.type ?? "auto";
+      if (type === "lite" && mode === "summary") {
+        throw new Error(
+          'Exa type "lite" does not support mode "summary"; use type "auto" or mode "highlights"/"text".',
+        );
+      }
 
-      const data = await post<{ results?: ExaResult[] }>(
+      const numResults = params.numResults ?? resultCount(window);
+      const cap = Math.max(
+        1,
+        Math.min(params.maxChars ?? DEFAULT_SEARCH_CHARS, Math.floor(total / numResults)),
+      );
+      const data = await post<ExaResponse>(
         "/search",
         {
           query: params.query,
@@ -165,28 +207,28 @@ export default function (pi: ExtensionAPI) {
           includeDomains: params.includeDomains,
           excludeDomains: params.excludeDomains,
           startPublishedDate: params.startPublishedDate,
-          contents: contents(
-            mode,
-            params.maxChars ?? (mode === "highlights" ? undefined : limits.maxChars),
-            params.objective ?? params.query,
-          ),
+          contents: contents(mode, cap, params.objective),
         },
         signal,
       );
 
       const results = data.results ?? [];
-      // Billed per request, whether or not anything came back.
-      const costUsd =
-        (SEARCH_PER_1K[type] + Math.max(0, numResults - 10) * EXTRA_RESULT_PER_1K) / 1000;
+      const costUsd = data.costDollars?.total;
+      const truncated = results
+        .map((r) => truncatedUrl(r, mode, cap))
+        .filter((url): url is string => Boolean(url));
+
       if (results.length === 0) {
         return {
           content: [{ type: "text" as const, text: `No results for "${params.query}".` }],
-          details: { numResults, mode, costUsd },
+          details: { numResults, mode, costUsd, truncated: [] },
         };
       }
+      const notes =
+        truncated.length > 0 ? [`Capped at ~${cap} chars: ${shortList(truncated)}`] : [];
       return {
-        content: [{ type: "text" as const, text: format(results, true) }],
-        details: { numResults, mode, costUsd },
+        content: [{ type: "text" as const, text: format(results, true) + footer(notes) }],
+        details: { numResults, mode, costUsd, truncated },
       };
     },
   });
@@ -197,62 +239,74 @@ export default function (pi: ExtensionAPI) {
     description:
       "Read pages you already have URLs for: Exa extracts the body, so it works on docs, READMEs and articles that curl turns into script tags.",
     promptSnippet:
-      "exa_fetch: extract page content for known URLs; prefer it over curl for rendered or JS-heavy pages.",
+      "Extract page content for known URLs; prefer it over curl for rendered or JS-heavy pages.",
     parameters: Type.Object({
-      urls: Type.Array(Type.String(), { description: "Pages to read." }),
+      urls: Type.Array(Type.String(), {
+        minItems: 1,
+        maxItems: 100,
+        description: "Pages to read; the context budget may skip some.",
+      }),
       mode: modeParam(
         "text",
-        'Per page: "text" (full body up to the budget), "highlights" (short excerpts), "summary" (LLM digest).',
+        'Per page: "text" (page body), "highlights" (short excerpts), "summary" (LLM digest).',
       ),
-      maxChars: capParam("Per-page character budget."),
-      livecrawl: Type.Optional(
-        Type.Union(
-          [
-            Type.Literal("never"),
-            Type.Literal("fallback"),
-            Type.Literal("always"),
-            Type.Literal("auto"),
-            Type.Literal("preferred"),
-          ],
-          {
-            description:
-              'Cache policy. "never" is fastest and stalest; "fallback" refetches only when the cache is stale; use one of those two when a page changed recently.',
-          },
-        ),
+      maxChars: capParam(
+        "Per-page character budget. Defaults to a share of the call budget; summary ignores it.",
+      ),
+      maxAgeHours: Type.Optional(
+        Type.Integer({
+          minimum: -1,
+          maximum: 720,
+          description:
+            "Maximum age of cached content in hours: 0 always fetches fresh, -1 always uses cache, 1-720 tolerates cache that old. Defaults to 24.",
+        }),
       ),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const limits = budget(ctx);
+      const { total } = contextBudget(ctx);
       const mode = params.mode ?? "text";
+      const pageCap = Math.max(1, Math.min(params.maxChars ?? MAX_PAGE_CHARS, MAX_PAGE_CHARS));
+      const maxPages = Math.max(
+        1,
+        Math.min(params.urls.length, Math.floor(total / Math.min(pageCap, MIN_PAGE_CHARS))),
+      );
+      const perPage = Math.max(1, Math.min(pageCap, Math.floor(total / maxPages)));
+      const urls = params.urls.slice(0, maxPages);
+      const skipped = params.urls.slice(maxPages);
 
-      const data = await post<{
-        results?: ExaResult[];
-        statuses?: { id: string; status: string }[];
-      }>(
+      const data = await post<ExaResponse>(
         "/contents",
         {
-          urls: params.urls,
-          livecrawl: params.livecrawl,
-          ...contents(mode, params.maxChars ?? limits.maxChars, params.urls.join(" ")),
+          urls,
+          maxAgeHours: params.maxAgeHours ?? 24,
+          ...contents(mode, perPage, urls.join(" ")),
         },
         signal,
       );
 
       const results = (data.results ?? []).filter((r) => r.url);
-      // Pages Exa actually returned; a failed extraction is not billed.
-      const costUsd = (results.length * PAGE_PER_1K) / 1000;
+      const costUsd = data.costDollars?.total;
+      const failed = (data.statuses ?? [])
+        .filter((s) => s.status !== "success")
+        .map((s) => `${s.id} (${s.status})`);
+      const truncated = results
+        .map((r) => truncatedUrl(r, mode, perPage))
+        .filter((url): url is string => Boolean(url));
+      const notes = [
+        ...(truncated.length > 0 ? [`Capped at ~${perPage} chars: ${shortList(truncated)}`] : []),
+        ...(skipped.length > 0 ? [`Skipped (context budget): ${shortList(skipped)}`] : []),
+        ...(failed.length > 0 ? [`Failed: ${shortList(failed)}`] : []),
+      ];
+
       if (results.length === 0) {
-        const failed = data.statuses?.map((s) => `${s.id}: ${s.status}`).join(", ");
         return {
-          content: [
-            { type: "text" as const, text: `Nothing extracted${failed ? ` (${failed})` : ""}.` },
-          ],
-          details: { mode, costUsd },
+          content: [{ type: "text" as const, text: `Nothing extracted.${footer(notes)}` }],
+          details: { mode, costUsd, truncated, skipped, failed },
         };
       }
       return {
-        content: [{ type: "text" as const, text: format(results, false) }],
-        details: { mode, pages: results.length, costUsd },
+        content: [{ type: "text" as const, text: format(results, false) + footer(notes) }],
+        details: { mode, pages: results.length, costUsd, truncated, skipped, failed },
       };
     },
   });
