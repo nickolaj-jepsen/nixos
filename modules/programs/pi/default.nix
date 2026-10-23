@@ -204,7 +204,8 @@ in {
           theme = "fireproof";
           # Keeps the version and key hints; drops the loaded-resource listing.
           quietStartup = "header";
-          # `/tree` opens on my prompts; ctrl+d still shows everything.
+          # `/tree` opens on my prompts; ctrl+d returns to the default view and
+          # ctrl+a shows every entry.
           treeFilterMode = "user-only";
           # OSC 9;4 progress in ghostty's tab, for runs long enough to switch away from.
           terminal.showTerminalProgress = true;
