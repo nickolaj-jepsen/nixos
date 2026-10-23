@@ -30,6 +30,7 @@ import { Key, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/
 import type { Component, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
 
 import { recordSideCall } from "./lib/usage-ledger.ts";
+import { providePromptEditor } from "./lib/prompt-editor.ts";
 
 type Miss = { word: string; start: number; end: number };
 /** A typo the model found that hunspell did not flag: a real word or one it skipped (`dense/recieve`). */
@@ -1035,7 +1036,7 @@ export default function (pi: ExtensionAPI) {
     void ensurePersonal();
     unsubscribeInput?.();
     editor = undefined;
-    ctx.ui.setEditorComponent((tui, editorTheme, keybindings) => {
+    providePromptEditor(ctx, (tui, editorTheme, keybindings) => {
       editor = new SpellEditor(
         tui,
         editorTheme,

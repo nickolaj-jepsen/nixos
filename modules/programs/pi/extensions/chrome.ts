@@ -4,6 +4,7 @@
  * top-level files, so this is the one entry point.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { ensurePromptEditor, wrapPromptEditor } from "./lib/prompt-editor.ts";
 import { createActions } from "./chrome/actions.ts";
 import { createEditorChrome } from "./chrome/editor.ts";
 import { createFooter } from "./chrome/footer.ts";
@@ -16,17 +17,14 @@ export default function (pi: ExtensionAPI) {
   const actions = createActions(pi, state);
   const identity = createIdentity(pi, state);
   const footer = createFooter(pi, state, actions);
-  const editor = createEditorChrome(state, {
-    top: (width, hidden, border) =>
-      identity.drawTop(width, hidden, border, measurementLevels(state, footer.meters())),
-  });
+  wrapPromptEditor(
+    createEditorChrome(state, {
+      top: (width, hidden, border) =>
+        identity.drawTop(width, hidden, border, measurementLevels(state, footer.meters())),
+    }),
+  );
 
-  // Spellfix installs its editor from its own session_start; wrap it once every startup handler ran.
-  pi.on("session_start", (_event, ctx) => {
-    setTimeout(() => {
-      if (state.ctx === ctx) editor.ensureInstalled(ctx);
-    }, 0).unref?.();
-  });
-  // A second chance, in case an editor was installed late.
-  pi.on("agent_start", (_event, ctx) => editor.ensureInstalled(ctx));
+  pi.on("session_start", (_event, ctx) => ensurePromptEditor(ctx));
+  // A second chance, in case another extension installed a factory of its own late.
+  pi.on("agent_start", (_event, ctx) => ensurePromptEditor(ctx));
 }

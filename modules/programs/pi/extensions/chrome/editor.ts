@@ -1,5 +1,5 @@
-import { CustomEditor, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
+import type { EditorWrapper } from "../lib/prompt-editor.ts";
 import { hitTest, hoverAt, isPlainClick, type Region } from "./layout.ts";
 import type { Action, ChromeState, Renderer } from "./state.ts";
 
@@ -36,16 +36,14 @@ const widgetAbove = (state: ChromeState): boolean => {
 };
 
 /**
- * Owns the editor's top border without owning the editor: another extension
- * (spellfix) installs pi's custom editor and only one factory can exist, so this
- * wraps whatever factory is installed. The proxy forwards everything pi wires up
- * (submit, text, keybindings, border color) and intercepts only `render` and
- * `handleMouse`; the border is rewritten after the inner render, so spellfix's
- * styling never reaches it.
+ * Owns the editor's top border without owning the editor: spellfix supplies it
+ * through lib/prompt-editor, and this wraps that instance. The proxy forwards
+ * everything pi wires up (submit, text, keybindings, border color) and
+ * intercepts only `render` and `handleMouse`; the border is rewritten after the
+ * inner render, so spellfix's styling never reaches it.
  */
-export const createEditorChrome = (state: ChromeState, painters: Painters) => {
+export const createEditorChrome = (state: ChromeState, painters: Painters): EditorWrapper => {
   let topRegions: Region[] = [];
-  let installed: unknown;
 
   const decorate = (inner: Inner, tui: Renderer) => {
     state.tui = tui;
@@ -118,23 +116,5 @@ export const createEditorChrome = (state: ChromeState, painters: Painters) => {
     return wrapper;
   };
 
-  /**
-   * Runs after the startup handlers and wraps whatever editor factory it finds;
-   * when nothing installed one, it supplies pi's default CustomEditor.
-   */
-  const ensureInstalled = (ctx: ExtensionContext) => {
-    if (ctx.mode !== "tui" || !ctx.hasUI) return;
-    const previous = ctx.ui.getEditorComponent();
-    if (previous && previous === installed) return;
-    const factory = (tui: never, theme: never, keybindings: never) => {
-      const inner = previous
-        ? previous(tui, theme, keybindings)
-        : new CustomEditor(tui, theme, keybindings, { embedWorkingStatus: true });
-      return decorate(inner as never, tui);
-    };
-    installed = factory;
-    ctx.ui.setEditorComponent(factory as never);
-  };
-
-  return { ensureInstalled };
+  return (inner, host) => decorate(inner as Inner, host[0] as unknown as Renderer) as never;
 };
