@@ -162,9 +162,8 @@
       enable = true;
       package = pkgs.claude-code;
       enableMcpIntegration = true;
-      # The fireproof.agents.skills registry. One file per command (commands/<name>.md).
+      # The fireproof.agents.skills registry.
       skills = config.fireproof.agents.skills;
-      commandsDir = ./commands;
 
       # The fireproof.agents.lspServers registry (agent-lsp.nix); its rust-analyzer
       # replaces the hand-installed rust-analyzer-lsp plugin.
