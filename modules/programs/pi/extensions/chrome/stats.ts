@@ -40,19 +40,19 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
     } else if (prompt >= MIN_CACHE_PROMPT_TOKENS) {
       cacheHit = (message.usage.cacheRead / prompt) * 100;
     }
+    // Not the entry's timestamp: pi persists a message up to minutes after its stream ends.
     if (
+      message.durationMs !== undefined &&
+      message.durationMs >= 500 &&
       message.usage.output >= MIN_SPEED_OUTPUT_TOKENS &&
       message.stopReason !== "error" &&
       message.stopReason !== "aborted"
     ) {
-      const seconds = (Date.parse(entry.timestamp) - message.timestamp) / 1000;
-      if (Number.isFinite(seconds) && seconds >= 0.5) {
-        lastSpeed = {
-          provider: message.provider,
-          model: message.model,
-          value: message.usage.output / seconds,
-        };
-      }
+      lastSpeed = {
+        provider: message.provider,
+        model: message.model,
+        value: message.usage.output / (message.durationMs / 1000),
+      };
     }
   }
 
