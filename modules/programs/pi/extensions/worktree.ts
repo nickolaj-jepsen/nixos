@@ -7,16 +7,18 @@
  * rewriting the command, so the model gets the real path back in the reason.
  */
 import { spawnSync } from "node:child_process";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
 const fallback = "Blocked: git worktree add outside ~/worktrees/<repo>/. Use `wt create <name>`.";
 
 export default function (pi: ExtensionAPI) {
   pi.on("tool_call", (event, ctx) => {
-    if (event.toolName !== "bash") return;
-
-    // `event.input` is unknown for custom tools, so read it structurally.
-    const { command } = event.input as { command?: unknown };
+    // bg_run (pi-background-tasks) is a shell too.
+    const command = isToolCallEventType("bash", event)
+      ? event.input.command
+      : event.toolName === "bg_run"
+        ? event.input.command
+        : undefined;
     // Substring test first: spawning wt on every bash call would be waste.
     if (typeof command !== "string" || !command.includes("worktree")) return;
 
