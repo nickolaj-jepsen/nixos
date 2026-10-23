@@ -1,3 +1,6 @@
+import { homedir } from "node:os";
+import { relative, sep } from "node:path";
+
 export const formatTokens = (count: number) => {
   if (count < 1000) return count.toString();
   if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
@@ -27,4 +30,16 @@ export const formatWhen = (at: Date, now = new Date()) => {
   if (ms < 24 * HOUR) return at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   if (ms < 7 * 24 * HOUR) return at.toLocaleDateString("en-GB", { weekday: "short" });
   return at.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+};
+
+/** A directory as `~/a/b`, eliding the middle of deep paths. */
+export const shortPath = (cwd: string) => {
+  const home = homedir();
+  if (cwd === home) return "~";
+  if (cwd.startsWith(home + sep)) {
+    const parts = relative(home, cwd).split(sep).filter(Boolean);
+    return parts.length <= 2 ? `~/${parts.join("/")}` : `~/…/${parts[parts.length - 1]}`;
+  }
+  const parts = cwd.split(sep).filter(Boolean);
+  return parts.length <= 2 ? `/${parts.join("/")}` : `/${parts[0]}/…/${parts[parts.length - 1]}`;
 };

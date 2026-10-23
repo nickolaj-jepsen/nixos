@@ -15,8 +15,8 @@ export type ChromeState = {
   hover: string | undefined;
   /** Moves the hover; it lapses on its own because pi never reports the pointer leaving. */
   setHover(group: string | undefined): void;
-  /** Whether the last editor render drew the context gauge; the footer shows context while false. */
-  gaugeActive: boolean;
+  /** Whether the last editor render drew the measurements on the bottom border; the footer shows them while false. */
+  metersActive: boolean;
 };
 
 // Terminals that implement OSC 22 show a hand over a control; the rest ignore it.
@@ -47,7 +47,7 @@ export const createState = (): ChromeState => {
       state.hover = group;
       state.tui?.requestRender();
     },
-    gaugeActive: false,
+    metersActive: false,
   };
   return state;
 };

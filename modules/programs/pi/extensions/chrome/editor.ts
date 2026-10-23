@@ -58,11 +58,13 @@ export const createEditorChrome = (state: ChromeState, painters: Painters) => {
             const below = target.renderedAutocompleteHeight;
             const index = lines.length - 1 - (typeof below === "number" ? below : 0);
             const match = index > 0 ? BOTTOM.exec(plain(lines[index] ?? "")) : null;
-            const gauge = match ? painters.bottom(width, Number(match[1] ?? 0), border) : undefined;
-            if (gauge !== undefined) lines[index] = gauge;
-            const active = gauge !== undefined;
-            if (active !== state.gaugeActive) {
-              state.gaugeActive = active;
+            const meters = match
+              ? painters.bottom(width, Number(match[1] ?? 0), border)
+              : undefined;
+            if (meters !== undefined) lines[index] = meters;
+            const active = meters !== undefined;
+            if (active !== state.metersActive) {
+              state.metersActive = active;
               // The footer reads this flag; repaint after this frame, not inside it.
               setTimeout(() => state.tui?.requestRender(), 0);
             }

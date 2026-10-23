@@ -1,9 +1,10 @@
 /**
  * The line under the editor: what is answering on the left (provider, model,
  * effort, other extensions' statuses), measurements right-aligned before git.
- * Steady meters are cost and speed; alarms (quota running out, credit left,
- * a cache miss) appear only when they say something. Layout and shedding live
- * in `footer-line.ts`; git, usage and stats in their own modules.
+ * Measurements (context, cost, speed) live on the editor's bottom border;
+ * alarms (quota running out, credit left, a cache miss) appear here only when
+ * they say something. Layout and shedding live in `footer-line.ts`; git, usage
+ * and stats in their own modules.
  */
 import type {
   ExtensionAPI,
@@ -14,7 +15,7 @@ import type {
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
 import { layoutFooter } from "./footer-line.ts";
-import { formatCost } from "./format.ts";
+import { formatCost, shortPath } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
 import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
@@ -81,6 +82,28 @@ export const createFooter = (
   const stats = createStats();
   let regions: Region[] = [];
 
+  /** Cost and speed as text; `undefined` when there is nothing worth showing. */
+  const meterTexts = (ctx: ExtensionContext) => {
+    const model = ctx.model;
+    const s = stats.statsFor(ctx, model);
+    const paid = (model?.cost.input ?? 0) > 0 || (model?.cost.output ?? 0) > 0;
+    return {
+      cost: s.cost > 0 || paid ? formatCost(s.cost) : undefined,
+      speed:
+        s.speed !== undefined && Number.isFinite(s.speed) && s.speed > 0
+          ? `${Math.round(s.speed)} t/s`
+          : undefined,
+    };
+  };
+
+  /** The measurements the editor's bottom border shows next to the context. */
+  const meters = (): string[] => {
+    const ctx = state.ctx;
+    if (!ctx) return [];
+    const { cost, speed } = meterTexts(ctx);
+    return [cost, speed].filter((text): text is string => text !== undefined);
+  };
+
   const renderLine = (
     width: number,
     theme: Theme,
@@ -106,8 +129,8 @@ export const createFooter = (
         color: s.cacheHit < CACHE_ERROR_PCT ? "error" : "warning",
       });
     }
-    // Only when the bottom-border gauge could not be drawn.
-    const percent = state.gaugeActive ? undefined : ctx.getContextUsage()?.percent;
+    // Only when the bottom border could not be drawn.
+    const percent = state.metersActive ? undefined : ctx.getContextUsage()?.percent;
     if (percent != null) {
       alarms.push({
         id: "context",
@@ -117,12 +140,7 @@ export const createFooter = (
       });
     }
 
-    const paid = (model?.cost.input ?? 0) > 0 || (model?.cost.output ?? 0) > 0;
-    const costText = s.cost > 0 || paid ? formatCost(s.cost) : undefined;
-    const speedText =
-      s.speed !== undefined && Number.isFinite(s.speed) && s.speed > 0
-        ? `${Math.round(s.speed)} t/s`
-        : undefined;
+    const { cost: costText, speed: speedText } = meterTexts(ctx);
 
     const result = layoutFooter(
       width,
@@ -163,8 +181,16 @@ export const createFooter = (
           .filter(Boolean)
           .map((text, index) => ({ id: `status-${index}`, text, color: "dim" as const })),
         alarms,
-        cost: costText ? { id: "cost", text: costText, color: "dim" } : undefined,
-        speed: speedText ? { id: "speed", text: speedText, color: "dim" } : undefined,
+        path: { id: "path", text: shortPath(ctx.cwd), color: "dim" },
+        // The bottom border carries these; the footer only does when it could not be drawn.
+        cost:
+          costText && !state.metersActive
+            ? { id: "cost", text: costText, color: "dim" }
+            : undefined,
+        speed:
+          speedText && !state.metersActive
+            ? { id: "speed", text: speedText, color: "dim" }
+            : undefined,
         git: git.view,
       },
       state.hover,
@@ -255,4 +281,6 @@ export const createFooter = (
     track(ctx);
     git.schedule();
   });
+
+  return { meters };
 };
