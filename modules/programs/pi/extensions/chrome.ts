@@ -4,7 +4,7 @@
  * top-level files, so this is the one entry point.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { ensurePromptEditor, wrapPromptEditor } from "./lib/prompt-editor.ts";
+import { ensurePromptEditor, unwrapPromptEditor, wrapPromptEditor } from "./lib/prompt-editor.ts";
 import { createActions } from "./chrome/actions.ts";
 import { createEditorChrome } from "./chrome/editor.ts";
 import { createFooter } from "./chrome/footer.ts";
@@ -23,20 +23,23 @@ export default function (pi: ExtensionAPI) {
   const actions = createActions(pi, state);
   const identity = createIdentity(pi, state);
   const footer = createFooter(pi, state, actions);
-  wrapPromptEditor(
-    createEditorChrome(state, {
-      top: (width, hidden, border, status) =>
-        identity.drawTop(
-          width,
-          hidden,
-          border,
-          status,
-          measurementLevels(state, footer.measurements()),
-        ),
-    }),
-  );
+  const wrapper = createEditorChrome(state, {
+    top: (width, hidden, border, status) =>
+      identity.drawTop(
+        width,
+        hidden,
+        border,
+        status,
+        measurementLevels(state, footer.measurements()),
+      ),
+  });
 
-  pi.on("session_start", (_event, ctx) => ensurePromptEditor(ctx));
+  // Per live session under one key, so no earlier session's wrapper draws through its dead ctx.
+  pi.on("session_start", (_event, ctx) => {
+    if (state.live) wrapPromptEditor("chrome", wrapper);
+    ensurePromptEditor(ctx);
+  });
+  pi.on("session_shutdown", () => unwrapPromptEditor("chrome", wrapper));
   // A second chance, in case another extension installed a factory of its own late.
   pi.on("agent_start", (_event, ctx) => ensurePromptEditor(ctx));
 }

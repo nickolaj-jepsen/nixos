@@ -56,7 +56,7 @@ import {
 import type { Found, LogPick, Verdict } from "./lib/spellfix/hooks/core.ts";
 import type { Extra, FixLog, FixSource, Miss } from "./lib/spellfix/types/index.d.ts";
 import { recordSideCall } from "./lib/usage-ledger.ts";
-import { providePromptEditor } from "./lib/prompt-editor.ts";
+import { providePromptEditor, withdrawPromptEditor } from "./lib/prompt-editor.ts";
 
 type Suggestion = { word: string; source: FixSource };
 
@@ -961,6 +961,9 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args, ctx) => openPicker(ctx),
   });
 
+  // Closes over one session's ctx, so it is withdrawn when that session ends.
+  let provided: Parameters<typeof providePromptEditor>[1] | undefined;
+
   pi.on("session_start", (_event, ctx) => {
     sessionGen++;
     const gen = sessionGen;
@@ -974,7 +977,7 @@ export default function (pi: ExtensionAPI) {
     // hunspell neither creates a missing personal dictionary nor saves into one.
     void ensurePersonal();
     editor = undefined;
-    providePromptEditor(ctx, (tui, editorTheme, keybindings) => {
+    provided = (tui, editorTheme, keybindings) => {
       editor = new SpellEditor(
         tui,
         editorTheme,
@@ -983,7 +986,8 @@ export default function (pi: ExtensionAPI) {
         () => scheduleCheck(gen, ctx),
       );
       return editor;
-    });
+    };
+    providePromptEditor(ctx, provided);
     scheduleCheck(gen, ctx);
   });
 
@@ -995,6 +999,8 @@ export default function (pi: ExtensionAPI) {
     suspended = false;
     editor = undefined;
     batch = undefined;
+    if (provided) withdrawPromptEditor(provided);
+    provided = undefined;
     if (ctx.mode === "tui") ctx.ui.setWidget("spellfix", undefined);
   });
 
