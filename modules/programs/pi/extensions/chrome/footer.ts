@@ -91,9 +91,12 @@ const createRouted = () => {
   };
 };
 
+// Any CSI (private and colon forms too), then OSC, DCS, PM and APC strings up to BEL or ST.
+const TERMINAL_SEQUENCE = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b[\]P^_][\s\S]*?(?:\x07|\x1b\\)/g;
+
 const sanitize = (text: string) =>
   text
-    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
+    .replace(TERMINAL_SEQUENCE, "")
     .replace(/[\r\n\t]+/g, " ")
     .replace(/ +/g, " ")
     .trim();
