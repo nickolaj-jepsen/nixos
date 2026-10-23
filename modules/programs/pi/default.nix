@@ -139,8 +139,9 @@ in {
         themes = [theme];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
-        # Read at launch, so the key never lands in the Nix store.
-        environment.EXA_API_KEY.file = config.age.secrets.exa-api-key.path;
+        # A path, not the key: extensions/exa.ts reads it, so the key stays out
+        # of the environment every tool and MCP server inherits.
+        environment.PI_EXA_KEY_FILE.value = config.age.secrets.exa-api-key.path;
         # Spellfix (extensions/spellfix.ts) shares its dictionary and fix log
         # with the Claude Code mod. Haiku keeps the one batch call cheap.
         environment.PI_SPELLFIX_HUNSPELL.value = lib.getExe spellChecker;

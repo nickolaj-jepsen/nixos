@@ -7,6 +7,7 @@
  */
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
+import { readFileSync } from "node:fs";
 import { usdUsage } from "./lib/usage-ledger.ts";
 
 const API = "https://api.exa.ai";
@@ -60,18 +61,32 @@ function contextBudget(ctx: ExtensionToolContext) {
 const resultCount = (window: number) =>
   window >= 500_000 ? 10 : window >= 150_000 ? 8 : window >= 64_000 ? 5 : 3;
 
+let apiKey: string | undefined;
+
+/** The key from `$PI_EXA_KEY_FILE`, read on first use and cached; throws when unset, unreadable or empty. */
+function exaKey(): string {
+  if (apiKey) return apiKey;
+  const file = process.env.PI_EXA_KEY_FILE;
+  // Points at the agenix secret, so say what is missing rather than how to curl it.
+  if (!file) throw new Error("PI_EXA_KEY_FILE is unset (secret: exa-api-key).");
+  let key: string;
+  try {
+    key = readFileSync(file, "utf8").trim();
+  } catch (err) {
+    throw new Error(`Can't read the Exa key (secret: exa-api-key): ${(err as Error).message}`);
+  }
+  if (!key) throw new Error(`The Exa key file ${file} is empty (secret: exa-api-key).`);
+  return (apiKey = key);
+}
+
 async function post<T extends ExaResponse>(
   path: string,
   body: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
-  const key = process.env.EXA_API_KEY;
-  // Points at the agenix secret, so say what is missing rather than how to curl it.
-  if (!key) throw new Error("EXA_API_KEY is unset (secret: exa-api-key).");
-
   const res = await fetch(`${API}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": key },
+    headers: { "content-type": "application/json", "x-api-key": exaKey() },
     body: JSON.stringify(body),
     signal,
   });
