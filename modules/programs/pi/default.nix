@@ -139,8 +139,6 @@ in {
           - A result is not shown to the user: summarise it, and check an agent's claimed edits before reporting them done.
           - `SubagentWorkflow` is scripted fan-out, declared only on large-context models; where it is missing, `/workflow` carries the codemode call. Both routes need an explicit ask — a task that would merely benefit from parallelism is not one.
         '';
-        # The fireproof.agents.skills registry, linked into one dir.
-        skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
         themes = [theme];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
@@ -153,6 +151,9 @@ in {
         environment.PI_SPELLFIX_PERSONAL.value = fpLib.hunspellPersonalDictionary config;
         environment.PI_SPELLFIX_LOG.value = fpLib.spellfixLog config;
         environment.PI_SPELLFIX_MODEL.value = "anthropic/claude-haiku-5-5";
+        # Session labels (extensions/chrome/identity.ts) go through the router,
+        # so they bridge to Haiku while Go's quota is out instead of failing.
+        environment.PI_IDENTITY_MODEL.value = "fp/flash";
         # You should know (extensions/you-should-know.ts) forks the session model,
         # so a check is a cache read of the main request; PI_YSK_MODEL routes it
         # elsewhere and gives that up. A local session must not check at all:
@@ -166,8 +167,10 @@ in {
         # `attribution` feature rewrites Anthropic requests and rejects API-key credentials.
         environment.PI_BG_FEATURES.value = "process";
         environment.PI_BG_DISABLE_UPDATE_CHECK.value = "1";
-        # $SHELL is fish, which the package won't treat as POSIX.
+        # $SHELL is fish, which the package won't treat as POSIX. The path skips
+        # its /bin/bash probe, which on darwin finds Apple's bash 3.2.
         environment.PI_BG_POSIX_SHELL.value = "bash";
+        environment.PI_BG_POSIX_SHELL_PATH.value = lib.getExe pkgs.bash;
         settings = {
           # The model picker's "save as default" reverts at launch; change it here.
           # DeepSeek on OpenCode Go, bridging to Haiku while Go's quota is out
@@ -175,6 +178,23 @@ in {
           defaultProvider = "fp";
           defaultModel = "flash";
           defaultThinkingLevel = "high";
+          # /model opens on these and ctrl+p cycles them; its All tab still lists
+          # every model. A default outside the list would start on the first entry
+          # instead, so the virtual models lead.
+          enabledModels =
+            [
+              "fp/*"
+              "anthropic/claude-opus-5-5"
+              "anthropic/claude-sonnet-5-5"
+              "anthropic/claude-haiku-5-5"
+              "opencode-go/deepseek-v4.1-flash"
+              "opencode-go/glm-5.3"
+              "opencode-go/qwen3.8-flash"
+              "opencode-go/minimax-m3"
+              "opencode-go/kimi-k3"
+              "tensorx/*"
+            ]
+            ++ lib.optional config.fireproof.dev.llm.enable "local/*";
           # The defaults (reserve 16k, keep 20k) overrun a 32k window: compaction would
           # start at 16k, with the system prompt and tools already taking ~9k of it.
           compaction.modelOverrides = lib.optionalAttrs config.fireproof.dev.llm.enable (lib.mapAttrs' (id: m:
@@ -187,7 +207,8 @@ in {
           theme = "fireproof";
           # Keeps the version and key hints; drops the loaded-resource listing.
           quietStartup = "header";
-          # `/tree` opens on my prompts; ctrl+d still shows everything.
+          # `/tree` opens on my prompts; ctrl+d returns to the default view and
+          # ctrl+a shows every entry.
           treeFilterMode = "user-only";
           # OSC 9;4 progress in ghostty's tab, for runs long enough to switch away from.
           terminal.showTerminalProgress = true;
@@ -207,7 +228,8 @@ in {
         # Arrays replace wholesale, so `pi config` toggles of built-ins revert at launch.
         settings.extensions = [];
         # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
-        # ~/.config/mcp/mcp.json. Merged at launch, so /mcp toggles persist.
+        # ~/.config/mcp/mcp.json. Merged at launch: /mcp toggles persist, but a
+        # server dropped here stays in the file until removed by hand.
         mcp = let
           # pi rejects the null/empty fields home-manager's option fills in.
           shared = lib.mapAttrs (_: lib.filterAttrs (_: v: v != null && v != {} && v != [])) config.programs.mcp.servers;
@@ -293,11 +315,14 @@ in {
                 supportsReasoningEffort = false;
                 maxTokensField = "max_tokens";
                 supportsStrictMode = false;
-                thinkingFormat = "deepseek";
                 sendSessionAffinityHeaders = false;
-                # Merges with the server's --chat-template-kwargs rather than
-                # replacing it, so the thinking toggle works and effort survives.
-                chatTemplateArgs.enable_thinking = {"$var" = "thinking.enabled";};
+                # Sent as chat_template_kwargs, which llama.cpp merges over the
+                # server's --chat-template-kwargs rather than replacing them, so the
+                # thinking toggle works per request and the pinned effort survives.
+                # Not qwen-chat-template: its preserve_thinking keeps old reasoning
+                # in the prompt, which the small windows can't spare.
+                thinkingFormat = "chat-template";
+                chatTemplateKwargs.enable_thinking = {"$var" = "thinking.enabled";};
               };
               models =
                 lib.mapAttrsToList (id: m: {
@@ -320,17 +345,23 @@ in {
           };
       };
 
-      # Claude Code's defaults where pi leaves the key free: alt+p is its model
-      # picker and alt+t its thinking toggle. Frees ctrl+s for extensions/stash.ts
-      # and ctrl+t for the todo overlay below. The alt+s saves only act in
-      # pickers, but pi's conflict check ignores view and would warn at startup.
+      # Claude Code's keys where pi leaves them free: alt+p opens the model
+      # picker, and alt+t shows or hides thinking blocks (Claude Code's alt+t
+      # turns thinking itself on or off; shift+tab cycles that here). Frees ctrl+s
+      # for extensions/stash.ts and ctrl+t for the todo overlay below. pi's
+      # conflict check ignores view, so every built-in on a key an extension
+      # claims moves, even the picker-only alt+s saves and the /tree filter.
       home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
         "$schema" = "https://pi.dev/schemas/keybindings.schema.json";
         "app.model.select" = ["ctrl+l" "alt+p"];
+        # Drops WSL's alt+p default, which would win over the picker.
+        "app.model.cycleBackward" = ["shift+ctrl+p"];
         "app.thinking.toggle" = "alt+t";
         "app.thinking.save" = "alt+s";
         "app.session.toggleSort" = "alt+s";
         "app.models.save" = "alt+s";
+        # Still reachable through the filter cycle.
+        "app.tree.filter.noTools" = [];
         # Unbound by pi. Plain alt+<key> belongs to zellij's default keybinds.
         "app.session.new" = "alt+shift+n";
         "app.session.resume" = "alt+shift+r";
@@ -354,6 +385,12 @@ in {
         # Auto stands down if another extension provides a workflow tool.
         workflowsEnabled = true;
       };
+
+      # The fireproof.agents.skills registry, in pi's user skills dir rather than
+      # the module's `skills` (a --skill flag): pi-subagents builds each child
+      # session with its own resource loader, which scans this dir but never
+      # sees the main process's flags.
+      home.file.".pi/agent/skills".source = pkgs.linkFarm "pi-skills" config.fireproof.agents.skills;
 
       # `/workflow`: the opt-in the workflow tool asks for, in one line.
       home.file.".pi/agent/prompts/workflow.md".source = ./prompts/workflow.md;

@@ -4,7 +4,7 @@ Repository-local instructions and existing conventions take precedence over thes
 
 ## Environment
 
-- This machine runs NixOS. Persistent system or user configuration belongs in `~/nixos`; do not use `apt`, global npm/pip installs, or edit `/etc`.
+- This machine is managed by the `~/nixos` flake (NixOS, or nix-darwin on macOS). Persistent system or user configuration belongs there; do not use `apt`, global npm/pip installs, or edit `/etc`.
 - For one-off tools, use `nix run nixpkgs#<tool>` or `nix shell nixpkgs#<tool>`.
 - Don't create files or folders directly in `~`, or in a repo you weren't asked to change. Throwaway files (benchmarks, experiments, test fixtures) go in `$TMPDIR` or a `mktemp -d` dir. Anything meant to outlive the session (plans, notes, reports) goes in `~/.local/share/agents/<topic>/`.
 
