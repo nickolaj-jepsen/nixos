@@ -1,5 +1,10 @@
 import type { ThemeColor } from "@earendil-works/pi-coding-agent";
-import { createUsageReader, type UsageProvider, type UsageWindow } from "../lib/ai-usage.ts";
+import {
+  createUsageReader,
+  exhaustedWindow,
+  type UsageProvider,
+  type UsageWindow,
+} from "../lib/ai-usage.ts";
 import { formatCredit, formatWhen } from "./format.ts";
 import type { Part } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
@@ -16,22 +21,19 @@ export const usageAlarm = (
   now = new Date(),
 ): Part | undefined => {
   if (!provider) return undefined;
+  // A snapshot can outlive the moment a window resets, so every check is against `now`.
+  const exhausted = exhaustedWindow(provider, now.getTime());
   if (provider.credit) {
     const { remaining, allowance } = provider.credit;
     const share = allowance > 0 ? remaining / allowance : 1;
-    const pace = provider.windows[0]?.pace;
     const color: ThemeColor =
-      share <= 0.05 || pace === "exhausted"
+      share <= 0.05 || exhausted
         ? "error"
-        : share <= 0.2 || pace === "over"
+        : share <= 0.2 || provider.windows[0]?.pace === "over"
           ? "warning"
           : "dim";
     return { id: "credit", text: `${formatCredit(remaining)} left`, color };
   }
-  // The window that blocks longest is the one that matters.
-  const exhausted = provider.windows
-    .filter((w) => w.pace === "exhausted")
-    .sort((a, b) => Date.parse(b.resetsAt) - Date.parse(a.resetsAt))[0];
   if (exhausted) {
     const when = formatWhen(new Date(exhausted.resetsAt), now);
     return { id: "quota", text: `${label(exhausted)} out until ${when}`, color: "error" };
@@ -41,6 +43,7 @@ export const usageAlarm = (
       (w): w is UsageWindow & { runsOutAt: string } =>
         w.pace === "over" &&
         w.runsOutAt !== null &&
+        Date.parse(w.runsOutAt) > now.getTime() &&
         Date.parse(w.runsOutAt) < Date.parse(w.resetsAt),
     )
     .sort((a, b) => Date.parse(a.runsOutAt) - Date.parse(b.runsOutAt))[0];

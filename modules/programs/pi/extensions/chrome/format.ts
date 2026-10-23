@@ -24,11 +24,13 @@ export const formatCredit = (usd: number) =>
 
 const HOUR = 3_600_000;
 
-/** A moment as the shortest unambiguous text: `14:30` within a day, `Fri` within a week, else `31 Oct`. */
+/** A moment as the shortest unambiguous text: `14:30` today, `Fri 09:00` within a week, else `31 Oct`. */
 export const formatWhen = (at: Date, now = new Date()) => {
-  const ms = at.getTime() - now.getTime();
-  if (ms < 24 * HOUR) return at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  if (ms < 7 * 24 * HOUR) return at.toLocaleDateString("en-GB", { weekday: "short" });
+  const time = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  if (at.toDateString() === now.toDateString()) return time;
+  if (Math.abs(at.getTime() - now.getTime()) < 7 * 24 * HOUR) {
+    return `${at.toLocaleDateString("en-GB", { weekday: "short" })} ${time}`;
+  }
   return at.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 };
 
