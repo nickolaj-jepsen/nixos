@@ -46,6 +46,26 @@ build hostname=`hostname -s` *ARGS="":
     read -r _ _ _ activation <<<"$(just _meta {{ hostname }})"
     $(command -v nom || echo nix) build ".#$activation" {{ ARGS }}
 
+[doc('Print one config value of a host as JSON without building it; an hm. prefix reads its home-manager config')]
+[group('host')]
+[script]
+eval attr hostname=`hostname -s` *ARGS="":
+    attr='{{ attr }}'
+    valid='^[a-zA-Z0-9._/+"-]+$'
+    if ! [[ "$attr" =~ $valid ]]; then
+        echo "Not an attribute path: $attr" >&2
+        exit 1
+    fi
+    just _meta {{ hostname }} >/dev/null
+    root=$({{ nixcmd }} eval --raw .#hostMeta --apply 'm: m."{{ hostname }}".config')
+    if [[ "$attr" == hm.* ]]; then
+        # A standalone home config is the HM config itself; the others embed it per user.
+        apply="c: (if c ? home-manager then c.home-manager.users.\${c.fireproof.username} else c).${attr#hm.}"
+    else
+        apply="c: c.$attr"
+    fi
+    {{ nixcmd }} eval --json ".#$root" --apply "$apply" {{ ARGS }}
+
 [arg('target', pattern='[a-zA-Z0-9._@:+-]*')]
 [doc('Build + activate a host (this machine by default); a nixos host can also be pushed to target=user@host')]
 [group('host')]

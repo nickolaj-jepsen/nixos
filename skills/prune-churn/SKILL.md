@@ -1,6 +1,7 @@
 ---
 name: prune-churn
 description: Find and remove change-amplifying tests, docs and structure — anything that must be edited whenever something else changes (mock-echo tests, broad snapshots, copy-asserting e2e, inventory docs, file/line references, hand-synced registries). Optional scope arg — diff (default), touched, branch, repo, or a path.
+disable-model-invocation: true
 argument-hint: "[diff|touched|branch|repo|<path>]"
 arguments: scope
 ---

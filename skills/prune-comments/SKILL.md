@@ -1,6 +1,7 @@
 ---
 name: prune-comments
 description: Prune redundant, over-long or coupled comments, docstrings, and prose docs down to the minimal load-bearing why — including comments that rot when something elsewhere changes (file/line references, caller lists, inventories, keep-in-sync markers, change narration). Run after generating code to clean up comment/doc bloat. Optional scope arg — diff (default), touched, branch, repo, or a path.
+disable-model-invocation: true
 argument-hint: "[diff|touched|branch|repo|<path>]"
 arguments: scope
 ---

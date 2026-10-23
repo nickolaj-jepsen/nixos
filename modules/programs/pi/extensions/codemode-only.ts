@@ -10,7 +10,7 @@
  * pi leaves a hidden tool's guidelines out of the prompt and codemode does not
  * list `direct` tools, so the guidelines name what is hidden instead.
  *
- * Small-context models (the local ones) get a leaner set. Pi runs the hook
+ * Small-context models (the local ones) also lose delegation. Pi runs the hook
  * before every request, so a model switch takes effect on the next one.
  */
 import { Type } from "@earendil-works/pi-ai";
@@ -19,9 +19,14 @@ import { isLeanModel } from "./lib/lean-model.ts";
 
 const NAME = "codemode_only";
 const CODEMODE = "codemode";
-const HIDDEN = ["get_subagent_result", "steer_subagent"];
-// pi-background-tasks: bg_run stays declared; its completion notice makes these rarely needed.
-const HIDDEN_WHEN_LEAN = ["bg_status", "bg_logs", "bg_kill"];
+const HIDDEN = [
+  "get_subagent_result",
+  "steer_subagent",
+  // pi-background-tasks: bg_run stays declared; its completion notice makes these rarely needed.
+  "bg_status",
+  "bg_logs",
+  "bg_kill",
+];
 // Not to be called from codemode either, unless the user asks for it.
 const DELEGATION_HIDDEN_WHEN_LEAN = [
   // llama-swap serves one model at a time, so subagents would only queue behind the parent.
@@ -30,10 +35,7 @@ const DELEGATION_HIDDEN_WHEN_LEAN = [
   "SubagentWorkflow",
 ];
 
-const hidden = (lean: boolean) => [
-  ...HIDDEN,
-  ...(lean ? [...HIDDEN_WHEN_LEAN, ...DELEGATION_HIDDEN_WHEN_LEAN] : []),
-];
+const hidden = (lean: boolean) => [...HIDDEN, ...(lean ? DELEGATION_HIDDEN_WHEN_LEAN : [])];
 
 const list = (names: string[]) => {
   const quoted = names.map((name) => `\`${name}\``);
@@ -43,9 +45,7 @@ const list = (names: string[]) => {
 };
 
 const guidelines = (lean: boolean, active: Set<string>) => {
-  const reachable = [...HIDDEN, ...(lean ? HIDDEN_WHEN_LEAN : [])].filter((name) =>
-    active.has(name),
-  );
+  const reachable = HIDDEN.filter((name) => active.has(name));
   const delegation = lean ? DELEGATION_HIDDEN_WHEN_LEAN.filter((name) => active.has(name)) : [];
   const lines: string[] = [];
   if (reachable.length > 0) {

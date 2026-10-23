@@ -6,7 +6,7 @@ tools: bash, read, grep, find, ls
 model: opencode-go/deepseek-v4.1-flash
 thinking: low
 prompt_mode: append
-exclude_extensions: builtin:mcp, you-should-know
+exclude_extensions: builtin:mcp
 max_turns: 40
 ---
 

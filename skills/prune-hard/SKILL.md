@@ -1,6 +1,7 @@
 ---
 name: prune-hard
 description: Strip comments from code you own down to the traps — delete by default, keep only what stops a future edit from silently breaking something. The harsh sibling of prune-comments, for private or solo codebases. Optional scope arg — diff (default), touched, branch, repo, or a path.
+disable-model-invocation: true
 argument-hint: "[diff|touched|branch|repo|<path>]"
 arguments: scope
 ---

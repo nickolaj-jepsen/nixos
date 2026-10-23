@@ -3,8 +3,8 @@
  * tool-result `usage`, usage entries (cache warming), compaction and branch
  * summaries. Two things it cannot see live here as custom entries:
  *
- * - model calls an extension makes on the side (spellfix, you-should-know,
- *   session labels), which never become messages;
+ * - model calls an extension makes on the side (spellfix, session labels),
+ *   which never become messages;
  * - which nested tool a codemode script's usage came from: pi merges the usage
  *   of every `ctx.executeTool()` call into the calling tool's result.
  *
