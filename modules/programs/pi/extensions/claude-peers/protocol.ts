@@ -21,8 +21,9 @@ import {
 } from "node:fs";
 import { access, open, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { connect, createServer, type Server } from "node:net";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import path from "node:path";
+import { originalTmpdir } from "../lib/original-tmpdir.ts";
 
 export const PEER_PROTOCOL = 1;
 export const FEATURE_NOTIFY_IDLE = "notify_idle";
@@ -103,7 +104,8 @@ export function registryDirs(): string[] {
 
 /** Socket directory Claude itself binds in; reply addresses outside it are refused. */
 export function socketDir(): string {
-  const base = process.env.XDG_RUNTIME_DIR || process.env.CLAUDE_CODE_TMPDIR || tmpdir();
+  // Claude resolves tmpdir() without pi's TMPDIR override, so ours must too.
+  const base = process.env.XDG_RUNTIME_DIR || process.env.CLAUDE_CODE_TMPDIR || originalTmpdir();
   const dir = path.join(base, "cc-socks");
   const longest = path.join(dir, `${2 ** 22}-ffffffff.sock`);
   return longest.length <= MAX_SOCKET_PATH ? dir : `/tmp/cc-socks-${process.getuid?.() ?? 0}`;
@@ -191,8 +193,12 @@ export function socketReachable(socketPath: string, timeoutMs = 300): Promise<bo
   });
 }
 
-/** Live, messageable sessions from every Claude registry, newest first. */
-export async function listPeers(excludeSocket?: string): Promise<Peer[]> {
+/**
+ * Live, messageable sessions of other processes from every Claude registry,
+ * newest first. Matched by pid, so in-process subagents don't see their own main
+ * session as a peer either.
+ */
+export async function listPeers(): Promise<Peer[]> {
   const domain = pidDomain();
   // A pi session registers in every registry, so the socket path is the key.
   const candidates = new Map<string, Peer>();
@@ -212,11 +218,12 @@ export async function listPeers(excludeSocket?: string): Promise<Peer[]> {
         continue;
       }
       const sock = entry.messagingSocketPath;
-      if (typeof sock !== "string" || !sock || sock === excludeSocket) continue;
+      if (typeof sock !== "string" || !sock) continue;
       if (candidates.has(sock)) continue;
       if ((entry.peerProtocol ?? 0) < PEER_PROTOCOL) continue;
       if (entry.pidDomain !== undefined && domain !== undefined && entry.pidDomain !== domain)
         continue;
+      if (entry.pid === process.pid) continue;
       if (!pidAlive(entry.pid)) continue;
       if (entry.procStart !== undefined && procStart(entry.pid) !== entry.procStart) continue;
       candidates.set(sock, {
@@ -232,12 +239,18 @@ export async function listPeers(excludeSocket?: string): Promise<Peer[]> {
 }
 
 /**
- * Short id shown next to names to tell same-named sessions apart. Hashed because
- * pi's UUIDv7 session ids share their leading timestamp digits. Not Claude's own
- * `[ref]`, which it derives internally.
+ * Claude's own `[ref]` for a session, so an id read off either harness resolves
+ * in both: the first 6 hex digits of sha256(`session:<socket path>`). Claude
+ * lengthens a ref only while two collide, so match refs as a prefix of the full
+ * digest. Its tengu_session_stable_address flag would hash
+ * `session:sid:<sessionId>` instead.
  */
-export function shortId(peer: Pick<Peer, "sessionId">): string {
-  return createHash("sha256").update(peer.sessionId).digest("hex").slice(0, 6);
+export function shortId(peer: Pick<Peer, "messagingSocketPath">): string {
+  return refHash(peer).slice(0, 6);
+}
+
+function refHash(peer: Pick<Peer, "messagingSocketPath">): string {
+  return createHash("sha256").update(`session:${peer.messagingSocketPath}`).digest("hex");
 }
 
 /**
@@ -333,7 +346,7 @@ export function resolvePeer(peers: Peer[], to: string): Resolution {
     .replace(/^"(.*)"$/, "$1");
   const bracket = /^(.*?)\s*\[([0-9a-f]{4,})\]$/i.exec(query);
   const byId = (id: string) =>
-    peers.filter((p) => p.sessionId === id || shortId(p).startsWith(id.toLowerCase()));
+    peers.filter((p) => p.sessionId === id || refHash(p).startsWith(id.toLowerCase()));
   const tries: Array<() => Peer[]> = [
     () =>
       peers.filter(
@@ -360,12 +373,19 @@ export function resolvePeer(peers: Peer[], to: string): Resolution {
   return { error: `no live session matches "${to}". Reachable: ${known}` };
 }
 
-// Claude neutralizes a closing tag in the body as `<\/…`; it also folds
-// lookalike characters, which this simpler escape does not.
-const tagInBody = new RegExp(`<(?=\\s*/?\\s*${TAG})`, "giu");
+/**
+ * `body` with the `<` of every `<tag` and `</tag` turned into `<\`, the way
+ * Claude keeps a body from closing its envelope. Claude also folds lookalike
+ * characters, which this simpler escape does not.
+ */
+export function escapeTag(body: string, tag: string): string {
+  return body.replace(new RegExp(`<(?=\\s*/?\\s*${tag})`, "giu"), "<\\");
+}
+
 const escapedTagInBody = new RegExp(`<\\\\(?=\\s*/?\\s*${TAG})`, "giu");
 
-function attr(value: string): string {
+/** `value` made safe for a double-quoted attribute, capped at 64 characters. */
+export function attr(value: string): string {
   const clean = value
     .replace(/["<>]/g, "")
     .replace(/[\p{Cf}\p{Cc}\p{Cs}\p{Zl}\p{Zp}]/gu, "")
@@ -391,7 +411,7 @@ export function buildEnvelope(e: Envelope): string {
   const name = e.fromName === undefined ? "" : attr(e.fromName);
   if (name) attrs.push(`from-name="${name}"`);
   if (e.fromMode) attrs.push(`from-mode="${e.fromMode}"`);
-  return `<${TAG}${attrs.map((a) => ` ${a}`).join("")}>\n${e.body.replace(tagInBody, "<\\")}\n</${TAG}>`;
+  return `<${TAG}${attrs.map((a) => ` ${a}`).join("")}>\n${escapeTag(e.body, TAG)}\n</${TAG}>`;
 }
 
 /** Parse an inbound envelope; content without one comes back as the body. */
