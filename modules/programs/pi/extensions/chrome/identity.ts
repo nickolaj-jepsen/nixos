@@ -25,6 +25,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { recordSideCall } from "../lib/usage-ledger.ts";
+import { trackUserWait, waitingOnUser } from "../lib/user-wait.ts";
 import { shortPath } from "./format.ts";
 import type { BorderStatus } from "./editor.ts";
 import type { Region } from "./layout.ts";
@@ -34,7 +35,7 @@ import type { Segment } from "./measurements.ts";
 const LABEL_ID = "label";
 import type { ChromeState } from "./state.ts";
 
-type Phase = "working" | "idle" | "waiting" | "failed";
+type Phase = "working" | "idle" | "failed";
 type Source = "name" | "prompt" | "cwd" | "model" | "manual";
 
 type Label = {
@@ -84,7 +85,8 @@ Use the user's own words and concrete nouns from the file names. Name the work, 
 // Sub-agent widgets already own `●`, `○`, `⟳` and `▸`, so states that need you
 // are words and "working" is either pi's spinner or a frozen frame of one.
 const WORK_GLYPH = "⠿";
-const stateWord = (phase: Phase) => (phase === "waiting" || phase === "failed" ? phase : "");
+const stateWord = (phase: Phase, waiting: boolean) =>
+  waiting ? "waiting" : phase === "failed" ? "failed" : "";
 
 const userText = (content: string | Array<{ type: string; text?: string }>) =>
   typeof content === "string"
@@ -125,8 +127,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   let timer: ReturnType<typeof setInterval> | undefined;
   let cwd = process.cwd();
   let phase: Phase = "idle";
-  // What to fall back to when a dialog closes; a dialog can open mid-run.
-  let phaseBeforePrompt: Phase = "idle";
+  let waited = false;
   let since = Date.now();
   let busy = false;
   let paintedTitle = "";
@@ -139,10 +140,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
 
   const sessionId = () => state.ctx?.sessionManager.getSessionId() ?? "";
   const shortId = () => sessionId().slice(0, 8);
-
-  const setPhase = (next: Phase) => {
-    phase = next;
-  };
 
   const persist = () => {
     if (!label) return;
@@ -188,7 +185,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   const renderTitle = (ctx: ExtensionContext) => {
     const { text } = currentLabel(ctx);
     const age = formatAge(Date.now() - since);
-    const state = stateWord(phase);
+    const state = stateWord(phase, waitingOnUser(ctx));
     // A frozen frame, not the animation: the title is rewritten by the OS.
     const lead = busy || phase === "working" ? `${WORK_GLYPH} ` : "";
     return `${lead}${text} · ${shortPath(cwd)} · ${age}${state ? ` · ${state}` : ""}`;
@@ -239,7 +236,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     if (!ctx) return { left: "", right: "", controls: [] };
     const theme = ctx.ui.theme;
     const { text } = currentLabel(ctx);
-    const stateText = stateWord(phase);
+    const stateText = stateWord(phase, waitingOnUser(ctx));
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
     // so it belongs next to the label rather than in the session detail.
     const hint = hidden > 0 ? ` ↑${hidden}` : "";
@@ -549,6 +546,9 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     handler: (ctx) => relabel(ctx, true),
   });
 
+  // Before this module's own ui_prompt_start handler, which reads the state it keeps.
+  trackUserWait(pi);
+
   pi.on("session_start", (_event, ctx) => {
     cwd = ctx.cwd;
     // The last persisted label on this branch wins, so a resumed session paints
@@ -578,34 +578,34 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
 
   pi.on("agent_start", () => {
     since = Date.now();
-    setPhase("working");
+    phase = "working";
     paint();
   });
 
   pi.on("agent_settled", () => {
     since = Date.now();
     // Failure is sticky until the next run starts.
-    setPhase(phase === "failed" ? "failed" : "idle");
+    if (phase !== "failed") phase = "idle";
     paint();
   });
 
-  pi.on("ui_prompt_start", () => {
-    since = Date.now();
-    phaseBeforePrompt = phase;
-    setPhase("waiting");
+  // Only a dialog the run is blocked on says "waiting"; the phase underneath is
+  // untouched, so the spinner stays and a run that settles meanwhile shows it.
+  const promptChanged = (ctx: ExtensionContext) => {
+    const waiting = waitingOnUser(ctx);
+    if (waiting !== waited) {
+      waited = waiting;
+      since = Date.now();
+    }
     paint();
-  });
-
-  pi.on("ui_prompt_end", () => {
-    since = Date.now();
-    setPhase(phaseBeforePrompt);
-    paint();
-  });
+  };
+  pi.on("ui_prompt_start", (_event, ctx) => promptChanged(ctx));
+  pi.on("ui_prompt_end", (_event, ctx) => promptChanged(ctx));
 
   pi.on("message_end", (event) => {
     derivedCache = undefined;
     if (event.message.role === "assistant" && event.message.stopReason === "error") {
-      setPhase("failed");
+      phase = "failed";
     }
     paint();
   });
