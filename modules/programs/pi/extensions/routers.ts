@@ -13,6 +13,7 @@
  * not retry, so those never reach `route()` as a retry: the extension flags
  * them and continues the interrupted turn on the bridge.
  */
+import { execFile } from "node:child_process";
 import type { Message } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
@@ -20,7 +21,7 @@ import type {
   ModelRoute,
   ModelRouteRequest,
 } from "@earendil-works/pi-coding-agent";
-import { createUsageReader, exhaustedWindow } from "./lib/ai-usage.ts";
+import { createUsageReader, exhaustedWindow, type UsageProvider } from "./lib/ai-usage.ts";
 
 const PROVIDER = "fp";
 const GO = { provider: "opencode-go", id: "deepseek-v4.1-flash" } as const;
@@ -143,7 +144,9 @@ export default function (pi: ExtensionAPI) {
       }
       const state = request.state;
       const sessionId = ctx.sessionManager.getSessionId();
-      if (!state || (request.reason === "user" && replan.delete(sessionId))) {
+      // Consume a pending /replan even on the first prompt, which plans anyway.
+      const replanNow = request.reason === "user" && replan.delete(sessionId);
+      if (!state || replanNow) {
         const plan: ArchitectState = { phase: "plan" };
         return {
           model: find(ctx, PLANNER),
@@ -163,15 +166,21 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("replan", {
     description: "Send the next prompt (or the given one) to fp/architect's planner",
     handler: async (args, ctx) => {
+      // Only fp/architect consumes the entry; on any other model it would wait for a later switch.
+      if (ctx.model?.provider !== PROVIDER || ctx.model.id !== "architect") {
+        ctx.ui.notify("/replan only applies while fp/architect is the model", "warning");
+        return;
+      }
       replan.add(ctx.sessionManager.getSessionId());
-      if (args.trim()) pi.sendUserMessage(args.trim());
+      const prompt = args.trim();
+      if (prompt) pi.sendUserMessage(prompt, ctx.isIdle() ? undefined : { deliverAs: "followUp" });
       else ctx.ui.notify("The next prompt goes to Opus", "info");
     },
   });
 
   const routedHere = (ctx: ExtensionContext) => ctx.model?.provider === PROVIDER;
 
-  pi.on("message_end", async (event, ctx) => {
+  pi.on("message_end", (event, ctx) => {
     const message = event.message;
     if (
       message.role !== "assistant" ||
@@ -181,23 +190,59 @@ export default function (pi: ExtensionAPI) {
     ) {
       return;
     }
-    await usage.refresh();
-    const window = exhaustedWindow(usage.provider("opencode-go"));
-    goBlockedUntil = window ? Date.parse(window.resetsAt) : Date.now() + GO_BLOCK_FALLBACK_MS;
+    goBlockedUntil = Date.now() + GO_BLOCK_FALLBACK_MS;
     resumeAfterLimit = routedHere(ctx) && bridgeUsable();
+    // Go's usage can lag its own limit errors, so only a window that is out moves the block.
+    void freshGoUsage().then((go) => {
+      const window = exhaustedWindow(go);
+      if (window) goBlockedUntil = Date.parse(window.resetsAt);
+    });
   });
 
-  pi.on("agent_settled", (event, ctx) => {
+  // Continuing before the run settles keeps settle listeners from seeing it finish and restart.
+  pi.on("agent_before_settle", (event, ctx) => {
     if (!resumeAfterLimit) return;
     resumeAfterLimit = false;
-    if (event.aborted || !routedHere(ctx)) return;
-    pi.sendMessage(
-      {
-        customType: "fp-router",
-        content: "OpenCode Go's quota ran out mid-turn. Continue where you left off.",
-        display: true,
+    if (event.outcome === "aborted" || !routedHere(ctx)) return;
+    return {
+      entries: [
+        ...event.entries,
+        {
+          type: "custom_message",
+          customType: "fp-router",
+          content: "OpenCode Go's quota ran out mid-turn. Continue where you left off.",
+          display: true,
+        },
+      ],
+      continue: true,
+    };
+  });
+
+  // An aborted run skips agent_before_settle; the flag must not carry into the next one.
+  pi.on("agent_settled", () => {
+    resumeAfterLimit = false;
+  });
+}
+
+/**
+ * Go's quota past the reader's TTL and ai-usage's own cache, both of which still
+ * hold the snapshot that sent the failed request to Go.
+ */
+function freshGoUsage(): Promise<UsageProvider | undefined> {
+  return new Promise((resolve) => {
+    execFile(
+      "ai-usage",
+      ["--json", "--refresh"],
+      { timeout: 10_000, maxBuffer: 1 << 20 },
+      (error, stdout) => {
+        try {
+          if (error) throw error;
+          const { providers } = JSON.parse(stdout) as { providers?: UsageProvider[] };
+          resolve(providers?.find((p) => p.id === GO.provider));
+        } catch {
+          resolve(undefined);
+        }
       },
-      { triggerTurn: true },
     );
   });
 }
@@ -207,7 +252,10 @@ function editedThisTurn(messages: readonly Message[]): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message.role === "user") return false;
-    if (message.role === "toolResult" && EDIT_TOOLS.has(message.toolName) && !message.isError) {
+    if (message.role !== "toolResult") continue;
+    if (EDIT_TOOLS.has(message.toolName) && !message.isError) return true;
+    // A codemode script's edits only show up as nested calls; they count even if the script failed later.
+    if (message.nestedCalls?.calls.some((c) => EDIT_TOOLS.has(c.name) && c.status === "ok")) {
       return true;
     }
   }
