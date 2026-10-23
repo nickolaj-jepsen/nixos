@@ -384,19 +384,42 @@ in {
             "~/.claude/.credentials.json" = "deny";
             "~/.claude-work/.credentials.json" = "deny";
           };
+          # Where a write lands is decided here, not by bash text: the package
+          # also matches every bash path argument in its absolute spelling, so a
+          # pattern can't tell `rm -rf build` from `rm -rf /abs/build`. Covers rm,
+          # redirects and the write/edit tools alike. A subagent's ask is a deny:
+          # pi-subagents does not forward prompts to the parent. The cwd root
+          # counts as inside, so only `rm * ~*` below catches removing it, and
+          # only when typed with ~.
+          external_directory_write = let
+            roots =
+              # The store is read-only; listed so `rm result`, a link resolving
+              # into it, doesn't ask.
+              # One level into ~/worktrees, so a whole <repo> dir still asks.
+              ["/tmp" "~/.local/share/agents" "~/worktrees/*" "/nix/store"]
+              # tmpdir.ts's scratch dir; darwin's tmpdir() is not /tmp.
+              ++ lib.optional pkgs.stdenv.isDarwin "/var/folders/*/T/pi-run-*";
+          in
+            {"*" = "ask";}
+            // lib.listToAttrs (lib.concatMap (root: [
+                (lib.nameValuePair "${root}/*" "allow")
+                # The typed spelling is matched too, so `/tmp/../home` would
+                # otherwise ride the allow.
+                (lib.nameValuePair "${root}/*..*" "ask")
+              ])
+              roots);
           bash = {
             # Explicit, or the top-level "*" still applies but warns at startup.
             "*" = "allow";
             # Bash rules are last-match-wins and Nix sorts these keys, so the
             # generic allow above stays first and narrower rules follow it.
-            # Relative cleanup is routine; the destructive shapes still prompt.
+            # A computed path gets no absolute spelling, so the outside-cwd check
+            # above can't see it.
             "rm * $*" = "ask";
             "rm * .*" = "ask";
-            "rm * /" = "deny";
-            "rm * /?*" = "ask";
-            "rm * /tmp/*" = "allow";
-            "rm * /tmp/..*" = "ask";
+            # Never produced from a relative argument, so only a typed ~ hits it.
             "rm * ~*" = "ask";
+            "rm * /" = "deny";
             "rm -rf /" = "deny";
             "sudo rm *" = "deny";
             "sudo *" = "ask";
