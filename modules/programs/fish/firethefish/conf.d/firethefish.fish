@@ -120,6 +120,9 @@ function fish_job_summary -a job_id is_foreground cmd_line signal_or_end_name
         # Claude Code always prints a blank line and two suspend notices; wipe them (assumes no line wrap).
         test "$name" = claude
         and printf '\e[3A\e[J' >&2
+        # Pi's fullscreen TUI reprints its whole viewport on ctrl+z, frame included.
+        test "$name" = pi
+        and printf '\e[H\e[J' >&2
         set_color brblack >&2
         echo "⏸ $name suspended · ctrl+z or fg to return" >&2
         set_color normal >&2
