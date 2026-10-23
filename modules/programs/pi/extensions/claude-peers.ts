@@ -17,7 +17,12 @@
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
-import { VERSION, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  VERSION,
+  type ExtensionAPI,
+  type ExtensionContext,
+  type SessionShutdownEvent,
+} from "@earendil-works/pi-coding-agent";
 import { Box, Text } from "@earendil-works/pi-tui";
 import { execFile } from "node:child_process";
 import { unlinkSync } from "node:fs";
@@ -64,6 +69,10 @@ const RATE_WINDOW_MS = 60_000;
 // In-process subagent sessions load this extension too; only the first
 // session in the process may own the pid-keyed registry entry and socket.
 const OWNER = Symbol.for("fireproof.claude-peers.owner");
+// What /reload hands the runtime it rebuilds for the same session in this process.
+const RELOADED = Symbol.for("fireproof.claude-peers.reloaded");
+// A subscriber that stopped reading (e.g. a suspended Claude) must not stall quitting or /new.
+const EXIT_NOTICE_TIMEOUT_MS = 1000;
 
 type InboundPolicy = "auto" | "accept" | "hold" | "refuse";
 
@@ -80,6 +89,18 @@ interface IdleSubscriber {
   expires: number;
 }
 
+interface Subscription {
+  name: string;
+  expires: number;
+}
+
+interface Reloaded {
+  sessionId: string;
+  idleSubscribers: Map<string, IdleSubscriber>;
+  ourSubscriptions: Map<string, Subscription>;
+  sentMessages: Map<string, string>;
+}
+
 export default function (pi: ExtensionAPI) {
   pi.registerFlag("claude-peers-inbound", {
     description:
@@ -89,7 +110,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   const runtimeId = Symbol("claude-peers-runtime");
-  const owner = globalThis as { [OWNER]?: symbol };
+  const owner = globalThis as { [OWNER]?: symbol; [RELOADED]?: Reloaded };
   let ctx: ExtensionContext | undefined;
   let server: Server | undefined;
   let socketPath = "";
@@ -98,7 +119,7 @@ export default function (pi: ExtensionAPI) {
   let lastTurnText = "";
   const idleSubscribers = new Map<string, IdleSubscriber>();
   // msg_id of each notify_when_idle we sent -> display name of the watched session.
-  const ourSubscriptions = new Map<string, { name: string; expires: number }>();
+  const ourSubscriptions = new Map<string, Subscription>();
   const sentMessages = new Map<string, string>();
   const recentBySender = new Map<string, { at: number; body: string }[]>();
 
@@ -253,7 +274,7 @@ export default function (pi: ExtensionAPI) {
     return Date.now() - (entry.statusUpdatedAt ?? Date.now());
   }
 
-  function sendIdleNotice(sub: IdleSubscriber, state: "idle" | "exited") {
+  function sendIdleNotice(sub: IdleSubscriber, state: "idle" | "exited", timeoutMs?: number) {
     const frame = controlFrame("peer_idle_notice", {
       orig_msg_id: sub.origMsgId,
       state,
@@ -262,7 +283,7 @@ export default function (pi: ExtensionAPI) {
       from: ownAddress,
       from_mode: OWN_MODE,
     });
-    return sendFrame(sub.socketPath, frame).catch(() => {});
+    return sendFrame(sub.socketPath, frame, timeoutMs).catch(() => {});
   }
 
   function onControlFrame(frame: Record<string, unknown>) {
@@ -363,12 +384,32 @@ export default function (pi: ExtensionAPI) {
       nameSource: named ? "user" : "derived",
       nameSince: Date.now(),
     };
+    const reloaded = owner[RELOADED];
+    owner[RELOADED] = undefined;
+    if (reloaded?.sessionId === entry.sessionId) {
+      for (const [k, v] of reloaded.idleSubscribers) idleSubscribers.set(k, v);
+      for (const [k, v] of reloaded.ourSubscriptions) ourSubscriptions.set(k, v);
+      for (const [k, v] of reloaded.sentMessages) sentMessages.set(k, v);
+    }
     await publish({ status: "idle" });
   }
 
-  async function stop() {
+  async function stop(reason: SessionShutdownEvent["reason"]) {
     if (owner[OWNER] !== runtimeId) return;
-    await Promise.all([...idleSubscribers.values()].map((s) => sendIdleNotice(s, "exited")));
+    // A reload keeps this session alive, so its subscribers and pending statuses carry over.
+    if (reason === "reload" && entry)
+      owner[RELOADED] = {
+        sessionId: entry.sessionId,
+        idleSubscribers: new Map(idleSubscribers),
+        ourSubscriptions: new Map(ourSubscriptions),
+        sentMessages: new Map(sentMessages),
+      };
+    else
+      await Promise.all(
+        [...idleSubscribers.values()].map((s) =>
+          sendIdleNotice(s, "exited", EXIT_NOTICE_TIMEOUT_MS),
+        ),
+      );
     idleSubscribers.clear();
     server?.close();
     server = undefined;
@@ -383,7 +424,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on("session_start", async (_event, c) => start(c));
-  pi.on("session_shutdown", async () => stop());
+  pi.on("session_shutdown", async (event) => stop(event.reason));
   // Splits peers only into active and stale, not by exact idle time, so the
   // section changes when a peer crosses STALE_AFTER_MS rather than every turn.
   pi.on("before_agent_start", async (event, c) => {
@@ -431,7 +472,7 @@ export default function (pi: ExtensionAPI) {
     const now = Date.now();
     const due = [...idleSubscribers.values()];
     idleSubscribers.clear();
-    await Promise.all(due.filter((s) => s.expires > now).map((s) => sendIdleNotice(s, "idle")));
+    for (const s of due) if (s.expires > now) void sendIdleNotice(s, "idle");
   });
 
   pi.registerMessageRenderer<PeerMessageDetails>(
