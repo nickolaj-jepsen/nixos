@@ -161,11 +161,18 @@ export default function (pi: ExtensionAPI) {
     return target === socketPath ? undefined : target;
   }
 
-  function receipt(address: unknown, origMsgId: unknown, status: string, reason?: string) {
+  function receipt(
+    address: unknown,
+    origMsgId: unknown,
+    status: string,
+    reason?: string,
+    extra: Record<string, unknown> = {},
+  ) {
     const target = replyTarget(address);
     if (!target || typeof origMsgId !== "string") return;
     const frame = controlFrame("peer_message_status", {
       status,
+      ...extra,
       orig_msg_id: origMsgId,
       from: ownAddress,
       ...(reason && { reason }),
@@ -215,7 +222,13 @@ export default function (pi: ExtensionAPI) {
 
     let decision = policy();
     if (decision === "auto") decision = env.fromMode === "bypass" ? "hold" : "accept";
-    if (decision === "refuse") return;
+    if (decision === "refuse") {
+      // Claude's own refusal receipt; without one the sender's model assumes the message landed.
+      receipt(replyTo, frame.msg_id, "expired", "Refused by the pi user's inbound policy.", {
+        status_detail: "refused",
+      });
+      return;
+    }
     if (decision === "hold") {
       receipt(replyTo, frame.msg_id, "held", "Held for approval by the pi user.");
       const approved =
@@ -249,7 +262,8 @@ export default function (pi: ExtensionAPI) {
       body: env.body,
     };
     const tokens = ctx?.getContextUsage()?.tokens ?? undefined;
-    if (ownIdleMs() > STALE_AFTER_MS && costlyWake(tokens)) {
+    // A message the user just approved wakes the session: the approval is their consent to the cost.
+    if (decision !== "hold" && ownIdleMs() > STALE_AFTER_MS && costlyWake(tokens)) {
       // Waking would re-read this whole conversation uncached; leave it for the user's next prompt.
       deliver(details, llmText, false);
       receipt(
