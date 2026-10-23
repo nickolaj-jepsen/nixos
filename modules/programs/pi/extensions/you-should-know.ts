@@ -6,14 +6,15 @@
  * binary rather than taken from a port; the extraction and its diffs live in
  * `~/.local/share/agents/you-should-know/reference`.
  *
- * - A check runs at the 6th step of a turn, again at the 12th, 18th …, at most
- *   once per turn, and never while a note is showing. Turns shorter than six
+ * - A check runs at the 6th step of a run, again at the 12th, 18th … until one
+ *   shows a note, and never while a note is showing. Runs shorter than six
  *   steps never check: that is the mod's "longer tasks only" rule.
  * - The side request replays the main request's provider payload with one user
  *   message appended, so the conversation prefix is a prompt-cache read. A
  *   rebuilt request pays full input price on every token, which at DeepSeek's
  *   cache-read rate is the difference between ~$0.0006 and ~$0.015 per check
- *   at 100k tokens.
+ *   at 100k tokens. On Opus the cache read alone is $0.02 there, so a check
+ *   estimated above PI_YSK_MAX_COST is skipped.
  * - A note survives 2 user prompts; then it is cleared and counts as ignored.
  *   Two ignored notes are free, after which the checker skips 1, 2, 4, 8, 16
  *   checks. Dismissing a note counts as answering it and resets that.
@@ -26,11 +27,12 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Message, Model } from "@earendil-works/pi-ai";
+import { calculateCost } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Message, Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
-import { recordSideCall } from "./lib/usage-ledger.ts";
+import { emptyUsage, recordSideCall } from "./lib/usage-ledger.ts";
 
 // Read from the mod's own export map; see the reference notes for the extraction.
 const CHECK_EVERY = 6; // CHECK_EVERY: the step of a turn that may check
@@ -50,6 +52,11 @@ const SKIP_PROVIDERS = (process.env.PI_YSK_SKIP_PROVIDERS ?? "")
   .split(",")
   .map((name) => name.trim())
   .filter((name) => name !== "");
+// A check expected to cost more than this many dollars is skipped; unset means no cap.
+const MAX_COST = (() => {
+  const cap = Number(process.env.PI_YSK_MAX_COST);
+  return cap > 0 ? cap : Infinity;
+})();
 
 const AGENT_DIR = process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), ".pi", "agent");
 const STATE_DIR = join(AGENT_DIR, "you-should-know");
@@ -80,6 +87,7 @@ type Check = {
   cacheRead?: number;
   cacheWrite?: number;
   cost?: number;
+  estimate?: number;
   error?: string;
 };
 type Parsed = { kind: "none" } | { kind: "unparsable" } | { kind: "line"; line: string; tag: Tag };
@@ -129,6 +137,21 @@ function textOf(message: { content: readonly unknown[] }): string {
     .trim();
 }
 
+/** A message without its blocks' cache markers, for a tail no later request will read. */
+function unmarked(message: unknown): unknown {
+  if (message === null || typeof message !== "object") return message;
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return message;
+  return {
+    ...message,
+    content: content.map((block: unknown) => {
+      if (block === null || typeof block !== "object" || !("cache_control" in block)) return block;
+      const { cache_control: _, ...rest } = block as Record<string, unknown>;
+      return rest;
+    }),
+  };
+}
+
 /** Two provider messages are the same conversation step if they differ only in cache markers. */
 const sameMessage = (a: unknown, b: unknown) =>
   JSON.stringify(a, (key, value) => (key === "cache_control" ? undefined : value)) ===
@@ -138,7 +161,9 @@ export default function (pi: ExtensionAPI) {
   let state: State = { enabled: true, seen: [], typedPast: 0, looksToSkip: 0 };
   let offer: Offer | undefined;
   let inFlight: AbortController | undefined;
-  let offeredTurn: string | undefined;
+  // A run that has shown a note checks no more, even once the note is dismissed.
+  let agentRuns = 0;
+  let shownInRun: number | undefined;
   let promptCounter = 0;
   let runId = 0;
   let checks = 0;
@@ -148,30 +173,45 @@ export default function (pi: ExtensionAPI) {
   // The exact payload the main request sent, so the fork can reuse its prefix.
   let mainPayload: Record<string, unknown> | undefined;
   let aligned: Record<string, unknown> | undefined;
-  const forkPayloads = new WeakSet<object>();
+  // Notes this process showed that the state file may not hold yet.
+  let added: string[] = [];
+
+  function readState(): Partial<State> {
+    try {
+      return JSON.parse(readFileSync(STATE_FILE, "utf8")) as Partial<State>;
+    } catch {
+      return {};
+    }
+  }
+
+  const seenOf = (raw: Partial<State>) =>
+    Array.isArray(raw.seen)
+      ? raw.seen.filter((line): line is string => typeof line === "string")
+      : [];
 
   function loadState() {
-    try {
-      const raw = JSON.parse(readFileSync(STATE_FILE, "utf8")) as Partial<State>;
-      state = {
-        enabled: raw.enabled !== false,
-        seen: Array.isArray(raw.seen)
-          ? raw.seen.filter((line): line is string => typeof line === "string").slice(-SEEN_MAX)
-          : [],
-        typedPast: Number.isSafeInteger(raw.typedPast) ? (raw.typedPast as number) : 0,
-        looksToSkip: Number.isSafeInteger(raw.looksToSkip) ? (raw.looksToSkip as number) : 0,
-      };
-    } catch {
-      state = { enabled: true, seen: [], typedPast: 0, looksToSkip: 0 };
-    }
+    const raw = readState();
+    state = {
+      enabled: raw.enabled !== false,
+      seen: seenOf(raw).slice(-SEEN_MAX),
+      typedPast: Number.isSafeInteger(raw.typedPast) ? (raw.typedPast as number) : 0,
+      looksToSkip: Number.isSafeInteger(raw.looksToSkip) ? (raw.looksToSkip as number) : 0,
+    };
   }
 
   function saveState() {
     try {
       mkdirSync(STATE_DIR, { recursive: true });
+      // Every pi process writes this file: its list stays the base, and only our own
+      // new notes go on the end, so trimming drops the oldest rather than theirs.
+      const file = seenOf(readState());
+      const inFile = new Set(file.map(normalize));
+      const fresh = added.filter((line) => !inFile.has(normalize(line)));
+      state.seen = [...file, ...fresh].slice(-SEEN_MAX);
       const scratch = `${STATE_FILE}.${process.pid}.tmp`;
       writeFileSync(scratch, JSON.stringify(state, null, 2));
       renameSync(scratch, STATE_FILE);
+      added = [];
     } catch {}
   }
 
@@ -231,10 +271,10 @@ export default function (pi: ExtensionAPI) {
   /**
    * Sends the main request back with one message appended. Everything before the
    * fork's own tail stays byte for byte what the provider cached, cache markers
-   * included; only the tail is paid at the input rate.
+   * included; only the tail is paid at the input rate. The tail loses its markers:
+   * nothing reads that entry back, and Anthropic allows only four.
    */
   function align(payload: unknown): unknown {
-    if (payload !== null && typeof payload === "object") forkPayloads.add(payload);
     const main = mainPayload;
     if (!main || payload === null || typeof payload !== "object") return undefined;
     const fork = payload as Record<string, unknown>;
@@ -264,8 +304,28 @@ export default function (pi: ExtensionAPI) {
     return {
       ...main,
       stream: fork.stream,
-      messages: [...mainMessages.slice(0, shared), ...forkMessages.slice(shared)],
+      messages: [...mainMessages.slice(0, shared), ...forkMessages.slice(shared).map(unmarked)],
     };
+  }
+
+  /**
+   * The least a check on `model` can cost: the prompt of `last`, the last
+   * successful request, as a cache read, and the turn since (its reply and tool
+   * results) plus the check's prompt at the input rate.
+   */
+  function estimate(
+    ctx: ExtensionContext,
+    model: Model<string>,
+    last: AssistantMessage | undefined,
+    prompt: string,
+  ): number {
+    const prefix = last ? last.usage.input + last.usage.cacheRead + last.usage.cacheWrite : 0;
+    const usage = emptyUsage();
+    usage.cacheRead = prefix;
+    usage.input =
+      Math.max(0, (ctx.getContextUsage()?.tokens ?? prefix) - prefix) +
+      Math.ceil(prompt.length / 4);
+    return calculateCost(model, usage).total;
   }
 
   async function check(ctx: ExtensionContext, step: number, llmMessages: Message[], run: number) {
@@ -273,29 +333,48 @@ export default function (pi: ExtensionAPI) {
     inFlight = abort;
     const atPrompt = promptCounter;
     const started = Date.now();
-    const model = pickModel(ctx);
+    const picked = pickModel(ctx);
     let outcome = "error";
     let detail: Partial<Check> = {};
 
     try {
-      if (!model) {
+      if (!picked) {
         outcome = "no_model";
-        return;
-      }
-      if (SKIP_PROVIDERS.includes(model.provider)) {
-        outcome = "skipped_provider";
         return;
       }
       const sameAsMain =
         ctx.model !== undefined &&
-        ctx.model.provider === model.provider &&
-        ctx.model.id === model.id;
+        ctx.model.provider === picked.provider &&
+        ctx.model.id === picked.id;
+      const last = llmMessages
+        .filter(
+          (m): m is AssistantMessage =>
+            m.role === "assistant" && m.stopReason !== "error" && m.stopReason !== "aborted",
+        )
+        .at(-1);
+      // A virtual model would route the fork as a direct request, often away from the
+      // model whose prefix it replays, and it lists no prices to estimate with.
+      const model =
+        sameAsMain && picked.api === "pi-virtual" && last
+          ? (ctx.modelRegistry.find(last.provider, last.model) ?? picked)
+          : picked;
+      if (SKIP_PROVIDERS.includes(model.provider)) {
+        outcome = "skipped_provider";
+        return;
+      }
+      const prompt = PROMPT.replace("{{SEEN}}", listed(state.seen));
+      const cost = estimate(ctx, model, last, prompt);
+      if (cost > MAX_COST) {
+        outcome = "skipped_cost";
+        detail = { model: `${model.provider}/${model.id}`, estimate: cost };
+        return;
+      }
       aligned = undefined;
       const messages: Message[] = [
         ...llmMessages,
         {
           role: "user",
-          content: [{ type: "text", text: PROMPT.replace("{{SEEN}}", listed(state.seen)) }],
+          content: [{ type: "text", text: prompt }],
           timestamp: Date.now(),
         },
       ];
@@ -316,12 +395,7 @@ export default function (pi: ExtensionAPI) {
             maxTokens: MAX_REPLY_TOKENS,
             cacheRetention: "short",
             timeoutMs: REQUEST_TIMEOUT_MS,
-            onPayload: sameAsMain
-              ? align
-              : (payload: unknown) => {
-                  if (payload !== null && typeof payload === "object") forkPayloads.add(payload);
-                  return undefined;
-                },
+            onPayload: sameAsMain ? align : undefined,
           },
         )
         .result();
@@ -349,7 +423,9 @@ export default function (pi: ExtensionAPI) {
         else if (run !== runId || promptCounter !== atPrompt) outcome = "stale";
         else {
           outcome = "shown";
+          shownInRun = agentRuns;
           state.seen = [...state.seen, parsed.line].slice(-SEEN_MAX);
+          added.push(parsed.line);
           saveState();
           offer = { line: parsed.line, tag: parsed.tag, prompts: 0 };
           draw(ctx);
@@ -372,7 +448,7 @@ export default function (pi: ExtensionAPI) {
     runId += 1;
     loadState();
     offer = undefined;
-    offeredTurn = undefined;
+    shownInRun = undefined;
     promptCounter = 0;
     checks = 0;
     recent.length = 0;
@@ -392,15 +468,16 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("before_provider_request", (event, ctx) => {
     const payload = event.payload;
-    if (payload === null || typeof payload !== "object" || forkPayloads.has(payload)) return;
-    // Another extension's nested call runs while the agent is idle and carries its
-    // own system prompt; aligning a check to it would send the wrong conversation.
-    if (ctx.isIdle()) return;
-    mainPayload = payload as Record<string, unknown>;
+    if (payload === null || typeof payload !== "object" || ctx.isIdle()) return;
+    // pi's cache warmer replays the last request with a 1-token cap, mid-run too;
+    // a fork aligned to that replay would inherit the cap.
+    const p = payload as Record<string, unknown>;
+    if (p.max_tokens === 1 || p.max_completion_tokens === 1) return;
+    mainPayload = p;
   });
 
   pi.on("agent_start", () => {
-    offeredTurn = undefined;
+    agentRuns += 1;
   });
 
   pi.on("input", (event, ctx) => {
@@ -417,8 +494,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_end", (event, ctx) => {
     if (PROMPT === "" || !state.enabled || ctx.mode !== "tui") return;
     if (!(event.turnIndex > 0 && event.turnIndex % CHECK_EVERY === 0)) return;
-    const turn = `${promptCounter}:${event.turnIndex}`;
-    if (offeredTurn === turn || offer || inFlight) return;
+    if (shownInRun === agentRuns || offer || inFlight) return;
     const skip = Math.min(LOOKS_TO_SKIP_MAX, state.looksToSkip);
     if (skip > 0) {
       state.looksToSkip = skip - 1;
@@ -426,7 +502,6 @@ export default function (pi: ExtensionAPI) {
       record({ at: new Date().toISOString(), step: event.turnIndex, outcome: "skipped", ms: 0 });
       return;
     }
-    offeredTurn = turn;
     void check(ctx, event.turnIndex, event.context.llmMessages, runId);
   });
 
