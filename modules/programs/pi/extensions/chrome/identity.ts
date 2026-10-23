@@ -13,9 +13,8 @@
  * you pick a window.
  *
  * The border belongs to the editor; the wrapper in `editor.ts` calls `drawTop`
- * for the border row. The label never becomes the session name if you already
- * ran `/name`; the first model label becomes it once so `/resume` shows
- * something useful.
+ * for the border row. Until you run `/name`, the session name follows the latest
+ * model or manual label, so `/resume` shows something useful.
  */
 import { basename, relative } from "node:path";
 import {
@@ -44,8 +43,8 @@ type Label = {
   at: number;
   calls: number;
   costUsd: number;
-  /** True once this extension named the session, so it never renames it again. */
-  namedSession: boolean;
+  /** The session name this extension last wrote; any other name is the user's `/name`. */
+  autoName?: string;
 };
 
 const CUSTOM_TYPE = "identity_label";
@@ -154,7 +153,19 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
    */
   const explicitName = () => {
     const name = pi.getSessionName();
-    return name && name !== label?.text ? name : undefined;
+    return name && name !== label?.autoName ? name : undefined;
+  };
+
+  /**
+   * Stores a model or manual label and, unless the user named the session,
+   * renames it to match: `/resume` lists sessions by name, the one place the
+   * label helps before the window is even open.
+   */
+  const adopt = (next: Omit<Label, "autoName">) => {
+    const owned = explicitName() !== undefined;
+    label = { ...next, autoName: owned ? label?.autoName : next.text };
+    if (owned) return;
+    if (pi.getSessionName() !== next.text) pi.setSessionName(next.text);
   };
 
   const derive = (ctx: ExtensionContext): { text: string; source: Source } => {
@@ -442,21 +453,13 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       const text = cleanLabel(reply);
       if (text === "") throw new Error(`no text in reply (${response.stopReason})`);
 
-      const named = label?.namedSession ?? false;
-      label = {
+      adopt({
         text,
         source: "model",
         at: Date.now(),
         calls: (label?.calls ?? 0) + 1,
         costUsd: (label?.costUsd ?? 0) + (response.usage?.cost?.total ?? 0),
-        namedSession: named,
-      };
-      // `/resume` reads the session name, and it is the one place the label can
-      // help before the window is even open. Set it once, only if untouched.
-      if (!named) {
-        pi.setSessionName(text);
-        label.namedSession = true;
-      }
+      });
       persist();
     } catch (error) {
       if (manual && !controller.signal.aborted) {
@@ -497,14 +500,13 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     const cleaned = cleanLabel(text);
     if (cleaned === "") return "empty";
     if (explicitName()) return "named";
-    label = {
+    adopt({
       text: cleaned,
       source: "manual",
       at: Date.now(),
       calls: label?.calls ?? 0,
       costUsd: label?.costUsd ?? 0,
-      namedSession: label?.namedSession ?? false,
-    };
+    });
     derivedCache = undefined;
     persist();
     paint();
@@ -562,17 +564,21 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     cwd = ctx.cwd;
     // The last persisted label on this branch wins, so a resumed session paints
     // instantly and without a model call.
+    let firstModel: string | undefined;
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type === "custom" && entry.customType === CUSTOM_TYPE) {
-        const data = entry.data as Partial<Label> | undefined;
+        const data = entry.data as (Partial<Label> & { namedSession?: boolean }) | undefined;
         if (data && typeof data.text === "string" && data.text !== "") {
+          const source = data.source ?? "model";
+          if (source === "model") firstModel ??= data.text;
           label = {
             text: data.text,
-            source: data.source ?? "model",
+            source,
             at: data.at ?? Date.now(),
             calls: data.calls ?? 0,
             costUsd: data.costUsd ?? 0,
-            namedSession: data.namedSession ?? false,
+            // Labels from before autoName mark that the first model label named the session.
+            autoName: data.autoName ?? (data.namedSession ? firstModel : undefined),
           };
         }
       }
