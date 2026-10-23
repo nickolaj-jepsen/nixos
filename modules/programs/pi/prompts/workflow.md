@@ -8,8 +8,8 @@ that scale, so don't stop to ask whether to.
 
 Scout inline first, so the script iterates a list that exists rather than a guess: name
 the files, routes or channels the fan-out will cover. Then write the script and call
-`SubagentWorkflow` — declared directly on large-context models, otherwise as
-`tools.SubagentWorkflow` from codemode after `await describeTool("SubagentWorkflow")`.
+`SubagentWorkflow`, from codemode as `tools.SubagentWorkflow` when it isn't in your
+tool list.
 
 Structure it: `meta` whose phase titles match the `phase()` calls, a discovery `agent()`,
 then `parallel`/`pipeline` over what discovery returned, and a verification stage that
