@@ -443,24 +443,28 @@ export default function (pi: ExtensionAPI) {
     owner[OWNER] = undefined;
   }
 
-  pi.on("session_start", async (_event, c) => start(c));
-  pi.on("session_shutdown", async (event) => stop(event.reason));
-
-  /** Declares enter_worktree once the checkout is shared; worktree.ts registers it inactive. */
-  async function activateWorktree(c: ExtensionContext, peerCount: number) {
+  /** Declares enter_worktree when the checkout is shared; worktree.ts registers it inactive. */
+  async function activateWorktree(c: ExtensionContext) {
     if (!c.hasUI || isLeanModel(c.model)) return;
-    if (peerCount === 0 && !(await dirtyTree(c.cwd))) return;
+    const peers = (await sameTreePeers(c.cwd).catch(() => undefined))?.list.length ?? 0;
+    if (peers === 0 && !(await dirtyTree(c.cwd))) return;
     if (!pi.getAllTools().some((tool) => tool.name === WORKTREE_TOOL)) return;
     pi.setActiveTools([...pi.getActiveTools(), WORKTREE_TOOL]);
   }
+
+  pi.on("session_start", async (_event, c) => {
+    // Once, before the first request: a later tool-set change is a prompt transition that
+    // can cost a cache-invalidating re-read, far more than the declaration it saves.
+    await activateWorktree(c);
+    await start(c);
+  });
+  pi.on("session_shutdown", async (event) => stop(event.reason));
 
   // Splits peers only into active and stale, not by exact idle time, so the
   // section changes when a peer crosses STALE_AFTER_MS rather than every turn.
   pi.on("before_agent_start", async (event, c) => {
     const sections = event.systemPromptOptions.sections;
     const peers = await sameTreePeers(c.cwd).catch(() => undefined);
-    if (!pi.getActiveTools().includes(WORKTREE_TOOL))
-      await activateWorktree(c, peers?.list.length ?? 0);
     if (!peers?.list.length) {
       delete sections.peer_sessions;
       return;
