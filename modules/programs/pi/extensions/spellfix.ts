@@ -326,6 +326,20 @@ function cachedExtras(text: string): Extra[] {
   return batch?.text === text ? batch.extras.filter((x) => !ignored.has(x.word)) : [];
 }
 
+/**
+ * The draft as the editor holds it, a large paste still its `[paste #n]`
+ * marker: the words in a paste are neither checked nor sent to the model.
+ */
+function draftText(ctx: ExtensionContext): string {
+  return editor?.getText() ?? ctx.ui.getEditorText();
+}
+
+/** Puts back a draft read with `draftText`. */
+function writeDraft(ui: ExtensionUIContext, text: string) {
+  if (editor) editor.replaceDraft(text);
+  else ui.setEditorText(text);
+}
+
 /** Hunspell's misses plus the cached model extras, in draft order. */
 async function allMisses(ctx: ExtensionContext, text: string): Promise<(Miss | Extra)[]> {
   return withExtras(await findMisses(ctx, text), cachedExtras(text));
@@ -394,6 +408,17 @@ class SpellEditor extends CustomEditor {
   override setText(text: string): void {
     super.setText(text);
     this.onEdit();
+  }
+
+  /** `setText` for a draft from `getText`, keeping the pastes its markers name. */
+  replaceDraft(text: string): void {
+    // pi-tui's paste map and counter are private, and setText clears them.
+    const self = this as unknown as { pastes: Map<number, string>; pasteCounter: number };
+    const pastes = new Map(self.pastes);
+    const counter = self.pasteCounter;
+    this.setText(text);
+    for (const [id, paste] of pastes) self.pastes.set(id, paste);
+    self.pasteCounter = counter;
   }
 
   override render(width: number): string[] {
@@ -520,7 +545,7 @@ class SpellPicker implements Component {
   }
 
   private changed() {
-    this.ui.setEditorText(this.text);
+    writeDraft(this.ui, this.text);
     this.prefetch();
     this.tui.requestRender();
   }
@@ -691,7 +716,7 @@ class SpellPicker implements Component {
     }
     record(fixes.map(({ item, fix }) => ({ from: item.word, to: fix, as: AI_SOURCE })));
     this.items = [];
-    this.ui.setEditorText(this.text);
+    writeDraft(this.ui, this.text);
     this.close({ changed: true });
   }
 
@@ -849,7 +874,7 @@ function scheduleCheck(gen: number, ctx: ExtensionContext) {
 async function refreshCount(gen: number, ctx: ExtensionContext) {
   if (gen !== sessionGen) return;
   const id = ++checkId;
-  const text = ctx.ui.getEditorText();
+  const text = draftText(ctx);
   if (!text.trim()) {
     editor?.setUnderlined(new Set());
     ctx.ui.setWidget("spellfix", undefined);
@@ -876,7 +901,7 @@ async function openPicker(ctx: ExtensionContext) {
     toast(ctx, "spellfix: the picker needs the interactive UI", "warning");
     return;
   }
-  const text = ctx.ui.getEditorText();
+  const text = draftText(ctx);
   if (!text.trim()) {
     toast(ctx, "No misspellings", "info");
     return;
