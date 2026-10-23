@@ -188,6 +188,8 @@ in {
           theme = "fireproof";
           # Keeps the version and key hints; drops the loaded-resource listing.
           quietStartup = "header";
+          # `/tree` opens on my prompts; ctrl+d still shows everything.
+          treeFilterMode = "user-only";
           # Loads the cwd's direnv/nix-direnv env into the bash tool, which
           # otherwise keeps the env pi was launched with. Blocked or missing
           # .envrc files export nothing.
