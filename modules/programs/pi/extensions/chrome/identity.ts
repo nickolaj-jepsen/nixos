@@ -3,14 +3,14 @@
  * `/header`.
  *
  * The title is the only surface visible from the niri overview, so it stays
- * terse — task label, directory, age, and a state word only when the session
- * wants you — with the directory last so elision drops the part the workspace
- * name already told you. The border row is
- * the persistent one inside pi: it carries the label and the path, and a click
- * on it relabels (`/header` still shows the age and session id). The label is deterministic
- * until you ask for a model one (alt+r or a click), plus a refresh at each
- * compaction boundary, which bounds the cost of a feature that only has to help
- * you pick a window.
+ * terse: task label, directory, age, and a state word only when the session
+ * wants you. The border row is the persistent one inside pi: the label, which a
+ * click relabels, pi's scroll hint, the state word and the measurements. pi's
+ * working spinner sits in front of the label, and a retry, compaction or branch
+ * summary takes its place. `/header` shows the details and the resume command.
+ * The label is deterministic until you ask for a model one (alt+r or a click),
+ * plus a refresh at each compaction boundary, which bounds the cost of a
+ * feature that only has to help you pick a window.
  *
  * The border belongs to the editor; the wrapper in `editor.ts` calls `drawTop`
  * for the border row. Until you run `/name`, the session name follows the latest
@@ -30,10 +30,10 @@ import { shortPath } from "./format.ts";
 import type { BorderStatus } from "./editor.ts";
 import type { Region } from "./layout.ts";
 import type { Segment } from "./measurements.ts";
+import type { ChromeState } from "./state.ts";
 
 // Hover id of the top-border label.
 const LABEL_ID = "label";
-import type { ChromeState } from "./state.ts";
 
 type Phase = "working" | "idle" | "failed";
 type Source = "name" | "prompt" | "cwd" | "model" | "manual";
@@ -526,11 +526,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
           ctx.ui.notify("identity: /name owns the label, run /name to change it", "warning");
         return;
       }
-      if (!ctx.hasUI) {
-        ctx.ui.notify(summary(ctx), "info");
-        return;
-      }
       ctx.ui.notify(summary(ctx), "info");
+      if (!ctx.hasUI) return;
       const choice = await ctx.ui.select("Session identity", [
         "Relabel now",
         "Copy resume command",
@@ -621,7 +618,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   pi.on("ui_prompt_end", (_event, ctx) => promptChanged(ctx));
 
   pi.on("message_end", (event) => {
-    derivedCache = undefined;
     if (event.message.role === "assistant" && event.message.stopReason === "error") {
       phase = "failed";
     }
@@ -631,7 +627,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   pi.on("tool_execution_end", () => paint());
 
   pi.on("session_compact", (_event, ctx) => {
-    derivedCache = undefined;
     // Compaction already paid for a summary, so the marginal label is cheap and
     // the work has usually moved on by the time one happens.
     void relabel(ctx, false).catch(() => {});
@@ -639,7 +634,6 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   });
 
   pi.on("session_info_changed", () => {
-    derivedCache = undefined;
     paint();
     repaintSoon();
   });
