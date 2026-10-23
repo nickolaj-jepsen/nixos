@@ -9,9 +9,6 @@ import { formatCredit, formatWhen } from "./format.ts";
 import type { Part } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
 
-const LABELS: Record<string, string> = { month: "mo" };
-const label = (window: UsageWindow) => LABELS[window.label] ?? window.label;
-
 /**
  * The one usage fact worth a glance: credit left (always, it is real money),
  * a window that is out, or one that will run dry before it resets.
@@ -36,7 +33,7 @@ export const usageAlarm = (
   }
   if (exhausted) {
     const when = formatWhen(new Date(exhausted.resetsAt), now);
-    return { id: "quota", text: `${label(exhausted)} out until ${when}`, color: "error" };
+    return { id: "quota", text: `${exhausted.label} out until ${when}`, color: "error" };
   }
   const emptying = provider.windows
     .filter(
@@ -49,7 +46,7 @@ export const usageAlarm = (
     .sort((a, b) => Date.parse(a.runsOutAt) - Date.parse(b.runsOutAt))[0];
   if (emptying) {
     const when = formatWhen(new Date(emptying.runsOutAt), now);
-    return { id: "quota", text: `${label(emptying)} empty ${when}`, color: "warning" };
+    return { id: "quota", text: `${emptying.label} empty ${when}`, color: "warning" };
   }
   return undefined;
 };
