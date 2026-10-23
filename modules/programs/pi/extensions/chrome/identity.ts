@@ -23,6 +23,7 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { setAutoName } from "../lib/auto-name.ts";
 import { recordSideCall } from "../lib/usage-ledger.ts";
 import { trackUserWait, waitingOnUser } from "../lib/user-wait.ts";
 import { shortPath } from "./format.ts";
@@ -165,6 +166,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     const owned = explicitName() !== undefined;
     label = { ...next, autoName: owned ? label?.autoName : next.text };
     if (owned) return;
+    setAutoName(sessionId(), next.text);
     if (pi.getSessionName() !== next.text) pi.setSessionName(next.text);
   };
 
@@ -583,6 +585,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
         }
       }
     }
+    setAutoName(sessionId(), label?.autoName);
 
     if (!state.live) return;
     timer = setInterval(paint, TICK_MS);
@@ -643,6 +646,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
 
   pi.on("session_shutdown", () => {
     inflight?.abort();
+    setAutoName(sessionId(), undefined);
     if (timer) clearInterval(timer);
     timer = undefined;
     if (repaintTimer) clearTimeout(repaintTimer);

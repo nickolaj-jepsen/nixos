@@ -56,6 +56,7 @@ import {
   userFrame,
   writeRegistryEntry,
 } from "./claude-peers/protocol.ts";
+import { isAutoName } from "./lib/auto-name.ts";
 import { markAgentPrompt } from "./lib/user-wait.ts";
 
 const MESSAGE_TYPE = "claude-peer-message";
@@ -398,7 +399,7 @@ export default function (pi: ExtensionAPI) {
       pidDomain: pidDomain(),
       messagingSocketPath: socketPath,
       name: displayName(),
-      nameSource: named ? "user" : "derived",
+      nameSource: named && !isAutoName(c.sessionManager.getSessionId(), named) ? "user" : "derived",
       nameSince: Date.now(),
     };
     const reloaded = owner[RELOADED];
@@ -482,11 +483,14 @@ export default function (pi: ExtensionAPI) {
     ctx = c;
     if (isOwner()) await publish({ status: "busy" });
   });
-  pi.on("session_info_changed", async (event) => {
+  pi.on("session_info_changed", async (event, c) => {
     if (isOwner())
       await publish({
         name: displayName(),
-        nameSource: event.name ? "user" : "derived",
+        nameSource:
+          event.name && !isAutoName(c.sessionManager.getSessionId(), event.name)
+            ? "user"
+            : "derived",
         nameSince: Date.now(),
       });
   });
