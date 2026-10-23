@@ -148,7 +148,6 @@ export default function (pi: ExtensionAPI) {
   // The exact payload the main request sent, so the fork can reuse its prefix.
   let mainPayload: Record<string, unknown> | undefined;
   let aligned: Record<string, unknown> | undefined;
-  const forkPayloads = new WeakSet<object>();
 
   function loadState() {
     try {
@@ -234,7 +233,6 @@ export default function (pi: ExtensionAPI) {
    * included; only the tail is paid at the input rate.
    */
   function align(payload: unknown): unknown {
-    if (payload !== null && typeof payload === "object") forkPayloads.add(payload);
     const main = mainPayload;
     if (!main || payload === null || typeof payload !== "object") return undefined;
     const fork = payload as Record<string, unknown>;
@@ -316,12 +314,7 @@ export default function (pi: ExtensionAPI) {
             maxTokens: MAX_REPLY_TOKENS,
             cacheRetention: "short",
             timeoutMs: REQUEST_TIMEOUT_MS,
-            onPayload: sameAsMain
-              ? align
-              : (payload: unknown) => {
-                  if (payload !== null && typeof payload === "object") forkPayloads.add(payload);
-                  return undefined;
-                },
+            onPayload: sameAsMain ? align : undefined,
           },
         )
         .result();
@@ -392,11 +385,12 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("before_provider_request", (event, ctx) => {
     const payload = event.payload;
-    if (payload === null || typeof payload !== "object" || forkPayloads.has(payload)) return;
-    // Another extension's nested call runs while the agent is idle and carries its
-    // own system prompt; aligning a check to it would send the wrong conversation.
-    if (ctx.isIdle()) return;
-    mainPayload = payload as Record<string, unknown>;
+    if (payload === null || typeof payload !== "object" || ctx.isIdle()) return;
+    // pi's cache warmer replays the last request with a 1-token cap, mid-run too;
+    // a fork aligned to that replay would inherit the cap.
+    const p = payload as Record<string, unknown>;
+    if (p.max_tokens === 1 || p.max_completion_tokens === 1) return;
+    mainPayload = p;
   });
 
   pi.on("agent_start", () => {
