@@ -191,18 +191,28 @@ export default function (pi: ExtensionAPI) {
     });
   });
 
-  pi.on("agent_settled", (event, ctx) => {
+  // Continuing before the run settles keeps settle listeners from seeing it finish and restart.
+  pi.on("agent_before_settle", (event, ctx) => {
     if (!resumeAfterLimit) return;
     resumeAfterLimit = false;
-    if (event.aborted || !routedHere(ctx)) return;
-    pi.sendMessage(
-      {
-        customType: "fp-router",
-        content: "OpenCode Go's quota ran out mid-turn. Continue where you left off.",
-        display: true,
-      },
-      { triggerTurn: true },
-    );
+    if (event.outcome === "aborted" || !routedHere(ctx)) return;
+    return {
+      entries: [
+        ...event.entries,
+        {
+          type: "custom_message",
+          customType: "fp-router",
+          content: "OpenCode Go's quota ran out mid-turn. Continue where you left off.",
+          display: true,
+        },
+      ],
+      continue: true,
+    };
+  });
+
+  // An aborted run skips agent_before_settle; the flag must not carry into the next one.
+  pi.on("agent_settled", () => {
+    resumeAfterLimit = false;
   });
 }
 
