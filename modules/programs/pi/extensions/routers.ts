@@ -13,6 +13,7 @@
  * not retry, so those never reach `route()` as a retry: the extension flags
  * them and continues the interrupted turn on the bridge.
  */
+import { execFile } from "node:child_process";
 import type { Message } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
@@ -20,7 +21,7 @@ import type {
   ModelRoute,
   ModelRouteRequest,
 } from "@earendil-works/pi-coding-agent";
-import { createUsageReader, exhaustedWindow } from "./lib/ai-usage.ts";
+import { createUsageReader, exhaustedWindow, type UsageProvider } from "./lib/ai-usage.ts";
 
 const PROVIDER = "fp";
 const GO = { provider: "opencode-go", id: "deepseek-v4.1-flash" } as const;
@@ -171,7 +172,7 @@ export default function (pi: ExtensionAPI) {
 
   const routedHere = (ctx: ExtensionContext) => ctx.model?.provider === PROVIDER;
 
-  pi.on("message_end", async (event, ctx) => {
+  pi.on("message_end", (event, ctx) => {
     const message = event.message;
     if (
       message.role !== "assistant" ||
@@ -181,10 +182,13 @@ export default function (pi: ExtensionAPI) {
     ) {
       return;
     }
-    await usage.refresh();
-    const window = exhaustedWindow(usage.provider("opencode-go"));
-    goBlockedUntil = window ? Date.parse(window.resetsAt) : Date.now() + GO_BLOCK_FALLBACK_MS;
+    goBlockedUntil = Date.now() + GO_BLOCK_FALLBACK_MS;
     resumeAfterLimit = routedHere(ctx) && bridgeUsable();
+    // Go's usage can lag its own limit errors, so only a window that is out moves the block.
+    void freshGoUsage().then((go) => {
+      const window = exhaustedWindow(go);
+      if (window) goBlockedUntil = Date.parse(window.resetsAt);
+    });
   });
 
   pi.on("agent_settled", (event, ctx) => {
@@ -198,6 +202,29 @@ export default function (pi: ExtensionAPI) {
         display: true,
       },
       { triggerTurn: true },
+    );
+  });
+}
+
+/**
+ * Go's quota past the reader's TTL and ai-usage's own cache, both of which still
+ * hold the snapshot that sent the failed request to Go.
+ */
+function freshGoUsage(): Promise<UsageProvider | undefined> {
+  return new Promise((resolve) => {
+    execFile(
+      "ai-usage",
+      ["--json", "--refresh"],
+      { timeout: 10_000, maxBuffer: 1 << 20 },
+      (error, stdout) => {
+        try {
+          if (error) throw error;
+          const { providers } = JSON.parse(stdout) as { providers?: UsageProvider[] };
+          resolve(providers?.find((p) => p.id === GO.provider));
+        } catch {
+          resolve(undefined);
+        }
+      },
     );
   });
 }
