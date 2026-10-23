@@ -1,19 +1,28 @@
 /**
- * Virtual models (see pi's docs/virtual-models.md):
+ * Virtual models (see pi's docs/virtual-models.md), one per kind, with the
+ * ladders themselves in ./routers/kinds.ts:
  *
- * - `fp/flash`: DeepSeek V4.1 Flash on OpenCode Go. Only while Go's quota is
- *   used up does it bridge to Claude Haiku on the Anthropic credit, and it
- *   returns at the first prompt after Go's window resets. Otherwise a session
- *   stays on one model, so the prompt cache stays warm.
- * - `fp/architect`: Opus explores, plans and makes the first edit; from the next
- *   request on, the session continues on `fp/flash`'s model. `/replan` sends the
- *   next prompt back to Opus.
+ * - `fp/flash`: DeepSeek V4.1 Flash on OpenCode Go, then on Synthetic, then Haiku
+ *   on the Anthropic credit. Frontier-grade intelligence for a fraction of the
+ *   price, so it drives ordinary turns.
+ * - `fp/strong`: GLM-5.3 and Kimi K3, Synthetic then Go, and no Anthropic stage —
+ *   the second opinion and the escape hatch for work Claude-lineage models
+ *   decline, so it fails loudly instead of tailing into one.
+ * - `fp/planner`: Opus while the credit lasts, then the strong kind's pools.
+ * - `fp/architect`: the first step plans on `fp/planner`, and once the planner has
+ *   made an edit the session continues on `fp/flash`. `/replan` sends the next
+ *   prompt back to the planner.
  *
- * Go's quota comes from ai-usage, and from Go's own limit errors, which pi does
- * not retry, so those never reach `route()` as a retry: the extension flags
- * them and continues the interrupted turn on the bridge.
+ * A kind only ever walks its own ladder; nothing escalates to a pricier kind on
+ * its own. Each subscription meters one shared pool, so a stage is a pool, not a
+ * model: availability is asked once per provider, and the model chosen inside a
+ * stage is whichever fits the turn. Request counts come from ai-usage (`ai-usage
+ * --json`) and from each provider's own limit errors, which pi does not retry, so
+ * those never reach `route()` as a retry: the extension flags them and continues
+ * the interrupted turn one stage down. No kind spends the Anthropic credit below
+ * CREDIT_RESERVE_USD, which keeps it as a reserve to spend by hand.
  */
-import type { Message } from "@earendil-works/pi-ai";
+import type { Message, ThinkingLevel } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -21,110 +30,162 @@ import type {
   ModelRouteRequest,
 } from "@earendil-works/pi-coding-agent";
 import { createUsageReader, exhaustedWindow } from "./lib/ai-usage.ts";
+import {
+  FLASH,
+  KIND_META,
+  KINDS,
+  PLANNER,
+  type Kind,
+  type Ladder,
+  type Stage,
+} from "./routers/kinds.ts";
 
 const PROVIDER = "fp";
-const GO = { provider: "opencode-go", id: "deepseek-v4.1-flash" } as const;
-const BRIDGE = { provider: "anthropic", id: "claude-haiku-5-5" } as const;
-const PLANNER = { provider: "anthropic", id: "claude-opus-5-5" } as const;
-
-type Pool = "go" | "bridge";
-const POOLS: Record<Pool, { provider: string; id: string }> = { go: GO, bridge: BRIDGE };
-
-// pi lists these as non-retryable OpenCode Go subscription limits.
-const GO_LIMIT_ERROR = /GoUsageLimitError|Monthly usage limit reached|available balance/i;
-// How long a limit error blocks Go when ai-usage can't say when it resets.
+/** Below this the Anthropic credit is the reserve; no kind spends it. */
+const CREDIT_RESERVE_USD = 20;
+const PROVIDER_NAME: Record<string, string> = {
+  "opencode-go": "OpenCode Go",
+  synthetic: "Synthetic",
+};
+// The providers whose own subscription limits pi lists as non-retryable.
+const LIMIT_ERROR: Record<string, RegExp> = {
+  "opencode-go": /GoUsageLimitError|Monthly usage limit reached|available balance/i,
+  synthetic: /quota|credit|rate.?limit|429/i,
+};
+// How long a limit error blocks a provider when ai-usage can't say when it comes back.
 const GO_BLOCK_FALLBACK_MS = 30 * 60_000;
-// Below this the promo credit is spent and the key would bill or fail.
-const MIN_CREDIT_USD = 1;
+// Synthetic regenerates 2% of the weekly credit every 202 minutes, so a spent
+// meter is usable again at the next tick, which ai-usage does not report.
+const SYNTHETIC_REFILL_MS = 202 * 60_000;
+// A limit error ai-usage does not corroborate: let the turn finish, then retry.
+const UNCORROBORATED_BLOCK_MS = 60_000;
 
 /** Tools whose successful result means implementation has started. */
 const EDIT_TOOLS = new Set(["edit", "write"]);
 
-type FlashState = { pool: Pool };
-type ArchitectState = { phase: "plan" } | { phase: "build"; pool: Pool };
+/** A place on a ladder: the stage (pool) and the model inside it. */
+type Position = { stage: number; model: number };
+type KindState = { at: Position };
+type ArchitectState = { phase: "plan" | "build"; at: Position };
 
 export default function (pi: ExtensionAPI) {
   const usage = createUsageReader();
-  /** Set by a Go limit error; ai-usage alone lags it by up to two minutes. */
-  let goBlockedUntil = 0;
-  /** A Go limit error ended a turn of one of these models; continue it on the bridge. */
-  let resumeAfterLimit = false;
+  /** Per provider, set by its own limit errors; ai-usage alone lags them. */
+  const blockedUntil: Record<string, number> = {};
+  /** The provider a limit error stopped; its turn continues one stage down. */
+  let resumeAfter: string | undefined;
   /** Sessions whose next prompt goes back to the planner. */
   const replan = new Set<string>();
 
-  const goBlocked = () => {
-    const window = exhaustedWindow(usage.provider("opencode-go"));
-    return Date.now() < goBlockedUntil || window !== undefined;
-  };
+  /** Whether ai-usage has the provider out of quota right now. */
+  const spent = (provider: string) => exhaustedWindow(usage.provider(provider)) !== undefined;
 
-  const bridgeUsable = () => {
+  /** The credit is the reserve: below it no kind spends Anthropic at all. */
+  const creditAboveReserve = () => {
     const credit = usage.provider("anthropic")?.credit;
-    return !credit || credit.remaining >= MIN_CREDIT_USD;
+    return !credit || credit.remaining >= CREDIT_RESERVE_USD;
   };
 
-  const find = (ctx: ExtensionContext, ref: { provider: string; id: string }) => {
-    const model = ctx.modelRegistry.find(ref.provider, ref.id);
-    if (!model) throw new Error(`${ref.provider}/${ref.id} is not in the catalog`);
-    return model;
+  /** A stage is its pool: every model on it shares one allowance. */
+  const stageReady = (stage: Stage) =>
+    stage.provider === "anthropic"
+      ? creditAboveReserve()
+      : Date.now() >= (blockedUntil[stage.provider] ?? 0) && !spent(stage.provider);
+
+  const find = (ctx: ExtensionContext, stage: Stage, model: number) => {
+    const variant = stage.variants[model];
+    const found = ctx.modelRegistry.find(stage.provider, variant.id);
+    if (!found) throw new Error(`${stage.provider}/${variant.id} is not in the catalog`);
+    return found;
   };
 
   /**
-   * The pool for this request: stay put, except to leave Go once its quota is
-   * out, or to return to it at a prompt once it is back.
+   * Where to send this request: the first ready stage from `from` on, taking the
+   * model that fits the turn (a text-only one is skipped while the conversation
+   * carries images). `from` is the current position for a continuation, so a
+   * working model keeps its prompt cache; a fresh prompt starts at the top of the
+   * ladder so a recovered pool is used again.
    */
-  const choosePool = async (current: Pool | undefined, reason: string): Promise<Pool> => {
+  const pick = async (
+    ladder: Ladder,
+    from: Position | undefined,
+    messages: readonly Message[],
+  ): Promise<Position> => {
     // Only the first decision waits; later ones use the last snapshot.
     if (!usage.known()) await usage.refresh();
     else void usage.refresh();
-    if (goBlocked()) return bridgeUsable() ? "bridge" : "go";
-    if (current === "bridge" && reason !== "user") return "bridge";
-    return "go";
+    const images = hasImages(messages);
+    const fits = (stage: Stage, model: number) => !images || stage.variants[model].vision !== false;
+
+    const search = (start: number, end: number): Position | undefined => {
+      for (let s = start; s < end; s++) {
+        const stage = ladder[s];
+        if (!stageReady(stage)) continue;
+        // Staying on the same model keeps the cache; otherwise the preferred one.
+        const preferred = from?.stage === s && fits(stage, from.model) ? from.model : 0;
+        for (const m of [preferred, ...stage.variants.keys()]) {
+          if (fits(stage, m)) return { stage: s, model: m };
+        }
+      }
+      return undefined;
+    };
+
+    const start = from?.stage ?? 0;
+    // Down the ladder first, then up it, for a pool that recovered mid-turn.
+    return search(start, ladder.length) ?? search(0, start) ?? from ?? { stage: 0, model: 0 };
   };
 
-  const notifySwitch = (ctx: ExtensionContext, from: Pool | undefined, to: Pool) => {
-    if (!from || from === to || !ctx.hasUI) return;
+  /** Route within one kind's ladder, keeping `state` unless the position changes. */
+  const routeKind = async <S extends object>(
+    ladder: Ladder,
+    request: ModelRouteRequest<S>,
+    ctx: ExtensionContext,
+    current: Position | undefined,
+    withAt: (at: Position) => S,
+  ): Promise<ModelRoute<S>> => {
+    // Retries keep the failed model, so its cache and reasoning replay stay valid.
+    if (request.reason === "retry" && request.failed) {
+      return { model: request.failed.model, thinkingLevel: request.thinkingLevel };
+    }
+    // A new prompt walks the whole ladder again; anything else starts where it is.
+    const fresh = request.reason === "user" || request.reason === "direct";
+    const at = await pick(ladder, fresh ? undefined : current, request.messages);
+    if (current && current.stage !== at.stage) {
+      notifySwitch(ctx, ladder[current.stage], ladder[at.stage], at.stage > current.stage);
+    }
+    return {
+      model: find(ctx, ladder[at.stage], at.model),
+      thinkingLevel: request.thinkingLevel,
+      state: samePosition(current, at) ? request.state : withAt(at),
+    };
+  };
+
+  const notifySwitch = (ctx: ExtensionContext, from: Stage, to: Stage, down: boolean) => {
+    if (!ctx.hasUI) return;
     ctx.ui.notify(
-      to === "bridge"
-        ? "OpenCode Go quota is used up: continuing on Claude Haiku (Anthropic credit)"
-        : "OpenCode Go quota is back: continuing on DeepSeek",
+      down
+        ? `${from.label} is used up: continuing on ${to.label}`
+        : `${to.label} is back: continuing on it`,
       "info",
     );
   };
 
-  /** Route within the flash pools, keeping `state` unless the pool changes. */
-  const flashRoute = async <S extends object>(
-    request: ModelRouteRequest<S>,
-    ctx: ExtensionContext,
-    current: Pool | undefined,
-    withPool: (pool: Pool) => S,
-  ): Promise<ModelRoute<S>> => {
-    const pool = await choosePool(current, request.reason);
-    notifySwitch(ctx, current, pool);
-    return {
-      model: find(ctx, POOLS[pool]),
-      thinkingLevel: request.thinkingLevel,
-      state: pool === current ? request.state : withPool(pool),
-    };
-  };
+  const register = (
+    id: string,
+    ladder: Ladder,
+    meta: { name: string; thinkingLevels: ThinkingLevel[]; contextWindow: number },
+  ) =>
+    pi.registerVirtualModel<KindState>({
+      provider: PROVIDER,
+      id,
+      name: meta.name,
+      thinkingLevels: meta.thinkingLevels,
+      contextWindow: meta.contextWindow,
+      route: (request, ctx) =>
+        routeKind<KindState>(ladder, request, ctx, request.state?.at, (at) => ({ at })),
+    });
 
-  pi.registerVirtualModel<FlashState>({
-    provider: PROVIDER,
-    id: "flash",
-    name: "Flash",
-    thinkingLevels: ["low", "high", "max"],
-    contextWindow: 1_000_000,
-    async route(request, ctx) {
-      // Retries keep the failed model, so its cache and reasoning replay stay valid.
-      if (request.reason === "retry" && request.failed) {
-        return { model: request.failed.model, thinkingLevel: request.thinkingLevel };
-      }
-      if (request.reason === "direct") {
-        const pool = await choosePool(undefined, "direct");
-        return { model: find(ctx, POOLS[pool]), thinkingLevel: request.thinkingLevel };
-      }
-      return flashRoute(request, ctx, request.state?.pool, (pool) => ({ pool }));
-    },
-  });
+  for (const kind of Object.keys(KINDS) as Kind[]) register(kind, KINDS[kind], KIND_META[kind]);
 
   pi.registerVirtualModel<ArchitectState>({
     provider: PROVIDER,
@@ -136,90 +197,91 @@ export default function (pi: ExtensionAPI) {
       if (request.reason === "retry" && request.failed) {
         return { model: request.failed.model, thinkingLevel: request.thinkingLevel };
       }
-      // Compaction summaries don't need the planner.
       if (request.reason === "direct") {
-        const pool = await choosePool(undefined, "direct");
-        return { model: find(ctx, POOLS[pool]), thinkingLevel: request.thinkingLevel };
+        const at = await pick(FLASH, undefined, request.messages);
+        return {
+          model: find(ctx, FLASH[at.stage], at.model),
+          thinkingLevel: request.thinkingLevel,
+        };
       }
       const state = request.state;
       const sessionId = ctx.sessionManager.getSessionId();
-      // Consume a pending /replan even on the first prompt, which plans anyway.
-      const replanNow = request.reason === "user" && replan.delete(sessionId);
-      if (!state || replanNow) {
-        const plan: ArchitectState = { phase: "plan" };
-        return {
-          model: find(ctx, PLANNER),
-          thinkingLevel: request.thinkingLevel,
-          state: state?.phase === "plan" ? state : plan,
-        };
+      const startPlanning = !state || (request.reason === "user" && replan.delete(sessionId));
+      if (startPlanning || (state.phase === "plan" && !editedThisTurn(request.messages))) {
+        // The first step plans on the planner kind, whatever pool that lands on.
+        const at = startPlanning ? undefined : state.at;
+        return routeKind(PLANNER, request, ctx, at, (position) => ({
+          phase: "plan",
+          at: position,
+        }));
       }
-      if (state.phase === "plan" && !editedThisTurn(request.messages)) {
-        return { model: find(ctx, PLANNER), thinkingLevel: request.thinkingLevel };
-      }
-      // The planner made the first edit: the rest goes to the flash pools.
-      const current = state.phase === "build" ? state.pool : undefined;
-      return flashRoute(request, ctx, current, (pool) => ({ phase: "build", pool }));
+      // The planner made the first edit: the rest goes to the flash ladder.
+      const at = state.phase === "build" ? state.at : undefined;
+      return routeKind(FLASH, request, ctx, at, (position) => ({ phase: "build", at: position }));
     },
   });
 
   pi.registerCommand("replan", {
     description: "Send the next prompt (or the given one) to fp/architect's planner",
     handler: async (args, ctx) => {
-      // Only fp/architect consumes the entry; on any other model it would wait for a later switch.
-      if (ctx.model?.provider !== PROVIDER || ctx.model.id !== "architect") {
-        ctx.ui.notify("/replan only applies while fp/architect is the model", "warning");
-        return;
-      }
       replan.add(ctx.sessionManager.getSessionId());
-      const prompt = args.trim();
-      if (prompt) pi.sendUserMessage(prompt, ctx.isIdle() ? undefined : { deliverAs: "followUp" });
-      else ctx.ui.notify("The next prompt goes to Opus", "info");
+      if (args.trim()) pi.sendUserMessage(args.trim());
+      else ctx.ui.notify("The next prompt goes to the planner", "info");
     },
   });
 
   const routedHere = (ctx: ExtensionContext) => ctx.model?.provider === PROVIDER;
 
-  pi.on("message_end", (event, ctx) => {
+  pi.on("message_end", async (event, ctx) => {
     const message = event.message;
-    if (
-      message.role !== "assistant" ||
-      message.stopReason !== "error" ||
-      message.provider !== GO.provider ||
-      !GO_LIMIT_ERROR.test(message.errorMessage ?? "")
-    ) {
-      return;
+    if (message.role !== "assistant" || message.stopReason !== "error") return;
+    const provider = message.provider;
+    if (!LIMIT_ERROR[provider]?.test(message.errorMessage ?? "")) return;
+    await usage.refresh();
+    if (provider === "opencode-go") {
+      const window = exhaustedWindow(usage.provider(provider));
+      blockedUntil[provider] = window
+        ? Date.parse(window.resetsAt)
+        : Date.now() + GO_BLOCK_FALLBACK_MS;
+    } else {
+      // The error can land before ai-usage's next refresh; the meter's tick is the real wait.
+      blockedUntil[provider] =
+        Date.now() + (spent(provider) ? SYNTHETIC_REFILL_MS : UNCORROBORATED_BLOCK_MS);
     }
-    goBlockedUntil = Date.now() + GO_BLOCK_FALLBACK_MS;
-    resumeAfterLimit = routedHere(ctx) && bridgeUsable();
-    // Go's usage can lag its own limit errors, so only a window that is out moves the block.
-    void usage.refresh({ force: true }).then(() => {
-      const window = exhaustedWindow(usage.provider(GO.provider));
-      if (window) goBlockedUntil = Date.parse(window.resetsAt);
-    });
+    // Continue the turn only if that block left another pool to continue on.
+    const elsewhere = Object.values(KINDS).some((ladder) =>
+      ladder.some((stage) => stage.provider !== provider && stageReady(stage)),
+    );
+    if (routedHere(ctx) && elsewhere) resumeAfter = provider;
   });
 
-  // Continuing before the run settles keeps settle listeners from seeing it finish and restart.
-  pi.on("agent_before_settle", (event, ctx) => {
-    if (!resumeAfterLimit) return;
-    resumeAfterLimit = false;
-    if (event.outcome === "aborted" || !routedHere(ctx)) return;
-    return {
-      entries: [
-        ...event.entries,
-        {
-          type: "custom_message",
-          customType: "fp-router",
-          content: "OpenCode Go's quota ran out mid-turn. Continue where you left off.",
-          display: true,
-        },
-      ],
-      continue: true,
-    };
+  pi.on("agent_settled", (event, ctx) => {
+    const ended = resumeAfter;
+    resumeAfter = undefined;
+    if (!ended || event.aborted || !routedHere(ctx)) return;
+    pi.sendMessage(
+      {
+        customType: "fp-router",
+        content: `${PROVIDER_NAME[ended] ?? ended} ran out of quota mid-turn. Continue where you left off.`,
+        display: true,
+      },
+      { triggerTurn: true },
+    );
   });
+}
 
-  // An aborted run skips agent_before_settle; the flag must not carry into the next one.
-  pi.on("agent_settled", () => {
-    resumeAfterLimit = false;
+/** Whether two positions point at the same pool and model. */
+const samePosition = (a: Position | undefined, b: Position) =>
+  a?.stage === b.stage && a.model === b.model;
+
+/** Whether any message in the conversation carries an image. */
+function hasImages(messages: readonly Message[]): boolean {
+  return messages.some((message) => {
+    const content = (message as { content?: unknown }).content;
+    return (
+      Array.isArray(content) &&
+      content.some((block) => (block as { type?: string }).type === "image")
+    );
   });
 }
 
@@ -228,10 +290,7 @@ function editedThisTurn(messages: readonly Message[]): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message.role === "user") return false;
-    if (message.role !== "toolResult") continue;
-    if (EDIT_TOOLS.has(message.toolName) && !message.isError) return true;
-    // A codemode script's edits only show up as nested calls; they count even if the script failed later.
-    if (message.nestedCalls?.calls.some((c) => EDIT_TOOLS.has(c.name) && c.status === "ok")) {
+    if (message.role === "toolResult" && EDIT_TOOLS.has(message.toolName) && !message.isError) {
       return true;
     }
   }

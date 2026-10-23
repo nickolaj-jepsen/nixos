@@ -7,8 +7,8 @@
   }: let
     fp = config.fireproof;
     home = config.home.homeDirectory;
-    # Same condition agents.nix deploys the OpenCode Go key under.
-    hasOpencodeGo = fp.dev.pi.enable || fp.dev.opencode.enable;
+    # Same condition agents.nix deploys the agent API keys under.
+    hasAgentKeys = fp.dev.pi.enable || fp.dev.opencode.enable;
 
     providers =
       [
@@ -41,15 +41,23 @@
         sessionKeyFile = config.age.secrets.anthropic-console-session.path;
         orgId = "16cf6a94-7fae-421d-9ea6-29787833a032";
       }
-      ++ lib.optional hasOpencodeGo {
+      ++ lib.optional hasAgentKeys {
         id = "opencode-go";
         kind = "opencode-go";
         name = "OpenCode Go";
         short = "OC";
         icon = "opencode";
         keyFile = config.age.secrets.opencode-go-api-key.path;
-        # The 7d window moves with the 5h one; the monthly cap is the one that bites.
-        windows = ["rolling" "monthly"];
+        # All three bite at different burst lengths, and weekly runs hotter than
+        # monthly in practice, so none of them is noise.
+        windows = ["rolling" "weekly" "monthly"];
+      }
+      ++ lib.optional hasAgentKeys {
+        id = "synthetic";
+        kind = "synthetic";
+        name = "Synthetic";
+        short = "SY";
+        keyFile = config.age.secrets.synthetic-api-key.path;
       }
       ++ lib.optional config.programs.github-copilot-cli.enable {
         id = "copilot";

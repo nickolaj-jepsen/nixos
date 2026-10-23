@@ -181,6 +181,43 @@
       };
     };
 
+    # Same catalog pi reads (./_synthetic-models.nix), mapped to opencode's schema.
+    synthetic = {
+      name = "Synthetic";
+      package = "@opencode/ai/providers/openai-compatible";
+      settings = {
+        baseURL = "https://api.synthetic.new/openai/v1";
+        apiKey = "{file:${config.age.secrets.synthetic-api-key.path}}";
+      };
+      compatibility.maxTokensField = "max_tokens";
+      models =
+        lib.mapAttrs (_id: m: {
+          inherit (m) name;
+          capabilities = {
+            tools = true;
+            inherit (m) input;
+            output = ["text"];
+          };
+          limit = {
+            context = m.ctx;
+            output = m.maxOut;
+          };
+          cost = {
+            input = m.cost.input;
+            output = m.cost.output;
+            cache.read = m.cost.cached;
+          };
+          # The endpoint's own efforts, one variant each.
+          variants =
+            map (effort: {
+              id = effort;
+              settings.reasoningEffort = effort;
+            })
+            m.efforts;
+        })
+        (import ./_synthetic-models.nix);
+    };
+
     mcpServer = s: let
       enabled =
         if (s.enabled or null) != null
@@ -231,6 +268,7 @@
             lib.optionalAttrs llm.enable {inherit local;}
             // {
               inherit tensorx;
+              inherit synthetic;
               # The built-in catalog supplies the models; only the key is ours.
               opencode-go.settings.apiKey = "{file:${config.age.secrets.opencode-go-api-key.path}}";
             };

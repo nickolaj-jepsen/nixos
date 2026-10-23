@@ -29,6 +29,10 @@ TIMEOUT = 10
 MIN_ELAPSED_PCT = 5
 MIN_USED_PCT = 10
 CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
+# Synthetic refills its weekly credit meter in 2% steps, one every 202 minutes,
+# so a spent meter is full again one week later.
+SYNTHETIC_TICK = timedelta(minutes=202)
+SYNTHETIC_STEP_PCT = 2.0
 
 
 class FetchError(Exception):
@@ -213,6 +217,50 @@ def fetch_anthropic_credits(p):
     }
 
 
+def fetch_synthetic(p):
+    """The weekly credit meter on /v2/quotas, plus the rolling request cap beside it.
+
+    Synthetic regenerates credits instead of resetting them: `planWeeklyLimit`
+    reports what is left and when the next step lands, and a step is
+    `nextRegenPercent` (2%) of the weekly limit every 202 minutes. So there is no
+    reset instant and `resetsAt` is when the meter would be full again at the
+    current spend.
+    """
+    key = Path(p["keyFile"]).read_text().strip()
+    data = http_json(
+        "https://api.synthetic.new/v2/quotas",
+        {"Authorization": f"Bearer {key}", "User-Agent": "ai-usage"},
+    )
+    t = now()
+    windows = []
+    sub = data.get("subscription") or {}
+    if keeps(p, "rolling") and sub.get("limit"):
+        used = float(sub.get("requests") or 0) / float(sub["limit"]) * 100
+        windows.append(window("5h", used, sub.get("renewsAt") or t, timedelta(hours=5), "outer"))
+    weekly = data.get("planWeeklyLimit") or {}
+    if keeps(p, "weekly") and weekly.get("percentRemaining") is not None:
+        used = 100 - float(weekly["percentRemaining"])
+        step = float(weekly.get("nextRegenPercent") or SYNTHETIC_STEP_PCT)
+        detail = None
+        if weekly.get("nextRegenAt"):
+            left = human_delta((parse_time(weekly["nextRegenAt"]) - t).total_seconds())
+            detail = f"next +{step:g}% in {left}"
+        windows.append(
+            window(
+                "7d",
+                used,
+                t + SYNTHETIC_TICK * (used / step),
+                timedelta(days=7),
+                "inner" if windows else "outer",
+                detail,
+                t,
+            )
+        )
+    if not windows:
+        raise FetchError("no quota in the answer")
+    return {"windows": windows, "overage": None}
+
+
 def fetch_copilot(p):
     token = subprocess.run(
         [p.get("gh", "gh"), "auth", "token"], capture_output=True, text=True
@@ -247,6 +295,7 @@ FETCHERS = {
     "claude": fetch_claude,
     "anthropic-credits": fetch_anthropic_credits,
     "opencode-go": fetch_opencode_go,
+    "synthetic": fetch_synthetic,
     "copilot": fetch_copilot,
 }
 

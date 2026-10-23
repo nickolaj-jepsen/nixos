@@ -23,6 +23,7 @@ import { contextColor, type Measurements, type Meter } from "./measurements.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage, usageAlarm } from "./usage.ts";
+import { stageTone } from "../routers/kinds.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
@@ -180,6 +181,12 @@ export const createFooter = (
 
     const { cost: costText, speed: speedText } = meterTexts(ctx, model);
 
+    // The kind's ladder decides how alarming the answering model is: a later rung
+    // means the preferred one ran out, and the credit-backed ones are a warning in
+    // their own right. Neutral for a model reached outside the kinds.
+    const tone = model ? stageTone(model.provider, model.id) : "normal";
+    const modelColor = tone === "alert" ? "error" : tone === "warn" ? "warning" : "dim";
+
     const statusEntries = [...footerData.getExtensionStatuses()]
       .filter(([key]) => key !== "pi-cache-stats")
       .sort(([a], [b]) => a.localeCompare(b));
@@ -230,7 +237,7 @@ export const createFooter = (
               : model
                 ? modelAlias(model)
                 : undefined,
-          color: "dim",
+          color: modelColor,
           bold: true,
           tight: true,
           action: actions.model,

@@ -61,6 +61,12 @@
           path = "${config.home.homeDirectory}/.pi/agent/opencode-go-api-key";
           mode = "0600";
         };
+        # Also read by ai-usage (modules/programs/ai-usage.nix).
+        age.secrets.synthetic-api-key = {
+          rekeyFile = ../../secrets/synthetic-api-key.age;
+          path = "${config.home.homeDirectory}/.pi/agent/synthetic-api-key";
+          mode = "0600";
+        };
       })
     ]);
   };

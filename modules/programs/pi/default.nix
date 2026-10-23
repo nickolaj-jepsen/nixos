@@ -181,8 +181,8 @@ in {
         environment.PI_BG_POSIX_SHELL_PATH.value = lib.getExe pkgs.bash;
         settings = {
           # The model picker's "save as default" reverts at launch; change it here.
-          # DeepSeek on OpenCode Go, bridging to Haiku while Go's quota is out
-          # (extensions/routers.ts).
+          # The kinds live in extensions/routers.ts: flash is DeepSeek V4.1 Flash on
+          # Go, then Synthetic, then Haiku.
           defaultProvider = "fp";
           defaultModel = "flash";
           defaultThinkingLevel = "high";
@@ -304,6 +304,52 @@ in {
                 sendSessionAffinityHeaders = true;
               };
               models = import ./_tensorx-models.nix;
+            };
+            # Same catalog opencode reads (../_synthetic-models.nix); each client
+            # maps it to its own schema.
+            synthetic = {
+              baseUrl = "https://api.synthetic.new/openai/v1";
+              api = "openai-completions";
+              apiKey = "!cat ${config.age.secrets.synthetic-api-key.path}";
+              compat = {
+                supportsStore = false;
+                supportsDeveloperRole = false;
+                maxTokensField = "max_tokens";
+                supportsStrictMode = false;
+              };
+              models =
+                lib.mapAttrsToList (id: m: let
+                  level = effort:
+                    if lib.elem effort m.efforts
+                    then effort
+                    else null;
+                in {
+                  inherit id;
+                  inherit (m) name input;
+                  reasoning = true;
+                  contextWindow = m.ctx;
+                  maxTokens = m.maxOut;
+                  # A level the endpoint doesn't accept is null: pi hides it.
+                  thinkingLevelMap = {
+                    off =
+                      if lib.elem "none" m.efforts
+                      then "none"
+                      else null;
+                    minimal = null;
+                    low = level "low";
+                    medium = level "medium";
+                    high = level "high";
+                    xhigh = level "xhigh";
+                    max = level "max";
+                  };
+                  cost = {
+                    input = m.cost.input;
+                    output = m.cost.output;
+                    cacheRead = m.cost.cached;
+                    cacheWrite = 0;
+                  };
+                })
+                (import ../_synthetic-models.nix);
             };
           }
           // lib.optionalAttrs config.fireproof.dev.llm.enable {
