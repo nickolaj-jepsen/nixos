@@ -14,6 +14,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
+import { createBackground } from "./background.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { formatCost, shortPath } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
@@ -24,8 +25,8 @@ import { createUsage, usageAlarm } from "./usage.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
-// Font Awesome range of the Nerd Font, present in every version of it. Icons are followed by two
-// spaces: terminals draw a non-Mono Nerd Font glyph over the space after it, so one would read as none.
+// Font Awesome range of the Nerd Font, present in every version of it. One space follows an icon:
+// these fonts draw the glyph into its own cells, so a second one reads as a gap.
 const ICON_MODEL = "\uf2db";
 const ICON_EFFORT = "\uf0e7";
 
@@ -110,6 +111,7 @@ export const createFooter = (
   const usage = createUsage(state);
   const stats = createStats();
   const routed = createRouted();
+  const background = createBackground(() => state.tui?.requestRender());
   let regions: Region[] = [];
 
   /** Cost and speed as text; `undefined` when there is nothing worth showing. */
@@ -175,6 +177,22 @@ export const createFooter = (
 
     const { cost: costText, speed: speedText } = meterTexts(ctx);
 
+    const statusEntries = [...footerData.getExtensionStatuses()]
+      .filter(([key]) => key !== "pi-cache-stats")
+      .sort(([a], [b]) => a.localeCompare(b));
+    // Called even when the package published nothing, so the spinner stops.
+    const published = statusEntries.find(([key]) => key === "background-tasks")?.[1];
+    const backgroundStatus = background.parts(
+      published === undefined ? undefined : sanitize(published),
+      actions.backgroundTasks,
+      actions.dismissBackgroundTasks,
+    );
+    const statuses = statusEntries.flatMap(([key, text], index) => {
+      if (key === "background-tasks") return backgroundStatus;
+      const plain = sanitize(text);
+      return plain ? [{ id: `status-${index}`, text: plain, color: "dim" as const }] : [];
+    });
+
     const result = layoutFooter(
       width,
       theme,
@@ -182,7 +200,7 @@ export const createFooter = (
         provider: tag
           ? {
               id: "provider",
-              text: /^\w/.test(tag) ? `${ICON_MODEL}  ${tag}` : tag,
+              text: /^\w/.test(tag) ? `${ICON_MODEL} ${tag}` : tag,
               color: "dim",
             }
           : undefined,
@@ -211,18 +229,13 @@ export const createFooter = (
           model?.reasoning && thinking
             ? {
                 id: "effort",
-                text: `${ICON_EFFORT}  ${thinking}`,
+                text: `${ICON_EFFORT} ${thinking}`,
                 color: "muted",
-                styled: (t) => t.getThinkingBorderColor(thinking)(`${ICON_EFFORT}  ${thinking}`),
+                styled: (t) => t.getThinkingBorderColor(thinking)(`${ICON_EFFORT} ${thinking}`),
                 action: actions.effort,
               }
             : undefined,
-        statuses: [...footerData.getExtensionStatuses()]
-          .filter(([key]) => key !== "pi-cache-stats")
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([, text]) => sanitize(text))
-          .filter(Boolean)
-          .map((text, index) => ({ id: `status-${index}`, text, color: "dim" as const })),
+        statuses,
         alarms,
         path: { id: "path", text: shortPath(ctx.cwd), color: "dim" },
         // The editor's top border carries these; the footer only does until it is installed.
@@ -275,6 +288,7 @@ export const createFooter = (
         },
         dispose: () => {
           unsubscribe();
+          background.dispose();
           git.dispose();
         },
       };

@@ -13,7 +13,7 @@ import { createState } from "./chrome/state.ts";
 
 export default function (pi: ExtensionAPI) {
   const state = createState();
-  const actions = createActions(state);
+  const actions = createActions(pi, state);
   const identity = createIdentity(pi, state);
   const footer = createFooter(pi, state, actions);
   const editor = createEditorChrome(state, {
