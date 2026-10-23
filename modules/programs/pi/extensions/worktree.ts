@@ -11,10 +11,12 @@
  * rebuilds the whole runtime there (tools, context files, footer, git). Only a
  * command context may switch sessions, so the `enter_worktree` tool queues
  * `/wt` for when the turn has settled, and the move then re-prompts the agent.
+ * A bare `/wt` asks the naming model for a branch name from the session, so a
+ * worktree costs no more than the move.
  */
 import { execFile, spawnSync } from "node:child_process";
 import { existsSync, statSync, writeFileSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { basename, isAbsolute } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import {
   type ExtensionAPI,
@@ -22,11 +24,28 @@ import {
   isToolCallEventType,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import {
+  firstRequest,
+  NAME_MAX_TOKENS,
+  NAME_MODEL,
+  NAME_TIMEOUT_MS,
+  namingModel,
+  oneLine,
+  requests,
+  stripRequest,
+} from "./lib/naming.ts";
+import { recordSideCall } from "./lib/usage-ledger.ts";
 
 const fallback = "Blocked: git worktree add outside ~/worktrees/<repo>/. Use `wt create <name>`.";
 const MOVED = "worktree-moved";
 // Tools that would still act on the old checkout between enter_worktree and the move.
 const MUTATING = new Set(["bash", "bg_run", "edit", "write"]);
+
+// Prompts say what the work is; the branch says the same thing in a name.
+const NAME_SYSTEM = `You name a git branch so its owner can tell one worktree from another.
+Reply with 2-4 lowercase words joined by hyphens, like "flaky-test-retry". No punctuation, no quotes, no "worktree", no branch prefixes.
+Use the user's own words, the directory name and concrete nouns. Name the work, not the fact that you agreed to something.`;
+const NAME_WORDS = 4;
 
 const wt = (args: string[], cwd: string) =>
   new Promise<string>((resolve, reject) =>
@@ -40,6 +59,35 @@ const names = (cwd: string) =>
     (out) => out.split("\n").filter(Boolean),
     () => [] as string[],
   );
+
+/** Branch names `wt create` would refuse, so an automatic name has to avoid them. */
+const branches = (cwd: string) =>
+  new Promise<string[]>((resolve) =>
+    execFile(
+      "git",
+      ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+      { cwd, encoding: "utf8" },
+      (error, stdout) => resolve(error ? [] : stdout.split("\n").filter(Boolean)),
+    ),
+  );
+
+/** Turns a model reply into a branch name: lowercase words, `NAME_WORDS` at most. */
+const slug = (raw: string) =>
+  oneLine(raw)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, NAME_WORDS)
+    .join("-");
+
+/** `base`, or `base-2`, `base-3`, … — whichever nothing claims yet. */
+const free = (base: string, claimed: Set<string>) => {
+  let candidate = base;
+  for (let n = 2; claimed.has(candidate); n++) candidate = `${base}-${n}`;
+  return candidate;
+};
 
 /** An existing worktree's path for a name or path; `create` makes a missing name. */
 async function resolveWorktree(target: string, cwd: string, create: boolean): Promise<string> {
@@ -69,6 +117,59 @@ export default function (pi: ExtensionAPI) {
   // Set just before the queued `/wt` runs, so the move knows to re-prompt the agent.
   let agentMove: string | undefined;
 
+  /** The naming model's branch name, or undefined when it is unavailable or answers nothing usable. */
+  const modelName = async (ctx: ExtensionCommandContext) => {
+    const model = namingModel(ctx, process.env.PI_WORKTREE_MODEL || NAME_MODEL);
+    if (!model) return undefined;
+    const lines = [
+      `directory: ${basename(ctx.cwd) || ctx.cwd}`,
+      "requests:",
+      ...requests(ctx, 5, 300).map((prompt) => `- ${prompt}`),
+    ];
+    try {
+      const response = await ctx.modelRegistry
+        .streamSimple(
+          model,
+          {
+            systemPrompt: NAME_SYSTEM,
+            messages: [
+              {
+                role: "user",
+                content: [{ type: "text", text: lines.join("\n") }],
+                timestamp: Date.now(),
+              },
+            ],
+          },
+          {
+            maxTokens: NAME_MAX_TOKENS,
+            temperature: 0,
+            timeoutMs: NAME_TIMEOUT_MS,
+            // The opencode gateway routes on `x-opencode-session`, which pi derives from this.
+            sessionId: ctx.sessionManager.getSessionId(),
+          },
+        )
+        .result();
+      recordSideCall(pi, "worktree name", response);
+      if (response.stopReason === "error" || response.stopReason === "aborted") return undefined;
+      const reply = response.content
+        .flatMap((block) => (block.type === "text" ? [block.text] : []))
+        .join(" ");
+      return slug(reply) || undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  /**
+   * A branch name for the work in this session. A bare `/wt` is worth the round
+   * trip; when the model is unreachable the first prompt names it instead.
+   */
+  const generateName = async (ctx: ExtensionCommandContext) =>
+    free(
+      (await modelName(ctx)) || slug(stripRequest(firstRequest(ctx) ?? "")) || "worktree",
+      new Set([...(await names(ctx.cwd)), ...(await branches(ctx.cwd))]),
+    );
+
   pi.on("tool_call", (event, ctx) => {
     if (pending && MUTATING.has(event.toolName))
       return {
@@ -96,7 +197,11 @@ export default function (pi: ExtensionAPI) {
     pending = undefined;
     if (!target) return;
     if (event.aborted) {
-      ctx.ui.notify(`Worktree move cancelled; ${target} was kept. Run /wt to move later.`, "info");
+      const name = basename(target);
+      ctx.ui.notify(
+        `Worktree move cancelled; ${name} was kept. Run /wt ${name} to move later.`,
+        "info",
+      );
       return;
     }
     agentMove = target;
@@ -105,7 +210,8 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("wt", {
-    description: "Move this session into a git worktree, creating it if needed: /wt <name>",
+    description:
+      "Move this session into a git worktree, creating it if needed: /wt <name>. Without a name it generates one from the session.",
     getArgumentCompletions: async (prefix) =>
       (await names(process.cwd()))
         .filter((name) => name.startsWith(prefix))
@@ -113,12 +219,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       const resume = agentMove !== undefined && agentMove === args.trim();
       agentMove = undefined;
-      let target = args.trim();
-      if (!target) {
-        const picked = await ctx.ui.select("Move session to worktree", await names(ctx.cwd));
-        if (!picked) return;
-        target = picked;
-      }
+      const target = args.trim() || (await generateName(ctx));
 
       await ctx.waitForIdle();
       let path: string;

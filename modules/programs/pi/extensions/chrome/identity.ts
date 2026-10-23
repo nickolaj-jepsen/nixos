@@ -16,7 +16,7 @@
  * for the border row. Until you run `/name`, the session name follows the latest
  * model or manual label, so `/resume` shows something useful.
  */
-import { basename, relative } from "node:path";
+import { basename } from "node:path";
 import {
   copyToClipboard,
   type ExtensionAPI,
@@ -24,6 +24,15 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { setAutoName } from "../lib/auto-name.ts";
+import {
+  catalogModel,
+  firstRequest,
+  NAME_MODEL,
+  oneLine,
+  requests,
+  stripRequest,
+  touchedFiles,
+} from "../lib/naming.ts";
 import { recordSideCall } from "../lib/usage-ledger.ts";
 import { trackUserWait, waitingOnUser } from "../lib/user-wait.ts";
 import { shortPath } from "./format.ts";
@@ -50,7 +59,6 @@ type Label = {
 
 const CUSTOM_TYPE = "identity_label";
 const SHORTCUT = "alt+r";
-const DEFAULT_MODEL = "opencode-go/deepseek-v4.1-flash";
 const TICK_MS = 60_000;
 // Worst case for a whole session; a relabel is a few hundred tokens, so this is
 // less a budget than a guard against a click loop.
@@ -63,20 +71,6 @@ const MIN_LABEL_ROOM = 14;
 const PROMPT_CHARS = 300;
 const RECENT_PROMPTS = 5;
 const TOUCHED_FILES = 6;
-const TRIVIAL =
-  /^(yes|yeah|yep|ok|okay|sure|agreed?|agree|continue|go on|go ahead|proceed|do it|sounds good|perfect|thanks|lgtm|carry on|next)\b/i;
-// The deterministic label comes from a whole sentence, so drop the asking part.
-const REQUEST_PREFIX = /^(?:(?:can|could|would|will) you (?:please )?|(?:please|help me|to) )/i;
-
-const stripRequest = (text: string) => {
-  let stripped = text.trim();
-  for (let i = 0; i < 3; i++) {
-    const next = stripped.replace(REQUEST_PREFIX, "");
-    if (next === stripped) break;
-    stripped = next;
-  }
-  return stripped;
-};
 
 const SYSTEM = `You name a coding session so its owner can pick the right terminal window from a list.
 Reply with 2-6 lowercase words. No punctuation, no quotes, no "session", no trailing period.
@@ -87,22 +81,6 @@ Use the user's own words and concrete nouns from the file names. Name the work, 
 const WORK_GLYPH = "⠿";
 const stateWord = (phase: Phase, waiting: boolean) =>
   waiting ? "waiting" : phase === "failed" ? "failed" : "";
-
-const userText = (content: string | Array<{ type: string; text?: string }>) =>
-  typeof content === "string"
-    ? content
-    : content
-        .flatMap((block) => (block.type === "text" && block.text ? [block.text] : []))
-        .join("\n");
-
-/** Short agreement replies are the bulk of a long session and say nothing new. */
-const isSubstantive = (text: string) => {
-  const trimmed = text.trim();
-  const words = trimmed.split(/\s+/).length;
-  return words >= 5 && !(words <= 8 && TRIVIAL.test(trimmed));
-};
-
-const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
 
 const cleanLabel = (raw: string) => {
   const first = oneLine(raw).replace(/^(label|session|task)\s*:\s*/i, "");
@@ -173,17 +151,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   const derive = (ctx: ExtensionContext): { text: string; source: Source } => {
     const leaf = ctx.sessionManager.getLeafId();
     if (derivedCache?.leaf === leaf) return derivedCache;
-    let prompt = "";
-    for (const entry of ctx.sessionManager.getBranch()) {
-      if (entry.type !== "message" || entry.message.role !== "user") continue;
-      const text = userText(
-        entry.message.content as string | Array<{ type: string; text?: string }>,
-      );
-      if (isSubstantive(text)) {
-        prompt = text;
-        break;
-      }
-    }
+    let prompt = firstRequest(ctx) ?? "";
     derivedCache = prompt
       ? { leaf, text: cleanLabel(stripRequest(prompt)), source: "prompt" }
       : { leaf, text: basename(ctx.cwd) || ctx.cwd, source: "cwd" };
@@ -341,12 +309,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   };
 
   const model = (ctx: ExtensionContext) => {
-    const configured = process.env.PI_IDENTITY_MODEL || DEFAULT_MODEL;
-    const slash = configured.indexOf("/");
-    const found =
-      slash > 0
-        ? ctx.modelRegistry.find(configured.slice(0, slash), configured.slice(slash + 1))
-        : undefined;
+    const configured = process.env.PI_IDENTITY_MODEL || NAME_MODEL;
+    const found = catalogModel(ctx, configured);
     if (found) return found;
     if (!warnedModel) {
       warnedModel = true;
@@ -359,39 +323,13 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   };
 
   const buildPrompt = (ctx: ExtensionContext, current: string) => {
-    const prompts: string[] = [];
-    const files: string[] = [];
-    for (const entry of ctx.sessionManager.getBranch()) {
-      if (entry.type !== "message") continue;
-      const message = entry.message;
-      if (message.role === "user") {
-        const text = userText(message.content as string | Array<{ type: string; text?: string }>);
-        if (!isSubstantive(text)) continue;
-        prompts.push(text);
-      } else if (message.role === "assistant") {
-        for (const block of message.content) {
-          if (block.type !== "toolCall" || (block.name !== "edit" && block.name !== "write"))
-            continue;
-          const args = block.arguments as { path?: unknown; file_path?: unknown };
-          const path = typeof args.path === "string" ? args.path : args.file_path;
-          if (typeof path === "string") files.push(path);
-        }
-      }
-    }
-
-    const first = prompts[0];
-    const recent = prompts.slice(-RECENT_PROMPTS);
+    const files = touchedFiles(ctx, cwd, TOUCHED_FILES);
     const lines = [`directory: ${shortPath(cwd)}`, `current label: ${current || "(none)"}`];
-    if (files.length > 0) {
-      lines.push(
-        `files touched: ${[...new Set(files.map((path) => relative(cwd, path) || path))]
-          .slice(-TOUCHED_FILES)
-          .join(", ")}`,
-      );
-    }
-    lines.push("requests:");
-    if (first && !recent.includes(first)) lines.push(`- ${oneLine(first).slice(0, PROMPT_CHARS)}`);
-    for (const prompt of recent) lines.push(`- ${oneLine(prompt).slice(0, PROMPT_CHARS)}`);
+    if (files.length > 0) lines.push(`files touched: ${files.join(", ")}`);
+    lines.push(
+      "requests:",
+      ...requests(ctx, RECENT_PROMPTS, PROMPT_CHARS).map((prompt) => `- ${prompt}`),
+    );
     return lines.join("\n");
   };
 
