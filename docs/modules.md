@@ -137,6 +137,10 @@ dev-setup` links `node_modules` into the folder for editor types and
   fails the build otherwise. Bumps go through `UPDATERS` (`pi-packages`),
   which rewrites the pins and regenerates the lock (read via `importNpmLock`,
   no hash to bump).
+- **Pi settings and MCP servers**: the pi wrapper merges the leaf's `settings`
+  and `mcp` into `~/.pi/agent/settings.json` and `mcp.json` at every launch, so a
+  key or server dropped from the leaf stays in the file until removed by hand;
+  only arrays are replaced.
 - **Claude Code mod**: a plugin folder with a hooks module in
   `modules/programs/claude-code/mods/<name>/`. The claude-code leaf builds it
   with `claude plugin validate` and `claude plugin test` against the

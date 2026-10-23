@@ -222,7 +222,8 @@ in {
         # Arrays replace wholesale, so `pi config` toggles of built-ins revert at launch.
         settings.extensions = [];
         # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
-        # ~/.config/mcp/mcp.json. Merged at launch, so /mcp toggles persist.
+        # ~/.config/mcp/mcp.json. Merged at launch: /mcp toggles persist, but a
+        # server dropped here stays in the file until removed by hand.
         mcp = let
           # pi rejects the null/empty fields home-manager's option fills in.
           shared = lib.mapAttrs (_: lib.filterAttrs (_: v: v != null && v != {} && v != [])) config.programs.mcp.servers;
