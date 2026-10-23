@@ -27,8 +27,6 @@ export default function (pi: ExtensionAPI) {
       if (state.ctx === ctx) editor.ensureInstalled(ctx);
     }, 0).unref?.();
   });
-  // Leave the terminal's pointer as it was.
-  pi.on("session_shutdown", () => state.setHover(undefined));
   // A second chance, in case an editor was installed late.
   pi.on("agent_start", (_event, ctx) => editor.ensureInstalled(ctx));
 }

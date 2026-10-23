@@ -19,14 +19,6 @@ export type ChromeState = {
   metersActive: boolean;
 };
 
-// Terminals that implement OSC 22 show a hand over a control; the rest ignore it.
-const POINTER_HAND = "\x1b]22;pointer\x1b\\";
-const POINTER_DEFAULT = "\x1b]22;\x1b\\";
-
-const setPointer = (hand: boolean) => {
-  if (process.stdout.isTTY) process.stdout.write(hand ? POINTER_HAND : POINTER_DEFAULT);
-};
-
 // A resting pointer sends nothing, so this also bounds a hover whose exit pi never saw.
 const HOVER_MS = 1500;
 
@@ -43,7 +35,6 @@ export const createState = (): ChromeState => {
       timer = group ? setTimeout(() => state.setHover(undefined), HOVER_MS) : undefined;
       timer?.unref?.();
       if (state.hover === group) return;
-      if ((state.hover === undefined) !== (group === undefined)) setPointer(group !== undefined);
       state.hover = group;
       state.tui?.requestRender();
     },
