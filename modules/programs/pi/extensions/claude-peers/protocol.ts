@@ -232,12 +232,18 @@ export async function listPeers(excludeSocket?: string): Promise<Peer[]> {
 }
 
 /**
- * Short id shown next to names to tell same-named sessions apart. Hashed because
- * pi's UUIDv7 session ids share their leading timestamp digits. Not Claude's own
- * `[ref]`, which it derives internally.
+ * Claude's own `[ref]` for a session, so an id read off either harness resolves
+ * in both: the first 6 hex digits of sha256(`session:<socket path>`). Claude
+ * lengthens a ref only while two collide, so match refs as a prefix of the full
+ * digest. Its tengu_session_stable_address flag would hash
+ * `session:sid:<sessionId>` instead.
  */
-export function shortId(peer: Pick<Peer, "sessionId">): string {
-  return createHash("sha256").update(peer.sessionId).digest("hex").slice(0, 6);
+export function shortId(peer: Pick<Peer, "messagingSocketPath">): string {
+  return refHash(peer).slice(0, 6);
+}
+
+function refHash(peer: Pick<Peer, "messagingSocketPath">): string {
+  return createHash("sha256").update(`session:${peer.messagingSocketPath}`).digest("hex");
 }
 
 /**
@@ -333,7 +339,7 @@ export function resolvePeer(peers: Peer[], to: string): Resolution {
     .replace(/^"(.*)"$/, "$1");
   const bracket = /^(.*?)\s*\[([0-9a-f]{4,})\]$/i.exec(query);
   const byId = (id: string) =>
-    peers.filter((p) => p.sessionId === id || shortId(p).startsWith(id.toLowerCase()));
+    peers.filter((p) => p.sessionId === id || refHash(p).startsWith(id.toLowerCase()));
   const tries: Array<() => Peer[]> = [
     () =>
       peers.filter(

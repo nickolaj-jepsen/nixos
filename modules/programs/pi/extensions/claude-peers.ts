@@ -102,6 +102,7 @@ export default function (pi: ExtensionAPI) {
 
   const isOwner = () => owner[OWNER] === runtimeId && server !== undefined;
   const ownName = () => entry?.name ?? displayName();
+  const ownLabel = () => `${ownName()} [${shortId({ messagingSocketPath: socketPath })}]`;
 
   function displayName(): string {
     const named = pi.getSessionName()?.trim();
@@ -455,7 +456,7 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({}),
     async execute() {
       const peers = await listPeers(socketPath || undefined);
-      const self = isOwner() && entry ? `This session: ${ownName()} [${shortId(entry)}]\n` : "";
+      const self = isOwner() && entry ? `This session: ${ownLabel()}\n` : "";
       if (!peers.length)
         return {
           content: [{ type: "text", text: `${self}No other sessions are reachable.` }],
@@ -578,10 +579,7 @@ export default function (pi: ExtensionAPI) {
     description: "Show the Claude Code and pi sessions this session can message",
     handler: async (_args, c) => {
       const peers = await listPeers(socketPath || undefined);
-      const self =
-        isOwner() && entry
-          ? `This session: ${ownName()} [${shortId(entry)}]`
-          : "This session has no inbox";
+      const self = isOwner() && entry ? `This session: ${ownLabel()}` : "This session has no inbox";
       const rows = peers.map(
         (p) =>
           `  [${activityLabel(p)}] ${p.name} [${shortId(p)}] · ${p.entrypoint ?? "?"} · ${p.cwd}`,
