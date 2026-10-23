@@ -10,6 +10,8 @@ export type UsageWindow = {
   pace: "under" | "over" | "exhausted";
   resetsAt: string;
   runsOutAt: string | null;
+  /** A budget that regenerates instead of resetting: `resetsAt` is the next top-up. */
+  meter?: boolean;
 };
 
 export type UsageProvider = {

@@ -390,7 +390,7 @@ PluginComponent {
                                             color: Theme.surfaceText
                                         }
 
-                                        // Fill = used, tick = elapsed share; only usage past the tick takes the pace color.
+                                        // Fill = used, tinted once it is trouble; tick = elapsed share of a window (a meter has none).
                                         Item {
                                             width: parent.width - root.columns.label - root.columns.used - root.columns.projection - root.columns.reset - parent.spacing * 4
                                             height: 8
@@ -398,6 +398,10 @@ PluginComponent {
 
                                             readonly property real usedX: width * Math.min(1, windowItem.modelData.usedPct / 100)
                                             readonly property real elapsedX: width * windowItem.modelData.elapsedPct / 100
+                                            // A window tints only past the tick; a meter, having no tick, tints whole.
+                                            readonly property color fill: windowItem.modelData.pace === "exhausted" ? Theme.error
+                                                : windowItem.modelData.meter && windowItem.modelData.pace === "over" ? Theme.warning
+                                                : Theme.withAlpha(Theme.surfaceText, 0.75)
 
                                             Rectangle {
                                                 anchors.fill: parent
@@ -409,11 +413,12 @@ PluginComponent {
                                                 width: parent.usedX
                                                 height: parent.height
                                                 radius: height / 2
-                                                color: windowItem.modelData.pace === "exhausted" ? Theme.error : Theme.withAlpha(Theme.surfaceText, 0.75)
+                                                color: parent.fill
                                             }
 
+                                            // Only a window has a share of it elapsed; a meter has no tick.
                                             Rectangle {
-                                                visible: windowItem.modelData.pace === "over" && parent.usedX > parent.elapsedX
+                                                visible: !windowItem.modelData.meter && windowItem.modelData.pace === "over" && parent.usedX > parent.elapsedX
                                                 x: parent.elapsedX
                                                 width: parent.usedX - parent.elapsedX
                                                 height: parent.height
@@ -422,6 +427,7 @@ PluginComponent {
                                             }
 
                                             Rectangle {
+                                                visible: !windowItem.modelData.meter
                                                 x: parent.elapsedX - width / 2
                                                 y: -2
                                                 width: 2

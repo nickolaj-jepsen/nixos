@@ -33,7 +33,22 @@ export const usageAlarm = (
   }
   if (exhausted) {
     const when = formatWhen(new Date(exhausted.resetsAt), now);
-    return { id: "quota", text: `${exhausted.label} out until ${when}`, color: "error" };
+    return {
+      id: "quota",
+      text: exhausted.meter
+        ? `${exhausted.label} out, next top-up ${when}`
+        : `${exhausted.label} out until ${when}`,
+      color: "error",
+    };
+  }
+  // A meter never runs out on a pace, only on what is left of it.
+  const meter = provider.windows.find((w) => w.meter && w.pace !== "under");
+  if (meter) {
+    return {
+      id: "quota",
+      text: `${meter.label} ${Math.round(100 - meter.usedPct)}% left`,
+      color: "warning",
+    };
   }
   const emptying = provider.windows
     .filter(

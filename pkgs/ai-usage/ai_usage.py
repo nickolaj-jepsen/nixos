@@ -23,16 +23,20 @@ from pathlib import Path
 
 CACHE_TTL = timedelta(minutes=2)
 # Bump when the cached entry shape changes, so an upgrade discards old entries.
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 TIMEOUT = 10
 # Projections from the first few % of a window, or from trivial usage, are noise.
 MIN_ELAPSED_PCT = 5
 MIN_USED_PCT = 10
 CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
 # Synthetic refills its weekly credit meter in 2% steps, one every 202 minutes,
-# so a spent meter is full again one week later.
+# so a spent meter is full again one week later. A meter has no window to be on
+# pace with, so it is reported as one (`meter`) and warned on by what is left.
 SYNTHETIC_TICK = timedelta(minutes=202)
 SYNTHETIC_STEP_PCT = 2.0
+# Past this share a meter is nearly spent: at 2% per 202 minutes it is under a
+# day of regeneration from empty, which is the last point worth warning at.
+METER_WARN_PCT = 80.0
 
 
 class FetchError(Exception):
@@ -65,8 +69,12 @@ def keeps(p, key):
     return not wanted or key in wanted
 
 
-def window(label, used_pct, resets_at, length, ring=None, detail=None, starts=None):
-    """A quota window; `length` is a timedelta, or "month" for a calendar month."""
+def window(label, used_pct, resets_at, length, ring=None, detail=None, starts=None, meter=False):
+    """A quota window; `length` is a timedelta, or "month" for a calendar month.
+
+    `meter` marks a budget that regenerates instead of resetting: `resets_at` is
+    then the next top-up, not a turnover, and nothing is on pace.
+    """
     resets = parse_time(resets_at) if isinstance(resets_at, str) else resets_at
     if starts is None:
         starts = month_before(resets) if length == "month" else resets - length
@@ -77,6 +85,7 @@ def window(label, used_pct, resets_at, length, ring=None, detail=None, starts=No
         "resetsAt": resets.isoformat(),
         "ring": ring,
         "detail": detail,
+        "meter": meter,
     }
 
 
@@ -217,14 +226,23 @@ def fetch_anthropic_credits(p):
     }
 
 
-def fetch_synthetic(p):
-    """The weekly credit meter on /v2/quotas, plus the rolling request cap beside it.
+def number(value):
+    """A /v2/quotas amount, some of which it writes as dollars ("$2.10")."""
+    try:
+        return float(str(value).lstrip("$").strip())
+    except (TypeError, ValueError):
+        return None
 
-    Synthetic regenerates credits instead of resetting them: `planWeeklyLimit`
-    reports what is left and when the next step lands, and a step is
-    `nextRegenPercent` (2%) of the weekly limit every 202 minutes. So there is no
-    reset instant and `resetsAt` is when the meter would be full again at the
-    current spend.
+
+def fetch_synthetic(p):
+    """The weekly credit meter on /v2/quotas, plus the rolling burst cap beside it.
+
+    Synthetic regenerates credits instead of resetting them: the plan reports
+    what is left and when the next slice lands, where a slice is a percentage
+    (`nextRegenPercent`) or a dollar amount (`nextRegenCredits`) of the weekly
+    limit. So the meter is reported as a `meter`, with `resetsAt` at the next
+    top-up. `subscription` is left out: it is a legacy request counter that only
+    some accounts still populate, and it is not what blocks a request.
     """
     key = Path(p["keyFile"]).read_text().strip()
     data = http_json(
@@ -233,27 +251,46 @@ def fetch_synthetic(p):
     )
     t = now()
     windows = []
-    sub = data.get("subscription") or {}
-    if keeps(p, "rolling") and sub.get("limit"):
-        used = float(sub.get("requests") or 0) / float(sub["limit"]) * 100
-        windows.append(window("5h", used, sub.get("renewsAt") or t, timedelta(hours=5), "outer"))
-    weekly = data.get("planWeeklyLimit") or {}
-    if keeps(p, "weekly") and weekly.get("percentRemaining") is not None:
-        used = 100 - float(weekly["percentRemaining"])
-        step = float(weekly.get("nextRegenPercent") or SYNTHETIC_STEP_PCT)
-        detail = None
-        if weekly.get("nextRegenAt"):
-            left = human_delta((parse_time(weekly["nextRegenAt"]) - t).total_seconds())
-            detail = f"next +{step:g}% in {left}"
+    burst = data.get("rollingFiveHourLimit") or {}
+    if keeps(p, "rolling") and number(burst.get("max")):
+        limit = number(burst["max"])
+        used = (limit - (number(burst.get("remaining")) or 0)) / limit * 100
+        windows.append(
+            window(
+                "5h",
+                # The endpoint's own verdict, which outranks the arithmetic.
+                100.0 if burst.get("limited") else used,
+                burst.get("nextTickAt") or t,
+                timedelta(hours=5),
+                "outer",
+            )
+        )
+    weekly = data.get("weeklyTokenLimit") or data.get("planWeeklyLimit") or {}
+    allowance = number(weekly.get("maxCredits"))
+    left = number(weekly.get("remainingCredits"))
+    remaining = number(weekly.get("percentRemaining"))
+    if remaining is None and allowance and left is not None:
+        remaining = left / allowance * 100
+    if keeps(p, "weekly") and remaining is not None:
+        used = 100 - remaining
+        step = number(weekly.get("nextRegenPercent"))
+        if step is None and allowance and number(weekly.get("nextRegenCredits")) is not None:
+            step = number(weekly["nextRegenCredits"]) / allowance * 100
+        detail = (
+            f"{money(left, 'USD')} of {money(allowance, 'USD')} left"
+            if None not in (left, allowance)
+            else None
+        )
         windows.append(
             window(
                 "7d",
                 used,
-                t + SYNTHETIC_TICK * (used / step),
+                # Without a tick time, one step's worth of spend is a tick's wait.
+                weekly.get("nextRegenAt") or t + SYNTHETIC_TICK * (used / (step or SYNTHETIC_STEP_PCT)),
                 timedelta(days=7),
                 "inner" if windows else "outer",
                 detail,
-                t,
+                meter=True,
             )
         )
     if not windows:
@@ -345,8 +382,13 @@ def pace(w, t):
     """Add the elapsed share, the linear projection to reset, and the pace status.
 
     Over pace means the projection passes 100%; `runsOutAt` is then when the
-    current rate hits 100%.
+    current rate hits 100%. A meter has no window to project across, so it only
+    warns: over once spent past the warn threshold, out at 100%.
     """
+    if w.get("meter"):
+        used = w["usedPct"]
+        status = "exhausted" if used >= 100 else "over" if used >= METER_WARN_PCT else "under"
+        return {**w, "elapsedPct": 0.0, "projectedPct": None, "runsOutAt": None, "pace": status}
     start, end = parse_time(w["startsAt"]), parse_time(w["resetsAt"])
     total = (end - start).total_seconds()
     since = max(0.0, (t - start).total_seconds())
@@ -427,10 +469,11 @@ def render(result, color):
             projection = f"→{w['projectedPct']}%" if w["projectedPct"] is not None else ""
             if w["runsOutAt"]:
                 projection += " out " + parse_time(w["runsOutAt"]).astimezone().strftime("%a %H:%M")
+            moves = "top-up" if w["meter"] else "resets"
             lines.append(
                 f"  {w['label']:<6} {bar} {w['usedPct']:5.1f}% "
                 + c(pace_color[w["pace"]] if w["pace"] != "under" else "2", f"{projection:<20}")
-                + c("2", f"{w.get('detail') or '':<12} resets {when} (in {left})")
+                + c("2", f"{w.get('detail') or '':<12} {moves} {when} (in {left})")
             )
         if p["overage"]:
             o = p["overage"]
