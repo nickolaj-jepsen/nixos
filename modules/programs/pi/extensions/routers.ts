@@ -17,15 +17,15 @@
  *
  * Three bends on top of the ladder order, all visible in `/vm`:
  * - Background requests (`reason: "direct"`, e.g. compaction summaries) hold
- *   the credit stage back to last, so it serves background work only when both
- *   subscriptions are out.
+ *   the credit stage back to last, so it serves background work only when every
+ *   other pool is out.
  * - While Go's monthly window is under pace near its reset (kinds.ts: bankable
  *   allowance about to strand), its stage swaps ahead of Synthetic's.
  * - The architect's planning entry is rated by Jev (typesafe/jev-latest):
  *   standard prompts plan on flash, complex prompts on the planner, and no
  *   verdict fails open to the planner — the gate is an optimisation, not a
- *   policy. GLM-5.3 sits past Opus in the planner ladder: it is reached only
- *   when a genuinely hard problem outlives the credit, the only place its
+ *   policy. Kimi K3.1 Pro sits past Opus in the planner ladder: it is reached
+ *   only when a genuinely hard problem outlives the credit, the only place its
  *   edge over DS 4.1 Flash is worth its price.
  * - The plan→build boundary re-rates the finished plan on the same question
  *   (shadow): the verdict is marked in the chat and kept in the /vm trace
@@ -56,18 +56,29 @@ const CREDIT_RESERVE_USD = 20;
 const PROVIDER_NAME: Record<string, string> = {
   "opencode-go": "OpenCode Go",
   synthetic: "Synthetic",
+  "kimi-coding": "Kimi Code",
   anthropic: "the Anthropic credit",
 };
 // The providers whose own subscription limits pi lists as non-retryable.
 const LIMIT_ERROR: Record<string, RegExp> = {
   "opencode-go": /GoUsageLimitError|Monthly usage limit reached|available balance/i,
   synthetic: /quota|credit|rate.?limit|429/i,
+  "kimi-coding": /reached your (5-hour|weekly|monthly) usage limit|credit balance is insufficient/i,
 };
 // How long a limit error blocks a provider when ai-usage can't say when it comes back.
 const GO_BLOCK_FALLBACK_MS = 30 * 60_000;
+// Kimi Code's window is a rolling five hours with no reader in ai-usage, so its
+// own limit errors are the only signal: long enough that a burst clears, short
+// enough that a spent plan comes back within the session.
+const KIMI_BLOCK_FALLBACK_MS = 10 * 60_000;
 // Synthetic regenerates 2% of the weekly credit every 202 minutes, so a spent
-// meter is usable again at the next tick, which ai-usage does not report.
+// meter is usable again at the tick its window reports, or one tick from now
+// when that tick is already behind the snapshot.
 const SYNTHETIC_REFILL_MS = 202 * 60_000;
+// The share of the weekly meter the router leaves unspent: a turn that spends it
+// to the last drop ends in a hard 429 that no pool can cover, while a reserve
+// regenerates at 2% per 202 minutes and keeps the pool usable next session.
+const SYNTHETIC_RESERVE_PCT = 10;
 // A limit error ai-usage does not corroborate: let the turn finish, then retry.
 const UNCORROBORATED_BLOCK_MS = 60_000;
 
@@ -119,9 +130,6 @@ export default function (pi: ExtensionAPI) {
   /** Per session, the last route decisions (`/vm` shows the tail). */
   const traces = new Map<string, TraceEntry[]>();
 
-  /** Whether ai-usage has the provider out of quota right now. */
-  const spent = (provider: string) => exhaustedWindow(usage.provider(provider)) !== undefined;
-
   /** The credit is the reserve: below it no kind spends Anthropic at all. */
   const creditAboveReserve = () => {
     const credit = usage.provider("anthropic")?.credit;
@@ -136,7 +144,15 @@ export default function (pi: ExtensionAPI) {
     const until = blockedUntil[stage.provider] ?? 0;
     if (Date.now() < until) return `blocked by its own limit error until ${fmtWhen(until)}`;
     const window = exhaustedWindow(usage.provider(stage.provider));
-    if (window) return `out of requests until ${fmtWhen(window.resetsAt)}`;
+    if (window) {
+      return window.meter
+        ? `out of credits until the next top-up ${fmtWhen(window.resetsAt)}`
+        : `out of requests until ${fmtWhen(window.resetsAt)}`;
+    }
+    const meter = usage.provider(stage.provider)?.windows.find((w) => w.meter);
+    if (meter && 100 - meter.usedPct <= SYNTHETIC_RESERVE_PCT) {
+      return `${Math.round(100 - meter.usedPct)}% credits left, under the ${SYNTHETIC_RESERVE_PCT}% reserve`;
+    }
     return undefined;
   };
 
@@ -552,7 +568,10 @@ export default function (pi: ExtensionAPI) {
 
   const describeWindows = (provider: UsageProvider): string =>
     provider.windows
-      .map((w) => `${w.label} ${Math.round(w.usedPct)}% used, resets ${fmtWhen(w.resetsAt)}`)
+      .map(
+        (w) =>
+          `${w.label} ${Math.round(w.usedPct)}% used, ${w.meter ? "next top-up" : "resets"} ${fmtWhen(w.resetsAt)}`,
+      )
       .join("; ");
 
   const routedHere = (ctx: ExtensionContext) => ctx.model?.provider === PROVIDER;
@@ -576,10 +595,17 @@ export default function (pi: ExtensionAPI) {
       blockedUntil[provider] = window
         ? Date.parse(window.resetsAt)
         : Date.now() + GO_BLOCK_FALLBACK_MS;
+    } else if (provider === "kimi-coding") {
+      blockedUntil[provider] = Date.now() + KIMI_BLOCK_FALLBACK_MS;
     } else {
-      // The error can land before ai-usage's next refresh; the meter's tick is the real wait.
+      // The error can land before ai-usage's next refresh; the meter's reported
+      // tick is the real wait.
+      const window = exhaustedWindow(usage.provider(provider));
+      const tick = window ? Date.parse(window.resetsAt) : 0;
       blockedUntil[provider] =
-        Date.now() + (spent(provider) ? SYNTHETIC_REFILL_MS : UNCORROBORATED_BLOCK_MS);
+        tick > Date.now()
+          ? tick
+          : Date.now() + (window ? SYNTHETIC_REFILL_MS : UNCORROBORATED_BLOCK_MS);
     }
     // Continue the turn only if that block left another pool to continue on.
     const elsewhere = Object.values(KINDS).some((ladder) =>

@@ -33,31 +33,6 @@
     };
   }
   {
-    id = "z-ai/glm-5.3";
-    name = "GLM 5.3";
-    reasoning = true;
-    input = ["text"];
-    contextWindow = 1048576;
-    maxTokens = 64000;
-    cost = {
-      input = 1.75;
-      output = 4.5;
-      cacheRead = 0.44;
-      cacheWrite = 0;
-    };
-    promptCache.short = 300;
-    # Always reasons; 5.3 dropped `thinking.type: "disabled"`.
-    thinkingLevelMap = {
-      off = null;
-      minimal = null;
-      low = "low";
-      medium = null;
-      high = "high";
-      xhigh = null;
-      max = "max";
-    };
-  }
-  {
     id = "moonshotai/kimi-k3";
     name = "Kimi K3";
     reasoning = true;

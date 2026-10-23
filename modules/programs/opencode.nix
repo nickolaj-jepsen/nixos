@@ -87,21 +87,6 @@
           # K3 always reasons; only low/high/max are real levels.
           variants = efforts ["low" "high" "max"];
         };
-        "z-ai/glm-5.3" = {
-          name = "GLM 5.3 (TensorX)";
-          capabilities.input = ["text"];
-          limit = {
-            context = 1000000;
-            output = 128000;
-          };
-          cost = {
-            input = 1.75;
-            output = 4.5;
-            cache.read = 0.44;
-          };
-          # Always reasons, max being the default.
-          variants = efforts ["low" "high" "max"];
-        };
         "z-ai/glm-5.3-flash" = {
           name = "GLM 5.3 Flash (TensorX)";
           capabilities.input = ["text" "image"];
@@ -142,6 +127,25 @@
             output = 2;
             cache.read = 0.1;
           };
+        };
+        "deepseek/deepseek-v4.1-flash" = {
+          name = "DeepSeek V4.1 Flash (TensorX)";
+          capabilities.input = ["text" "image"];
+          limit = {
+            context = 1048576;
+            output = 64000;
+          };
+          cost = {
+            input = 0.5;
+            output = 1.5;
+            cache.read = 0.13;
+          };
+          # DeepSeek rejects replayed turns missing reasoning_content.
+          compatibility = {
+            reasoningField = "reasoning_content";
+            requireReasoning = true;
+          };
+          variants = efforts ["high" "max"];
         };
         # TensorX only serves the dated snapshot, not the bare alias.
         "deepseek/deepseek-v4-flash-0731" = {
@@ -258,10 +262,12 @@
           # the check live in `wt guard` (modules/scripts/wt.bash), shared with the
           # Claude Code and pi adapters. A store path, so no plugin install step.
           plugins = ["file://${./opencode/worktree-guard.js}"];
+          # Not Kimi K3.1 Pro: on Go's metered rate it would eat the monthly
+          # allowance in minutes, and only pi's router can fall back when it does.
           model =
             if llm.enable
             then "local/qwen3.8-27b"
-            else "tensorx/z-ai/glm-5.3";
+            else "tensorx/deepseek/deepseek-v4.1-flash";
           # Remote, so titling a session never evicts the local model from llama-swap.
           agents.title.model = "tensorx/z-ai/glm-5.3-flash";
           providers =

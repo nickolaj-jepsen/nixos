@@ -55,6 +55,12 @@ const GO: readonly Label[] = ["zdr"];
 const PROVIDERS: Record<string, readonly Label[]> = {
   synthetic: SYNTHETIC,
   "opencode-go": GO,
+  /**
+   * https://www.kimi.com/en/privacy — the consumer membership keeps prompts with
+   * the account and the terms state no zero-retention option outside the
+   * enterprise API, so `zdr` is not claimed.
+   */
+  "kimi-coding": ["retains"],
   /** https://tensorx.ai/trust-security/ — memory-only inference on EU GPUs in Dublin and Helsinki. */
   tensorx: ["zdr", "eu"],
   /** https://privacy.anthropic.com/en/articles/10023548-how-long-do-you-store-my-data — 30 days. */

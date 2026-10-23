@@ -3,7 +3,7 @@ name: reviewer
 description: Reviews a diff for defects, read-only, and reports them with file:line. Never edits and never fixes.
 color: red
 tools: bash, read, grep, find, ls
-model: opencode-go/glm-5.3
+model: kimi-coding/k3.1-pro
 thinking: high
 prompt_mode: replace
 exclude_extensions: builtin:mcp, you-should-know

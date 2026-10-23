@@ -47,18 +47,6 @@
       output = 7.5;
     };
   };
-  "hf:zai-org/GLM-5.3" = {
-    name = "GLM-5.3";
-    ctx = 524288;
-    maxOut = 65536;
-    input = ["text"];
-    efforts = ["low" "high" "max"];
-    cost = {
-      input = 0.40;
-      cached = 0.07;
-      output = 2.2;
-    };
-  };
   "hf:zai-org/GLM-5.3-Flash" = {
     name = "GLM-5.3-Flash";
     ctx = 524288;

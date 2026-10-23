@@ -191,6 +191,9 @@
         voice.enabled = true;
         useAutoModeDuringPlan = true;
         skipAutoPermissionPrompt = true;
+        # Transcripts are training/eval data for the pi auto-gate judge; the
+        # default prunes them after 30 days.
+        cleanupPeriodDays = 3650;
         # Drives niri's urgency hint; desktop toasts come from the Notification hook.
         preferredNotifChannel = "terminal_bell";
         # /effort saves per model under modelSettings, but settings.json is a

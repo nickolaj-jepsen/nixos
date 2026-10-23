@@ -140,32 +140,6 @@ true
 
 
 
-## fireproof\.claude-code\.workMcpServers
-
-
-
-MCP servers only the claude-work wrapper loads\. Work-owned services
-stay out of programs\.mcp\.servers, which every agent (pi, opencode,
-copilot, vscode and the personal claude) reads\.
-
-
-
-*Type:*
-attribute set of anything
-
-
-
-*Default:*
-
-```nix
-{ }
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.desktop\.enable
 
 
@@ -2763,6 +2737,8 @@ true
 
 
 ## fireproof\.wsl\.enable
+
+
 
 Whether to enable WSL configuration\.
 

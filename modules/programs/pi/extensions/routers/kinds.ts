@@ -5,22 +5,27 @@
  * subscription pool, tried in order; a stage holds the models that can do the
  * kind's job on that pool, preferred first.
  *
- * Both subscriptions meter one shared pool per plan, so a model is not a rung of
- * its own: exhausting GLM-5.3 exhausts Kimi K3 with it. What varies *inside* a
- * stage is only which model fits the turn — GLM-5.3 is text-only, so an
- * image-bearing turn takes the next variant that can read it. What varies
- * *between* stages is price: each pool is spent where its rates sting least.
+ * Go and Synthetic each meter one shared pool per plan, so a model is not a rung
+ * of its own: exhausting Kimi K3.1 Pro on Go exhausts Kimi K3 with it. The Kimi
+ * Code plan meters one pool across the Kimi apps too, so strong turns there
+ * spend the same allowance the chat clients draw from. What varies *inside* a
+ * stage is only which model fits the turn — a text-only variant is skipped
+ * while the conversation carries an image. What varies *between* stages is
+ * price: each pool is spent where its rates sting least.
  *
  * - `flash` runs on Go first. Go's DeepSeek rate is 1.4x Synthetic's, cheap
  *   enough that spending the monthly Go pool on bulk traffic costs little, and
  *   it keeps Synthetic's pool for the models only its discount makes affordable
- *   (Go's GLM-5.3 rate is 3.6x Synthetic's, Kimi K3's is 1.4x).
- * - `strong` therefore runs on Synthetic first, Go second.
+ *   (Kimi K3's Go rate is double Synthetic's).
+ * - `strong` starts on the Kimi Code plan: that quota is prepaid and costs
+ *   nothing at the margin until it resets, so nothing priced per token runs
+ *   ahead of it. Synthetic follows, and Go is last, for when the plan's window
+ *   is out.
  *
  * The order above is each pool's steady-state ranking; ../routers.ts bends it two
  * ways at pick time. Background requests (compaction summaries) try the credit
- * stage last, so it is spent on background work only when both subscriptions
- * are out. And Go's monthly allowance is bankable — whatever it holds at its
+ * stage last, so it is spent on background work only when every other pool
+ * is out. And Go's monthly allowance is bankable — whatever it holds at its
  * reset strands, while Synthetic's weekly meter refills continuously and can
  * never be banked — so while Go's window is under pace near its reset, its
  * stage swaps ahead of Synthetic's. Both pools carry the same models, so only
@@ -32,7 +37,7 @@
  */
 import type { ThinkingLevel } from "@earendil-works/pi-ai";
 
-export type Provider = "opencode-go" | "synthetic" | "anthropic";
+export type Provider = "opencode-go" | "synthetic" | "anthropic" | "kimi-coding";
 
 export type Variant = {
   id: string;
@@ -51,7 +56,8 @@ export type Stage = {
 export type Ladder = readonly Stage[];
 
 const deepseek: Variant = { id: "deepseek-v4.1-flash" };
-const glm: Variant = { id: "glm-5.3", vision: false };
+const kimiPlan: Variant = { id: "k3.1-pro" };
+const kimiPro: Variant = { id: "kimi-k3.1-pro" };
 const kimi: Variant = { id: "kimi-k3" };
 
 /**
@@ -77,14 +83,19 @@ export const FLASH: Ladder = [
  */
 export const STRONG: Ladder = [
   {
+    provider: "kimi-coding",
+    label: "Kimi Code",
+    variants: [kimiPlan],
+  },
+  {
     provider: "synthetic",
     label: "Synthetic",
-    variants: [{ id: "hf:zai-org/GLM-5.3", vision: false }, { id: "hf:moonshotai/Kimi-K3" }],
+    variants: [kimi],
   },
   {
     provider: "opencode-go",
     label: "OpenCode Go",
-    variants: [glm, kimi],
+    variants: [kimiPro],
   },
 ];
 

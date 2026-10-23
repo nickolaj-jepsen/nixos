@@ -197,8 +197,9 @@ in {
               "anthropic/claude-opus-5-5"
               "anthropic/claude-sonnet-5-5"
               "anthropic/claude-haiku-5-5"
+              "kimi-coding/k3.1-pro"
               "opencode-go/deepseek-v4.1-flash"
-              "opencode-go/glm-5.3"
+              "opencode-go/kimi-k3.1-pro"
               "opencode-go/qwen3.8-flash"
               "opencode-go/minimax-m3"
               "opencode-go/kimi-k3"
@@ -288,7 +289,53 @@ in {
           {
             # No `opencode` (Zen) entry on purpose: its free models are free only
             # inside opencode itself, and the Go subscription covers the paid ones.
-            opencode-go.apiKey = "!cat ${config.age.secrets.opencode-go-api-key.path}";
+            # pi's bundled Go catalog predates K3.1 Pro; declare it until a refresh carries it.
+            opencode-go = {
+              apiKey = "!cat ${config.age.secrets.opencode-go-api-key.path}";
+              models = [
+                {
+                  id = "kimi-k3.1-pro";
+                  name = "Kimi K3.1 Pro";
+                  reasoning = true;
+                  input = ["text" "image"];
+                  contextWindow = 1048576;
+                  maxTokens = 131072;
+                  cost = {
+                    input = 2;
+                    output = 10;
+                    cacheRead = 0.2;
+                    cacheWrite = 0;
+                  };
+                }
+              ];
+            };
+            # The plan serves k3.1-pro, which pi's bundled catalog predates too;
+            # its `kimi-for-coding` id is K2.8 Preview, not this model.
+            kimi-coding.models = [
+              {
+                id = "k3.1-pro";
+                name = "Kimi K3.1 Pro";
+                reasoning = true;
+                input = ["text" "image"];
+                contextWindow = 1048576;
+                maxTokens = 131072;
+                cost = {
+                  input = 2;
+                  output = 10;
+                  cacheRead = 0.2;
+                  cacheWrite = 0;
+                };
+                thinkingLevelMap = {
+                  off = null;
+                  minimal = null;
+                  low = "low";
+                  medium = null;
+                  high = "high";
+                  xhigh = null;
+                  max = "max";
+                };
+              }
+            ];
             # API credits, not the Max subscription: run /login anthropic and
             # that stored OAuth credential would take precedence over this.
             anthropic.apiKey = "!cat ${config.age.secrets.anthropic-api-key.path}";
