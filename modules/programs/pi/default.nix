@@ -86,8 +86,9 @@ in {
     localModels = (import ../_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
     localMaxTokens = 8192;
     # Pi-only, not in the shared programs.mcp registry: Claude Code has its own
-    # browser tools. The server launches its own Chromium on a dedicated profile
-    # (~/.cache/chrome-devtools-mcp), never attaching to a running browser.
+    # browser tools. The server launches its own Chromium on a throwaway profile,
+    # never attaching to a running browser. Throwaway because every subagent
+    # starts its own server, and a shared profile lets only one browser run.
     # extensions/browser-gate.ts asks before its first call each session.
     hasBrowser = config.programs.chromium.enable || (pkgs.stdenv.isDarwin && config.fireproof.desktop.enable);
     chrome-devtools = {
@@ -96,6 +97,7 @@ in {
         [
           "--no-usage-statistics"
           "--no-performance-crux"
+          "--isolated"
           # Image tokens scale with pixels; full-size PNGs swamp small context windows.
           "--screenshotFormat=jpeg"
           "--screenshotMaxWidth=1280"
