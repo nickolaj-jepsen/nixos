@@ -79,6 +79,24 @@ in {
       inherit lib;
       colors = config.fireproof.theme.colors;
     }));
+    # Pi-only, not in the shared programs.mcp registry: Claude Code has its own
+    # browser tools. The server launches its own Chromium on a dedicated profile
+    # (~/.cache/chrome-devtools-mcp), never attaching to a running browser.
+    # extensions/browser-gate.ts asks before its first call each session.
+    hasBrowser = config.programs.chromium.enable || (pkgs.stdenv.isDarwin && config.fireproof.desktop.enable);
+    chrome-devtools = {
+      command = lib.getExe pkgs.chrome-devtools-mcp;
+      args =
+        [
+          "--no-usage-statistics"
+          "--no-performance-crux"
+          # Image tokens scale with pixels; full-size PNGs swamp small context windows.
+          "--screenshotFormat=jpeg"
+          "--screenshotMaxWidth=1280"
+        ]
+        # Puppeteer can't find a browser on NixOS unaided; darwin's Homebrew Chrome it finds.
+        ++ lib.optional config.programs.chromium.enable "--executablePath=${lib.getExe config.programs.chromium.package}";
+    };
     # Load order and why each is here; the pins live in
     # pkgs/pi-packages/package.json, and the assertion below keeps the two
     # rosters equal.
@@ -94,6 +112,8 @@ in {
       "@ayulab/pi-rewind"
       # agents
       "@tintinweb/pi-subagents"
+      # long builds/tests without blocking the turn
+      "pi-background-tasks"
     ];
   in {
     imports = [inputs.pi.homeModules.default];
@@ -109,6 +129,7 @@ in {
 
           - `SubagentWorkflow`, `get_subagent_result`, and `steer_subagent` are hidden from the tool list; call them from codemode as `tools.<name>` and read `await describeTool("<name>")` first for their parameters.
           - For a deterministic multi-agent script (Claude Code `Workflow` style), call `tools.SubagentWorkflow` from codemode.
+          - `bg_status`, `bg_logs` and `bg_kill` are hidden too; call them from codemode, or `read` the output path `bg_run` returned.
         '';
         # The fireproof.agents.skills registry, linked into one dir.
         skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
@@ -124,6 +145,16 @@ in {
         environment.PI_SPELLFIX_PERSONAL.value = fpLib.hunspellPersonalDictionary config;
         environment.PI_SPELLFIX_LOG.value = fpLib.spellfixLog config;
         environment.PI_SPELLFIX_MODEL.value = "anthropic/claude-haiku-5-5";
+        # The fireproof.agents.lspServers registry, read by extensions/lsp.ts.
+        environment.PI_LSP_SERVERS = lib.mkIf (config.fireproof.agents.lspServers != {}) {
+          value = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
+        };
+        # Plain background shell only: the default set adds seven more tools, and its
+        # `attribution` feature rewrites Anthropic requests and rejects API-key credentials.
+        environment.PI_BG_FEATURES.value = "process";
+        environment.PI_BG_DISABLE_UPDATE_CHECK.value = "1";
+        # $SHELL is fish, which the package won't treat as POSIX.
+        environment.PI_BG_POSIX_SHELL.value = "bash";
         settings = {
           # The model picker's "save as default" reverts at launch; change it here.
           defaultProvider = "opencode-go";
@@ -150,14 +181,16 @@ in {
         settings.extensions = [];
         # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
         # ~/.config/mcp/mcp.json. Merged at launch, so /mcp toggles persist.
-        mcp = lib.optionalAttrs (config.programs.mcp.servers != {}) {
-          mcpServers = lib.mapAttrs (name: server:
+        mcp = let
+          shared = lib.mapAttrs (name: server:
             # pi rejects the null/empty fields home-manager's option fills in.
               lib.filterAttrs (_: v: v != null && v != {} && v != []) server
               # Figma only accepts OAuth registrations from clients it knows.
               // lib.optionalAttrs (name == "figma") {oauth.clientName = "Claude Code";})
           config.programs.mcp.servers;
-        };
+          servers = shared // lib.optionalAttrs hasBrowser {inherit chrome-devtools;};
+        in
+          lib.optionalAttrs (servers != {}) {mcpServers = servers;};
       };
 
       assertions = let
@@ -172,6 +205,9 @@ in {
           '';
         }
       ];
+
+      # pi-background-tasks writes task output to <cwd>/.pi/tasks, with no setting to move it.
+      programs.git.ignores = [".pi/tasks/"];
 
       # The extension spawns its own hunspell; keep the package in the profile too
       # so the same dictionaries are available outside pi.
@@ -284,6 +320,8 @@ in {
       # Nix-owned (read-only), so pi's "persist globally" approval won't stick;
       # session approvals still work.
       home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
+        # Otherwise bg_run is an ordinary extension tool and skips the bash rules below.
+        shellTools.bg_run.commandArgument = "command";
         permission = {
           "*" = "allow";
           # Gates bash too, and matches symlink targets, so the agenix-backed

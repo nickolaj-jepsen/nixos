@@ -172,6 +172,21 @@ def update_github_release(name: str, repo: str) -> tuple[str, str]:
     return old, new
 
 
+def update_npm_tarball(name: str) -> tuple[str, str]:
+    """For a package whose src is fetchurl of the npm tarball at `version`, pinned by npm's integrity."""
+    path = PKGS / name / "package.nix"
+    text = path.read_text()
+    old = read_field(text, r'^\s*version = "([^"]+)";')
+    latest = json.loads(fetch(f"https://registry.npmjs.org/{quote(name, safe='@')}/latest").decode())
+    new = latest["version"]
+    if new == old:
+        return old, new
+    text = replace_once(text, r'^\s*version = "([^"]+)";', new)
+    text = replace_once(text, r'^\s*hash = "([^"]+)";', latest["dist"]["integrity"])
+    path.write_text(text)
+    return old, new
+
+
 def update_pi_packages() -> tuple[str, str]:
     """Bump every pin in pkgs/pi-packages and regenerate its npm lock."""
     path = PKGS / "pi-packages" / "package.json"
@@ -218,6 +233,7 @@ def update_pi_packages() -> tuple[str, str]:
 UPDATERS = {
     "claude-code": update_claude_code,
     "bambu-studio": update_bambu_studio,
+    "chrome-devtools-mcp": lambda: update_npm_tarball("chrome-devtools-mcp"),
     "claude-desktop": update_claude_desktop,
     "ha-bambulab": lambda: update_github_release("ha-bambulab", "greghesp/ha-bambulab"),
     "pi-packages": update_pi_packages,

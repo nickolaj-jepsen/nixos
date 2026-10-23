@@ -48,6 +48,7 @@
         core.fsmonitor = pkgs.stdenv.hostPlatform.isDarwin;
         alias.fixup = "!git log -n 50 --pretty=format:'%h %s' --no-merges | ${lib.getExe pkgs.fzf} | cut -c -7 | xargs -o git commit --fixup";
       };
+      ignores = ["**/.claude/settings.local.json"];
       includes = [
         {
           condition = "hasconfig:remote.*.url:git@github.com:Digital-Udvikling/**";
@@ -57,5 +58,7 @@
         }
       ];
     };
+    # Replaces the hand-written file this list grew out of.
+    xdg.configFile."git/ignore".force = true;
   };
 }
