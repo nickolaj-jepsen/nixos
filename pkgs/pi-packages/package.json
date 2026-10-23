@@ -2,7 +2,6 @@
   "name": "pi-packages",
   "private": true,
   "dependencies": {
-    "@ayulab/pi-rewind": "0.4.6",
     "@gotgenes/pi-permission-system": "41.0.0",
     "@juicesharp/rpiv-ask-user-question": "2.13.9",
     "@juicesharp/rpiv-todo": "2.13.9",
