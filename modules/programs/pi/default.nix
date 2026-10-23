@@ -151,6 +151,9 @@ in {
         environment.PI_SPELLFIX_PERSONAL.value = fpLib.hunspellPersonalDictionary config;
         environment.PI_SPELLFIX_LOG.value = fpLib.spellfixLog config;
         environment.PI_SPELLFIX_MODEL.value = "anthropic/claude-haiku-5-5";
+        # Session labels (extensions/chrome/identity.ts) go through the router,
+        # so they bridge to Haiku while Go's quota is out instead of failing.
+        environment.PI_IDENTITY_MODEL.value = "fp/flash";
         # You should know (extensions/you-should-know.ts) forks the session model,
         # so a check is a cache read of the main request; PI_YSK_MODEL routes it
         # elsewhere and gives that up. A local session must not check at all:
