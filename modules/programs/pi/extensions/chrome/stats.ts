@@ -68,34 +68,40 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
   return { cost, cacheHit: warmModel && caching.has(warmModel) ? cacheHit : undefined, speed };
 };
 
-/** Session cost, cache health and speed, rescanned only when the leaf or model moves. */
-export const createStats = () => {
-  let cache:
-    | { sessionId: string; leafId: string | null; modelKey: string; stats: Stats }
-    | undefined;
+// Entries are append-only and every append moves the leaf, so session, leaf and
+// model say whether a result computed from the session is still current.
+const sessionKey = (ctx: ExtensionContext, model: ActiveModel | undefined) =>
+  [
+    ctx.sessionManager.getSessionId(),
+    ctx.sessionManager.getLeafId(),
+    model ? `${model.provider}/${model.id}` : "",
+  ].join("\n");
 
-  const statsFor = (ctx: ExtensionContext, model: ActiveModel | undefined): Stats => {
-    // Entries are append-only and every append moves the leaf, so leaf + model
-    // is enough to know the scan is still current.
-    const sessionId = ctx.sessionManager.getSessionId();
-    const leafId = ctx.sessionManager.getLeafId();
-    const modelKey = model ? `${model.provider}/${model.id}` : "";
-    if (
-      cache &&
-      cache.sessionId === sessionId &&
-      cache.leafId === leafId &&
-      cache.modelKey === modelKey
-    ) {
-      return cache.stats;
-    }
-    const stats = collectStats(ctx, model);
-    cache = { sessionId, leafId, modelKey, stats };
-    return stats;
+const memoize = <T>(compute: (ctx: ExtensionContext, model: ActiveModel | undefined) => T) => {
+  let cache: { key: string; value: T } | undefined;
+  const get = (ctx: ExtensionContext, model: ActiveModel | undefined): T => {
+    const key = sessionKey(ctx, model);
+    if (cache?.key === key) return cache.value;
+    const value = compute(ctx, model);
+    cache = { key, value };
+    return value;
   };
+  return { get, reset: () => (cache = undefined) };
+};
+
+/**
+ * Session cost, cache health and speed, and pi's context usage, which rebuilds
+ * the session's projection on every call; both recomputed only when the leaf
+ * or model moves.
+ */
+export const createStats = () => {
+  const stats = memoize(collectStats);
+  const context = memoize((ctx) => ctx.getContextUsage());
 
   const reset = () => {
-    cache = undefined;
+    stats.reset();
+    context.reset();
   };
 
-  return { statsFor, reset };
+  return { statsFor: stats.get, contextFor: context.get, reset };
 };

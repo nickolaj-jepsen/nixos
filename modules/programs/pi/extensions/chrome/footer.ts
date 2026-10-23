@@ -21,7 +21,7 @@ import { layoutFooter } from "./footer-line.ts";
 import { formatCost, shortPath } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
 import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
-import type { Meter } from "./measurements.ts";
+import type { Measurements, Meter } from "./measurements.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage, usageAlarm } from "./usage.ts";
@@ -112,8 +112,7 @@ export const createFooter = (
   let regions: Region[] = [];
 
   /** Cost and speed as text; `undefined` when there is nothing worth showing. */
-  const meterTexts = (ctx: ExtensionContext) => {
-    const model = routed(ctx) ?? ctx.model;
+  const meterTexts = (ctx: ExtensionContext, model: ActiveModel | undefined) => {
     const s = stats.statsFor(ctx, model);
     const paid = (model?.cost.input ?? 0) > 0 || (model?.cost.output ?? 0) > 0;
     return {
@@ -128,15 +127,17 @@ export const createFooter = (
     };
   };
 
-  /** The measurements the editor's top border shows next to the context; the cost opens /cost. */
-  const meters = (): Meter[] => {
+  /** What the editor's top border shows: the context, then the meters; the cost opens /cost. */
+  const measurements = (): Measurements => {
     const ctx = state.ctx;
-    if (!ctx) return [];
-    const { cost, speed } = meterTexts(ctx);
-    return [
+    if (!ctx) return { context: undefined, meters: [] };
+    const model = routed(ctx) ?? ctx.model;
+    const { cost, speed } = meterTexts(ctx, model);
+    const meters = [
       cost === undefined ? undefined : { id: "cost", text: cost, action: actions.cost },
       speed === undefined ? undefined : { id: "speed", text: speed },
     ].filter((meter): meter is Meter => meter !== undefined);
+    return { context: stats.contextFor(ctx, model), meters };
   };
 
   const renderLine = (
@@ -168,7 +169,7 @@ export const createFooter = (
       });
     }
     // Only until the editor's top border carries it.
-    const percent = state.metersActive ? undefined : ctx.getContextUsage()?.percent;
+    const percent = state.metersActive ? undefined : stats.contextFor(ctx, model)?.percent;
     if (percent != null) {
       alarms.push({
         id: "context",
@@ -178,7 +179,7 @@ export const createFooter = (
       });
     }
 
-    const { cost: costText, speed: speedText } = meterTexts(ctx);
+    const { cost: costText, speed: speedText } = meterTexts(ctx, model);
 
     const statusEntries = [...footerData.getExtensionStatuses()]
       .filter(([key]) => key !== "pi-cache-stats")
@@ -367,5 +368,5 @@ export const createFooter = (
     };
   });
 
-  return { meters };
+  return { measurements };
 };

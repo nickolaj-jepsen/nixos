@@ -26,7 +26,13 @@ export default function (pi: ExtensionAPI) {
   wrapPromptEditor(
     createEditorChrome(state, {
       top: (width, hidden, border, status) =>
-        identity.drawTop(width, hidden, border, status, measurementLevels(state, footer.meters())),
+        identity.drawTop(
+          width,
+          hidden,
+          border,
+          status,
+          measurementLevels(state, footer.measurements()),
+        ),
     }),
   );
 
