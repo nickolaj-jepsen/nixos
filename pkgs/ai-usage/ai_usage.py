@@ -10,6 +10,7 @@ are only ever read, never refreshed or written.
 
 import argparse
 import calendar
+import email.utils
 import hashlib
 import json
 import os
@@ -23,7 +24,7 @@ from pathlib import Path
 
 CACHE_TTL = timedelta(minutes=2)
 # Bump when the cached entry shape changes, so an upgrade discards old entries.
-CACHE_VERSION = 3
+CACHE_VERSION = 4
 TIMEOUT = 10
 # Projections from the first few % of a window, or from trivial usage, are noise.
 MIN_ELAPSED_PCT = 5
@@ -40,7 +41,11 @@ METER_WARN_PCT = 80.0
 
 
 class FetchError(Exception):
-    pass
+    """A provider fetch that failed; `retry_after` is the wait the server asked for."""
+
+    def __init__(self, message, retry_after=None):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 def now():
@@ -89,13 +94,29 @@ def window(label, used_pct, resets_at, length, ring=None, detail=None, starts=No
     }
 
 
+def retry_after(error):
+    """Seconds from a Retry-After header, which is either a count or an HTTP date."""
+    value = error.headers.get("Retry-After") if error.headers else None
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        pass
+    try:
+        when = email.utils.parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, (when - now()).total_seconds())
+
+
 def http_json(url, headers):
     req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
             return json.load(resp)
     except urllib.error.HTTPError as e:
-        raise FetchError(f"HTTP {e.code}") from e
+        raise FetchError(f"HTTP {e.code}", retry_after=retry_after(e)) from e
     except (urllib.error.URLError, TimeoutError) as e:
         raise FetchError(f"network: {getattr(e, 'reason', e)}") from e
     except json.JSONDecodeError as e:
@@ -328,11 +349,137 @@ def fetch_copilot(p):
     return {"windows": windows, "overage": overage}
 
 
+def kimi_reset(data, t):
+    """A pool's turnover: an absolute timestamp, or a number of seconds from now.
+
+    A value that is neither leaves the pool unreadable, so the caller skips that
+    window rather than failing the whole fetch.
+    """
+    for key in ("reset_time", "resetTime", "reset_at", "resetAt"):
+        value = data.get(key)
+        if value is None:
+            continue
+        try:
+            return parse_time(str(value))
+        except ValueError:
+            continue
+    for key in ("reset_in", "resetIn", "ttl"):
+        seconds = number(data.get(key))
+        if seconds and seconds > 0:
+            return t + timedelta(seconds=seconds)
+    return None
+
+
+def kimi_pool(pool, t):
+    """(used_pct, resets_at) from a `usages` entry, whose `used_ratio` is 0-1."""
+    if not isinstance(pool, dict):
+        return None
+    ratio = number(pool.get("used_ratio"))
+    resets = kimi_reset(pool, t)
+    if ratio is None or resets is None:
+        return None
+    # 1.0 is 100% used; a payload that spells the ratio as a percent is tolerated.
+    return (ratio if ratio <= 1 else ratio / 100) * 100, resets
+
+
+def kimi_window(entry, detail, t):
+    """A `limits` entry as (seconds, label, used_pct, resets_at, length, text).
+
+    `seconds` orders windows from shortest to longest and `text` is the "used of
+    limit" line. The window names its own size
+    (`{"duration": 300, "timeUnit": "TIME_UNIT_MINUTE"}`), so a plan that adds or
+    drops one needs no change here.
+    """
+    span = entry.get("window") if isinstance(entry.get("window"), dict) else {}
+    duration = number(span.get("duration"))
+    unit = str(span.get("timeUnit") or span.get("unit") or "").upper()
+    if duration:
+        if "MINUTE" in unit:
+            length, seconds = timedelta(minutes=duration), duration * 60
+            label = f"{duration / 60:g}h"
+        elif "HOUR" in unit:
+            length, seconds = timedelta(hours=duration), duration * 3600
+            label = f"{duration:g}h"
+        elif "DAY" in unit:
+            length, seconds = timedelta(days=duration), duration * 86_400
+            label = f"{duration:g}d"
+        elif "MONTH" in unit:
+            length, seconds, label = "month", duration * 30 * 86_400, "month"
+        else:
+            return None
+    else:
+        return None
+
+    limit = number(detail.get("limit"))
+    used = number(detail.get("used"))
+    if used is None and limit is not None:
+        remaining = number(detail.get("remaining"))
+        used = None if remaining is None else limit - remaining
+    resets = kimi_reset(detail, t) or kimi_reset(entry, t)
+    if used is None or not limit or resets is None:
+        return None
+    text = f"{used:g} of {limit:g} used"
+    return seconds, label, used / limit * 100, resets, length, text
+
+
+def kimi_limits(entries, t):
+    rows = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        detail = entry.get("detail") if isinstance(entry.get("detail"), dict) else entry
+        row = kimi_window(entry, detail, t)
+        if row:
+            rows.append(row)
+    rows.sort(key=lambda row: row[0])
+    return [
+        window(label, used, resets, length, ("outer", "inner")[i] if i < 2 else None, text)
+        for i, (_, label, used, resets, length, text) in enumerate(rows)
+    ]
+
+
+def fetch_kimi_coding(p):
+    """The Kimi Code plan's quota on /coding/v1/usages: the rolling five-hour
+    rate window and the monthly pool every membership feature shares.
+
+    Both are `usages` entries, a 0-1 `used_ratio` plus an absolute `reset_time`.
+    The `limits` array beside them repeats the five-hour window in
+    used/remaining form, so it is only the fallback for an older payload.
+    """
+    key = Path(p["keyFile"]).read_text().strip()
+    data = http_json(
+        "https://api.kimi.com/coding/v1/usages",
+        {"Authorization": f"Bearer {key}", "User-Agent": "ai-usage"},
+    )
+    t = now()
+    pools = data.get("usages") if isinstance(data.get("usages"), dict) else {}
+    windows = []
+    for name, label, length, ring in (
+        ("limit_5h", "5h", timedelta(hours=5), "outer"),
+        ("limit_month_total", "month", "month", "inner"),
+    ):
+        pool = kimi_pool(pools.get(name), t)
+        if pool is None:
+            # Everything shares the monthly pool; the Code-only counter is the
+            # same quota under another name, so either one will do.
+            pool = kimi_pool(pools.get("limit_month_code"), t) if length == "month" else None
+        if pool is None:
+            continue
+        used, resets = pool
+        windows.append(window(label, used, resets, length, ring))
+    if not windows:
+        windows = kimi_limits(data.get("limits"), t)
+    if not windows:
+        raise FetchError("no quota windows in the answer")
+    return {"windows": windows, "overage": None}
+
+
 FETCHERS = {
     "claude": fetch_claude,
     "anthropic-credits": fetch_anthropic_credits,
     "opencode-go": fetch_opencode_go,
     "synthetic": fetch_synthetic,
+    "kimi-coding": fetch_kimi_coding,
     "copilot": fetch_copilot,
 }
 
@@ -362,10 +509,14 @@ def resolve(p, refresh):
     """Cached or freshly fetched data for provider `p`, never raising.
 
     The TTL runs from the last attempt, so a failing provider isn't retried on
-    every call; a failure keeps the last good windows and records the error.
+    every call; a failure keeps the last good windows and records the error. A
+    server that answered with Retry-After is left alone until then even by a
+    forced refresh, because asking again is only another 429.
     """
     cached = read_cache(p["id"])
     t = now()
+    if cached and cached.get("retryAt") and parse_time(cached["retryAt"]) > t:
+        return cached
     if cached and not refresh and t - parse_time(cached["attemptedAt"]) < CACHE_TTL:
         return cached
     try:
@@ -373,7 +524,12 @@ def resolve(p, refresh):
     except Exception as e:  # One provider's failure must not hide the others.
         msg = str(e) if isinstance(e, FetchError) else f"{type(e).__name__}: {e}"
         last = cached or {"fetchedAt": None, "windows": [], "overage": None}
-        entry = {**last, "attemptedAt": t.isoformat(), "error": msg}
+        entry = {k: v for k, v in last.items() if k not in ("retryAt", "version")}
+        entry.update({"attemptedAt": t.isoformat(), "error": msg})
+        wait = getattr(e, "retry_after", None)
+        if wait:
+            entry["retryAt"] = (t + timedelta(seconds=wait)).isoformat()
+            entry["error"] = f"{msg}, retrying in {human_delta(wait)}"
     write_cache(p["id"], entry)
     return entry
 

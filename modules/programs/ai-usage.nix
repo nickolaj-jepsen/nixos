@@ -59,13 +59,12 @@
         short = "SY";
         keyFile = config.age.secrets.synthetic-api-key.path;
       }
-      ++ lib.optional config.programs.github-copilot-cli.enable {
-        id = "copilot";
-        kind = "copilot";
-        name = "Copilot";
-        short = "GH";
-        icon = "copilot";
-        gh = lib.getExe config.programs.gh.package;
+      ++ lib.optional hasAgentKeys {
+        id = "kimi-coding";
+        kind = "kimi-coding";
+        name = "Kimi Code";
+        short = "KC";
+        keyFile = config.age.secrets.kimi-coding-api-key.path;
       };
   in {
     config = lib.mkIf fp.dev.ai-usage.enable {
