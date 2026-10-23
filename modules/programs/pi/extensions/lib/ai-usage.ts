@@ -40,22 +40,40 @@ export const exhaustedWindow = (
 
 /**
  * A background-refreshed snapshot. `refresh()` resolves once the snapshot is
- * fresh; without ai-usage on PATH every provider reads as unknown.
+ * fresh; `force` also skips this reader's TTL and ai-usage's own cache, for a
+ * caller that knows the snapshot is out of date. Without ai-usage on PATH every
+ * provider reads as unknown.
  */
 export const createUsageReader = (onUpdate?: () => void) => {
   let usage: { providers: UsageProvider[]; at: number } | undefined;
   let inflight: Promise<void> | undefined;
+  let forced: Promise<void> | undefined;
 
-  const refresh = (): Promise<void> => {
-    if (usage && Date.now() - usage.at < USAGE_TTL_MS) return Promise.resolve();
-    inflight ??= new Promise<void>((resolve) => {
-      execFile("ai-usage", ["--json"], { timeout: 5000, maxBuffer: 1 << 20 }, (error, stdout) => {
-        usage = { providers: error ? [] : readUsage(stdout), at: Date.now() };
-        inflight = undefined;
+  const read = (force: boolean) =>
+    new Promise<void>((resolve) => {
+      const started = Date.now();
+      const args = force ? ["--json", "--refresh"] : ["--json"];
+      // Well above ai-usage's per-request TIMEOUT, so one slow endpoint cannot get the run killed.
+      const timeout = force ? 30_000 : 5000;
+      execFile("ai-usage", args, { timeout, maxBuffer: 1 << 20 }, (error, stdout) => {
+        // A plain read may come from ai-usage's cache, so one that started before a
+        // forced read finished must not replace its result.
+        if (force || !usage || started >= usage.at) {
+          usage = { providers: error ? [] : readUsage(stdout), at: force ? Date.now() : started };
+        }
         onUpdate?.();
         resolve();
       });
     });
+
+  const refresh = ({ force = false } = {}): Promise<void> => {
+    if (force) {
+      // Not the plain read in flight: ai-usage may serve that one from its cache.
+      forced ??= read(true).finally(() => (forced = undefined));
+      return forced;
+    }
+    if (usage && Date.now() - usage.at < USAGE_TTL_MS) return Promise.resolve();
+    inflight ??= read(false).finally(() => (inflight = undefined));
     return inflight;
   };
 
