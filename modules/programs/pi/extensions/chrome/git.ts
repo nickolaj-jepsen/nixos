@@ -57,6 +57,12 @@ export const PR_COMMAND = /\bgh\s+pr\s+(create|merge|close|reopen|edit|ready)\b/
 const BRANCH_GLYPH = "\uf418";
 const DETACHED_GLYPH = "\uf417";
 const WORKTREE_GLYPH = "\uf1bb";
+const PR_GLYPHS: Record<PrKind, string> = {
+  open: "\uf407",
+  draft: "\uf4dd",
+  merged: "\uf419",
+  closed: "\uf4dc",
+};
 
 const readTrim = (path: string) => {
   try {
@@ -421,15 +427,11 @@ export const createGit = (chrome: ChromeState) => {
 
     const spans: { text: string; color: ThemeColor; attached?: boolean; url?: string }[] = [];
     if (state.worktree) spans.push({ text: WORKTREE_GLYPH, color: "muted" });
-    // The `#` marks the pull request, so the branch glyph would be noise there,
-    // and the number is already the short form narrow widths fall back to.
-    if (pr) {
-      spans.push({ text: `#${pr.number}`, color: prColor(pr), url: pr.url });
-    } else {
-      spans.push({ text: glyph, color: stateColor });
-      if (mode === "full" && name) spans.push({ text: name, color: "muted" });
-    }
+    spans.push({ text: glyph, color: stateColor });
+    if (mode === "full" && name) spans.push({ text: name, color: "muted" });
     if (dirtyColor) spans.push({ text: "*", color: dirtyColor, attached: true });
+    // The icon alone says a pull request exists; it links to it where the terminal can.
+    if (pr) spans.push({ text: PR_GLYPHS[pr.state ?? "open"], color: prColor(pr), url: pr.url });
     if (state.operation) spans.push({ text: state.operation, color: "accent" });
     if (state.untracked > 0) spans.push({ text: "?", color: "warning" });
     if (state.conflicts > 0) spans.push({ text: `~${state.conflicts}`, color: "error" });

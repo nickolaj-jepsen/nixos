@@ -23,10 +23,10 @@ import { createUsage, usageAlarm } from "./usage.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
-// Font Awesome range of the Nerd Font, present in every version of it.
+// Font Awesome range of the Nerd Font, present in every version of it. Icons are followed by two
+// spaces: terminals draw a non-Mono Nerd Font glyph over the space after it, so one would read as none.
 const ICON_MODEL = "\uf2db";
 const ICON_EFFORT = "\uf0e7";
-const ICON_SPEED = "\uf0e4";
 
 const CACHE_WARN_PCT = 90;
 const CACHE_ERROR_PCT = 50;
@@ -131,17 +131,16 @@ export const createFooter = (
         provider: tag
           ? {
               id: "provider",
-              text: /^\w/.test(tag) ? `${ICON_MODEL} ${tag}` : tag,
+              text: /^\w/.test(tag) ? `${ICON_MODEL}  ${tag}` : tag,
               color: "dim",
-              group: "model",
-              action: actions.model,
             }
           : undefined,
-        // The model is the one bright word on the line; everything else steps back.
+        // Only the model opens the selector; the provider is just a label.
         model: {
           id: "model",
-          text: model ? modelAlias(model) : "no model",
-          color: "text",
+          text: model ? model.name || model.id : "no model",
+          short: model ? modelAlias(model) : undefined,
+          color: "dim",
           bold: true,
           tight: true,
           action: actions.model,
@@ -151,9 +150,9 @@ export const createFooter = (
           model?.reasoning && thinking
             ? {
                 id: "effort",
-                text: `${ICON_EFFORT} ${thinking}`,
+                text: `${ICON_EFFORT}  ${thinking}`,
                 color: "muted",
-                styled: (t) => t.getThinkingBorderColor(thinking)(`${ICON_EFFORT} ${thinking}`),
+                styled: (t) => t.getThinkingBorderColor(thinking)(`${ICON_EFFORT}  ${thinking}`),
                 action: actions.effort,
               }
             : undefined,
@@ -164,10 +163,8 @@ export const createFooter = (
           .filter(Boolean)
           .map((text, index) => ({ id: `status-${index}`, text, color: "dim" as const })),
         alarms,
-        cost: costText ? { id: "cost", text: costText, color: "text" } : undefined,
-        speed: speedText
-          ? { id: "speed", text: `${ICON_SPEED} ${speedText}`, color: "dim" }
-          : undefined,
+        cost: costText ? { id: "cost", text: costText, color: "dim" } : undefined,
+        speed: speedText ? { id: "speed", text: speedText, color: "dim" } : undefined,
         git: git.view,
       },
       state.hover,

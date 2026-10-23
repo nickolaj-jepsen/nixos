@@ -26,6 +26,9 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { Region } from "./layout.ts";
+
+// Hover id of the top-border label.
+const LABEL_ID = "label";
 import type { ChromeState } from "./state.ts";
 
 type Phase = "working" | "idle" | "waiting" | "failed";
@@ -259,7 +262,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
    */
   const borderSides = (width: number, hidden: number, border: (text: string) => string) => {
     const ctx = state.ctx;
-    if (!ctx) return { left: "", right: "" };
+    if (!ctx) return { left: "", right: "", label: undefined };
     const theme = ctx.ui.theme;
     const { text } = currentLabel(ctx);
     const stateText = stateWord(phase);
@@ -292,11 +295,16 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       if (room < MIN_LABEL_ROOM) continue;
       // The label wears the input's own border color (pi keys it to the
       // thinking level), so it reads as box chrome rather than prompt text.
-      const painted = border(truncateToWidth(text, room, "…"));
-      const label = state.hover === "label" ? theme.underline(painted) : painted;
-      return { left: `${lead}${label}${theme.fg("dim", hint)} `, right };
+      const shown = truncateToWidth(text, room, "…");
+      const label = state.hover === LABEL_ID ? theme.fg("text", shown) : border(shown);
+      const x0 = visibleWidth(lead);
+      return {
+        left: `${lead}${label}${theme.fg("dim", hint)} `,
+        right,
+        label: { x0, x1: x0 + visibleWidth(shown) },
+      };
     }
-    return { left: "", right: "" };
+    return { left: "", right: "", label: undefined };
   };
 
   const drawTop = (
@@ -304,9 +312,13 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     hidden: number,
     border: (text: string) => string,
   ): { line: string; regions: Region[] } => {
-    const { left, right } = borderSides(width, hidden, border);
+    const { left, right, label } = borderSides(width, hidden, border);
     const fill = Math.max(0, width - visibleWidth(left) - visibleWidth(right));
-    return { line: left + (fill > 0 ? border("─".repeat(fill)) : "") + right, regions: [] };
+    return {
+      line: left + (fill > 0 ? border("─".repeat(fill)) : "") + right,
+      // Only the label is the control; the rest of the row is plain border.
+      regions: label ? [{ ...label, id: LABEL_ID, action: (ctx) => relabel(ctx, true) }] : [],
+    };
   };
 
   const model = (ctx: ExtensionContext) => {

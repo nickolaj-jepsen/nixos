@@ -13,7 +13,7 @@ export type BranchMode = "full" | "glyph" | "none";
 
 export type FooterInput = {
   provider?: Part;
-  /** The full model alias; it is the part that truncates. */
+  /** Full model name, collapsing to `short`; it is the part that truncates. */
   model: Part;
   effort?: Part;
   statuses: Part[];
@@ -26,8 +26,9 @@ export type FooterInput = {
 
 /**
  * Words on the left, meters right-aligned before git. When the line does not
- * fit, parts give way in a fixed order: statuses, speed, cost, branch name,
- * provider, effort, git, model width (down to MODEL_MIN), alarms.
+ * fit, parts give way in a fixed order: the model name shortens, then
+ * statuses, speed, cost, branch name, provider, effort, git, model width (down
+ * to MODEL_MIN) and alarms.
  */
 export const layoutFooter = (
   width: number,
@@ -45,6 +46,7 @@ export const layoutFooter = (
   let provider = true;
   let effort = true;
   let alarms = true;
+  let shortModel = false;
   let modelText = input.model.text;
 
   const compose = () => {
@@ -72,6 +74,10 @@ export const layoutFooter = (
 
   let layout = compose();
   const steps: Array<() => void> = [
+    () => {
+      shortModel = true;
+      modelText = input.model.short ?? input.model.text;
+    },
     () => (statuses = false),
     () => (speed = false),
     () => (cost = false),
@@ -81,7 +87,11 @@ export const layoutFooter = (
     () => (branch = "none"),
     () => {
       const room = inner - (layout.used - visibleWidth(modelText));
-      modelText = truncateToWidth(input.model.text, Math.max(MODEL_MIN, room), "…");
+      modelText = truncateToWidth(
+        shortModel ? (input.model.short ?? input.model.text) : input.model.text,
+        Math.max(MODEL_MIN, room),
+        "…",
+      );
     },
     () => (alarms = false),
   ];
