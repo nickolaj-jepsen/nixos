@@ -3,8 +3,10 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { paintParts, partsWidth, type Part, type Region } from "./layout.ts";
 
 export const PAD = 2;
-// Between the left zone and the meters, and between the meters and git.
+// Between the left zone and the right one.
 const ZONE_GAP = 2;
+// Git follows the path as one phrase (`~/nixos  branch`); the branch glyph is the separator.
+const PATH_GIT_GAP = 1;
 const GIT_GAP = 3;
 // The model keeps at least this many columns before alarms give way.
 const MODEL_MIN = 8;
@@ -19,6 +21,8 @@ export type FooterInput = {
   statuses: Part[];
   /** Quota/credit, cache miss, context fallback: they outlive the steady meters. */
   alarms: Part[];
+  /** Working directory; only shown here because the borders carry the label and meters. */
+  path?: Part;
   cost?: Part;
   speed?: Part;
   git: (mode: BranchMode) => Part | null;
@@ -27,7 +31,7 @@ export type FooterInput = {
 /**
  * Words on the left, meters right-aligned before git. When the line does not
  * fit, parts give way in a fixed order: the model name shortens, then
- * statuses, speed, cost, branch name, provider, effort, git, model width (down
+ * statuses, path, speed, cost, branch name, provider, effort, git, model width (down
  * to MODEL_MIN) and alarms.
  */
 export const layoutFooter = (
@@ -46,6 +50,7 @@ export const layoutFooter = (
   let provider = true;
   let effort = true;
   let alarms = true;
+  let path = true;
   let shortModel = false;
   let modelText = input.model.text;
 
@@ -62,14 +67,16 @@ export const layoutFooter = (
       ...(alarms ? input.alarms : []),
       cost ? input.cost : undefined,
       speed ? input.speed : undefined,
+      path ? input.path : undefined,
     ].filter((part): part is Part => part !== undefined);
     const git = input.git(branch);
     const leftWidth = partsWidth(left);
     const rightWidth = partsWidth(right);
     const gitWidth = git ? visibleWidth(git.text) : 0;
+    const gitGap = path && input.path ? PATH_GIT_GAP : GIT_GAP;
     const used =
-      leftWidth + (rightWidth > 0 ? ZONE_GAP + rightWidth : 0) + (git ? GIT_GAP + gitWidth : 0);
-    return { left, right, git, leftWidth, rightWidth, gitWidth, used };
+      leftWidth + (rightWidth > 0 ? ZONE_GAP + rightWidth : 0) + (git ? gitGap + gitWidth : 0);
+    return { left, right, git, leftWidth, rightWidth, gitWidth, gitGap, used };
   };
 
   let layout = compose();
@@ -79,6 +86,7 @@ export const layoutFooter = (
       modelText = input.model.short ?? input.model.text;
     },
     () => (statuses = false),
+    () => (path = false),
     () => (speed = false),
     () => (cost = false),
     () => (branch = "glyph"),
@@ -103,11 +111,11 @@ export const layoutFooter = (
 
   const pad = " ".repeat(PAD);
   const left = paintParts(layout.left, theme, PAD, hovered);
-  const gitBlock = layout.git ? GIT_GAP + layout.gitWidth : 0;
+  const gitBlock = layout.git ? layout.gitGap + layout.gitWidth : 0;
   const fill = Math.max(0, inner - layout.leftWidth - layout.rightWidth - gitBlock);
   const right = paintParts(layout.right, theme, PAD + layout.leftWidth + fill, hovered);
   const git = layout.git
-    ? " ".repeat(GIT_GAP) +
+    ? " ".repeat(layout.gitGap) +
       (layout.git.styled ? layout.git.styled(theme) : theme.fg(layout.git.color, layout.git.text))
     : "";
   const line = pad + left.text + " ".repeat(fill) + right.text + git;

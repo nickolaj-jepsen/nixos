@@ -17,14 +17,14 @@
  * ran `/name`; the first model label becomes it once so `/resume` shows
  * something useful.
  */
-import { homedir } from "node:os";
-import { basename, relative, sep } from "node:path";
+import { basename, relative } from "node:path";
 import {
   copyToClipboard,
   type ExtensionAPI,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { shortPath } from "./format.ts";
 import type { Region } from "./layout.ts";
 
 // Hover id of the top-border label.
@@ -120,17 +120,6 @@ const formatAge = (ms: number) => {
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
   return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
-};
-
-const shortPath = (cwd: string) => {
-  const home = homedir();
-  if (cwd === home) return "~";
-  if (cwd.startsWith(home + sep)) {
-    const parts = relative(home, cwd).split(sep).filter(Boolean);
-    return parts.length <= 2 ? `~/${parts.join("/")}` : `~/…/${parts[parts.length - 1]}`;
-  }
-  const parts = cwd.split(sep).filter(Boolean);
-  return parts.length <= 2 ? `/${parts.join("/")}` : `/${parts[0]}/…/${parts[parts.length - 1]}`;
 };
 
 export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
@@ -269,13 +258,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
     // so it belongs next to the label rather than in the session detail.
     const hint = hidden > 0 ? ` ↑${hidden}` : "";
-    const rows: string[][] = [
-      [shortPath(cwd), stateText],
-      // State outlives the path: it is the part that asks you to look.
-      [stateText],
-      [shortPath(cwd)],
-      [],
-    ];
+    const rows: string[][] = [[stateText], []];
     const working = busy || phase === "working";
     // pi's own shape: `── ⠋ Working`; the spinner takes the slot the label would.
     const lead = working ? `${border("──")} ${theme.fg("accent", spinnerGlyph())} ` : border("── ");
