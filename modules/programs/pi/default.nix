@@ -335,17 +335,23 @@ in {
           };
       };
 
-      # Claude Code's defaults where pi leaves the key free: alt+p is its model
-      # picker and alt+t its thinking toggle. Frees ctrl+s for extensions/stash.ts
-      # and ctrl+t for the todo overlay below. The alt+s saves only act in
-      # pickers, but pi's conflict check ignores view and would warn at startup.
+      # Claude Code's keys where pi leaves them free: alt+p opens the model
+      # picker, and alt+t shows or hides thinking blocks (Claude Code's alt+t
+      # turns thinking itself on or off; shift+tab cycles that here). Frees ctrl+s
+      # for extensions/stash.ts and ctrl+t for the todo overlay below. pi's
+      # conflict check ignores view, so every built-in on a key an extension
+      # claims moves, even the picker-only alt+s saves and the /tree filter.
       home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
         "$schema" = "https://pi.dev/schemas/keybindings.schema.json";
         "app.model.select" = ["ctrl+l" "alt+p"];
+        # Drops WSL's alt+p default, which would win over the picker.
+        "app.model.cycleBackward" = ["shift+ctrl+p"];
         "app.thinking.toggle" = "alt+t";
         "app.thinking.save" = "alt+s";
         "app.session.toggleSort" = "alt+s";
         "app.models.save" = "alt+s";
+        # Still reachable through the filter cycle.
+        "app.tree.filter.noTools" = [];
         # Unbound by pi. Plain alt+<key> belongs to zellij's default keybinds.
         "app.session.new" = "alt+shift+n";
         "app.session.resume" = "alt+shift+r";
