@@ -37,23 +37,20 @@ const dismissOverlay =
 
 export const createActions = (pi: ExtensionAPI, state: ChromeState) => {
   const openModels = appAction(state, "app.model.select", "ctrl+l");
-  let pickerOpen = false;
+  const closeOverlay = dismissOverlay(state);
 
   return {
-    // A second click closes the picker; a picker is open while focus has left the prompt.
+    // A second click closes the picker. pi closes it on Escape or a choice
+    // without telling anyone, so a click with focus off the prompt closes
+    // whatever holds it rather than stacking the picker on top.
     model: ((ctx) => {
       const focus = state.tui?.getFocusedComponent?.();
-      if (pickerOpen && focus && focus !== state.editorComponent) {
-        (focus as { handleInput?(data: string): void }).handleInput?.("\x1b");
-        pickerOpen = false;
-        return;
-      }
-      pickerOpen = true;
+      if (focus && focus !== state.editorComponent) return closeOverlay(ctx);
       return openModels(ctx);
     }) as Action,
     effort: appAction(state, "app.thinking.cycle", "shift+tab"),
     backgroundTasks: command(state, pi, "/tasks"),
-    dismissBackgroundTasks: dismissOverlay(state),
+    dismissBackgroundTasks: closeOverlay,
     agents: command(state, pi, "/agents"),
     cost: command(state, pi, "/cost"),
   };

@@ -113,14 +113,14 @@ const readStep = (numFile: string, endFile: string) => {
 /** Git branch, status and pull request for the footer, refreshed off the render path. */
 export const createGit = (chrome: ChromeState) => {
   let gitState: GitState | null | undefined;
-  let gitPathsCache: { cwd: string; value: GitPaths | null } | undefined;
+  // Only a repository is cached: a plain directory can become one with `git init`.
+  let gitPaths: GitPaths | undefined;
   let gitBusy = false;
   let gitQueued = false;
   let gitTimer: ReturnType<typeof setTimeout> | undefined;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   let polling = false;
   let activeCwd = "";
-  let generation = 0;
 
   let currentPr: PrRef | null = null;
   let prRequestKey = "";
@@ -137,7 +137,8 @@ export const createGit = (chrome: ChromeState) => {
       execFile(
         "git",
         ["--no-optional-locks", "-C", cwd, ...args],
-        { timeout: 3000, maxBuffer: 1 << 20 },
+        // Porcelain lists every changed path; a big dirty tree outgrows 1 MiB.
+        { timeout: 3000, maxBuffer: 32 << 20 },
         (error, stdout) => resolve(error ? null : stdout),
       );
     });
@@ -269,7 +270,6 @@ export const createGit = (chrome: ChromeState) => {
     if (!force && now < (prRetryAt.get(key) ?? 0)) return;
     if (prInFlight.has(key)) return;
 
-    const mine = generation;
     prInFlight.add(key);
     const result = await fetchPr(activeCwd);
     prInFlight.delete(key);
@@ -281,12 +281,12 @@ export const createGit = (chrome: ChromeState) => {
       prRetryAt.set(key, Date.now() + PR_RETRY_MS);
     }
     // The cache keeps the answer either way; only the painted line can be stale.
-    if (mine !== generation || prRequestKey !== key) return;
+    if (prRequestKey !== key) return;
     setPr(resolvePr(key, stack));
   };
 
   const resolveGitPaths = async (cwd: string): Promise<GitPaths | null> => {
-    if (gitPathsCache?.cwd === cwd) return gitPathsCache.value;
+    if (gitPaths) return gitPaths;
     const output = await runGit(cwd, [
       "rev-parse",
       "--path-format=absolute",
@@ -294,9 +294,9 @@ export const createGit = (chrome: ChromeState) => {
       "--git-common-dir",
     ]);
     const [gitDir, commonDir] = output?.split("\n").filter(Boolean) ?? [];
-    const value = gitDir && commonDir ? { gitDir, commonDir } : null;
-    gitPathsCache = { cwd, value };
-    return value;
+    if (!gitDir || !commonDir) return null;
+    gitPaths = { gitDir, commonDir };
+    return gitPaths;
   };
 
   const parseStatus = (output: string, paths: GitPaths): GitState => {
@@ -362,11 +362,9 @@ export const createGit = (chrome: ChromeState) => {
       return;
     }
     gitBusy = true;
-    const mine = generation;
     const cwd = activeCwd;
     try {
       const paths = await resolveGitPaths(cwd);
-      if (mine !== generation) return;
       if (!paths) {
         const changed = gitState !== null;
         gitState = null;
@@ -377,18 +375,23 @@ export const createGit = (chrome: ChromeState) => {
         return;
       }
       const status = await runGit(cwd, ["status", "--porcelain=v2", "--branch"]);
-      if (mine !== generation || !status) return;
+      // Keep the last state through a slow status; probe again in case the
+      // worktree itself is gone.
+      if (!status) {
+        gitPaths = undefined;
+        return;
+      }
       const previous = gitState;
       const next = parseStatus(status, paths);
       const changed = stateKey(previous) !== stateKey(next);
       gitState = next;
       // A branch switch or a first push changes which pull request the branch
-      // carries; everything else waits for the cached answer to expire.
+      // carries; everything else, a fresh session included, waits for the cached
+      // answer to expire, so panes on one branch share a lookup.
       const force =
         prDirty ||
-        !previous ||
-        previous.branch !== gitState.branch ||
-        (!previous.upstream && gitState.upstream);
+        (previous != null &&
+          (previous.branch !== gitState.branch || (!previous.upstream && gitState.upstream)));
       prDirty = false;
       void refreshPr(gitState, paths, force);
       if (changed) chrome.tui?.requestRender();
@@ -407,6 +410,7 @@ export const createGit = (chrome: ChromeState) => {
       gitTimer = undefined;
       void refreshGit().catch(() => {});
     }, delay);
+    gitTimer.unref?.();
   };
 
   // One poll at a time: the next one is armed when the previous refresh settles,
@@ -502,28 +506,9 @@ export const createGit = (chrome: ChromeState) => {
     markPrDirty: () => {
       prDirty = true;
     },
-    /** New session: forget everything learned about the previous one. */
-    reset: (cwd: string) => {
+    /** Points this at the session's cwd, which never changes, and asks git once. */
+    start: (cwd: string) => {
       activeCwd = cwd;
-      generation++;
-      gitState = undefined;
-      gitPathsCache = undefined;
-      prRequestKey = "";
-      prDirty = false;
-      currentPr = null;
-      ghMissing = false;
-      prRetryAt.clear();
-      scheduleGit(0);
-    },
-    /** Same session, maybe a new cwd. */
-    retarget: (cwd: string) => {
-      if (cwd === activeCwd) return;
-      activeCwd = cwd;
-      generation++;
-      gitState = undefined;
-      gitPathsCache = undefined;
-      prRequestKey = "";
-      currentPr = null;
       scheduleGit(0);
     },
     dispose: () => {

@@ -6,11 +6,12 @@
  * they say something. Layout and shedding live in `footer-line.ts`; git, usage
  * and stats in their own modules.
  */
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  ReadonlyFooterDataProvider,
-  Theme,
+import {
+  createLocalBashOperations,
+  type ExtensionAPI,
+  type ExtensionContext,
+  type ReadonlyFooterDataProvider,
+  type Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
@@ -271,14 +272,7 @@ export const createFooter = (
     return result.line;
   };
 
-  const track = (ctx: ExtensionContext) => {
-    state.ctx = ctx;
-    usage.refresh();
-    git.retarget(ctx.cwd);
-  };
-
   const mountFooter = (ctx: ExtensionContext) => {
-    if (ctx.mode !== "tui" || !ctx.hasUI) return;
     ctx.ui.setFooter((tui, theme, footerData) => {
       state.tui = tui;
       const unsubscribe = footerData.onBranchChange(() => {
@@ -313,24 +307,25 @@ export const createFooter = (
   };
 
   pi.on("session_start", (_event, ctx) => {
-    state.ctx = ctx;
-    stats.reset();
-    git.reset(ctx.cwd);
+    if (!state.live) return;
+    git.start(ctx.cwd);
     mountFooter(ctx);
     usage.refresh();
   });
 
-  const repaint = (_event: unknown, ctx: ExtensionContext) => {
-    track(ctx);
+  const repaint = () => {
+    if (!state.live) return;
+    usage.refresh();
     state.tui?.requestRender();
   };
-  const repaintAndGit = (_event: unknown, ctx: ExtensionContext) => {
-    repaint(_event, ctx);
+  const repaintAndGit = () => {
+    if (!state.live) return;
+    repaint();
     git.schedule();
   };
-  const rescan = (_event: unknown, ctx: ExtensionContext) => {
+  const rescan = () => {
     stats.reset();
-    repaint(_event, ctx);
+    repaint();
   };
 
   pi.on("model_select", repaint);
@@ -340,20 +335,42 @@ export const createFooter = (
   pi.on("session_info_changed", repaint);
   pi.on("turn_end", repaintAndGit);
   pi.on("agent_end", repaintAndGit);
-  pi.on("tool_execution_end", repaintAndGit);
   pi.on("session_compact", rescan);
   pi.on("session_tree", rescan);
 
   // A pull request created or merged a moment ago should not wait out the TTL.
+  // Marked once the command is done: a lookup forced while `gh pr create` still
+  // runs finds nothing, and caches that.
+  const prCalls = new Set<string>();
   pi.on("tool_execution_start", (event) => {
     const command = event.toolName === "bash" ? event.args?.command : undefined;
-    if (typeof command === "string" && PR_COMMAND.test(command)) git.markPrDirty();
+    if (typeof command === "string" && PR_COMMAND.test(command)) prCalls.add(event.toolCallId);
+  });
+  pi.on("tool_execution_end", (event) => {
+    if (prCalls.delete(event.toolCallId)) git.markPrDirty();
+    repaintAndGit();
   });
 
-  pi.on("user_bash", (event, ctx) => {
-    if (PR_COMMAND.test(event.command)) git.markPrDirty();
-    track(ctx);
-    git.schedule();
+  // user_bash fires before a `!command` runs and nothing fires after it, so the
+  // refresh rides on the operations that run it. These are pi's default when no
+  // shellPath is set; returning them ends pi's user_bash chain.
+  const bash = createLocalBashOperations();
+  pi.on("user_bash", (event) => {
+    if (!state.live) return;
+    const prCommand = PR_COMMAND.test(event.command);
+    return {
+      operations: {
+        exec: async (command, cwd, options) => {
+          try {
+            return await bash.exec(command, cwd, options);
+          } finally {
+            if (prCommand) git.markPrDirty();
+            repaint();
+            git.schedule(0);
+          }
+        },
+      },
+    };
   });
 
   return { meters };

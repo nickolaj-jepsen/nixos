@@ -14,13 +14,19 @@ import { createState } from "./chrome/state.ts";
 
 export default function (pi: ExtensionAPI) {
   const state = createState();
+  // Registered before the modules, so their handlers already see the session. pi
+  // builds a fresh runtime, and so a fresh instance of this, for every session.
+  pi.on("session_start", (_event, ctx) => {
+    state.ctx = ctx;
+    state.live = ctx.mode === "tui" && ctx.hasUI;
+  });
   const actions = createActions(pi, state);
   const identity = createIdentity(pi, state);
   const footer = createFooter(pi, state, actions);
   wrapPromptEditor(
     createEditorChrome(state, {
-      top: (width, hidden, border) =>
-        identity.drawTop(width, hidden, border, measurementLevels(state, footer.meters())),
+      top: (width, hidden, border, status) =>
+        identity.drawTop(width, hidden, border, status, measurementLevels(state, footer.meters())),
     }),
   );
 

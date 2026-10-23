@@ -11,8 +11,20 @@ type Inner = {
   actionHandlers?: Map<string, () => void>;
 };
 
+/** What pi shows while it works, retries, compacts or summarises a branch; pi animates it. */
+export type BorderStatus = {
+  kind: string;
+  renderInBorder(width: number): string;
+  renderSpinnerInBorder(width: number): string;
+};
+
 export type Painters = {
-  top: (width: number, hidden: number, border: Border) => { line: string; regions: Region[] };
+  top: (
+    width: number,
+    hidden: number,
+    border: Border,
+    status: BorderStatus | undefined,
+  ) => { line: string; regions: Region[] };
 };
 
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
@@ -39,17 +51,26 @@ const widgetAbove = (state: ChromeState): boolean => {
  * Owns the editor's top border without owning the editor: spellfix supplies it
  * through lib/prompt-editor, and this wraps that instance. The proxy forwards
  * everything pi wires up (submit, text, keybindings, border color) and
- * intercepts only `render` and `handleMouse`; the border is rewritten after the
- * inner render, so spellfix's styling never reaches it.
+ * intercepts only `render`, `handleMouse` and the status pi embeds in the
+ * border; the border is rewritten after the inner render, so spellfix's styling
+ * never reaches it.
  */
 export const createEditorChrome = (state: ChromeState, painters: Painters): EditorWrapper => {
   let topRegions: Region[] = [];
+  let status: BorderStatus | undefined;
 
   const decorate = (inner: Inner, tui: Renderer) => {
     state.tui = tui;
     state.editor = inner;
     const wrapper: Inner = new Proxy(inner, {
       get(target, property) {
+        // Kept here rather than passed on, so the inner editor draws the plain
+        // border whose `↑ N more` the top reads, and the top places the status.
+        if (property === "setWorkingStatusIndicator") {
+          return (indicator: BorderStatus | undefined) => {
+            status = indicator;
+          };
+        }
         if (property === "render") {
           return (width: number) => {
             const drawn = target.render(width);
@@ -65,7 +86,7 @@ export const createEditorChrome = (state: ChromeState, painters: Painters): Edit
             const lead = widgetAbove(state) ? 1 : 0;
             const lines = lead === 1 ? ["", ...drawn] : drawn;
 
-            const top = painters.top(width, topHidden(lines[lead] ?? ""), border);
+            const top = painters.top(width, topHidden(lines[lead] ?? ""), border, status);
             lines[lead] = top.line;
             topRegions = top.regions;
 
