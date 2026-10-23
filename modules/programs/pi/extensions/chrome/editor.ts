@@ -1,7 +1,7 @@
 import { CustomEditor, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import { hitTest, isPlainClick, type Region } from "./layout.ts";
-import type { Action, ChromeState } from "./state.ts";
+import type { Action, ChromeState, Renderer } from "./state.ts";
 
 type Border = (text: string) => string;
 type Inner = {
@@ -37,10 +37,10 @@ export const createEditorChrome = (state: ChromeState, painters: Painters) => {
   let topRegions: Region[] = [];
   let installed: unknown;
 
-  const decorate = (inner: Inner, tui: { requestRender(): void }) => {
+  const decorate = (inner: Inner, tui: Renderer) => {
     state.tui = tui;
     state.editor = inner;
-    return new Proxy(inner, {
+    const wrapper: Inner = new Proxy(inner, {
       get(target, property) {
         if (property === "render") {
           return (width: number) => {
@@ -95,6 +95,8 @@ export const createEditorChrome = (state: ChromeState, painters: Painters) => {
         return Reflect.has(target, property);
       },
     });
+    state.editorComponent = wrapper;
+    return wrapper;
   };
 
   /**

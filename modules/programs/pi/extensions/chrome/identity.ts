@@ -6,8 +6,8 @@
  * terse — task label, directory, age, and a state word only when the session
  * wants you — with the directory last so elision drops the part the workspace
  * name already told you. The border row is
- * the persistent one inside pi: it carries the label, the path, the age and the
- * short session id, and a click on it relabels. The label is deterministic
+ * the persistent one inside pi: it carries the label and the path, and a click
+ * on it relabels (`/header` still shows the age and session id). The label is deterministic
  * until you ask for a model one (alt+r or a click), plus a refresh at each
  * compaction boundary, which bounds the cost of a feature that only has to help
  * you pick a window.
@@ -255,26 +255,20 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
    * One continuous line, inset like the footer's text: the leading and trailing
    * dashes stand in for its padding, and the detail is separated by the same
    * dashes instead of dots so the row reads as the top of the input box.
-   * Detail is shed before the label is shortened, and the path outlives the
-   * session id because the path answers the glance question.
+   * Detail is shed before the label is shortened.
    */
   const borderSides = (width: number, hidden: number, border: (text: string) => string) => {
     const ctx = state.ctx;
     if (!ctx) return { left: "", right: "" };
     const theme = ctx.ui.theme;
     const { text } = currentLabel(ctx);
-    const age = formatAge(Date.now() - since);
     const stateText = stateWord(phase);
-    const id = shortId();
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
     // so it belongs next to the label rather than in the session detail.
     const hint = hidden > 0 ? ` ↑${hidden}` : "";
     const rows: string[][] = [
-      [shortPath(cwd), age, stateText, id],
-      [shortPath(cwd), stateText, id],
       [shortPath(cwd), stateText],
       // State outlives the path: it is the part that asks you to look.
-      [stateText, id],
       [stateText],
       [shortPath(cwd)],
       [],
