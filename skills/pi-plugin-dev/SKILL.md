@@ -1,6 +1,6 @@
 ---
 name: pi-plugin-dev
-description: Build, run and debug pi extensions by observation: tmux-driven TUI sessions, color screenshots, session digests, and a replay provider for deterministic tool calls. Use when developing, fixing or reviewing a pi extension, tool, command, renderer, overlay or theme; when an extension fails to load or a tool is never called; or when asking how something renders.
+description: Build, run and debug pi extensions by observation — tmux-driven TUI sessions, color screenshots, session digests, and a replay provider for deterministic tool calls. Use when developing, fixing or reviewing a pi extension, tool, command, renderer, overlay or theme; when an extension fails to load or a tool is never called; or when asking how something renders.
 compatibility: Requires tmux, nix and python3.
 ---
 
