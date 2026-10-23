@@ -1,6 +1,6 @@
 /**
- * Spelling fixes for the prompt draft, ported from the Claude Code spellfix
- * mod (modules/programs/claude-code/mods/spellfix). hunspell flags the words;
+ * Spelling fixes for the prompt draft, on the Claude Code spellfix mod's
+ * core (modules/programs/claude-code/mods/spellfix). hunspell flags the words;
  * one model call answers every flagged word at once and finds real-word typos
  * hunspell cannot see (`form` for `from`).
  *
@@ -12,7 +12,8 @@
  * - Picks teach a fix log, so the fix picked most for a word leads its list.
  *
  * Shares the personal dictionary and fix log with the Claude Code mod, so a
- * word learned in one is known to the other.
+ * word learned in one is known to the other; the core keeps their rules and
+ * file formats the same.
  */
 import { spawn } from "node:child_process";
 import { mkdir, open, readFile, writeFile } from "node:fs/promises";
@@ -29,19 +30,35 @@ import type {
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { Component, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
 
+import {
+  addInput,
+  autoAdds,
+  candidates,
+  caseVariants,
+  CHECK,
+  checkPrompt,
+  countPicks,
+  formatLog,
+  hunspellArgs,
+  isExtra,
+  nearest,
+  parseReply,
+  parseSuggestions,
+  placeExtras,
+  recase,
+  replyBudget,
+  shift,
+  suggestInput,
+  topFix,
+  withExtras,
+  withoutWords,
+} from "./lib/spellfix/hooks/core.ts";
+import type { Found, LogPick, Verdict } from "./lib/spellfix/hooks/core.ts";
+import type { Extra, FixLog, FixSource, Miss } from "./lib/spellfix/types/index.d.ts";
 import { recordSideCall } from "./lib/usage-ledger.ts";
 import { providePromptEditor } from "./lib/prompt-editor.ts";
 
-type Miss = { word: string; start: number; end: number };
-/** A typo the model found that hunspell did not flag: a real word or one it skipped (`dense/recieve`). */
-type Extra = Miss & { fix: string };
-type FixSource = "haiku" | "hunspell" | "history";
-type Verdict = { kind: "fix"; word: string } | { kind: "correct" } | { kind: "unsure" };
-type ParsedExtra = { word: string; nth: number; fix: string };
 type Suggestion = { word: string; source: FixSource };
-
-type FixCount = { [K in FixSource | "rejected"]?: number } & { last: string };
-type FixLog = Record<string, Record<string, FixCount>>;
 
 const HUNSPELL = process.env.PI_SPELLFIX_HUNSPELL || "hunspell";
 const DICTIONARIES = process.env.PI_SPELLFIX_DICTS || "en_US";
@@ -54,24 +71,6 @@ const SUGGESTIONS = 5;
 // "haiku" is the Claude Code mod's log key; keeping it shares the learned fixes.
 const AI_SOURCE: FixSource = "haiku";
 
-const CHECK = `You check spelling in a draft message a developer is about to send to a coding assistant. The draft may be in English or Danish, or mix both; never translate.
-
-A spell checker flagged the words marked ⟦like this⟧. Give each distinct flagged word one line:
-<word text="teh" verdict="fix">the</word> when it is a typo: the word they meant, in the same language and casing.
-<word text="Jepsen" verdict="correct"/> when it is a real word, name, product or technical term spelled as intended.
-<word text="xqzt" verdict="unsure"/> when you can't tell.
-
-Then give one line per typo outside the marked words, which the spell checker can't see: a word joined to another by a slash ("dense/recieve"), or a correctly spelled word that is clearly not the one meant ("form" for "from"). "word" is the typo exactly as written in the draft, and nth counts that word's occurrences in the draft from 1:
-<extra word="recieve" nth="1">receive</extra>
-
-Rules:
-- Spelling only: never grammar, style, punctuation or wording.
-- Never touch code, file paths, URLs, identifiers, command names, flags, @mentions, /slash-commands, or anything inside backticks.
-- Reply with these lines and nothing else.`;
-
-const SKIPPED_SCRIPTS =
-  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
-const WORD = /^\p{L}+(?:['’]\p{L}+)*$/u;
 const WORD_IN_TEXT = /[\p{L}]+(?:['’][\p{L}]+)*/gu;
 // SGR and APC, the only escapes the editor draws with. Text between them is
 // safe to style without corrupting a sequence.
@@ -95,8 +94,11 @@ let warnedHunspell = false;
 let warnedModel = false;
 let logging = Promise.resolve();
 
-/** The last model answer, kept for reopening the picker on the same draft without paying for it again. */
-let batch: { text: string; verdicts: Map<string, Verdict>; extras: ParsedExtra[] } | undefined;
+/**
+ * The last model answer, kept for reopening the picker on the same draft
+ * without paying for it again; `text` and the extras follow the picker's fixes.
+ */
+let batch: { text: string; verdicts: Map<string, Verdict>; extras: Extra[] } | undefined;
 
 function toast(
   ctx: ExtensionContext,
@@ -116,11 +118,6 @@ function warnHunspell(ctx: ExtensionContext, error: unknown) {
   );
 }
 
-function hunspellArgs(mode: "-l" | "-a"): string[] {
-  const personal = PERSONAL ? ["-p", PERSONAL] : [];
-  return [mode, "-d", DICTIONARIES, ...personal];
-}
-
 function ensurePersonal(): Promise<void> {
   if (!PERSONAL) return Promise.resolve();
   return mkdir(dirname(PERSONAL), { recursive: true })
@@ -136,7 +133,9 @@ async function runHunspell(
 ): Promise<string | undefined> {
   try {
     return await new Promise<string>((resolve, reject) => {
-      const child = spawn(HUNSPELL, hunspellArgs(mode), { stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn(HUNSPELL, hunspellArgs(mode, DICTIONARIES, PERSONAL), {
+        stdio: ["pipe", "pipe", "pipe"],
+      });
       let stdout = "";
       let stderr = "";
       let settled = false;
@@ -164,27 +163,6 @@ async function runHunspell(
   }
 }
 
-/** `text` with code blocks and spans blanked out, offsets kept. */
-function maskCode(text: string): string {
-  return text.replace(/```[\s\S]*?(?:```|$)|`[^`\n]*`?/g, (m) => " ".repeat(m.length));
-}
-
-/** The words to check: the same code-like-text exclusions the Claude Code mod documents. */
-function candidates(text: string): Miss[] {
-  const out: Miss[] = [];
-  for (const tok of maskCode(text).matchAll(/\S+/g)) {
-    // Commands, mentions, flags, URLs, paths, and anything with digits or underscores.
-    if (/^[/@-]|[/\\_~\d]|:\/\/|\.\p{L}/u.test(tok[0])) continue;
-    for (const m of tok[0].matchAll(/\p{L}+(?:['’]\p{L}+)*/gu)) {
-      const word = m[0];
-      if (word.length < 2 || /.\p{Lu}/u.test(word) || SKIPPED_SCRIPTS.test(word)) continue;
-      const start = tok.index + m.index;
-      out.push({ word, start, end: start + word.length });
-    }
-  }
-  return out;
-}
-
 /** The candidates hunspell rejects, skipped words excluded; none when hunspell fails. */
 async function findMisses(ctx: ExtensionContext, text: string): Promise<Miss[]> {
   const words = candidates(text).filter((w) => !ignored.has(w.word));
@@ -199,19 +177,25 @@ async function findMisses(ctx: ExtensionContext, text: string): Promise<Miss[]> 
   return words.filter((w) => bad.has(w.word));
 }
 
+/** The words of `words` hunspell accepts; none when it fails. */
+async function knownWords(ctx: ExtensionContext, words: readonly string[]): Promise<Set<string>> {
+  if (words.length === 0) return new Set();
+  const stdout = await runHunspell(ctx, "-l", `${words.join("\n")}\n`);
+  if (stdout === undefined) return new Set();
+  const bad = new Set(stdout.split("\n"));
+  return new Set(words.filter((w) => !bad.has(w)));
+}
+
 async function suggest(ctx: ExtensionContext, word: string): Promise<string[]> {
-  // `^` keeps hunspell's pipe mode from reading the word as a command.
-  const stdout = await runHunspell(ctx, "-a", `^${word}\n`);
-  const line = stdout?.split("\n").find((l) => l.startsWith("& "));
-  return line?.split(": ")[1]?.split(", ").filter(Boolean).slice(0, SUGGESTIONS) ?? [];
+  const stdout = await runHunspell(ctx, "-a", suggestInput(word));
+  return stdout === undefined ? [] : parseSuggestions(stdout, SUGGESTIONS);
 }
 
 async function addWords(ctx: ExtensionContext, words: readonly string[]) {
   for (const word of words) ignored.add(word);
   if (!PERSONAL || words.length === 0) return;
   await ensurePersonal();
-  // `*` adds to the personal dictionary and `#` saves it.
-  await runHunspell(ctx, "-a", `${words.map((w) => `*${w}\n`).join("")}#\n`);
+  await runHunspell(ctx, "-a", addInput(words));
 }
 
 /** Takes auto-added words back out of the personal dictionary; hunspell itself cannot remove one. */
@@ -222,10 +206,7 @@ async function removeWords(ctx: ExtensionContext, words: readonly string[]) {
   }
   if (!PERSONAL) return;
   try {
-    const lines = (await readFile(PERSONAL, "utf8")).split("\n");
-    // A line may carry affix flags after a slash (`word/S`).
-    const kept = lines.filter((line) => !words.includes(line.split("/")[0]!));
-    await writeFile(PERSONAL, kept.join("\n"));
+    await writeFile(PERSONAL, withoutWords(await readFile(PERSONAL, "utf8"), words));
   } catch (error) {
     toast(ctx, `spellfix: couldn't edit ${PERSONAL}: ${String(error)}`, "error");
   }
@@ -246,8 +227,6 @@ async function loadLog(): Promise<FixLog | undefined> {
   }
 }
 
-type LogPick = { from: string; to: string; as: FixSource | "rejected" };
-
 /** Counts picks in the fix log, one write at a time so quick picks don't drop each other. */
 function record(picks: readonly LogPick[]) {
   if (!FIX_LOG || picks.length === 0) return;
@@ -256,71 +235,10 @@ function record(picks: readonly LogPick[]) {
       const log = await loadLog();
       if (!log) return;
       const last = new Date().toISOString().slice(0, 10);
-      for (const { from, to, as } of picks) {
-        const counts = ((log[from] ??= {})[to] ??= { last });
-        counts[as] = (counts[as] ?? 0) + 1;
-        counts.last = last;
-      }
       await mkdir(dirname(FIX_LOG), { recursive: true });
-      await writeFile(FIX_LOG, `${JSON.stringify(log, null, 1)}\n`);
+      await writeFile(FIX_LOG, formatLog(countPicks(log, picks, last)));
     })
     .catch(() => undefined);
-}
-
-/** The fix picked most for `word`, net of the model's rejected ones; null when none comes out ahead. */
-function topFix(log: FixLog | undefined, word: string): string | null {
-  let best: string | null = null;
-  let bestScore = 0;
-  for (const [to, c] of Object.entries(log?.[word] ?? {})) {
-    const score = (c.haiku ?? 0) + (c.hunspell ?? 0) + (c.history ?? 0) - (c.rejected ?? 0);
-    if (score > bestScore) [best, bestScore] = [to, score];
-  }
-  return best;
-}
-
-/**
- * `word`'s nth whole-word occurrence in `text`, counting code too, as the model
- * does; undefined when that lands in code, a URL, a command, a mention or a
- * flag. Unlike `candidates`, a word in a slashed token (`dense/consice`) counts.
- */
-function locate(text: string, word: string, nth: number): Miss | undefined {
-  if (!WORD.test(word) || nth < 1) return undefined;
-  const at = [...text.matchAll(new RegExp(`(?<![\\p{L}'’])${word}(?![\\p{L}'’])`, "gu"))][nth - 1];
-  if (at === undefined || at.index === undefined) return undefined;
-  const end = at.index + word.length;
-  const tok = [...maskCode(text).matchAll(/\S+/g)].find(
-    (t) => t.index! <= at.index! && end <= t.index! + t[0].length,
-  );
-  if (!tok || /^[/@-]|:\/\//.test(tok[0])) return undefined;
-  return { word, start: at.index, end };
-}
-
-/** `m` past an edit that replaced start..end with `delta` more characters; undefined when the edit touched it. */
-function shift<T extends Miss>(m: T, start: number, end: number, delta: number): T | undefined {
-  if (m.end <= start) return m;
-  if (m.start >= end) return { ...m, start: m.start + delta, end: m.end + delta };
-  return undefined;
-}
-
-function isExtra(m: Miss | Extra): m is Extra {
-  return "fix" in m;
-}
-
-function nearest<T extends Miss>(found: readonly T[], cursor: number): T | undefined {
-  const distance = (m: Miss) => (cursor < m.start ? m.start - cursor : Math.max(0, cursor - m.end));
-  return found.reduce<T | undefined>(
-    (best, m) => (!best || distance(m) < distance(best) ? m : best),
-    undefined,
-  );
-}
-
-/** `text` with every flagged word wrapped for the model's batch answer. */
-function mark(text: string, misses: readonly Miss[]): string {
-  let marked = text;
-  for (const m of [...misses].sort((a, b) => b.start - a.start)) {
-    marked = `${marked.slice(0, m.start)}⟦${m.word}⟧${marked.slice(m.end)}`;
-  }
-  return marked;
 }
 
 function pickModel(ctx: ExtensionContext): Model<string> | undefined {
@@ -337,24 +255,23 @@ function pickModel(ctx: ExtensionContext): Model<string> | undefined {
   return ctx.model;
 }
 
-type Batch = { verdicts: Map<string, Verdict>; extras: ParsedExtra[] };
+type Answer = { verdicts: Map<string, Verdict>; found: Found[] };
 
 async function askModel(
   ctx: ExtensionContext,
   text: string,
   flagged: readonly Miss[],
   signal: AbortSignal,
-): Promise<Batch | undefined> {
+): Promise<Answer | undefined> {
   const model = pickModel(ctx);
   if (!model) {
     toast(ctx, "spellfix: no model selected", "warning");
     return undefined;
   }
   const distinct = new Set(flagged.map((m) => m.word));
-  const prompt = `<draft>\n${mark(text, flagged)}\n</draft>`;
   const message: UserMessage = {
     role: "user",
-    content: [{ type: "text", text: prompt }],
+    content: [{ type: "text", text: checkPrompt(text, flagged) }],
     timestamp: Date.now(),
   };
   try {
@@ -363,7 +280,7 @@ async function askModel(
         model,
         { systemPrompt: CHECK, messages: [message] },
         {
-          maxTokens: Math.min(4096, 48 * (distinct.size + 10)),
+          maxTokens: replyBudget(distinct.size),
           temperature: 0,
           timeoutMs: 20_000,
           signal,
@@ -375,35 +292,7 @@ async function askModel(
       throw new Error(response.errorMessage ?? response.stopReason);
     }
     const reply = response.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("\n");
-
-    const verdicts = new Map<string, Verdict>();
-    const extras: ParsedExtra[] = [];
-    for (const m of reply.matchAll(
-      /<word text="([^"]+)" verdict="(fix|correct|unsure)"\s*(?:\/>|>([^<]*)<\/word>)/g,
-    )) {
-      const [, word = "", kind, fix = ""] = m;
-      // The model sometimes answers an extra as a verdict; take it as one when the draft has it once.
-      if (!distinct.has(word)) {
-        if (kind === "fix" && locate(text, word, 2) === undefined)
-          extras.push({ word, nth: 1, fix });
-        continue;
-      }
-      // A "fix" back to the same word says nothing either way.
-      const isFix = kind === "fix" && fix.trim() !== "" && fix.trim() !== word;
-      verdicts.set(
-        word,
-        isFix
-          ? { kind: "fix", word: fix.trim() }
-          : kind === "correct"
-            ? { kind }
-            : { kind: "unsure" },
-      );
-    }
-    for (const m of reply.matchAll(/<extra word="([^"]+)" nth="(\d+)">([^<]+)<\/extra>/g)) {
-      const [, word = "", nth = "", fix = ""] = m;
-      extras.push({ word, nth: Number(nth), fix });
-    }
-    return { verdicts, extras };
+    return parseReply(reply, text, distinct);
   } catch (error) {
     toast(
       ctx,
@@ -425,24 +314,14 @@ function underlinedWords(misses: readonly (Miss | Extra)[]): Set<string> {
   return new Set(misses.map((m) => m.word));
 }
 
-/** The cached batch's extras located in `text`; empty for any other draft or skipped word. */
+/** The cached batch's extras when it is for `text`, skipped words left out. */
 function cachedExtras(text: string): Extra[] {
-  if (batch?.text !== text) return [];
-  return batch.extras.flatMap((extra) => {
-    if (ignored.has(extra.word)) return [];
-    const at = locate(text, extra.word, extra.nth);
-    const fix = extra.fix.trim();
-    return at && fix !== extra.word ? [{ ...at, fix }] : [];
-  });
+  return batch?.text === text ? batch.extras.filter((x) => !ignored.has(x.word)) : [];
 }
 
 /** Hunspell's misses plus the cached model extras, in draft order. */
 async function allMisses(ctx: ExtensionContext, text: string): Promise<(Miss | Extra)[]> {
-  const found: (Miss | Extra)[] = await findMisses(ctx, text);
-  for (const extra of cachedExtras(text)) {
-    if (!found.some((m) => m.start < extra.end && extra.start < m.end)) found.push(extra);
-  }
-  return found.sort((a, b) => a.start - b.start);
+  return withExtras(await findMisses(ctx, text), cachedExtras(text));
 }
 
 /* ------------------------------------------------------------------ editor */
@@ -577,6 +456,8 @@ class SpellPicker implements Component {
   private closed = false;
   private pendingAll = false;
   private flagged: Miss[] = [];
+  // Fixes made while the model call is out, replayed on its extras when it lands.
+  private edits: { start: number; end: number; delta: number }[] = [];
   private readonly abort = new AbortController();
 
   constructor(
@@ -599,11 +480,7 @@ class SpellPicker implements Component {
   async start() {
     this.flagged = await findMisses(this.ctx, this.text);
     if (!this.live) return;
-    const items: (Miss | Extra)[] = [...this.flagged];
-    for (const extra of cachedExtras(this.text)) {
-      if (!items.some((m) => m.start < extra.end && extra.start < m.end)) items.push(extra);
-    }
-    this.items = items.sort((a, b) => a.start - b.start);
+    this.items = withExtras(this.flagged, cachedExtras(this.text));
     const near = nearest(this.items, this.cursor);
     this.index = near ? Math.max(0, this.items.indexOf(near)) : 0;
     this.prefetch();
@@ -623,11 +500,20 @@ class SpellPicker implements Component {
     this.done(result);
   }
 
+  /** Replaces start..end of the picker's text with `fix`, keeping the batch's extras in place. */
+  private splice(start: number, end: number, fix: string) {
+    const before = this.text;
+    const delta = fix.length - (end - start);
+    this.text = `${before.slice(0, start)}${fix}${before.slice(end)}`;
+    if (batch?.text === before) {
+      batch.text = this.text;
+      batch.extras = batch.extras.flatMap((x) => shift(x, start, end, delta) ?? []);
+    }
+    if (!this.aiDone) this.edits.push({ start, end, delta });
+  }
+
   private changed() {
     this.ui.setEditorText(this.text);
-    // Keep a landed batch usable for this draft: extras are found by word and
-    // occurrence, so a shifted offset does not invalidate them.
-    if (batch) batch.text = this.text;
     this.prefetch();
     this.tui.requestRender();
   }
@@ -651,38 +537,41 @@ class SpellPicker implements Component {
 
   /** The model's batch for the draft at open; fixes found for words already gone are ignored. */
   private async runModel() {
-    const result = await askModel(this.ctx, this.text, this.flagged, this.abort.signal);
+    const sent = this.text;
+    const answer = await askModel(this.ctx, sent, this.flagged, this.abort.signal);
     if (!this.live) return;
-    if (!result) {
+    if (!answer) {
       this.aiError = "no answer";
       this.aiDone = true;
       this.tui.requestRender();
       return;
     }
-    batch = { text: this.text, verdicts: result.verdicts, extras: result.extras };
-    await this.applyFresh(result);
+    const { verdicts, found } = answer;
+    const variants = [...verdicts].flatMap(([word, v]) =>
+      v.kind === "correct" ? caseVariants(word) : [],
+    );
+    recase(verdicts, await knownWords(this.ctx, variants));
+    if (!this.live) return;
+    let extras = placeExtras(sent, found, this.flagged);
+    for (const e of this.edits)
+      extras = extras.flatMap((x) => shift(x, e.start, e.end, e.delta) ?? []);
+    batch = { text: this.text, verdicts, extras };
+    await this.applyFresh(verdicts);
   }
 
   /** Acts on a fresh answer, which may add words to the personal dictionary. */
-  private async applyFresh(result: Batch) {
-    for (const [word, verdict] of result.verdicts) {
+  private async applyFresh(verdicts: ReadonlyMap<string, Verdict>) {
+    for (const [word, verdict] of verdicts) {
       if (verdict.kind === "fix") this.ai.set(word, verdict.word);
     }
-    const correct = [...result.verdicts]
-      .filter(
-        ([word, verdict]) => verdict.kind === "correct" && !ignored.has(word) && !unadded.has(word),
-      )
-      .map(([word]) => word);
+    const correct = autoAdds(verdicts, (word) => ignored.has(word) || unadded.has(word));
     if (correct.length) {
       await addWords(this.ctx, correct);
       if (!this.live) return;
       for (const word of correct) this.added.add(word);
       this.items = this.items.filter((item) => !correct.includes(item.word));
     }
-    for (const extra of cachedExtras(this.text)) {
-      if (!this.items.some((m) => m.start === extra.start)) this.items.push(extra);
-    }
-    this.items.sort((a, b) => a.start - b.start);
+    this.items = withExtras(this.items, cachedExtras(this.text));
     this.index = Math.max(0, Math.min(this.index, this.items.length - 1));
     this.aiDone = true;
     this.prefetch();
@@ -725,7 +614,7 @@ class SpellPicker implements Component {
     record([{ from: item.word, to: fix, as: source }]);
 
     const delta = fix.length - (item.end - item.start);
-    this.text = `${this.text.slice(0, item.start)}${fix}${this.text.slice(item.end)}`;
+    this.splice(item.start, item.end, fix);
     this.items = this.items
       .filter((m) => m !== item)
       .flatMap((m) => shift(m, item.start, item.end, delta) ?? []);
@@ -748,7 +637,8 @@ class SpellPicker implements Component {
 
   private async add() {
     const item = this.item;
-    if (!item) return;
+    // Extras are typos the model found; none belongs in the dictionary.
+    if (!item || isExtra(item)) return;
     if (!PERSONAL) {
       toast(this.ctx, "spellfix: no personal dictionary configured", "warning");
       return;
@@ -789,15 +679,12 @@ class SpellPicker implements Component {
       toast(this.ctx, "No fixes from the model", "info");
       return;
     }
-    let text = this.text;
     for (const { item, fix } of [...fixes].sort((a, b) => b.item.start - a.item.start)) {
-      text = `${text.slice(0, item.start)}${fix}${text.slice(item.end)}`;
+      this.splice(item.start, item.end, fix);
     }
     record(fixes.map(({ item, fix }) => ({ from: item.word, to: fix, as: AI_SOURCE })));
-    this.text = text;
     this.items = [];
-    if (batch) batch.text = text;
-    this.ui.setEditorText(text);
+    this.ui.setEditorText(this.text);
     this.close({ changed: true });
   }
 
