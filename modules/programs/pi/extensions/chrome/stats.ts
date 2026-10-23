@@ -5,7 +5,7 @@ type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
 export type Stats = {
   cost: number;
-  /** Hit rate of the latest request that could have hit a warm cache. */
+  /** Hit rate of the latest request that could hit a warm cache, from a model that reports caching. */
   cacheHit: number | undefined;
   speed: number | undefined;
 };
@@ -22,6 +22,8 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
   // The first request after a start, a model switch or a compaction can only
   // write the cache, so it says nothing about the hit rate.
   let warmModel: string | undefined;
+  // A provider that never reports cache usage would read as a permanent 0% hit rate.
+  const caching = new Set<string>();
 
   for (const entry of ctx.sessionManager.getEntries()) {
     cost += entryCost(entry);
@@ -34,6 +36,7 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
     const message = entry.message;
     const key = `${message.provider}/${message.model}`;
     const prompt = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
+    if (message.usage.cacheRead + message.usage.cacheWrite > 0) caching.add(key);
     if (key !== warmModel) {
       warmModel = key;
       cacheHit = undefined;
@@ -62,7 +65,7 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
       ? lastSpeed.value
       : undefined;
 
-  return { cost, cacheHit, speed };
+  return { cost, cacheHit: warmModel && caching.has(warmModel) ? cacheHit : undefined, speed };
 };
 
 /** Session cost, cache health and speed, rescanned only when the leaf or model moves. */
