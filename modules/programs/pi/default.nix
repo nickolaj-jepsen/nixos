@@ -535,6 +535,63 @@ in {
       home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
         # Otherwise bg_run is an ordinary extension tool and skips the bash rules below.
         shellTools.bg_run.commandArgument = "command";
+        # A path whose read/write direction is unproven is checked against both
+        # external_directory directions and takes the stricter answer, so every
+        # routine reader outside the package's pure-reader core lands on the
+        # write ask below. Declaring one proves its operands are reads. Don't
+        # declare a core word (cat, grep, sed, …): the core wins and the
+        # package warns that the entry is ignored.
+        commandEffects = {
+          readlink.effects = "read";
+          jq.effects = "read";
+          cut.effects = "read";
+          du.effects = "read";
+          df.effects = "read";
+          strings.effects = "read";
+          sha256sum.effects = "read";
+          # The core leaves it out because -C compiles a magic.mgc.
+          file = {
+            effects = "read";
+            unlessOption = ["-C" "--compile"];
+          };
+          git = {
+            unlessOption = ["--output"];
+            subcommands = {
+              log = "read";
+              show = "read";
+              status = "read";
+              diff = "read";
+              rev-parse = "read";
+              rev-list = "read";
+              merge-base = "read";
+              blame = "read";
+              grep = "read";
+              ls-files = "read";
+              cat-file = "read";
+              describe = "read";
+              shortlog = "read";
+              whatchanged = "read";
+              for-each-ref = "read";
+              remote.subcommands = {
+                show = "read";
+                get-url = "read";
+              };
+            };
+          };
+          # eval and the read-only flake verbs; build and run stay undeclared so
+          # their store paths and links still ask.
+          nix.subcommands = {
+            eval = "read";
+            search = "read";
+            path-info = "read";
+            why-depends = "read";
+            show-config = "read";
+            flake.subcommands = {
+              show = "read";
+              metadata = "read";
+            };
+          };
+        };
         permission = {
           "*" = "allow";
           # Gates bash too, and matches symlink targets as well as the path as

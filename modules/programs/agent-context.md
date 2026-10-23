@@ -6,7 +6,7 @@ Repository-local instructions and existing conventions take precedence over thes
 
 - This machine is managed by the `~/nixos` flake (NixOS, or nix-darwin on macOS). Persistent system or user configuration belongs there; do not use `apt`, global npm/pip installs, or edit `/etc`.
 - For one-off tools, use `nix run nixpkgs#<tool>` or `nix shell nixpkgs#<tool>`.
-- Don't create files or folders directly in `~`, or in a repo you weren't asked to change. Throwaway files (benchmarks, experiments, test fixtures) go in `$TMPDIR` or a `mktemp -d` dir. Anything meant to outlive the session (plans, notes, reports) goes in `~/.local/share/agents/<topic>/`.
+- Don't create files or folders directly in `~`, or in a repo you weren't asked to change. Throwaway files (benchmarks, experiments, test fixtures) go under `/tmp` — spell the path out literally, since `$TMPDIR`, `$(mktemp -d)` and any other computed path are opaque to permission rules and make each write through one ask. Anything meant to outlive the session (plans, notes, reports) goes in `~/.local/share/agents/<topic>/`.
 
 ## Tooling
 
@@ -18,6 +18,7 @@ Repository-local instructions and existing conventions take precedence over thes
   (it prints the path); `git worktree add` anywhere else is blocked. `wt` also
   lists, diffs, lands and cleans them.
 - In Digital-Udvikling repositories, use `ds` when it supports the operation; check `ds --help` when uncertain.
+- A wrapper (`xargs`, `sh -c`, `eval`, `sudo`, `find -exec`) hides the command that runs, so it asks for approval even when the inner command is harmless. A plain command or a glob avoids the prompt.
 
 ## Code style
 
