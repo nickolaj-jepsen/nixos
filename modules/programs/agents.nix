@@ -68,6 +68,15 @@
           mode = "0600";
         };
       })
+
+      # pi's Jev classifier gate (extensions/routers.ts) needs no other agent.
+      (lib.mkIf config.fireproof.dev.pi.enable {
+        age.secrets.typesafe-api-key = {
+          rekeyFile = ../../secrets/typesafe-api-key.age;
+          path = "${config.home.homeDirectory}/.pi/agent/typesafe-api-key";
+          mode = "0600";
+        };
+      })
     ]);
   };
 }

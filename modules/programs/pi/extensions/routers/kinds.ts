@@ -17,6 +17,15 @@
  *   (Go's GLM-5.3 rate is 3.6x Synthetic's, Kimi K3's is 1.4x).
  * - `strong` therefore runs on Synthetic first, Go second.
  *
+ * The order above is each pool's steady-state ranking; ../routers.ts bends it two
+ * ways at pick time. Background requests (compaction summaries) try the credit
+ * stage last, so it is spent on background work only when both subscriptions
+ * are out. And Go's monthly allowance is bankable — whatever it holds at its
+ * reset strands, while Synthetic's weekly meter refills continuously and can
+ * never be banked — so while Go's window is under pace near its reset, its
+ * stage swaps ahead of Synthetic's. Both pools carry the same models, so only
+ * which meter drains changes.
+ *
  * The Anthropic credit is a pool of its own, reserving CREDIT_RESERVE_USD in
  * ../routers.ts. Opus and Sonnet draw the same credit, so a Sonnet stage after
  * Opus could never be reached; Sonnet stays a model to pick by hand.
@@ -79,7 +88,7 @@ export const STRONG: Ladder = [
   },
 ];
 
-/** Opus first while the credit lasts, then the strong kinds's pools. */
+/** Opus first while the credit lasts, then the strong kind's pools. */
 export const PLANNER: Ladder = [
   { provider: "anthropic", label: "the Anthropic credit", variants: [{ id: "claude-opus-5-5" }] },
   ...STRONG,
@@ -88,15 +97,47 @@ export const PLANNER: Ladder = [
 export const KINDS = { flash: FLASH, strong: STRONG, planner: PLANNER } as const;
 export type Kind = keyof typeof KINDS;
 
-/** Display metadata; thinking levels are clamped per routed model by pi. */
-export const KIND_META: Record<
-  Kind,
-  { name: string; thinkingLevels: ThinkingLevel[]; contextWindow: number }
-> = {
-  flash: { name: "Flash", thinkingLevels: ["low", "high", "max"], contextWindow: 524_288 },
-  strong: { name: "Strong", thinkingLevels: ["low", "high", "max"], contextWindow: 524_288 },
+/** The namespace the virtual models are listed under: vm/flash, vm/strong, … */
+export const PROVIDER = "vm";
+
+/** Every virtual model's ladder keyed as pi lists it; architect is the planner
+ * and flash ladders flattened in dispatch order, for registries that display. */
+export const LADDERS: Record<Kind | "architect", Ladder> = {
+  ...KINDS,
+  architect: [...PLANNER, ...FLASH],
+};
+
+export type ModelMeta = {
+  name: string;
+  /** One line for /models; this file's header is the long form. */
+  description: string;
+  thinkingLevels: ThinkingLevel[];
+  contextWindow: number;
+};
+
+/** Display metadata for every virtual model in ../routers.ts; pi clamps thinking levels per routed model. */
+export const KIND_META: Record<Kind | "architect", ModelMeta> = {
+  flash: {
+    name: "Flash",
+    description: "Cheap frontier for ordinary turns",
+    thinkingLevels: ["low", "high", "max"],
+    contextWindow: 524_288,
+  },
+  strong: {
+    name: "Strong",
+    description: "Second opinion, and the escape hatch Claude models decline",
+    thinkingLevels: ["low", "high", "max"],
+    contextWindow: 524_288,
+  },
   planner: {
     name: "Planner",
+    description: "Opus plans while the credit lasts",
+    thinkingLevels: ["low", "medium", "high", "xhigh", "max"],
+    contextWindow: 1_000_000,
+  },
+  architect: {
+    name: "Architect",
+    description: "Plans on the planner, builds on Flash",
     thinkingLevels: ["low", "medium", "high", "xhigh", "max"],
     contextWindow: 1_000_000,
   },
