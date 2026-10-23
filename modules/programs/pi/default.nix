@@ -79,6 +79,9 @@ in {
       inherit lib;
       colors = config.fireproof.theme.colors;
     }));
+    # llama-swap's entries for this host's VRAM tier (modules/programs/llm.nix).
+    localModels = (import ../_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
+    localMaxTokens = 8192;
     # Pi-only, not in the shared programs.mcp registry: Claude Code has its own
     # browser tools. The server launches its own Chromium on a dedicated profile
     # (~/.cache/chrome-devtools-mcp), never attaching to a running browser.
@@ -129,7 +132,7 @@ in {
 
           - `SubagentWorkflow`, `get_subagent_result`, and `steer_subagent` are hidden from the tool list; call them from codemode as `tools.<name>` and read `await describeTool("<name>")` first for their parameters.
           - For a deterministic multi-agent script (Claude Code `Workflow` style), call `tools.SubagentWorkflow` from codemode.
-          - `bg_status`, `bg_logs` and `bg_kill` are hidden too; call them from codemode, or `read` the output path `bg_run` returned.
+          - When `bg_status`, `bg_logs` or `bg_kill` is missing from your tool list, call it from codemode, or `read` the output path `bg_run` returned.
         '';
         # The fireproof.agents.skills registry, linked into one dir.
         skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
@@ -160,6 +163,14 @@ in {
           defaultProvider = "opencode-go";
           defaultModel = "deepseek-v4.1-flash";
           defaultThinkingLevel = "high";
+          # The defaults (reserve 16k, keep 20k) overrun a 32k window: compaction would
+          # start at 16k, with the system prompt and tools already taking ~9k of it.
+          compaction.modelOverrides = lib.optionalAttrs config.fireproof.dev.llm.enable (lib.mapAttrs' (id: m:
+            lib.nameValuePair "local/${id}" {
+              reserveTokens = localMaxTokens;
+              keepRecentTokens = lib.min 20000 (m.ctx / 4);
+            })
+          localModels);
           # Pinned, not `system`, so the accent is the desktop accent.
           theme = "fireproof";
           # Keeps the version and key hints; drops the loaded-resource listing.
@@ -286,7 +297,7 @@ in {
                   # mmproj isn't loaded — no VRAM left for the vision tower.
                   input = ["text"];
                   contextWindow = m.ctx;
-                  maxTokens = 8192;
+                  maxTokens = localMaxTokens;
                   cost = {
                     input = 0;
                     output = 0;
@@ -294,7 +305,7 @@ in {
                     cacheWrite = 0;
                   };
                 })
-                (import ../_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
+                localModels;
             };
           };
       };
