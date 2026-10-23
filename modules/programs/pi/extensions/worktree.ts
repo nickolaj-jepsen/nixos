@@ -14,7 +14,7 @@
  * A bare `/wt` asks the naming model for a branch name from the session, so a
  * worktree costs no more than the move.
  */
-import { execFile, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
@@ -35,6 +35,7 @@ import {
   stripRequest,
 } from "./lib/naming.ts";
 import { recordSideCall } from "./lib/usage-ledger.ts";
+import { branches, names, wt } from "./lib/wt.ts";
 
 const fallback = "Blocked: git worktree add outside ~/worktrees/<repo>/. Use `wt create <name>`.";
 const MOVED = "worktree-moved";
@@ -46,30 +47,6 @@ const NAME_SYSTEM = `You name a git branch so its owner can tell one worktree fr
 Reply with 2-4 lowercase words joined by hyphens, like "flaky-test-retry". No punctuation, no quotes, no "worktree", no branch prefixes.
 Use the user's own words, the directory name and concrete nouns. Name the work, not the fact that you agreed to something.`;
 const NAME_WORDS = 4;
-
-const wt = (args: string[], cwd: string) =>
-  new Promise<string>((resolve, reject) =>
-    execFile("wt", args, { cwd, encoding: "utf8", timeout: 120_000 }, (error, stdout, stderr) =>
-      error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout.trim()),
-    ),
-  );
-
-const names = (cwd: string) =>
-  wt(["names"], cwd).then(
-    (out) => out.split("\n").filter(Boolean),
-    () => [] as string[],
-  );
-
-/** Branch names `wt create` would refuse, so an automatic name has to avoid them. */
-const branches = (cwd: string) =>
-  new Promise<string[]>((resolve) =>
-    execFile(
-      "git",
-      ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
-      { cwd, encoding: "utf8" },
-      (error, stdout) => resolve(error ? [] : stdout.split("\n").filter(Boolean)),
-    ),
-  );
 
 /** Turns a model reply into a branch name: lowercase words, `NAME_WORDS` at most. */
 const slug = (raw: string) =>

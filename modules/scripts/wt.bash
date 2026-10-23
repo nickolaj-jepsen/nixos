@@ -17,8 +17,12 @@ Usage:
   wt create <name> [<base>]      Create <root>/<repo>/<name> on a new branch <name> off
                                  <base> (default: <default>); prints its path.
   wt cd [<name>]                 Print a worktree's path (fzf picker if no name).
-  wt clean [--dry-run] [<name>]  Remove safely-removable worktrees; no name cleans every
-                                 safe one (never main, never one parked on <default>).
+  wt clean [--dry-run] [--force] [<name>]
+                                 Remove safely-removable worktrees and their branches; no name
+                                 cleans every safe one (never main, never one parked on
+                                 <default>). --force names one worktree and drops its
+                                 uncommitted or unmerged work, which the dialog in pi's
+                                 shutdown hook does.
   wt apply [--dry-run] [<name>]  Rebase onto <default>, remove the worktree, fast-forward
                                  <default>, delete the branch. Needs main on clean <default>.
   wt diff [<name>]               Review the diff (committed + uncommitted) vs <default>.
@@ -27,6 +31,10 @@ Usage:
   wt migrate [--dry-run]         Move this repo's worktrees that live outside the root into
                                  <root>/<repo>/.
   wt names                       Print every worktree name, one per line (shell completions).
+  wt status [<name>]             Machine-readable: one \x1f-separated row per worktree
+                                 (name path registered branch state ahead behind locked
+                                 age_seconds safe_clean is_main default_branch main_state
+                                 main_branch). Agent hooks read this instead of `wt list`.
   wt guard <command>             Exit 1 with a reason when <command> runs `git worktree add`
                                  outside the root, else exit 0. Agent hooks call this.
 EOF
@@ -340,6 +348,53 @@ cmd_list() {
     printf '%s\n' "$rows" | format_display | print_table
 }
 
+# Machine-readable state: gather_worktrees' rows plus the repo facts that decide
+# whether a `wt apply` could land — the default branch, and a non-fatal version of
+# require_main_on_clean_default's answer. Agents read this instead of `wt list`.
+cmd_status() {
+    local target=""
+    while (( $# > 0 )); do
+        case "$1" in
+            -*) die "unknown flag: $1" ;;
+            *)  target="$1"; shift ;;
+        esac
+    done
+
+    local main_state="" main_branch porcelain
+    porcelain=$(git -C "$MAIN_WT" status --porcelain 2>/dev/null || true)
+    if ! main_branch=$(git -C "$MAIN_WT" symbolic-ref --short --quiet HEAD 2>/dev/null); then
+        main_branch=""
+        main_state="detached"
+    fi
+    if [[ -z "$main_state" ]]; then
+        if [[ -z "$porcelain" ]]; then
+            main_state="clean"
+        elif grep -qvE '^\?\?' <<<"$porcelain"; then
+            main_state="dirty"
+        else
+            main_state="untracked"
+        fi
+    fi
+
+    local rows
+    rows=$(gather_worktrees "$MAIN_WT" "$DEFAULT_BRANCH")
+    [[ -n "$rows" ]] || return 0
+
+    local row name matched=0
+    while IFS= read -r row; do
+        name="${row%%$'\x1f'*}"
+        if [[ -n "$target" && "$name" != "$target" ]]; then
+            continue
+        fi
+        matched=1
+        printf '%s\x1f%s\x1f%s\x1f%s\n' "$row" "$DEFAULT_BRANCH" "$main_state" "$main_branch"
+    done <<<"$rows"
+
+    if [[ -n "$target" && "$matched" -eq 0 ]]; then
+        die "no worktree named '$target'"
+    fi
+}
+
 cmd_create() {
     local name="" base=""
     while (( $# > 0 )); do
@@ -469,15 +524,26 @@ cmd_cd() {
     : "${reg:-}" "${branch:-}" "${state:-}" "${ahead:-}" "${behind:-}" "${locked:-}" "${age_s:-}" "${safe_clean:-}" "${is_main:-}"
 }
 
+# Removing a worktree leaves its branch behind, and `wt create <name>` refuses a
+# taken branch — so a removed worktree takes its branch with it, never the default.
+drop_branch() {
+    local branch="$1"
+    [[ -n "$branch" && "$branch" != "$DEFAULT_BRANCH" ]] || return 0
+    git -C "$MAIN_WT" branch -D "$branch" >/dev/null 2>&1 || true
+}
+
 cmd_clean() {
-    local dry_run=0 target=""
+    local dry_run=0 force=0 target=""
     while (( $# > 0 )); do
         case "$1" in
             --dry-run) dry_run=1; shift ;;
+            --force)   force=1; shift ;;
             -*)        die "unknown flag: $1" ;;
             *)         target="$1"; shift ;;
         esac
     done
+    (( force == 0 )) || [[ -n "$target" ]] \
+        || die "--force needs a worktree name; a sweep never drops unmerged work"
 
     local rows
     rows=$(gather_worktrees "$MAIN_WT" "$DEFAULT_BRANCH")
@@ -513,6 +579,8 @@ cmd_clean() {
                 if (( reg == 1 )); then
                     if (( locked == 1 )); then
                         die "'$name' is locked. Run: git -C '$MAIN_WT' worktree unlock '$path'"
+                    elif (( force == 1 )); then
+                        : # asked for by name: the uncommitted/unmerged work is the point
                     elif [[ "$state" != "clean" ]]; then
                         die "'$name' has uncommitted changes ($state); commit/stash inside the worktree first"
                     else
@@ -530,8 +598,13 @@ cmd_clean() {
         if (( reg == 1 )); then
             if (( dry_run == 1 )); then
                 info "would remove (registered) $name"
+            elif (( force == 1 )); then
+                git -C "$MAIN_WT" worktree remove --force "$path"
+                drop_branch "$branch"
+                info "removed (registered, force) $name"
             else
                 git -C "$MAIN_WT" worktree remove "$path"
+                drop_branch "$branch"
                 info "removed (registered) $name"
             fi
         else
@@ -1170,6 +1243,7 @@ case "$verb" in
     code)            cmd_code "$@" ;;
     migrate)         cmd_migrate "$@" ;;
     names)           cmd_names "$@" ;;
+    status)          cmd_status "$@" ;;
     -h|--help|help)  usage ;;
     *)               usage; exit 1 ;;
 esac
