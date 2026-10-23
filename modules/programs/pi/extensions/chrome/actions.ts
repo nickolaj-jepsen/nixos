@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { closeModels, modelsOpen } from "../lib/models-picker.ts";
 import type { Action, ChromeState } from "./state.ts";
@@ -41,6 +42,14 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState) => {
   const closeOverlay = dismissOverlay(state);
 
   return {
+    // The path is the checkout the session works in, so it opens where the work
+    // continues rather than in a file manager. Plain `code` focuses a window that
+    // already has it open and makes one otherwise.
+    openFolder: ((ctx) => {
+      const child = spawn("code", [ctx.cwd], { detached: true, stdio: "ignore" });
+      child.on("error", () => ctx.ui.notify("chrome: cannot run code", "error"));
+      child.unref();
+    }) as Action,
     // The picker is this repo's own (/models: labels, cost, context), and a
     // second click closes it. Any other overlay closes instead of opening the
     // picker on top: pi closes those on Escape without telling anyone.

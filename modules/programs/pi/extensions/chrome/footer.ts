@@ -17,7 +17,7 @@ import { agentParts } from "./agents.ts";
 import { createBackground } from "./background.ts";
 import { borderShown } from "./editor.ts";
 import { layoutFooter } from "./footer-line.ts";
-import { formatCost, shortPath } from "./format.ts";
+import { formatCost, splitPath } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
 import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";
@@ -213,6 +213,8 @@ export const createFooter = (
       return plain ? [{ id: `status-${index}`, text: plain, color: "dim" as const }] : [];
     });
 
+    const path = splitPath(ctx.cwd);
+
     const result = layoutFooter(
       width,
       theme,
@@ -266,7 +268,14 @@ export const createFooter = (
             : undefined,
         statuses,
         alarms,
-        path: { id: "path", text: shortPath(ctx.cwd), color: "dim" },
+        path: {
+          id: "path",
+          text: path.parent + path.name,
+          color: "dim",
+          // The last segment names the worktree or checkout, so it is the part that reads.
+          styled: (t) => t.fg("dim", path.parent) + t.fg("text", path.name),
+          action: actions.openFolder,
+        },
         cost:
           costText && !bordered
             ? { id: "cost", text: costText, color: "dim", action: actions.cost }

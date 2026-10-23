@@ -113,9 +113,11 @@ export const layoutFooter = (
     () => (providerShort = true),
     () => (selection = false),
     () => (statuses = false),
-    () => (path = false),
     () => (speed = false),
     () => (cost = false),
+    // Where the session is says more than what it has cost, so the path survives
+    // both meters and only goes when the model itself needs the room.
+    () => (path = false),
     () => (branch = "glyph"),
     // A pool alarm needs its provider to mean anything, so with one on screen the
     // provider outlives the effort icon and the branch and leaves with the alarm.

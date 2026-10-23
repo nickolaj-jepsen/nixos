@@ -34,6 +34,21 @@ export const formatWhen = (at: Date, now = new Date()) => {
   return at.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 };
 
+/**
+ * A directory as its parent prefix and final name, so a footer can dim the road
+ * and light the place: the last segment is the worktree or checkout the session
+ * is on, which is the one part that has to read.
+ */
+export const splitPath = (cwd: string) => {
+  const home = homedir();
+  const shown =
+    cwd === home ? "~" : cwd.startsWith(home + sep) ? `~${cwd.slice(home.length)}` : cwd;
+  const cut = shown.lastIndexOf("/");
+  return cut < 0
+    ? { parent: "", name: shown }
+    : { parent: shown.slice(0, cut + 1), name: shown.slice(cut + 1) };
+};
+
 /** A directory as `~/a/b`, eliding the middle of deep paths. */
 export const shortPath = (cwd: string) => {
   const home = homedir();

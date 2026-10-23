@@ -12,7 +12,7 @@ import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { getCapabilities, hyperlink } from "@earendil-works/pi-tui";
 import type { BranchMode } from "./footer-line.ts";
@@ -33,7 +33,6 @@ type GitState = {
   detached: boolean;
   oid: string;
   upstream: boolean;
-  worktree: boolean;
   staged: number;
   unstaged: number;
   untracked: number;
@@ -62,7 +61,6 @@ export const PR_COMMAND = /\bgh\s+pr\s+(create|merge|close|reopen|edit|ready)\b/
 const POLL_MS = 2000;
 const BRANCH_GLYPH = "\uf418";
 const DETACHED_GLYPH = "\uf417";
-const WORKTREE_GLYPH = "\uf1bb";
 const PR_GLYPHS: Record<PrKind, string> = {
   open: "\uf407",
   draft: "\uf4dd",
@@ -342,7 +340,6 @@ export const createGit = (chrome: ChromeState) => {
       detached,
       oid,
       upstream,
-      worktree: paths.gitDir !== paths.commonDir,
       staged,
       unstaged,
       untracked,
@@ -457,9 +454,12 @@ export const createGit = (chrome: ChromeState) => {
       state.unstaged > 0 ? "error" : state.staged > 0 ? "warning" : undefined;
 
     const spans: { text: string; color: ThemeColor; attached?: boolean; url?: string }[] = [];
-    if (state.worktree) spans.push({ text: WORKTREE_GLYPH, color: "muted" });
     spans.push({ text: glyph, color: stateColor });
-    if (mode === "full" && name) spans.push({ text: name, color: "muted" });
+    // `wt` names a worktree's folder and its branch alike, so the name only earns
+    // its columns when it says something the path does not.
+    if (mode === "full" && name && name !== basename(activeCwd)) {
+      spans.push({ text: name, color: "muted" });
+    }
     if (dirtyColor) spans.push({ text: "*", color: dirtyColor, attached: true });
     // The icon alone says a pull request exists; it links to it where the terminal can.
     if (pr) spans.push({ text: PR_GLYPHS[pr.state ?? "open"], color: prColor(pr), url: pr.url });
