@@ -8,9 +8,11 @@
  * so an install deferred with a timer lands in the middle of the pass and the
  * next handler's install silently replaces it.
  *
- * Register a wrapper once from the extension factory, but install from a
- * `session_start` handler (`providePromptEditor` or `ensurePromptEditor`) — never
- * from the factory itself, since some invocations never start a session.
+ * Everything here belongs to the live TUI session. Provide or wrap from its
+ * `session_start`, never from the extension factory: pi re-runs a cached
+ * factory for /new, /resume, /fork, /reload and in-process subagents. Withdraw
+ * and unwrap at its `session_shutdown`, so the next session's editor never
+ * draws through a disposed session's ctx.
  */
 import {
   CustomEditor,
@@ -28,18 +30,28 @@ type Host = Parameters<EditorFactory>;
 export type EditorWrapper = (inner: Editor, host: Host) => Editor;
 
 type Chain = {
-  ctx?: ExtensionContext;
-  /** The editor to wrap; another extension's factory when nothing provided one. */
-  inner?: EditorFactory;
-  wrappers: EditorWrapper[];
-  /** The factory this chain last installed; anything else in the slot came from elsewhere. */
+  /** The editor `providePromptEditor` supplied. */
+  provided?: EditorFactory;
+  /** Another extension's factory found in the slot, wrapped in place of `provided`. */
+  adopted?: EditorFactory;
+  wrappers: Map<string, EditorWrapper>;
+  /** The wrappers changed since the last install. */
+  stale: boolean;
+  /** The factory this chain last installed. */
   installed?: EditorFactory;
+  /** Every factory this chain installed, so none is mistaken for another extension's. */
+  own: WeakSet<EditorFactory>;
 };
 
-const chain: Chain = { wrappers: [] };
+// On globalThis because each extension loads its own copy of this module, and
+// all of them must compose on one chain.
+const KEY = Symbol.for("fireproof.pi.prompt-editor");
+const store = globalThis as { [KEY]?: Chain };
+const chain: Chain = (store[KEY] ??= { wrappers: new Map(), stale: false, own: new WeakSet() });
 
 const compose = (): EditorFactory => {
-  const { inner, wrappers } = chain;
+  const inner = chain.adopted ?? chain.provided;
+  const wrappers = [...chain.wrappers.values()];
   return (tui, theme, keybindings) => {
     const host: Host = [tui, theme, keybindings];
     const editor = inner
@@ -49,36 +61,51 @@ const compose = (): EditorFactory => {
   };
 };
 
-/**
- * Puts a composed factory in the slot, rebuilding the editor only when the chain
- * changed (`recomposed`), the slot was empty, or another extension took it.
- */
-const install = (recomposed: boolean) => {
-  const { ctx } = chain;
-  if (!ctx || ctx.mode !== "tui" || !ctx.hasUI) return;
-  const current = ctx.ui.getEditorComponent();
-  const foreign = current !== chain.installed;
-  if (foreign) chain.inner = current;
-  if (!recomposed && !foreign && chain.installed !== undefined) return;
+const install = (ctx: ExtensionContext) => {
   const factory = compose();
   chain.installed = factory;
+  chain.own.add(factory);
+  chain.stale = false;
   ctx.ui.setEditorComponent(factory);
 };
 
-/** Adds a wrapper for every editor installed from now on; register each one once. */
-export const wrapPromptEditor = (wrapper: EditorWrapper) => {
-  chain.wrappers.push(wrapper);
+const live = (ctx: ExtensionContext) => ctx.mode === "tui" && ctx.hasUI;
+
+/** Puts `wrapper` under `key`, replacing what the key held, from the next install on. */
+export const wrapPromptEditor = (key: string, wrapper: EditorWrapper) => {
+  chain.wrappers.set(key, wrapper);
+  chain.stale = true;
 };
 
-/** Supplies the editor the wrappers draw around. */
+/** Removes `wrapper` if `key` still holds it, from the next install on. */
+export const unwrapPromptEditor = (key: string, wrapper: EditorWrapper) => {
+  if (chain.wrappers.get(key) !== wrapper) return;
+  chain.wrappers.delete(key);
+  chain.stale = true;
+};
+
+/** Supplies the editor the wrappers draw around, in place of whatever holds the slot. */
 export const providePromptEditor = (ctx: ExtensionContext, factory: EditorFactory) => {
-  chain.ctx = ctx;
-  chain.inner = factory;
-  install(true);
+  if (!live(ctx)) return;
+  chain.provided = factory;
+  chain.adopted = undefined;
+  install(ctx);
 };
 
-/** Takes the slot, or takes it back when another extension installed its own factory. */
+/** Drops `factory` if it is still the one provided, from the next install on. */
+export const withdrawPromptEditor = (factory: EditorFactory) => {
+  if (chain.provided === factory) chain.provided = undefined;
+};
+
+/**
+ * Takes the slot, rebuilding the editor only when the wrappers changed, the
+ * slot was emptied, or another extension installed its own factory, which is
+ * then wrapped instead.
+ */
 export const ensurePromptEditor = (ctx: ExtensionContext) => {
-  chain.ctx = ctx;
-  install(false);
+  if (!live(ctx)) return;
+  const current = ctx.ui.getEditorComponent();
+  if (current !== undefined && current === chain.installed && !chain.stale) return;
+  if (current === undefined || !chain.own.has(current)) chain.adopted = current;
+  install(ctx);
 };
