@@ -193,8 +193,12 @@ export function socketReachable(socketPath: string, timeoutMs = 300): Promise<bo
   });
 }
 
-/** Live, messageable sessions from every Claude registry, newest first. */
-export async function listPeers(excludeSocket?: string): Promise<Peer[]> {
+/**
+ * Live, messageable sessions of other processes from every Claude registry,
+ * newest first. Matched by pid, so in-process subagents don't see their own main
+ * session as a peer either.
+ */
+export async function listPeers(): Promise<Peer[]> {
   const domain = pidDomain();
   // A pi session registers in every registry, so the socket path is the key.
   const candidates = new Map<string, Peer>();
@@ -214,11 +218,12 @@ export async function listPeers(excludeSocket?: string): Promise<Peer[]> {
         continue;
       }
       const sock = entry.messagingSocketPath;
-      if (typeof sock !== "string" || !sock || sock === excludeSocket) continue;
+      if (typeof sock !== "string" || !sock) continue;
       if (candidates.has(sock)) continue;
       if ((entry.peerProtocol ?? 0) < PEER_PROTOCOL) continue;
       if (entry.pidDomain !== undefined && domain !== undefined && entry.pidDomain !== domain)
         continue;
+      if (entry.pid === process.pid) continue;
       if (!pidAlive(entry.pid)) continue;
       if (entry.procStart !== undefined && procStart(entry.pid) !== entry.procStart) continue;
       candidates.set(sock, {

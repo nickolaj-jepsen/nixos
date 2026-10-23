@@ -373,7 +373,7 @@ export default function (pi: ExtensionAPI) {
     try {
       server = await bindInbox(socketPath, onFrame);
     } catch (e) {
-      owner[OWNER] = undefined;
+      // Keep the claim, or the next subagent session would take the pid's entry under its own id.
       c.ui.notify(`claude-peers: no inbox (${(e as Error).message})`, "warning");
       return;
     }
@@ -425,11 +425,14 @@ export default function (pi: ExtensionAPI) {
         ),
       );
     idleSubscribers.clear();
-    server?.close();
-    server = undefined;
-    try {
-      unlinkSync(socketPath);
-    } catch {}
+    // Unbound after a failed bind, when the path may be another process's live socket.
+    if (server) {
+      server.close();
+      server = undefined;
+      try {
+        unlinkSync(socketPath);
+      } catch {}
+    }
     if (entry) await removeRegistryEntry(entry.pid);
     entry = undefined;
     if (process.env.CLAUDE_CODE_MESSAGING_SOCKET === socketPath)
@@ -519,7 +522,7 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "List Claude Code and pi sessions on this machine that send_message can reach",
     parameters: Type.Object({}),
     async execute() {
-      const peers = await listPeers(socketPath || undefined);
+      const peers = await listPeers();
       const self = isOwner() && entry ? `This session: ${ownLabel()}\n` : "";
       if (!peers.length)
         return {
@@ -569,7 +572,7 @@ export default function (pi: ExtensionAPI) {
       const message = params.message?.trim() ?? "";
       if (!message && !params.notify_when_idle)
         throw new Error("Nothing to send: give a message or set notify_when_idle.");
-      const found = resolvePeer(await listPeers(socketPath || undefined), params.to);
+      const found = resolvePeer(await listPeers(), params.to);
       if ("error" in found) throw new Error(found.error);
       const target = found.peer;
       const label = `${target.name} [${shortId(target)}]`;
@@ -642,7 +645,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("list-agents", {
     description: "Show the Claude Code and pi sessions this session can message",
     handler: async (_args, c) => {
-      const peers = await listPeers(socketPath || undefined);
+      const peers = await listPeers();
       const self = isOwner() && entry ? `This session: ${ownLabel()}` : "This session has no inbox";
       const rows = peers.map(
         (p) =>
@@ -691,9 +694,8 @@ function treeRoot(dir: string): Promise<string> {
 /** Live sessions of other processes whose cwd is in the same working tree as `cwd`. */
 async function sameTreePeers(cwd: string) {
   const [root, peers] = await Promise.all([treeRoot(cwd), listPeers()]);
-  const others = peers.filter((p) => p.pid !== process.pid);
-  const roots = await Promise.all(others.map((p) => treeRoot(p.cwd)));
-  return { root, list: others.filter((_, i) => roots[i] === root) };
+  const roots = await Promise.all(peers.map((p) => treeRoot(p.cwd)));
+  return { root, list: peers.filter((_, i) => roots[i] === root) };
 }
 
 function lastAssistantText(messages: AgentMessage[]): string {
