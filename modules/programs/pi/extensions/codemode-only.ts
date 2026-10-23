@@ -1,8 +1,10 @@
 /**
  * Hides expensive tool declarations from the model while keeping the tools
- * active, so codemode scripts can still call them. Pi has no per-tool exposure
- * setting, so this rides on a tool's `prepareLoadout` hook, which only runs
- * while that tool is active; the carrier tool hides itself too.
+ * active, so codemode scripts can still call them. Per-tool `exposure` does this
+ * at registration, but every tool hidden here belongs to a package that
+ * registers itself `direct`; `prepareLoadout` is the other mechanism, and it
+ * runs only while a tool is active. The carrier hides its own declaration too,
+ * so the model sees none of this.
  *
  * Small-context models (the local ones) get a leaner set. Pi runs the hook
  * before every request, so a model switch takes effect on the next one.
@@ -33,6 +35,16 @@ export default function (pi: ExtensionAPI) {
   let lean = false;
   pi.on("session_start", (_event, ctx) => {
     lean = isLean(ctx.model);
+    // The names are third-party: a package bump that renames one would leave its
+    // full declaration in the prompt with nothing to show for it.
+    const registered = new Set(pi.getAllTools().map((tool) => tool.name));
+    const missing = [...HIDDEN, ...HIDDEN_WHEN_LEAN].filter((name) => !registered.has(name));
+    if (missing.length > 0) {
+      ctx.ui.notify(
+        `codemode_only: not registered, declarations stay visible: ${missing.join(", ")}`,
+        "warning",
+      );
+    }
   });
   pi.on("model_select", (event) => {
     lean = isLean(event.model);
