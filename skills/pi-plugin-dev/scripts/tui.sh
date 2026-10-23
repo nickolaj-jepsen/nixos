@@ -56,9 +56,23 @@ start)
   for arg in "$@"; do
     pi_cmd+=" $(printf '%q' "$arg")"
   done
+  # Inline the env: an already-running tmux server hands new sessions its own
+  # environment, so an exported FIXTURE would otherwise go stale.
+  [ -n "${FIXTURE:-}" ] && pi_cmd="FIXTURE=$(printf '%q' "$FIXTURE") $pi_cmd"
   # A session file is required: digest reads it.
   tmux new-session -d -s "$sess" -x "$cols" -y "$lines" "PI_OFFLINE=1 $pi_cmd"
-  printf '%s\n' "$out"
+  # Return only once the TUI accepts input, so callers can drive it straight
+  # away. A failure here is usually the extension, so show what the pane says.
+  for _ in $(seq 75); do
+    if pane -e | grep -qE 'escape interrupt|commands ·'; then
+      printf '%s\n' "$out"
+      exit 0
+    fi
+    sleep 0.2
+  done
+  printf '%s\n' "session did not reach the prompt after 15s, pane follows:" >&2
+  pane >&2
+  exit 1
   ;;
 wait)
   pattern="${1:?usage: tui.sh wait <regex> [seconds]}"

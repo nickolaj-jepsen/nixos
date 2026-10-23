@@ -14,7 +14,6 @@ import argparse
 import json
 import os
 import re
-import signal
 import sys
 
 ZERO = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 0, "cost": 0.0}
@@ -238,6 +237,10 @@ def main():
 
 
 if __name__ == "__main__":
-    # Piped into head/grep is normal for this tool; die quietly like a filter.
-    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
-    os._exit(main())
+    # Line buffered so `digest.py | head` sees output before the pipe closes.
+    sys.stdout.reconfigure(line_buffering=True)
+    try:
+        sys.exit(main())
+    except BrokenPipeError:
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        sys.exit(0)
