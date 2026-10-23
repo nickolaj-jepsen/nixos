@@ -84,7 +84,6 @@ const ignored = new Set<string>();
 const unadded = new Set<string>();
 
 let editor: SpellEditor | undefined;
-let unsubscribeInput: (() => void) | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let checkId = 0;
 /** Bumped on session start and shutdown: a ctx captured before the bump is unusable. */
@@ -417,6 +416,12 @@ class SpellEditor extends CustomEditor {
 
   override setText(text: string): void {
     super.setText(text);
+    this.onEdit();
+  }
+
+  // pi's clipboard paste lands here once read, after its keystroke's check has run.
+  override insertTextAtCursor(text: string): void {
+    super.insertTextAtCursor(text);
     this.onEdit();
   }
 
@@ -971,7 +976,6 @@ export default function (pi: ExtensionAPI) {
     if (ctx.mode !== "tui") return;
     // hunspell neither creates a missing personal dictionary nor saves into one.
     void ensurePersonal();
-    unsubscribeInput?.();
     editor = undefined;
     providePromptEditor(ctx, (tui, editorTheme, keybindings) => {
       editor = new SpellEditor(
@@ -983,12 +987,6 @@ export default function (pi: ExtensionAPI) {
       );
       return editor;
     });
-    // Also catches edits made without the custom editor, e.g. after another
-    // extension replaces it: the picker then starts from the end of the draft.
-    unsubscribeInput = ctx.ui.onTerminalInput(() => {
-      scheduleCheck(gen, ctx);
-      return undefined;
-    });
     scheduleCheck(gen, ctx);
   });
 
@@ -998,8 +996,6 @@ export default function (pi: ExtensionAPI) {
     timer = undefined;
     checkId++;
     suspended = false;
-    unsubscribeInput?.();
-    unsubscribeInput = undefined;
     editor = undefined;
     batch = undefined;
     if (ctx.mode === "tui") ctx.ui.setWidget("spellfix", undefined);
