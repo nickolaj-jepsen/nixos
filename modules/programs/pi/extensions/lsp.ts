@@ -165,6 +165,11 @@ class Server {
         /Content-Length: (\d+)/i.exec(this.buffer.subarray(0, headerEnd).toString())?.[1],
       );
       const start = headerEnd + 4;
+      if (Number.isNaN(length)) {
+        // A header block without a length (stray stdout logging) would otherwise be found again forever.
+        this.buffer = this.buffer.subarray(start);
+        continue;
+      }
       if (this.buffer.length < start + length) return;
       const body = this.buffer.subarray(start, start + length).toString();
       this.buffer = this.buffer.subarray(start + length);
