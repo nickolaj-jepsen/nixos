@@ -287,6 +287,7 @@ async function askModel(
         { systemPrompt: CHECK, messages: [message] },
         {
           maxTokens: replyBudget(distinct.size),
+          // Haiku drops it; the ctx.model fallback may honour it.
           temperature: 0,
           timeoutMs: 20_000,
           signal,
@@ -316,11 +317,7 @@ async function askModel(
   }
 }
 
-/**
- * Adds `text`'s misses and extras to `words`, which the editor underlines.
- * `words` is keyed by word, not offset: every occurrence of a flagged word is
- * marked, matching the underline the Claude Code mod draws.
- */
+/** The words the editor underlines: by word, not offset, so every occurrence is marked. */
 function underlinedWords(misses: readonly (Miss | Extra)[]): Set<string> {
   return new Set(misses.map((m) => m.word));
 }
@@ -626,7 +623,7 @@ class SpellPicker implements Component {
     this.index = Math.max(0, Math.min(this.index, this.items.length - 1));
     this.aiDone = true;
     this.prefetch();
-    await this.refreshUnderline();
+    this.refreshUnderline();
     if (this.pendingAll) {
       this.pendingAll = false;
       void this.fixAll();
@@ -648,7 +645,7 @@ class SpellPicker implements Component {
   }
 
   /** Rebuilds the editor's underlines from the current answers, once they land. */
-  private async refreshUnderline() {
+  private refreshUnderline() {
     if (editor) editor.setUnderlined(underlinedWords(this.items));
     this.tui.requestRender();
   }
@@ -903,7 +900,7 @@ async function refreshCount(gen: number, ctx: ExtensionContext) {
   if (id !== checkId || gen !== sessionGen) return;
   editor?.setUnderlined(underlinedWords(misses));
   if (suspended) return;
-  // The word still being typed waits until the cursor moves past it, as the underline does.
+  // The word still being typed is underlined but not counted until the cursor moves past it.
   const cursor = editor?.cursorOffset() ?? Number.POSITIVE_INFINITY;
   const count = misses.filter((m) => m.end !== cursor).length;
   const theme = ctx.ui.theme;
