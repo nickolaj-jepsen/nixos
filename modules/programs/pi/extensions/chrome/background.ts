@@ -47,8 +47,8 @@ const badgesOf = (text: string, frame: number): Badge[] =>
  *
  * `repaint` runs once per animation frame, and the spinner ticks only while a
  * render has shown a running task. `parts` takes the package's status text, or
- * `undefined` when it published none, and returns nothing it cannot parse so the
- * caller can fall back to the raw text.
+ * `undefined` when it published none, and drops whatever carries no count, such
+ * as the package's update notice: the segment exists for the clickable counts.
  */
 export const createBackground = (repaint: () => void) => {
   let frame = 0;
