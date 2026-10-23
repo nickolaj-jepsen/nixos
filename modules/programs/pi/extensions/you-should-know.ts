@@ -163,29 +163,45 @@ export default function (pi: ExtensionAPI) {
   // The exact payload the main request sent, so the fork can reuse its prefix.
   let mainPayload: Record<string, unknown> | undefined;
   let aligned: Record<string, unknown> | undefined;
+  // Notes this process showed that the state file may not hold yet.
+  let added: string[] = [];
+
+  function readState(): Partial<State> {
+    try {
+      return JSON.parse(readFileSync(STATE_FILE, "utf8")) as Partial<State>;
+    } catch {
+      return {};
+    }
+  }
+
+  const seenOf = (raw: Partial<State>) =>
+    Array.isArray(raw.seen)
+      ? raw.seen.filter((line): line is string => typeof line === "string")
+      : [];
 
   function loadState() {
-    try {
-      const raw = JSON.parse(readFileSync(STATE_FILE, "utf8")) as Partial<State>;
-      state = {
-        enabled: raw.enabled !== false,
-        seen: Array.isArray(raw.seen)
-          ? raw.seen.filter((line): line is string => typeof line === "string").slice(-SEEN_MAX)
-          : [],
-        typedPast: Number.isSafeInteger(raw.typedPast) ? (raw.typedPast as number) : 0,
-        looksToSkip: Number.isSafeInteger(raw.looksToSkip) ? (raw.looksToSkip as number) : 0,
-      };
-    } catch {
-      state = { enabled: true, seen: [], typedPast: 0, looksToSkip: 0 };
-    }
+    const raw = readState();
+    state = {
+      enabled: raw.enabled !== false,
+      seen: seenOf(raw).slice(-SEEN_MAX),
+      typedPast: Number.isSafeInteger(raw.typedPast) ? (raw.typedPast as number) : 0,
+      looksToSkip: Number.isSafeInteger(raw.looksToSkip) ? (raw.looksToSkip as number) : 0,
+    };
   }
 
   function saveState() {
     try {
       mkdirSync(STATE_DIR, { recursive: true });
+      // Every pi process writes this file: its list stays the base, and only our own
+      // new notes go on the end, so trimming drops the oldest rather than theirs.
+      const file = seenOf(readState());
+      const inFile = new Set(file.map(normalize));
+      const fresh = added.filter((line) => !inFile.has(normalize(line)));
+      state.seen = [...file, ...fresh].slice(-SEEN_MAX);
       const scratch = `${STATE_FILE}.${process.pid}.tmp`;
       writeFileSync(scratch, JSON.stringify(state, null, 2));
       renameSync(scratch, STATE_FILE);
+      added = [];
     } catch {}
   }
 
@@ -359,6 +375,7 @@ export default function (pi: ExtensionAPI) {
         else {
           outcome = "shown";
           state.seen = [...state.seen, parsed.line].slice(-SEEN_MAX);
+          added.push(parsed.line);
           saveState();
           offer = { line: parsed.line, tag: parsed.tag, prompts: 0 };
           draw(ctx);

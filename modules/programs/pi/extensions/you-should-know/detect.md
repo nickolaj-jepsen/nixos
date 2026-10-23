@@ -114,8 +114,8 @@ Bad, because it is a teaser instead of a statement:
 - Would a busy person be glad to read this, or annoyed? If annoyed, `learn: none`.
 - Is the stake real, or is it just interesting? Interesting is not important.
 
-These notes were already shown in this session. Do not offer them again, in
-other words or in another shape:
+These notes were already shown to the user, in this session or an earlier one.
+Do not offer them again, in other words or in another shape:
 
 {{SEEN}}
 
