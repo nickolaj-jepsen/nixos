@@ -64,6 +64,36 @@ const PROVIDER_TAGS: Record<string, string> = {
   local: "\uf015",
 };
 
+/**
+ * Under a virtual selection (extensions/routers.ts), the physical model that
+ * answered last on the branch; undefined for a physical selection or before
+ * the first answer. Rescanned only when the leaf or selection moves.
+ */
+const createRouted = () => {
+  let cache:
+    | { leafId: string | null; selected: string; model: ActiveModel | undefined }
+    | undefined;
+  return (ctx: ExtensionContext): ActiveModel | undefined => {
+    const selected = ctx.model;
+    if (selected?.api !== "pi-virtual") return undefined;
+    const leafId = ctx.sessionManager.getLeafId();
+    const key = `${selected.provider}/${selected.id}`;
+    if (cache && cache.leafId === leafId && cache.selected === key) return cache.model;
+    let model: ActiveModel | undefined;
+    const branch = ctx.sessionManager.getBranch();
+    for (let i = branch.length - 1; i >= 0 && !model; i--) {
+      const entry = branch[i];
+      if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+      const { stopReason, provider, model: id } = entry.message;
+      if (stopReason !== "error" && stopReason !== "aborted") {
+        model = ctx.modelRegistry.find(provider, id);
+      }
+    }
+    cache = { leafId, selected: key, model };
+    return model;
+  };
+};
+
 const sanitize = (text: string) =>
   text
     .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
@@ -79,11 +109,12 @@ export const createFooter = (
   const git = createGit(state);
   const usage = createUsage(state);
   const stats = createStats();
+  const routed = createRouted();
   let regions: Region[] = [];
 
   /** Cost and speed as text; `undefined` when there is nothing worth showing. */
   const meterTexts = (ctx: ExtensionContext) => {
-    const model = ctx.model;
+    const model = routed(ctx) ?? ctx.model;
     const s = stats.statsFor(ctx, model);
     const paid = (model?.cost.input ?? 0) > 0 || (model?.cost.output ?? 0) > 0;
     return {
@@ -113,7 +144,10 @@ export const createFooter = (
       regions = [];
       return "";
     }
-    const model = ctx.model;
+    const selected = ctx.model;
+    const routedTo = routed(ctx);
+    // Provider, quota and stats follow the model that answers.
+    const model = routedTo ?? selected;
     const s = stats.statsFor(ctx, model);
     const thinking = ctx.thinkingLevel ?? pi.getThinkingLevel();
     const tag = model ? (PROVIDER_TAGS[model.provider] ?? model.provider) : "";
@@ -155,8 +189,18 @@ export const createFooter = (
         // Only the model opens the selector; the provider is just a label.
         model: {
           id: "model",
-          text: model ? model.name || model.id : "no model",
-          short: model ? modelAlias(model) : undefined,
+          text:
+            selected && routedTo
+              ? `${selected.name} \u2192 ${routedTo.name || routedTo.id}`
+              : model
+                ? model.name || model.id
+                : "no model",
+          short:
+            selected && routedTo
+              ? `${selected.name} \u2192 ${modelAlias(routedTo)}`
+              : model
+                ? modelAlias(model)
+                : undefined,
           color: "dim",
           bold: true,
           tight: true,

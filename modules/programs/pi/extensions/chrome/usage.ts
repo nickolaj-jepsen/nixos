@@ -1,22 +1,8 @@
-import { execFile } from "node:child_process";
 import type { ThemeColor } from "@earendil-works/pi-coding-agent";
+import { createUsageReader, type UsageProvider, type UsageWindow } from "../lib/ai-usage.ts";
 import { formatCredit, formatWhen } from "./format.ts";
 import type { Part } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
-
-export type UsageWindow = {
-  label: string;
-  usedPct: number;
-  pace: "under" | "over" | "exhausted";
-  resetsAt: string;
-  runsOutAt: string | null;
-};
-
-export type UsageProvider = {
-  id: string;
-  windows: UsageWindow[];
-  credit?: { remaining: number; allowance: number } | null;
-};
 
 const LABELS: Record<string, string> = { month: "mo" };
 const label = (window: UsageWindow) => LABELS[window.label] ?? window.label;
@@ -65,34 +51,8 @@ export const usageAlarm = (
   return undefined;
 };
 
-// ai-usage caches for 2 minutes; poll no faster than this, and only on events.
-const USAGE_TTL_MS = 60_000;
-
-const readUsage = (stdout: string): UsageProvider[] => {
-  try {
-    return (JSON.parse(stdout) as { providers?: UsageProvider[] }).providers ?? [];
-  } catch {
-    return [];
-  }
-};
-
-/** `ai-usage --json`, whose provider ids match pi's, refreshed in the background. */
+/** The shared ai-usage snapshot, repainting the footer when it refreshes. */
 export const createUsage = (state: ChromeState) => {
-  let usage: { providers: UsageProvider[]; at: number } | undefined;
-  let busy = false;
-
-  const refresh = () => {
-    if (busy || (usage && Date.now() - usage.at < USAGE_TTL_MS)) return;
-    busy = true;
-    // Not on PATH when the ai-usage feature is off; that just hides the alarm.
-    execFile("ai-usage", ["--json"], { timeout: 5000, maxBuffer: 1 << 20 }, (error, stdout) => {
-      busy = false;
-      usage = { providers: error ? [] : readUsage(stdout), at: Date.now() };
-      state.tui?.requestRender();
-    });
-  };
-
-  const provider = (id: string) => usage?.providers.find((p) => p.id === id);
-
-  return { refresh, provider };
+  const reader = createUsageReader(() => state.tui?.requestRender());
+  return { refresh: () => void reader.refresh(), provider: reader.provider };
 };

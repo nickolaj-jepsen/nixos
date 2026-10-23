@@ -165,8 +165,10 @@ in {
         environment.PI_BG_POSIX_SHELL.value = "bash";
         settings = {
           # The model picker's "save as default" reverts at launch; change it here.
-          defaultProvider = "opencode-go";
-          defaultModel = "deepseek-v4.1-flash";
+          # DeepSeek on OpenCode Go, bridging to Haiku while Go's quota is out
+          # (extensions/routers.ts).
+          defaultProvider = "fp";
+          defaultModel = "flash";
           defaultThinkingLevel = "high";
           # The defaults (reserve 16k, keep 20k) overrun a 32k window: compaction would
           # start at 16k, with the system prompt and tools already taking ~9k of it.
