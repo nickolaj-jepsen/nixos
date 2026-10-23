@@ -5,7 +5,6 @@ type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
 export type Stats = {
   cost: number;
-  cacheRead: number;
   /** Hit rate of the latest request that could have hit a warm cache. */
   cacheHit: number | undefined;
   speed: number | undefined;
@@ -16,12 +15,8 @@ export type Stats = {
 const MIN_SPEED_OUTPUT_TOKENS = 100;
 const MIN_CACHE_PROMPT_TOKENS = 2000;
 
-const addCacheRead = (totals: { cacheRead: number }, usage: { cacheRead: number } | undefined) => {
-  if (usage) totals.cacheRead += usage.cacheRead;
-};
-
 const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): Stats => {
-  const totals = { cost: 0, cacheRead: 0 };
+  let cost = 0;
   let cacheHit: number | undefined;
   let lastSpeed: { provider: string; model: string; value: number } | undefined;
   // The first request after a start, a model switch or a compaction can only
@@ -29,42 +24,35 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
   let warmModel: string | undefined;
 
   for (const entry of ctx.sessionManager.getEntries()) {
-    totals.cost += entryCost(entry);
-    if (entry.type === "usage") {
-      addCacheRead(totals, entry.usage);
-    } else if (entry.type === "message") {
-      const message = entry.message;
-      if (message.role === "assistant") {
-        addCacheRead(totals, message.usage);
-        const key = `${message.provider}/${message.model}`;
-        const prompt = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
-        if (key !== warmModel) {
-          warmModel = key;
-          cacheHit = undefined;
-        } else if (prompt >= MIN_CACHE_PROMPT_TOKENS) {
-          cacheHit = (message.usage.cacheRead / prompt) * 100;
-        }
-        if (
-          message.usage.output >= MIN_SPEED_OUTPUT_TOKENS &&
-          message.stopReason !== "error" &&
-          message.stopReason !== "aborted"
-        ) {
-          const seconds = (Date.parse(entry.timestamp) - message.timestamp) / 1000;
-          if (Number.isFinite(seconds) && seconds >= 0.5) {
-            lastSpeed = {
-              provider: message.provider,
-              model: message.model,
-              value: message.usage.output / seconds,
-            };
-          }
-        }
-      } else if (message.role === "toolResult") {
-        addCacheRead(totals, message.usage);
-      }
-    } else if (entry.type === "compaction" || entry.type === "branch_summary") {
-      addCacheRead(totals, entry.usage);
+    cost += entryCost(entry);
+    if (entry.type === "compaction" || entry.type === "branch_summary") {
       warmModel = undefined;
       cacheHit = undefined;
+      continue;
+    }
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    const message = entry.message;
+    const key = `${message.provider}/${message.model}`;
+    const prompt = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
+    if (key !== warmModel) {
+      warmModel = key;
+      cacheHit = undefined;
+    } else if (prompt >= MIN_CACHE_PROMPT_TOKENS) {
+      cacheHit = (message.usage.cacheRead / prompt) * 100;
+    }
+    if (
+      message.usage.output >= MIN_SPEED_OUTPUT_TOKENS &&
+      message.stopReason !== "error" &&
+      message.stopReason !== "aborted"
+    ) {
+      const seconds = (Date.parse(entry.timestamp) - message.timestamp) / 1000;
+      if (Number.isFinite(seconds) && seconds >= 0.5) {
+        lastSpeed = {
+          provider: message.provider,
+          model: message.model,
+          value: message.usage.output / seconds,
+        };
+      }
     }
   }
 
@@ -74,7 +62,7 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
       ? lastSpeed.value
       : undefined;
 
-  return { ...totals, cacheHit, speed };
+  return { cost, cacheHit, speed };
 };
 
 /** Session cost, cache health and speed, rescanned only when the leaf or model moves. */

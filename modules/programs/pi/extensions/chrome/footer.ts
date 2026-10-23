@@ -46,13 +46,7 @@ const MODEL_ALIAS_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bClaude\s+/gi, ""],
 ];
 
-// Exceptions the patterns cannot express; add an entry when a model needs a
-// name of its own.
-const MODEL_ALIASES: Record<string, string> = {};
-
 const modelAlias = (model: ActiveModel): string => {
-  const explicit = MODEL_ALIASES[model.id];
-  if (explicit) return explicit;
   let alias = model.name || model.id;
   for (const [pattern, replacement] of MODEL_ALIAS_PATTERNS) {
     alias = alias.replace(pattern, replacement);

@@ -20,7 +20,7 @@ export type Part = {
 
 export type Region = { x0: number; x1: number; id: string; action: Action };
 
-export const GAP = 2;
+const GAP = 2;
 
 const joinWidth = (part: Part, index: number) => (index === 0 ? 0 : part.tight ? 1 : GAP);
 

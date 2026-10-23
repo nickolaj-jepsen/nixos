@@ -2,7 +2,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { paintParts, partsWidth, type Part, type Region } from "./layout.ts";
 
-export const PAD = 2;
+const PAD = 2;
 // Between the left zone and the right one.
 const ZONE_GAP = 2;
 // Git follows the path as one phrase (`~/nixos  branch`); the branch glyph is the separator.

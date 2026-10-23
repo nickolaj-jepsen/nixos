@@ -129,9 +129,6 @@ export const createEditorChrome = (state: ChromeState, painters: Painters): Edit
       set(target, property, value) {
         return Reflect.set(target, property, value, target);
       },
-      has(target, property) {
-        return Reflect.has(target, property);
-      },
     });
     state.editorComponent = wrapper;
     return wrapper;
