@@ -14,6 +14,8 @@
  * Unlike Claude Code, which leaves noticing a shared checkout to the model,
  * each run's system prompt names the peers working in the same git working
  * tree and asks the model to coordinate destructive git operations with them.
+ * It also declares `enter_worktree`, which worktree.ts registers inactive, once
+ * the checkout is shared and the model has room for the extra declaration.
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
@@ -37,6 +39,7 @@ import {
   encodeAddress,
   escapeTag,
   FEATURE_NOTIFY_IDLE,
+  FEATURE_QUEUE_WHEN_IDLE,
   listPeers,
   parseEnvelope,
   PEER_PROTOCOL,
@@ -57,9 +60,11 @@ import {
   writeRegistryEntry,
 } from "./claude-peers/protocol.ts";
 import { isAutoName } from "./lib/auto-name.ts";
+import { isLeanModel } from "./lib/lean-model.ts";
 import { markAgentPrompt } from "./lib/user-wait.ts";
 
 const MESSAGE_TYPE = "claude-peer-message";
+const WORKTREE_TOOL = "enter_worktree";
 const OWN_MODE: PermissionClass = "prompting";
 const IDLE_SUBSCRIPTION_TTL_MS = 12 * 60 * 60 * 1000;
 const HOLD_DIALOG_MS = 5 * 60 * 1000;
@@ -266,31 +271,22 @@ export default function (pi: ExtensionAPI) {
       replyTo: replyAddress,
       body: env.body,
     };
-    const tokens = ctx?.getContextUsage()?.tokens ?? undefined;
-    // A message the user just approved wakes the session: the approval is their consent to the cost.
-    if (decision !== "hold" && ownIdleMs() > STALE_AFTER_MS && costlyWake(tokens)) {
-      // Waking would re-read this whole conversation uncached; leave it for the user's next prompt.
+    // A finished session's last reply is its answer to the user; a turn started by a peer would
+    // bury it. A message the user just approved still wakes: the approval is their consent.
+    if (decision !== "hold" && (ctx?.isIdle() ?? true)) {
       deliver(details, llmText, false);
       receipt(
         replyTo,
         frame.msg_id,
         "held",
-        `This pi session has been idle over an hour (${tokensLabel(tokens)} of context); the message waits for its user's next prompt.`,
+        `${ownName()} has finished its turn; the message waits for its user's next prompt. Don't wait on a reply; ask your user if you need its answer now.`,
+        { status_detail: "queued" },
       );
-      ctx?.ui.notify(
-        `Message from @${fromName} queued for your next prompt (not woken: session idle >1h)`,
-        "info",
-      );
+      ctx?.ui.notify(`Message from @${fromName} queued for your next prompt`, "info");
       return;
     }
     deliver(details, llmText, true);
     receipt(replyTo, frame.msg_id, "delivered");
-  }
-
-  /** How long this session has been idle, or 0 while it is running. */
-  function ownIdleMs(): number {
-    if (!(ctx?.isIdle() ?? true) || entry?.status !== "idle") return 0;
-    return Date.now() - (entry.statusUpdatedAt ?? Date.now());
   }
 
   function sendIdleNotice(sub: IdleSubscriber, state: "idle" | "exited", timeoutMs?: number) {
@@ -321,7 +317,10 @@ export default function (pi: ExtensionAPI) {
           `Message to @${name} ${frame.status}${reason}`,
           frame.status === "held" ? "info" : "warning",
         );
-        if (frame.status !== "held") {
+        if (frame.status_detail === "queued") {
+          const body = `Your message to ${name} was queued, not answered${reason}`;
+          deliver({ kind: "status", fromName: name, body }, body, false);
+        } else if (frame.status !== "held") {
           const body = `Your message to ${name} was not delivered (${frame.status}${reason}).`;
           deliver({ kind: "status", fromName: name, body }, body, false);
         }
@@ -393,7 +392,7 @@ export default function (pi: ExtensionAPI) {
       procStart: procStart(process.pid),
       version: `pi-${VERSION}`,
       peerProtocol: PEER_PROTOCOL,
-      peerFeatures: [FEATURE_NOTIFY_IDLE],
+      peerFeatures: [FEATURE_NOTIFY_IDLE, FEATURE_QUEUE_WHEN_IDLE],
       kind: "interactive",
       entrypoint: "pi",
       pidDomain: pidDomain(),
@@ -446,11 +445,22 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, c) => start(c));
   pi.on("session_shutdown", async (event) => stop(event.reason));
+
+  /** Declares enter_worktree once the checkout is shared; worktree.ts registers it inactive. */
+  async function activateWorktree(c: ExtensionContext, peerCount: number) {
+    if (!c.hasUI || isLeanModel(c.model)) return;
+    if (peerCount === 0 && !(await dirtyTree(c.cwd))) return;
+    if (!pi.getAllTools().some((tool) => tool.name === WORKTREE_TOOL)) return;
+    pi.setActiveTools([...pi.getActiveTools(), WORKTREE_TOOL]);
+  }
+
   // Splits peers only into active and stale, not by exact idle time, so the
   // section changes when a peer crosses STALE_AFTER_MS rather than every turn.
   pi.on("before_agent_start", async (event, c) => {
     const sections = event.systemPromptOptions.sections;
     const peers = await sameTreePeers(c.cwd).catch(() => undefined);
+    if (!pi.getActiveTools().includes(WORKTREE_TOOL))
+      await activateWorktree(c, peers?.list.length ?? 0);
     if (!peers?.list.length) {
       delete sections.peer_sessions;
       return;
@@ -465,9 +475,14 @@ export default function (pi: ExtensionAPI) {
       lines.push(
         "Active within the last hour:",
         ...active.map(row),
-        "You share uncommitted changes with them. Before you commit, switch branches, rebase, merge, run git " +
-          "checkout/restore/reset/stash/clean, or start a long tree-wide build or codegen, tell them with send_message. " +
-          "When you start editing files they may also touch, say which ones.",
+        "You share uncommitted changes with them. Before you commit, switch branches, rebase, merge, or run git " +
+          "checkout/restore/reset/stash/clean, tell them with send_message. Don't send acknowledgements, status, " +
+          "or replies to messages that need no answer.",
+        ...(c.hasUI && pi.getActiveTools().includes(WORKTREE_TOOL)
+          ? [
+              "If your task edits files, call enter_worktree before your first edit so your work stays out of theirs.",
+            ]
+          : []),
       );
     if (stale.length)
       lines.push(
@@ -475,7 +490,7 @@ export default function (pi: ExtensionAPI) {
         ...stale.map(row),
       );
     lines.push(
-      "Changes in git status that you did not make are probably theirs: never revert, stash or commit them; ask instead.",
+      "Changes in git status that you did not make are probably theirs: never revert, stash or commit them; ask your user instead.",
     );
     sections.peer_sessions = lines.join("\n");
   });
@@ -594,7 +609,10 @@ export default function (pi: ExtensionAPI) {
       const from = isOwner() ? ownAddress : undefined;
       const notes: string[] = [];
 
-      if (message && isStale(target)) {
+      // It won't start a turn, so there is no wake-up cost to confirm; its receipt tells the model.
+      const queues =
+        target.status === "idle" && target.peerFeatures?.includes(FEATURE_QUEUE_WHEN_IDLE);
+      if (message && !queues && isStale(target)) {
         const tokens = await contextTokens(target).catch(() => undefined);
         if (costlyWake(tokens)) {
           const why =
@@ -625,11 +643,15 @@ export default function (pi: ExtensionAPI) {
           body: message,
         });
         const frame = userFrame({ content, from, sessionId: target.sessionId });
-        await sendFrame(target.messagingSocketPath, frame);
+        // Recorded first: the receipt can arrive before sendFrame resolves.
         sentMessages.set(frame.msg_id, label);
         if (sentMessages.size > 200) sentMessages.delete(sentMessages.keys().next().value!);
+        await sendFrame(target.messagingSocketPath, frame).catch((error) => {
+          sentMessages.delete(frame.msg_id);
+          throw error;
+        });
         notes.push(`Sent to ${label}.`);
-        if (isStale(target))
+        if (!queues && isStale(target))
           notes.push(
             `It has been ${activityLabel(target)}, so it may be abandoned; your message starts a new turn there. Don't wait on a reply.`,
           );
@@ -704,6 +726,15 @@ function treeRoot(dir: string): Promise<string> {
     treeRoots.set(dir, root);
   }
   return root;
+}
+
+/** Whether the working tree holds edits someone may be building on; a worktree starts from the default branch. */
+function dirtyTree(dir: string): Promise<boolean> {
+  return new Promise((resolve) =>
+    execFile("git", ["-C", dir, "status", "--porcelain"], { timeout: 2000 }, (err, out) =>
+      resolve(!err && out.trim() !== ""),
+    ),
+  );
 }
 
 /** Live sessions of other processes whose cwd is in the same working tree as `cwd`. */

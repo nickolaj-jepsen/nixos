@@ -27,6 +27,8 @@ import { originalTmpdir } from "../lib/original-tmpdir.ts";
 
 export const PEER_PROTOCOL = 1;
 export const FEATURE_NOTIFY_IDLE = "notify_idle";
+// An idle recipient holds messages for its user's next prompt instead of starting a turn.
+export const FEATURE_QUEUE_WHEN_IDLE = "queue_when_idle";
 const TAG = "cross-session-message";
 // Claude drops a connection once this much arrives without a newline.
 export const MAX_FRAME_BYTES = 1024 * 1024;

@@ -13,14 +13,13 @@
  * Small-context models (the local ones) get a leaner set. Pi runs the hook
  * before every request, so a model switch takes effect on the next one.
  */
-import type { Model } from "@earendil-works/pi-ai";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { isLeanModel } from "./lib/lean-model.ts";
 
 const NAME = "codemode_only";
 const CODEMODE = "codemode";
 const HIDDEN = ["get_subagent_result", "steer_subagent"];
-const LEAN_MAX_CONTEXT = 131_072;
 // pi-background-tasks: bg_run stays declared; its completion notice makes these rarely needed.
 const HIDDEN_WHEN_LEAN = ["bg_status", "bg_logs", "bg_kill"];
 // Not to be called from codemode either, unless the user asks for it.
@@ -30,9 +29,6 @@ const DELEGATION_HIDDEN_WHEN_LEAN = [
   // Not that queue, but the room: its declaration alone is ~5k tokens.
   "SubagentWorkflow",
 ];
-
-const isLean = (model: Model<any> | undefined) =>
-  model?.contextWindow !== undefined && model.contextWindow <= LEAN_MAX_CONTEXT;
 
 const hidden = (lean: boolean) => [
   ...HIDDEN,
@@ -74,7 +70,7 @@ const guidelines = (lean: boolean, active: Set<string>) => {
 export default function (pi: ExtensionAPI) {
   let lean = false;
   pi.on("session_start", (_event, ctx) => {
-    lean = isLean(ctx.model);
+    lean = isLeanModel(ctx.model);
     // The names are third-party: a package bump that renames one would leave its
     // full declaration in the prompt with nothing to show for it.
     const registered = new Set(pi.getAllTools().map((tool) => tool.name));
@@ -87,7 +83,7 @@ export default function (pi: ExtensionAPI) {
     }
   });
   pi.on("model_select", (event) => {
-    lean = isLean(event.model);
+    lean = isLeanModel(event.model);
   });
 
   // The prompt options are rebuilt for every run, so a model switch drops the old lines.
