@@ -1,6 +1,7 @@
 /**
  * Claude Code's same-machine cross-session protocol, as read out of the
- * Claude Code 2.1.308 binary: a session registry under `~/.claude/sessions`,
+ * Claude Code 2.1.308 binary: a session registry under `<config dir>/sessions`
+ * (`~/.claude` on a plain install, `~/.claude-work` for the work wrapper),
  * one Unix socket per session under `cc-socks`, and newline-delimited JSON
  * frames on it. Undocumented upstream, so any Claude Code release may change it.
  *
@@ -8,7 +9,16 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { chmodSync, lstatSync, mkdirSync, readFileSync, readlinkSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+} from "node:fs";
 import { access, open, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { connect, createServer, type Server } from "node:net";
 import { homedir, tmpdir } from "node:os";
@@ -53,8 +63,42 @@ export interface Peer extends RegistryEntry {
   name: string;
 }
 
-export function registryDir(): string {
-  return path.join(process.env.CLAUDE_CONFIG_DIR || path.join(homedir(), ".claude"), "sessions");
+/**
+ * Claude config dirs this machine uses: the one CLAUDE_CONFIG_DIR names,
+ * `~/.claude`, and sibling profiles such as `~/.claude-work` that already hold
+ * a registry. Each profile keeps its own registry, so one without the others
+ * hides every session belonging to a different login.
+ */
+function configDirs(): string[] {
+  const home = homedir();
+  const dirs = [process.env.CLAUDE_CONFIG_DIR, path.join(home, ".claude")].filter(
+    (dir): dir is string => !!dir,
+  );
+  for (const name of entries(home).sort())
+    if (/^\.claude-[^.]+$/.test(name) && existsSync(path.join(home, name, "sessions")))
+      dirs.push(path.join(home, name));
+  return [...new Set(dirs)];
+}
+
+function real(dir: string): string {
+  try {
+    return realpathSync(dir);
+  } catch {
+    return dir;
+  }
+}
+
+function entries(dir: string): string[] {
+  try {
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+/** Every session registry on this machine; profiles symlinked together count once. */
+export function registryDirs(): string[] {
+  return [...new Set(configDirs().map((dir) => real(path.join(dir, "sessions"))))];
 }
 
 /** Socket directory Claude itself binds in; reply addresses outside it are refused. */
@@ -147,42 +191,44 @@ export function socketReachable(socketPath: string, timeoutMs = 300): Promise<bo
   });
 }
 
-/** Live, messageable sessions from Claude's registry, newest first. */
+/** Live, messageable sessions from every Claude registry, newest first. */
 export async function listPeers(excludeSocket?: string): Promise<Peer[]> {
-  const dir = registryDir();
-  let files: string[];
-  try {
-    files = await readdir(dir);
-  } catch {
-    return [];
-  }
   const domain = pidDomain();
-  const candidates: Peer[] = [];
-  for (const file of files) {
-    if (!/^\d+\.json$/.test(file)) continue;
-    let entry: RegistryEntry;
+  // A pi session registers in every registry, so the socket path is the key.
+  const candidates = new Map<string, Peer>();
+  for (const dir of registryDirs()) {
+    let files: string[];
     try {
-      entry = JSON.parse(await readFile(path.join(dir, file), "utf8"));
+      files = await readdir(dir);
     } catch {
       continue;
     }
-    const sock = entry.messagingSocketPath;
-    if (typeof sock !== "string" || !sock || sock === excludeSocket) continue;
-    if ((entry.peerProtocol ?? 0) < PEER_PROTOCOL) continue;
-    if (entry.pidDomain !== undefined && domain !== undefined && entry.pidDomain !== domain)
-      continue;
-    if (!pidAlive(entry.pid)) continue;
-    if (entry.procStart !== undefined && procStart(entry.pid) !== entry.procStart) continue;
-    candidates.push({
-      ...entry,
-      messagingSocketPath: sock,
-      name: entry.name || `pid ${entry.pid}`,
-    });
+    for (const file of files) {
+      if (!/^\d+\.json$/.test(file)) continue;
+      let entry: RegistryEntry;
+      try {
+        entry = JSON.parse(await readFile(path.join(dir, file), "utf8"));
+      } catch {
+        continue;
+      }
+      const sock = entry.messagingSocketPath;
+      if (typeof sock !== "string" || !sock || sock === excludeSocket) continue;
+      if (candidates.has(sock)) continue;
+      if ((entry.peerProtocol ?? 0) < PEER_PROTOCOL) continue;
+      if (entry.pidDomain !== undefined && domain !== undefined && entry.pidDomain !== domain)
+        continue;
+      if (!pidAlive(entry.pid)) continue;
+      if (entry.procStart !== undefined && procStart(entry.pid) !== entry.procStart) continue;
+      candidates.set(sock, {
+        ...entry,
+        messagingSocketPath: sock,
+        name: entry.name || `pid ${entry.pid}`,
+      });
+    }
   }
-  const reachable = await Promise.all(
-    candidates.map((p) => socketReachable(p.messagingSocketPath)),
-  );
-  return candidates.filter((_, i) => reachable[i]).sort((a, b) => b.startedAt - a.startedAt);
+  const peers = [...candidates.values()];
+  const reachable = await Promise.all(peers.map((p) => socketReachable(p.messagingSocketPath)));
+  return peers.filter((_, i) => reachable[i]).sort((a, b) => b.startedAt - a.startedAt);
 }
 
 /**
@@ -222,13 +268,16 @@ const exists = (file: string) =>
   );
 
 async function claudeTranscript(peer: Peer): Promise<string | undefined> {
-  const projects = path.join(path.dirname(registryDir()), "projects");
   const file = `${peer.sessionId}.jsonl`;
-  const guess = path.join(projects, peer.cwd.replace(/[^A-Za-z0-9-]/g, "-"), file);
-  if (await exists(guess)) return guess;
-  // Claude shortens long project dir names; fall back to a scan.
-  for (const dir of await readdir(projects).catch(() => [])) {
-    if (await exists(path.join(projects, dir, file))) return path.join(projects, dir, file);
+  for (const dir of registryDirs()) {
+    const projects = path.join(path.dirname(dir), "projects");
+    const guess = path.join(projects, peer.cwd.replace(/[^A-Za-z0-9-]/g, "-"), file);
+    if (await exists(guess)) return guess;
+    // Claude shortens long project dir names; fall back to a scan.
+    for (const project of await readdir(projects).catch(() => [])) {
+      if (await exists(path.join(projects, project, file)))
+        return path.join(projects, project, file);
+    }
   }
   return undefined;
 }
@@ -461,15 +510,22 @@ export async function bindInbox(
   return server;
 }
 
+/** Register in every Claude profile's registry, so each login sees this session. */
 export async function writeRegistryEntry(entry: RegistryEntry): Promise<void> {
-  const dir = registryDir();
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const file = path.join(dir, `${entry.pid}.json`);
-  const tmp = `${file}.${randomUUID().slice(0, 8)}.tmp`;
-  await writeFile(tmp, JSON.stringify(entry), { mode: 0o644 });
-  await rename(tmp, file);
+  const body = JSON.stringify(entry);
+  await Promise.allSettled(
+    registryDirs().map(async (dir) => {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      const file = path.join(dir, `${entry.pid}.json`);
+      const tmp = `${file}.${randomUUID().slice(0, 8)}.tmp`;
+      await writeFile(tmp, body, { mode: 0o644 });
+      await rename(tmp, file);
+    }),
+  );
 }
 
 export async function removeRegistryEntry(pid: number): Promise<void> {
-  await unlink(path.join(registryDir(), `${pid}.json`)).catch(() => {});
+  await Promise.all(
+    registryDirs().map((dir) => unlink(path.join(dir, `${pid}.json`)).catch(() => {})),
+  );
 }
