@@ -13,7 +13,8 @@
  *   message appended, so the conversation prefix is a prompt-cache read. A
  *   rebuilt request pays full input price on every token, which at DeepSeek's
  *   cache-read rate is the difference between ~$0.0006 and ~$0.015 per check
- *   at 100k tokens.
+ *   at 100k tokens. On Opus the cache read alone is $0.02 there, so a check
+ *   estimated above PI_YSK_MAX_COST is skipped.
  * - A note survives 2 user prompts; then it is cleared and counts as ignored.
  *   Two ignored notes are free, after which the checker skips 1, 2, 4, 8, 16
  *   checks. Dismissing a note counts as answering it and resets that.
@@ -26,11 +27,12 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Message, Model } from "@earendil-works/pi-ai";
+import { calculateCost } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Message, Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
-import { recordSideCall } from "./lib/usage-ledger.ts";
+import { emptyUsage, recordSideCall } from "./lib/usage-ledger.ts";
 
 // Read from the mod's own export map; see the reference notes for the extraction.
 const CHECK_EVERY = 6; // CHECK_EVERY: the step of a turn that may check
@@ -50,6 +52,11 @@ const SKIP_PROVIDERS = (process.env.PI_YSK_SKIP_PROVIDERS ?? "")
   .split(",")
   .map((name) => name.trim())
   .filter((name) => name !== "");
+// A check expected to cost more than this many dollars is skipped; unset means no cap.
+const MAX_COST = (() => {
+  const cap = Number(process.env.PI_YSK_MAX_COST);
+  return cap > 0 ? cap : Infinity;
+})();
 
 const AGENT_DIR = process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), ".pi", "agent");
 const STATE_DIR = join(AGENT_DIR, "you-should-know");
@@ -80,6 +87,7 @@ type Check = {
   cacheRead?: number;
   cacheWrite?: number;
   cost?: number;
+  estimate?: number;
   error?: string;
 };
 type Parsed = { kind: "none" } | { kind: "unparsable" } | { kind: "line"; line: string; tag: Tag };
@@ -300,34 +308,73 @@ export default function (pi: ExtensionAPI) {
     };
   }
 
+  /**
+   * The least a check on `model` can cost: the prompt of `last`, the last
+   * successful request, as a cache read, and the turn since (its reply and tool
+   * results) plus the check's prompt at the input rate.
+   */
+  function estimate(
+    ctx: ExtensionContext,
+    model: Model<string>,
+    last: AssistantMessage | undefined,
+    prompt: string,
+  ): number {
+    const prefix = last ? last.usage.input + last.usage.cacheRead + last.usage.cacheWrite : 0;
+    const usage = emptyUsage();
+    usage.cacheRead = prefix;
+    usage.input =
+      Math.max(0, (ctx.getContextUsage()?.tokens ?? prefix) - prefix) +
+      Math.ceil(prompt.length / 4);
+    return calculateCost(model, usage).total;
+  }
+
   async function check(ctx: ExtensionContext, step: number, llmMessages: Message[], run: number) {
     const abort = new AbortController();
     inFlight = abort;
     const atPrompt = promptCounter;
     const started = Date.now();
-    const model = pickModel(ctx);
+    const picked = pickModel(ctx);
     let outcome = "error";
     let detail: Partial<Check> = {};
 
     try {
-      if (!model) {
+      if (!picked) {
         outcome = "no_model";
-        return;
-      }
-      if (SKIP_PROVIDERS.includes(model.provider)) {
-        outcome = "skipped_provider";
         return;
       }
       const sameAsMain =
         ctx.model !== undefined &&
-        ctx.model.provider === model.provider &&
-        ctx.model.id === model.id;
+        ctx.model.provider === picked.provider &&
+        ctx.model.id === picked.id;
+      const last = llmMessages
+        .filter(
+          (m): m is AssistantMessage =>
+            m.role === "assistant" && m.stopReason !== "error" && m.stopReason !== "aborted",
+        )
+        .at(-1);
+      // A virtual model would route the fork as a direct request, often away from the
+      // model whose prefix it replays, and it lists no prices to estimate with.
+      const model =
+        sameAsMain && picked.api === "pi-virtual" && last
+          ? (ctx.modelRegistry.find(last.provider, last.model) ?? picked)
+          : picked;
+      if (SKIP_PROVIDERS.includes(model.provider)) {
+        outcome = "skipped_provider";
+        return;
+      }
+      const prompt = PROMPT.replace("{{SEEN}}", listed(state.seen));
+      const cost = estimate(ctx, model, last, prompt);
+      if (cost > MAX_COST) {
+        outcome = "skipped_cost";
+        detail = { model: `${model.provider}/${model.id}`, estimate: cost };
+        return;
+      }
       aligned = undefined;
       const messages: Message[] = [
         ...llmMessages,
         {
           role: "user",
-          content: [{ type: "text", text: PROMPT.replace("{{SEEN}}", listed(state.seen)) }],
+          content: [{ type: "text", text: prompt }],
           timestamp: Date.now(),
         },
       ];
