@@ -137,7 +137,7 @@ export const KIND_META: Record<Kind | "architect", ModelMeta> = {
   },
   architect: {
     name: "Architect",
-    description: "Plans on the planner, builds on Flash",
+    description: "Hard problems planned on the planner, everything else on Flash",
     thinkingLevels: ["low", "medium", "high", "xhigh", "max"],
     contextWindow: 1_000_000,
   },

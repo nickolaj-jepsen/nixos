@@ -1,8 +1,9 @@
 /**
  * Virtual models (see pi's docs/virtual-models.md), one per kind, with the
  * ladders and one-line descriptions in ./routers/kinds.ts: `vm/flash`,
- * `vm/strong`, `vm/planner` and `vm/architect`, which plans on the planner and
- * builds on flash until `/replan` sends the next prompt back to planning.
+ * `vm/strong`, `vm/planner` and `vm/architect`, whose rated planning entries
+ * run on the planner or flash, and whose build phase runs on flash until
+ * `/replan` sends the next prompt back to planning.
  *
  * A kind only ever walks its own ladder; nothing escalates to a pricier kind on
  * its own. Each subscription meters one shared pool, so a stage is a pool, not
@@ -21,9 +22,14 @@
  * - While Go's monthly window is under pace near its reset (kinds.ts: bankable
  *   allowance about to strand), its stage swaps ahead of Synthetic's.
  * - The architect's planning entry is rated by Jev (typesafe/jev-latest):
- *   standard prompts plan on the strong stages, complex prompts on the
- *   planner, and no verdict fails open to the planner — the gate is an
- *   optimisation, not a policy.
+ *   standard prompts plan on flash, complex prompts on the planner, and no
+ *   verdict fails open to the planner — the gate is an optimisation, not a
+ *   policy. GLM-5.3 sits past Opus in the planner ladder: it is reached only
+ *   when a genuinely hard problem outlives the credit, the only place its
+ *   edge over DS 4.1 Flash is worth its price.
+ * - The plan→build boundary re-rates the finished plan on the same question
+ *   (shadow): the verdict is marked in the chat and kept in the /vm trace
+ *   but never acted on, until it has earned a threshold on real sessions.
  */
 import type { Message, ThinkingLevel } from "@earendil-works/pi-ai";
 import type {
@@ -82,7 +88,13 @@ const EDIT_TOOLS = new Set(["edit", "write"]);
 /** A place on a ladder: the stage (pool) and the model inside it. */
 type Position = { stage: number; model: number };
 type KindState = { at: Position };
-type ArchitectState = { phase: "plan" | "build"; at: Position; verdict?: boolean };
+type ArchitectState = {
+  phase: "plan" | "build";
+  at: Position;
+  verdict?: boolean;
+  /** The shadow re-rate at the plan→build boundary; see classifyPlan. */
+  reRate?: boolean;
+};
 
 /** One route decision, as `/vm` shows it. */
 type TraceEntry = {
@@ -279,6 +291,53 @@ export default function (pi: ExtensionAPI) {
     };
   };
 
+  /**
+   * The shadow re-rate at the plan→build boundary: with the plan text in
+   * state, the same complexity question that gated the prompt. A plan that
+   * reads complex after a standard prompt is the misclassification the
+   * prompt gate cannot see. Shadow only: the verdict is marked and
+   * traced, never routed on, until it has earned a threshold on real
+   * sessions. No verdict is not a signal.
+   */
+  const classifyPlan = async (
+    ctx: ExtensionContext,
+    request: ModelRouteRequest<ArchitectState>,
+  ): Promise<{ complex?: boolean; note: string }> => {
+    const jev = ctx.modelRegistry.findOfType("classifier", "typesafe", "jev-latest");
+    if (!jev) return { note: "re-rate off: no typesafe credentials" };
+    try {
+      const result = await ctx.modelRegistry.classify(
+        jev,
+        {
+          state: {
+            prompt: lastUserText(request.messages).slice(0, 4_000),
+            plan: planText(request.messages).slice(0, 12_000),
+          },
+          questions: {
+            complexity: {
+              type: "choice",
+              instructions:
+                "The finished plan for `prompt` is in `plan`. Does the plan reveal work more demanding than an ordinary feature, fix, review or question?",
+              criteria: {
+                standard: "The plan covers ordinary work with straightforward steps",
+                complex: "The plan reveals subtle design, cross-cutting changes, or hard debugging",
+              },
+            },
+          },
+        },
+        { signal: request.signal },
+      );
+      const answer = result.stopReason === "stop" ? result.answers.complexity : undefined;
+      if (answer?.type === "choice") {
+        const complex = (answer.probabilities.complex ?? 0) >= 0.5;
+        return { complex, note: complex ? "re-rate: complex" : "re-rate: standard" };
+      }
+      return { note: `re-rate inconclusive (${result.errorMessage ?? result.stopReason})` };
+    } catch (error) {
+      return { note: `re-rate failed (${errorText(error)}): no verdict` };
+    }
+  };
+
   const notifySwitch = (ctx: ExtensionContext, from: Stage, to: Stage, down: boolean) => {
     if (!ctx.hasUI) return;
     ctx.ui.notify(
@@ -290,9 +349,19 @@ export default function (pi: ExtensionAPI) {
   };
 
   /**
-   * The Jev verdict for a planning entry: `false` plans on the strong stages,
-   * anything else on the planner. No verdict fails open to the planner — the
-   * gate is missing credentials, a quota or a bad answer, not a signal.
+   * A phase marker in the chat: gate verdicts and transitions as they happen.
+   * `warning` is for the ones worth a second look — a shadow re-rate changing
+   * its mind. Subagents run without a UI.
+   */
+  const marker = (ctx: ExtensionContext, text: string, type: "info" | "warning" = "info") => {
+    if (!ctx.hasUI) return;
+    ctx.ui.notify(text, type);
+  };
+
+  /**
+   * The Jev verdict for a planning entry: `false` plans on flash, anything
+   * else on the planner. No verdict fails open to the planner — the gate is
+   * missing credentials, a quota or a bad answer, not a signal.
    */
   const classifyPlanning = async (
     ctx: ExtensionContext,
@@ -374,12 +443,18 @@ export default function (pi: ExtensionAPI) {
       const startPlanning = !state || (request.reason === "user" && replan.delete(sessionId));
       if (startPlanning || (state.phase === "plan" && !editedThisTurn(request.messages))) {
         // Every entry into planning is rated: complex prompts on the planner
-        // kind, standard ones on the strong stages, no verdict on the planner.
+        // kind, standard ones on flash, no verdict on the planner.
         // The verdict persists across planning continuations in the branch state.
         const gate = startPlanning
           ? await classifyPlanning(ctx, request)
           : { verdict: state.verdict, note: "" };
-        const ladder = gate.verdict === false ? STRONG : PLANNER;
+        const ladder = gate.verdict === false ? FLASH : PLANNER;
+        if (startPlanning) {
+          marker(
+            ctx,
+            `architect: planning on ${gate.verdict === false ? "flash" : "the planner"} — ${gate.note}`,
+          );
+        }
         const at = startPlanning ? undefined : state.at;
         return routeKind(
           ladder,
@@ -391,12 +466,41 @@ export default function (pi: ExtensionAPI) {
           gate.note ? [gate.note] : [],
         );
       }
-      // Planning made the first edit: the rest goes to the flash ladder.
+      // Planning made the first edit: the rest goes to the flash ladder. The
+      // crossing itself re-rates the finished plan (shadow): marked in the
+      // chat, kept in the trace and the branch state, never routed on.
+      const crossing = state.phase === "plan";
       const at = state.phase === "build" ? state.at : undefined;
-      return routeKind(FLASH, "architect", request, ctx, at, (position) => ({
-        phase: "build",
-        at: position,
-      }));
+      const reRate = crossing ? await classifyPlan(ctx, request) : undefined;
+      if (reRate) {
+        const clause =
+          reRate.complex === undefined
+            ? reRate.note
+            : `re-rate: ${reRate.complex ? "complex" : "standard"}` +
+              (reRate.complex === state.verdict
+                ? " (agrees)"
+                : state.verdict === false
+                  ? " (would have planned on the planner; shadow)"
+                  : " (the planner could have been skipped; shadow)");
+        marker(
+          ctx,
+          `architect: plan → build on flash — ${clause}`,
+          reRate.complex !== undefined && reRate.complex !== state.verdict ? "warning" : "info",
+        );
+      }
+      return routeKind(
+        FLASH,
+        "architect",
+        request,
+        ctx,
+        at,
+        (position) => ({
+          phase: "build",
+          at: position,
+          ...(reRate?.complex !== undefined ? { reRate: reRate.complex } : {}),
+        }),
+        reRate ? ["planning made the first edit", reRate.note] : [],
+      );
     },
   });
 
@@ -531,6 +635,27 @@ function lastUserText(messages: readonly Message[]): string {
   return typeof content === "string"
     ? content
     : content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
+}
+
+/** The assistant text since the last user message: the finished plan, for the re-rate. */
+function planText(messages: readonly Message[]): string {
+  const lastUser = [...messages].reverse().findIndex((message) => message.role === "user");
+  const sinceUser = lastUser === -1 ? messages : messages.slice(messages.length - lastUser);
+  const plan = sinceUser
+    .filter((message) => message.role === "assistant")
+    .map((message) => {
+      const content = message.content;
+      return typeof content === "string"
+        ? content
+        : content
+            .filter((block) => block.type === "text")
+            .map((block) => block.text)
+            .join("\n");
+    })
+    .join("\n");
+  // An empty plan (no assistant text) says nothing; fall back to the prompt so a
+  // wrong rerun of the boundary classifies the same evidence as the gate.
+  return plan || lastUserText(messages);
 }
 
 /** Whether a tool call since the last user message edited a file successfully. */
