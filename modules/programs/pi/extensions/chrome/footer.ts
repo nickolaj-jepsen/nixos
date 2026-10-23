@@ -1,7 +1,7 @@
 /**
  * The line under the editor: what is answering on the left (provider, model,
  * effort, other extensions' statuses), measurements right-aligned before git.
- * Measurements (context, cost, speed) live on the editor's bottom border;
+ * Measurements (context, cost, speed) live on the editor's top border;
  * alarms (quota running out, credit left, a cache miss) appear here only when
  * they say something. Layout and shedding live in `footer-line.ts`; git, usage
  * and stats in their own modules.
@@ -96,7 +96,7 @@ export const createFooter = (
     };
   };
 
-  /** The measurements the editor's bottom border shows next to the context. */
+  /** The measurements the editor's top border shows next to the context. */
   const meters = (): string[] => {
     const ctx = state.ctx;
     if (!ctx) return [];
@@ -129,7 +129,7 @@ export const createFooter = (
         color: s.cacheHit < CACHE_ERROR_PCT ? "error" : "warning",
       });
     }
-    // Only when the bottom border could not be drawn.
+    // Only until the editor's top border carries it.
     const percent = state.metersActive ? undefined : ctx.getContextUsage()?.percent;
     if (percent != null) {
       alarms.push({
@@ -182,7 +182,7 @@ export const createFooter = (
           .map((text, index) => ({ id: `status-${index}`, text, color: "dim" as const })),
         alarms,
         path: { id: "path", text: shortPath(ctx.cwd), color: "dim" },
-        // The bottom border carries these; the footer only does when it could not be drawn.
+        // The editor's top border carries these; the footer only does until it is installed.
         cost:
           costText && !state.metersActive
             ? { id: "cost", text: costText, color: "dim" }

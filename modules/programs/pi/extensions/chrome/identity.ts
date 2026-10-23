@@ -249,7 +249,12 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
    * dashes instead of dots so the row reads as the top of the input box.
    * Detail is shed before the label is shortened.
    */
-  const borderSides = (width: number, hidden: number, border: (text: string) => string) => {
+  const borderSides = (
+    width: number,
+    hidden: number,
+    border: (text: string) => string,
+    levels: readonly string[][],
+  ) => {
     const ctx = state.ctx;
     if (!ctx) return { left: "", right: "", label: undefined };
     const theme = ctx.ui.theme;
@@ -258,7 +263,12 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
     // so it belongs next to the label rather than in the session detail.
     const hint = hidden > 0 ? ` ↑${hidden}` : "";
-    const rows: string[][] = [[stateText], []];
+    const stateSegment = stateText
+      ? [theme.fg(stateText === "failed" ? "error" : "warning", stateText)]
+      : [];
+    // Measurements give way before the state, which is the part that asks you to look.
+    const rows: string[][] = [...levels.map((level) => [...stateSegment, ...level]), stateSegment];
+    if (stateSegment.length > 0) rows.push([]);
     const working = busy || phase === "working";
     // pi's own shape: `── ⠋ Working`; the spinner takes the slot the label would.
     const lead = working ? `${border("──")} ${theme.fg("accent", spinnerGlyph())} ` : border("── ");
@@ -266,13 +276,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     const tail = border(" ──");
 
     for (const row of rows) {
-      const parts = row.filter(Boolean);
-      const sized = parts.map((part) =>
-        part === stateText
-          ? theme.fg(stateText === "failed" ? "error" : "warning", part)
-          : theme.fg("dim", part),
-      );
-      const right = parts.length > 0 ? ` ${sized.join(separator)}${tail}` : "";
+      const right = row.length > 0 ? ` ${row.join(separator)}${tail}` : "";
       // lead + label + hint + space, then the detail, then at least one dash.
       const room = width - visibleWidth(lead) - visibleWidth(hint) - 2 - visibleWidth(right);
       if (room < MIN_LABEL_ROOM) continue;
@@ -294,8 +298,9 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     width: number,
     hidden: number,
     border: (text: string) => string,
+    levels: readonly string[][] = [],
   ): { line: string; regions: Region[] } => {
-    const { left, right, label } = borderSides(width, hidden, border);
+    const { left, right, label } = borderSides(width, hidden, border, levels);
     const fill = Math.max(0, width - visibleWidth(left) - visibleWidth(right));
     return {
       line: left + (fill > 0 ? border("─".repeat(fill)) : "") + right,

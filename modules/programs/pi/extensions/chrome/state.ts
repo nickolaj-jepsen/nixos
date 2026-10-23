@@ -15,7 +15,7 @@ export type ChromeState = {
   hover: string | undefined;
   /** Moves the hover; it lapses on its own because pi never reports the pointer leaving. */
   setHover(group: string | undefined): void;
-  /** Whether the last editor render drew the measurements on the bottom border; the footer shows them while false. */
+  /** Whether the editor wrapper has drawn the top border with the measurements; the footer shows them while false. */
   metersActive: boolean;
 };
 
