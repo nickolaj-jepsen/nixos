@@ -5,8 +5,8 @@
 # ~/.pi/agent/settings.json on every launch and arrays replace wholesale —
 # imperative `pi install`/`pi remove` edits revert at next start, and entries
 # removed here stop loading but leave their download in ~/.pi/agent/{npm,git}.
-# npm entries are version-pinned, so `pi update` leaves them alone: bump them
-# here (`npm view <pkg> version`); the update bot only covers pkgs/.
+# Third-party packages are Nix-built (pkgs/pi-packages) and listed as local
+# paths, so pi never runs npm and `pi update` has nothing to reconcile.
 #
 # Own extensions live in ./extensions, a local pi package: each `.ts` file
 # there is one extension. See docs/modules.md.
@@ -79,6 +79,22 @@ in {
       inherit lib;
       colors = config.fireproof.theme.colors;
     }));
+    # Load order and why each is here; the pins live in
+    # pkgs/pi-packages/package.json, and the assertion below keeps the two
+    # rosters equal.
+    thirdPartyPackages = [
+      # core
+      "@juicesharp/rpiv-ask-user-question"
+      "@juicesharp/rpiv-todo"
+      # guardrails
+      "@gotgenes/pi-permission-system"
+      # context diet
+      "pi-cache-optimizer"
+      # ui
+      "@ayulab/pi-rewind"
+      # agents
+      "@tintinweb/pi-subagents"
+    ];
   in {
     imports = [inputs.pi.homeModules.default];
 
@@ -124,21 +140,12 @@ in {
           # extensions/codemode-only.ts moves the expensive tools behind it.
           defaultTools = ["+codemode"];
         };
-        settings.packages = [
-          # core
-          "npm:@juicesharp/rpiv-ask-user-question@2.13.8"
-          "npm:@juicesharp/rpiv-todo@2.13.8"
-          # guardrails
-          "npm:@gotgenes/pi-permission-system@41.0.0"
-          # context diet
-          "npm:pi-cache-optimizer@2.8.24"
-          # ui
-          "npm:@ayulab/pi-rewind@0.4.6"
-          # agents
-          "npm:@tintinweb/pi-subagents@0.22.0"
+        # Local paths: pi loads the Nix-built tree as-is (see
+        # pkgs/pi-packages for how the npm dependencies get there).
+        settings.packages =
+          map (name: "${pkgs.pi-packages}/node_modules/${name}") thirdPartyPackages
           # own, from ./extensions
-          "${mkExtensions pkgs pi}"
-        ];
+          ++ ["${mkExtensions pkgs pi}"];
         # Arrays replace wholesale, so `pi config` toggles of built-ins revert at launch.
         settings.extensions = [];
         # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
@@ -152,6 +159,19 @@ in {
           config.programs.mcp.servers;
         };
       };
+
+      assertions = let
+        declared = lib.sort builtins.lessThan thirdPartyPackages;
+      in [
+        {
+          assertion = declared == lib.sort builtins.lessThan pkgs.pi-packages.packageNames;
+          message = ''
+            The pi package roster in settings.packages and pkgs/pi-packages/package.json disagree.
+            Only here: ${lib.concatStringsSep ", " (lib.subtractLists pkgs.pi-packages.packageNames declared)}
+            Only in package.json: ${lib.concatStringsSep ", " (lib.subtractLists declared pkgs.pi-packages.packageNames)}
+          '';
+        }
+      ];
 
       # The extension spawns its own hunspell; keep the package in the profile too
       # so the same dictionaries are available outside pi.

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Bump the hand-pinned packages in pkgs/ to their latest upstream release.
 
-Each package with an updater gets its latest version looked up, the new hash
-prefetched with `nix store prefetch-file`, and pkgs/<name>/ rewritten in place.
+Each package with an updater gets its latest version looked up and
+pkgs/<name>/ rewritten in place, prefetching a new hash where the package pins
+one.
 One package failing to update never stops the others.
 
 Usage: update_packages.py [--only NAME ...] [--json PATH]
@@ -19,6 +20,7 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[2]
 PKGS = ROOT / "pkgs"
@@ -170,12 +172,55 @@ def update_github_release(name: str, repo: str) -> tuple[str, str]:
     return old, new
 
 
+def update_pi_packages() -> tuple[str, str]:
+    """Bump every pin in pkgs/pi-packages and regenerate its npm lock."""
+    path = PKGS / "pi-packages" / "package.json"
+    package = json.loads(path.read_text())
+    deps = package["dependencies"]
+    latest = {
+        name: json.loads(fetch(f"https://registry.npmjs.org/{quote(name, safe='@')}").decode())[
+            "dist-tags"
+        ]["latest"]
+        for name in deps
+    }
+    changed = {name: (deps[name], latest[name]) for name in deps if deps[name] != latest[name]}
+    if not changed:
+        return "", ""
+    path.write_text(json.dumps({**package, "dependencies": latest}, indent=2) + "\n")
+    # importNpmLock hashes this lock at eval, so regenerating it is the whole
+    # bump. The build's nodejs writes it, not the runner's.
+    proc = subprocess.run(
+        [
+            "nix",
+            "shell",
+            "--inputs-from",
+            str(ROOT),
+            "nixpkgs#nodejs",
+            "--command",
+            "npm",
+            "install",
+            "--package-lock-only",
+            "--legacy-peer-deps",
+        ],
+        cwd=path.parent,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"regenerating package-lock.json failed:\n{proc.stderr[-2000:]}")
+    return (
+        ", ".join(f"{n}@{old}" for n, (old, _) in changed.items()),
+        ", ".join(f"{n}@{new}" for n, (_, new) in changed.items()),
+    )
+
+
 # pkgs/<name> -> updater; update_bot.py holds one back by reverting that directory.
 UPDATERS = {
     "claude-code": update_claude_code,
     "bambu-studio": update_bambu_studio,
     "claude-desktop": update_claude_desktop,
     "ha-bambulab": lambda: update_github_release("ha-bambulab", "greghesp/ha-bambulab"),
+    "pi-packages": update_pi_packages,
     "zwift-hass": lambda: update_github_release("zwift-hass", "snicker/zwift_hass"),
 }
 

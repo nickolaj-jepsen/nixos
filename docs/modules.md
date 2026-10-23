@@ -129,6 +129,13 @@ home-manager and the overlays):
   from pi itself (`mkExtensions` in `modules/programs/pi/default.nix`). `just
 dev-setup` links `node_modules` into the folder for editor types and
   `pi -e modules/programs/pi/extensions/<name>.ts` without a rebuild.
+- **Third-party pi package**: `pkgs/pi-packages/` is one npm tree whose
+  `package.json` holds the roster and the exact pins; the pi leaf lists each
+  `$out/node_modules/<name>` as a local path in `settings.packages`, so pi
+  loads them without running npm. Keep the two rosters equal — an assertion
+  fails the build otherwise. Bumps go through `UPDATERS` (`pi-packages`),
+  which rewrites the pins and regenerates the lock (read via `importNpmLock`,
+  no hash to bump).
 - **Claude Code mod**: a plugin folder with a hooks module in
   `modules/programs/claude-code/mods/<name>/`. The claude-code leaf builds it
   with `claude plugin validate` and `claude plugin test` against the
