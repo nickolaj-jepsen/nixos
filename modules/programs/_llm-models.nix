@@ -17,7 +17,7 @@ let
   # 8.2 GiB at 128k on either card; 256k fits only with q4_0 KV, at ~40 tok/s.
   # Thinking only when the client asks; Qwen's non-thinking sampling.
   qwen35-4b = {
-    name = "Qwen3.5 4B (local fast 128k)";
+    name = "Qwen3.5 4B";
     weights = unsloth "Qwen3.5-4B-MTP-GGUF" "Qwen3.5-4B-UD-Q4_K_XL.gguf";
     ctx = 131072;
     args = [
@@ -61,7 +61,7 @@ in {
   # ngram-mod on top of MTP gains nothing; DFlash2 drafting needs 1.1 GiB more.
   "16" = {
     "qwen3.8-27b" = {
-      name = "Qwen3.8 27B (local 96k)";
+      name = "Qwen3.8 27B";
       weights = byteshape "Qwen3.8-27B-IQ3_S-3.23bpw.gguf";
       ctx = 98304;
       args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
@@ -107,7 +107,7 @@ in {
     # Fails to load once the desktop holds more than ~2.4 GiB; without MTP it
     # would tolerate ~3.2.
     "qwen3.8-27b" = {
-      name = "Qwen3.8 27B IQ2 (local 32k)";
+      name = "Qwen3.8 27B";
       weights = byteshape "Qwen3.8-27B-IQ2_XXS-2.56bpw.gguf";
       ctx = 32768;
       # The MTP draft's compute buffer is sized by ubatch; 256 instead of the

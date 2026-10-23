@@ -20,6 +20,7 @@ import { formatCost, shortPath } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
 import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";
+import { modelAlias, modelTag } from "../lib/model-names.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage, usageAlarm } from "./usage.ts";
@@ -34,30 +35,6 @@ const ICON_EFFORT = "\uf0e7";
 
 const CACHE_WARN_PCT = 90;
 const CACHE_ERROR_PCT = 50;
-
-// Long, well-known lab names only; Qwen, GLM, Kimi, Nemotron and LongCat keep
-// their catalog names. Claude is redundant next to the provider tag.
-const MODEL_ALIAS_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\bDeepSeek\b/gi, "DS"],
-  [/\bMiniMax\b/gi, "MM"],
-  [/\bClaude\s+/gi, ""],
-];
-
-const modelAlias = (model: ActiveModel): string => {
-  let alias = model.name || model.id;
-  for (const [pattern, replacement] of MODEL_ALIAS_PATTERNS) {
-    alias = alias.replace(pattern, replacement);
-  }
-  return alias.replace(/\s+/g, " ").trim() || model.name || model.id;
-};
-
-// Short provider tags; unknown providers fall back to their full id.
-const PROVIDER_TAGS: Record<string, string> = {
-  "opencode-go": "go",
-  tensorx: "tx",
-  anthropic: "anth",
-  local: "\uf015",
-};
 
 /**
  * Under a virtual selection (extensions/routers.ts), the physical model that
@@ -156,7 +133,7 @@ export const createFooter = (
     const model = routedTo ?? selected;
     const s = stats.statsFor(ctx, model);
     const thinking = ctx.thinkingLevel ?? pi.getThinkingLevel();
-    const tag = model ? (PROVIDER_TAGS[model.provider] ?? model.provider) : "";
+    const tag = model ? modelTag(model.provider) : "";
 
     const alarms: Part[] = [];
     const quota = model ? usageAlarm(usage.provider(model.provider)) : undefined;
