@@ -309,11 +309,14 @@ in {
                 supportsReasoningEffort = false;
                 maxTokensField = "max_tokens";
                 supportsStrictMode = false;
-                thinkingFormat = "deepseek";
                 sendSessionAffinityHeaders = false;
-                # Merges with the server's --chat-template-kwargs rather than
-                # replacing it, so the thinking toggle works and effort survives.
-                chatTemplateArgs.enable_thinking = {"$var" = "thinking.enabled";};
+                # Sent as chat_template_kwargs, which llama.cpp merges over the
+                # server's --chat-template-kwargs rather than replacing them, so the
+                # thinking toggle works per request and the pinned effort survives.
+                # Not qwen-chat-template: its preserve_thinking keeps old reasoning
+                # in the prompt, which the small windows can't spare.
+                thinkingFormat = "chat-template";
+                chatTemplateKwargs.enable_thinking = {"$var" = "thinking.enabled";};
               };
               models =
                 lib.mapAttrsToList (id: m: {
