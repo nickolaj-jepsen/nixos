@@ -6,8 +6,8 @@
  * binary rather than taken from a port; the extraction and its diffs live in
  * `~/.local/share/agents/you-should-know/reference`.
  *
- * - A check runs at the 6th step of a turn, again at the 12th, 18th …, at most
- *   once per turn, and never while a note is showing. Turns shorter than six
+ * - A check runs at the 6th step of a run, again at the 12th, 18th … until one
+ *   shows a note, and never while a note is showing. Runs shorter than six
  *   steps never check: that is the mod's "longer tasks only" rule.
  * - The side request replays the main request's provider payload with one user
  *   message appended, so the conversation prefix is a prompt-cache read. A
@@ -153,7 +153,9 @@ export default function (pi: ExtensionAPI) {
   let state: State = { enabled: true, seen: [], typedPast: 0, looksToSkip: 0 };
   let offer: Offer | undefined;
   let inFlight: AbortController | undefined;
-  let offeredTurn: string | undefined;
+  // A run that has shown a note checks no more, even once the note is dismissed.
+  let agentRuns = 0;
+  let shownInRun: number | undefined;
   let promptCounter = 0;
   let runId = 0;
   let checks = 0;
@@ -374,6 +376,7 @@ export default function (pi: ExtensionAPI) {
         else if (run !== runId || promptCounter !== atPrompt) outcome = "stale";
         else {
           outcome = "shown";
+          shownInRun = agentRuns;
           state.seen = [...state.seen, parsed.line].slice(-SEEN_MAX);
           added.push(parsed.line);
           saveState();
@@ -398,7 +401,7 @@ export default function (pi: ExtensionAPI) {
     runId += 1;
     loadState();
     offer = undefined;
-    offeredTurn = undefined;
+    shownInRun = undefined;
     promptCounter = 0;
     checks = 0;
     recent.length = 0;
@@ -427,7 +430,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("agent_start", () => {
-    offeredTurn = undefined;
+    agentRuns += 1;
   });
 
   pi.on("input", (event, ctx) => {
@@ -444,8 +447,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_end", (event, ctx) => {
     if (PROMPT === "" || !state.enabled || ctx.mode !== "tui") return;
     if (!(event.turnIndex > 0 && event.turnIndex % CHECK_EVERY === 0)) return;
-    const turn = `${promptCounter}:${event.turnIndex}`;
-    if (offeredTurn === turn || offer || inFlight) return;
+    if (shownInRun === agentRuns || offer || inFlight) return;
     const skip = Math.min(LOOKS_TO_SKIP_MAX, state.looksToSkip);
     if (skip > 0) {
       state.looksToSkip = skip - 1;
@@ -453,7 +455,6 @@ export default function (pi: ExtensionAPI) {
       record({ at: new Date().toISOString(), step: event.turnIndex, outcome: "skipped", ms: 0 });
       return;
     }
-    offeredTurn = turn;
     void check(ctx, event.turnIndex, event.context.llmMessages, runId);
   });
 
