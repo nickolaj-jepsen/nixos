@@ -7,7 +7,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createActions } from "./chrome/actions.ts";
 import { createEditorChrome } from "./chrome/editor.ts";
 import { createFooter } from "./chrome/footer.ts";
-import { drawMeters } from "./chrome/meters.ts";
+import { measurementLevels } from "./chrome/measurements.ts";
 import { createIdentity } from "./chrome/identity.ts";
 import { createState } from "./chrome/state.ts";
 
@@ -17,8 +17,8 @@ export default function (pi: ExtensionAPI) {
   const identity = createIdentity(pi, state);
   const footer = createFooter(pi, state, actions);
   const editor = createEditorChrome(state, {
-    top: identity.drawTop,
-    bottom: (width, hidden, border) => drawMeters(state, width, hidden, border, footer.meters()),
+    top: (width, hidden, border) =>
+      identity.drawTop(width, hidden, border, measurementLevels(state, footer.meters())),
   });
 
   // Spellfix installs its editor from its own session_start; wrap it once every startup handler ran.

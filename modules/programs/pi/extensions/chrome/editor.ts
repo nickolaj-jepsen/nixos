@@ -8,28 +8,24 @@ type Inner = {
   render(width: number): string[];
   handleMouse?(event: TuiMouseEvent): unknown;
   borderColor?: Border;
-  renderedAutocompleteHeight?: unknown;
   actionHandlers?: Map<string, () => void>;
 };
 
 export type Painters = {
   top: (width: number, hidden: number, border: Border) => { line: string; regions: Region[] };
-  bottom: (width: number, hidden: number, border: Border) => string | undefined;
 };
 
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
 const plain = (line: string) => line.replace(ANSI, "");
 const topHidden = (line: string) => Number(/↑\s*(\d+)\s*more/.exec(plain(line))?.[1] ?? 0);
-// pi's bottom border: dashes, optionally around a ` ↓ N more ` scroll label.
-const BOTTOM = /^─*(?: ↓ (\d+) more )?─*$/;
 
 /**
- * Owns both editor borders without owning the editor: another extension
+ * Owns the editor's top border without owning the editor: another extension
  * (spellfix) installs pi's custom editor and only one factory can exist, so this
  * wraps whatever factory is installed. The proxy forwards everything pi wires up
  * (submit, text, keybindings, border color) and intercepts only `render` and
- * `handleMouse`; the borders are rewritten after the inner render, so spellfix's
- * styling never reaches them.
+ * `handleMouse`; the border is rewritten after the inner render, so spellfix's
+ * styling never reaches it.
  */
 export const createEditorChrome = (state: ChromeState, painters: Painters) => {
   let topRegions: Region[] = [];
@@ -54,18 +50,10 @@ export const createEditorChrome = (state: ChromeState, painters: Painters) => {
             lines[0] = top.line;
             topRegions = top.regions;
 
-            // The autocomplete list renders below the bottom border.
-            const below = target.renderedAutocompleteHeight;
-            const index = lines.length - 1 - (typeof below === "number" ? below : 0);
-            const match = index > 0 ? BOTTOM.exec(plain(lines[index] ?? "")) : null;
-            const meters = match
-              ? painters.bottom(width, Number(match[1] ?? 0), border)
-              : undefined;
-            if (meters !== undefined) lines[index] = meters;
-            const active = meters !== undefined;
-            if (active !== state.metersActive) {
-              state.metersActive = active;
-              // The footer reads this flag; repaint after this frame, not inside it.
+            // The footer reads this flag to know whether the borders carry the measurements.
+            if (!state.metersActive) {
+              state.metersActive = true;
+              // Repaint after this frame, not inside it.
               setTimeout(() => state.tui?.requestRender(), 0);
             }
             return lines;
