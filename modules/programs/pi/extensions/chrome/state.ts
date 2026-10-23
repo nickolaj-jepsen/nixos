@@ -11,14 +11,34 @@ export type ChromeState = {
   editor: { actionHandlers?: Map<string, () => void> } | undefined;
   /** What pi focuses while the prompt is active: the wrapper around `editor`. */
   editorComponent: unknown;
+  /** Group of the clickable thing under the pointer; footer parts and the `label` on the top border. */
+  hover: string | undefined;
+  /** Moves the hover; it lapses on its own because pi never reports the pointer leaving. */
+  setHover(group: string | undefined): void;
   /** Whether the last editor render drew the context gauge; the footer shows context while false. */
   gaugeActive: boolean;
 };
 
-export const createState = (): ChromeState => ({
-  ctx: undefined,
-  tui: undefined,
-  editor: undefined,
-  editorComponent: undefined,
-  gaugeActive: false,
-});
+// A resting pointer sends nothing, so this also bounds a hover whose exit pi never saw.
+const HOVER_MS = 1500;
+
+export const createState = (): ChromeState => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const state: ChromeState = {
+    ctx: undefined,
+    tui: undefined,
+    editor: undefined,
+    editorComponent: undefined,
+    hover: undefined,
+    setHover: (group) => {
+      if (timer) clearTimeout(timer);
+      timer = group ? setTimeout(() => state.setHover(undefined), HOVER_MS) : undefined;
+      timer?.unref?.();
+      if (state.hover === group) return;
+      state.hover = group;
+      state.tui?.requestRender();
+    },
+    gaugeActive: false,
+  };
+  return state;
+};

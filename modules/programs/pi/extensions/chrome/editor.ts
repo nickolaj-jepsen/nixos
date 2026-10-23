@@ -73,6 +73,11 @@ export const createEditorChrome = (state: ChromeState, painters: Painters) => {
         }
         if (property === "handleMouse") {
           return (event: TuiMouseEvent) => {
+            if (event.type === "move") {
+              // Leaving the border downward is the only exit pi reports for it.
+              state.setHover(event.y === 0 ? "label" : undefined);
+              return target.handleMouse?.(event);
+            }
             // Only the top border row: the input keeps its click-to-place-cursor.
             if (event.y === 0 && isPlainClick(event)) {
               const ctx = state.ctx;

@@ -16,12 +16,17 @@ import type { createActions } from "./actions.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { formatCost } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
-import { hitTest, isPlainClick, type Part, type Region } from "./layout.ts";
+import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage, usageAlarm } from "./usage.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
+
+// Font Awesome range of the Nerd Font, present in every version of it.
+const ICON_MODEL = "\uf2db";
+const ICON_EFFORT = "\uf0e7";
+const ICON_SPEED = "\uf0e4";
 
 const CACHE_WARN_PCT = 90;
 const CACHE_ERROR_PCT = 50;
@@ -119,32 +124,54 @@ export const createFooter = (
         ? `${Math.round(s.speed)} t/s`
         : undefined;
 
-    const result = layoutFooter(width, theme, {
-      provider: tag
-        ? { id: "provider", text: tag, color: "dim", action: actions.model }
-        : undefined,
-      model: {
-        id: "model",
-        text: model ? modelAlias(model) : "no model",
-        color: "muted",
-        tight: true,
-        action: actions.model,
-      },
-      effort:
-        model?.reasoning && thinking
-          ? { id: "effort", text: thinking, color: "muted", action: actions.effort }
+    const result = layoutFooter(
+      width,
+      theme,
+      {
+        provider: tag
+          ? {
+              id: "provider",
+              text: /^\w/.test(tag) ? `${ICON_MODEL} ${tag}` : tag,
+              color: "dim",
+              group: "model",
+              action: actions.model,
+            }
           : undefined,
-      statuses: [...footerData.getExtensionStatuses()]
-        .filter(([key]) => key !== "pi-cache-stats")
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([, text]) => sanitize(text))
-        .filter(Boolean)
-        .map((text, index) => ({ id: `status-${index}`, text, color: "dim" as const })),
-      alarms,
-      cost: costText ? { id: "cost", text: costText, color: "dim" } : undefined,
-      speed: speedText ? { id: "speed", text: speedText, color: "dim" } : undefined,
-      git: git.view,
-    });
+        // The model is the one bright word on the line; everything else steps back.
+        model: {
+          id: "model",
+          text: model ? modelAlias(model) : "no model",
+          color: "text",
+          bold: true,
+          tight: true,
+          action: actions.model,
+        },
+        // The effort wears the colour of the editor border, which is keyed to the same level.
+        effort:
+          model?.reasoning && thinking
+            ? {
+                id: "effort",
+                text: `${ICON_EFFORT} ${thinking}`,
+                color: "muted",
+                styled: (t) => t.getThinkingBorderColor(thinking)(`${ICON_EFFORT} ${thinking}`),
+                action: actions.effort,
+              }
+            : undefined,
+        statuses: [...footerData.getExtensionStatuses()]
+          .filter(([key]) => key !== "pi-cache-stats")
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([, text]) => sanitize(text))
+          .filter(Boolean)
+          .map((text, index) => ({ id: `status-${index}`, text, color: "dim" as const })),
+        alarms,
+        cost: costText ? { id: "cost", text: costText, color: "text" } : undefined,
+        speed: speedText
+          ? { id: "speed", text: `${ICON_SPEED} ${speedText}`, color: "dim" }
+          : undefined,
+        git: git.view,
+      },
+      state.hover,
+    );
     regions = result.regions;
     return result.line;
   };
@@ -168,6 +195,10 @@ export const createFooter = (
         render: (width: number) => [renderLine(width, theme, footerData)],
         invalidate: () => {},
         handleMouse: (event: TuiMouseEvent) => {
+          if (event.type === "move") {
+            state.setHover(hoverAt(regions, event.x));
+            return undefined;
+          }
           const ctx = state.ctx;
           const action = isPlainClick(event) ? hitTest(regions, event.x) : undefined;
           if (!ctx || !action) return undefined;
