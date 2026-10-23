@@ -193,6 +193,16 @@
       .${
         class
       };
+    # The evaluated module config, for `just eval`.
+    config =
+      {
+        nixos = "nixosConfigurations.${name}.config";
+        darwin = "darwinConfigurations.${name}.config";
+        home = "homeConfigurations.${name}.config";
+      }
+      .${
+        class
+      };
   };
 in {
   config.flake.hostMeta = lib.genAttrs discovered hostMeta;

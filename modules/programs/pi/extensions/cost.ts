@@ -1,7 +1,7 @@
 /**
  * `/cost`: where this session's money went. A breakdown by conversation model
  * (tokens, cache hits, 1h cache writes), upkeep (compaction, cache warming),
- * extensions' side calls (spellfix, you-should-know, labels) and tools (Exa,
+ * extensions' side calls (spellfix, labels) and tools (Exa,
  * subagents, codemode); why (spend per prompt, cache rebuilds, reasoning share,
  * what the re-sent context is made of); then who pays for each provider:
  * prepaid credit, a subscription (spend at list price, with its quota windows),

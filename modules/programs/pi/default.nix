@@ -125,8 +125,6 @@ in {
       "@tintinweb/pi-subagents"
       # long builds/tests without blocking the turn
       "pi-background-tasks"
-      # cross-session memory; on trial, see issue #468
-      "pi-memoria"
     ];
   in {
     imports = [inputs.pi.homeModules.default];
@@ -161,14 +159,6 @@ in {
         # Session labels (extensions/chrome/identity.ts) go through the router,
         # so they bridge to Haiku while Go's quota is out instead of failing.
         environment.PI_IDENTITY_MODEL.value = "vm/flash";
-        # You should know (extensions/you-should-know.ts) forks the session model,
-        # so a check is a cache read of the main request; PI_YSK_MODEL routes it
-        # elsewhere and gives that up. On Opus that read still costs cents, so a
-        # check estimated above PI_YSK_MAX_COST dollars is skipped. A local
-        # session must not check at all: llama-swap has one GPU, and the check
-        # would queue ahead of the turn.
-        environment.PI_YSK_SKIP_PROVIDERS.value = "local";
-        environment.PI_YSK_MAX_COST.value = "0.02";
         # The fireproof.agents.lspServers registry, read by extensions/lsp.ts.
         environment.PI_LSP_SERVERS = lib.mkIf (config.fireproof.agents.lspServers != {}) {
           value = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
@@ -203,7 +193,8 @@ in {
               "opencode-go/qwen3.8-flash"
               "opencode-go/minimax-m3"
               "opencode-go/kimi-k3"
-              "tensorx/*"
+              # `**`: the ids hold a slash (qwen/…), which a glob `*` doesn't cross.
+              "tensorx/**"
             ]
             ++ lib.optional config.fireproof.dev.llm.enable "local/*";
           # The defaults (reserve 16k, keep 20k) overrun a 32k window: compaction would
@@ -515,11 +506,13 @@ in {
         workflowsEnabled = true;
       };
 
-      # The fireproof.agents.skills registry, in pi's user skills dir rather than
+      # The fireproof.agents.skills registry, in a user skills dir rather than
       # the module's `skills` (a --skill flag): pi-subagents builds each child
       # session with its own resource loader, which scans this dir but never
-      # sees the main process's flags.
-      home.file.".pi/agent/skills".source = pkgs.linkFarm "pi-skills" config.fireproof.agents.skills;
+      # sees the main process's flags. The cross-tool Agent Skills dir, not
+      # ~/.pi/agent/skills, as one store link: `npx skills add` writes here, and
+      # a read-only target makes that fail instead of slipping skills into the prompt.
+      home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" config.fireproof.agents.skills;
 
       # `/workflow`: the opt-in the workflow tool asks for, in one line.
       home.file.".pi/agent/prompts/workflow.md".source = ./prompts/workflow.md;
