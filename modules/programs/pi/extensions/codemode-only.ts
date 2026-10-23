@@ -13,11 +13,13 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const NAME = "codemode_only";
 // Point the model at each of these some other way, or it won't know they exist.
-const HIDDEN = ["SubagentWorkflow", "get_subagent_result", "steer_subagent"];
+const HIDDEN = ["get_subagent_result", "steer_subagent"];
 const LEAN_MAX_CONTEXT = 131_072;
 const HIDDEN_WHEN_LEAN = [
   // llama-swap serves one model at a time, so subagents would only queue behind the parent.
   "Agent",
+  // Not that queue, but the room: its declaration alone is ~5k tokens.
+  "SubagentWorkflow",
   // pi-background-tasks: bg_run stays declared; its completion notice makes these rarely needed.
   "bg_status",
   "bg_logs",

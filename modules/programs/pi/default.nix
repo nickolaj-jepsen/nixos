@@ -130,9 +130,15 @@ in {
           ${builtins.readFile ../agent-context.md}
           ## Pi
 
-          - `SubagentWorkflow`, `get_subagent_result`, and `steer_subagent` are hidden from the tool list; call them from codemode as `tools.<name>` and read `await describeTool("<name>")` first for their parameters.
-          - For a deterministic multi-agent script (Claude Code `Workflow` style), call `tools.SubagentWorkflow` from codemode.
           - When `bg_status`, `bg_logs` or `bg_kill` is missing from your tool list, call it from codemode, or `read` the output path `bg_run` returned.
+          - `get_subagent_result` and `steer_subagent` are always hidden from the tool list; call them from codemode as `tools.<name>` after `await describeTool("<name>")`.
+
+          ## Delegating
+
+          - Reach for `Agent` when the work can't be scoped in one guess: a sweep over many files, a search you would otherwise read the whole tree to answer, a second opinion on a change. Not for a path you already know.
+          - Independent lookups go out as parallel `Agent` calls in one message. Hand over the question, not a step list, and say what you want back.
+          - A result is not shown to the user: summarise it, and check an agent's claimed edits before reporting them done.
+          - `SubagentWorkflow` is scripted fan-out, declared only on large-context models; where it is missing, `/workflow` carries the codemode call. Both routes need an explicit ask — a task that would merely benefit from parallelism is not one.
         '';
         # The fireproof.agents.skills registry, linked into one dir.
         skills = [(pkgs.linkFarm "pi-skills" config.fireproof.agents.skills)];
@@ -328,6 +334,9 @@ in {
         # Auto stands down if another extension provides a workflow tool.
         workflowsEnabled = true;
       };
+
+      # `/workflow`: the opt-in the workflow tool asks for, in one line.
+      home.file.".pi/agent/prompts/workflow.md".source = ./prompts/workflow.md;
 
       # Nix-owned (read-only), so pi's "persist globally" approval won't stick;
       # session approvals still work.
