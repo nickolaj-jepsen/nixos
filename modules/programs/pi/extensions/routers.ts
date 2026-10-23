@@ -144,7 +144,9 @@ export default function (pi: ExtensionAPI) {
       }
       const state = request.state;
       const sessionId = ctx.sessionManager.getSessionId();
-      if (!state || (request.reason === "user" && replan.delete(sessionId))) {
+      // Consume a pending /replan even on the first prompt, which plans anyway.
+      const replanNow = request.reason === "user" && replan.delete(sessionId);
+      if (!state || replanNow) {
         const plan: ArchitectState = { phase: "plan" };
         return {
           model: find(ctx, PLANNER),
@@ -164,8 +166,14 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("replan", {
     description: "Send the next prompt (or the given one) to fp/architect's planner",
     handler: async (args, ctx) => {
+      // Only fp/architect consumes the entry; on any other model it would wait for a later switch.
+      if (ctx.model?.provider !== PROVIDER || ctx.model.id !== "architect") {
+        ctx.ui.notify("/replan only applies while fp/architect is the model", "warning");
+        return;
+      }
       replan.add(ctx.sessionManager.getSessionId());
-      if (args.trim()) pi.sendUserMessage(args.trim());
+      const prompt = args.trim();
+      if (prompt) pi.sendUserMessage(prompt, ctx.isIdle() ? undefined : { deliverAs: "followUp" });
       else ctx.ui.notify("The next prompt goes to Opus", "info");
     },
   });
