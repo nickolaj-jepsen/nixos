@@ -130,6 +130,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   let waited = false;
   let since = Date.now();
   let busy = false;
+  // Aborted at session_shutdown, after which every ctx and pi call throws.
+  let inflight: AbortController | undefined;
   let paintedTitle = "";
   let repaintTimer: ReturnType<typeof setTimeout> | undefined;
   let warnedModel = false;
@@ -397,6 +399,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       return;
     }
 
+    const controller = new AbortController();
+    inflight = controller;
     busy = true;
     paint();
     try {
@@ -423,9 +427,11 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
             // The opencode gateway routes on `x-opencode-session`, which pi
             // derives from this; without it the request fails with 400.
             sessionId: ctx.sessionManager.getSessionId(),
+            signal: controller.signal,
           },
         )
         .result();
+      if (controller.signal.aborted) return;
       recordSideCall(pi, "session label", response);
       if (response.stopReason === "error" || response.stopReason === "aborted") {
         throw new Error(response.errorMessage ?? response.stopReason);
@@ -453,13 +459,16 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       }
       persist();
     } catch (error) {
-      if (manual) {
+      if (manual && !controller.signal.aborted) {
         const reason = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(`identity: relabel failed: ${reason}`, "error");
       }
     } finally {
-      busy = false;
-      paint();
+      inflight = undefined;
+      if (!controller.signal.aborted) {
+        busy = false;
+        paint();
+      }
     }
   };
 
@@ -616,7 +625,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     derivedCache = undefined;
     // Compaction already paid for a summary, so the marginal label is cheap and
     // the work has usually moved on by the time one happens.
-    void relabel(ctx, false);
+    void relabel(ctx, false).catch(() => {});
     paint();
   });
 
@@ -627,6 +636,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   });
 
   pi.on("session_shutdown", () => {
+    inflight?.abort();
     if (timer) clearInterval(timer);
     timer = undefined;
     if (repaintTimer) clearTimeout(repaintTimer);
