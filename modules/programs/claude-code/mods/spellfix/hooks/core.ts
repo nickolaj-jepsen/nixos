@@ -4,7 +4,8 @@
  * dictionary formats. Plain ES with no Node or engine API, so pi's spellfix
  * can run the same rules on the files both agents write.
  */
-import type { Extra, FixLog, FixSource, Miss } from "../types";
+// Spelled out: pi type-checks this file under NodeNext, which needs the extension.
+import type { Extra, FixLog, FixSource, Miss } from "../types/index.d.ts";
 
 export type Verdict = { kind: "fix"; word: string } | { kind: "correct" } | { kind: "unsure" };
 

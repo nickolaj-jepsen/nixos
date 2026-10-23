@@ -40,6 +40,13 @@
       npmDeps = pkgs.importNpmLock {npmRoot = ./extensions;};
       inherit (pkgs.importNpmLock) npmConfigHook;
       nativeBuildInputs = [pkgs.typescript];
+      # lib/spellfix links to the Claude Code mod, so the editor and `pi -e`
+      # see its core; in the store the link dangles, so the files are copied in.
+      postPatch = ''
+        rm lib/spellfix
+        install -Dm644 ${../claude-code/mods/spellfix/hooks/core.ts} lib/spellfix/hooks/core.ts
+        install -Dm644 ${../claude-code/mods/spellfix/types/index.d.ts} lib/spellfix/types/index.d.ts
+      '';
       buildPhase = ''
         runHook preBuild
         # Type against the pi that runs, not an npm copy: a second copy would
