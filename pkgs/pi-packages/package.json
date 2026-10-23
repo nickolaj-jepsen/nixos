@@ -6,6 +6,7 @@
     "@juicesharp/rpiv-ask-user-question": "2.13.9",
     "@juicesharp/rpiv-todo": "2.13.9",
     "@tintinweb/pi-subagents": "0.22.0",
-    "pi-background-tasks": "2.6.10"
+    "pi-background-tasks": "2.6.10",
+    "pi-memoria": "0.4.7"
   }
 }

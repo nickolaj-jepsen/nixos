@@ -125,6 +125,8 @@ in {
       "@tintinweb/pi-subagents"
       # long builds/tests without blocking the turn
       "pi-background-tasks"
+      # cross-session memory; on trial, see issue #468
+      "pi-memoria"
     ];
   in {
     imports = [inputs.pi.homeModules.default];
