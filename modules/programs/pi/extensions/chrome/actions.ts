@@ -54,5 +54,6 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState) => {
     effort: appAction(state, "app.thinking.cycle", "shift+tab"),
     backgroundTasks: command(state, pi, "/tasks"),
     dismissBackgroundTasks: dismissOverlay(state),
+    agents: command(state, pi, "/agents"),
   };
 };
