@@ -16,9 +16,13 @@ import { STATEMENT_MAX, freeId, loadStoreCached, slugify } from "./store.ts";
 import { coveredBy, nearDuplicate, overlap, tokenSet } from "./search.ts";
 import { verify } from "./verify.ts";
 
-/** Statements that announce state instead of a fact. */
+/**
+ * Statements that announce state instead of a fact. Bare labels only count as
+ * the opening words ("TODO: ..."), so "git status is slow here" passes; the
+ * phrases are unambiguous anywhere.
+ */
 const STATUS_WORDS =
-  /\b(status|wip|todo|tbd|next steps?|in progress|milestone|this session|as of (?:today|now)|currently working)\b/i;
+  /^\W*(status|wip|todo|tbd|next steps?|in progress|milestone)\b|\b(this session|as of (?:today|now)|currently working)\b/i;
 
 const CONTEXT_FILES = ["AGENTS.md", "AGENTS.MD", "AGENTS.override.md", "CLAUDE.md", "CLAUDE.MD"];
 
@@ -29,7 +33,6 @@ export type SaveRequest = {
   tags: string[];
   whyNotDerivable: string;
   citations: Citation[];
-  query: string;
   detail?: string;
   scope?: "project" | "global";
   whyGlobal?: string;
@@ -164,10 +167,6 @@ export function planSave(request: SaveRequest, scope: Scope): SaveOutcome {
       error:
         "AGENTS.md/CLAUDE.md already says this; that file is the durable channel and does not need a memory copy",
     };
-
-  const declaration = request.query.trim();
-  if (declaration.length < 2)
-    return { ok: false, error: "query must be the search you ran before saving" };
 
   const candidates = entries
     .filter((entry) => entry !== replacing)
