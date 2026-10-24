@@ -11,7 +11,7 @@
  * the agent touched and the commands it ran say what the session is about for a
  * few hundred tokens; the raw tool output would say less for thousands.
  */
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { basename } from "node:path";
 import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -107,23 +107,23 @@ type GitContext = { repo: string; branch?: string };
 let gitCache: { cwd: string; at: number; value: GitContext } | undefined;
 
 /** The repository and checked-out branch, or the directory name outside git. */
-export const gitContext = (cwd: string): GitContext => {
+export const gitContext = async (cwd: string): Promise<GitContext> => {
   if (gitCache && gitCache.cwd === cwd && Date.now() - gitCache.at < GIT_TTL_MS) {
     return gitCache.value;
   }
-  let value: GitContext = { repo: basename(cwd) || cwd };
-  try {
-    const [top, head] = execFileSync(
+  const stdout = await new Promise<string>((resolve) =>
+    execFile(
       "git",
       ["rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD"],
-      { cwd, encoding: "utf8", timeout: 1000, stdio: ["ignore", "pipe", "ignore"] },
-    )
-      .trim()
-      .split("\n");
-    if (top) value = { repo: basename(top), branch: head && head !== "HEAD" ? head : undefined };
-  } catch {
-    // Not a checkout, or git is missing: the directory still says which project this is.
-  }
+      { cwd, timeout: 1000 },
+      // Not a checkout, or git is missing: the directory still says which project this is.
+      (error, out) => resolve(error ? "" : out),
+    ),
+  );
+  const [top, head] = stdout.trim().split("\n");
+  const value: GitContext = top
+    ? { repo: basename(top), branch: head && head !== "HEAD" ? head : undefined }
+    : { repo: basename(cwd) || cwd };
   gitCache = { cwd, at: Date.now(), value };
   return value;
 };
@@ -177,9 +177,9 @@ const closingWords = (ctx: ExtensionContext) => {
 };
 
 /** The digest the model reads: enough to name the work, small enough to pay for every turn. */
-export const buildPrompt = (ctx: ExtensionContext, input: Input) => {
-  const { repo, branch } = gitContext(ctx.cwd);
-  const lines = [`repo: ${repo}${branch ? ` · branch: ${branch}` : ""}`];
+export const buildPrompt = async (ctx: ExtensionContext, input: Input) => {
+  const git = gitContext(ctx.cwd);
+  const lines: string[] = [];
   if (input.label) lines.push(`current label: ${input.label}`);
   if (input.summary) lines.push(`previous summary: ${input.summary}`);
   if (input.tags?.length) lines.push(`tags so far: ${input.tags.join(", ")}`);
@@ -193,7 +193,9 @@ export const buildPrompt = (ctx: ExtensionContext, input: Input) => {
   );
   const said = input.settle ? closingWords(ctx) : undefined;
   if (said) lines.push(`assistant said: ${said}`);
-  return lines.join("\n");
+  // Awaited last: the session's ctx goes stale if it shuts down meanwhile.
+  const { repo, branch } = await git;
+  return [`repo: ${repo}${branch ? ` · branch: ${branch}` : ""}`, ...lines].join("\n");
 };
 
 // Tolerates a model that answers in a list or bolds its keys, which small ones do.

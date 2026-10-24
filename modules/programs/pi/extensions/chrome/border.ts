@@ -1,0 +1,202 @@
+/**
+ * The editor's top border and the row under the input. The border carries the
+ * label, the step in flight while the agent works or what the finished turn
+ * needs from you, pi's scroll hint, the state word and the measurements. pi's
+ * working spinner sits in front of the label, and a retry, compaction or branch
+ * summary takes its place. The row under the input offers the drafted reply.
+ *
+ * The border belongs to the editor; the wrapper in `editor.ts` calls `drawTop`.
+ */
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import type { BorderStatus } from "./editor.ts";
+import type { LabelState } from "./label.ts";
+import type { Region } from "./layout.ts";
+import type { Segment } from "./measurements.ts";
+import type { ChromeState } from "./state.ts";
+
+// Hover id of the top-border label.
+const LABEL_ID = "label";
+// Below this the label stops being the point of the row, so shed the detail first.
+const MIN_LABEL_ROOM = 14;
+// A step cut shorter than this says nothing worth the columns.
+const MIN_DOING_ROOM = 8;
+// The ask carries a "needs: " prefix, so it needs room for that plus a word.
+const MIN_ASK_ROOM = 14;
+
+export const createBorder = (state: ChromeState, label: LabelState) => {
+  /**
+   * One continuous line, inset like the footer's text: the leading and trailing
+   * dashes stand in for its padding, and the detail is separated by the same
+   * dashes instead of dots so the row reads as the top of the input box.
+   * Detail is shed before the label is shortened.
+   */
+  const borderSides = (
+    width: number,
+    hidden: number,
+    border: (text: string) => string,
+    status: BorderStatus | undefined,
+    levels: readonly Segment[][],
+  ): { left: string; right: string; label?: { x0: number; x1: number }; controls: Region[] } => {
+    const ctx = state.ctx;
+    if (!ctx) return { left: "", right: "", controls: [] };
+    const theme = ctx.ui.theme;
+    const current = label.current(ctx);
+    const name = current?.text ?? "";
+    const detail = label.detail();
+    const stateText = label.stateWord(ctx);
+    // pi reports scrolled editor content as `↑ N more`; it describes the editor,
+    // so it belongs next to the label rather than in the session detail.
+    const hint = hidden > 0 ? ` ↑${hidden}` : "";
+    const stateSegment: Segment[] = stateText
+      ? [{ text: theme.fg(stateText === "failed" ? "error" : "warning", stateText) }]
+      : [];
+    // Measurements give way before the state, which is the part that asks you to look.
+    const rows: Segment[][] = [...levels.map((level) => [...stateSegment, ...level]), stateSegment];
+    if (stateSegment.length > 0) rows.push([]);
+    // A retry, compaction or branch summary takes the label's slot: it carries
+    // the countdown and the key that cancels it.
+    const message = status && status.kind !== "working" ? status : undefined;
+    // pi's own shape, `── ⠋ Working`, with the label where its message would be.
+    const lead =
+      status?.kind === "working"
+        ? `${border("──")} ${status.renderSpinnerInBorder(width)} `
+        : border("── ");
+    const separator = border(" ── ");
+    const tail = border(" ──");
+
+    for (const row of rows) {
+      const right =
+        row.length > 0 ? ` ${row.map((segment) => segment.text).join(separator)}${tail}` : "";
+      // lead + label + hint + space, then the detail, then at least one dash.
+      const room = width - visibleWidth(lead) - visibleWidth(hint) - 2 - visibleWidth(right);
+      if (room < MIN_LABEL_ROOM) continue;
+      // Columns of the clickable measurements, counted from the start of `right`.
+      const controls: Region[] = [];
+      let column = 1;
+      row.forEach((segment, index) => {
+        if (index > 0) column += visibleWidth(separator);
+        const segmentWidth = visibleWidth(segment.text);
+        if (segment.id && segment.action) {
+          const pad = segment.hitPad ?? 0;
+          controls.push({
+            x0: column - pad,
+            x1: column + segmentWidth + pad,
+            id: segment.id,
+            action: segment.action,
+          });
+        }
+        column += segmentWidth;
+      });
+      // A padded target must not swallow its neighbour: two of them split the gap
+      // between them, so a click near the border, or the pointer's hover, still
+      // picks the control it is closest to.
+      for (let i = 1; i < controls.length; i++) {
+        const left = controls[i - 1];
+        const right = controls[i];
+        if (left && right && left.x1 > right.x0) {
+          const middle = Math.floor((left.x1 + right.x0) / 2);
+          left.x1 = middle;
+          right.x0 = middle;
+        }
+      }
+      if (message) {
+        return {
+          left: `${lead}${message.renderInBorder(room)}${theme.fg("dim", hint)} `,
+          right,
+          controls,
+        };
+      }
+      // The label wears the input's own border color (pi keys it to the
+      // thinking level), so it reads as box chrome rather than prompt text.
+      const shown = name ? truncateToWidth(name, room, "…") : "";
+      // The step gives way before the label is shortened: it is the part that can lie.
+      const roomForDetail = room - visibleWidth(shown) - 3;
+      const minDetail = label.asking() ? MIN_ASK_ROOM : MIN_DOING_ROOM;
+      const shownDetail =
+        detail && shown === name && roomForDetail >= minDetail
+          ? truncateToWidth(detail, roomForDetail, "…")
+          : undefined;
+      const painted =
+        current?.source === "prompt"
+          ? theme.fg("dim", shown)
+          : state.hover === LABEL_ID
+            ? theme.fg("text", shown)
+            : border(shown);
+      const detailLine = shownDetail
+        ? `${theme.fg("dim", " · ")}${theme.fg("dim", shownDetail)}`
+        : "";
+      const x0 = visibleWidth(lead);
+      return {
+        left: `${lead}${painted}${detailLine}${theme.fg("dim", hint)}${name ? " " : ""}`,
+        right,
+        label: name ? { x0, x1: x0 + visibleWidth(shown) } : undefined,
+        controls,
+      };
+    }
+    return { left: "", right: "", controls: [] };
+  };
+
+  const drawTop = (
+    width: number,
+    hidden: number,
+    border: (text: string) => string,
+    status: BorderStatus | undefined,
+    levels: readonly Segment[][] = [],
+  ): { line: string; regions: Region[] } => {
+    const sides = borderSides(width, hidden, border, status, levels);
+    const { left, right, controls } = sides;
+    const fill = Math.max(0, width - visibleWidth(left) - visibleWidth(right));
+    const rightStart = visibleWidth(left) + fill;
+    return {
+      line: left + (fill > 0 ? border("─".repeat(fill)) : "") + right,
+      // The label and the measurements that carry an action; the rest is plain border.
+      regions: [
+        ...(sides.label
+          ? [
+              {
+                ...sides.label,
+                id: LABEL_ID,
+                action: (ctx: ExtensionContext) => label.refresh(ctx, true),
+              },
+            ]
+          : []),
+        ...controls.map((c) => ({ ...c, x0: rightStart + c.x0, x1: rightStart + c.x1 })),
+      ],
+    };
+  };
+
+  /**
+   * The row under the input: the draft that answers the finished turn's ask.
+   * It exists only while the editor is empty, so it is never something you have
+   * to delete before typing, and it is dropped as soon as you do type.
+   */
+  const hint = (width: number, empty: boolean): { line: string } | undefined => {
+    const ctx = state.ctx;
+    if (!ctx || !state.live) return undefined;
+    if (!empty) {
+      label.dropReply();
+      return undefined;
+    }
+    const reply = label.reply();
+    if (!reply) return undefined;
+    const theme = ctx.ui.theme;
+    // Inset like the editor's own content, so the row reads as a line of the box.
+    const inset = 1;
+    const lead = theme.fg("dim", "⇥ ");
+    const accept = theme.fg("dim", "tab ");
+    const room = width - inset * 2 - visibleWidth(lead) - visibleWidth(accept);
+    if (room < 12) return undefined;
+    const text = truncateToWidth(reply, room, "…");
+    const pad = " ".repeat(
+      Math.max(
+        0,
+        width - inset * 2 - visibleWidth(lead) - visibleWidth(text) - visibleWidth(accept),
+      ),
+    );
+    const edge = " ".repeat(inset);
+    return { line: `${edge}${lead}${theme.fg("text", text)}${pad}${accept}${edge}` };
+  };
+
+  return { drawTop, hint, takeHint: label.takeReply };
+};

@@ -6,11 +6,13 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { ensurePromptEditor, unwrapPromptEditor, wrapPromptEditor } from "./lib/prompt-editor.ts";
 import { createActions } from "./chrome/actions.ts";
+import { createBorder } from "./chrome/border.ts";
 import { createEditorChrome } from "./chrome/editor.ts";
 import { createFooter } from "./chrome/footer.ts";
+import { createLabel } from "./chrome/label.ts";
 import { measurementLevels } from "./chrome/measurements.ts";
-import { createIdentity } from "./chrome/identity.ts";
 import { createState } from "./chrome/state.ts";
+import { createTitle } from "./chrome/title.ts";
 
 export default function (pi: ExtensionAPI) {
   const state = createState();
@@ -21,14 +23,17 @@ export default function (pi: ExtensionAPI) {
     state.live = ctx.mode === "tui" && ctx.hasUI;
   });
   const actions = createActions(pi, state);
-  const identity = createIdentity(pi, state);
+  const label = createLabel(pi, state);
+  // After the label, so its handlers read the turn state the label just updated.
+  createTitle(pi, state, label);
+  const border = createBorder(state, label);
   const footer = createFooter(pi, state, actions);
   const wrapper = createEditorChrome(state, {
-    top: (width, hidden, border, status) =>
-      identity.drawTop(
+    top: (width, hidden, color, status) =>
+      border.drawTop(
         width,
         hidden,
-        border,
+        color,
         status,
         measurementLevels(state, footer.measurements(), {
           tools: actions.tools,
@@ -39,8 +44,8 @@ export default function (pi: ExtensionAPI) {
           thinkingOpen: !pi.getSettings().hideThinkingBlock,
         }),
       ),
-    hint: identity.hint,
-    takeHint: identity.takeHint,
+    hint: border.hint,
+    takeHint: border.takeHint,
   });
 
   // Per live session under one key, so no earlier session's wrapper draws through its dead ctx.
@@ -48,7 +53,10 @@ export default function (pi: ExtensionAPI) {
     if (state.live) wrapPromptEditor("chrome", wrapper);
     ensurePromptEditor(ctx);
   });
-  pi.on("session_shutdown", () => unwrapPromptEditor("chrome", wrapper));
+  pi.on("session_shutdown", () => {
+    state.tui = undefined;
+    unwrapPromptEditor("chrome", wrapper);
+  });
   // A second chance, in case another extension installed a factory of its own late.
   pi.on("agent_start", (_event, ctx) => ensurePromptEditor(ctx));
 }

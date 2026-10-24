@@ -171,7 +171,7 @@ in {
         environment.PI_SPELLFIX_DICTS.value = lib.concatStringsSep "," fpLib.hunspellLanguages;
         environment.PI_SPELLFIX_PERSONAL.value = fpLib.hunspellPersonalDictionary config;
         environment.PI_SPELLFIX_MODEL.value = "anthropic/claude-haiku-5-5";
-        # Session labels (extensions/chrome/identity.ts) go through the router,
+        # Session labels (extensions/chrome/label.ts) go through the router,
         # so they fall through the flash ladder while Go's quota is out.
         environment.PI_IDENTITY_MODEL.value = "vm/flash";
         # The fireproof.agents.lspServers registry, read by extensions/lsp.ts.

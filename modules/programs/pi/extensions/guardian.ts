@@ -193,7 +193,7 @@ export default function (pi: ExtensionAPI) {
     const confirm = catalogModel(session, judges.confirm);
     if (!check || !confirm) return { kind: "defer" };
 
-    const { repo, branch } = gitContext(session.cwd);
+    const { repo, branch } = await gitContext(session.cwd);
     const prompt = [
       `repo: ${repo}${branch ? ` · branch: ${branch}` : ""} · cwd: ${session.cwd}`,
       "the person's requests, oldest first:",
