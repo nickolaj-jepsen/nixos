@@ -19,8 +19,15 @@ export type Status = "verified" | "stale" | "unverified";
 export type CitationCheck = { citation: Citation; status: Status; note: string };
 export type Verification = { status: Status; checks: CitationCheck[] };
 
-const resolve = (entry: Entry, path: string) =>
-  isAbsolute(path) ? path : join(entry.store.root ?? process.cwd(), path);
+/** Absolute path of a citation; a relative one in a rootless (global) store has no anchor. */
+const resolve = (entry: Entry, path: string): string | undefined =>
+  isAbsolute(path) ? path : entry.store.root ? join(entry.store.root, path) : undefined;
+
+const unanchored = (citation: Citation): CitationCheck => ({
+  citation,
+  status: "unverified",
+  note: "relative path in a store with no checkout",
+});
 
 function onPath(command: string): boolean {
   if (command.includes("/")) return existsSync(command);
@@ -60,16 +67,19 @@ function check(citation: Citation, entry: Entry): CitationCheck {
   switch (kind) {
     case "path": {
       const path = resolve(entry, value);
+      if (!path) return unanchored(citation);
       return existsSync(path)
         ? { citation, status: "verified", note: value }
         : { citation, status: "stale", note: `${value} is gone` };
     }
     case "symbol": {
-      const search = citation.path
-        ? resolve(entry, citation.path)
-        : (entry.store.root ?? process.cwd());
+      // git grep runs inside the entry's checkout, not wherever pi was started.
+      const cwd = entry.store.root;
+      if (!cwd) return unanchored(citation);
+      const scope = citation.path ? [citation.path] : [];
       try {
-        const hits = execFileSync("git", ["grep", "-l", "-w", "--", value, search], {
+        const hits = execFileSync("git", ["grep", "-l", "-w", "-F", "-e", value, "--", ...scope], {
+          cwd,
           encoding: "utf8",
           timeout: 4_000,
           stdio: ["ignore", "pipe", "ignore"],
@@ -89,6 +99,7 @@ function check(citation: Citation, entry: Entry): CitationCheck {
     case "snippet": {
       if (!citation.path) return { citation, status: "unverified", note: "snippet without a path" };
       const path = resolve(entry, citation.path);
+      if (!path) return unanchored(citation);
       if (!existsSync(path)) return { citation, status: "stale", note: `${citation.path} is gone` };
       try {
         return readFileSync(path, "utf8").includes(value)
