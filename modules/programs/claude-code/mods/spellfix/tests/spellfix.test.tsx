@@ -16,7 +16,6 @@ const BAND = {
 } as const;
 
 const OPTIONS = { options: { personalDictionary: "/personal.dic" } };
-const LOGGED = { options: { fixLog: "/fixes.json" } };
 
 const usage = {
   input_tokens: 0,
@@ -390,39 +389,6 @@ test("fix all applies every word's answer at once", async ($, on) => {
   expect(await band.find({ type: "Text", text: /teh→the, qiuck→quick/ })).toBeDefined();
   await band.unmount();
 });
-
-test(
-  "picks are counted in the fix log, and a fix picked before leads next time",
-  LOGGED,
-  async ($, on) => {
-    let clock: MockClock | undefined;
-    const w = world(on, async (prompt) => {
-      await clock?.sleep(500);
-      return haikuSays({ qiuck: `<word text="qiuck" verdict="fix">quack</word>` })(prompt);
-    });
-    clock = w.clock;
-
-    await paste($, w, "a qiuck fox");
-    let band = await openPicker($, w);
-    await w.clock.advance(600);
-    await key($, w, "2");
-    await w.clock.settle();
-    expect(JSON.parse(w.files.get("/fixes.json") ?? "{}")).toEqual({
-      qiuck: {
-        quick: expect.objectContaining({ hunspell: 1 }),
-        quack: expect.objectContaining({ rejected: 1 }),
-      },
-    });
-    await band.unmount();
-
-    await paste($, w, "another qiuck");
-    band = await openPicker($, w);
-    expect((await band.find({ key: "ai" }))?.text).toContain("quick (history)");
-    await key($, w, "1");
-    expect(w.box.text).toBe("another quick");
-    await band.unmount();
-  },
-);
 
 test("Haiku's typos in words hunspell skips are offered, but never in code, URLs or commands", async ($, on) => {
   const w = world(

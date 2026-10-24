@@ -9,11 +9,9 @@
  * - ctrl+q (or /spellcheck) opens a picker over the draft: numbers pick a fix,
  *   `s` skips, `d` adds to the personal dictionary, `a` applies every fix,
  *   `u` takes back words the model called correct, esc closes.
- * - Picks teach a fix log, so the fix picked most for a word leads its list.
  *
- * Shares the personal dictionary and fix log with the Claude Code mod, so a
- * word learned in one is known to the other; the core keeps their rules and
- * file formats the same.
+ * Shares the personal dictionary with the Claude Code mod, so a word learned in
+ * one is known to the other; the core keeps their rules and file format the same.
  */
 import { spawn } from "node:child_process";
 import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
@@ -37,8 +35,6 @@ import {
   caseVariants,
   CHECK,
   checkPrompt,
-  countPicks,
-  formatLog,
   hunspellArgs,
   isExtra,
   nearest,
@@ -49,27 +45,21 @@ import {
   replyBudget,
   shift,
   suggestInput,
-  topFix,
   withExtras,
   withoutWords,
 } from "./lib/spellfix/hooks/core.ts";
-import type { Found, LogPick, Verdict } from "./lib/spellfix/hooks/core.ts";
-import type { Extra, FixLog, FixSource, Miss } from "./lib/spellfix/types/index.d.ts";
+import type { Found, Verdict } from "./lib/spellfix/hooks/core.ts";
+import type { Extra, Miss } from "./lib/spellfix/types/index.d.ts";
 import { recordSideCall } from "./lib/usage-ledger.ts";
 import { providePromptEditor, withdrawPromptEditor } from "./lib/prompt-editor.ts";
-
-type Suggestion = { word: string; source: FixSource };
 
 const HUNSPELL = process.env.PI_SPELLFIX_HUNSPELL || "hunspell";
 const DICTIONARIES = process.env.PI_SPELLFIX_DICTS || "en_US";
 const PERSONAL = process.env.PI_SPELLFIX_PERSONAL || "";
-const FIX_LOG = process.env.PI_SPELLFIX_LOG || "";
 const MODEL = process.env.PI_SPELLFIX_MODEL || "";
 
 const CHECK_DELAY_MS = 300;
 const SUGGESTIONS = 5;
-// "haiku" is the Claude Code mod's log key; keeping it shares the learned fixes.
-const AI_SOURCE: FixSource = "haiku";
 
 const WORD_IN_TEXT = /[\p{L}]+(?:['’][\p{L}]+)*/gu;
 // SGR and APC, the only escapes the editor draws with. Text between them is
@@ -94,7 +84,6 @@ let sessionGen = 0;
 let suspended = false;
 let warnedHunspell = false;
 let warnedModel = false;
-let logging = Promise.resolve();
 
 /**
  * The last model answer, kept for reopening the picker on the same draft
@@ -227,35 +216,6 @@ async function removeWords(gen: number, ctx: ExtensionContext, words: readonly s
     if (gen === sessionGen)
       toast(ctx, `spellfix: couldn't edit ${PERSONAL}: ${String(error)}`, "error");
   }
-}
-
-async function loadLog(): Promise<FixLog | undefined> {
-  if (!FIX_LOG) return undefined;
-  try {
-    return JSON.parse(await readFile(FIX_LOG, "utf8")) as FixLog;
-  } catch {
-    // Missing starts a new log; one that won't parse is left alone rather than overwritten.
-    try {
-      await readFile(FIX_LOG);
-      return undefined;
-    } catch {
-      return {};
-    }
-  }
-}
-
-/** Counts picks in the fix log, one write at a time so quick picks don't drop each other. */
-function record(picks: readonly LogPick[]) {
-  if (!FIX_LOG || picks.length === 0) return;
-  logging = logging
-    .then(async () => {
-      const log = await loadLog();
-      if (!log) return;
-      const last = new Date().toISOString().slice(0, 10);
-      await mkdir(dirname(FIX_LOG), { recursive: true });
-      await writeAtomic(FIX_LOG, formatLog(countPicks(log, picks, last)));
-    })
-    .catch(() => undefined);
 }
 
 function pickModel(ctx: ExtensionContext): Model<string> | undefined {
@@ -511,7 +471,7 @@ class SpellPicker implements Component {
   private ai = new Map<string, string>();
   private aiDone = false;
   private aiError: string | undefined;
-  private suggestions = new Map<string, Suggestion[]>();
+  private suggestions = new Map<string, string[]>();
   private added = new Set<string>();
   private closed = false;
   private pendingAll = false;
@@ -581,17 +541,9 @@ class SpellPicker implements Component {
   private async prefetch() {
     const item = this.item;
     if (!item || isExtra(item) || this.suggestions.has(item.word)) return;
-    const log = await loadLog();
-    if (!this.live) return;
-    const guess = topFix(log, item.word);
     const hunspell = await suggest(this.gen, this.ctx, item.word);
     if (!this.live) return;
-    const list: Suggestion[] = [];
-    if (guess) list.push({ word: guess, source: "history" });
-    for (const word of hunspell) {
-      if (!list.some((s) => s.word === word)) list.push({ word, source: "hunspell" });
-    }
-    this.suggestions.set(item.word, list.slice(0, SUGGESTIONS));
+    this.suggestions.set(item.word, hunspell);
     this.tui.requestRender();
   }
 
@@ -670,13 +622,9 @@ class SpellPicker implements Component {
     return this.ai.get(item.word) ?? (isExtra(item) ? item.fix : null);
   }
 
-  private pick(fix: string, source: FixSource) {
+  private pick(fix: string) {
     const item = this.item;
     if (!item) return;
-    const ai = this.aiFix(item);
-    if (ai && ai !== fix) record([{ from: item.word, to: ai, as: "rejected" }]);
-    record([{ from: item.word, to: fix, as: source }]);
-
     const delta = fix.length - (item.end - item.start);
     this.splice(item.start, item.end, fix);
     this.items = this.items
@@ -690,8 +638,6 @@ class SpellPicker implements Component {
   private skip() {
     const item = this.item;
     if (!item) return;
-    const ai = this.aiFix(item);
-    if (ai) record([{ from: item.word, to: ai, as: "rejected" }]);
     ignored.add(item.word);
     this.items = this.items.filter((m) => m !== item);
     this.index = Math.min(this.index, Math.max(0, this.items.length - 1));
@@ -746,7 +692,6 @@ class SpellPicker implements Component {
     for (const { item, fix } of [...fixes].sort((a, b) => b.item.start - a.item.start)) {
       this.splice(item.start, item.end, fix);
     }
-    record(fixes.map(({ item, fix }) => ({ from: item.word, to: fix, as: AI_SOURCE })));
     this.items = [];
     writeDraft(this.ui, this.text);
     this.close({ changed: true });
@@ -778,10 +723,10 @@ class SpellPicker implements Component {
       const item = this.item;
       if (!item) return;
       const fix = this.aiFix(item);
-      if (fix) this.pick(fix, AI_SOURCE);
+      if (fix) this.pick(fix);
       else {
         const first = this.suggestions.get(item.word)?.[0];
-        if (first) this.pick(first.word, first.source);
+        if (first) this.pick(first);
       }
       return;
     }
@@ -807,11 +752,11 @@ class SpellPicker implements Component {
       if (!item) return;
       if (n === 1) {
         const fix = this.aiFix(item);
-        if (fix) this.pick(fix, AI_SOURCE);
+        if (fix) this.pick(fix);
         return;
       }
       const suggestion = this.suggestions.get(item.word)?.[n - 2];
-      if (suggestion) this.pick(suggestion.word, suggestion.source);
+      if (suggestion) this.pick(suggestion);
       return;
     }
   }
@@ -858,12 +803,7 @@ class SpellPicker implements Component {
     }
     const suggestions = this.suggestions.get(item.word) ?? [];
     suggestions.forEach((suggestion, i) => {
-      actions.push(
-        theme.fg("accent", String(i + 2)) +
-          " " +
-          suggestion.word +
-          (suggestion.source === "history" ? theme.fg("dim", " (history)") : ""),
-      );
+      actions.push(`${theme.fg("accent", String(i + 2))} ${suggestion}`);
     });
     if (!this.suggestions.has(item.word) && !isExtra(item)) actions.push(theme.fg("dim", "…"));
     for (const row of rows(actions, width - 4, "  ")) body.push(row);

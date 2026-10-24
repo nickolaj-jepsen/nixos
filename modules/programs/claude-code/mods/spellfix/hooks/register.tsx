@@ -1,7 +1,7 @@
 import { atom, read, update } from "claude-code";
 import type { EngineInterface, PluginOptions, PromptBox, Register, Timer } from "claude-code";
 
-import type { Extra, FixLog, FixSource, Miss, Picker, Report } from "../types";
+import type { Extra, Miss, Picker, Report } from "../types";
 import {
   addInput,
   autoAdds,
@@ -9,8 +9,6 @@ import {
   caseVariants,
   CHECK,
   checkPrompt,
-  countPicks,
-  formatLog,
   hunspellArgs,
   isExtra,
   nearest,
@@ -21,11 +19,10 @@ import {
   replyBudget,
   shift,
   suggestInput,
-  topFix,
   withExtras,
   withoutWords,
 } from "./core";
-import type { LogPick, Verdict } from "./core";
+import type { Verdict } from "./core";
 
 // Borrowed: mods can't define keybinding actions, and nothing handles this one
 // while the built-in cc-plugin-diff mod is enabled. A key bound to it in
@@ -44,9 +41,9 @@ const added = atom({ plugin: "spellfix", key: "added" } as const, []);
 // True while ctrl+q waits on the batch to find anything hunspell didn't.
 const isBusy = atom({ plugin: "spellfix", key: "isBusy" } as const, false);
 
-type Config = { hunspell: string; dictionaries: string; personal: string; fixLog: string };
+type Config = { hunspell: string; dictionaries: string; personal: string };
 
-let config: Config = { hunspell: "hunspell", dictionaries: "en_US", personal: "", fixLog: "" };
+let config: Config = { hunspell: "hunspell", dictionaries: "en_US", personal: "" };
 // Words skipped in the picker, forgotten once the draft is submitted or cleared.
 const ignored = new Set<string>();
 // Auto-added words taken back with `8`: the batch leaves them flagged for the rest of the draft.
@@ -54,7 +51,6 @@ const unadded = new Set<string>();
 let timer: Timer | undefined;
 let checkId = 0;
 let hasWarned = false;
-let logging = Promise.resolve();
 
 /** One Haiku call's answers for a draft; `text` follows the picker's own fixes. */
 type Batch = {
@@ -75,7 +71,6 @@ function readConfig(options: PluginOptions): Config {
     hunspell: text("hunspell", "hunspell"),
     dictionaries: text("dictionaries", "en_US"),
     personal: text("personalDictionary", ""),
-    fixLog: text("fixLog", ""),
   };
 }
 
@@ -170,29 +165,6 @@ async function removeWords($: EngineInterface, words: readonly string[]) {
   }
 }
 
-async function loadLog($: EngineInterface): Promise<FixLog | undefined> {
-  if (!config.fixLog) return undefined;
-  try {
-    return JSON.parse(await $.fs.read(config.fixLog)) as FixLog;
-  } catch {
-    // Missing starts a new log; one that won't parse is left alone rather than overwritten.
-    return (await $.fs.exists(config.fixLog)) ? undefined : {};
-  }
-}
-
-/** Counts picks in the fix log, one write at a time so quick picks don't drop each other. */
-function record($: EngineInterface, picks: readonly LogPick[]) {
-  if (!config.fixLog || picks.length === 0) return;
-  logging = logging
-    .then(async () => {
-      const log = await loadLog($);
-      if (!log) return;
-      const last = new Date(await $.clock.now()).toISOString().slice(0, 10);
-      await $.fs.write(config.fixLog, formatLog(countPicks(log, picks, last)));
-    })
-    .catch(() => undefined);
-}
-
 /** Keeps the batch on the draft through a fix the picker made to `text`. */
 function noteSplice(text: string, m: Miss, replacement: string) {
   if (batch?.text !== text) return;
@@ -274,7 +246,7 @@ async function landed($: EngineInterface, b: Batch) {
   };
   await update($, picker, () => answered);
   if (p.wantsAll) await applyAllLate($);
-  else if (p.wantsAi && answered.ai) await applyLate($, answered, answered.ai, "haiku");
+  else if (p.wantsAi && answered.ai) await applyLate($, answered, answered.ai);
 }
 
 function scheduleCheck($: EngineInterface, box: PromptBox) {
@@ -315,12 +287,7 @@ async function togglePicker($: EngineInterface) {
 }
 
 async function show($: EngineInterface, text: string, miss: Miss | Extra) {
-  const guess = topFix(await loadLog($), miss.word);
-  const hunspell = isExtra(miss) ? [] : await suggest($, miss.word);
-  // A fix picked before leads the row, so its digit stays put from one draft to the next.
-  const suggestions = guess
-    ? [guess, ...hunspell.filter((s) => s !== guess)].slice(0, SUGGESTIONS)
-    : hunspell;
+  const suggestions = isExtra(miss) ? [] : await suggest($, miss.word);
   const before = text.slice(Math.max(0, miss.start - 30), miss.start).replace(/\s+/g, " ");
   const after = text.slice(miss.end, miss.end + 30).replace(/\s+/g, " ");
   const isAiDone = batch?.text === text && batch.result !== undefined;
@@ -332,7 +299,6 @@ async function show($: EngineInterface, text: string, miss: Miss | Extra) {
     after,
     suggestions,
     isExtra: isExtra(miss),
-    guess,
     ai: isAiDone ? fixFor(miss) : null,
     isAiDone,
     wantsAi: false,
@@ -343,12 +309,11 @@ async function show($: EngineInterface, text: string, miss: Miss | Extra) {
 }
 
 /** Applies a pick made before its answer arrived; outside an edit, so the cursor ends up at the end. */
-async function applyLate($: EngineInterface, p: Picker, choice: string, as: FixSource) {
+async function applyLate($: EngineInterface, p: Picker, choice: string) {
   const box = await $.prompt.read();
   if (box.text.slice(p.start, p.end) !== p.word) return;
   const fixed = splice(box, p, choice);
   noteSplice(box.text, p, choice);
-  record($, [{ from: p.word, to: choice, as }]);
   await $.prompt.fill({ text: fixed.text, mode: "replace" });
   await advance($, fixed.text, p.start + choice.length);
 }
@@ -399,10 +364,6 @@ async function applyAll($: EngineInterface, box: PromptBox): Promise<PromptBox |
     changes: fixes.map((f) => `${f.word}→${f.fix}`),
   };
   await update($, report, () => done);
-  record(
-    $,
-    fixes.map((f) => ({ from: f.word, to: f.fix, as: "haiku" })),
-  );
   return fixed;
 }
 
@@ -424,12 +385,7 @@ async function pick(
 ): Promise<PromptBox | undefined> {
   const p = await read($, picker);
   if (!p || box.text.slice(p.start, p.end) !== p.word) return undefined;
-  const passOver = () => {
-    if (p.ai) record($, [{ from: p.word, to: p.ai, as: "rejected" }]);
-  };
-
   if (key === "s" || (key === "d" && !p.isExtra && config.personal)) {
-    passOver();
     if (key === "d") await addWords($, [p.word]);
     else if (p.isExtra && batch?.result) {
       batch.result.extras = batch.result.extras.filter((x) => x.start !== p.start);
@@ -454,18 +410,15 @@ async function pick(
   if (!/^[1-9]$/.test(key)) return undefined;
 
   // The edit hook can't wait out Haiku (its budget is milliseconds): the answer applies when it lands.
-  if (key === "1" && !p.isAiDone && !p.guess) {
+  if (key === "1" && !p.isAiDone) {
     const waiting: Picker = { ...p, wantsAi: true };
     await update($, picker, () => waiting);
     return box;
   }
-  const as: FixSource = key !== "1" ? "hunspell" : p.isAiDone ? "haiku" : "history";
-  const choice = key === "1" ? (p.isAiDone ? p.ai : p.guess) : p.suggestions[Number(key) - 2];
+  const choice = key === "1" ? p.ai : p.suggestions[Number(key) - 2];
   // A digit with nothing behind it is swallowed, never typed into the draft.
   if (!choice) return box;
 
-  if (p.ai && choice !== p.ai) passOver();
-  record($, [{ from: p.word, to: choice, as }]);
   const fixed = splice(box, p, choice);
   noteSplice(box.text, p, choice);
   await advance($, fixed.text, p.start + choice.length);
@@ -584,7 +537,7 @@ export const register: Register = (on, options) => {
     if (isQuiet) return hidden;
 
     if (p) {
-      const slot = p.isAiDone ? (p.ai ?? "no idea") : p.wantsAi ? "waiting…" : (p.guess ?? "…");
+      const slot = p.isAiDone ? (p.ai ?? "no idea") : p.wantsAi ? "waiting…" : "…";
       // Ideally these would be marked inline in the prompt itself; mods can't decorate the
       // composer's text yet, so the band lists them instead.
       const summary = [...p.summary, ...(words.length ? [`added: ${words.join(", ")}`] : [])];
@@ -600,9 +553,7 @@ export const register: Register = (on, options) => {
           <Box flexWrap="wrap" columnGap={2}>
             <Button key="ai" hotkey="1" plain onPress={() => pickFromBand($, "1")}>
               {slot}
-              <Text dimColor>
-                {!p.isAiDone && !p.wantsAi && p.guess ? " (history)" : " (Haiku)"}
-              </Text>
+              <Text dimColor> (Haiku)</Text>
             </Button>
             {p.suggestions.map((s, i) => (
               <Button

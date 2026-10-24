@@ -370,7 +370,6 @@
           hunspell = lib.getExe spellChecker;
           dictionaries = lib.concatStringsSep "," dictionaries;
           inherit personalDictionary;
-          fixLog = fpLib.spellfixLog config;
         };
         statusLine = {
           type = "command";

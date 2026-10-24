@@ -1,18 +1,16 @@
 /**
  * Spellfix's logic that needs no engine: which words to check, the model's
- * prompt and reply, where its extras land, and the fix log and personal
- * dictionary formats. Plain ES with no Node or engine API, so pi's spellfix
- * can run the same rules on the files both agents write.
+ * prompt and reply, where its extras land, and the personal dictionary format.
+ * Plain ES with no Node or engine API, so pi's spellfix can run the same rules
+ * on the files both agents write.
  */
 // Spelled out: pi type-checks this file under NodeNext, which needs the extension.
-import type { Extra, FixLog, FixSource, Miss } from "../types/index.d.ts";
+import type { Extra, Miss } from "../types/index.d.ts";
 
 export type Verdict = { kind: "fix"; word: string } | { kind: "correct" } | { kind: "unsure" };
 
 /** A typo the model named by word and occurrence, before it is placed in the draft. */
 export type Found = { word: string; nth: number; fix: string };
-
-export type LogPick = { from: string; to: string; as: FixSource | "rejected" };
 
 export const CHECK = `You check spelling in a draft message a developer is about to send to a coding assistant. The draft may be in English or Danish, or mix both; never translate.
 
@@ -236,30 +234,4 @@ export function nearest<T extends Miss>(found: readonly T[], cursor: number): T 
     (best, m) => (!best || distance(m) < distance(best) ? m : best),
     undefined,
   );
-}
-
-/** `log` with `picks` counted, each dated `last` (YYYY-MM-DD). */
-export function countPicks(log: FixLog, picks: readonly LogPick[], last: string): FixLog {
-  for (const { from, to, as } of picks) {
-    const counts = ((log[from] ??= {})[to] ??= { last });
-    counts[as] = (counts[as] ?? 0) + 1;
-    counts.last = last;
-  }
-  return log;
-}
-
-/** The fix log file's text for `log`. */
-export function formatLog(log: FixLog): string {
-  return `${JSON.stringify(log, null, 1)}\n`;
-}
-
-/** The fix picked most for `word`, net of the model's rejected ones; null when none comes out ahead. */
-export function topFix(log: FixLog | undefined, word: string): string | null {
-  let best: string | null = null;
-  let bestScore = 0;
-  for (const [to, c] of Object.entries(log?.[word] ?? {})) {
-    const score = (c.haiku ?? 0) + (c.hunspell ?? 0) + (c.history ?? 0) - (c.rejected ?? 0);
-    if (score > bestScore) [best, bestScore] = [to, score];
-  }
-  return best;
 }

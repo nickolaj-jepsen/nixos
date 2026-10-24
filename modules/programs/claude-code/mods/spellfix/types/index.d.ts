@@ -8,8 +8,6 @@ export type Picker = Miss & {
   after: string;
   suggestions: string[];
   isExtra: boolean;
-  /** The fix most often picked for this word before, from the fix log. */
-  guess: string | null;
   ai: string | null;
   isAiDone: boolean;
   wantsAi: boolean;
@@ -24,14 +22,6 @@ export type Report = {
   fixed: string;
   changes: string[];
 };
-
-export type FixSource = "haiku" | "hunspell" | "history";
-
-/** How often `to` was picked for `from` by each source, and how often Haiku's `to` was passed over. */
-export type FixCount = { [K in FixSource | "rejected"]?: number } & { last: string };
-
-/** The fix log's file: misspelling → replacement → counts. */
-export type FixLog = Record<string, Record<string, FixCount>>;
 
 declare module "claude-code" {
   interface PluginState {

@@ -1,6 +1,6 @@
 {
   "name": "spellfix",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Pick fixes for misspelled words in the prompt draft with hunspell and Haiku",
   "author": {
     "name": "Nickolaj Jepsen"
@@ -23,12 +23,6 @@
       "type": "string",
       "title": "Personal dictionary",
       "description": "An existing word list file the picker's add key writes to (hunspell -p), and where words Haiku calls correct are added; empty turns adding off",
-      "default": ""
-    },
-    "fixLog": {
-      "type": "string",
-      "title": "Fix log",
-      "description": "A JSON file counting each misspelling's picked fixes, mined for suggestions; empty turns logging off",
       "default": ""
     }
   }

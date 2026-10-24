@@ -51,7 +51,6 @@ in {
 
   mkHunspell = pkgs: pkgs.hunspell.withDicts (d: map (name: d.${name}) hunspellLanguages);
   hunspellPersonalDictionary = config: "${config.xdg.configHome}/hunspell/personal.dic";
-  spellfixLog = config: "${config.xdg.dataHome}/spellfix/fixes.json";
 
   # The `programs.<app>.package` an HM GUI leaf should install: null on darwin
   # (the binary comes from a homebrew cask, so HM manages config only — nixpkgs

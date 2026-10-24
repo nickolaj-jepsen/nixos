@@ -21,8 +21,8 @@ Code update can break one.
   hunspell and Haiku. One Haiku call answers every flagged word, adds the ones
   it calls correct to the personal word list, and finds real-word typos
   hunspell can't (`form` for `from`). Needs `hunspell` and its dictionaries
-  installed; set the executable, dictionaries, personal word list and fix log
-  in the plugin's options (`claude plugin configure spellfix`). Its picker is
+  installed; set the executable, dictionaries and personal word list in the
+  plugin's options (`claude plugin configure spellfix`). Its picker is
   the band button above the prompt; to open it from the keyboard, bind
   `app:toggleDiffNoiseFilter` in the `Global` context of
   `~/.claude/keybindings.json` (I use `ctrl+q`), which works on any draft.

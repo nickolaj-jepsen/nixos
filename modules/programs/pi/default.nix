@@ -165,12 +165,11 @@ in {
         # A path, not the key: extensions/exa.ts reads it, so the key stays out
         # of the environment every tool and MCP server inherits.
         environment.PI_EXA_KEY_FILE.value = config.age.secrets.exa-api-key.path;
-        # Spellfix (extensions/spellfix.ts) shares its dictionary and fix log
-        # with the Claude Code mod. Haiku keeps the one batch call cheap.
+        # Spellfix (extensions/spellfix.ts) shares its dictionary with the
+        # Claude Code mod. Haiku keeps the one batch call cheap.
         environment.PI_SPELLFIX_HUNSPELL.value = lib.getExe spellChecker;
         environment.PI_SPELLFIX_DICTS.value = lib.concatStringsSep "," fpLib.hunspellLanguages;
         environment.PI_SPELLFIX_PERSONAL.value = fpLib.hunspellPersonalDictionary config;
-        environment.PI_SPELLFIX_LOG.value = fpLib.spellfixLog config;
         environment.PI_SPELLFIX_MODEL.value = "anthropic/claude-haiku-5-5";
         # Session labels (extensions/chrome/identity.ts) go through the router,
         # so they fall through the flash ladder while Go's quota is out.
