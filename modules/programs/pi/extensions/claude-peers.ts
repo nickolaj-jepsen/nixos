@@ -119,6 +119,8 @@ export default function (pi: ExtensionAPI) {
   const runtimeId = Symbol("claude-peers-runtime");
   const owner = globalThis as { [OWNER]?: symbol; [RELOADED]?: Reloaded };
   let ctx: ExtensionContext | undefined;
+  /** Inbound frames arrive on socket callbacks, where a used-up ctx is an uncaught throw. */
+  let live = false;
   let server: Server | undefined;
   let socketPath = "";
   let ownAddress = "";
@@ -254,6 +256,9 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
+    // The dialog can outlive the session it was opened in.
+    if (!live) return;
+
     const replyHint = replyAddress
       ? `To answer, call send_message with to: "${replyAddress}". Reply only when it helps the sender.`
       : "It carries no reply address, so it cannot be answered.";
@@ -363,6 +368,8 @@ export default function (pi: ExtensionAPI) {
   }
 
   function onFrame(frame: Record<string, unknown>) {
+    // server.close() does not cancel a frame already handed to us.
+    if (!live) return;
     if (frame.type === "user") void onUserFrame(frame).catch(() => {});
     else if (frame.type === "control") onControlFrame(frame);
   }
@@ -412,6 +419,8 @@ export default function (pi: ExtensionAPI) {
   }
 
   async function stop(reason: SessionShutdownEvent["reason"]) {
+    // Before the awaits below, so a frame already in flight cannot outlive the ctx.
+    live = false;
     if (owner[OWNER] !== runtimeId) return;
     // A reload keeps this session alive, so its subscribers and pending statuses carry over.
     if (reason === "reload" && entry)
@@ -453,6 +462,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on("session_start", async (_event, c) => {
+    live = true;
     // Once, before the first request: a later tool-set change is a prompt transition that
     // can cost a cache-invalidating re-read, far more than the declaration it saves.
     await activateWorktree(c);

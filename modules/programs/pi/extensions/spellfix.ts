@@ -86,7 +86,10 @@ const unadded = new Set<string>();
 let editor: SpellEditor | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let checkId = 0;
-/** Bumped on session start and shutdown: a ctx captured before the bump is unusable. */
+/**
+ * Bumped on session start and shutdown: a ctx captured before the bump is unusable,
+ * so anything holding one across an await checks its gen first.
+ */
 let sessionGen = 0;
 let suspended = false;
 let warnedHunspell = false;
@@ -126,6 +129,7 @@ function ensurePersonal(): Promise<void> {
 }
 
 async function runHunspell(
+  gen: number,
   ctx: ExtensionContext,
   mode: "-l" | "-a",
   stdin: string,
@@ -157,16 +161,18 @@ async function runHunspell(
       child.stdin.end(stdin);
     });
   } catch (error) {
-    warnHunspell(ctx, error);
+    // hunspell can fail after the session its ctx belongs to is gone.
+    if (gen === sessionGen) warnHunspell(ctx, error);
     return undefined;
   }
 }
 
 /** The candidates hunspell rejects, skipped words excluded; none when hunspell fails. */
-async function findMisses(ctx: ExtensionContext, text: string): Promise<Miss[]> {
+async function findMisses(gen: number, ctx: ExtensionContext, text: string): Promise<Miss[]> {
   const words = candidates(text).filter((w) => !ignored.has(w.word));
   if (words.length === 0) return [];
   const stdout = await runHunspell(
+    gen,
     ctx,
     "-l",
     `${[...new Set(words.map((w) => w.word))].join("\n")}\n`,
@@ -177,16 +183,20 @@ async function findMisses(ctx: ExtensionContext, text: string): Promise<Miss[]> 
 }
 
 /** The words of `words` hunspell accepts; none when it fails. */
-async function knownWords(ctx: ExtensionContext, words: readonly string[]): Promise<Set<string>> {
+async function knownWords(
+  gen: number,
+  ctx: ExtensionContext,
+  words: readonly string[],
+): Promise<Set<string>> {
   if (words.length === 0) return new Set();
-  const stdout = await runHunspell(ctx, "-l", `${words.join("\n")}\n`);
+  const stdout = await runHunspell(gen, ctx, "-l", `${words.join("\n")}\n`);
   if (stdout === undefined) return new Set();
   const bad = new Set(stdout.split("\n"));
   return new Set(words.filter((w) => !bad.has(w)));
 }
 
-async function suggest(ctx: ExtensionContext, word: string): Promise<string[]> {
-  const stdout = await runHunspell(ctx, "-a", suggestInput(word));
+async function suggest(gen: number, ctx: ExtensionContext, word: string): Promise<string[]> {
+  const stdout = await runHunspell(gen, ctx, "-a", suggestInput(word));
   return stdout === undefined ? [] : parseSuggestions(stdout, SUGGESTIONS);
 }
 
@@ -197,15 +207,15 @@ async function writeAtomic(path: string, text: string) {
   await rename(tmp, path);
 }
 
-async function addWords(ctx: ExtensionContext, words: readonly string[]) {
+async function addWords(gen: number, ctx: ExtensionContext, words: readonly string[]) {
   for (const word of words) ignored.add(word);
   if (!PERSONAL || words.length === 0) return;
   await ensurePersonal();
-  await runHunspell(ctx, "-a", addInput(words));
+  await runHunspell(gen, ctx, "-a", addInput(words));
 }
 
 /** Takes auto-added words back out of the personal dictionary; hunspell itself cannot remove one. */
-async function removeWords(ctx: ExtensionContext, words: readonly string[]) {
+async function removeWords(gen: number, ctx: ExtensionContext, words: readonly string[]) {
   for (const word of words) {
     ignored.delete(word);
     unadded.add(word);
@@ -214,7 +224,8 @@ async function removeWords(ctx: ExtensionContext, words: readonly string[]) {
   try {
     await writeAtomic(PERSONAL, withoutWords(await readFile(PERSONAL, "utf8"), words));
   } catch (error) {
-    toast(ctx, `spellfix: couldn't edit ${PERSONAL}: ${String(error)}`, "error");
+    if (gen === sessionGen)
+      toast(ctx, `spellfix: couldn't edit ${PERSONAL}: ${String(error)}`, "error");
   }
 }
 
@@ -264,6 +275,7 @@ function pickModel(ctx: ExtensionContext): Model<string> | undefined {
 type Answer = { verdicts: Map<string, Verdict>; found: Found[] };
 
 async function askModel(
+  gen: number,
   ctx: ExtensionContext,
   text: string,
   flagged: readonly Miss[],
@@ -304,8 +316,8 @@ async function askModel(
     const reply = response.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("\n");
     return parseReply(reply, text, distinct);
   } catch (error) {
-    // Closing the picker aborts the call on purpose.
-    if (signal.aborted) return undefined;
+    // Closing the picker aborts the call on purpose; a replaced session has no UI left.
+    if (signal.aborted || gen !== sessionGen) return undefined;
     toast(
       ctx,
       `spellfix: ${model.provider}/${model.id} failed: ${
@@ -347,8 +359,12 @@ function writeDraft(ui: ExtensionUIContext, text: string) {
 }
 
 /** Hunspell's misses plus the cached model extras, in draft order. */
-async function allMisses(ctx: ExtensionContext, text: string): Promise<(Miss | Extra)[]> {
-  return withExtras(await findMisses(ctx, text), cachedExtras(text));
+async function allMisses(
+  gen: number,
+  ctx: ExtensionContext,
+  text: string,
+): Promise<(Miss | Extra)[]> {
+  return withExtras(await findMisses(gen, ctx, text), cachedExtras(text));
 }
 
 /* ------------------------------------------------------------------ editor */
@@ -522,7 +538,7 @@ class SpellPicker implements Component {
   }
 
   async start() {
-    this.flagged = await findMisses(this.ctx, this.text);
+    this.flagged = await findMisses(this.gen, this.ctx, this.text);
     if (!this.live) return;
     this.items = withExtras(this.flagged, cachedExtras(this.text));
     const near = nearest(this.items, this.cursor);
@@ -568,7 +584,7 @@ class SpellPicker implements Component {
     const log = await loadLog();
     if (!this.live) return;
     const guess = topFix(log, item.word);
-    const hunspell = await suggest(this.ctx, item.word);
+    const hunspell = await suggest(this.gen, this.ctx, item.word);
     if (!this.live) return;
     const list: Suggestion[] = [];
     if (guess) list.push({ word: guess, source: "history" });
@@ -582,7 +598,7 @@ class SpellPicker implements Component {
   /** The model's batch for the draft at open; fixes found for words already gone are ignored. */
   private async runModel() {
     const sent = this.text;
-    const answer = await askModel(this.ctx, sent, this.flagged, this.abort.signal);
+    const answer = await askModel(this.gen, this.ctx, sent, this.flagged, this.abort.signal);
     if (!this.live) return;
     if (!answer) {
       this.aiError = "no answer";
@@ -598,7 +614,7 @@ class SpellPicker implements Component {
     const variants = [...verdicts].flatMap(([word, v]) =>
       v.kind === "correct" ? caseVariants(word) : [],
     );
-    recase(verdicts, await knownWords(this.ctx, variants));
+    recase(verdicts, await knownWords(this.gen, this.ctx, variants));
     if (!this.live) return;
     let extras = placeExtras(sent, found, this.flagged);
     for (const e of this.edits)
@@ -614,7 +630,7 @@ class SpellPicker implements Component {
     }
     const correct = autoAdds(verdicts, (word) => ignored.has(word) || unadded.has(word));
     if (correct.length) {
-      await addWords(this.ctx, correct);
+      await addWords(this.gen, this.ctx, correct);
       if (!this.live) return;
       for (const word of correct) this.added.add(word);
       this.items = this.items.filter((item) => !correct.includes(item.word));
@@ -691,7 +707,7 @@ class SpellPicker implements Component {
       toast(this.ctx, "spellfix: no personal dictionary configured", "warning");
       return;
     }
-    await addWords(this.ctx, [item.word]);
+    await addWords(this.gen, this.ctx, [item.word]);
     if (!this.live) return;
     this.items = this.items.filter((m) => m !== item);
     this.index = Math.min(this.index, Math.max(0, this.items.length - 1));
@@ -703,9 +719,9 @@ class SpellPicker implements Component {
     const words = [...this.added];
     if (words.length === 0) return;
     this.added.clear();
-    await removeWords(this.ctx, words);
+    await removeWords(this.gen, this.ctx, words);
     if (!this.live) return;
-    this.items = await allMisses(this.ctx, this.text);
+    this.items = await allMisses(this.gen, this.ctx, this.text);
     if (!this.live) return;
     this.index = Math.max(0, Math.min(this.index, this.items.length - 1));
     this.prefetch();
@@ -895,7 +911,7 @@ async function refreshUnderlines(gen: number, ctx: ExtensionContext) {
     editor?.setUnderlined(new Set());
     return;
   }
-  const misses = await allMisses(ctx, text);
+  const misses = await allMisses(gen, ctx, text);
   if (id !== checkId || gen !== sessionGen) return;
   editor?.setUnderlined(underlinedWords(misses));
 }
