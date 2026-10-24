@@ -395,6 +395,24 @@ cmd_status() {
     fi
 }
 
+# Claude Code's own rule for a worktree's base, so a native Claude worktree and
+# `wt create` start from the same commit: fetch origin/<default> when it is
+# missing, or when the last fetch is over a day old (capped at 5s, so a slow
+# remote never holds up a create). A failed fetch keeps whatever ref is there.
+refresh_origin_default() {
+    git -C "$MAIN_WT" remote get-url origin >/dev/null 2>&1 || return 0
+    local common fetched
+    common=$(git -C "$MAIN_WT" rev-parse --path-format=absolute --git-common-dir) || return 0
+    if git -C "$MAIN_WT" rev-parse --verify --quiet "refs/remotes/origin/$DEFAULT_BRANCH" >/dev/null 2>&1; then
+        fetched=$(stat -c %Y "$common/FETCH_HEAD" 2>/dev/null || echo 0)
+        (( $(date +%s) - fetched > 86400 )) || return 0
+        GIT_TERMINAL_PROMPT=0 timeout 5 git -C "$MAIN_WT" fetch --quiet origin "$DEFAULT_BRANCH" >&2 \
+            || info "fetch of origin/$DEFAULT_BRANCH failed; basing on the local ref"
+    else
+        GIT_TERMINAL_PROMPT=0 git -C "$MAIN_WT" fetch --quiet origin "$DEFAULT_BRANCH" >&2 || true
+    fi
+}
+
 cmd_create() {
     local name="" base=""
     while (( $# > 0 )); do
@@ -436,7 +454,8 @@ cmd_create() {
         git -C "$MAIN_WT" rev-parse --verify --quiet "$base^{commit}" >/dev/null 2>&1 \
             || die "base ref '$base' not found"
         base_ref="$base"
-    elif git -C "$MAIN_WT" rev-parse --verify --quiet "refs/remotes/origin/$DEFAULT_BRANCH" >/dev/null 2>&1; then
+    elif refresh_origin_default \
+        && git -C "$MAIN_WT" rev-parse --verify --quiet "refs/remotes/origin/$DEFAULT_BRANCH" >/dev/null 2>&1; then
         base_ref="origin/$DEFAULT_BRANCH"
     elif git -C "$MAIN_WT" rev-parse --verify --quiet "refs/heads/$DEFAULT_BRANCH" >/dev/null 2>&1; then
         base_ref="$DEFAULT_BRANCH"
