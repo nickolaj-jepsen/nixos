@@ -132,8 +132,8 @@ in {
     '';
     # Children keep the router (their models are vm/* virtual models, which
     # only our extensions register) and the permission system, whose
-    # `ask` forwards to this session. The UI and process-managing packages have
-    # nothing to do in a headless child.
+    # `ask` forwards to this session. The other packages have nothing to do in
+    # a headless child.
     childExcludedPackages =
       map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages);
   in {

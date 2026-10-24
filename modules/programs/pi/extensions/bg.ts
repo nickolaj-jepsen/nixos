@@ -8,7 +8,7 @@
  * session.
  */
 import { spawn } from "node:child_process";
-import { closeSync, fstatSync, mkdirSync, openSync, readSync } from "node:fs";
+import { closeSync, fstatSync, mkdirSync, openSync, readdirSync, readSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
@@ -22,7 +22,7 @@ const TAIL_BYTES = 4096;
 // Font Awesome "terminal". One space follows it: these fonts draw it into its own cells.
 const ICON = "";
 
-type Session = { ctx: ExtensionContext; closed: boolean; next: number; running: Set<number> };
+type Session = { ctx: ExtensionContext; closed: boolean; next?: number; running: Set<number> };
 
 /** The last lines of a log, at most `TAIL_BYTES`, without a line cut at the front. */
 const tail = (path: string) => {
@@ -33,7 +33,7 @@ const tail = (path: string) => {
     const buffer = Buffer.alloc(size - start);
     readSync(fd, buffer, 0, buffer.length, start);
     const lines = buffer.toString("utf8").replace(/\n$/, "").split("\n");
-    if (start > 0) lines.shift();
+    if (start > 0 && lines.length > 1) lines.shift();
     return lines.slice(-TAIL_LINES).join("\n");
   } finally {
     closeSync(fd);
@@ -50,7 +50,7 @@ export default function (pi: ExtensionAPI) {
     );
 
   pi.on("session_start", (_event, ctx) => {
-    session = { ctx, closed: false, next: 1, running: new Set() };
+    session = { ctx, closed: false, running: new Set() };
     // A child's session is gone by the time its task ends, so nothing would hear the wake.
     if (isSubagentSession(ctx))
       pi.setActiveTools(pi.getActiveTools().filter((name) => name !== TOOL));
@@ -82,11 +82,13 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const s = session;
       if (!s) throw new Error("bg_run: no session");
-      const id = s.next++;
       const dir = join(tmpdir(), "pi-bg", ctx.sessionManager.getSessionId());
       mkdirSync(dir, { recursive: true });
+      // A reloaded or resumed session reuses its dir, and its transcript still points at the old logs.
+      s.next ??= Math.max(0, ...readdirSync(dir).map((file) => Number.parseInt(file, 10) || 0)) + 1;
+      const id = s.next++;
       const path = join(dir, `${id}.log`);
-      const fd = openSync(path, "w");
+      const fd = openSync(path, "wx");
       const started = Date.now();
       // bash from PATH: the shell pi itself would pick is Apple's 3.2 on darwin.
       // Detached, so the task leads its own process group and one kill takes its children too.
@@ -104,6 +106,7 @@ export default function (pi: ExtensionAPI) {
 
       const label = params.name ?? params.command.split("\n")[0].slice(0, 60);
       child.on("exit", (code, signal) => {
+        // Its `cmd &` children outlive the session: a freed pid may lead another group by shutdown.
         s.running.delete(pid);
         if (s.closed) return;
         showCount(s);
