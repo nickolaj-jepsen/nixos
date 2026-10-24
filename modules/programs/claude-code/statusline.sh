@@ -94,7 +94,7 @@ detect_op() {
 git_segment() {
   local dir=$1 wt=$2
   local status line head oid ab ahead behind staged unstaged untracked conflicts
-  local gitdir op step color dirty glyph name out arrows xy
+  local gitdir op step color dirty glyph name out arrows xy top
 
   if [ -z "$dir" ]; then return 0; fi
   status=$(git --no-optional-locks -C "$dir" status --porcelain=v2 --branch 2>/dev/null) || return 0
@@ -143,8 +143,6 @@ git_segment() {
   else color=$green
   fi
 
-  out=""
-  if [ -n "$wt" ]; then out+="${dim}${worktree_glyph}${reset} "; fi
   if [ "$head" = "(detached)" ]; then
     glyph=$detached_glyph
     name=${oid:0:7}
@@ -152,8 +150,14 @@ git_segment() {
     glyph=$branch_glyph
     name=$head
   fi
-  out+="${color}${glyph}${reset}"
+  out="${color}${glyph}${reset}"
   if [ -n "$name" ]; then out+=" ${dim}${name}${reset}"; fi
+  # In a worktree the glyph and branch open it in VS Code (OSC 8), like pi's footer.
+  if [ -n "$wt" ]; then
+    top=$(git --no-optional-locks -C "$dir" rev-parse --show-toplevel 2>/dev/null) || top=""
+    out="${dim}${worktree_glyph}${reset} ${out}"
+    if [ -n "$top" ]; then out=$'\e]8;;'"vscode://file${top}"$'\e\\'"${out}"$'\e]8;;\e\\'; fi
+  fi
   if [ "$staged" -gt 0 ] || [ "$unstaged" -gt 0 ]; then
     if [ "$unstaged" -gt 0 ]; then dirty=$red; else dirty=$warn; fi
     out+="${dirty}*${reset}"
@@ -189,7 +193,7 @@ jq -r \
   --arg git "$git_seg" \
   --argjson target "$target" '
     def pct: (.context_window.used_percentage // 0);
-    def vlen: gsub("\u001b\\[[0-9;]*m"; "") | length;
+    def vlen: gsub("\u001b\\[[0-9;]*m|\u001b\\]8;[^\u001b]*\u001b\\\\"; "") | length;
     # resets_at is epoch seconds per the docs; the ISO branch is a guard, not a known format.
     def hhmm: (if type == "number" then . else sub("\\.[0-9]+"; "") | fromdateiso8601 end)
       | strflocaltime("%H:%M");
