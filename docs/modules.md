@@ -120,16 +120,28 @@ home-manager and the overlays):
   they are Claude Code plugin marketplaces fetched at runtime
   (`extraKnownMarketplaces`/`enabledPlugins` in
   `modules/programs/claude-code/default.nix`), so they reach Claude Code only.
-- **Pi extension**: one top-level `.ts` file in `modules/programs/pi/extensions/`
-  (it may import helpers from a subfolder such as `chrome/`, which pi does not
-  load on its own), a local pi package (`"pi": {"extensions": ["./*.ts"]}`)
-  built by the pi leaf and listed in `settings.packages`. The build runs `tsc --noEmit` against the
-  pi that ships, so a type error fails `just build`. npm dependencies go
-  in its `package.json` + lockfile (`npm install --package-lock-only`; read via
-  `importNpmLock`, no hash to bump); never add packages the pi leaf links in
-  from pi itself (`mkExtensions` in `modules/programs/pi/default.nix`). `just
-dev-setup` links `node_modules` into the folder for editor types and
-  `pi -e modules/programs/pi/extensions/<name>.ts` without a rebuild.
+- **Pi extension**: `modules/programs/pi/extensions/` holds one local pi
+  package per audience, both built by the pi leaf and listed in
+  `settings.packages`:
+  - `core/` loads in every session, subagent children included. Each top-level
+    `.ts` file is one extension (`"pi": {"extensions": ["./*.ts"]}`); a
+    subfolder such as `memory/` holds its helpers.
+  - `parent/` loads only in the session you started: the leaf names it in
+    subagents.json's `excludedExtensionPackages`. A feature there is a default
+    export that `parent/index.ts`, the package's one entry, calls; a feature
+    that throws is reported and the rest still load.
+  - `shared/` is not a package: helpers both import. Each package evaluates
+    its own copy of a module, so keep them stateless; ai-usage's one reader per
+    process, on `globalThis`, is the exception. A helper only one package needs
+    lives in that package.
+    The build runs `tsc --noEmit` over all three against the pi that ships, so a
+    type error fails `just build`. npm dependencies go in the folder's
+    `package.json` + lockfile (`npm install --package-lock-only`; read via
+    `importNpmLock`, no hash to bump); never add packages the pi leaf links in
+    from pi itself (`mkExtensions` in `modules/programs/pi/default.nix`). `just
+dev-setup` links `node_modules` into the folder for editor types; then this
+    runs the tree without a rebuild:
+    `pi -ne -e builtin:codemode -e builtin:mcp -e modules/programs/pi/extensions/core -e modules/programs/pi/extensions/parent`.
 - **Third-party pi package**: `pkgs/pi-packages/` is one npm tree whose
   `package.json` holds the roster and the exact pins; the pi leaf lists each
   `$out/node_modules/<name>` as a local path in `settings.packages`, so pi

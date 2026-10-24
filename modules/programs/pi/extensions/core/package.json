@@ -1,0 +1,10 @@
+{
+  "name": "fireproof-pi-core",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./*.ts"
+    ]
+  }
+}

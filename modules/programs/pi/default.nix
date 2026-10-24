@@ -9,8 +9,8 @@
 # Third-party packages are Nix-built (pkgs/pi-packages) and listed as local
 # paths, so pi never runs npm and `pi update` has nothing to reconcile.
 #
-# Own extensions live in ./extensions, a local pi package: each `.ts` file
-# there is one extension. See docs/modules.md.
+# Own extensions live in ./extensions as two local pi packages: core/ loads in
+# every session, parent/ only where no subagent runs it. See docs/modules.md.
 {
   fpLib,
   inputs,
@@ -25,12 +25,12 @@
       npmDeps = pkgs.importNpmLock {npmRoot = ./extensions;};
       inherit (pkgs.importNpmLock) npmConfigHook;
       nativeBuildInputs = [pkgs.typescript];
-      # lib/spellfix links to the Claude Code mod, so the editor and `pi -e`
+      # parent/lib/spellfix links to the Claude Code mod, so the editor and `pi -e`
       # see its core; in the store the link dangles, so the files are copied in.
       postPatch = ''
-        rm lib/spellfix
-        install -Dm644 ${../claude-code/mods/spellfix/hooks/core.ts} lib/spellfix/hooks/core.ts
-        install -Dm644 ${../claude-code/mods/spellfix/types/index.d.ts} lib/spellfix/types/index.d.ts
+        rm parent/lib/spellfix
+        install -Dm644 ${../claude-code/mods/spellfix/hooks/core.ts} parent/lib/spellfix/hooks/core.ts
+        install -Dm644 ${../claude-code/mods/spellfix/types/index.d.ts} parent/lib/spellfix/types/index.d.ts
       '';
       buildPhase = ''
         runHook preBuild
@@ -93,7 +93,7 @@ in {
     # a second one would fight the first over a shared profile. A subagent never
     # loads MCP: its tool allowlist names no `mcp__` tool, and that is what the
     # agent package gates the extension on.
-    # extensions/browser-gate.ts asks before its first call each session.
+    # extensions/parent/browser-gate.ts asks before its first call each session.
     hasBrowser = config.programs.chromium.enable || (pkgs.stdenv.isDarwin && config.fireproof.desktop.enable);
     chrome-devtools = {
       command = lib.getExe pkgs.chrome-devtools-mcp;
@@ -115,7 +115,8 @@ in {
     # One source string per package, so settings.packages and the children's
     # exclusion list in subagents.json cannot drift.
     packagePath = name: "${piPackages}/node_modules/${name}";
-    extensionsPath = mkExtensions pkgs pi;
+    extensions = mkExtensions pkgs pi;
+    parentPath = "${extensions}/parent";
     # Parsed with pi's own reader: one role the package can't parse stops
     # pi-subagents from loading at all.
     agentRoles = pkgs.runCommand "pi-agent-roles" {nativeBuildInputs = [pkgs.nodejs];} ''
@@ -130,12 +131,12 @@ in {
       done
       cp -r ${./agents} $out
     '';
-    # Children keep the router (their models are vm/* virtual models, which
-    # only our extensions register) and the permission system, whose
-    # `ask` forwards to this session. The other packages have nothing to do in
-    # a headless child.
+    # Children keep core/ (their models are vm/* virtual models, which only its
+    # router registers) and the permission system, whose `ask` forwards to this
+    # session. The other packages have nothing to do in a headless child.
     childExcludedPackages =
-      map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages);
+      map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages)
+      ++ [parentPath];
   in {
     imports = [inputs.pi.homeModules.default];
 
@@ -144,7 +145,7 @@ in {
         enable = true;
         package = pi;
         # agent-context.md is shared by every agent; keep it agent-agnostic.
-        # How to delegate is in extensions/codemode-only.ts: these rules reach every
+        # How to delegate is in extensions/core/codemode-only.ts: these rules reach every
         # child as project context, and a child holds no agent tools.
         rules = ''
           ${builtins.readFile ../agent-context.md}
@@ -160,15 +161,15 @@ in {
         themes = [theme];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
-        # A path, not the key: extensions/exa.ts reads it, so the key stays out
+        # A path, not the key: extensions/core/exa.ts reads it, so the key stays out
         # of the environment every tool and MCP server inherits.
         environment.PI_EXA_KEY_FILE.value = config.age.secrets.exa-api-key.path;
-        # Spellfix (extensions/spellfix.ts) shares its dictionary with the
+        # Spellfix (extensions/parent/spellfix.ts) shares its dictionary with the
         # Claude Code mod.
         environment.PI_SPELLFIX_HUNSPELL.value = lib.getExe spellChecker;
         environment.PI_SPELLFIX_DICTS.value = lib.concatStringsSep "," fpLib.hunspellLanguages;
         environment.PI_SPELLFIX_PERSONAL.value = fpLib.hunspellPersonalDictionary config;
-        # The fireproof.agents.lspServers registry, read by extensions/lsp.ts.
+        # The fireproof.agents.lspServers registry, read by extensions/core/lsp.ts.
         environment.PI_LSP_SERVERS = lib.mkIf (config.fireproof.agents.lspServers != {}) {
           value = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
         };
@@ -219,15 +220,16 @@ in {
           # otherwise keeps the env pi was launched with. Blocked or missing
           # .envrc files export nothing.
           shellCommandPrefix = ''eval "$(${lib.getExe config.programs.direnv.package} export bash 2>/dev/null)"'';
-          # extensions/codemode-only.ts moves the expensive tools behind it.
+          # extensions/core/codemode-only.ts moves the expensive tools behind it.
           defaultTools = ["+codemode"];
         };
         # Local paths: pi loads the Nix-built tree as-is (see
         # pkgs/pi-packages for how the npm dependencies get there).
+        # parent/ before core/ keeps the order the chained hooks ran in when
+        # every extension was one alphabetical package.
         settings.packages =
           map packagePath thirdPartyPackages
-          # own, from ./extensions
-          ++ [extensionsPath];
+          ++ [parentPath "${extensions}/core"];
         # Arrays replace wholesale, so `pi config` toggles of built-ins revert at launch.
         settings.extensions = [];
         # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
@@ -335,7 +337,7 @@ in {
             # API credits, not the Max subscription: run /login anthropic and
             # that stored OAuth credential would take precedence over this.
             anthropic.apiKey = "!cat ${config.age.secrets.anthropic-api-key.path}";
-            # Only for the Jev classifier gate in extensions/routers.ts; the
+            # Only for the Jev classifier gate in extensions/core/routers.ts; the
             # provider itself is one of pi's built-ins.
             typesafe.apiKey = "!cat ${config.age.secrets.typesafe-api-key.path}";
             tensorx = {
@@ -448,10 +450,10 @@ in {
       };
 
       # Claude Code's keys where pi leaves them free: alt+p and ctrl+l open the
-      # labelled model picker (extensions/model-labels.ts), leaving the stock one
+      # labelled model picker (extensions/parent/model-labels.ts), leaving the stock one
       # to /model, and alt+t shows or hides thinking blocks (Claude Code's alt+t
       # turns thinking itself on or off; shift+tab cycles that here). Frees ctrl+s for
-      # extensions/stash.ts and ctrl+t for the todo overlay below. pi's conflict
+      # extensions/parent/stash.ts and ctrl+t for the todo overlay below. pi's conflict
       # check ignores view, so every built-in on a key an extension claims moves,
       # even the picker-only alt+s saves and the /tree filter.
       home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
@@ -542,7 +544,7 @@ in {
       home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
         # Otherwise bg_run is an ordinary extension tool and skips the bash rules below.
         shellTools.bg_run.commandArgument = "command";
-        # extensions/guardian.ts: a model judge that approves an ask your own
+        # extensions/core/guardian.ts: a model judge that approves an ask your own
         # prompts plainly asked for; anything else still reaches the dialog.
         authorizerChain = ["guardian"];
         # A path whose read/write direction is unproven is checked against both

@@ -1,0 +1,10 @@
+{
+  "name": "fireproof-pi-parent",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

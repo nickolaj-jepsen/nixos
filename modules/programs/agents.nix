@@ -7,7 +7,7 @@
   }: {
     config = lib.mkIf config.fireproof.dev.enable (lib.mkMerge [
       {
-        # On PATH for pi's extensions/notify.ts; the CLI hooks below use its store path.
+        # On PATH for pi's extensions/parent/notify.ts; the CLI hooks below use its store path.
         home.packages = lib.optional (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) pkgs.agent-notify;
 
         # Copilot reads this dir as user hooks, in Claude Code's nested format. Not
@@ -75,7 +75,7 @@
         };
       })
 
-      # pi's Jev classifier gate (extensions/routers.ts) needs no other agent.
+      # pi's Jev classifier gate (extensions/core/routers.ts) needs no other agent.
       (lib.mkIf config.fireproof.dev.pi.enable {
         age.secrets.typesafe-api-key = {
           rekeyFile = ../../secrets/typesafe-api-key.age;

@@ -1,9 +1,9 @@
 # Models in pi
 
-Read this before changing the router (`modules/programs/pi/extensions/routers.ts`
-and `routers/kinds.ts`), the provider declarations in the pi leaf's `models.json`,
+Read this before changing the router (`modules/programs/pi/extensions/core/routers.ts`
+and `shared/kinds.ts`), the provider declarations in the pi leaf's `models.json`,
 `enabledModels`, or the subagent roles in `modules/programs/pi/agents/`. The
-ladders themselves live in `routers/kinds.ts`; this page says why they look the
+ladders themselves live in `shared/kinds.ts`; this page says why they look the
 way they do.
 
 ## Subscriptions

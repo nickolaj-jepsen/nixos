@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["*.ts"]
+  "include": ["core/*.ts", "parent/*.ts", "shared/*.ts"]
 }
