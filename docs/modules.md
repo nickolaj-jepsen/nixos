@@ -130,18 +130,21 @@ home-manager and the overlays):
     subagents.json's `excludedExtensionPackages`. A feature there is a default
     export that `parent/index.ts`, the package's one entry, calls; a feature
     that throws is reported and the rest still load.
-  - `shared/` is not a package: helpers both import. Each package evaluates
-    its own copy of a module, so keep them stateless; ai-usage's one reader per
-    process, on `globalThis`, is the exception. A helper only one package needs
-    lives in that package.
-    The build runs `tsc --noEmit` over all three against the pi that ships, so a
-    type error fails `just build`. npm dependencies go in the folder's
-    `package.json` + lockfile (`npm install --package-lock-only`; read via
-    `importNpmLock`, no hash to bump); never add packages the pi leaf links in
-    from pi itself (`mkExtensions` in `modules/programs/pi/default.nix`). `just
-dev-setup` links `node_modules` into the folder for editor types; then this
-    runs the tree without a rebuild:
-    `pi -ne -e builtin:codemode -e builtin:mcp -e modules/programs/pi/extensions/core -e modules/programs/pi/extensions/parent`.
+  - `shared/` is not a package: helpers both import. Every `core/` file and
+    `parent/index.ts` evaluates its own copy of each module it imports, so
+    module state is shared only among parent features. Keep `shared/` and
+    `core/lib/` stateless; ai-usage's one reader per process, on `globalThis`,
+    is the exception. A helper only one package needs lives in that package.
+
+  The build runs `tsc --noEmit` over all three against the pi that ships, so a
+  type error fails `just build`. npm dependencies go in
+  `modules/programs/pi/extensions/package.json` + lockfile, the npm root, never
+  in `core/` or `parent/package.json` (`npm install --package-lock-only`; read
+  via `importNpmLock`, no hash to bump); never add packages the pi leaf links
+  in from pi itself (`mkExtensions` in `modules/programs/pi/default.nix`).
+  `just dev-setup` links `node_modules` into the folder for editor types; then
+  this runs the tree without a rebuild:
+  `pi -ne -e builtin:codemode -e builtin:mcp -e modules/programs/pi/extensions/core -e modules/programs/pi/extensions/parent`.
 - **Third-party pi package**: `pkgs/pi-packages/` is one npm tree whose
   `package.json` holds the roster and the exact pins; the pi leaf lists each
   `$out/node_modules/<name>` as a local path in `settings.packages`, so pi

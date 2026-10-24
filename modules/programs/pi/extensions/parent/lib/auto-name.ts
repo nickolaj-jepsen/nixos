@@ -3,7 +3,7 @@
  * extensions can tell it from a name the user chose with `/name`.
  */
 
-// Module state starts empty after /reload: identity refills it at session_start.
+// Re-evaluated on /reload and cwd changes; the label's session_start refills it.
 const names = new Map<string, string>();
 
 /** Record `name` as the automatic name of `sessionId`; `undefined` forgets it. */

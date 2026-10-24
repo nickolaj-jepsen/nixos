@@ -101,8 +101,8 @@ const createUsageReader = () => {
 
 type UsageReader = ReturnType<typeof createUsageReader>;
 
-// On globalThis because core/ and parent/ each load their own copy of this module. The
-// only state shared across this harness's extension packages; keep it that way.
+// On globalThis because every extension entry evaluates its own copy of this module. The
+// only state shared across this harness's extension entries; keep it that way.
 const KEY = Symbol.for("fireproof.pi.ai-usage");
 
 /** The process's one ai-usage reader. */

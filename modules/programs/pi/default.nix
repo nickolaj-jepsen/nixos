@@ -10,7 +10,7 @@
 # paths, so pi never runs npm and `pi update` has nothing to reconcile.
 #
 # Own extensions live in ./extensions as two local pi packages: core/ loads in
-# every session, parent/ only where no subagent runs it. See docs/modules.md.
+# every session, parent/ never in a subagent child. See docs/modules.md.
 {
   fpLib,
   inputs,
@@ -225,8 +225,8 @@ in {
         };
         # Local paths: pi loads the Nix-built tree as-is (see
         # pkgs/pi-packages for how the npm dependencies get there).
-        # parent/ before core/ keeps the order the chained hooks ran in when
-        # every extension was one alphabetical package.
+        # parent/ first: chained before_agent_start and tool_result handlers run
+        # in package order, which sets the system prompt's section order.
         settings.packages =
           map packagePath thirdPartyPackages
           ++ [parentPath "${extensions}/core"];
