@@ -1,8 +1,8 @@
 /**
  * The review report: what the store can no longer back up. Deterministic, no
- * model call — staleness is re-checked against the tree, duplicates by token
- * overlap, and usefulness by recall counts. Review only recommends; nothing is
- * deleted or rewritten from here.
+ * model call — staleness is re-checked against the tree and duplicates found by
+ * token overlap. Review only recommends; nothing is deleted or rewritten from
+ * here.
  */
 import type { Entry, Scope } from "./store.ts";
 import { loadStore } from "./store.ts";
@@ -10,13 +10,7 @@ import { nearDuplicate } from "./search.ts";
 import { buildHotSection } from "./hot.ts";
 import { verify } from "./verify.ts";
 
-export type FindingKind =
-  | "stale"
-  | "unverified"
-  | "duplicate"
-  | "never-recalled"
-  | "orphan"
-  | "unparsed";
+export type FindingKind = "stale" | "unverified" | "duplicate" | "orphan";
 
 export type Finding = {
   kind: FindingKind;
@@ -30,14 +24,6 @@ export type Review = {
   findings: Finding[];
   hot: ReturnType<typeof buildHotSection>;
   skipped: string[];
-};
-
-const NEVER_RECALLED_AFTER_DAYS = 14;
-
-const daysSince = (iso: string | undefined) => {
-  if (!iso) return Number.POSITIVE_INFINITY;
-  const at = Date.parse(iso);
-  return Number.isNaN(at) ? Number.POSITIVE_INFINITY : (Date.now() - at) / 86_400_000;
 };
 
 /** Collects everything review can point at, cheapest checks first. */
@@ -83,18 +69,6 @@ export function review(scope: Scope): Review {
         note: "no citation this store can check",
       });
     }
-    if (
-      entry.recallCount === 0 &&
-      daysSince(entry.added) > NEVER_RECALLED_AFTER_DAYS &&
-      entry.priority < 60
-    ) {
-      findings.push({
-        kind: "never-recalled",
-        id: entry.id,
-        origin: entry.store.origin,
-        note: `never searched, added ${entry.added.slice(0, 10)}`,
-      });
-    }
   }
 
   const seen = new Set<string>();
@@ -125,19 +99,15 @@ export function renderReview(scope: Scope, report: Review): string {
     `Memory in ${scope.project?.root ?? scope.cwd}: ${report.entries} entr${report.entries === 1 ? "y" : "ies"}, hot section ${hot.used}/${hot.budget} chars, ${hot.cold} cold, ${hot.stale} stale.`,
   );
   if (report.findings.length === 0) {
-    lines.push(
-      "Nothing to clean up: every citation resolves, nothing duplicates, nothing sits unused.",
-    );
+    lines.push("Nothing to clean up: every citation resolves and nothing duplicates.");
     return lines.join("\n");
   }
-  const order: FindingKind[] = ["stale", "orphan", "duplicate", "unverified", "never-recalled"];
+  const order: FindingKind[] = ["stale", "orphan", "duplicate", "unverified"];
   const label: Record<FindingKind, string> = {
     stale: "Stale (citation no longer resolves)",
     orphan: "Orphaned (worktree removed)",
     duplicate: "Duplicates",
     unverified: "Unverifiable",
-    "never-recalled": "Long unused",
-    unparsed: "Unparsed files",
   };
   for (const kind of order) {
     const group = report.findings.filter((finding) => finding.kind === kind);

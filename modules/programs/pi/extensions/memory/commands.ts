@@ -5,7 +5,6 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
 import { openBrowser, type BrowserAction } from "./browser.ts";
-import { flushRecalls } from "./recall.ts";
 import { renderReview, review } from "./review.ts";
 import type { Sessions } from "./session.ts";
 import {
@@ -22,8 +21,7 @@ import {
   type Scope,
   type Store,
 } from "./store.ts";
-import { STATUS_MARK } from "./tools.ts";
-import { verify } from "./verify.ts";
+import { STATUS_MARK, verify } from "./verify.ts";
 
 type Target = "main" | "global";
 
@@ -103,7 +101,6 @@ export function registerCommands(pi: ExtensionAPI, sessions: Sessions) {
   }
 
   async function runReview(ctx: ExtensionCommandContext, scope: Scope) {
-    await flushRecalls();
     const text = renderReview(scope, review(scope));
     if (!ctx.hasUI) {
       ctx.ui.notify(text, "info");
@@ -171,28 +168,19 @@ export function registerCommands(pi: ExtensionAPI, sessions: Sessions) {
       await runReview(ctx, scope);
       return false;
     }
-    if (action.type === "promote") {
-      const entries = action.ids
-        .map((id) => find(scope, id))
-        .filter((entry): entry is Entry => entry !== undefined);
-      await promote(ctx, scope, entries, action.target);
-      return true;
-    }
-    const entry = find(scope, action.id);
-    if (!entry) return true;
-    if (action.type === "forget") await forget(ctx, entry);
-    else if (action.type === "edit") await edit(ctx, entry);
-    else await adjustPriority(ctx, entry, action.delta);
+    if (action.type === "promote") await promote(ctx, scope, [action.entry], action.target);
+    else if (action.type === "forget") await forget(ctx, action.entry);
+    else if (action.type === "edit") await edit(ctx, action.entry);
+    else await adjustPriority(ctx, action.entry, action.delta);
     return true;
   }
 
   /** The browser loop: each action returns control here, which reopens it. */
   async function browse(ctx: ExtensionCommandContext, scope: Scope) {
-    if (ctx.mode !== "tui") {
+    if (!ctx.hasUI) {
       await list(ctx, scope);
       return;
     }
-    await flushRecalls();
     for (;;) {
       const action = await openBrowser(ctx, scope, sessions.get(ctx).hot);
       if (!action || !(await apply(ctx, scope, action))) return;

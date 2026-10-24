@@ -2,15 +2,13 @@
  * The write gate. A memory earns its place by passing a test, not by being
  * plausible: it must not be something the repo already answers, its citations
  * must resolve right now, it must not restate an entry that exists (unless it
- * says which one it replaces), and its statement must be a rule rather than a
- * status report.
+ * says which one it replaces or differs from), and its statement must be a
+ * rule rather than a status report.
  *
  * The gate is code, not prose in a tool description. Claude Code's corpus shows
  * what the model does with prose.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { homedir } from "node:os";
+import { join } from "node:path";
 import type { Citation, Entry, Kind, Scope, Store } from "./store.ts";
 import { STATEMENT_MAX, freeId, loadStoreCached, slugify } from "./store.ts";
 import { coveredBy, nearDuplicate, overlap, tokenSet } from "./search.ts";
@@ -24,20 +22,17 @@ import { verify } from "./verify.ts";
 const STATUS_WORDS =
   /^\W*(status|wip|todo|tbd|next steps?|in progress|milestone)\b|\b(this session|as of (?:today|now)|currently working)\b/i;
 
-const CONTEXT_FILES = ["AGENTS.md", "AGENTS.MD", "AGENTS.override.md", "CLAUDE.md", "CLAUDE.MD"];
-
 export type SaveRequest = {
   statement: string;
   kind: Kind;
   priority: number;
-  tags: string[];
   whyNotDerivable: string;
   citations: Citation[];
   detail?: string;
   scope?: "project" | "global";
-  whyGlobal?: string;
   replaces?: string;
-  id?: string;
+  /** Id of an overlapping entry the save says is a different fact. */
+  distinctFrom?: string;
   sourceSession?: string;
 };
 
@@ -45,35 +40,13 @@ export type SaveOutcome =
   | { ok: true; entry: Entry; replaced: boolean }
   | { ok: false; error: string; candidates?: string[] };
 
-/** Context files pi already loads for this directory, nearest last. */
-function contextText(cwd: string): string {
-  const files: string[] = [];
-  let dir = cwd;
-  for (;;) {
-    for (const name of CONTEXT_FILES) files.push(join(dir, name));
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  for (const name of CONTEXT_FILES) files.push(join(homedir(), ".pi", "agent", name));
-  const seen = new Set<string>();
-  const parts: string[] = [];
-  for (const file of files) {
-    if (!existsSync(file) || seen.has(file)) continue;
-    seen.add(file);
-    try {
-      parts.push(readFileSync(file, "utf8"));
-    } catch {
-      // unreadable context file is not the memory's problem
-    }
-  }
-  return parts.join("\n");
-}
-
 const allEntries = (scope: Scope) => scope.visible.flatMap((store) => loadStoreCached(store));
 
-/** Validates `request` against the store it will land in and returns the entry to write. */
-export function planSave(request: SaveRequest, scope: Scope): SaveOutcome {
+/**
+ * Validates `request` against the store it will land in and returns the entry to write.
+ * `context` is the text pi already puts in the prompt; a statement it covers is rejected.
+ */
+export function planSave(request: SaveRequest, scope: Scope, context: string): SaveOutcome {
   const statement = request.statement.replace(/\s+/g, " ").trim();
   if (statement.length === 0) return { ok: false, error: "statement is empty" };
   if (statement.length > STATEMENT_MAX)
@@ -105,12 +78,7 @@ export function planSave(request: SaveRequest, scope: Scope): SaveOutcome {
     return {
       ok: false,
       error:
-        'this directory is not in a git worktree, so there is no project memory to write. Save machine-wide facts with scope: "global" and why_global, or start pi inside the repo.',
-    };
-  if (wantsGlobal && (request.whyGlobal ?? "").trim().length < 10)
-    return {
-      ok: false,
-      error: "why_global must say why this holds in every project, not just this one",
+        'this directory is not in a git worktree, so there is no project memory to write. Save machine-wide facts with scope: "global", or start pi inside the repo.',
     };
   const target: Store = wantsGlobal ? scope.global : (scope.project as Store);
 
@@ -134,18 +102,14 @@ export function planSave(request: SaveRequest, scope: Scope): SaveOutcome {
   }
 
   const draft: Entry = {
-    id: request.id ? slugify(request.id) : slugify(statement),
+    id: slugify(statement),
     kind: request.kind,
     priority: Math.max(0, Math.min(100, Math.round(request.priority))),
-    tags: request.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean),
     added: new Date().toISOString(),
     updated: new Date().toISOString(),
     sourceSession: request.sourceSession,
     whyNotDerivable: request.whyNotDerivable.trim(),
-    whyGlobal: request.scope === "global" ? request.whyGlobal?.trim() : undefined,
     citations: request.citations,
-    recallCount: replacing?.recallCount ?? 0,
-    lastRecalled: replacing?.lastRecalled,
     statement,
     detail: (request.detail ?? "").trim(),
     file: "",
@@ -160,31 +124,37 @@ export function planSave(request: SaveRequest, scope: Scope): SaveOutcome {
       error: `citation does not resolve now: ${broken.map((check) => check.note).join("; ")}`,
     };
 
-  const context = contextText(scope.cwd);
   if (context && coveredBy(statement, context))
     return {
       ok: false,
       error:
-        "AGENTS.md/CLAUDE.md already says this; that file is the durable channel and does not need a memory copy",
+        "the context files or rules in your prompt already say this; they are the durable channel and need no memory copy",
     };
 
-  const candidates = entries
+  const overlapping = entries
     .filter((entry) => entry !== replacing)
     .filter(
       (entry) =>
         nearDuplicate(draft, entry) ||
         overlap(tokenSet(statement), tokenSet(`${entry.statement} ${entry.detail}`)) >= 0.5,
-    )
-    .map((entry) => `${entry.id} (${entry.store.origin}): ${entry.statement}`);
-  if (candidates.length > 0 && !request.replaces)
+    );
+  if (request.distinctFrom && !entries.some((entry) => entry.id === request.distinctFrom))
+    return {
+      ok: false,
+      error: `no entry with id ${request.distinctFrom} in a store this session can see`,
+    };
+  const distinct = overlapping.some((entry) => entry.id === request.distinctFrom);
+  if (overlapping.length > 0 && !replacing && !distinct)
     return {
       ok: false,
       error:
-        "this overlaps an existing memory. Re-save with replaces: <id> to update it, or say in detail what makes this a different fact.",
-      candidates,
+        "this overlaps an existing memory. Re-save with replaces: <id> to update it, or distinct_from: <id> if it is a different fact.",
+      candidates: overlapping.map(
+        (entry) => `${entry.id} (${entry.store.origin}): ${entry.statement}`,
+      ),
     };
 
-  draft.id = replacing?.id ?? freeId(target, request.id ? slugify(request.id) : draft.id);
+  draft.id = replacing?.id ?? freeId(target, draft.id);
   draft.added = replacing?.added ?? draft.added;
   draft.file = join(target.dir, `${draft.id}.md`);
   return { ok: true, entry: draft, replaced: Boolean(replacing) };

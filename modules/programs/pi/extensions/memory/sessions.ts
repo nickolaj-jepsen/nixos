@@ -11,7 +11,7 @@
  * including ones `wt clean` already removed — because a discarded PoC is still
  * honest history even when its conclusions are not worth remembering.
  */
-import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
+import { open, readdir, readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -56,16 +56,16 @@ function identityCard(entry: unknown): Card | undefined {
   };
 }
 
-/** First line of a session file, which records its cwd and id. */
-function header(file: string): Header | undefined {
-  let fd: number | undefined;
+/** First line of a session file, which records its cwd, id and start time. */
+async function header(file: string): Promise<Header | undefined> {
+  const handle = await open(file, "r").catch(() => undefined);
+  if (!handle) return undefined;
   try {
-    fd = openSync(file, "r");
     const buffer = Buffer.alloc(8192);
-    const read = readSync(fd, buffer, 0, buffer.length, 0);
-    const newline = buffer.subarray(0, read).indexOf(0x0a);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const newline = buffer.subarray(0, bytesRead).indexOf(0x0a);
     const parsed = JSON.parse(
-      buffer.subarray(0, newline === -1 ? read : newline).toString("utf8"),
+      buffer.subarray(0, newline === -1 ? bytesRead : newline).toString("utf8"),
     ) as Header & {
       type?: string;
     };
@@ -73,7 +73,7 @@ function header(file: string): Header | undefined {
   } catch {
     return undefined;
   } finally {
-    if (fd !== undefined) closeSync(fd);
+    await handle.close();
   }
 }
 
@@ -88,35 +88,22 @@ export function repoCwds(cwd: string): string[] {
   return [main, join(worktreeRoot, basename(main)), join(main, ".claude", "worktrees")];
 }
 
-/** Every session file under the agent dir, excluding subagent task transcripts. */
-function sessionFiles(includeSubagents: boolean): string[] {
+/** Every session file under the agent dir, newest first, subagent transcripts only on request. */
+async function sessionFiles(includeSubagents: boolean): Promise<string[]> {
   const root = join(getAgentDir(), "sessions");
   const out: string[] = [];
-  const walk = (dir: string, depth: number) => {
-    let names: string[];
-    try {
-      names = readdirSync(dir);
-    } catch {
-      return;
-    }
-    for (const name of names) {
-      const path = join(dir, name);
-      if (name.endsWith(".jsonl")) {
-        if (includeSubagents || !dir.endsWith(`${join("", "tasks")}`)) out.push(path);
-        continue;
-      }
-      if (depth > 0 && !includeSubagents) continue;
-      let stat;
-      try {
-        stat = statSync(path);
-      } catch {
-        continue;
-      }
-      if (stat.isDirectory()) walk(path, depth + 1);
+  const walk = async (dir: string, depth: number) => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const path = join(dir, entry.name);
+      if (entry.name.endsWith(".jsonl")) out.push(path);
+      else if ((entry.isDirectory() || entry.isSymbolicLink()) && (depth === 0 || includeSubagents))
+        await walk(path, depth + 1);
     }
   };
-  walk(root, 0);
-  return out.sort();
+  await walk(root, 0);
+  // Basenames start with the session's ISO start time.
+  return out.sort((a, b) => basename(b).localeCompare(basename(a)));
 }
 
 const textOf = (content: unknown): string => {
@@ -133,10 +120,7 @@ const textOf = (content: unknown): string => {
 };
 
 /** The human-readable line of a transcript entry, if it has one worth searching. */
-function entryText(
-  entry: unknown,
-  includeToolResults: boolean,
-): { role: string; text: string; timestamp: string } | undefined {
+function entryText(entry: unknown): { role: string; text: string; timestamp: string } | undefined {
   const row = entry as {
     type?: string;
     timestamp?: string;
@@ -144,9 +128,7 @@ function entryText(
   };
   if (row?.type !== "message" || !row.message) return undefined;
   const role = row.message.role ?? "";
-  const wanted =
-    role === "user" || role === "assistant" || (includeToolResults && role === "toolResult");
-  if (!wanted) return undefined;
+  if (role !== "user" && role !== "assistant") return undefined;
   const text = textOf(row.message.content).trim();
   if (text.length < 8) return undefined;
   return { role, text, timestamp: row.timestamp ?? "" };
@@ -165,19 +147,18 @@ export type SessionQuery = {
   query: string;
   scope?: SessionScope;
   includeSubagents?: boolean;
-  includeToolResults?: boolean;
+  /** Skips sessions started before this ISO date. */
   since?: string;
   limit?: number;
   cwd: string;
   currentSessionFile?: string;
+  signal?: AbortSignal;
 };
 
-/** Ranked transcript excerpts matching `query`. */
-export function searchSessions(query: SessionQuery): {
-  hits: SessionHit[];
-  scanned: number;
-  skipped: number;
-} {
+/** Ranked transcript excerpts matching `query`, from the newest MAX_FILES sessions in scope. */
+export async function searchSessions(
+  query: SessionQuery,
+): Promise<{ hits: SessionHit[]; scanned: number; skipped: number }> {
   const terms = [
     ...new Set(
       query.query
@@ -188,8 +169,8 @@ export function searchSessions(query: SessionQuery): {
   ];
   if (terms.length === 0) return { hits: [], scanned: 0, skipped: 0 };
   const family = repoCwds(query.cwd);
-  const since = query.since ? Date.parse(query.since) : undefined;
-  const files = sessionFiles(query.includeSubagents ?? false).filter(
+  const since = Date.parse(query.since ?? "");
+  const files = (await sessionFiles(query.includeSubagents ?? false)).filter(
     (file) => file !== query.currentSessionFile,
   );
   const hits: SessionHit[] = [];
@@ -197,21 +178,23 @@ export function searchSessions(query: SessionQuery): {
   let scanned = 0;
   let skipped = 0;
 
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
+    if (query.signal?.aborted) break;
     if (scanned >= MAX_FILES) {
-      skipped = files.length - scanned;
+      skipped += files.length - index;
       break;
     }
-    const head = header(file);
+    const head = await header(file);
     if (!head?.cwd) continue;
     if ((query.scope ?? "repo") === "repo" && !within(head.cwd, family)) continue;
+    if (!Number.isNaN(since) && !(Date.parse(head.timestamp ?? "") >= since)) continue;
     let raw: string;
     try {
-      if (statSync(file).size > MAX_FILE_BYTES) {
+      if ((await stat(file)).size > MAX_FILE_BYTES) {
         skipped++;
         continue;
       }
-      raw = readFileSync(file, "utf8");
+      raw = await readFile(file, "utf8");
     } catch {
       skipped++;
       continue;
@@ -240,12 +223,8 @@ export function searchSessions(query: SessionQuery): {
       } catch {
         continue;
       }
-      const line = entryText(entry, query.includeToolResults ?? false);
+      const line = entryText(entry);
       if (!line) continue;
-      if (since !== undefined) {
-        const at = Date.parse(line.timestamp);
-        if (Number.isNaN(at) || at < since) continue;
-      }
       const flat = line.text.replace(/\s+/g, " ").toLowerCase();
       const matched = terms.filter((term) => flat.includes(term));
       if (matched.length === 0) continue;
@@ -271,8 +250,7 @@ export function searchSessions(query: SessionQuery): {
       : "";
     const aboutLower = about.toLowerCase();
     const aboutMatched = terms.filter((term) => aboutLower.includes(term));
-    const recent = since === undefined || Date.parse(card?.timestamp ?? "") >= since;
-    if (card && aboutMatched.length > 0 && recent) {
+    if (card && aboutMatched.length > 0) {
       found.push({
         session,
         cwd: head.cwd,

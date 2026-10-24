@@ -1,7 +1,6 @@
 /**
- * Lexical recall over a deliberately small store: token overlap, weighted by
- * where the token appears, with a phrase bonus. No embeddings and no persisted
- * index — a few dozen markdown files rebuild in milliseconds.
+ * Lexical overlap for the save gate and review: token sets over a deliberately
+ * small store. No embeddings and no persisted index.
  */
 import type { Entry } from "./store.ts";
 
@@ -23,48 +22,6 @@ export function tokenize(text: string): string[] {
 
 export const tokenSet = (text: string) => new Set(tokenize(text));
 
-/** Fields searched, with how much a hit in each one counts. */
-const FIELDS: { weight: number; of: (entry: Entry) => string }[] = [
-  { weight: 3, of: (e) => e.id.replace(/-/g, " ") },
-  { weight: 3, of: (e) => e.tags.join(" ") },
-  { weight: 2.5, of: (e) => e.statement },
-  { weight: 1, of: (e) => e.detail },
-  { weight: 1, of: (e) => e.citations.map((c) => c.value).join(" ") },
-  { weight: 0.7, of: (e) => e.whyNotDerivable },
-];
-
-export type Ranked = { entry: Entry; score: number };
-
-/** Entries matching `query`, best first; an empty query returns nothing. */
-export function rank(entries: Entry[], query: string): Ranked[] {
-  const tokens = [...new Set(tokenize(query))];
-  if (tokens.length === 0) return [];
-  const phrase = query.toLowerCase().trim();
-  const ranked: Ranked[] = [];
-  for (const entry of entries) {
-    const fields = FIELDS.map((field) => ({
-      weight: field.weight,
-      set: tokenSet(field.of(entry)),
-    }));
-    let score = 0;
-    for (const token of tokens) {
-      let hit = 0;
-      for (const field of fields) if (field.set.has(token)) hit = Math.max(hit, field.weight);
-      if (hit > 0) score += hit;
-      else if (tokens.length > 1) score -= 0.5; // partial matches rank below complete ones
-    }
-    if (
-      phrase.length > 2 &&
-      (entry.statement.toLowerCase().includes(phrase) ||
-        entry.id.includes(phrase.replace(/\s+/g, "-")))
-    ) {
-      score += 4;
-    }
-    if (score > 0) ranked.push({ entry, score: score + entry.priority / 1000 });
-  }
-  return ranked.sort((a, b) => b.score - a.score || b.entry.priority - a.entry.priority);
-}
-
 /** Jaccard overlap of two token sets. */
 export function overlap(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
@@ -84,8 +41,8 @@ export function containment(a: Set<string>, b: Set<string>): number {
 /** Whether two entries say substantially the same thing. */
 export function nearDuplicate(a: Entry, b: Entry): boolean {
   if (a.id === b.id) return true;
-  const left = tokenSet(`${a.statement} ${a.tags.join(" ")}`);
-  const right = tokenSet(`${b.statement} ${b.tags.join(" ")}`);
+  const left = tokenSet(a.statement);
+  const right = tokenSet(b.statement);
   return (
     overlap(left, right) >= 0.6 ||
     containment(left, right) >= 0.9 ||

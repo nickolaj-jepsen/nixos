@@ -9,8 +9,7 @@
  * a stale entry is left out of the hot section until a human or agent fixes it.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, existsSync, readdirSync, readFileSync } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { Citation, Entry } from "./store.ts";
@@ -18,6 +17,8 @@ import type { Citation, Entry } from "./store.ts";
 export type Status = "verified" | "stale" | "unverified";
 export type CitationCheck = { citation: Citation; status: Status; note: string };
 export type Verification = { status: Status; checks: CitationCheck[] };
+
+export const STATUS_MARK: Record<Status, string> = { verified: "✓", stale: "✗", unverified: "?" };
 
 /** Absolute path of a citation; a relative one in a rootless (global) store has no anchor. */
 const resolve = (entry: Entry, path: string): string | undefined =>
@@ -43,22 +44,22 @@ function onPath(command: string): boolean {
   return false;
 }
 
-function findSession(value: string): string | undefined {
+/** Whether `value`, a session file or a bare session id, names a transcript on disk. */
+function sessionExists(value: string): boolean {
+  if (existsSync(value)) return true;
+  if (!/^[\w-]{8,}$/.test(value)) return false;
+  // Parent transcripts are `<project>/<timestamp>_<id>.jsonl`.
   const root = join(getAgentDir(), "sessions");
-  if (existsSync(value)) return value;
   try {
-    const found = execFileSync(
-      "find",
-      [root, "-maxdepth", "3", "-name", `${value.replace(/[^\w.-]/g, "")}*`],
-      {
-        encoding: "utf8",
-        timeout: 3_000,
-        stdio: ["ignore", "pipe", "ignore"],
-      },
-    ).trim();
-    return found.split("\n")[0] || undefined;
+    return readdirSync(root).some((project) => {
+      try {
+        return readdirSync(join(root, project)).some((name) => name.endsWith(`_${value}.jsonl`));
+      } catch {
+        return false;
+      }
+    });
   } catch {
-    return undefined;
+    return false;
   }
 }
 
@@ -92,8 +93,11 @@ function check(citation: Citation, entry: Entry): CitationCheck {
               note: `${value} in ${count} file${count === 1 ? "" : "s"}`,
             }
           : { citation, status: "stale", note: `${value} matches nothing in the tree` };
-      } catch {
-        return { citation, status: "stale", note: `${value} matches nothing in the tree` };
+      } catch (error) {
+        // Exit 1 is git grep's "no match"; a timeout or a broken checkout proves nothing.
+        return (error as { status?: number }).status === 1
+          ? { citation, status: "stale", note: `${value} matches nothing in the tree` }
+          : { citation, status: "unverified", note: `git grep for ${value} failed` };
       }
     }
     case "snippet": {
@@ -115,11 +119,11 @@ function check(citation: Citation, entry: Entry): CitationCheck {
         return { citation, status: "unverified", note: "not a single command" };
       return onPath(word)
         ? { citation, status: "verified", note: `${word} is installed` }
-        : { citation, status: "stale", note: `${word} is not on PATH` };
+        : // A devshell tool is absent whenever pi starts outside direnv.
+          { citation, status: "unverified", note: `${word} is not on PATH here` };
     }
     case "session": {
-      const found = findSession(value);
-      return found
+      return sessionExists(value)
         ? { citation, status: "verified", note: "session transcript exists" }
         : { citation, status: "unverified", note: "session transcript not found" };
     }

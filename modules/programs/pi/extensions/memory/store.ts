@@ -53,15 +53,11 @@ export type Entry = {
   id: string;
   kind: Kind;
   priority: number;
-  tags: string[];
   added: string;
   updated: string;
   sourceSession?: string;
   whyNotDerivable: string;
-  whyGlobal?: string;
   citations: Citation[];
-  recallCount: number;
-  lastRecalled?: string;
   /** First body paragraph, one line; what the hot section shows. */
   statement: string;
   /** Rest of the body. */
@@ -216,15 +212,11 @@ const OWNED = new Set([
   "id",
   "kind",
   "priority",
-  "tags",
   "added",
   "updated",
   "source_session",
   "why_not_derivable",
-  "why_global",
   "citations",
-  "recall_count",
-  "last_recalled",
 ]);
 
 function citationsOf(v: FrontmatterValue | undefined): Citation[] {
@@ -265,15 +257,11 @@ export function parseEntry(text: string, file: string, store: Store): Entry | un
     id: str(data.id) ?? basename(file, ".md"),
     kind: kind && KINDS.includes(kind) ? kind : "reference",
     priority: Math.max(0, Math.min(100, num(data.priority, 50))),
-    tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
     added,
     updated: str(data.updated) ?? added,
     sourceSession: str(data.source_session),
     whyNotDerivable: str(data.why_not_derivable) ?? "",
-    whyGlobal: str(data.why_global),
     citations: citationsOf(data.citations),
-    recallCount: num(data.recall_count, 0),
-    lastRecalled: str(data.last_recalled),
     statement,
     detail,
     file,
@@ -290,15 +278,11 @@ export function renderEntry(entry: Entry): string {
       id: entry.id,
       kind: entry.kind,
       priority: entry.priority,
-      tags: entry.tags,
       added: entry.added,
       updated: entry.updated,
       source_session: entry.sourceSession,
       why_not_derivable: entry.whyNotDerivable,
-      why_global: entry.whyGlobal,
       citations: entry.citations,
-      recall_count: entry.recallCount,
-      last_recalled: entry.lastRecalled ?? null,
       ...entry.extra,
     },
     body,

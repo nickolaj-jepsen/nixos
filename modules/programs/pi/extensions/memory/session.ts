@@ -24,6 +24,8 @@ export type SessionState = {
   hot: HotIndex;
   injected: string;
   subagent: boolean;
+  /** Context files and appended rules of the last run; empty before the first one. */
+  contextText: string;
 };
 
 export type Sessions = ReturnType<typeof createSessions>;
@@ -44,7 +46,7 @@ export function createSessions() {
     const scope = resolveScope(ctx.cwd);
     const hot = buildHot(scope);
     const subagent = isSubagentSession(ctx);
-    const state: SessionState = { scope, hot, injected: hot.text, subagent };
+    const state: SessionState = { scope, hot, injected: hot.text, subagent, contextText: "" };
     states.set(id, state);
     return state;
   };
