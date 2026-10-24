@@ -255,15 +255,28 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
         if (index > 0) column += visibleWidth(separator);
         const segmentWidth = visibleWidth(segment.text);
         if (segment.id && segment.action) {
+          const pad = segment.hitPad ?? 0;
           controls.push({
-            x0: column,
-            x1: column + segmentWidth,
+            x0: column - pad,
+            x1: column + segmentWidth + pad,
             id: segment.id,
             action: segment.action,
           });
         }
         column += segmentWidth;
       });
+      // A padded target must not swallow its neighbour: two of them split the gap
+      // between them, so a click near the border, or the pointer's hover, still
+      // picks the control it is closest to.
+      for (let i = 1; i < controls.length; i++) {
+        const left = controls[i - 1];
+        const right = controls[i];
+        if (left && right && left.x1 > right.x0) {
+          const middle = Math.floor((left.x1 + right.x0) / 2);
+          left.x1 = middle;
+          right.x0 = middle;
+        }
+      }
       if (message) {
         return {
           left: `${lead}${message.renderInBorder(room)}${theme.fg("dim", hint)} `,

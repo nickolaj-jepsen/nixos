@@ -60,6 +60,10 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState) => {
       return openModels(ctx);
     }) as Action,
     effort: appAction(state, "app.thinking.cycle", "shift+tab"),
+    // The two chips on the editor's top border. Both flip a flag pi already owns,
+    // so ctrl+o and alt+t keep their meaning and the click reads as one more key.
+    tools: ((ctx) => ctx.ui.setToolsExpanded(!ctx.ui.getToolsExpanded())) as Action,
+    thinking: appAction(state, "app.thinking.toggle", "alt+t"),
     backgroundTasks: command(state, pi, "/tasks"),
     dismissBackgroundTasks: closeOverlay,
     agents: command(state, pi, "/agents"),

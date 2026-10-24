@@ -30,7 +30,13 @@ export default function (pi: ExtensionAPI) {
         hidden,
         border,
         status,
-        measurementLevels(state, footer.measurements()),
+        measurementLevels(state, footer.measurements(), {
+          tools: actions.tools,
+          thinking: actions.thinking,
+          // pi owns this flag and alt+t writes it; asking costs a settings clone per
+          // border render, which the measurements beside it already outweigh.
+          thinkingOpen: !pi.getSettings().hideThinkingBlock,
+        }),
       ),
   });
 

@@ -209,6 +209,11 @@ in {
           theme = "fireproof";
           # Keeps the version and key hints; drops the loaded-resource listing.
           quietStartup = "header";
+          # One line per reasoning run instead of the whole block, and the resting
+          # state for the thinking chip on the editor border. alt+t or a click still
+          # opens it for a session, but a value written that way is merged away at
+          # the next launch, like every other setting here.
+          hideThinkingBlock = true;
           # `/tree` opens on my prompts; ctrl+d returns to the default view and
           # ctrl+a shows every entry.
           treeFilterMode = "user-only";
@@ -482,6 +487,16 @@ in {
         "app.tree.filter.noTools" = [];
         # ctrl+l is the labelled model picker (extensions/model-labels.ts).
         "app.tree.filter.labeledOnly" = [];
+        # Unbound by pi: the granular scroll between pageUp and the prompt
+        # jumps. alt+<page/arrow> stays clear of zellij's plain alt+<letter>.
+        "tui.altScreen.halfPageUp" = "alt+pageUp";
+        "tui.altScreen.halfPageDown" = "alt+pageDown";
+        "tui.altScreen.lineUp" = "alt+shift+up";
+        "tui.altScreen.lineDown" = "alt+shift+down";
+        # ctrl+end/ctrl+home are a two-hand reach; a list replaces the default, so
+        # keep it. alt+end is also what the scrolling pill advertises.
+        "tui.altScreen.top" = ["ctrl+home" "alt+home"];
+        "tui.altScreen.bottom" = ["ctrl+end" "alt+end"];
         # Unbound by pi. Plain alt+<key> belongs to zellij's default keybinds.
         "app.session.new" = "alt+shift+n";
         "app.session.resume" = "alt+shift+r";

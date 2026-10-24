@@ -9,11 +9,11 @@
 }: let
   hex = name: "#${colors.${name}}";
 
-  # Fill for tinted panels: `name` mixed 20% over `bg`. That lands a panel just
-  # under `ui`'s luminance, so a hue as bright as flexoki `green` reads as a
-  # grey-green surface instead of a block of color; the container step
-  # `accentContainer` uses is for small elements with text on top.
-  tint = name: let
+  # Fill for tinted panels: `name` mixed `pct` percent over `bg`. At 20 the panel
+  # lands just under `ui`'s luminance, so a hue as bright as flexoki `green`
+  # reads as a grey-green surface instead of a block of color; the container
+  # step `accentContainer` uses is for small elements with text on top.
+  tint = pct: name: let
     # Nix has no hex parser; TOML's 0x integer literal is the shortest way in.
     parse = s: (builtins.fromTOML "v = 0x${s}").v;
     channel = shift: n: builtins.bitAnd (builtins.div n shift) 255;
@@ -21,7 +21,7 @@
       hue = channel shift (parse colors.${name});
       base = channel shift (parse colors.bg);
     in
-      lib.strings.fixedWidthString 2 "0" (lib.toHexString (builtins.div (hue * 20 + base * 80) 100));
+      lib.strings.fixedWidthString 2 "0" (lib.toHexString (builtins.div (hue * pct + base * (100 - pct)) 100));
   in "#${mix 65536}${mix 256}${mix 1}";
 in {
   "$schema" = "https://pi.dev/schemas/theme.schema.json";
@@ -53,11 +53,14 @@ in {
     customMessageText = hex "fgAlt";
     customMessageLabel = hex "accent";
 
-    # The only hue-coded box: a finished run reads green at panel brightness.
+    # The only hue-coded box. A finished run sits at half the tint an error does:
+    # green is the common case and must not out-shout the prose beside it, while a
+    # failed tool is the one row worth looking at twice.
     toolPendingBg = hex "ui";
-    toolSuccessBg = tint "green";
-    toolErrorBg = tint "red";
-    toolTitle = hex "fg";
+    toolSuccessBg = tint 10 "green";
+    toolErrorBg = tint 20 "red";
+    # Dimmer than body text: a tool call is scaffolding around the answer.
+    toolTitle = hex "fgAlt";
     toolOutput = hex "fgAlt";
 
     mdHeading = hex "yellow";
