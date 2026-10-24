@@ -17,7 +17,6 @@ import { spawn } from "node:child_process";
 import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import type { Model, UserMessage } from "@earendil-works/pi-ai";
 import { CustomEditor, type Theme } from "@earendil-works/pi-coding-agent";
 import type {
   ExtensionAPI,
@@ -50,13 +49,15 @@ import {
 } from "./lib/spellfix/hooks/core.ts";
 import type { Found, Verdict } from "./lib/spellfix/hooks/core.ts";
 import type { Extra, Miss } from "./lib/spellfix/types/index.d.ts";
-import { recordSideCall } from "./lib/usage-ledger.ts";
 import { providePromptEditor, withdrawPromptEditor } from "./lib/prompt-editor.ts";
+import { sideCall } from "./lib/side-call.ts";
 
 const HUNSPELL = process.env.PI_SPELLFIX_HUNSPELL || "hunspell";
 const DICTIONARIES = process.env.PI_SPELLFIX_DICTS || "en_US";
 const PERSONAL = process.env.PI_SPELLFIX_PERSONAL || "";
-const MODEL = process.env.PI_SPELLFIX_MODEL || "";
+// Not vm/flash: its reasoning DeepSeek would spend replyBudget thinking, and the
+// picker waits on the call. Haiku keeps the one batch call cheap.
+const MODEL = "anthropic/claude-haiku-5-5";
 
 const CHECK_DELAY_MS = 300;
 const SUGGESTIONS = 5;
@@ -83,7 +84,6 @@ let checkId = 0;
 let sessionGen = 0;
 let suspended = false;
 let warnedHunspell = false;
-let warnedModel = false;
 
 /**
  * The last model answer, kept for reopening the picker on the same draft
@@ -218,20 +218,6 @@ async function removeWords(gen: number, ctx: ExtensionContext, words: readonly s
   }
 }
 
-function pickModel(ctx: ExtensionContext): Model<string> | undefined {
-  if (MODEL) {
-    const slash = MODEL.indexOf("/");
-    const found =
-      slash > 0 ? ctx.modelRegistry.find(MODEL.slice(0, slash), MODEL.slice(slash + 1)) : undefined;
-    if (found) return found;
-    if (!warnedModel) {
-      warnedModel = true;
-      toast(ctx, `spellfix: PI_SPELLFIX_MODEL=${MODEL} is not a known model`, "warning");
-    }
-  }
-  return ctx.model;
-}
-
 type Answer = { verdicts: Map<string, Verdict>; found: Found[] };
 
 async function askModel(
@@ -241,52 +227,22 @@ async function askModel(
   flagged: readonly Miss[],
   signal: AbortSignal,
 ): Promise<Answer | undefined> {
-  const model = pickModel(ctx);
-  if (!model) {
-    toast(ctx, "spellfix: no model selected", "warning");
-    return undefined;
-  }
+  if (!api) return undefined;
   const distinct = new Set(flagged.map((m) => m.word));
-  const message: UserMessage = {
-    role: "user",
-    content: [{ type: "text", text: checkPrompt(text, flagged) }],
-    timestamp: Date.now(),
-  };
-  try {
-    const response = await ctx.modelRegistry
-      .streamSimple(
-        model,
-        { systemPrompt: CHECK, messages: [message] },
-        {
-          maxTokens: replyBudget(distinct.size),
-          // Haiku drops it; the ctx.model fallback may honour it.
-          temperature: 0,
-          timeoutMs: 20_000,
-          signal,
-          // The opencode gateway, where the ctx.model fallback may route, rejects
-          // a request without the session header pi derives from this.
-          sessionId: ctx.sessionManager.getSessionId(),
-        },
-      )
-      .result();
-    if (api) recordSideCall(api, "spellfix", response);
-    if (response.stopReason === "error" || response.stopReason === "aborted") {
-      throw new Error(response.errorMessage ?? response.stopReason);
-    }
-    const reply = response.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("\n");
-    return parseReply(reply, text, distinct);
-  } catch (error) {
-    // Closing the picker aborts the call on purpose; a replaced session has no UI left.
-    if (signal.aborted || gen !== sessionGen) return undefined;
-    toast(
-      ctx,
-      `spellfix: ${model.provider}/${model.id} failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      "warning",
-    );
-    return undefined;
-  }
+  const reply = await sideCall(api, ctx, {
+    source: "spellfix",
+    system: CHECK,
+    prompt: checkPrompt(text, flagged),
+    model: MODEL,
+    maxTokens: replyBudget(distinct.size),
+    timeoutMs: 20_000,
+    signal,
+  });
+  if ("text" in reply) return parseReply(reply.text, text, distinct);
+  // Closing the picker aborts the call on purpose; a replaced session has no UI left.
+  if (signal.aborted || gen !== sessionGen) return undefined;
+  toast(ctx, `spellfix: ${MODEL} failed: ${reply.error}`, "warning");
+  return undefined;
 }
 
 /** The words the editor underlines: by word, not offset, so every occurrence is marked. */
@@ -914,7 +870,6 @@ export default function (pi: ExtensionAPI) {
     unadded.clear();
     batch = undefined;
     warnedHunspell = false;
-    warnedModel = false;
     suspended = false;
     if (ctx.mode !== "tui") return;
     // hunspell neither creates a missing personal dictionary nor saves into one.

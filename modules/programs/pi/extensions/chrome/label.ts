@@ -27,14 +27,7 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { setAutoName } from "../lib/auto-name.ts";
-import {
-  catalogModel,
-  firstRequest,
-  isAcknowledgement,
-  NAME_MODEL,
-  oneLine,
-  stripRequest,
-} from "../lib/naming.ts";
+import { firstRequest, isAcknowledgement, oneLine, stripRequest } from "../lib/naming.ts";
 import {
   ask as askSidecar,
   buildPrompt,
@@ -46,7 +39,6 @@ import {
   type SidecarUpdate,
   type TurnState,
 } from "../lib/sidecar.ts";
-import { recordSideCall } from "../lib/usage-ledger.ts";
 import { trackUserWait, waitingOnUser } from "../lib/user-wait.ts";
 import type { ChromeState } from "./state.ts";
 
@@ -111,7 +103,6 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
   let busy = false;
   // Aborted at session_shutdown, after which every ctx and pi call throws.
   let inflight: AbortController | undefined;
-  let warnedModel = false;
   let label: Label | undefined;
   let meta: Meta = {};
   let calls = 0;
@@ -196,27 +187,6 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
           ? "needs you"
           : "";
 
-  /**
-   * The model to ask. A missing one is a warning, not a reason to spend the
-   * session's own model: an automatic fallback would name the session on every
-   * turn at roughly thirty times the price of the one it was told to use.
-   */
-  const model = (ctx: ExtensionContext, manual: boolean) => {
-    const configured = process.env.PI_IDENTITY_MODEL || NAME_MODEL;
-    const found = catalogModel(ctx, configured);
-    if (found) return found;
-    if (!warnedModel) {
-      warnedModel = true;
-      ctx.ui.notify(
-        `identity: ${configured} is not in the catalog${
-          manual ? ", using the active model" : ", not labeling with the active model"
-        }`,
-        "warning",
-      );
-    }
-    return manual ? ctx.model : undefined;
-  };
-
   /** Tells other extensions what the sidecar knows now; `asked` is false when no call was made. */
   const announce = (moment: Moment, asked: boolean) => {
     const update: SidecarUpdate = {
@@ -299,8 +269,6 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
     // A settled turn is one call no matter how quickly it followed the last one;
     // the debounce exists for prompts typed in bursts.
     if (!manual && moment === "start" && Date.now() - lastCallAt < MIN_CALL_GAP_MS) return;
-    const chosen = model(ctx, manual);
-    if (!chosen) return skip();
 
     const controller = new AbortController();
     inflight = controller;
@@ -317,22 +285,13 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
         settle: moment === "settle",
       });
       if (controller.signal.aborted) return;
-      const response = await askSidecar(ctx, chosen, prompt, controller.signal);
+      const reply = await askSidecar(pi, ctx, prompt, moment, controller.signal);
       if (controller.signal.aborted) return;
-      // The ask is the half that runs once per turn, so /cost shows it on its own.
-      recordSideCall(pi, moment === "settle" ? "session ask" : "session label", response);
-      // Counted before validation: a reply that failed or came back empty was billed all the same.
+      // Counted on any outcome, so a model that keeps failing still meets CALL_CAP.
       calls += 1;
-      if (response.stopReason === "error" || response.stopReason === "aborted") {
-        throw new Error(response.errorMessage ?? response.stopReason);
-      }
-      const text = response.content
-        .flatMap((block) => (block.type === "text" ? [block.text] : []))
-        .join("\n");
-      const fields = parseFields(text);
-      if (Object.keys(fields).length === 0) {
-        throw new Error(`no fields in reply (${response.stopReason})`);
-      }
+      if ("error" in reply) throw new Error(reply.error);
+      const fields = parseFields(reply.text);
+      if (Object.keys(fields).length === 0) throw new Error("no fields in reply");
       failures = 0;
       apply(fields, moment);
     } catch (error) {

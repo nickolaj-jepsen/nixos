@@ -13,9 +13,9 @@
  */
 import { execFile } from "node:child_process";
 import { basename } from "node:path";
-import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { NAME_TIMEOUT_MS, oneLine, requests, touchedFiles } from "./naming.ts";
+import { sideCall } from "./side-call.ts";
 
 export type Fields = {
   /** Absent means the work has not moved on; the current label stands. */
@@ -236,37 +236,23 @@ export const parseFields = (reply: string): Fields => {
   return fields;
 };
 
-/** Asks the sidecar; the caller owns the abort signal, the timeout and the ledger entry. */
-export const ask = async (
+/** Asks the sidecar about `prompt`; the caller owns the abort signal. */
+export const ask = (
+  pi: ExtensionAPI,
   ctx: ExtensionContext,
-  model: Model<any>,
   prompt: string,
+  moment: SidecarUpdate["moment"],
   signal: AbortSignal,
-): Promise<AssistantMessage> =>
-  ctx.modelRegistry
-    .streamSimple(
-      model,
-      {
-        systemPrompt: SYSTEM,
-        messages: [
-          {
-            role: "user",
-            content: [{ type: "text", text: prompt }],
-            timestamp: Date.now(),
-          },
-        ],
-      },
-      {
-        // Seven short lines, and nothing worth thinking about: a model that reasons
-        // here spends the whole budget on it and returns no text at all.
-        maxTokens: MAX_TOKENS,
-        reasoning: "minimal",
-        temperature: 0,
-        timeoutMs: NAME_TIMEOUT_MS,
-        // The opencode gateway routes on `x-opencode-session`, which pi derives
-        // from this; without it the request fails with 400.
-        sessionId: ctx.sessionManager.getSessionId(),
-        signal,
-      },
-    )
-    .result();
+) =>
+  sideCall(pi, ctx, {
+    // The ask is the half that runs once per turn, so /cost shows it on its own.
+    source: moment === "settle" ? "session ask" : "session label",
+    system: SYSTEM,
+    prompt,
+    maxTokens: MAX_TOKENS,
+    // Seven short lines, and nothing worth thinking about: a model that reasons
+    // here spends the whole budget on it and returns no text at all.
+    reasoning: "minimal",
+    timeoutMs: NAME_TIMEOUT_MS,
+    signal,
+  });

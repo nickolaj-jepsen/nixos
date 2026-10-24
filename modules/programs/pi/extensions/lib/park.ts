@@ -15,8 +15,8 @@ import { execFile } from "node:child_process";
 import { readdirSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { NAME_MAX_TOKENS, NAME_MODEL, namingModel } from "./naming.ts";
-import { recordSideCall } from "./usage-ledger.ts";
+import { NAME_MAX_TOKENS } from "./naming.ts";
+import { sideCall } from "./side-call.ts";
 import { status, wt, type RepoStatus, type Worktree } from "./wt.ts";
 
 const COMMIT_MS = 5_000;
@@ -183,8 +183,6 @@ const writeMessage = async (
   tree: Worktree,
 ): Promise<string> => {
   const fallback = `wip: ${pi.getSessionName() ?? basename(tree.path)}`;
-  const model = namingModel(ctx, process.env.PI_WT_COMMIT_MODEL || NAME_MODEL);
-  if (!model) return fallback;
   const [stat, diff] = await Promise.all([
     git(["diff", "--cached", "--stat"], tree.path),
     git(["diff", "--cached"], tree.path),
@@ -196,36 +194,19 @@ const writeMessage = async (
     "diff:",
     diff.slice(0, DIFF_CHARS),
   ].join("\n");
-  try {
-    const response = await ctx.modelRegistry
-      .streamSimple(
-        model,
-        {
-          systemPrompt: MESSAGE_SYSTEM,
-          messages: [
-            { role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() },
-          ],
-        },
-        {
-          maxTokens: NAME_MAX_TOKENS,
-          temperature: 0,
-          timeoutMs: COMMIT_MS,
-          sessionId: ctx.sessionManager.getSessionId(),
-        },
-      )
-      .result();
-    recordSideCall(pi, "worktree commit", response);
-    if (response.stopReason === "error" || response.stopReason === "aborted") return fallback;
-    const reply = response.content
-      .flatMap((block) => (block.type === "text" ? [block.text] : []))
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .replace(/^["'`]+|["'`.]+$/g, "")
-      .trim();
-    return reply === "" ? fallback : reply.slice(0, 72);
-  } catch {
-    return fallback;
-  }
+  const reply = await sideCall(pi, ctx, {
+    source: "worktree commit",
+    system: MESSAGE_SYSTEM,
+    prompt,
+    maxTokens: NAME_MAX_TOKENS,
+    timeoutMs: COMMIT_MS,
+  });
+  if ("error" in reply) return fallback;
+  const message = reply.text
+    .replace(/\s+/g, " ")
+    .replace(/^["'`]+|["'`.]+$/g, "")
+    .trim();
+  return message === "" ? fallback : message.slice(0, 72);
 };
 
 /** What became of a parked worktree, in one line, and how loud to say it. */

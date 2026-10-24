@@ -89,8 +89,8 @@ const META = ".store.json";
 
 type StoreMeta = { root: string; main?: string; kind: "main" | "worktree"; created: string };
 
-/** Root of all memory stores; `PI_MEMORY_DIR` overrides it. */
-export const memoryDir = () => process.env.PI_MEMORY_DIR ?? join(getAgentDir(), "memory");
+/** Root of all memory stores, under the agent dir. */
+export const memoryDir = () => join(getAgentDir(), "memory");
 
 const real = (path: string) => {
   try {

@@ -20,18 +20,20 @@
  * also downgrades a link's allow on path and external-directory asks to a
  * defer, so those are not sent to a model at all.
  */
-import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
+import type { Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { catalogModel, NAME_MODEL, oneLine, requests } from "./lib/naming.ts";
+import { oneLine, requests } from "./lib/naming.ts";
 import { createRouted } from "./lib/routed-model.ts";
+import { sideCall } from "./lib/side-call.ts";
 import { gitContext } from "./lib/sidecar.ts";
-import { recordSideCall } from "./lib/usage-ledger.ts";
 
 const LINK = "guardian";
 // The permission package's process-global service map, keyed by session id.
 const SERVICES = Symbol.for("@gotgenes/pi-permission-system:session-services");
 const READY_CHANNEL = "permissions:ready";
 
+// Not vm/flash: its last stage is Claude, which must not check a Claude actor.
+const CHECK_MODEL = "opencode-go/deepseek-v4.1-flash";
 // Second opinions, each from another lineage than the model that made the call.
 const CONFIRM_MODEL = "anthropic/claude-sonnet-5-5";
 const CLAUDE_CONFIRM_MODEL = "opencode-go/kimi-k3.1-pro";
@@ -69,7 +71,7 @@ type Verdict = { kind: "allow" } | { kind: "defer" };
 const judgesFor = (actor: Model<any> | undefined) => {
   if (!actor || PRIVATE_PROVIDERS.has(actor.provider)) return undefined;
   const claude = actor.provider === "anthropic" || /claude/i.test(actor.id);
-  return { check: NAME_MODEL, confirm: claude ? CLAUDE_CONFIRM_MODEL : CONFIRM_MODEL };
+  return { check: CHECK_MODEL, confirm: claude ? CLAUDE_CONFIRM_MODEL : CONFIRM_MODEL };
 };
 
 /** The slice of the package's ask details this link reads; the rest is ignored. */
@@ -102,10 +104,7 @@ type PermissionsService = {
 const outOfReach = (surface: string) =>
   surface.startsWith("path") || surface.startsWith("external_directory");
 
-const verdictOf = (response: AssistantMessage) => {
-  const text = response.content
-    .flatMap((block) => (block.type === "text" ? [block.text] : []))
-    .join("\n");
+const verdictOf = (text: string) => {
   const verdict = /^[\s>*#-]*\**verdict\**\s*:\s*\**\s*(allow|ask)\b/im.exec(text)?.[1];
   const reason = /^[\s>*#-]*\**reason\**\s*:\s*\**\s*(.+)$/im.exec(text)?.[1];
   return { allow: verdict?.toLowerCase() === "allow", reason: oneLine(reason ?? "") };
@@ -141,39 +140,27 @@ export default function (pi: ExtensionAPI) {
 
   const ask = async (
     session: ExtensionContext,
-    model: Model<any>,
+    model: string,
     prompt: string,
     timeoutMs: number,
     source: string,
-    temperature?: number,
+    temperature?: number | null,
   ) => {
     const controller = new AbortController();
     inflight.add(controller);
     try {
-      const response = await session.modelRegistry
-        .streamSimple(
-          model,
-          {
-            systemPrompt: SYSTEM,
-            messages: [
-              { role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() },
-            ],
-          },
-          {
-            maxTokens: MAX_TOKENS,
-            temperature,
-            timeoutMs,
-            // The opencode gateway routes on `x-opencode-session`, which pi derives from this.
-            sessionId: session.sessionManager.getSessionId(),
-            signal: controller.signal,
-          },
-        )
-        .result();
-      recordSideCall(pi, source, response);
-      if (response.stopReason === "error" || response.stopReason === "aborted") {
-        throw new Error(response.errorMessage ?? response.stopReason);
-      }
-      return verdictOf(response);
+      const reply = await sideCall(pi, session, {
+        source,
+        system: SYSTEM,
+        prompt,
+        model,
+        maxTokens: MAX_TOKENS,
+        timeoutMs,
+        temperature,
+        signal: controller.signal,
+      });
+      if ("error" in reply) throw new Error(reply.error);
+      return verdictOf(reply.text);
     } finally {
       inflight.delete(controller);
     }
@@ -189,9 +176,6 @@ export default function (pi: ExtensionAPI) {
     if (!session || outOfReach(surface) || failures >= MAX_FAILURES) return { kind: "defer" };
     const judges = judgesFor(routed(session)?.model ?? session.model);
     if (!judges) return { kind: "defer" };
-    const check = catalogModel(session, judges.check);
-    const confirm = catalogModel(session, judges.confirm);
-    if (!check || !confirm) return { kind: "defer" };
 
     const { repo, branch } = await gitContext(session.cwd);
     const prompt = [
@@ -204,7 +188,7 @@ export default function (pi: ExtensionAPI) {
     ].join("\n");
 
     try {
-      const first = await ask(session, check, prompt, CHECK_TIMEOUT_MS, "guardian check", 0);
+      const first = await ask(session, judges.check, prompt, CHECK_TIMEOUT_MS, "guardian check");
       if (!first.allow) {
         failures = 0;
         log.review("guardian_deferred", {
@@ -215,7 +199,14 @@ export default function (pi: ExtensionAPI) {
         return { kind: "defer" };
       }
       // Kimi, which confirms for Claude, rejects any temperature but its own.
-      const second = await ask(session, confirm, prompt, CONFIRM_TIMEOUT_MS, "guardian confirm");
+      const second = await ask(
+        session,
+        judges.confirm,
+        prompt,
+        CONFIRM_TIMEOUT_MS,
+        "guardian confirm",
+        null,
+      );
       failures = 0;
       if (!second.allow) {
         log.review("guardian_deferred", {

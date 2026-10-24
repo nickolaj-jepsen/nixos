@@ -30,15 +30,13 @@ import {
 import {
   firstRequest,
   NAME_MAX_TOKENS,
-  NAME_MODEL,
   NAME_TIMEOUT_MS,
-  namingModel,
   oneLine,
   requests,
   stripRequest,
 } from "./lib/naming.ts";
 import { linkedWorktree, park, removableAt, worktreeAt } from "./lib/park.ts";
-import { recordSideCall } from "./lib/usage-ledger.ts";
+import { sideCall } from "./lib/side-call.ts";
 import { branches, names, status, wt, type RepoStatus } from "./lib/wt.ts";
 
 const fallback = "Blocked: git worktree add outside ~/worktrees/<repo>/. Use `wt create <name>`.";
@@ -127,45 +125,18 @@ export default function (pi: ExtensionAPI) {
 
   /** The naming model's branch name, or undefined when it is unavailable or answers nothing usable. */
   const modelName = async (ctx: ExtensionCommandContext) => {
-    const model = namingModel(ctx, process.env.PI_WORKTREE_MODEL || NAME_MODEL);
-    if (!model) return undefined;
-    const lines = [
-      `directory: ${basename(ctx.cwd) || ctx.cwd}`,
-      "requests:",
-      ...requests(ctx, 5, 300).map((prompt) => `- ${prompt}`),
-    ];
-    try {
-      const response = await ctx.modelRegistry
-        .streamSimple(
-          model,
-          {
-            systemPrompt: NAME_SYSTEM,
-            messages: [
-              {
-                role: "user",
-                content: [{ type: "text", text: lines.join("\n") }],
-                timestamp: Date.now(),
-              },
-            ],
-          },
-          {
-            maxTokens: NAME_MAX_TOKENS,
-            temperature: 0,
-            timeoutMs: NAME_TIMEOUT_MS,
-            // The opencode gateway routes on `x-opencode-session`, which pi derives from this.
-            sessionId: ctx.sessionManager.getSessionId(),
-          },
-        )
-        .result();
-      recordSideCall(pi, "worktree name", response);
-      if (response.stopReason === "error" || response.stopReason === "aborted") return undefined;
-      const reply = response.content
-        .flatMap((block) => (block.type === "text" ? [block.text] : []))
-        .join(" ");
-      return slug(reply) || undefined;
-    } catch {
-      return undefined;
-    }
+    const reply = await sideCall(pi, ctx, {
+      source: "worktree name",
+      system: NAME_SYSTEM,
+      prompt: [
+        `directory: ${basename(ctx.cwd) || ctx.cwd}`,
+        "requests:",
+        ...requests(ctx, 5, 300).map((prompt) => `- ${prompt}`),
+      ].join("\n"),
+      maxTokens: NAME_MAX_TOKENS,
+      timeoutMs: NAME_TIMEOUT_MS,
+    });
+    return "text" in reply ? slug(reply.text) || undefined : undefined;
   };
 
   /**

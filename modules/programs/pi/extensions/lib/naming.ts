@@ -4,11 +4,8 @@
  * both are prompted with this and both answer in a handful of words.
  */
 import { relative } from "node:path";
-import type { Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-// Hot and cheap, and routed through the gateway like everything else.
-export const NAME_MODEL = "opencode-go/deepseek-v4.1-flash";
 // deepseek spends 60-70 tokens thinking before it answers, and a smaller cap
 // comes back as `length` with no text at all.
 export const NAME_MAX_TOKENS = 256;
@@ -91,15 +88,3 @@ export const touchedFiles = (ctx: ExtensionContext, cwd: string, limit: number) 
   }
   return [...new Set(files.map((path) => relative(cwd, path) || path))].slice(-limit);
 };
-
-/** The catalog entry named by `configured` ("provider/model"), if it is in the catalog. */
-export const catalogModel = (ctx: ExtensionContext, configured: string) => {
-  const slash = configured.indexOf("/");
-  return slash > 0
-    ? ctx.modelRegistry.find(configured.slice(0, slash), configured.slice(slash + 1))
-    : undefined;
-};
-
-/** The naming model, falling back to the session's own when the catalog lacks it. */
-export const namingModel = (ctx: ExtensionContext, configured: string): Model<any> | undefined =>
-  catalogModel(ctx, configured) ?? ctx.model;
