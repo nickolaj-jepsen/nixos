@@ -201,6 +201,8 @@
         # aliases, resolved like /model, so they follow new model releases; the
         # top-level level is the legacy default for models not listed.
         effortLevel = "high";
+        # No pin means the account default applies, which has drifted to Sonnet.
+        model = "opus";
         modelSettings = {
           opus.effortLevel = "high";
           fable.effortLevel = "xhigh";
