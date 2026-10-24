@@ -166,7 +166,7 @@ export default function (pi: ExtensionAPI) {
       }),
       mode: modeParam(
         "highlights",
-        'Per result: "highlights" (excerpts chosen for the query), "text" (page body), "summary" (LLM digest; requires type "auto").',
+        'Per result: "highlights" (excerpts chosen for the query), "text" (page body), "summary" (LLM digest).',
       ),
       numResults: Type.Optional(
         Type.Number({
@@ -179,23 +179,8 @@ export default function (pi: ExtensionAPI) {
       maxChars: capParam(
         "Per-result character budget. Defaults to a share of the call budget; lower numResults for longer excerpts.",
       ),
-      type: Type.Optional(
-        Type.Union([Type.Literal("auto"), Type.Literal("lite")], {
-          description:
-            'Search mode. "auto" is the balanced default; "lite" is cheaper and faster but serves content from Exa\'s index and does not support summary.',
-        }),
-      ),
-      category: Type.Optional(
-        Type.String({
-          description:
-            "Canonical values: company, publication, news, personal site, financial report, people. Other strings are hints. company and people reject date filters.",
-        }),
-      ),
       includeDomains: Type.Optional(
         Type.Array(Type.String(), { description: "Only search these domains." }),
-      ),
-      excludeDomains: Type.Optional(
-        Type.Array(Type.String(), { description: "Never search these domains." }),
       ),
       startPublishedDate: Type.Optional(
         Type.String({ description: "ISO date; drops anything published earlier." }),
@@ -204,13 +189,6 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const { window, total } = contextBudget(ctx);
       const mode = params.mode ?? "highlights";
-      const type = params.type ?? "auto";
-      if (type === "lite" && mode === "summary") {
-        throw new Error(
-          'Exa type "lite" does not support mode "summary"; use type "auto" or mode "highlights"/"text".',
-        );
-      }
-
       const numResults = params.numResults ?? resultCount(window);
       const cap = Math.max(
         1,
@@ -220,12 +198,9 @@ export default function (pi: ExtensionAPI) {
         "/search",
         {
           query: params.query,
-          type,
           numResults,
           objective: params.objective,
-          category: params.category,
           includeDomains: params.includeDomains,
-          excludeDomains: params.excludeDomains,
           startPublishedDate: params.startPublishedDate,
           contents: contents(mode, cap, params.objective),
         },
