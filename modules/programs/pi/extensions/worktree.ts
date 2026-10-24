@@ -1,6 +1,7 @@
 /**
  * pi's adapter for `wt`: keeps worktrees inside ~/worktrees/<repo>/, and moves
- * a running session into one.
+ * a running session into one — or back out to the repo's primary checkout,
+ * which is what `/new` does when it runs inside a worktree.
  *
  * The layout and the guard check live in `wt`, shared with the Claude Code hook
  * and the opencode plugin. The guard blocks instead of rewriting the command,
@@ -12,12 +13,14 @@
  * command context may switch sessions, so the `enter_worktree` tool queues
  * `/wt` for when the turn has settled, and the move then re-prompts the agent.
  * A bare `/wt` asks the naming model for a branch name from the session, so a
- * worktree costs no more than the move.
+ * worktree costs no more than the move. `/back` runs the same machinery the
+ * other way and then asks what should become of the worktree left behind.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
+import { Box, Text } from "@earendil-works/pi-tui";
 import {
   type ExtensionAPI,
   type ExtensionCommandContext,
@@ -34,13 +37,18 @@ import {
   requests,
   stripRequest,
 } from "./lib/naming.ts";
+import { linkedWorktree, park, removableAt, worktreeAt } from "./lib/park.ts";
 import { recordSideCall } from "./lib/usage-ledger.ts";
-import { branches, names, wt } from "./lib/wt.ts";
+import { branches, names, status, wt, type RepoStatus } from "./lib/wt.ts";
 
 const fallback = "Blocked: git worktree add outside ~/worktrees/<repo>/. Use `wt create <name>`.";
 const MOVED = "worktree-moved";
+const PARKED = "worktree-parked";
 // Tools that would still act on the old checkout between enter_worktree and the move.
 const MUTATING = new Set(["bash", "bg_run", "edit", "write"]);
+
+/** What `/back` leaves in the transcript: where the session went and what became of the worktree. */
+type ParkedDetails = { from: string; to: string; worktree: string; outcome: string };
 
 // Prompts say what the work is; the branch says the same thing in a name.
 const NAME_SYSTEM = `You name a git branch so its owner can tell one worktree from another.
@@ -87,6 +95,29 @@ function forkInto(ctx: ExtensionCommandContext, cwd: string): string {
   writeFileSync(file, `${lines.join("\n")}\n`, { flag: "wx", mode: 0o600 });
   return file;
 }
+
+/** Writes a session file that holds only a header, so the conversation starts empty at `cwd`. */
+function freshInto(cwd: string): string {
+  const target = SessionManager.create(cwd);
+  const file = target.getSessionFile();
+  const header = target.getHeader();
+  if (!file || !header) throw new Error(`pi could not prepare a session for ${cwd}`);
+  writeFileSync(file, `${JSON.stringify(header)}\n`, { flag: "wx", mode: 0o600 });
+  return file;
+}
+
+/**
+ * pi pins the session's cwd in the runtime and never chdirs, so `process.cwd()`
+ * and anything `wt` runs with an implicit cwd stay on the checkout the session
+ * left — which, for a worktree that is then removed, is a deleted directory.
+ */
+const follow = (cwd: string) => {
+  try {
+    process.chdir(cwd);
+  } catch {
+    // The checkout vanished; pi's tools pass their cwd explicitly and keep working.
+  }
+};
 
 export default function (pi: ExtensionAPI) {
   // Path the agent asked to move to; set by the tool, consumed once the turn settles.
@@ -186,6 +217,18 @@ export default function (pi: ExtensionAPI) {
     pi.sendUserMessage(`/wt ${target}`, { expandPromptTemplates: true });
   });
 
+  // `/new` (and `/clear`, which calls the same runtime method) roots its session
+  // in the runtime's pinned cwd, and `session_before_switch` can only cancel —
+  // there is no cwd override to give it. So the move back out is dispatched as
+  // our own command, after the cancelled one has returned.
+  pi.on("session_before_switch", async (event, ctx) => {
+    if (event.reason !== "new" || !(await linkedWorktree(ctx.cwd))) return;
+    setTimeout(() => {
+      pi.sendUserMessage("/back --new", { expandPromptTemplates: true });
+    }, 0);
+    return { cancel: true };
+  });
+
   pi.registerCommand("wt", {
     description:
       "Move this session into a git worktree, creating it if needed: /wt <name>. Without a name it generates one from the session.",
@@ -216,6 +259,7 @@ export default function (pi: ExtensionAPI) {
       const from = ctx.cwd;
       await ctx.switchSession(file, {
         withSession: async (next) => {
+          follow(path);
           next.ui.notify(`Moved session to ${path}`, "info");
           await next.sendMessage(
             {
@@ -232,6 +276,81 @@ export default function (pi: ExtensionAPI) {
         },
       });
     },
+  });
+
+  /**
+   * The way out of a worktree: back to the repo's primary checkout, then the
+   * parked-worktree question. `--new` is what `/new` becomes inside a worktree —
+   * the same move with a fresh conversation instead of this one.
+   */
+  pi.registerCommand("back", {
+    description:
+      "Move this session back to the repo's primary checkout, then ask whether to land or remove the worktree you left: /back. With --new it starts a fresh session there, which is what /new does inside a worktree.",
+    handler: async (args, ctx) => {
+      const fresh = args.split(/\s+/).includes("--new");
+      await ctx.waitForIdle();
+
+      let repo: RepoStatus;
+      try {
+        repo = await status(ctx.cwd);
+      } catch (error) {
+        ctx.ui.notify(`Not in a repo wt knows: ${(error as Error).message}`, "error");
+        return;
+      }
+      const main = repo.worktrees.find((tree) => tree.isMain);
+      const here = worktreeAt(repo, ctx.cwd);
+      if (!main || !here) {
+        ctx.ui.notify("Already in the primary checkout", "info");
+        return;
+      }
+
+      // Looked up before the switch: afterwards `ctx.cwd` is the primary checkout.
+      const left = removableAt(repo, ctx.cwd);
+      let file: string;
+      try {
+        file = fresh ? freshInto(main.path) : forkInto(ctx, main.path);
+      } catch (error) {
+        ctx.ui.notify(`Could not move to ${main.path}: ${(error as Error).message}`, "error");
+        return;
+      }
+
+      // The question has to be asked while this session's context is still live: a
+      // captured ctx goes stale the moment the switch lands, and the dialog would be
+      // drawn on a UI that the replacement then wipes. So park first, move second —
+      // and report the outcome as an entry in the session that arrives.
+      const from = ctx.cwd;
+      // Before the question, not after: the answer may remove the directory this
+      // process is standing in.
+      follow(main.path);
+      const parked = left ? await park(pi, ctx, repo, left) : undefined;
+
+      await ctx.switchSession(file, {
+        withSession: async (next) => {
+          if (!parked || !left) return;
+          const details: ParkedDetails = {
+            from,
+            to: main.path,
+            worktree: left.name,
+            outcome: parked.text,
+          };
+          await next.sendMessage({
+            customType: PARKED,
+            content: parked.text,
+            display: true,
+            details,
+          });
+        },
+      });
+    },
+  });
+
+  // One line of housekeeping does not need the default custom-message wrapper.
+  pi.registerMessageRenderer<ParkedDetails>(PARKED, (message, { outputPad }, theme) => {
+    const outcome = message.details?.outcome;
+    if (!outcome) return undefined;
+    const box = new Box(outputPad, 0);
+    box.addChild(new Text(`${theme.fg("dim", "› ")}${theme.fg("muted", outcome)}`, 0, 0));
+    return box;
   });
 
   pi.registerTool({
