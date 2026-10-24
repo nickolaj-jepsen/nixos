@@ -1,4 +1,4 @@
-import { matchesKey, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { matchesKey, type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui";
 import type { EditorWrapper } from "../lib/prompt-editor.ts";
 import { hitTest, hoverAt, isPlainClick, type Region } from "./layout.ts";
 import type { ChromeState, Renderer } from "./state.ts";
@@ -29,17 +29,20 @@ export type Painters = {
     status: BorderStatus | undefined,
   ) => { line: string; regions: Region[] };
   /**
-   * The row under the box: `empty` is whether the editor holds anything. The
-   * painter owns the content, the wrapper owns inserting it into the editor.
+   * The suggestion for the prompt's line: `room` is what the row has left after
+   * the cursor and `empty` is whether the editor holds anything. The painter owns
+   * the text, the wrapper owns placing it after the cursor.
    */
-  hint?: (width: number, empty: boolean) => { line: string } | undefined;
-  /** The text to insert when that row is accepted, taken at most once. */
+  hint?: (room: number, empty: boolean) => { ghost: string } | undefined;
+  /** The text to insert when that suggestion is accepted, taken at most once. */
   takeHint?: () => string | undefined;
 };
 
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
 const plain = (line: string) => line.replace(ANSI, "");
 const topHidden = (line: string) => Number(/↑\s*(\d+)\s*more/.exec(plain(line))?.[1] ?? 0);
+// One clear column between a suggestion and the edge of the box.
+const EDGE = 1;
 
 const mounted = (state: ChromeState) => {
   const children = (state.tui as { children?: Array<{ children?: unknown[] }> } | undefined)
@@ -114,11 +117,19 @@ export const createEditorChrome = (state: ChromeState, painters: Painters): Edit
             const top = painters.top(width, topHidden(lines[lead] ?? ""), border, status);
             lines[lead] = top.line;
             topRegions = top.regions;
-            // The suggestion belongs inside the box, above its bottom border. It
-            // only exists while the editor is empty, so the box is exactly one
-            // content line and the bottom border sits right behind it.
-            const hint = painters.hint?.(width, (target.getText?.() ?? "") === "");
-            if (hint) lines.splice(lead + 2, 0, hint.line);
+            // The suggestion belongs on the line you are about to type on, right
+            // after the cursor, so the box keeps its height. With the editor empty
+            // the cursor ends that row, so its padding is what the ghost spends.
+            const row = lead + 1;
+            const typed = (lines[row] ?? "").replace(/ +$/, "");
+            const hint = painters.hint?.(
+              width - visibleWidth(typed) - EDGE,
+              (target.getText?.() ?? "") === "",
+            );
+            if (hint && lines[row] !== undefined) {
+              const pad = width - visibleWidth(typed) - visibleWidth(hint.ghost);
+              lines[row] = typed + hint.ghost + " ".repeat(Math.max(0, pad));
+            }
             return lines;
           };
         }

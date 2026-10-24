@@ -12,10 +12,10 @@
  *
  * A second call reads the turn once it settles, for the one thing a wall of
  * prose hides: what it wants from you. That ask becomes the border's detail
- * when the agent is idle, and its draft answer the row under the input. The
- * same call says whether the turn finished, waits on you or gave up. The call
- * is skipped for a turn that ran no tools and said little, since those are read
- * at a glance.
+ * when the agent is idle, and its draft answer a suggestion on the input line.
+ * The same call says whether the turn finished, waits on you or gave up. The
+ * call is skipped for a turn that ran no tools and said little, since those are
+ * read at a glance.
  *
  * Every reading is broadcast on `SIDECAR_CHANNEL`, so other extensions can use
  * it without paying for a call of their own. Until you run `/name`, the session
@@ -464,7 +464,7 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
     refresh,
     working: () => phase === "working",
     /** A step is a plan made at turn start, shown only while that turn runs; an ask outlives its turn. */
-    detail: () => (phase === "working" ? doing : ask !== undefined ? `needs: ${ask}` : undefined),
+    detail: () => (phase === "working" ? doing : ask),
     /** Whether the detail is the finished turn's ask rather than the running step. */
     asking: () => phase !== "working" && ask !== undefined,
     reply: () => reply,

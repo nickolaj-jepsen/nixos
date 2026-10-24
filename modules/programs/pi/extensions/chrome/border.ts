@@ -1,9 +1,10 @@
 /**
- * The editor's top border and the row under the input. The border carries the
- * label, the step in flight while the agent works or what the finished turn
- * needs from you, pi's scroll hint, the state word and the measurements. pi's
- * working spinner sits in front of the label, and a retry, compaction or branch
- * summary takes its place. The row under the input offers the drafted reply.
+ * The editor's top border and the suggestion on the line under the input. The
+ * border carries the label, the step in flight while the agent works or what the
+ * finished turn wants from you, pi's scroll hint, the state word and the
+ * measurements. pi's working spinner sits in front of the label, and a retry,
+ * compaction or branch summary takes its place. The suggestion offers the drafted
+ * reply in place, after the cursor, while the prompt is still empty.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
@@ -19,7 +20,7 @@ const LABEL_ID = "label";
 const MIN_LABEL_ROOM = 14;
 // A step cut shorter than this says nothing worth the columns.
 const MIN_DOING_ROOM = 8;
-// The ask carries a "needs: " prefix, so it needs room for that plus a word.
+// An ask is a sentence beside the label; cut to a word or two it says nothing.
 const MIN_ASK_ROOM = 14;
 
 export const createBorder = (state: ChromeState, label: LabelState) => {
@@ -42,7 +43,11 @@ export const createBorder = (state: ChromeState, label: LabelState) => {
     const current = label.current(ctx);
     const name = current?.text ?? "";
     const detail = label.detail();
-    const stateText = label.stateWord(ctx);
+    // An ask already fills this row with what the turn wants, so the state word is
+    // only for the two things that row cannot say: a dialog holding the run, and a
+    // turn that gave up. The title keeps the word for every state.
+    const word = label.stateWord(ctx);
+    const stateText = word === "waiting" || word === "failed" ? word : undefined;
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
     // so it belongs next to the label rather than in the session detail.
     const hint = hidden > 0 ? ` ↑${hidden}` : "";
@@ -165,11 +170,14 @@ export const createBorder = (state: ChromeState, label: LabelState) => {
   };
 
   /**
-   * The row under the input: the draft that answers the finished turn's ask.
-   * It exists only while the editor is empty, so it is never something you have
-   * to delete before typing, and it is dropped as soon as you do type.
+   * The draft that answers the finished turn's ask, offered on the line you are
+   * about to type on: `room` is what the row has left after the cursor, so the
+   * suggestion costs the box no row of its own.
+   *
+   * It exists only while the editor is empty, so it is never something to delete
+   * before typing, and it is dropped as soon as you do type.
    */
-  const hint = (width: number, empty: boolean): { line: string } | undefined => {
+  const hint = (room: number, empty: boolean): { ghost: string } | undefined => {
     const ctx = state.ctx;
     if (!ctx || !state.live) return undefined;
     if (!empty) {
@@ -178,22 +186,12 @@ export const createBorder = (state: ChromeState, label: LabelState) => {
     }
     const reply = label.reply();
     if (!reply) return undefined;
-    const theme = ctx.ui.theme;
-    // Inset like the editor's own content, so the row reads as a line of the box.
-    const inset = 1;
-    const lead = theme.fg("dim", "⇥ ");
-    const accept = theme.fg("dim", "tab ");
-    const room = width - inset * 2 - visibleWidth(lead) - visibleWidth(accept);
-    if (room < 12) return undefined;
-    const text = truncateToWidth(reply, room, "…");
-    const pad = " ".repeat(
-      Math.max(
-        0,
-        width - inset * 2 - visibleWidth(lead) - visibleWidth(text) - visibleWidth(accept),
-      ),
-    );
-    const edge = " ".repeat(inset);
-    return { line: `${edge}${lead}${theme.fg("text", text)}${pad}${accept}${edge}` };
+    // A cue plus a fragment of draft, or it is not worth the columns.
+    const cue = "⇥ ";
+    if (room < 12 + visibleWidth(cue)) return undefined;
+    // Dim, because text at the cursor's weight would read as something already typed.
+    const text = truncateToWidth(reply, room - visibleWidth(cue), "…");
+    return { ghost: ctx.ui.theme.fg("dim", cue + text) };
   };
 
   return { drawTop, hint, takeHint: label.takeReply };
