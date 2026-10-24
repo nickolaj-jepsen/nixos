@@ -19,7 +19,7 @@ import {
   readlinkSync,
   realpathSync,
 } from "node:fs";
-import { access, open, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { connect, createServer, type Server } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -55,9 +55,7 @@ export interface RegistryEntry {
   updatedAt?: number;
   status?: string;
   statusUpdatedAt?: number;
-  /** pi-only: prompt tokens of the session's last turn; Claude Code ignores unknown fields. */
-  contextTokens?: number;
-  /** pi-only: the sidecar's sentence about the session, and the step in flight while busy. */
+  /** pi-only, ignored by Claude Code: the sidecar's sentence about the session, and the step in flight while busy. */
   summary?: string;
   doing?: string;
   [key: string]: unknown;
@@ -273,67 +271,6 @@ export function activityLabel(peer: Peer, now = Date.now()): string {
   if (mins < 60) return `idle ${mins}m`;
   if (mins < 48 * 60) return `idle ${Math.floor(mins / 60)}h`;
   return `idle ${Math.floor(mins / (24 * 60))}d`;
-}
-
-const TRANSCRIPT_TAIL_BYTES = 2 * 1024 * 1024;
-
-const exists = (file: string) =>
-  access(file).then(
-    () => true,
-    () => false,
-  );
-
-async function claudeTranscript(peer: Peer): Promise<string | undefined> {
-  const file = `${peer.sessionId}.jsonl`;
-  for (const dir of registryDirs()) {
-    const projects = path.join(path.dirname(dir), "projects");
-    const guess = path.join(projects, peer.cwd.replace(/[^A-Za-z0-9-]/g, "-"), file);
-    if (await exists(guess)) return guess;
-    // Claude shortens long project dir names; fall back to a scan.
-    for (const project of await readdir(projects).catch(() => [])) {
-      if (await exists(path.join(projects, project, file)))
-        return path.join(projects, project, file);
-    }
-  }
-  return undefined;
-}
-
-/**
- * Tokens a peer's next turn will read: pi peers publish `contextTokens`; for
- * Claude Code it is the prompt size of the last assistant entry in its
- * transcript. Undefined when neither is available.
- */
-export async function contextTokens(peer: Peer): Promise<number | undefined> {
-  if (typeof peer.contextTokens === "number") return peer.contextTokens;
-  if (peer.entrypoint === "pi") return undefined;
-  const transcript = await claudeTranscript(peer);
-  if (!transcript) return undefined;
-  const handle = await open(transcript);
-  try {
-    const { size } = await handle.stat();
-    const length = Math.min(size, TRANSCRIPT_TAIL_BYTES);
-    const buf = Buffer.alloc(length);
-    await handle.read(buf, 0, length, size - length);
-    const lines = buf.toString("utf8").split("\n").reverse();
-    for (const line of lines) {
-      if (!line.includes('"usage"') || !line.includes('"assistant"')) continue;
-      try {
-        const u = JSON.parse(line).message?.usage;
-        const total = u
-          ? (u.input_tokens ?? 0) +
-            (u.cache_read_input_tokens ?? 0) +
-            (u.cache_creation_input_tokens ?? 0)
-          : 0;
-        // Synthetic entries (API errors, usage-limit notices) carry all-zero usage.
-        if (total > 0) return total;
-      } catch {
-        // The first line of the tail is usually cut mid-entry.
-      }
-    }
-  } finally {
-    await handle.close();
-  }
-  return undefined;
 }
 
 export type Resolution = { peer: Peer } | { error: string };

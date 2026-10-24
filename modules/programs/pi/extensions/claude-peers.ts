@@ -42,7 +42,6 @@ import {
   parseEnvelope,
   PEER_PROTOCOL,
   activityLabel,
-  contextTokens,
   lastActive,
   type Peer,
   type PermissionClass,
@@ -74,12 +73,8 @@ const RATE_WINDOW_MS = 60_000;
 // In-process subagent sessions load this extension too; only the first
 // session in the process may own the pid-keyed registry entry and socket.
 const OWNER = Symbol.for("fireproof.claude-peers.owner");
-// What /reload hands the runtime it rebuilds for the same session in this process.
-const RELOADED = Symbol.for("fireproof.claude-peers.reloaded");
 // A subscriber that stopped reading (e.g. a suspended Claude) must not stall quitting or /new.
 const EXIT_NOTICE_TIMEOUT_MS = 1000;
-
-type InboundPolicy = "auto" | "accept" | "hold" | "refuse";
 
 interface PeerMessageDetails {
   kind: "message" | "idle" | "status";
@@ -99,23 +94,9 @@ interface Subscription {
   expires: number;
 }
 
-interface Reloaded {
-  sessionId: string;
-  idleSubscribers: Map<string, IdleSubscriber>;
-  ourSubscriptions: Map<string, Subscription>;
-  sentMessages: Map<string, string>;
-}
-
 export default function (pi: ExtensionAPI) {
-  pi.registerFlag("claude-peers-inbound", {
-    description:
-      "Messages from other sessions: auto (hold bypass-mode senders), accept, hold, or refuse",
-    type: "string",
-    default: "auto",
-  });
-
   const runtimeId = Symbol("claude-peers-runtime");
-  const owner = globalThis as { [OWNER]?: symbol; [RELOADED]?: Reloaded };
+  const owner = globalThis as { [OWNER]?: symbol };
   let ctx: ExtensionContext | undefined;
   /** Inbound frames arrive on socket callbacks, where a used-up ctx is an uncaught throw. */
   let live = false;
@@ -130,6 +111,7 @@ export default function (pi: ExtensionAPI) {
   const sentMessages = new Map<string, string>();
   const recentBySender = new Map<string, { at: number; body: string }[]>();
   let unsubscribeSidecar: (() => void) | undefined;
+  let warnedProtocol = false;
 
   const isOwner = () => owner[OWNER] === runtimeId && server !== undefined;
   const ownName = () => entry?.name ?? displayName();
@@ -146,9 +128,20 @@ export default function (pi: ExtensionAPI) {
     );
   }
 
-  function policy(): InboundPolicy {
-    const value = pi.getFlag("claude-peers-inbound");
-    return value === "accept" || value === "hold" || value === "refuse" ? value : "auto";
+  /** listPeers, warning once about peers on a newer protocol; they stay listed, since a bump may still take v1 frames. */
+  async function reachablePeers(): Promise<Peer[]> {
+    const list = await listPeers();
+    const newer = list.filter((p) => (p.peerProtocol ?? 0) > PEER_PROTOCOL);
+    if (newer.length && !warnedProtocol) {
+      warnedProtocol = true;
+      ctx?.ui.notify(
+        `claude-peers knows peer protocol ${PEER_PROTOCOL}, but ${newer
+          .map((p) => `${p.name} [${shortId(p)}] speaks ${p.peerProtocol}`)
+          .join(", ")}; messages to them may fail.`,
+        "warning",
+      );
+    }
+    return list;
   }
 
   async function publish(patch: Partial<RegistryEntry> = {}) {
@@ -228,16 +221,8 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
-    let decision = policy();
-    if (decision === "auto") decision = env.fromMode === "bypass" ? "hold" : "accept";
-    if (decision === "refuse") {
-      // Claude's own refusal receipt; without one the sender's model assumes the message landed.
-      receipt(replyTo, frame.msg_id, "expired", "Refused by the pi user's inbound policy.", {
-        status_detail: "refused",
-      });
-      return;
-    }
-    if (decision === "hold") {
+    const hold = env.fromMode === "bypass";
+    if (hold) {
       receipt(replyTo, frame.msg_id, "held", "Held for approval by the pi user.");
       const c = ctx;
       const approved =
@@ -277,7 +262,7 @@ export default function (pi: ExtensionAPI) {
     };
     // A finished session's last reply is its answer to the user; a turn started by a peer would
     // bury it. A message the user just approved still wakes: the approval is their consent.
-    if (decision !== "hold" && (ctx?.isIdle() ?? true)) {
+    if (!hold && (ctx?.isIdle() ?? true)) {
       deliver(details, llmText, false);
       receipt(
         replyTo,
@@ -332,7 +317,7 @@ export default function (pi: ExtensionAPI) {
       }
       case "notify_when_idle": {
         const target = replyTarget(frame.from);
-        if (!target || typeof frame.msg_id !== "string" || policy() === "refuse") return;
+        if (!target || typeof frame.msg_id !== "string") return;
         const sub = {
           socketPath: target,
           origMsgId: frame.msg_id,
@@ -408,13 +393,6 @@ export default function (pi: ExtensionAPI) {
       nameSince: Date.now(),
       summary: persistedSummary(c),
     };
-    const reloaded = owner[RELOADED];
-    owner[RELOADED] = undefined;
-    if (reloaded?.sessionId === entry.sessionId) {
-      for (const [k, v] of reloaded.idleSubscribers) idleSubscribers.set(k, v);
-      for (const [k, v] of reloaded.ourSubscriptions) ourSubscriptions.set(k, v);
-      for (const [k, v] of reloaded.sentMessages) sentMessages.set(k, v);
-    }
     await publish({ status: "idle" });
   }
 
@@ -422,15 +400,8 @@ export default function (pi: ExtensionAPI) {
     // Before the awaits below, so a frame already in flight cannot outlive the ctx.
     live = false;
     if (owner[OWNER] !== runtimeId) return;
-    // A reload keeps this session alive, so its subscribers and pending statuses carry over.
-    if (reason === "reload" && entry)
-      owner[RELOADED] = {
-        sessionId: entry.sessionId,
-        idleSubscribers: new Map(idleSubscribers),
-        ourSubscriptions: new Map(ourSubscriptions),
-        sentMessages: new Map(sentMessages),
-      };
-    else
+    // A reload keeps this session alive; telling subscribers it exited would be a lie.
+    if (reason !== "reload")
       await Promise.all(
         [...idleSubscribers.values()].map((s) =>
           sendIdleNotice(s, "exited", EXIT_NOTICE_TIMEOUT_MS),
@@ -479,7 +450,9 @@ export default function (pi: ExtensionAPI) {
   // section changes when a peer crosses STALE_AFTER_MS rather than every turn.
   pi.on("before_agent_start", async (event, c) => {
     const sections = event.systemPromptOptions.sections;
-    const peers = await sameTreePeers(c.cwd).catch(() => undefined);
+    const peers = await reachablePeers()
+      .then((list) => sameTreePeers(c.cwd, list))
+      .catch(() => undefined);
     if (!peers?.list.length) {
       delete sections.peer_sessions;
       return;
@@ -535,11 +508,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_settled", async (_event, c) => {
     ctx = c;
     if (!isOwner()) return;
-    await publish({
-      status: "idle",
-      doing: undefined,
-      contextTokens: c.getContextUsage()?.tokens ?? undefined,
-    });
+    await publish({ status: "idle", doing: undefined });
     const now = Date.now();
     const due = [...idleSubscribers.values()];
     idleSubscribers.clear();
@@ -576,7 +545,7 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "List Claude Code and pi sessions on this machine that send_message can reach",
     parameters: Type.Object({}),
     async execute() {
-      const peers = await listPeers();
+      const peers = await reachablePeers();
       const self = isOwner() && entry ? `This session: ${ownLabel()}\n` : "";
       if (!peers.length)
         return {
@@ -629,7 +598,7 @@ export default function (pi: ExtensionAPI) {
       const message = params.message?.trim() ?? "";
       if (!message && !params.notify_when_idle)
         throw new Error("Nothing to send: give a message or set notify_when_idle.");
-      const found = resolvePeer(await listPeers(), params.to);
+      const found = resolvePeer(await reachablePeers(), params.to);
       if ("error" in found) throw new Error(found.error);
       const target = found.peer;
       const label = `${target.name} [${shortId(target)}]`;
@@ -640,25 +609,18 @@ export default function (pi: ExtensionAPI) {
       const queues =
         target.status === "idle" && target.peerFeatures?.includes(FEATURE_QUEUE_WHEN_IDLE);
       if (message && !queues && isStale(target)) {
-        const tokens = await contextTokens(target).catch(() => undefined);
-        if (costlyWake(tokens)) {
-          const why =
-            `${label} has been ${activityLabel(target)} with ${tokensLabel(tokens)} of context; ` +
-            "a message starts a turn there that re-reads all of it without the prompt cache.";
-          if (!toolCtx.hasUI)
-            throw new Error(`Not sent: ${why} Ask your user whether it is worth it.`);
-          const ok = await toolCtx.ui.confirm(
-            `Wake ${label}?`,
-            `${why}\n\n${message.slice(0, 1000)}`,
-            {
-              timeout: HOLD_DIALOG_MS,
-            },
+        const why = `${label} has been ${activityLabel(target)}; a message starts an uncached turn there.`;
+        if (!toolCtx.hasUI)
+          throw new Error(`Not sent: ${why} Ask your user whether it is worth it.`);
+        const ok = await toolCtx.ui.confirm(
+          `Wake ${label}?`,
+          `${why}\n\n${message.slice(0, 1000)}`,
+          { timeout: HOLD_DIALOG_MS },
+        );
+        if (!ok)
+          throw new Error(
+            `Not sent: the user declined waking ${label} (${activityLabel(target)}).`,
           );
-          if (!ok)
-            throw new Error(
-              `Not sent: the user declined waking ${label} (${activityLabel(target)}, ${tokensLabel(tokens)}).`,
-            );
-        }
       }
 
       if (message) {
@@ -709,7 +671,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("list-agents", {
     description: "Show the Claude Code and pi sessions this session can message",
     handler: async (_args, c) => {
-      const peers = await listPeers();
+      const peers = await reachablePeers();
       const self = isOwner() && entry ? `This session: ${ownLabel()}` : "This session has no inbox";
       const rows = peers.map((p) => {
         const about = aboutLine(p);
@@ -745,18 +707,6 @@ function aboutLine(peer: Peer): string | undefined {
 // Past the 1h prompt-cache lifetime, a wake-up re-reads the whole conversation.
 const STALE_AFTER_MS = 60 * 60 * 1000;
 
-// Waking a stale session this large re-reads enough uncached input to be worth asking about.
-const COSTLY_CONTEXT_TOKENS = 100_000;
-
-/** Unknown size counts as costly: a stale session is more often large than not. */
-function costlyWake(tokens: number | undefined): boolean {
-  return tokens === undefined || tokens >= COSTLY_CONTEXT_TOKENS;
-}
-
-function tokensLabel(tokens: number | undefined): string {
-  return tokens === undefined ? "an unknown amount" : `~${Math.round(tokens / 1000)}k tokens`;
-}
-
 function isStale(peer: Peer, now = Date.now()): boolean {
   return now - lastActive(peer, now) > STALE_AFTER_MS;
 }
@@ -777,9 +727,9 @@ function treeRoot(dir: string): Promise<string> {
   return root;
 }
 
-/** Live sessions of other processes whose cwd is in the same working tree as `cwd`. */
-async function sameTreePeers(cwd: string) {
-  const [root, peers] = await Promise.all([treeRoot(cwd), listPeers()]);
+/** The `peers` whose cwd is in the same working tree as `cwd`. */
+async function sameTreePeers(cwd: string, peers: Peer[]) {
+  const root = await treeRoot(cwd);
   const roots = await Promise.all(peers.map((p) => treeRoot(p.cwd)));
   return { root, list: peers.filter((_, i) => roots[i] === root) };
 }
