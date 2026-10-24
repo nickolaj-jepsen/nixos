@@ -23,7 +23,7 @@ import { modelAlias, providerName, providerShortName } from "../lib/model-names.
 import { createRouted } from "../lib/routed-model.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
-import { createUsage, usageAlarm } from "./usage.ts";
+import { createUsage } from "./usage.ts";
 import { stageTone } from "../routers/kinds.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
@@ -105,7 +105,7 @@ export const createFooter = (
     const thinking = ctx.thinkingLevel ?? pi.getThinkingLevel();
 
     const alarms: Part[] = [];
-    const quota = model ? usageAlarm(usage.provider(model.provider)) : undefined;
+    const quota = model ? usage.alarm(usage.provider(model.provider)) : undefined;
     if (quota) alarms.push(quota);
     if (s.cacheHit !== undefined && s.cacheHit < CACHE_WARN_PCT) {
       alarms.push({
