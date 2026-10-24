@@ -1,5 +1,6 @@
-# Pi coding agent via pi.nix; the package roster is based on the lazypi
-# catalog (https://lazypi.org).
+# Pi coding agent: pi.nix supplies the home-manager module, the package comes
+# from pkgs/pi-coding-agent. The package roster is based on the lazypi catalog
+# (https://lazypi.org).
 #
 # The packages array is authoritative: pi.nix jq-merges settings into
 # ~/.pi/agent/settings.json on every launch and arrays replace wholesale —
@@ -15,22 +16,6 @@
   inputs,
   ...
 }: let
-  # node-gyp leaves config.gypi/Makefiles naming the npm-deps cache, python and
-  # -dev outputs, which pins ~600 MB of build inputs into the runtime closure.
-  mkPi = pkgs:
-    inputs.pi.packages.${pkgs.stdenv.hostPlatform.system}.coding-agent.overrideAttrs (old: {
-      postInstall =
-        (old.postInstall or "")
-        + ''
-          find $out/lib/node_modules -type d -path '*/build' -prune -print0 \
-            | while IFS= read -r -d "" d; do
-              [ -e "$d/config.gypi" ] || continue
-              find "$d" -mindepth 1 -maxdepth 1 ! -name Release -exec rm -rf {} +
-              rm -rf "$d/Release/obj.target" "$d/Release/.deps"
-            done
-        '';
-    });
-
   mkExtensions = pkgs: pi:
     pkgs.buildNpmPackage {
       pname = "pi-extensions";
@@ -52,10 +37,16 @@
         # Type against the pi that runs, not an npm copy: a second copy would
         # duplicate its classes. At runtime pi's own aliases win over these links.
         # Linked after npmConfigHook, whose `npm ci` would prune them.
-        mkdir -p node_modules/@types
-        ln -s ${pi}/lib/node_modules/@earendil-works node_modules/
-        ln -s ${pi}/lib/node_modules/typebox node_modules/
-        ln -s ${pi}/lib/node_modules/@types/node node_modules/@types/
+        # nixpkgs' build leaves the coding-agent at lib/node_modules/pi-monorepo
+        # and its dependencies in that package's node_modules, so the scope dir
+        # has to be assembled from both halves.
+        mkdir -p node_modules/@types node_modules/@earendil-works
+        ln -s ${pi}/lib/node_modules/pi-monorepo node_modules/@earendil-works/pi-coding-agent
+        for dep in ${pi}/lib/node_modules/pi-monorepo/node_modules/@earendil-works/*; do
+          ln -s "$dep" node_modules/@earendil-works/
+        done
+        ln -s ${pi}/lib/node_modules/pi-monorepo/node_modules/typebox node_modules/
+        ln -s ${pi}/lib/node_modules/pi-monorepo/node_modules/@types/node node_modules/@types/
         tsc --noEmit
         runHook postBuild
       '';
@@ -67,8 +58,14 @@
     };
 in {
   # For `just dev-setup`, which links its node_modules into the repo for the editor.
-  perSystem = {pkgs, ...}: {
-    packages.pi-extensions = mkExtensions pkgs (mkPi pkgs);
+  perSystem = {system, ...}: let
+    # flake-parts' pkgs has no overlay stack, so import one that does.
+    pkgs = import inputs.nixpkgs {
+      inherit system;
+      overlays = [inputs.self.overlays.default];
+    };
+  in {
+    packages.pi-extensions = mkExtensions pkgs pkgs.pi-coding-agent;
   };
 
   flake.modules.homeManager.pi = {
@@ -77,7 +74,7 @@ in {
     pkgs,
     ...
   }: let
-    pi = mkPi pkgs;
+    pi = pkgs.pi-coding-agent;
     # Instance for this host's palette: pi-background-tasks hardcodes its selection
     # band (see pkgs/pi-packages), so the override keeps it on the theme colors.
     piPackages = pkgs.pi-packages.override {themeColors = config.fireproof.theme.colors;};

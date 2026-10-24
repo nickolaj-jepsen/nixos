@@ -51,6 +51,42 @@ def prefetch(url: str, unpack: bool = False) -> str:
     return json.loads(out)["hash"]
 
 
+def prefetch_unpacked(url: str, name: str) -> tuple[str, Path]:
+    """SRI sha256 of the unpacked archive and its store path, so the tree can be read."""
+    out = subprocess.run(
+        ["nix", "store", "prefetch-file", "--json", "--unpack", "--name", name, url],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    data = json.loads(out)
+    return data["hash"], Path(data["storePath"])
+
+
+def prefetch_npm_deps(lockfile: Path) -> str:
+    """npmDepsHash for `lockfile`, computed by the fetcher buildNpmPackage itself uses."""
+    exe = subprocess.run(
+        [
+            "nix",
+            "build",
+            "--no-link",
+            "--print-out-paths",
+            "--inputs-from",
+            str(ROOT),
+            "nixpkgs#prefetch-npm-deps",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return subprocess.run(
+        [f"{exe}/bin/prefetch-npm-deps", str(lockfile)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
 def sri_from_hex(hex_digest: str) -> str:
     out = subprocess.run(
         ["nix", "hash", "convert", "--hash-algo", "sha256", "--to", "sri", hex_digest],
@@ -92,6 +128,33 @@ def update_claude_code() -> tuple[str, str]:
         if manifest.get("version") != new:
             raise RuntimeError(f"manifest for {new} reports version {manifest.get('version')}")
         path.write_text(json.dumps(manifest, indent=2) + "\n")
+    return old, new
+
+
+def update_pi_coding_agent() -> tuple[str, str]:
+    path = PKGS / "pi-coding-agent" / "release.json"
+    pins = json.loads(path.read_text())
+    old = pins["version"]
+    new = json.loads(fetch("https://registry.npmjs.org/@earendil-works/pi-coding-agent/latest"))["version"]
+    if new != old:
+        src_hash, src = prefetch_unpacked(
+            f"https://github.com/earendil-works/pi/archive/refs/tags/v{new}.tar.gz", f"pi-{new}-src"
+        )
+        path.write_text(
+            json.dumps(
+                {
+                    "version": new,
+                    "srcHash": src_hash,
+                    "npmDepsHash": prefetch_npm_deps(src / "package-lock.json"),
+                    # The generated model catalog is absent from the source tarball.
+                    "modelDataHash": prefetch(
+                        f"https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-{new}.tgz"
+                    ),
+                },
+                indent=2,
+            )
+            + "\n"
+        )
     return old, new
 
 
@@ -236,6 +299,7 @@ UPDATERS = {
     "chrome-devtools-mcp": lambda: update_npm_tarball("chrome-devtools-mcp"),
     "claude-desktop": update_claude_desktop,
     "ha-bambulab": lambda: update_github_release("ha-bambulab", "greghesp/ha-bambulab"),
+    "pi-coding-agent": update_pi_coding_agent,
     "pi-packages": update_pi_packages,
     "zwift-hass": lambda: update_github_release("zwift-hass", "snicker/zwift_hass"),
 }
