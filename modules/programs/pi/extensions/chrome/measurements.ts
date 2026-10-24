@@ -17,8 +17,13 @@ export type Meter = { id: string; text: string; action?: Action };
 /** What the footer measured for the border: pi's context usage and the meters beside it. */
 export type Measurements = { context: ContextUsage | undefined; meters: readonly Meter[] };
 
-/** The border's two controls over how much room the transcript spends. */
-export type Toggles = { tools: Action; thinking: Action; thinkingOpen: boolean };
+/** What the border's controls dispatch: the two condense toggles and the tree. */
+export type Controls = {
+  tools: Action;
+  thinking: Action;
+  tree: Action;
+  thinkingOpen: boolean;
+};
 
 // The Nerd Font range: present in Hack Nerd Font, where a text glyph like U+2692
 // would come from another font at another width and misalign the row. The
@@ -67,14 +72,14 @@ const toggleChip = (
  * The two controls ahead of the measurements. Each reports the flag pi already
  * owns, so ctrl+o and alt+t stay authoritative and a click reads as one more key.
  */
-const chipSegments = (state: ChromeState, toggles: Toggles): Segment[] => {
+const chipSegments = (state: ChromeState, controls: Controls): Segment[] => {
   const ctx = state.ctx;
   if (!ctx) return [];
   const theme = ctx.ui.theme;
   const toolsOpen = ctx.ui.getToolsExpanded();
   return [
-    toggleChip(state, theme, "tools", GLYPH_TOOLS, toolsOpen, toggles.tools),
-    toggleChip(state, theme, "thinking", GLYPH_THINKING, toggles.thinkingOpen, toggles.thinking),
+    toggleChip(state, theme, "tools", GLYPH_TOOLS, toolsOpen, controls.tools),
+    toggleChip(state, theme, "thinking", GLYPH_THINKING, controls.thinkingOpen, controls.thinking),
   ];
 };
 
@@ -84,25 +89,33 @@ const chipSegments = (state: ChromeState, toggles: Toggles): Segment[] => {
  * there is no model to measure.
  *
  * The toggles lead every level, so a narrow terminal drops the numbers before it
- * drops the controls.
+ * drops the controls. The context pill opens the tree, which is where a full
+ * window gets navigated.
  */
 export const measurementLevels = (
   state: ChromeState,
   { context: usage, meters }: Measurements,
-  toggles?: Toggles,
+  controls?: Controls,
 ): Segment[][] => {
   const ctx = state.ctx;
   if (!ctx?.model) return [];
   const theme = ctx.ui.theme;
-  const chips = toggles ? chipSegments(state, toggles) : [];
+  const chips = controls ? chipSegments(state, controls) : [];
   const window = usage?.contextWindow || ctx.model.contextWindow || 0;
   const percent = usage?.percent == null ? undefined : Math.max(0, Math.min(100, usage.percent));
   const color = contextColor(percent);
 
+  // Lit on hover by weight, not colour: the percentage's own colour is the alarm.
+  const fill = (text: string) =>
+    state.hover === "context" ? theme.bold(theme.fg(color, text)) : theme.fg(color, text);
   const pct = percent === undefined ? "?" : `${Math.floor(percent)}%`;
   const windowText = window > 0 ? ` / ${formatTokens(window)}` : "";
-  const context = { text: theme.fg(color, pct) + (windowText ? theme.fg("dim", windowText) : "") };
-  const bare = { text: theme.fg(color, pct) };
+  const context: Segment = {
+    id: "context",
+    action: controls?.tree,
+    text: fill(pct) + (windowText ? theme.fg("dim", windowText) : ""),
+  };
+  const bare: Segment = { id: "context", action: controls?.tree, text: fill(pct) };
   const extra = meters.map(({ id, text, action }) => ({
     id,
     action,

@@ -68,5 +68,11 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState) => {
     dismissBackgroundTasks: closeOverlay,
     agents: command(state, pi, "/agents"),
     cost: command(state, pi, "/cost"),
+    // A full window is where the session tree earns its keep, so the context pill
+    // opens it. pi's own handler, not the slash command: /tree is a built-in that
+    // only the interactive input path runs, while sendUserMessage would hand the
+    // text to the model as a prompt. /cost above is an extension command, which is
+    // why that one can go through the command path.
+    tree: appAction(state, "app.session.tree", "alt+shift+t"),
   };
 };
