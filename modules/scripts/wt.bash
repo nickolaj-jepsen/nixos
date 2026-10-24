@@ -15,14 +15,16 @@ usage() {
 Usage:
   wt list                        Show every worktree with state (incl. a (main) row).
   wt create <name> [<base>]      Create <root>/<repo>/<name> on a new branch <name> off
-                                 <base> (default: <default>); prints its path.
+                                 <base> (default: <default>), copying the gitignored paths
+                                 the repo's .worktreeinclude lists; prints its path.
   wt cd [<name>]                 Print a worktree's path (fzf picker if no name).
   wt clean [--dry-run] [--force] [<name>]
-                                 Remove safely-removable worktrees and their branches; no name
+                                 Remove safely-removable worktrees and their branches: clean,
+                                 unlocked, every commit already on <default> (rebased or
+                                 cherry-picked counts), no other process inside. No name
                                  cleans every safe one (never main, never one parked on
                                  <default>). --force names one worktree and drops its
-                                 uncommitted or unmerged work, which the dialog in pi's
-                                 shutdown hook does.
+                                 uncommitted or unmerged work.
   wt apply [--dry-run] [<name>]  Rebase onto <default>, remove the worktree, fast-forward
                                  <default>, delete the branch. Needs main on clean <default>.
   wt diff [<name>]               Review the diff (committed + uncommitted) vs <default>.
@@ -148,6 +150,77 @@ dir_has_files() {
     [[ -n "$(find "$1" -type f -print -quit 2>/dev/null)" ]]
 }
 
+# Parent of <pid>, or nothing once it is gone.
+parent_of() {
+    local stat
+    local -a rest
+    if [[ -r /proc/$1/stat ]]; then
+        stat=$(<"/proc/$1/stat")
+        # Fields after `comm`, which may hold spaces: state ppid …
+        read -ra rest <<<"${stat##*) }"
+        printf '%s\n' "${rest[1]}"
+    else
+        ps -o ppid= -p "$1" 2>/dev/null | tr -d ' ' || true
+    fi
+}
+
+# "pid<TAB>cwd" of every process this user can see, read once per gather from /
+# so the scan never counts itself. wt's ancestors and whatever its caller started
+# are not users: the caller's shell sits in the worktree by construction, and so
+# do a pipeline's other commands and a pi session's LSP and MCP servers.
+PROC_CWDS="" PROC_CWDS_READ=0 OUR_PIDS="" CALLER=""
+read_proc_cwds() {
+    (( PROC_CWDS_READ == 0 )) || return 0
+    PROC_CWDS_READ=1
+    local pid=$BASHPID
+    CALLER=$(parent_of "$$")
+    while [[ -n "$pid" ]] && (( pid > 1 )); do
+        OUR_PIDS+=" $pid "
+        pid=$(parent_of "$pid")
+    done
+    if [[ -d /proc/self ]]; then
+        PROC_CWDS=$(cd / && find /proc/[0-9]*/cwd -maxdepth 0 -printf '%h\t%l\n' 2>/dev/null \
+            | sed 's|^/proc/||') || true
+    else
+        PROC_CWDS=$(cd / && lsof -a -d cwd -Fn 2>/dev/null \
+            | awk '/^p/ { pid = substr($0, 2) } /^n/ { print pid "\t" substr($0, 2) }') || true
+    fi
+}
+
+# Whether <pid> descends from wt's caller; an orphaned wt (caller init) has none.
+callers_own() {
+    local pid=$1
+    [[ -n "$CALLER" ]] && (( CALLER > 1 )) || return 1
+    while [[ -n "$pid" ]] && (( pid > 1 )); do
+        [[ "$pid" == "$CALLER" ]] && return 0
+        pid=$(parent_of "$pid")
+    done
+    return 1
+}
+
+# Print the pid of a process, not wt's own, whose cwd is in <path>; fail when there is none.
+in_use() {
+    local root pid
+    root=$(realpath "$1" 2>/dev/null) || root="$1"
+    read_proc_cwds
+    while IFS= read -r pid; do
+        [[ -n "$(parent_of "$pid")" ]] || continue # gone since the scan
+        callers_own "$pid" && continue
+        printf '%s\n' "$pid"
+        return 0
+    done < <(awk -F'\t' -v root="$root" -v ours="$OUR_PIDS" \
+        'index(ours, " " $1 " ") == 0 && ($2 == root || index($2, root "/") == 1) { print $1 }' <<<"$PROC_CWDS")
+    return 1
+}
+
+# Commits on HEAD whose change is not on <upstream> yet: unlike `ahead`, a branch
+# that was rebased or cherry-picked onto it counts as landed.
+unlanded() {
+    local out
+    out=$(git -C "$1" cherry "$2" HEAD 2>/dev/null) || { echo "-"; return; }
+    grep -c '^+' <<<"$out" || true
+}
+
 # 'apply' fast-forwards the default branch in the main checkout, so that checkout
 # must be parked on a clean default first. Fail fast with an actionable message.
 require_main_on_clean_default() {
@@ -165,6 +238,8 @@ require_main_on_clean_default() {
 # Emit one TSV row per worktree: every registered worktree (main first), plus
 # orphan dirs under the root that git no longer tracks.
 # Fields: name path registered branch state ahead behind locked age_seconds safe_clean is_main
+# safe_clean: what `wt clean` removes unasked — clean, unlocked, nothing unlanded
+# ahead, and nobody else's cwd inside (see read_proc_cwds).
 # 'name' is the path basename; basenames shared across worktrees are
 # disambiguated to <parent>/<base> on the colliding rows only.
 gather_worktrees() {
@@ -205,7 +280,7 @@ gather_worktrees() {
     now=$(date +%s)
 
     local name reg branch state ahead behind locked age_s safe_clean is_main
-    local porcelain ab mt parent
+    local porcelain ab mt parent upstream
     for p in "${paths[@]}"; do
         name="${p##*/}"
         if (( ${base_count["$name"]} > 1 )); then
@@ -240,22 +315,24 @@ gather_worktrees() {
                 state="untracked"
             fi
 
+            upstream=""
             if git -C "$p" rev-parse --verify --quiet "refs/remotes/origin/${default_branch}" >/dev/null 2>&1; then
-                if ab=$(git -C "$p" rev-list --left-right --count "refs/remotes/origin/${default_branch}...HEAD" 2>/dev/null); then
-                    behind=$(awk '{print $1}' <<<"$ab")
-                    ahead=$(awk  '{print $2}' <<<"$ab")
-                fi
+                upstream="refs/remotes/origin/${default_branch}"
             elif git -C "$p" rev-parse --verify --quiet "refs/heads/${default_branch}" >/dev/null 2>&1; then
-                if ab=$(git -C "$p" rev-list --left-right --count "refs/heads/${default_branch}...HEAD" 2>/dev/null); then
-                    behind=$(awk '{print $1}' <<<"$ab")
-                    ahead=$(awk  '{print $2}' <<<"$ab")
-                fi
+                upstream="refs/heads/${default_branch}"
+            fi
+            if [[ -n "$upstream" ]] \
+                && ab=$(git -C "$p" rev-list --left-right --count "${upstream}...HEAD" 2>/dev/null); then
+                behind=$(awk '{print $1}' <<<"$ab")
+                ahead=$(awk  '{print $2}' <<<"$ab")
             fi
 
-            if [[ "$state" == "clean" && "$ahead" == "0" && "$locked" == "0" ]]; then
+            safe_clean=0
+            # Cheapest test first: git cherry walks upstream back to the merge base.
+            if [[ "$state" == "clean" && "$locked" == "0" && "$is_main" == "0" ]] \
+                && { [[ "$ahead" == "0" ]] || [[ "$ahead" != "-" && "$(unlanded "$p" "$upstream")" == "0" ]]; } \
+                && ! in_use "$p" >/dev/null; then
                 safe_clean=1
-            else
-                safe_clean=0
             fi
         else
             state="orphan"
@@ -413,6 +490,20 @@ refresh_origin_default() {
     fi
 }
 
+# Claude Code's .worktreeinclude (.gitignore syntax): the gitignored files of the
+# main checkout a fresh worktree needs too, copied with symlinks kept as links.
+# A match that is tracked, or not gitignored, is git's to check out.
+copy_worktreeinclude() {
+    local dest="$1" include="$MAIN_WT/.worktreeinclude" rel
+    [[ -f "$include" ]] || return 0
+    while IFS= read -r -d '' rel; do
+        rel="${rel%/}"
+        git -C "$MAIN_WT" check-ignore -q -- "$rel" || continue
+        mkdir -p "$(dirname "$dest/$rel")"
+        cp -a -- "$MAIN_WT/$rel" "$dest/$rel" || info "could not copy $rel from .worktreeinclude"
+    done < <(git -C "$MAIN_WT" ls-files -z --others --ignored --directory --exclude-from="$include")
+}
+
 cmd_create() {
     local name="" base=""
     while (( $# > 0 )); do
@@ -467,6 +558,7 @@ cmd_create() {
     info "creating worktree '$dir_name' on new branch '$branch' off $base_ref"
     git -C "$MAIN_WT" worktree add -b "$branch" "$path" "$base_ref" >&2 \
         || die "git worktree add failed"
+    copy_worktreeinclude "$path"
 
     # stdout is the path alone — for `cd (wt create ...)` and scripting.
     printf '%s\n' "$path"
@@ -571,7 +663,7 @@ cmd_clean() {
         return 0
     fi
 
-    local removed=0 skipped=0 matched=0
+    local removed=0 skipped=0 matched=0 pid
     local name path reg branch state ahead behind locked age_s safe_clean is_main
     while IFS=$'\x1f' read -r name path reg branch state ahead behind locked age_s safe_clean is_main; do
         if [[ -n "$target" && "$name" != "$target" ]]; then
@@ -602,6 +694,8 @@ cmd_clean() {
                         : # asked for by name: the uncommitted/unmerged work is the point
                     elif [[ "$state" != "clean" ]]; then
                         die "'$name' has uncommitted changes ($state); commit/stash inside the worktree first"
+                    elif pid=$(in_use "$path"); then
+                        die "'$name' is in use: process $pid has its cwd inside; close it, or name it with --force"
                     else
                         die "'$name' has $ahead commit(s) ahead of origin/$DEFAULT_BRANCH; run 'wt apply $name' to keep the work"
                     fi

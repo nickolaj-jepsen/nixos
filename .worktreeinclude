@@ -1,0 +1,3 @@
+# Gitignored paths `wt create` copies into a new worktree (.gitignore syntax).
+modules/programs/pi/extensions/node_modules
+modules/programs/pi/extensions/result
