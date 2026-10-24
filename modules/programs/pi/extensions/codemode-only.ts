@@ -10,8 +10,9 @@
  * pi leaves a hidden tool's guidelines out of the prompt and codemode does not
  * list `direct` tools, so the guidelines name what is hidden instead.
  *
- * Small-context models (the local ones) also lose delegation. Pi runs the hook
- * before every request, so a model switch takes effect on the next one.
+ * Small-context models (the local ones) also lose delegation: llama-swap serves
+ * one request at a time, so a child would only queue behind the parent. Pi runs
+ * the hook before every request, so a model switch takes effect on the next one.
  */
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -19,7 +20,10 @@ import { isLeanModel } from "./lib/lean-model.ts";
 
 const NAME = "codemode_only";
 const CODEMODE = "codemode";
+// Delegation is here on every model: the agent tool's declaration is the second
+// largest in the roster, and a run that does not delegate should not pay for it.
 const HIDDEN = [
+  "subagent",
   "get_subagent_result",
   "steer_subagent",
   // pi-background-tasks: bg_run stays declared; its completion notice makes these rarely needed.
@@ -27,15 +31,7 @@ const HIDDEN = [
   "bg_logs",
   "bg_kill",
 ];
-// Not to be called from codemode either, unless the user asks for it.
-const DELEGATION_HIDDEN_WHEN_LEAN = [
-  // llama-swap serves one model at a time, so subagents would only queue behind the parent.
-  "Agent",
-  // Not that queue, but the room: its declaration alone is ~5k tokens.
-  "SubagentWorkflow",
-];
-
-const hidden = (lean: boolean) => [...HIDDEN, ...(lean ? DELEGATION_HIDDEN_WHEN_LEAN : [])];
+const DELEGATION = ["subagent"];
 
 const list = (names: string[]) => {
   const quoted = names.map((name) => `\`${name}\``);
@@ -46,7 +42,6 @@ const list = (names: string[]) => {
 
 const guidelines = (lean: boolean, active: Set<string>) => {
   const reachable = HIDDEN.filter((name) => active.has(name));
-  const delegation = lean ? DELEGATION_HIDDEN_WHEN_LEAN.filter((name) => active.has(name)) : [];
   const lines: string[] = [];
   if (reachable.length > 0) {
     lines.push(
@@ -58,6 +53,7 @@ const guidelines = (lean: boolean, active: Set<string>) => {
       "A background task's output is also at the path `bg_run` returned; `read` it instead.",
     );
   }
+  const delegation = lean ? DELEGATION.filter((name) => active.has(name)) : [];
   if (delegation.length > 0) {
     const them = delegation.length === 1 ? "it" : "them";
     lines.push(
@@ -71,10 +67,13 @@ export default function (pi: ExtensionAPI) {
   let lean = false;
   pi.on("session_start", (_event, ctx) => {
     lean = isLeanModel(ctx.model);
+    // A child session never gets the agent tools, so the warning below would fire
+    // on every delegation. There is also nobody to show it to.
+    if (!ctx.hasUI) return;
     // The names are third-party: a package bump that renames one would leave its
     // full declaration in the prompt with nothing to show for it.
     const registered = new Set(pi.getAllTools().map((tool) => tool.name));
-    const missing = hidden(true).filter((name) => !registered.has(name));
+    const missing = HIDDEN.filter((name) => !registered.has(name));
     if (missing.length > 0) {
       ctx.ui.notify(
         `codemode_only: not registered, declarations stay visible: ${missing.join(", ")}`,
@@ -100,7 +99,7 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({}),
     prepareLoadout: (loadout) => ({
       hiddenDeclarations: loadout.declared.some((tool) => tool.name === CODEMODE)
-        ? [NAME, ...hidden(lean)]
+        ? [NAME, ...HIDDEN]
         : [NAME],
     }),
     async execute() {

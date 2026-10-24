@@ -17,7 +17,7 @@ type Context = Parameters<RenderResult>[3];
 
 const KEEP_BODY = new Set([
   // A subagent's report is the answer you asked it for.
-  "Agent",
+  "subagent",
   // The diff is how the change gets checked.
   "edit",
   "write",

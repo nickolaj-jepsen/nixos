@@ -91,8 +91,10 @@ in {
     localMaxTokens = 8192;
     # Pi-only, not in the shared programs.mcp registry: Claude Code has its own
     # browser tools. The server launches its own Chromium on a throwaway profile,
-    # never attaching to a running browser. Throwaway because every subagent
-    # starts its own server, and a shared profile lets only one browser run.
+    # never attaching to a running browser. Throwaway because a session that opens
+    # a second one would fight the first over a shared profile. A subagent never
+    # loads MCP: its tool allowlist names no `mcp__` tool, and that is what the
+    # agent package gates the extension on.
     # extensions/browser-gate.ts asks before its first call each session.
     hasBrowser = config.programs.chromium.enable || (pkgs.stdenv.isDarwin && config.fireproof.desktop.enable);
     chrome-devtools = {
@@ -119,10 +121,20 @@ in {
       # guardrails
       "@gotgenes/pi-permission-system"
       # agents
-      "@tintinweb/pi-subagents"
+      "@gotgenes/pi-subagents"
       # long builds/tests without blocking the turn
       "pi-background-tasks"
     ];
+    # One source string per package, so settings.packages and the children's
+    # exclusion list in subagents.json cannot drift.
+    packagePath = name: "${piPackages}/node_modules/${name}";
+    extensionsPath = mkExtensions pkgs pi;
+    # Children keep the router (the parent model may be a vm/* virtual model,
+    # which only our extensions register) and the permission system, whose
+    # `ask` forwards to this session. The UI and process-managing packages have
+    # nothing to do in a headless child.
+    childExcludedPackages =
+      map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages);
   in {
     imports = [inputs.pi.homeModules.default];
 
@@ -135,10 +147,11 @@ in {
           ${builtins.readFile ../agent-context.md}
           ## Delegating
 
-          - When `Agent` is in your tool list, reach for it when the work can't be scoped in one guess: a sweep over many files, a search you would otherwise read the whole tree to answer, a second opinion on a change. Not for a path you already know.
-          - Independent lookups go out as parallel `Agent` calls in one message. Hand over the question, not a step list, and say what you want back.
+          - `subagent` is not declared: call it from codemode after `await describeTool("subagent")`. It runs one agent in the background and notifies you when it finishes; `run_in_background: false` blocks and returns its report instead.
+          - Reach for one when the work can't be scoped in one guess: a sweep over many files, a search you would otherwise read the whole tree to answer, a second opinion on a change. Not for a path you already know.
+          - Launch several in one script and join them with `get_subagent_result({ agent_id, wait: true })`; four run at a time and the rest queue. Hand over the question, not a step list, and say what you want back.
           - A result is not shown to the user: summarise it, and check an agent's claimed edits before reporting them done.
-          - `SubagentWorkflow` is scripted fan-out and needs an explicit ask, such as `/workflow` — a task that would merely benefit from parallelism is not one.
+          - Fanning out over many items is scripted orchestration and needs an explicit ask, such as `/workflow` — a task that would merely benefit from parallelism is not one.
         '';
         themes = [theme];
         # Nix-built pi can't self-update; extension-update notices still show.
@@ -226,9 +239,9 @@ in {
         # Local paths: pi loads the Nix-built tree as-is (see
         # pkgs/pi-packages for how the npm dependencies get there).
         settings.packages =
-          map (name: "${piPackages}/node_modules/${name}") thirdPartyPackages
+          map packagePath thirdPartyPackages
           # own, from ./extensions
-          ++ ["${mkExtensions pkgs pi}"];
+          ++ [extensionsPath];
         # Arrays replace wholesale, so `pi config` toggles of built-ins revert at launch.
         settings.extensions = [];
         # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
@@ -508,18 +521,21 @@ in {
         collapseKey = "ctrl+t";
       };
 
-      # Compact roughly halves Agent's declaration. `/agents` writes project
-      # settings only, so this file can stay read-only.
+      # Children inherit the parent session's extensions unless excluded here,
+      # and each child runs its own copy of them. `/subagents:settings` writes the
+      # project file only, so this one can stay read-only.
       home.file.".pi/agent/subagents.json".text = builtins.toJSON {
-        toolDescriptionMode = "compact";
-        # Subagent spend is otherwise missing from the footer and /cost.
-        reportUsage = true;
-        # Auto stands down if another extension provides a workflow tool.
-        workflowsEnabled = true;
+        # A fan-out launches as many agents as it likes; this is what runs at
+        # once, and the rest queue.
+        maxConcurrent = 4;
+        # A child that interrupts the parent mid-run competes with the turn that
+        # spawned it; its findings ride the completion notice instead.
+        midRunUpdates = false;
+        excludedExtensionPackages = childExcludedPackages;
       };
 
       # The fireproof.agents.skills registry, in a user skills dir rather than
-      # the module's `skills` (a --skill flag): pi-subagents builds each child
+      # the module's `skills` (a --skill flag): the agent package builds each child
       # session with its own resource loader, which scans this dir but never
       # sees the main process's flags. The cross-tool Agent Skills dir, not
       # ~/.pi/agent/skills, as one store link: `npx skills add` writes here, and
@@ -530,10 +546,12 @@ in {
       home.file.".pi/agent/prompts/workflow.md".source = ./prompts/workflow.md;
 
       # Subagent roles, one file each (./agents): a pinned model and tool set per
-      # role, so a delegation can't inherit the router or spend the Anthropic
-      # credit, and a child starts no MCP servers.
+      # role, so a delegation can't spend the Anthropic credit or the parent's
+      # cache. Explore and Plan override the package's own definitions.
       home.file.".pi/agent/agents/verifier.md".source = ./agents/verifier.md;
       home.file.".pi/agent/agents/reviewer.md".source = ./agents/reviewer.md;
+      home.file.".pi/agent/agents/Explore.md".source = ./agents/Explore.md;
+      home.file.".pi/agent/agents/Plan.md".source = ./agents/Plan.md;
 
       # Nix-owned (read-only), so pi's "persist globally" approval won't stick;
       # session approvals still work.
@@ -626,8 +644,8 @@ in {
           # Where a write lands is decided here, not by bash text: the package
           # also matches every bash path argument in its absolute spelling, so a
           # pattern can't tell `rm -rf build` from `rm -rf /abs/build`. Covers rm,
-          # redirects and the write/edit tools alike. A subagent's ask is a deny:
-          # pi-subagents does not forward prompts to the parent. The cwd root
+          # redirects and the write/edit tools alike. A subagent's ask reaches
+          # this session's dialog, naming the child. The cwd root
           # counts as inside, so only `rm * ~*` below catches removing it, and
           # only when typed with ~.
           external_directory_write = let

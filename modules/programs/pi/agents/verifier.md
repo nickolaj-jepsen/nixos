@@ -1,12 +1,11 @@
 ---
 name: verifier
 description: Verifies a change by running the build, tests and linters, then reports what failed. Read-only on sources.
-color: green
 tools: bash, read, grep, find, ls
 model: opencode-go/deepseek-v4.1-flash
 thinking: low
 prompt_mode: append
-exclude_extensions: builtin:mcp
+locked: model, thinking
 max_turns: 40
 ---
 

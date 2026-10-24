@@ -1,7 +1,7 @@
 import type { Part } from "./layout.ts";
 import type { Action } from "./state.ts";
 
-// `pi-subagents` publishes its footer line as prose for a human reader ("2
+// The agent package publishes its footer line as prose for a human reader ("2
 // running, 1 queued agents"). The widget above the editor already names each
 // agent and what it is doing, so repeating the sentence here only competes with
 // it; the footer keeps the tallies behind one glyph.

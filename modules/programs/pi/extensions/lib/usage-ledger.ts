@@ -35,7 +35,22 @@ export type NestedSplit = {
   parts: Array<{ tool: string; usage: Usage }>;
 };
 
-export type LedgerData = SideCall | NestedSplit;
+/**
+ * One assistant message's worth of a subagent's spend, read from its transcript.
+ * `messages` is the running count of what has been recorded for this file and
+ * model, so a later read of the same, longer transcript adds only the tail.
+ */
+export type ChildCall = {
+  kind: "child";
+  file: string;
+  agent: string;
+  messages: number;
+  provider: string;
+  model: string;
+  usage: Usage;
+};
+
+export type LedgerData = SideCall | NestedSplit | ChildCall;
 
 export type ItemKind = "conversation" | "upkeep" | "side" | "tool";
 
@@ -113,6 +128,26 @@ export const recordSideCall = (pi: ExtensionAPI, source: string, response: Assis
 };
 
 /**
+ * Where a child's spend is filed. A row per agent type, so the breakdown says
+ * what the delegation bought rather than lumping it under one "subagent".
+ */
+const childSource = (agent: string) => (agent ? `subagent ${agent}` : "subagent");
+
+/** The entry's cost as one item, for the kind that is a plain model call. */
+const modelCall = (data: {
+  source: string;
+  provider: string;
+  model: string;
+  usage: Usage;
+}): Item => ({
+  kind: "side",
+  name: data.source,
+  provider: data.provider,
+  model: data.model,
+  usage: data.usage,
+});
+
+/**
  * What one entry adds to the session's spend. `toolNameOf` resolves the tool
  * behind a nested split's tool call; without it, splits are dropped, which
  * changes attribution but never the total.
@@ -176,13 +211,22 @@ export const entryItems = (
       const data = entry.data as LedgerData | undefined;
       if (data?.kind === "side" && isSpend(data.usage)) {
         return [
-          {
-            kind: "side",
-            name: data.source,
+          modelCall({
+            source: data.source,
             provider: data.provider,
             model: data.model,
             usage: data.usage,
-          },
+          }),
+        ];
+      }
+      if (data?.kind === "child" && isSpend(data.usage)) {
+        return [
+          modelCall({
+            source: childSource(data.agent),
+            provider: data.provider,
+            model: data.model,
+            usage: data.usage,
+          }),
         ];
       }
       if (data?.kind === "nested" && toolNameOf) {
