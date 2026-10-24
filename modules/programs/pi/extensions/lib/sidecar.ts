@@ -15,7 +15,7 @@ import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { NAME_MAX_TOKENS, NAME_TIMEOUT_MS, oneLine, requests, touchedFiles } from "./naming.ts";
+import { NAME_TIMEOUT_MS, oneLine, requests, touchedFiles } from "./naming.ts";
 
 export type Fields = {
   /** Absent means the work has not moved on; the current label stands. */
@@ -24,11 +24,22 @@ export type Fields = {
   doing?: string;
   summary?: string;
   tags?: string[];
+  /** What the finished turn wants from the person, when it wants anything. */
+  ask?: string;
+  /** The shortest reply that answers `ask`, for the row under the input. */
+  reply?: string;
 };
 
 export const MAX_DOING = 32;
 export const MAX_SUMMARY = 120;
+export const MAX_ASK = 110;
+export const MAX_REPLY = 240;
 export const MAX_TAGS = 3;
+/** Headroom for six lines, not a target: only the tokens emitted are billed. */
+// The model reasons before answering and a reasoning model will not be told
+// otherwise (468 of 512 in testing), so the cap has to clear the thinking that
+// the fields need, or the reply comes back as `length` with no text at all.
+const MAX_TOKENS = 1024;
 
 const RECENT_PROMPTS = 4;
 const PROMPT_CHARS = 300;
@@ -39,16 +50,21 @@ const COMMAND_CHARS = 48;
 const GIT_TTL_MS = 30_000;
 
 const SYSTEM = `You keep a coding session's identity current for the person working in it.
-Answer with exactly these four lines, in this order, and nothing else:
+Answer with exactly these six lines, in this order, and nothing else:
 label: 2-6 lowercase words naming what the work is about
 doing: at most 8 words for the step in flight, or empty
 summary: one sentence of at most 20 words about the session so far
 tags: up to three of bugfix feature refactor test docs deps ci perf chore
+ask: what the assistant turn needs from the person, or empty
+reply: the shortest reply that answers ask, or empty
 
 - The label names the work, never that you agreed to something.
 - Repeat the current label word for word when the work has not moved on.
 - doing names the step, not the subject: "stuck on the retry test", not "auth work".
 - The branch is a hint about the work, never the label on its own.
+- Fill ask and reply only from the assistant turn below. Leave both empty when
+  there is no such turn, or when it asks for nothing.
+- ask is a request, not a summary: "keep the old fixture?" not "asked about the fixture".
 - No quotes, no preamble, no commentary, no other lines.`;
 
 type GitContext = { repo: string; branch?: string };
@@ -109,6 +125,20 @@ export type Input = {
   label?: string;
   summary?: string;
   tags?: readonly string[];
+  /** Set when a turn just finished: the assistant's closing words are worth reading. */
+  settle?: boolean;
+};
+
+/** The last assistant text of the branch, on one line, cut to a glance. */
+const closingWords = (ctx: ExtensionContext) => {
+  for (const entry of [...ctx.sessionManager.getBranch()].reverse()) {
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    const text = entry.message.content
+      .flatMap((block) => (block.type === "text" ? [block.text] : []))
+      .join(" ");
+    if (text.trim() !== "") return oneLine(text).slice(0, 500);
+  }
+  return undefined;
 };
 
 /** The digest the model reads: enough to name the work, small enough to pay for every turn. */
@@ -126,11 +156,14 @@ export const buildPrompt = (ctx: ExtensionContext, input: Input) => {
     "requests:",
     ...requests(ctx, RECENT_PROMPTS, PROMPT_CHARS).map((prompt) => `- ${prompt}`),
   );
+  const said = input.settle ? closingWords(ctx) : undefined;
+  if (said) lines.push(`assistant said: ${said}`);
   return lines.join("\n");
 };
 
 // Tolerates a model that answers in a list or bolds its keys, which small ones do.
-const LINE = /^[\s>*#-]*\**\s*(label|doing|summary|tags)\s*\**\s*:\s*\**\s*(.*?)\s*\**\s*$/i;
+const LINE =
+  /^[\s>*#-]*\**\s*(label|doing|summary|tags|ask|reply)\s*\**\s*:\s*\**\s*(.*?)\s*\**\s*$/i;
 
 const stripQuotes = (text: string) => text.replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, "").trim();
 
@@ -148,6 +181,10 @@ export const parseFields = (reply: string): Fields => {
       fields.doing = value;
     } else if (key === "summary") {
       if (value) fields.summary = value.slice(0, MAX_SUMMARY);
+    } else if (key === "ask") {
+      fields.ask = value.slice(0, MAX_ASK);
+    } else if (key === "reply") {
+      fields.reply = value.slice(0, MAX_REPLY);
     } else {
       fields.tags = value
         .split(/[,\s]+/)
@@ -180,9 +217,10 @@ export const ask = async (
         ],
       },
       {
-        // deepseek spends 60-70 tokens thinking before it answers, and a smaller
-        // cap comes back as `length` with no text at all.
-        maxTokens: NAME_MAX_TOKENS,
+        // Six short lines, and nothing worth thinking about: a model that reasons
+        // here spends the whole budget on it and returns no text at all.
+        maxTokens: MAX_TOKENS,
+        reasoning: "minimal",
         temperature: 0,
         timeoutMs: NAME_TIMEOUT_MS,
         // The opencode gateway routes on `x-opencode-session`, which pi derives

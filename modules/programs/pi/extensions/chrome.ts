@@ -38,6 +38,8 @@ export default function (pi: ExtensionAPI) {
           thinkingOpen: !pi.getSettings().hideThinkingBlock,
         }),
       ),
+    hint: identity.hint,
+    takeHint: identity.takeHint,
   });
 
   // Per live session under one key, so no earlier session's wrapper draws through its dead ctx.
