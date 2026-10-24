@@ -96,6 +96,8 @@ const readTranscript = (file: string): Parts | undefined => {
     return undefined;
   }
   const groups = new Map<string, Parts[number]>();
+  // Compaction and branch summaries name no model; file them on the reply before them, as /cost does.
+  let last = { provider: "", model: "" };
   for (const line of text.split("\n")) {
     if (line === "") continue;
     let entry: SessionEntry;
@@ -105,8 +107,11 @@ const readTranscript = (file: string): Parts | undefined => {
       continue; // a line still being written
     }
     for (const item of entryItems(entry)) {
-      const provider = item.provider ?? "";
-      const model = item.model ?? "";
+      if (item.kind === "conversation")
+        last = { provider: item.provider ?? "", model: item.model ?? "" };
+      const fallback = item.kind === "upkeep" ? last : { provider: "", model: "" };
+      const provider = item.provider ?? fallback.provider;
+      const model = item.model ?? fallback.model;
       const key = `${provider}/${model}`;
       const group = groups.get(key) ?? { provider, model, usage: emptyUsage() };
       addUsage(group.usage, item.usage);

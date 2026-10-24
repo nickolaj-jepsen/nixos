@@ -1,7 +1,7 @@
 /**
  * `ai-usage --json` (pkgs/ai-usage), whose provider ids match pi's: the quota
- * windows and credit of each subscription. One reader serves the whole process,
- * the footer, `/cost` and the routers of every session and subagent alike.
+ * windows and credit of each subscription. One reader serves the whole process
+ * (`usageReader`).
  */
 import { execFile } from "node:child_process";
 

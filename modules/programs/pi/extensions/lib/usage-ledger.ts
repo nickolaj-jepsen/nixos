@@ -6,8 +6,7 @@
  * messages, and subagents' spend, which lives in their own session files.
  *
  * `entryItems` is the one definition of what an entry costs and what it is
- * attributed to, and `walkSpend` the one walk over a session; the footer total
- * and /cost both sum it.
+ * attributed to, and `walkSpend` the one walk over a session.
  */
 import type { AssistantMessage, Usage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
@@ -25,7 +24,7 @@ export type SideCall = {
 
 /**
  * A subagent's spend so far, read from its transcript and grouped by the model
- * that spent it (`""` for a tool fee or compaction, which name none). Each one
+ * that spent it (`""` for a tool fee, which names none). Each one
  * is cumulative, so only the latest per transcript counts (`walkSpend`).
  */
 export type ChildCall = {
@@ -179,7 +178,8 @@ export const entryItems = (entry: SessionEntry): Item[] => {
           },
         ];
       }
-      if (data?.kind === "child") {
+      // Child entries from before readings were cumulative have no `parts`; the next filing supersedes them.
+      if (data?.kind === "child" && Array.isArray(data.parts)) {
         return data.parts
           .filter((part) => isSpend(part.usage))
           .map((part) => ({
