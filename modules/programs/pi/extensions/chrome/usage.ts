@@ -1,9 +1,9 @@
 import type { ThemeColor } from "@earendil-works/pi-coding-agent";
 import {
-  createUsageReader,
   exhaustedWindow,
   type UsageProvider,
   type UsageWindow,
+  usageReader,
 } from "../lib/ai-usage.ts";
 import { formatCredit, formatWhen } from "./format.ts";
 import type { Part } from "./layout.ts";
@@ -66,8 +66,11 @@ export const usageAlarm = (
   return undefined;
 };
 
-/** The shared ai-usage snapshot, repainting the footer when it refreshes. */
+/** The shared ai-usage snapshot, repainting the footer when a refresh lands. */
 export const createUsage = (state: ChromeState) => {
-  const reader = createUsageReader(() => state.tui?.requestRender());
-  return { refresh: () => void reader.refresh(), provider: reader.provider };
+  const reader = usageReader();
+  return {
+    refresh: () => void reader.refresh().then(() => state.tui?.requestRender()),
+    provider: reader.provider,
+  };
 };

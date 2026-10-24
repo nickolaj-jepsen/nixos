@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { entryCost } from "../lib/usage-ledger.ts";
+import { memoizeOnSession, walkSpend } from "../lib/usage-ledger.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
@@ -25,14 +25,14 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
   // A provider that never reports cache usage would read as a permanent 0% hit rate.
   const caching = new Set<string>();
 
-  for (const entry of ctx.sessionManager.getEntries()) {
-    cost += entryCost(entry);
+  walkSpend(ctx.sessionManager.getEntries(), (entry, items) => {
+    for (const item of items) cost += item.usage.cost?.total ?? 0;
     if (entry.type === "compaction" || entry.type === "branch_summary") {
       warmModel = undefined;
       cacheHit = undefined;
-      continue;
+      return;
     }
-    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    if (entry.type !== "message" || entry.message.role !== "assistant") return;
     const message = entry.message;
     const key = `${message.provider}/${message.model}`;
     const prompt = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
@@ -57,7 +57,7 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
         value: message.usage.output / (message.durationMs / 1000),
       };
     }
-  }
+  });
 
   // A speed from another model would read as the current model's.
   const speed =
@@ -68,26 +68,7 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
   return { cost, cacheHit: warmModel && caching.has(warmModel) ? cacheHit : undefined, speed };
 };
 
-// Entries are append-only and every append moves the leaf, so session, leaf and
-// model say whether a result computed from the session is still current.
-const sessionKey = (ctx: ExtensionContext, model: ActiveModel | undefined) =>
-  [
-    ctx.sessionManager.getSessionId(),
-    ctx.sessionManager.getLeafId(),
-    model ? `${model.provider}/${model.id}` : "",
-  ].join("\n");
-
-const memoize = <T>(compute: (ctx: ExtensionContext, model: ActiveModel | undefined) => T) => {
-  let cache: { key: string; value: T } | undefined;
-  const get = (ctx: ExtensionContext, model: ActiveModel | undefined): T => {
-    const key = sessionKey(ctx, model);
-    if (cache?.key === key) return cache.value;
-    const value = compute(ctx, model);
-    cache = { key, value };
-    return value;
-  };
-  return { get, reset: () => (cache = undefined) };
-};
+const modelKey = (model: ActiveModel | undefined) => (model ? `${model.provider}/${model.id}` : "");
 
 /**
  * Session cost, cache health and speed, and pi's context usage, which rebuilds
@@ -95,8 +76,11 @@ const memoize = <T>(compute: (ctx: ExtensionContext, model: ActiveModel | undefi
  * or model moves.
  */
 export const createStats = () => {
-  const stats = memoize(collectStats);
-  const context = memoize((ctx) => ctx.getContextUsage());
+  const stats = memoizeOnSession(collectStats, modelKey);
+  const context = memoizeOnSession(
+    (ctx, _model: ActiveModel | undefined) => ctx.getContextUsage(),
+    modelKey,
+  );
 
   const reset = () => {
     stats.reset();

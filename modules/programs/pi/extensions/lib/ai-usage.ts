@@ -1,6 +1,7 @@
 /**
  * `ai-usage --json` (pkgs/ai-usage), whose provider ids match pi's: the quota
- * windows and credit of each subscription, shared by the footer and the routers.
+ * windows and credit of each subscription. One reader serves the whole process,
+ * the footer, `/cost` and the routers of every session and subagent alike.
  */
 import { execFile } from "node:child_process";
 
@@ -45,12 +46,13 @@ export const exhaustedWindow = (
  * fresh; `force` also skips this reader's TTL and ai-usage's own cache, for a
  * caller that knows the snapshot is out of date. A failed read keeps the last
  * snapshot and is retried no sooner than a successful one. Without ai-usage on
- * PATH every provider reads as unknown.
+ * PATH every provider reads as unknown. `stamp()` changes whenever a read lands.
  */
-export const createUsageReader = (onUpdate?: () => void) => {
+const createUsageReader = () => {
   /** `at` is when `providers` were current. */
   let usage: { providers: UsageProvider[]; at: number } | undefined;
   let failedAt: number | undefined;
+  let reads = 0;
   let inflight: Promise<void> | undefined;
   let forced: Promise<void> | undefined;
 
@@ -69,7 +71,7 @@ export const createUsageReader = (onUpdate?: () => void) => {
           // forced read finished must not replace its result.
           usage = { providers, at: force ? Date.now() : started };
         }
-        onUpdate?.();
+        reads += 1;
         resolve();
       });
     });
@@ -93,5 +95,16 @@ export const createUsageReader = (onUpdate?: () => void) => {
     provider,
     providers: () => usage?.providers ?? [],
     known: () => usage !== undefined || failedAt !== undefined,
+    stamp: () => reads,
   };
 };
+
+export type UsageReader = ReturnType<typeof createUsageReader>;
+
+// On globalThis because every session and subagent loads its own copy of this module. The
+// only state shared across this harness's extension packages; keep it that way.
+const KEY = Symbol.for("fireproof.pi.ai-usage");
+
+/** The process's one ai-usage reader. */
+export const usageReader = (): UsageReader =>
+  ((globalThis as { [KEY]?: UsageReader })[KEY] ??= createUsageReader());

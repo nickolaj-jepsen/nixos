@@ -19,8 +19,8 @@ import type {
   ModelRoute,
   ModelRouteRequest,
 } from "@earendil-works/pi-coding-agent";
-import { createUsageReader, exhaustedWindow, type UsageProvider } from "./lib/ai-usage.ts";
-import { entryItems } from "./lib/usage-ledger.ts";
+import { exhaustedWindow, type UsageProvider, usageReader } from "./lib/ai-usage.ts";
+import { walkSpend } from "./lib/usage-ledger.ts";
 import {
   DEEP,
   FLASH,
@@ -82,7 +82,7 @@ type TraceEntry = {
 };
 
 export default function (pi: ExtensionAPI) {
-  const usage = createUsageReader();
+  const usage = usageReader();
   /** Per provider, set by its own limit errors; ai-usage alone lags them. */
   const blockedUntil: Record<string, number> = {};
   /** The provider a limit error stopped; its turn continues one stage down. */
@@ -393,11 +393,11 @@ export default function (pi: ExtensionAPI) {
 
   const statusLines = (ctx: ExtensionContext): string[] => {
     const credit = usage.provider("anthropic")?.credit;
-    const spent = ctx.sessionManager
-      .getEntries()
-      .flatMap((entry) => entryItems(entry))
-      .filter((item) => item.provider === "anthropic")
-      .reduce((sum, item) => sum + (item.usage.cost?.total ?? 0), 0);
+    let spent = 0;
+    walkSpend(ctx.sessionManager.getEntries(), (_entry, items) => {
+      for (const item of items)
+        if (item.provider === "anthropic") spent += item.usage.cost?.total ?? 0;
+    });
     const creditLine = credit
       ? `$${credit.remaining.toFixed(2)} left, $${Math.max(0, credit.remaining - CREDIT_RESERVE_USD).toFixed(2)} above the $${CREDIT_RESERVE_USD} reserve; this session has spent $${spent.toFixed(2)} of it`
       : "unknown (ai-usage off or its key missing?)";

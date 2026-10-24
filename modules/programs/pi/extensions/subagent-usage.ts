@@ -6,21 +6,26 @@
  * money never reaches the session total. Pi counts only what it sees as
  * messages, and a child's messages live in its own session file.
  *
- * So this reads each finished child's transcript and records the assistant
- * messages it finds as ledger entries (`lib/usage-ledger.ts`), keeping the real
- * provider, cache and cost figures. An entry says how many of that transcript's
- * messages it accounts for, which is what makes the read idempotent: a resumed
- * child appends to the same transcript, a `/reload` re-runs this, and either way
- * only the messages no entry has claimed yet are added.
+ * So this reads each child's transcript with the ledger's own `entryItems`
+ * (`lib/usage-ledger.ts`), which counts its replies, tool fees, compaction,
+ * cache warming and side calls, and files the whole transcript's spend so far
+ * as one entry. Readers count only the latest entry per transcript, so a
+ * resumed child or a `/reload` filing it again never counts it twice.
  *
  * Parent-only: a child's hooks return rather than filing a grandchild's spend twice.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { Usage } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { childTranscriptDir, isSubagentSession } from "./lib/subagent-session.ts";
-import { addUsage, emptyUsage, isSpend, LEDGER_TYPE, type LedgerData } from "./lib/usage-ledger.ts";
+import {
+  addUsage,
+  type ChildCall,
+  emptyUsage,
+  entryItems,
+  LEDGER_TYPE,
+  type LedgerData,
+} from "./lib/usage-ledger.ts";
 
 /** The custom entry the agent package appends for each terminal run. */
 const RECORD_TYPE = "subagents:record";
@@ -28,10 +33,7 @@ const RECORD_TYPE = "subagents:record";
 /** A transcript and the agent type that wrote it, `""` when no record names one. */
 type Run = { file: string; agent: string };
 
-/** One transcript, as the usage of each assistant message per `provider/model`. */
-type Transcript = Map<string, Usage[]>;
-
-const key = (provider: string, model: string) => `${provider}/${model}`;
+type Parts = ChildCall["parts"];
 
 /** Terminal runs recorded in this session, one per transcript. */
 const recordedRuns = (ctx: ExtensionContext): Map<string, Run> => {
@@ -69,22 +71,22 @@ const unrecordedRuns = (ctx: ExtensionContext, recorded: Map<string, Run>): Run[
     .map((file) => ({ file, agent: "" }));
 };
 
-/** Messages each recorded model already accounts for, by transcript. */
-const claimed = (ctx: ExtensionContext): Map<string, Map<string, number>> => {
-  const byFile = new Map<string, Map<string, number>>();
+/** A reading as text, so a new one can be told apart from the last one filed. */
+const readingKey = (agent: string, parts: Parts) => JSON.stringify([agent, parts]);
+
+/** The latest reading filed for each transcript. */
+const filed = (ctx: ExtensionContext): Map<string, string> => {
+  const byFile = new Map<string, string>();
   for (const entry of ctx.sessionManager.getEntries()) {
     if (entry.type !== "custom" || entry.customType !== LEDGER_TYPE) continue;
     const data = entry.data as LedgerData | undefined;
-    if (data?.kind !== "child") continue;
-    const counts = byFile.get(data.file) ?? new Map<string, number>();
-    counts.set(key(data.provider, data.model), data.messages);
-    byFile.set(data.file, counts);
+    if (data?.kind === "child") byFile.set(data.file, readingKey(data.agent, data.parts));
   }
   return byFile;
 };
 
-/** Assistant-message usage in one child transcript, in the order it was spent. */
-const readTranscript = (file: string): Transcript | undefined => {
+/** One child transcript's whole spend, by the model that spent it. */
+const readTranscript = (file: string): Parts | undefined => {
   let text: string;
   try {
     text = readFileSync(file, "utf8");
@@ -93,33 +95,34 @@ const readTranscript = (file: string): Transcript | undefined => {
     // session restored elsewhere may point at one this machine never had.
     return undefined;
   }
-  const transcript: Transcript = new Map();
+  const groups = new Map<string, Parts[number]>();
   for (const line of text.split("\n")) {
     if (line === "") continue;
-    let entry: unknown;
+    let entry: SessionEntry;
     try {
-      entry = JSON.parse(line);
+      entry = JSON.parse(line) as SessionEntry;
     } catch {
       continue; // a line still being written
     }
-    const message = (
-      entry as { message?: { role?: string; provider?: string; model?: string; usage?: Usage } }
-    ).message;
-    if (message?.role !== "assistant" || !message.usage || !message.provider || !message.model)
-      continue;
-    const id = key(message.provider, message.model);
-    transcript.set(id, [...(transcript.get(id) ?? []), message.usage]);
+    for (const item of entryItems(entry)) {
+      const provider = item.provider ?? "";
+      const model = item.model ?? "";
+      const key = `${provider}/${model}`;
+      const group = groups.get(key) ?? { provider, model, usage: emptyUsage() };
+      addUsage(group.usage, item.usage);
+      groups.set(key, group);
+    }
   }
-  return transcript;
+  return [...groups.values()];
 };
 
 /**
  * Parsed transcripts by file, so a run that settles twice does not re-read a
  * megabyte each time; a child that resumes grows its file and misses the cache.
  */
-const cache = new Map<string, { stamp: string; transcript: Transcript | undefined }>();
+const cache = new Map<string, { stamp: string; parts: Parts | undefined }>();
 
-const cachedTranscript = (file: string): Transcript | undefined => {
+const cachedTranscript = (file: string): Parts | undefined => {
   let stamp: string;
   try {
     const stat = statSync(file);
@@ -128,46 +131,35 @@ const cachedTranscript = (file: string): Transcript | undefined => {
     return undefined;
   }
   const hit = cache.get(file);
-  if (hit?.stamp === stamp) return hit.transcript;
-  const transcript = readTranscript(file);
-  cache.set(file, { stamp, transcript });
-  return transcript;
+  if (hit?.stamp === stamp) return hit.parts;
+  const parts = readTranscript(file);
+  cache.set(file, { stamp, parts });
+  return parts;
 };
 
 export default function (pi: ExtensionAPI) {
   /**
-   * Records whatever of the children's spend no entry has accounted for yet.
+   * Files each child's reading where it differs from the last one filed.
    * `sweep` also files transcripts no record names, at the cost of an agent label.
    */
   const file = (ctx: ExtensionContext, sweep = false) => {
     if (isSubagentSession(ctx)) return;
-    const alreadyClaimed = claimed(ctx);
+    const latest = filed(ctx);
     const recorded = recordedRuns(ctx);
     const runs = [...recorded.values(), ...(sweep ? unrecordedRuns(ctx, recorded) : [])];
     for (const run of runs) {
-      const transcript = cachedTranscript(run.file);
-      if (!transcript) continue;
-      const counts = alreadyClaimed.get(run.file) ?? new Map<string, number>();
-      for (const [id, usages] of transcript) {
-        const unclaimed = usages.slice(counts.get(id) ?? 0);
-        if (unclaimed.length === 0) continue;
-        const usage = emptyUsage();
-        for (const spent of unclaimed) addUsage(usage, spent);
-        if (!isSpend(usage)) continue;
-        const slash = id.indexOf("/");
-        try {
-          pi.appendEntry<LedgerData>(LEDGER_TYPE, {
-            kind: "child",
-            file: run.file,
-            agent: run.agent,
-            messages: usages.length,
-            provider: id.slice(0, slash),
-            model: id.slice(slash + 1),
-            usage,
-          });
-        } catch {
-          // No session to write to (shutting down); the spend goes unrecorded.
-        }
+      const parts = cachedTranscript(run.file);
+      if (!parts || parts.length === 0) continue;
+      if (latest.get(run.file) === readingKey(run.agent, parts)) continue;
+      try {
+        pi.appendEntry<LedgerData>(LEDGER_TYPE, {
+          kind: "child",
+          file: run.file,
+          agent: run.agent,
+          parts,
+        });
+      } catch {
+        // No session to write to (shutting down); the spend goes unrecorded.
       }
     }
   };

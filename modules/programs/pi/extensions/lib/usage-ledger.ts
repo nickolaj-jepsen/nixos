@@ -1,18 +1,16 @@
 /**
  * Session spend, entry by entry. Pi's own accounting covers assistant messages,
  * tool-result `usage`, usage entries (cache warming), compaction and branch
- * summaries. Two things it cannot see live here as custom entries:
- *
- * - model calls an extension makes on the side (spellfix, session labels),
- *   which never become messages;
- * - which nested tool a codemode script's usage came from: pi merges the usage
- *   of every `ctx.executeTool()` call into the calling tool's result.
+ * summaries. What it cannot see lives here as custom entries: model calls an
+ * extension makes on the side (spellfix, session labels), which never become
+ * messages, and subagents' spend, which lives in their own session files.
  *
  * `entryItems` is the one definition of what an entry costs and what it is
- * attributed to; the footer total and the /cost breakdown both sum it.
+ * attributed to, and `walkSpend` the one walk over a session; the footer total
+ * and /cost both sum it.
  */
 import type { AssistantMessage, Usage } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 
 export const LEDGER_TYPE = "usage-ledger";
 
@@ -26,45 +24,30 @@ export type SideCall = {
 };
 
 /**
- * The share of a tool result's usage that came from the calls it made, by the
- * nested tool's name. It only moves spend between tools, never adds to it.
- */
-export type NestedSplit = {
-  kind: "nested";
-  toolCallId: string;
-  parts: Array<{ tool: string; usage: Usage }>;
-};
-
-/**
- * One assistant message's worth of a subagent's spend, read from its transcript.
- * `messages` is the running count of what has been recorded for this file and
- * model, so a later read of the same, longer transcript adds only the tail.
+ * A subagent's spend so far, read from its transcript and grouped by the model
+ * that spent it (`""` for a tool fee or compaction, which name none). Each one
+ * is cumulative, so only the latest per transcript counts (`walkSpend`).
  */
 export type ChildCall = {
   kind: "child";
   file: string;
   agent: string;
-  messages: number;
-  provider: string;
-  model: string;
-  usage: Usage;
+  parts: Array<{ provider: string; model: string; usage: Usage }>;
 };
 
-export type LedgerData = SideCall | NestedSplit | ChildCall;
+export type LedgerData = SideCall | ChildCall;
 
-export type ItemKind = "conversation" | "upkeep" | "side" | "tool";
+export type ItemKind = "conversation" | "upkeep" | "side" | "child" | "tool";
 
 export type Item = {
   kind: ItemKind;
-  /** Model id for conversation turns, the operation for upkeep, the feature or tool name otherwise. */
+  /** Model id for conversation turns, the operation for upkeep, the agent type for a child, the feature or tool name otherwise. */
   name: string;
   provider?: string;
   model?: string;
   usage: Usage;
   /** A reply that ended in an error or abort; it may still have been billed. */
   failed?: boolean;
-  /** The leg of a nested split that takes spend off the calling tool; not a call of its own. */
-  transfer?: boolean;
 };
 
 export const emptyUsage = (): Usage => ({
@@ -128,34 +111,10 @@ export const recordSideCall = (pi: ExtensionAPI, source: string, response: Assis
 };
 
 /**
- * Where a child's spend is filed. A row per agent type, so the breakdown says
- * what the delegation bought rather than lumping it under one "subagent".
+ * What one entry adds to the session's spend, read on its own: a child entry
+ * here is its whole reading, superseded or not.
  */
-const childSource = (agent: string) => (agent ? `subagent ${agent}` : "subagent");
-
-/** The entry's cost as one item, for the kind that is a plain model call. */
-const modelCall = (data: {
-  source: string;
-  provider: string;
-  model: string;
-  usage: Usage;
-}): Item => ({
-  kind: "side",
-  name: data.source,
-  provider: data.provider,
-  model: data.model,
-  usage: data.usage,
-});
-
-/**
- * What one entry adds to the session's spend. `toolNameOf` resolves the tool
- * behind a nested split's tool call; without it, splits are dropped, which
- * changes attribution but never the total.
- */
-export const entryItems = (
-  entry: SessionEntry,
-  toolNameOf?: (toolCallId: string) => string | undefined,
-): Item[] => {
+export const entryItems = (entry: SessionEntry): Item[] => {
   switch (entry.type) {
     case "message": {
       const message = entry.message;
@@ -211,36 +170,26 @@ export const entryItems = (
       const data = entry.data as LedgerData | undefined;
       if (data?.kind === "side" && isSpend(data.usage)) {
         return [
-          modelCall({
-            source: data.source,
-            provider: data.provider,
-            model: data.model,
-            usage: data.usage,
-          }),
-        ];
-      }
-      if (data?.kind === "child" && isSpend(data.usage)) {
-        return [
-          modelCall({
-            source: childSource(data.agent),
-            provider: data.provider,
-            model: data.model,
-            usage: data.usage,
-          }),
-        ];
-      }
-      if (data?.kind === "nested" && toolNameOf) {
-        const parent = toolNameOf(data.toolCallId);
-        if (!parent) return [];
-        return data.parts.flatMap((part) => [
-          { kind: "tool" as const, name: part.tool, usage: part.usage },
           {
-            kind: "tool" as const,
-            name: parent,
-            usage: addUsage(emptyUsage(), part.usage, -1),
-            transfer: true,
+            kind: "side",
+            name: data.source,
+            provider: data.provider,
+            model: data.model,
+            usage: data.usage,
           },
-        ]);
+        ];
+      }
+      if (data?.kind === "child") {
+        return data.parts
+          .filter((part) => isSpend(part.usage))
+          .map((part) => ({
+            kind: "child" as const,
+            // A row per agent type, so /cost says what each delegation bought.
+            name: data.agent || "unnamed",
+            provider: part.provider || undefined,
+            model: part.model || undefined,
+            usage: part.usage,
+          }));
       }
       return [];
     }
@@ -249,6 +198,54 @@ export const entryItems = (
   }
 };
 
-/** The entry's contribution to the session total, in USD. */
-export const entryCost = (entry: SessionEntry): number =>
-  entryItems(entry).reduce((sum, item) => sum + (item.usage.cost?.total ?? 0), 0);
+const childFile = (entry: SessionEntry) => {
+  if (entry.type !== "custom" || entry.customType !== LEDGER_TYPE) return undefined;
+  const data = entry.data as LedgerData | undefined;
+  return data?.kind === "child" ? data.file : undefined;
+};
+
+/**
+ * Calls `visit` with every entry of the session file, all branches included
+ * (abandoned ones were paid for too), and what it adds to the spend. A child
+ * entry adds nothing once a later one reads the same transcript.
+ */
+export const walkSpend = (
+  entries: readonly SessionEntry[],
+  visit: (entry: SessionEntry, items: Item[]) => void,
+) => {
+  const latest = new Map<string, string>();
+  for (const entry of entries) {
+    const file = childFile(entry);
+    if (file) latest.set(file, entry.id);
+  }
+  for (const entry of entries) {
+    const file = childFile(entry);
+    visit(entry, file && latest.get(file) !== entry.id ? [] : entryItems(entry));
+  }
+};
+
+/**
+ * `compute` cached until the session moves. Entries are append-only and every
+ * append moves the leaf, so the session and leaf ids and the entry count, plus
+ * `extra` for whatever else `compute` reads, say whether a result is current.
+ */
+export const memoizeOnSession = <A extends unknown[], T>(
+  compute: (ctx: ExtensionContext, ...args: A) => T,
+  extra: (...args: A) => string = () => "",
+) => {
+  let cache: { key: string; value: T } | undefined;
+  const get = (ctx: ExtensionContext, ...args: A): T => {
+    const session = ctx.sessionManager;
+    const key = [
+      session.getSessionId(),
+      session.getLeafId(),
+      session.getEntries().length,
+      extra(...args),
+    ].join("\n");
+    if (cache?.key === key) return cache.value;
+    const value = compute(ctx, ...args);
+    cache = { key, value };
+    return value;
+  };
+  return { get, reset: () => (cache = undefined) };
+};
