@@ -1,5 +1,5 @@
 /**
- * `/models` (ctrl+l): pi's model picker with the data-handling glyphs from
+ * `/models` (alt+p or ctrl+l): pi's model picker with the data-handling glyphs from
  * ./model-labels/registry.ts next to each model, and a one-line description for
  * the virtual models in ./routers.ts.
  *
@@ -39,6 +39,8 @@ const MIN_PROVIDER = 6;
 /** Columns the description is guaranteed before the provider column shrinks. */
 const MIN_DESCRIPTION = 12;
 const MAX_GLYPHS = 12;
+/** Claude Code's picker key and pi's; keybindings.json frees both from pi's own bindings. */
+const PICKER_KEYS = ["alt+p", "ctrl+l"] as const;
 
 type Cost = { tier: number; text: string };
 
@@ -142,7 +144,7 @@ export default function (pi: ExtensionAPI) {
     };
   };
 
-  /** The open picker, so ctrl+l closes what it opened; one at a time. */
+  /** The open picker, so its key closes what it opened; one at a time. */
   let picker: ModelPicker | undefined;
 
   const open = async (ctx: ExtensionContext) => {
@@ -183,10 +185,12 @@ export default function (pi: ExtensionAPI) {
     description: "Pick a model, with its data-handling labels",
     handler: (_args, ctx) => open(ctx),
   });
-  pi.registerShortcut("ctrl+l", {
-    description: "Pick a model, with its data-handling labels",
-    handler: open,
-  });
+  for (const key of PICKER_KEYS) {
+    pi.registerShortcut(key, {
+      description: "Pick a model, with its data-handling labels",
+      handler: open,
+    });
+  }
   // A picker torn down with its session never reports back, and a stale handle
   // would make the footer's click do nothing in the next one.
   pi.on("session_start", () => setModelsClose(undefined));
@@ -235,7 +239,7 @@ class ModelPicker implements Component {
 
   invalidate() {}
 
-  /** Close from outside, e.g. ctrl+l pressed again. */
+  /** Close from outside, e.g. its key pressed again. */
   cancel() {
     this.finish(undefined);
   }
@@ -249,7 +253,11 @@ class ModelPicker implements Component {
   }
 
   handleInput(data: string) {
-    if (matchesKey(data, Key.escape) || matchesKey(data, "ctrl+c") || matchesKey(data, "ctrl+l")) {
+    if (
+      matchesKey(data, Key.escape) ||
+      matchesKey(data, "ctrl+c") ||
+      PICKER_KEYS.some((key) => matchesKey(data, key))
+    ) {
       this.finish(undefined);
       return;
     }

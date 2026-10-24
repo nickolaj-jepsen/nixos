@@ -470,16 +470,17 @@ in {
           };
       };
 
-      # Claude Code's keys where pi leaves them free: alt+p opens the stock model
-      # picker, ctrl+l the labelled one (extensions/model-labels.ts), and alt+t
-      # shows or hides thinking blocks (Claude Code's alt+t turns thinking itself
-      # on or off; shift+tab cycles that here). Frees ctrl+s for
+      # Claude Code's keys where pi leaves them free: alt+p and ctrl+l open the
+      # labelled model picker (extensions/model-labels.ts), leaving the stock one
+      # to /model, and alt+t shows or hides thinking blocks (Claude Code's alt+t
+      # turns thinking itself on or off; shift+tab cycles that here). Frees ctrl+s for
       # extensions/stash.ts and ctrl+t for the todo overlay below. pi's conflict
       # check ignores view, so every built-in on a key an extension claims moves,
       # even the picker-only alt+s saves and the /tree filter.
       home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
         "$schema" = "https://pi.dev/schemas/keybindings.schema.json";
-        "app.model.select" = ["alt+p"];
+        # Reserved keys block an extension's, so the stock picker holds none.
+        "app.model.select" = [];
         # Drops WSL's alt+p default, which would win over the picker.
         "app.model.cycleBackward" = ["shift+ctrl+p"];
         "app.thinking.toggle" = "alt+t";
@@ -488,7 +489,7 @@ in {
         "app.models.save" = "alt+s";
         # Still reachable through the filter cycle.
         "app.tree.filter.noTools" = [];
-        # ctrl+l is the labelled model picker (extensions/model-labels.ts).
+        # ctrl+l opens the labelled model picker.
         "app.tree.filter.labeledOnly" = [];
         # Unbound by pi: the granular scroll between pageUp and the prompt
         # jumps. alt+<page/arrow> stays clear of zellij's plain alt+<letter>.
