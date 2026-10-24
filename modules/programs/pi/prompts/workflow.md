@@ -9,15 +9,12 @@ that scale, so don't stop to ask whether to.
 Scout inline first, so the script iterates a list that exists rather than a guess: name
 the files, routes or channels the fan-out will cover.
 
-Then write one codemode script. `subagent` is codemode-only, so the first line is
-`await describeTool("subagent")` when you don't have its parameters in front of you.
+Then write one codemode script in this shape:
 
-The shape:
-
-- Launch every item with `run_in_background: true` and collect the ids. A few run at
-  once and the rest queue, so pass the whole list rather than batching it by hand.
-- Wait with `get_subagent_result({ agent_id, wait: true })`, and use
-  `Promise.allSettled` so one failed agent does not discard the others' results.
+- Launch every item in the background. A few run at once and the rest queue, so pass
+  the whole list rather than batching it by hand.
+- Join them with `Promise.allSettled` so one failed agent does not discard the others'
+  results.
 - For stages that depend on each other, give each item its own async chain and await
   the chains together. Waiting for a whole stage before starting the next one wastes
   the fast items' time.

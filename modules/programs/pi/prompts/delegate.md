@@ -8,9 +8,7 @@ subagent tokens, so don't stop to ask whether to.
 
 Do the cheap part inline first: name the files, directories or questions the sweep
 covers, and the decision you need back from it. Then launch a few `Explore` agents
-(`reviewer` for a second opinion) with
-`tools.subagent` (codemode-only, so `await describeTool("subagent")` the first time),
-`run_in_background: true`, and join them with `get_subagent_result({ agent_id, wait: true })`.
+(`reviewer` for a second opinion) in the background.
 
 - One child costs a launch and a report. That is a fair trade for a sweep, a search you
   would otherwise page through, or an independent second opinion, and a waste for one
