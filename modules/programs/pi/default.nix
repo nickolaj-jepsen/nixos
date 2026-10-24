@@ -111,24 +111,27 @@ in {
         # Puppeteer can't find a browser on NixOS unaided; darwin's Homebrew Chrome it finds.
         ++ lib.optional config.programs.chromium.enable "--executablePath=${lib.getExe config.programs.chromium.package}";
     };
-    # Load order and why each is here; the pins live in
-    # pkgs/pi-packages/package.json, and the assertion below keeps the two
-    # rosters equal.
-    thirdPartyPackages = [
-      # core
-      "@juicesharp/rpiv-ask-user-question"
-      "@juicesharp/rpiv-todo"
-      # guardrails
-      "@gotgenes/pi-permission-system"
-      # agents
-      "@gotgenes/pi-subagents"
-      # long builds/tests without blocking the turn
-      "pi-background-tasks"
-    ];
+    # The roster and pins are pkgs/pi-packages/package.json; its alphabetical
+    # order loads the permission system first.
+    thirdPartyPackages = piPackages.packageNames;
     # One source string per package, so settings.packages and the children's
     # exclusion list in subagents.json cannot drift.
     packagePath = name: "${piPackages}/node_modules/${name}";
     extensionsPath = mkExtensions pkgs pi;
+    # Parsed with pi's own reader: one role the package can't parse stops
+    # pi-subagents from loading at all.
+    agentRoles = pkgs.runCommand "pi-agent-roles" {nativeBuildInputs = [pkgs.nodejs];} ''
+      for role in ${./agents}/*.md; do
+        node --input-type=module -e "
+          import { readFileSync } from 'node:fs';
+          import { parseFrontmatter } from '${pi}/lib/node_modules/pi-monorepo/dist/utils/frontmatter.js';
+          const { frontmatter } = parseFrontmatter(readFileSync(process.argv[1], 'utf8'));
+          for (const key of ['name', 'description'])
+            if (typeof frontmatter[key] !== 'string') throw new Error(process.argv[1] + ': ' + key + ' must be a string');
+        " "$role"
+      done
+      cp -r ${./agents} $out
+    '';
     # Children keep the router (their models are vm/* virtual models, which
     # only our extensions register) and the permission system, whose
     # `ask` forwards to this session. The UI and process-managing packages have
@@ -257,19 +260,6 @@ in {
         in
           lib.optionalAttrs (servers != {}) {mcpServers = servers;};
       };
-
-      assertions = let
-        declared = lib.sort builtins.lessThan thirdPartyPackages;
-      in [
-        {
-          assertion = declared == lib.sort builtins.lessThan piPackages.packageNames;
-          message = ''
-            The pi package roster in settings.packages and pkgs/pi-packages/package.json disagree.
-            Only here: ${lib.concatStringsSep ", " (lib.subtractLists piPackages.packageNames declared)}
-            Only in package.json: ${lib.concatStringsSep ", " (lib.subtractLists declared piPackages.packageNames)}
-          '';
-        }
-      ];
 
       # pi-background-tasks writes task output to <cwd>/.pi/tasks, with no setting to move it.
       programs.git.ignores = [".pi/tasks/"];
@@ -528,9 +518,6 @@ in {
       # and each child runs its own copy of them. `/subagents:settings` writes the
       # project file only, so this one can stay read-only.
       home.file.".pi/agent/subagents.json".text = builtins.toJSON {
-        # A fan-out launches as many agents as it likes; this is what runs at
-        # once, and the rest queue.
-        maxConcurrent = 4;
         # A child that interrupts the parent mid-run competes with the turn that
         # spawned it; its findings ride the completion notice instead.
         midRunUpdates = false;
@@ -545,21 +532,16 @@ in {
       # a read-only target makes that fail instead of slipping skills into the prompt.
       home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" config.fireproof.agents.skills;
 
-      # `/workflow`: the opt-in the workflow prompt asks for, in one line.
-      home.file.".pi/agent/prompts/workflow.md".source = ./prompts/workflow.md;
-      # `/delegate`: the same opt-in for a plain sweep, which is the common case.
-      home.file.".pi/agent/prompts/delegate.md".source = ./prompts/delegate.md;
+      home.file.".pi/agent/prompts" = {
+        source = ./prompts;
+        recursive = true;
+      };
 
-      # Subagent roles, one file each (./agents): a tool set per role, and vm/flash
-      # locked on every role but Plan, so a delegation reaches the Anthropic credit
-      # only after both cheap pools, above its reserve. Plan inherits the parent's
-      # model, since planning is judgment. general-purpose, Explore and Plan
-      # override the package's own definitions.
-      home.file.".pi/agent/agents/verifier.md".source = ./agents/verifier.md;
-      home.file.".pi/agent/agents/reviewer.md".source = ./agents/reviewer.md;
-      home.file.".pi/agent/agents/general-purpose.md".source = ./agents/general-purpose.md;
-      home.file.".pi/agent/agents/Explore.md".source = ./agents/Explore.md;
-      home.file.".pi/agent/agents/Plan.md".source = ./agents/Plan.md;
+      # Subagent roles; general-purpose, Explore and Plan override the package's own.
+      home.file.".pi/agent/agents" = {
+        source = agentRoles;
+        recursive = true;
+      };
 
       # Nix-owned (read-only), so pi's "persist globally" approval won't stick;
       # session approvals still work.

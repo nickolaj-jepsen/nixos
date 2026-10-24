@@ -133,8 +133,7 @@ dev-setup` links `node_modules` into the folder for editor types and
 - **Third-party pi package**: `pkgs/pi-packages/` is one npm tree whose
   `package.json` holds the roster and the exact pins; the pi leaf lists each
   `$out/node_modules/<name>` as a local path in `settings.packages`, so pi
-  loads them without running npm. Keep the two rosters equal — an assertion
-  fails the build otherwise. Bumps go through `UPDATERS` (`pi-packages`),
+  loads them without running npm. Bumps go through `UPDATERS` (`pi-packages`),
   which rewrites the pins and regenerates the lock (read via `importNpmLock`,
   no hash to bump).
 - **Pi itself**: `pkgs/pi-coding-agent/` pins the upstream release independently
