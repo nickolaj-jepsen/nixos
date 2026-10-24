@@ -11,12 +11,15 @@
  * list `direct` tools, so the guidelines name what is hidden instead.
  *
  * Small-context models (the local ones) also lose delegation: llama-swap serves
- * one request at a time, so a child would only queue behind the parent. Pi runs
- * the hook before every request, so a model switch takes effect on the next one.
+ * one request at a time, so a child would only queue behind the parent. The
+ * expensive tiers get the opposite line, since their own tokens are the scarce
+ * ones. Pi runs the hook before every request, so a model switch takes effect on
+ * the next one.
  */
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isLeanModel } from "./lib/lean-model.ts";
+import { isExpensiveModel } from "./lib/model-tier.ts";
 
 const NAME = "codemode_only";
 const CODEMODE = "codemode";
@@ -40,7 +43,7 @@ const list = (names: string[]) => {
     : `${quoted.slice(0, -1).join(", ")} and ${quoted.at(-1)}`;
 };
 
-const guidelines = (lean: boolean, active: Set<string>) => {
+const guidelines = (lean: boolean, expensive: boolean, active: Set<string>) => {
   const reachable = HIDDEN.filter((name) => active.has(name));
   const lines: string[] = [];
   if (reachable.length > 0) {
@@ -60,13 +63,23 @@ const guidelines = (lean: boolean, active: Set<string>) => {
       `${list(delegation)} ${delegation.length === 1 ? "is" : "are"} left out of your tool list on this model: it serves one request at a time, so a subagent would only queue behind you. Do the work yourself; call ${them} from codemode only when the user explicitly asks for it, as \`/workflow\` does.`,
     );
   }
+  // The opposite trade, on the models whose own tokens are the expensive ones:
+  // every file read here is paid for again on each later turn, so volume work
+  // belongs on a cheap child and judgment stays put.
+  if (expensive && !lean) {
+    lines.push(
+      "This model costs several times a cheap subagent's: hand over the wide reads, the multi-file searches and the independent second opinions, and keep design, review and small edits here. What you read into this context is paid for again on every later turn.",
+    );
+  }
   return lines;
 };
 
 export default function (pi: ExtensionAPI) {
   let lean = false;
+  let expensive = false;
   pi.on("session_start", (_event, ctx) => {
     lean = isLeanModel(ctx.model);
+    expensive = isExpensiveModel(ctx.model);
     // A child session never gets the agent tools, so the warning below would fire
     // on every delegation. There is also nobody to show it to.
     if (!ctx.hasUI) return;
@@ -83,13 +96,14 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on("model_select", (event) => {
     lean = isLeanModel(event.model);
+    expensive = isExpensiveModel(event.model);
   });
 
   // The prompt options are rebuilt for every run, so a model switch drops the old lines.
   pi.on("before_agent_start", (event) => {
     const active = new Set(pi.getActiveTools());
     if (!active.has(NAME) || !active.has(CODEMODE)) return;
-    event.systemPromptOptions.promptGuidelines.push(...guidelines(lean, active));
+    event.systemPromptOptions.promptGuidelines.push(...guidelines(lean, expensive, active));
   });
 
   pi.registerTool({

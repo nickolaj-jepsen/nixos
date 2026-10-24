@@ -151,7 +151,7 @@ in {
           - Reach for one when the work can't be scoped in one guess: a sweep over many files, a search you would otherwise read the whole tree to answer, a second opinion on a change. Not for a path you already know.
           - Launch several in one script and join them with `get_subagent_result({ agent_id, wait: true })`; four run at a time and the rest queue. Hand over the question, not a step list, and say what you want back.
           - A result is not shown to the user: summarise it, and check an agent's claimed edits before reporting them done.
-          - Fanning out over many items is scripted orchestration and needs an explicit ask, such as `/workflow` — a task that would merely benefit from parallelism is not one.
+          - Fanning out over many items is scripted orchestration and needs an explicit ask, such as `/delegate` or `/workflow` — a task that would merely benefit from parallelism is not one.
         '';
         themes = [theme];
         # Nix-built pi can't self-update; extension-update notices still show.
@@ -542,8 +542,10 @@ in {
       # a read-only target makes that fail instead of slipping skills into the prompt.
       home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" config.fireproof.agents.skills;
 
-      # `/workflow`: the opt-in the workflow tool asks for, in one line.
+      # `/workflow`: the opt-in the workflow prompt asks for, in one line.
       home.file.".pi/agent/prompts/workflow.md".source = ./prompts/workflow.md;
+      # `/delegate`: the same opt-in for a plain sweep, which is the common case.
+      home.file.".pi/agent/prompts/delegate.md".source = ./prompts/delegate.md;
 
       # Subagent roles, one file each (./agents): a pinned model and tool set per
       # role, so a delegation can't spend the Anthropic credit or the parent's
