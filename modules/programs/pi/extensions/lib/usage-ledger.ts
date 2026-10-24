@@ -83,7 +83,7 @@ export const addUsage = (into: Usage, add: Usage | undefined, sign = 1): Usage =
 };
 
 /** Whether `usage` used any tokens or cost anything. */
-export const isSpend = (usage: Usage | undefined): usage is Usage =>
+const isSpend = (usage: Usage | undefined): usage is Usage =>
   usage !== undefined &&
   (usage.input + usage.output + usage.cacheRead + usage.cacheWrite > 0 ||
     (usage.cost?.total ?? 0) !== 0);

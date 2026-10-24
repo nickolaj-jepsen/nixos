@@ -24,14 +24,6 @@ export const formatCost = (cost: number) => {
 export const formatCredit = (usd: number) =>
   usd >= 10 ? `$${Math.round(usd)}` : `$${usd.toFixed(2)}`;
 
-/** A duration as the shortest readable span: `3h 02m`, `42m`, `9s`. */
-export const formatSpan = (ms: number) => {
-  const minutes = Math.round(ms / 60_000);
-  if (minutes < 1) return `${Math.max(1, Math.round(ms / 1000))}s`;
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
-};
-
 const HOUR = 3_600_000;
 
 /** A moment as the shortest unambiguous text: `14:30` today, `Fri 09:00` within a week, else `31 Oct`. */

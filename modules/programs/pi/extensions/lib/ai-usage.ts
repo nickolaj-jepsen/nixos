@@ -99,7 +99,7 @@ const createUsageReader = () => {
   };
 };
 
-export type UsageReader = ReturnType<typeof createUsageReader>;
+type UsageReader = ReturnType<typeof createUsageReader>;
 
 // On globalThis because every session and subagent loads its own copy of this module. The
 // only state shared across this harness's extension packages; keep it that way.

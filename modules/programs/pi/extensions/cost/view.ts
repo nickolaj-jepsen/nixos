@@ -1,8 +1,4 @@
-/**
- * What the pane draws from: this session's spend, how the account pays for it,
- * and the quota left in each pool. Built by `cost.ts`, memoized there; the
- * pane only lays it out.
- */
+/** This session's spend, how the account pays for it, and the quota left in each pool. */
 import type { UsageWindow } from "../lib/ai-usage.ts";
 import type { Breakdown } from "./breakdown.ts";
 
