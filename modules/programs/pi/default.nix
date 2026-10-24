@@ -698,6 +698,11 @@ in {
             # Prints plaintext secrets to the transcript.
             "just decrypt *" = "ask";
             "gh pr merge *" = "ask";
+            "gh pr create *" = "ask";
+            "gh pr comment *" = "ask";
+            "gh pr review *" = "ask";
+            "gh issue create *" = "ask";
+            "gh issue comment *" = "ask";
           };
         };
       };

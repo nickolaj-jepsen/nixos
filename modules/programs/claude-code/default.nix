@@ -469,6 +469,11 @@
             # Prints plaintext to the transcript, sidestepping the agenix Read denies.
             "Bash(just decrypt:*)"
             "Bash(gh pr merge:*)"
+            "Bash(gh pr create:*)"
+            "Bash(gh pr comment:*)"
+            "Bash(gh pr review:*)"
+            "Bash(gh issue create:*)"
+            "Bash(gh issue comment:*)"
           ];
           # Read rules cover the file tools only — Bash can still cat these. agenix
           # decrypts to /run, and the ~/.ssh keys are symlinks into it.
