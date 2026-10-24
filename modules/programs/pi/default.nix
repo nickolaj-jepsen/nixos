@@ -662,9 +662,7 @@ in {
               # The store is read-only; listed so `rm result`, a link resolving
               # into it, doesn't ask.
               # One level into ~/worktrees, so a whole <repo> dir still asks.
-              ["/tmp" "~/.local/share/agents" "~/worktrees/*" "/nix/store"]
-              # tmpdir.ts's scratch dir; darwin's tmpdir() is not /tmp.
-              ++ lib.optional pkgs.stdenv.isDarwin "/var/folders/*/T/pi-run-*";
+              ["/tmp" "~/.local/share/agents" "~/worktrees/*" "/nix/store"];
           in
             {"*" = "ask";}
             // lib.listToAttrs (lib.concatMap (root: [
