@@ -56,20 +56,6 @@ ancestors() {
     printf '%s\n' "$out"
 }
 
-# Whether a process other than $2's pids lives in $1: shells and editors count,
-# the session's own launching shell does not (it loses its cwd as after `wt clean`).
-in_use() {
-    local root=$1 ours=" $2 " d pid cwd
-    [ -d /proc/self ] || return 0
-    for d in /proc/[0-9]*; do
-        pid=${d#/proc/}
-        case "$ours" in *" $pid "*) continue ;; esac
-        cwd=$(readlink "$d/cwd" 2>/dev/null) || continue
-        case "$cwd" in "$root" | "$root"/*) return 0 ;; esac
-    done
-    return 1
-}
-
 case "$verb" in
 create)
     # No wt: print nothing and Claude Code creates the worktree itself.
@@ -126,7 +112,10 @@ park)
     # The launch worktree goes only when nothing can be lost: clean, nothing
     # ahead, not parked on the default branch, nobody else inside. A worktree
     # entered with EnterWorktree is left to Claude Code's own exit prompt.
-    launch=$1 claude=$2 ours=$3
+    launch=$1 claude=$2
+    # Detached, so wt no longer sees the session's own launching shell as its
+    # caller's; that shell may lose its cwd, as after any `wt clean`.
+    export WT_IGNORE_PIDS=$3
     cd /
     for _ in $(seq 50); do
         [ -e "/proc/$claude" ] || break
@@ -135,7 +124,6 @@ park)
     row=$(wt_row "$launch") || exit 0
     read_row "$row"
     [ "$is_main" = 0 ] && [ "$safe" = 1 ] && [ "$branch" != "$default" ] || exit 0
-    in_use "$path" "$ours" && exit 0
     cd "$path"
     wt clean "$name"
     ;;

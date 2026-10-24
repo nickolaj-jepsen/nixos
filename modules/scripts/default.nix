@@ -55,17 +55,20 @@
         })
         (makeScript {
           path = ./wt.bash;
-          runtimeInputs = with pkgs; [
-            git
-            fzf
-            diffnav # for the diff verb
-            util-linux # for column
-            gawk
-            gnused
-            gnugrep
-            findutils
-            coreutils
-          ];
+          runtimeInputs = with pkgs;
+            [
+              git
+              fzf
+              diffnav # for the diff verb
+              util-linux # for column
+              gawk
+              gnused
+              gnugrep
+              findutils
+              coreutils
+            ]
+            # in_use reads cwds through lsof where there is no /proc.
+            ++ lib.optional stdenv.isDarwin lsof;
         })
       ]
       # systemd-only scripts (the systemd package isn't built on darwin).

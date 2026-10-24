@@ -168,6 +168,7 @@ parent_of() {
 # so the scan never counts itself. wt's ancestors and whatever its caller started
 # are not users: the caller's shell sits in the worktree by construction, and so
 # do a pipeline's other commands and a pi session's LSP and MCP servers.
+# WT_IGNORE_PIDS (space-separated) adds users a detached caller vouches for.
 PROC_CWDS="" PROC_CWDS_READ=0 OUR_PIDS="" CALLER=""
 read_proc_cwds() {
     (( PROC_CWDS_READ == 0 )) || return 0
@@ -177,6 +178,9 @@ read_proc_cwds() {
     while [[ -n "$pid" ]] && (( pid > 1 )); do
         OUR_PIDS+=" $pid "
         pid=$(parent_of "$pid")
+    done
+    for pid in ${WT_IGNORE_PIDS:-}; do
+        OUR_PIDS+=" $pid "
     done
     if [[ -d /proc/self ]]; then
         PROC_CWDS=$(cd / && find /proc/[0-9]*/cwd -maxdepth 0 -printf '%h\t%l\n' 2>/dev/null \
