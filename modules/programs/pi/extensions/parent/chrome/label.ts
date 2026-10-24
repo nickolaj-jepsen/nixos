@@ -39,7 +39,7 @@ import {
   type SidecarUpdate,
   type TurnState,
 } from "../../shared/sidecar.ts";
-import { trackUserWait, waitingOnUser } from "../lib/user-wait.ts";
+import { waitingOnUser } from "../lib/user-wait.ts";
 import type { ChromeState } from "./state.ts";
 
 type Phase = "working" | "idle" | "failed";
@@ -365,9 +365,6 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
     description: "Relabel this session now",
     handler: (ctx) => refresh(ctx, true),
   });
-
-  // Before any ui_prompt_start handler that reads the state it keeps, title.ts's included.
-  trackUserWait(pi);
 
   pi.on("session_start", (_event, ctx) => {
     cwd = ctx.cwd;

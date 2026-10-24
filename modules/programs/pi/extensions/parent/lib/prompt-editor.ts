@@ -10,9 +10,9 @@
  *
  * Everything here belongs to the live TUI session. Provide or wrap from its
  * `session_start`, never from the extension factory: pi re-runs a cached
- * factory for /new, /resume, /fork, /reload and in-process subagents. Withdraw
- * and unwrap at its `session_shutdown`, so the next session's editor never
- * draws through a disposed session's ctx.
+ * factory for /new, /resume and /fork without re-evaluating this module.
+ * Withdraw and unwrap at its `session_shutdown`, so the next session's editor
+ * never draws through a disposed session's ctx.
  */
 import {
   CustomEditor,
@@ -43,11 +43,7 @@ type Chain = {
   own: WeakSet<EditorFactory>;
 };
 
-// On globalThis because each extension loads its own copy of this module, and
-// all of them must compose on one chain.
-const KEY = Symbol.for("fireproof.pi.prompt-editor");
-const store = globalThis as { [KEY]?: Chain };
-const chain: Chain = (store[KEY] ??= { wrappers: new Map(), stale: false, own: new WeakSet() });
+const chain: Chain = { wrappers: new Map(), stale: false, own: new WeakSet() };
 
 const compose = (): EditorFactory => {
   const inner = chain.adopted ?? chain.provided;

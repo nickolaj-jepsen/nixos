@@ -3,10 +3,8 @@
  * extensions can tell it from a name the user chose with `/name`.
  */
 
-// On globalThis because each extension loads its own copy of this module.
-const KEY = Symbol.for("fireproof.pi.auto-name");
-const store = globalThis as { [KEY]?: Map<string, string> };
-const names = (store[KEY] ??= new Map());
+// Module state starts empty after /reload: identity refills it at session_start.
+const names = new Map<string, string>();
 
 /** Record `name` as the automatic name of `sessionId`; `undefined` forgets it. */
 export function setAutoName(sessionId: string, name: string | undefined): void {

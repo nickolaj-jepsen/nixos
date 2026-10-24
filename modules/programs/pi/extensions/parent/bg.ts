@@ -13,7 +13,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { isSubagentSession } from "../shared/subagent-session.ts";
 
 const TOOL = "bg_run";
 const STATUS = "bg";
@@ -51,9 +50,6 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", (_event, ctx) => {
     session = { ctx, closed: false, running: new Set() };
-    // A child's session is gone by the time its task ends, so nothing would hear the wake.
-    if (isSubagentSession(ctx))
-      pi.setActiveTools(pi.getActiveTools().filter((name) => name !== TOOL));
   });
 
   pi.on("session_shutdown", (_event, ctx) => {

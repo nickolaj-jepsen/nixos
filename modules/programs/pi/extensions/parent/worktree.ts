@@ -343,7 +343,7 @@ export default function (pi: ExtensionAPI) {
       }),
     }),
     exposure: "model-only",
-    // Activated at session_start, so a subagent child never declares it.
+    // Activated at session_start, only where the move can run.
     defaultActive: false,
     executionMode: "sequential",
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

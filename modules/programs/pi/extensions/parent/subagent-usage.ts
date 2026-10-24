@@ -17,7 +17,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
-import { childTranscriptDir, isSubagentSession } from "../shared/subagent-session.ts";
+import { childTranscriptDir } from "../shared/subagent-session.ts";
 import {
   addUsage,
   type ChildCall,
@@ -148,7 +148,6 @@ export default function (pi: ExtensionAPI) {
    * `sweep` also files transcripts no record names, at the cost of an agent label.
    */
   const file = (ctx: ExtensionContext, sweep = false) => {
-    if (isSubagentSession(ctx)) return;
     const latest = filed(ctx);
     const recorded = recordedRuns(ctx);
     const runs = [...recorded.values(), ...(sweep ? unrecordedRuns(ctx, recorded) : [])];

@@ -35,7 +35,7 @@ export default function (pi: ExtensionAPI) {
     );
   };
 
-  // Subagents share globalThis but have no editor; a child's prompt must not consume the stash.
+  // A print, JSON or RPC run has no editor; its prompt must not consume the stash.
   const hasEditor = (ctx: ExtensionContext) => ctx.mode === "tui" && ctx.hasUI;
 
   pi.on("session_start", (_event, ctx) => {

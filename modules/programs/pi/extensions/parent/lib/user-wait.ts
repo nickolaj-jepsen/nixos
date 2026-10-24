@@ -8,11 +8,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 type SessionWait = { prompting: boolean; tools: Set<string>; agentPrompts: number };
 
-// On globalThis because each extension loads its own copy of this module, and
-// all of them must read the state whichever one's handlers keep it.
-const KEY = Symbol.for("fireproof.pi.user-wait");
-const store = globalThis as { [KEY]?: Map<string, SessionWait> };
-const sessions = (store[KEY] ??= new Map());
+const sessions = new Map<string, SessionWait>();
 
 const state = (ctx: ExtensionContext): SessionWait => {
   const id = ctx.sessionManager.getSessionId();
@@ -23,8 +19,8 @@ const state = (ctx: ExtensionContext): SessionWait => {
 
 /**
  * Registers the handlers that keep the state `waitingOnUser` reads, per
- * session. The updates are idempotent, so every consumer calls this; call it
- * before registering a `ui_prompt_start` handler that reads the state.
+ * session. Register it once, before any `ui_prompt_start` handler that reads
+ * the state.
  */
 export function trackUserWait(pi: ExtensionAPI): void {
   // tool_execution_start fires before tool_call hooks, so a permission ask counts as in flight.

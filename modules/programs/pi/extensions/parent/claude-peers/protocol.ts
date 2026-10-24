@@ -196,8 +196,7 @@ export function socketReachable(socketPath: string, timeoutMs = 300): Promise<bo
 
 /**
  * Live, messageable sessions of other processes from every Claude registry,
- * newest first. Matched by pid, so in-process subagents don't see their own main
- * session as a peer either.
+ * newest first.
  */
 export async function listPeers(): Promise<Peer[]> {
   const domain = pidDomain();

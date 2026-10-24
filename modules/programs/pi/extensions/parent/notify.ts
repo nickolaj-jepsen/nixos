@@ -12,13 +12,13 @@
 import { spawn } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { SIDECAR_CHANNEL, type SidecarUpdate } from "../shared/sidecar.ts";
-import { trackUserWait, waitingOnUser } from "./lib/user-wait.ts";
+import { waitingOnUser } from "./lib/user-wait.ts";
 
 // The settle call usually lands in a second or two; past this a plain toast beats a late one.
 const SETTLE_WAIT_MS = 5_000;
 
 function notify(ctx: ExtensionContext, message: string) {
-  // Print/JSON/RPC runs and subagents are scripted; nobody is waiting at a terminal.
+  // Print/JSON/RPC runs are scripted; nobody is waiting at a terminal.
   if (ctx.mode !== "tui" || !ctx.hasUI) return;
   process.stdout.write("\x07");
   // On PATH only on Linux desktops; elsewhere the spawn fails and is ignored.
@@ -40,7 +40,6 @@ const finished = (update: SidecarUpdate | undefined) => {
 };
 
 export default function (pi: ExtensionAPI) {
-  trackUserWait(pi);
   /** The settle reading of the current run, once it arrives. */
   let settled: SidecarUpdate | undefined;
   let waiter: ((update: SidecarUpdate) => void) | undefined;

@@ -12,6 +12,7 @@ import claudePeers from "./claude-peers.ts";
 import condense from "./condense.ts";
 import cost from "./cost.ts";
 import gutter from "./gutter.ts";
+import { trackUserWait } from "./lib/user-wait.ts";
 import modelLabels from "./model-labels.ts";
 import notify from "./notify.ts";
 import spellfix from "./spellfix.ts";
@@ -19,8 +20,10 @@ import stash from "./stash.ts";
 import subagentUsage from "./subagent-usage.ts";
 import worktree from "./worktree.ts";
 
-// Registration order is handler order.
+// Registration order is handler order: user-wait's state has to be current
+// before anything reads it on ui_prompt_start.
 const FEATURES: [string, (pi: ExtensionAPI) => void][] = [
+  ["user-wait", trackUserWait],
   ["aliases", aliases],
   ["bg", bg],
   ["browser-gate", browserGate],

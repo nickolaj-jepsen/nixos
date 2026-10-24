@@ -70,9 +70,6 @@ const HOLD_DIALOG_MS = 5 * 60 * 1000;
 const DUPLICATE_WINDOW_MS = 30_000;
 const RATE_MAX = 10;
 const RATE_WINDOW_MS = 60_000;
-// In-process subagent sessions load this extension too; only the first
-// session in the process may own the pid-keyed registry entry and socket.
-const OWNER = Symbol.for("fireproof.claude-peers.owner");
 // A subscriber that stopped reading (e.g. a suspended Claude) must not stall quitting or /new.
 const EXIT_NOTICE_TIMEOUT_MS = 1000;
 
@@ -95,8 +92,6 @@ interface Subscription {
 }
 
 export default function (pi: ExtensionAPI) {
-  const runtimeId = Symbol("claude-peers-runtime");
-  const owner = globalThis as { [OWNER]?: symbol };
   let ctx: ExtensionContext | undefined;
   /** Inbound frames arrive on socket callbacks, where a used-up ctx is an uncaught throw. */
   let live = false;
@@ -113,7 +108,7 @@ export default function (pi: ExtensionAPI) {
   let unsubscribeSidecar: (() => void) | undefined;
   let warnedProtocol = false;
 
-  const isOwner = () => owner[OWNER] === runtimeId && server !== undefined;
+  const isOwner = () => server !== undefined;
   const ownName = () => entry?.name ?? displayName();
   const ownLabel = () => `${ownName()} [${shortId({ messagingSocketPath: socketPath })}]`;
 
@@ -360,14 +355,11 @@ export default function (pi: ExtensionAPI) {
 
   async function start(c: ExtensionContext) {
     ctx = c;
-    if (owner[OWNER] !== undefined) return;
-    owner[OWNER] = runtimeId;
     socketPath = path.join(socketDir(), `${process.pid}.sock`);
     ownAddress = encodeAddress(socketPath);
     try {
       server = await bindInbox(socketPath, onFrame);
     } catch (e) {
-      // Keep the claim, or the next subagent session would take the pid's entry under its own id.
       c.ui.notify(`claude-peers: no inbox (${(e as Error).message})`, "warning");
       return;
     }
@@ -399,7 +391,6 @@ export default function (pi: ExtensionAPI) {
   async function stop(reason: SessionShutdownEvent["reason"]) {
     // Before the awaits below, so a frame already in flight cannot outlive the ctx.
     live = false;
-    if (owner[OWNER] !== runtimeId) return;
     // A reload keeps this session alive; telling subscribers it exited would be a lie.
     if (reason !== "reload")
       await Promise.all(
@@ -420,7 +411,6 @@ export default function (pi: ExtensionAPI) {
     entry = undefined;
     if (process.env.CLAUDE_CODE_MESSAGING_SOCKET === socketPath)
       delete process.env.CLAUDE_CODE_MESSAGING_SOCKET;
-    owner[OWNER] = undefined;
   }
 
   /** Keeps the registry's summary and step current, so peers can tell what this session is on. */
@@ -644,12 +634,10 @@ export default function (pi: ExtensionAPI) {
           notes.push(
             `It has been ${activityLabel(target)}, so it may be abandoned; your message starts a new turn there. Don't wait on a reply.`,
           );
-        if (!from)
-          notes.push("This is a subagent session without an inbox, so the target cannot reply.");
       }
 
       if (params.notify_when_idle) {
-        if (!from) notes.push("No idle subscription: only the main pi session can subscribe.");
+        if (!from) notes.push("No idle subscription: this session has no inbox.");
         else if (!target.peerFeatures?.includes(FEATURE_NOTIFY_IDLE))
           notes.push(`No idle subscription: ${label} does not support it.`);
         else {

@@ -8,8 +8,8 @@ export type ChromeState = {
   /** Set once at session_start; its getters read the live session. */
   ctx: ExtensionContext | undefined;
   /**
-   * Whether the session draws pi's TUI. A headless one (an in-process subagent,
-   * `pi -p`, RPC) shows none of this, so it runs no git, gh, ai-usage or label call.
+   * Whether the session draws pi's TUI. A headless one (`pi -p`, RPC) shows
+   * none of this, so it runs no git, gh, ai-usage or label call.
    */
   live: boolean;
   tui: Renderer | undefined;
