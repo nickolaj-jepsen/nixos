@@ -60,6 +60,7 @@ import {
   writeRegistryEntry,
 } from "./claude-peers/protocol.ts";
 import { isAutoName } from "./lib/auto-name.ts";
+import { IDENTITY_ENTRY, SIDECAR_CHANNEL, type SidecarUpdate } from "./lib/sidecar.ts";
 import { isLeanModel } from "./lib/lean-model.ts";
 import { markAgentPrompt } from "./lib/user-wait.ts";
 
@@ -131,6 +132,7 @@ export default function (pi: ExtensionAPI) {
   const ourSubscriptions = new Map<string, Subscription>();
   const sentMessages = new Map<string, string>();
   const recentBySender = new Map<string, { at: number; body: string }[]>();
+  let unsubscribeSidecar: (() => void) | undefined;
 
   const isOwner = () => owner[OWNER] === runtimeId && server !== undefined;
   const ownName = () => entry?.name ?? displayName();
@@ -407,6 +409,7 @@ export default function (pi: ExtensionAPI) {
       name: displayName(),
       nameSource: named && !isAutoName(c.sessionManager.getSessionId(), named) ? "user" : "derived",
       nameSince: Date.now(),
+      summary: persistedSummary(c),
     };
     const reloaded = owner[RELOADED];
     owner[RELOADED] = undefined;
@@ -461,14 +464,31 @@ export default function (pi: ExtensionAPI) {
     pi.setActiveTools([...pi.getActiveTools(), WORKTREE_TOOL]);
   }
 
+  /** Keeps the registry's summary and step current, so peers can tell what this session is on. */
+  function onSidecar(data: unknown) {
+    const update = data as SidecarUpdate;
+    if (!isOwner() || !entry || update.sessionId !== entry.sessionId) return;
+    // The step is a plan for the turn in flight; a settled turn has none.
+    const doing = update.moment === "start" ? update.doing : undefined;
+    const summary = update.summary ?? entry.summary;
+    if (summary === entry.summary && doing === entry.doing) return;
+    void publish({ summary, doing });
+  }
+
   pi.on("session_start", async (_event, c) => {
     live = true;
+    unsubscribeSidecar?.();
+    unsubscribeSidecar = pi.events.on(SIDECAR_CHANNEL, onSidecar);
     // Once, before the first request: a later tool-set change is a prompt transition that
     // can cost a cache-invalidating re-read, far more than the declaration it saves.
     await activateWorktree(c);
     await start(c);
   });
-  pi.on("session_shutdown", async (event) => stop(event.reason));
+  pi.on("session_shutdown", async (event) => {
+    unsubscribeSidecar?.();
+    unsubscribeSidecar = undefined;
+    await stop(event.reason);
+  });
 
   // Splits peers only into active and stale, not by exact idle time, so the
   // section changes when a peer crosses STALE_AFTER_MS rather than every turn.
@@ -480,6 +500,7 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     const now = Date.now();
+    // No summaries here: a peer's changes every turn and would re-key the cached prompt.
     const row = (p: Peer) =>
       `- ${p.name} [${shortId(p)}] (${p.entrypoint === "pi" ? "pi" : "claude-code"})`;
     const active = peers.list.filter((p) => !isStale(p, now));
@@ -529,7 +550,11 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_settled", async (_event, c) => {
     ctx = c;
     if (!isOwner()) return;
-    await publish({ status: "idle", contextTokens: c.getContextUsage()?.tokens ?? undefined });
+    await publish({
+      status: "idle",
+      doing: undefined,
+      contextTokens: c.getContextUsage()?.tokens ?? undefined,
+    });
     const now = Date.now();
     const due = [...idleSubscribers.values()];
     idleSubscribers.clear();
@@ -562,7 +587,7 @@ export default function (pi: ExtensionAPI) {
     label: "List agents",
     description:
       "List the other agent sessions on this machine you can message: Claude Code sessions and pi sessions. " +
-      "Shows each session's name, short id, harness, status and working directory.",
+      "Shows each session's name, short id, harness, status and working directory, and what pi sessions are working on.",
     promptSnippet: "List Claude Code and pi sessions on this machine that send_message can reach",
     parameters: Type.Object({}),
     async execute() {
@@ -575,7 +600,10 @@ export default function (pi: ExtensionAPI) {
         };
       const rows = peers.map((p) => {
         const harness = p.entrypoint === "pi" ? "pi" : "claude-code";
-        return `- ${p.name} [${shortId(p)}] · ${harness} · ${activityLabel(p)} · ${p.cwd}`;
+        const about = aboutLine(p);
+        return `- ${p.name} [${shortId(p)}] · ${harness} · ${activityLabel(p)} · ${p.cwd}${
+          about ? `\n  ${about}` : ""
+        }`;
       });
       return {
         content: [
@@ -698,13 +726,35 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args, c) => {
       const peers = await listPeers();
       const self = isOwner() && entry ? `This session: ${ownLabel()}` : "This session has no inbox";
-      const rows = peers.map(
-        (p) =>
-          `  [${activityLabel(p)}] ${p.name} [${shortId(p)}] · ${p.entrypoint ?? "?"} · ${p.cwd}`,
-      );
+      const rows = peers.map((p) => {
+        const about = aboutLine(p);
+        return `  [${activityLabel(p)}] ${p.name} [${shortId(p)}] · ${p.entrypoint ?? "?"} · ${p.cwd}${
+          about ? `\n    ${about}` : ""
+        }`;
+      });
       c.ui.notify([self, `Other sessions (${peers.length}):`, ...rows].join("\n"), "info");
     },
   });
+}
+
+/** The last summary chrome's identity persisted on this branch, so a reload or resume keeps it. */
+function persistedSummary(c: ExtensionContext): string | undefined {
+  let summary: string | undefined;
+  for (const entry of c.sessionManager.getBranch()) {
+    if (entry.type !== "custom" || entry.customType !== IDENTITY_ENTRY) continue;
+    const data = entry.data as { summary?: unknown } | undefined;
+    if (typeof data?.summary === "string") summary = data.summary;
+  }
+  return summary;
+}
+
+/** What a pi peer says it is doing; Claude Code entries carry neither field. */
+function aboutLine(peer: Peer): string | undefined {
+  const summary = typeof peer.summary === "string" ? peer.summary : undefined;
+  const doing =
+    peer.status === "busy" && typeof peer.doing === "string" && peer.doing ? peer.doing : undefined;
+  if (!summary && !doing) return undefined;
+  return [summary, doing ? `now: ${doing}` : undefined].filter(Boolean).join(" · ");
 }
 
 // Past the 1h prompt-cache lifetime, a wake-up re-reads the whole conversation.

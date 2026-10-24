@@ -26,8 +26,35 @@ export type Fields = {
   tags?: string[];
   /** What the finished turn wants from the person, when it wants anything. */
   ask?: string;
-  /** The shortest reply that answers `ask`, for the row under the input. */
+  /** The person's likely answer to `ask`, for the row under the input. */
   reply?: string;
+  /** How the finished turn ended; absent when the model left it out. */
+  state?: TurnState;
+};
+
+/** How a finished turn ended: it did the work, it needs the person, or it could not finish. */
+export type TurnState = "done" | "blocked" | "failed";
+const TURN_STATES: readonly string[] = ["done", "blocked", "failed"];
+
+/** Session entries the identity extension appends; the last one on a branch is current. */
+export const IDENTITY_ENTRY = "identity_label";
+
+/** `pi.events` channel for each sidecar answer, so other extensions can use it without asking again. */
+export const SIDECAR_CHANNEL = "fireproof:sidecar";
+
+/**
+ * One sidecar outcome. `settle` fires once per finished turn even when no call
+ * was made (`asked: false`), so a listener waiting on the turn never has to time out.
+ */
+export type SidecarUpdate = {
+  sessionId: string;
+  moment: "start" | "settle";
+  asked: boolean;
+  label?: string;
+  summary?: string;
+  doing?: string;
+  state?: TurnState;
+  ask?: string;
 };
 
 export const MAX_DOING = 32;
@@ -35,7 +62,7 @@ export const MAX_SUMMARY = 120;
 export const MAX_ASK = 110;
 export const MAX_REPLY = 240;
 export const MAX_TAGS = 3;
-/** Headroom for six lines, not a target: only the tokens emitted are billed. */
+/** Headroom for seven lines, not a target: only the tokens emitted are billed. */
 // The model reasons before answering and a reasoning model will not be told
 // otherwise (468 of 512 in testing), so the cap has to clear the thinking that
 // the fields need, or the reply comes back as `length` with no text at all.
@@ -50,21 +77,29 @@ const COMMAND_CHARS = 48;
 const GIT_TTL_MS = 30_000;
 
 const SYSTEM = `You keep a coding session's identity current for the person working in it.
-Answer with exactly these six lines, in this order, and nothing else:
+Answer with exactly these seven lines, in this order, and nothing else:
 label: 2-6 lowercase words naming what the work is about
 doing: at most 8 words for the step in flight, or empty
 summary: one sentence of at most 20 words about the session so far
 tags: up to three of bugfix feature refactor test docs deps ci perf chore
+state: done, blocked or failed for the assistant turn, or empty
 ask: what the assistant turn needs from the person, or empty
-reply: the shortest reply that answers ask, or empty
+reply: what the person would most likely type to answer ask, or empty
 
 - The label names the work, never that you agreed to something.
 - Repeat the current label word for word when the work has not moved on.
 - doing names the step, not the subject: "stuck on the retry test", not "auth work".
 - The branch is a hint about the work, never the label on its own.
-- Fill ask and reply only from the assistant turn below. Leave both empty when
-  there is no such turn, or when it asks for nothing.
+- Fill state, ask and reply only from the assistant turn below. Leave all three
+  empty when there is no such turn.
+- state: done when the turn finished what was asked, blocked when it waits on a
+  decision or answer from the person, failed when it gave up or says the work
+  does not work yet. A turn with an ask is blocked.
 - ask is a request, not a summary: "keep the old fixture?" not "asked about the fixture".
+  Leave it empty when the turn asks for nothing.
+- reply predicts what the person would type, not what you think they should
+  say: their words, their length and their tone, as in the requests above.
+  Leave it empty when you cannot tell which way they would answer.
 - No quotes, no preamble, no commentary, no other lines.`;
 
 type GitContext = { repo: string; branch?: string };
@@ -72,7 +107,7 @@ type GitContext = { repo: string; branch?: string };
 let gitCache: { cwd: string; at: number; value: GitContext } | undefined;
 
 /** The repository and checked-out branch, or the directory name outside git. */
-const gitContext = (cwd: string): GitContext => {
+export const gitContext = (cwd: string): GitContext => {
   if (gitCache && gitCache.cwd === cwd && Date.now() - gitCache.at < GIT_TTL_MS) {
     return gitCache.value;
   }
@@ -163,7 +198,7 @@ export const buildPrompt = (ctx: ExtensionContext, input: Input) => {
 
 // Tolerates a model that answers in a list or bolds its keys, which small ones do.
 const LINE =
-  /^[\s>*#-]*\**\s*(label|doing|summary|tags|ask|reply)\s*\**\s*:\s*\**\s*(.*?)\s*\**\s*$/i;
+  /^[\s>*#-]*\**\s*(label|doing|summary|tags|state|ask|reply)\s*\**\s*:\s*\**\s*(.*?)\s*\**\s*$/i;
 
 const stripQuotes = (text: string) => text.replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, "").trim();
 
@@ -181,6 +216,9 @@ export const parseFields = (reply: string): Fields => {
       fields.doing = value;
     } else if (key === "summary") {
       if (value) fields.summary = value.slice(0, MAX_SUMMARY);
+    } else if (key === "state") {
+      const state = value.toLowerCase();
+      if (TURN_STATES.includes(state)) fields.state = state as TurnState;
     } else if (key === "ask") {
       fields.ask = value.slice(0, MAX_ASK);
     } else if (key === "reply") {
@@ -217,7 +255,7 @@ export const ask = async (
         ],
       },
       {
-        // Six short lines, and nothing worth thinking about: a model that reasons
+        // Seven short lines, and nothing worth thinking about: a model that reasons
         // here spends the whole budget on it and returns no text at all.
         maxTokens: MAX_TOKENS,
         reasoning: "minimal",

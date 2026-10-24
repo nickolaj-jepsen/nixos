@@ -566,6 +566,9 @@ in {
       home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
         # Otherwise bg_run is an ordinary extension tool and skips the bash rules below.
         shellTools.bg_run.commandArgument = "command";
+        # extensions/guardian.ts: a model judge that approves an ask your own
+        # prompts plainly asked for; anything else still reaches the dialog.
+        authorizerChain = ["guardian"];
         # A path whose read/write direction is unproven is checked against both
         # external_directory directions and takes the stricter answer, so every
         # routine reader outside the package's pure-reader core lands on the

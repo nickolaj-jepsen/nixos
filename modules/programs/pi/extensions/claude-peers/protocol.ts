@@ -58,6 +58,9 @@ export interface RegistryEntry {
   statusUpdatedAt?: number;
   /** pi-only: prompt tokens of the session's last turn; Claude Code ignores unknown fields. */
   contextTokens?: number;
+  /** pi-only: the sidecar's sentence about the session, and the step in flight while busy. */
+  summary?: string;
+  doing?: string;
   [key: string]: unknown;
 }
 

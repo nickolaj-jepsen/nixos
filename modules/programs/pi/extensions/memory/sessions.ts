@@ -3,6 +3,10 @@
  * prompt: they are cited when asked for, never injected, so an old conversation
  * cannot quietly become a fact.
  *
+ * A session's label and summary, which chrome's identity keeps current, are
+ * searched too: they say what a whole session was about where any one message
+ * only says what was said, so a match there ranks above a message.
+ *
  * Default scope is the current repo — its main checkout plus every worktree,
  * including ones `wt clean` already removed — because a discarded PoC is still
  * honest history even when its conclusions are not worth remembering.
@@ -11,6 +15,7 @@ import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } fr
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { IDENTITY_ENTRY } from "../lib/sidecar.ts";
 import { gitRoots } from "./store.ts";
 
 export type SessionScope = "repo" | "all";
@@ -22,6 +27,8 @@ export type SessionHit = {
   excerpt: string;
   file: string;
   score: number;
+  /** The session's label when it had one. */
+  label?: string;
 };
 
 const MAX_FILES = 400;
@@ -30,6 +37,24 @@ const MAX_LINE_BYTES = 512 * 1024;
 const EXCERPT_CHARS = 320;
 
 type Header = { id?: string; cwd?: string; timestamp?: string };
+// As JSON.stringify writes it; a message quoting the name has its quotes escaped.
+const IDENTITY_LINE = `"customType":"${IDENTITY_ENTRY}"`;
+type Card = { label?: string; summary?: string; tags: string[]; timestamp: string };
+
+/** The identity record a transcript line holds, if it is one. */
+function identityCard(entry: unknown): Card | undefined {
+  const row = entry as { type?: string; customType?: string; timestamp?: string; data?: unknown };
+  if (row?.type !== "custom" || row.customType !== IDENTITY_ENTRY) return undefined;
+  const data = row.data as { text?: unknown; summary?: unknown; tags?: unknown } | undefined;
+  return {
+    label: typeof data?.text === "string" && data.text ? data.text : undefined,
+    summary: typeof data?.summary === "string" && data.summary ? data.summary : undefined,
+    tags: Array.isArray(data?.tags)
+      ? data.tags.filter((tag): tag is string => typeof tag === "string")
+      : [],
+    timestamp: row.timestamp ?? "",
+  };
+}
 
 /** First line of a session file, which records its cwd and id. */
 function header(file: string): Header | undefined {
@@ -194,9 +219,19 @@ export function searchSessions(query: SessionQuery): {
     scanned++;
     const lower = raw.toLowerCase();
     if (!terms.some((term) => lower.includes(term))) continue;
+    const session = head.id ?? basename(file, ".jsonl");
+    const found: SessionHit[] = [];
+    let card: Card | undefined;
 
     for (const rawLine of raw.split("\n")) {
       if (rawLine.length > MAX_LINE_BYTES || !rawLine.startsWith("{")) continue;
+      // Read whether or not it matches: every hit of the session carries its label.
+      if (rawLine.includes(IDENTITY_LINE)) {
+        try {
+          card = identityCard(JSON.parse(rawLine)) ?? card;
+        } catch {}
+        continue;
+      }
       const lowered = rawLine.toLowerCase();
       if (!terms.some((term) => lowered.includes(term))) continue;
       let entry: unknown;
@@ -218,8 +253,8 @@ export function searchSessions(query: SessionQuery): {
       const key = snippet.slice(0, 120);
       if (seen.has(key)) continue;
       seen.add(key);
-      hits.push({
-        session: head.id ?? basename(file, ".jsonl"),
+      found.push({
+        session,
         cwd: head.cwd,
         timestamp: line.timestamp,
         role: line.role,
@@ -228,6 +263,27 @@ export function searchSessions(query: SessionQuery): {
         score: matched.length + (flat.includes(query.query.toLowerCase()) ? 1 : 0),
       });
     }
+
+    const about = card
+      ? [card.label, card.summary, card.tags.length ? `(${card.tags.join(", ")})` : undefined]
+          .filter(Boolean)
+          .join(" — ")
+      : "";
+    const aboutLower = about.toLowerCase();
+    const aboutMatched = terms.filter((term) => aboutLower.includes(term));
+    const recent = since === undefined || Date.parse(card?.timestamp ?? "") >= since;
+    if (card && aboutMatched.length > 0 && recent) {
+      found.push({
+        session,
+        cwd: head.cwd,
+        timestamp: card.timestamp,
+        role: "summary",
+        excerpt: about,
+        file,
+        score: aboutMatched.length + (aboutLower.includes(query.query.toLowerCase()) ? 1 : 0) + 1,
+      });
+    }
+    for (const hit of found) hits.push(card?.label ? { ...hit, label: card.label } : hit);
   }
   hits.sort((a, b) => b.score - a.score || b.timestamp.localeCompare(a.timestamp));
   return { hits: hits.slice(0, query.limit ?? 5), scanned, skipped };

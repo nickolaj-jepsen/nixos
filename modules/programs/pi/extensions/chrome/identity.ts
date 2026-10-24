@@ -21,8 +21,12 @@
  * A second call reads the turn once it settles, for the one thing a wall of
  * prose hides: what it wants from you. That ask takes the border's detail slot
  * when the agent is idle, and its draft answer becomes the row under the input,
- * offered with tab. The call is skipped for a turn that ran no tools and said
- * little, since those are read at a glance.
+ * offered with tab. The same call says whether the turn finished, waits on you
+ * or gave up, which the state word shows. The call is skipped for a turn that
+ * ran no tools and said little, since those are read at a glance.
+ *
+ * Every reading is broadcast on `SIDECAR_CHANNEL`, so other extensions can use
+ * it without paying for a call of their own.
  *
  * The border belongs to the editor; the wrapper in `editor.ts` calls `drawTop`
  * for the border row. Until you run `/name`, the session name follows the label,
@@ -47,8 +51,12 @@ import {
   ask as askSidecar,
   buildPrompt,
   type Fields,
+  IDENTITY_ENTRY,
   MAX_DOING,
   parseFields,
+  SIDECAR_CHANNEL,
+  type SidecarUpdate,
+  type TurnState,
 } from "../lib/sidecar.ts";
 import { recordSideCall } from "../lib/usage-ledger.ts";
 import { trackUserWait, waitingOnUser } from "../lib/user-wait.ts";
@@ -91,7 +99,6 @@ type Persisted = {
   namedSession?: boolean;
 };
 
-const CUSTOM_TYPE = "identity_label";
 const SHORTCUT = "alt+r";
 const TICK_MS = 60_000;
 // A runaway guard rather than a budget: a call costs ~$0.0002 and a turn buys one.
@@ -110,12 +117,22 @@ const MIN_ASK_ROOM = 14;
 // A turn that ran no tools and wrote less than this is read at a glance, so the
 // settle call would only tell you what is already on screen.
 const WORTH_ASKING_CHARS = 800;
+// Drafts passed over this many turns running are noise; from then on only every
+// few turns gets one, until one is taken.
+const REPLY_BACKOFF_AFTER = 4;
+const REPLY_BACKOFF_EVERY = 3;
 
 // Sub-agent widgets already own `●`, `○`, `⟳` and `▸`, so states that need you
 // are words and "working" is either pi's spinner or a frozen frame of one.
 const WORK_GLYPH = "⠿";
-const stateWord = (phase: Phase, waiting: boolean) =>
-  waiting ? "waiting" : phase === "failed" ? "failed" : "";
+const stateWord = (phase: Phase, waiting: boolean, turn: TurnState | undefined) =>
+  waiting
+    ? "waiting"
+    : phase === "failed" || (phase === "idle" && turn === "failed")
+      ? "failed"
+      : phase === "idle" && turn === "blocked"
+        ? "needs you"
+        : "";
 
 const cleanLabel = (raw: string) => {
   const first = oneLine(raw).replace(/^(label|session|task)\s*:\s*/i, "");
@@ -169,6 +186,12 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   /** What the finished turn asked for, and the draft that answers it. Both die with the next turn. */
   let ask: string | undefined;
   let reply: string | undefined;
+  /** How the finished turn ended, by the settle call's reading; dies with the next turn. */
+  let turnState: TurnState | undefined;
+  /** Whether a draft was on offer for the last turn, and how many turns running one went untaken. */
+  let offered = false;
+  let unusedReplies = 0;
+  let backedOff = 0;
   /** What the running turn has done so far, for deciding whether its outcome is worth a call. */
   let turnTools = 0;
   let lastText = 0;
@@ -187,7 +210,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       tags: meta.tags ? [...meta.tags] : undefined,
       autoName: label?.autoName,
     };
-    pi.appendEntry<Persisted>(CUSTOM_TYPE, data);
+    pi.appendEntry<Persisted>(IDENTITY_ENTRY, data);
   };
 
   /**
@@ -230,7 +253,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   const renderTitle = (ctx: ExtensionContext) => {
     const text = currentLabel(ctx)?.text;
     const age = formatAge(Date.now() - since);
-    const stateText = stateWord(phase, waitingOnUser(ctx));
+    const stateText = stateWord(phase, waitingOnUser(ctx), turnState);
     // A frozen frame, not the animation: the title is rewritten by the OS.
     const lead = phase === "working" ? `${WORK_GLYPH} ` : "";
     return `${lead}${text ? `${text} · ` : ""}${shortPath(cwd)} · ${age}${
@@ -287,7 +310,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     // A step is a plan made at turn start, so it is shown only while that turn
     // runs. What the turn wants from you outlives it, until the next one starts.
     const detail = phase === "working" ? doing : ask !== undefined ? `needs: ${ask}` : undefined;
-    const stateText = stateWord(phase, waitingOnUser(ctx));
+    const stateText = stateWord(phase, waitingOnUser(ctx), turnState);
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
     // so it belongs next to the label rather than in the session detail.
     const hint = hidden > 0 ? ` ↑${hidden}` : "";
@@ -423,6 +446,34 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     return manual ? ctx.model : undefined;
   };
 
+  /** Tells other extensions what the sidecar knows now; `asked` is false when no call was made. */
+  const announce = (moment: Moment, asked: boolean) => {
+    const update: SidecarUpdate = {
+      sessionId: sessionId(),
+      moment,
+      asked,
+      label: state.ctx ? currentLabel(state.ctx)?.text : label?.text,
+      summary: meta.summary,
+      doing: phase === "working" ? doing : undefined,
+      state: moment === "settle" ? turnState : undefined,
+      ask: moment === "settle" ? ask : undefined,
+    };
+    pi.events.emit(SIDECAR_CHANNEL, update);
+  };
+
+  /**
+   * The draft to offer, if any. After enough untaken drafts in a row, only every
+   * few turns gets one: a row you keep reading past is clutter.
+   */
+  const offer = (draft: string | undefined) => {
+    if (!draft) return undefined;
+    if (unusedReplies >= REPLY_BACKOFF_AFTER && ++backedOff % REPLY_BACKOFF_EVERY !== 0) {
+      return undefined;
+    }
+    offered = true;
+    return draft;
+  };
+
   /** Takes what the sidecar said, keeping whatever it left out. */
   const apply = (fields: Fields, moment: Moment) => {
     if (fields.summary) meta = { ...meta, summary: fields.summary };
@@ -435,7 +486,9 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     // guesses about work that has not happened.
     if (moment === "settle") {
       ask = fields.ask ? oneLine(fields.ask) : undefined;
-      reply = ask ? oneLine(fields.reply ?? "") || undefined : undefined;
+      reply = ask ? offer(oneLine(fields.reply ?? "") || undefined) : undefined;
+      // An open question is the person's turn whatever the model called it.
+      turnState = ask ? "blocked" : fields.state;
     }
     const next = fields.label ? cleanLabel(fields.label) : "";
     if (next && next !== label?.text && !ownsLabel()) {
@@ -443,6 +496,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       repaintSoon();
     }
     persist();
+    announce(moment, true);
   };
 
   /**
@@ -450,7 +504,11 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
    * shortcut, which skips the debounce and reports failures instead of hiding them.
    */
   const refresh = async (ctx: ExtensionContext, manual = false, moment: Moment = "start") => {
-    if (!state.live) return;
+    // A settled turn is announced whether or not it gets a call, so nobody waits on one.
+    const skip = () => {
+      if (moment === "settle") announce(moment, false);
+    };
+    if (!state.live) return skip();
     if (busy) {
       // A turn that settles while the turn-start call is still out keeps its ask:
       // it runs as soon as that call is done.
@@ -468,13 +526,13 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
           "warning",
         );
       }
-      return;
+      return skip();
     }
     // A settled turn is one call no matter how quickly it followed the last one;
     // the debounce exists for prompts typed in bursts.
     if (!manual && moment === "start" && Date.now() - lastCallAt < MIN_CALL_GAP_MS) return;
     const chosen = model(ctx, manual);
-    if (!chosen) return;
+    if (!chosen) return skip();
 
     const controller = new AbortController();
     inflight = controller;
@@ -512,6 +570,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       apply(fields, moment);
     } catch (error) {
       failures += 1;
+      if (!controller.signal.aborted) skip();
       if (manual && !controller.signal.aborted) {
         const reason = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(`identity: relabel failed: ${reason}`, "error");
@@ -543,6 +602,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       phase === "working" && doing ? `doing: ${doing}` : undefined,
       ask ? `needs: ${ask}` : undefined,
       reply ? `reply: ${reply}` : undefined,
+      turnState ? `last turn: ${turnState}` : undefined,
       `path: ${cwd}`,
       persisted
         ? `session: ${sessionId()}`
@@ -606,7 +666,12 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   const takeHint = () => {
     const draft = reply;
     reply = undefined;
-    if (draft) paint();
+    if (draft) {
+      offered = false;
+      unusedReplies = 0;
+      backedOff = 0;
+      paint();
+    }
     return draft;
   };
 
@@ -653,12 +718,13 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     cwd = ctx.cwd;
     ask = undefined;
     reply = undefined;
+    turnState = undefined;
     doing = undefined;
     // The last persisted record on this branch wins, so a resumed session paints
     // instantly and without a model call.
     let firstModel: string | undefined;
     for (const entry of ctx.sessionManager.getBranch()) {
-      if (entry.type !== "custom" || entry.customType !== CUSTOM_TYPE) continue;
+      if (entry.type !== "custom" || entry.customType !== IDENTITY_ENTRY) continue;
       const data = entry.data as Persisted | undefined;
       if (!data) continue;
       if (typeof data.calls === "number") calls = data.calls;
@@ -695,9 +761,21 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   // The turn's request is new information, and the call runs beside the run
   // rather than after it, so the name is ready by the time anyone looks up.
   pi.on("before_agent_start", (event, ctx) => {
-    // A new turn retires the last one's ask, its draft and its step.
+    // Only your own prompt passes a draft over; a peer's message or a steer does not.
+    if (offered && event.messageType === "user") {
+      unusedReplies += 1;
+      if (unusedReplies === REPLY_BACKOFF_AFTER && ctx.hasUI) {
+        ctx.ui.notify(
+          "identity: fewer reply drafts from now on; take one with tab to bring them back",
+          "info",
+        );
+      }
+    }
+    offered = false;
+    // A new turn retires the last one's ask, its draft, its state and its step.
     ask = undefined;
     reply = undefined;
+    turnState = undefined;
     doing = undefined;
     if (event.messageType !== "user") return;
     if (isAcknowledgement(event.prompt)) return;
@@ -724,6 +802,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     doing = undefined;
     if (turnTools > 0 || lastText >= WORTH_ASKING_CHARS) {
       void refresh(ctx, false, "settle").catch(() => {});
+    } else {
+      announce("settle", false);
     }
     paint();
   });

@@ -205,7 +205,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
     name: "session_search",
     label: "Session search",
     description:
-      "Search past pi session transcripts (pull-only, read this repo's sessions by default). Use it to recover why something was decided or what was tried before; results are quoted transcripts, not facts.",
+      "Search past pi session transcripts and their one-line summaries (pull-only, read this repo's sessions by default). Use it to recover why something was decided or what was tried before; results are quoted transcripts, not facts.",
     parameters: Type.Object({
       query: Type.String({
         description: "Words or phrase to look for in user and assistant messages.",
@@ -233,7 +233,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
           ? [`No transcript matches "${params.query}". Scanned ${result.scanned} session files.`]
           : result.hits.map(
               (hit) =>
-                `[${hit.timestamp.slice(0, 16).replace("T", " ")} · ${hit.role} · ${hit.cwd}]\n${hit.excerpt}\n  session ${hit.session} · ${hit.file}`,
+                `[${hit.timestamp.slice(0, 16).replace("T", " ")} · ${hit.role} · ${hit.cwd}${hit.label ? ` · ${hit.label}` : ""}]\n${hit.excerpt}\n  session ${hit.session} · ${hit.file}`,
             );
       if (result.skipped > 0)
         lines.push(`(${result.skipped} session files skipped: too large or unreadable)`);
