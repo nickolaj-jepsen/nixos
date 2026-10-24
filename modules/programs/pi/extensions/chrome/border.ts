@@ -4,8 +4,6 @@
  * needs from you, pi's scroll hint, the state word and the measurements. pi's
  * working spinner sits in front of the label, and a retry, compaction or branch
  * summary takes its place. The row under the input offers the drafted reply.
- *
- * The border belongs to the editor; the wrapper in `editor.ts` calls `drawTop`.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";

@@ -162,7 +162,7 @@ export const createGit = (chrome: ChromeState) => {
     chrome.tui?.requestRender();
   };
 
-  /** Looks the branch's pull request up again; a failed lookup keeps the last answer. */
+  /** Looks the branch's pull request up again; a failed lookup keeps the branch's last answer. */
   const refreshPr = async (state: GitState) => {
     const lookup = ++prLookup;
     // A branch that was never pushed has no pull request yet.
@@ -273,6 +273,8 @@ export const createGit = (chrome: ChromeState) => {
         previous.branch !== next.branch ||
         previous.upstream !== next.upstream;
       prDirty = false;
+      // The last answer belongs to the old branch, so it must not outlive it.
+      if (previous?.branch !== next.branch) setPr(null);
       if (lookup) void refreshPr(next);
       if (changed) chrome.tui?.requestRender();
     } finally {
