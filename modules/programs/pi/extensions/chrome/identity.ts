@@ -4,19 +4,24 @@
  *
  * The title is the only surface visible from the niri overview, so it stays
  * terse: task label, directory, age, and a state word only when the session
- * wants you. The border row is the persistent one inside pi: the label, which a
- * click relabels, pi's scroll hint, the state word and the measurements. pi's
- * working spinner sits in front of the label, and a retry, compaction or branch
- * summary takes its place. `/header` shows the details and the resume command.
- * The label is deterministic until you ask for a model one (alt+r or a click),
- * plus a refresh at each compaction boundary, which bounds the cost of a
- * feature that only has to help you pick a window.
+ * wants you. The border row is the persistent one inside pi: the label, the
+ * step in flight while the agent works, pi's scroll hint, the state word and
+ * the measurements. pi's working spinner sits in front of the label, and a
+ * retry, compaction or branch summary takes its place. `/header` shows the
+ * details and the resume command.
+ *
+ * The label is model-written, not cut from the first prompt: a sidecar call
+ * (`lib/sidecar.ts`) runs at each substantive turn, beside the run, and is
+ * asked to repeat the current label when the work has not moved on. So the name
+ * follows the work instead of freezing on one sentence, and the directory is
+ * never a name, since the footer already carries it. Until the first call lands
+ * the border is plain; the deterministic cut of the first prompt survives only
+ * as the fallback for a session the model could not name.
  *
  * The border belongs to the editor; the wrapper in `editor.ts` calls `drawTop`
- * for the border row. Until you run `/name`, the session name follows the latest
- * model or manual label, so `/resume` shows something useful.
+ * for the border row. Until you run `/name`, the session name follows the label,
+ * so `/resume` lists something useful.
  */
-import { basename } from "node:path";
 import {
   copyToClipboard,
   type ExtensionAPI,
@@ -27,12 +32,12 @@ import { setAutoName } from "../lib/auto-name.ts";
 import {
   catalogModel,
   firstRequest,
+  isAcknowledgement,
   NAME_MODEL,
   oneLine,
-  requests,
   stripRequest,
-  touchedFiles,
 } from "../lib/naming.ts";
+import { ask, buildPrompt, type Fields, MAX_DOING, parseFields } from "../lib/sidecar.ts";
 import { recordSideCall } from "../lib/usage-ledger.ts";
 import { trackUserWait, waitingOnUser } from "../lib/user-wait.ts";
 import { shortPath } from "./format.ts";
@@ -45,36 +50,47 @@ import type { ChromeState } from "./state.ts";
 const LABEL_ID = "label";
 
 type Phase = "working" | "idle" | "failed";
-type Source = "name" | "prompt" | "cwd" | "model" | "manual";
+type Source = "name" | "model" | "manual" | "prompt";
 
 type Label = {
   text: string;
   source: Source;
   at: number;
-  calls: number;
-  costUsd: number;
   /** The session name this extension last wrote; any other name is the user's `/name`. */
   autoName?: string;
+};
+
+/** What the sidecar says beside the label; it outlives a rename and survives `/name`. */
+type Meta = { summary?: string; tags?: readonly string[] };
+
+/** The persisted record. Entries from before the sidecar lack its optional fields. */
+type Persisted = {
+  text?: string;
+  source?: Source;
+  at?: number;
+  calls?: number;
+  costUsd?: number;
+  summary?: string;
+  tags?: string[];
+  autoName?: string;
+  /** Labels from before autoName mark that the first model label named the session. */
+  namedSession?: boolean;
 };
 
 const CUSTOM_TYPE = "identity_label";
 const SHORTCUT = "alt+r";
 const TICK_MS = 60_000;
-// Worst case for a whole session; a relabel is a few hundred tokens, so this is
-// less a budget than a guard against a click loop.
-const CALL_CAP = 20;
+// A runaway guard rather than a budget: a call costs ~$0.0002 and a turn buys one.
+const CALL_CAP = 200;
+// A paste and the follow-up that corrects it are one turn's naming, not two.
+const MIN_CALL_GAP_MS = 10_000;
+// A dead gateway should stop being asked, not be asked again every turn.
+const MAX_FAILURES = 3;
 const MAX_LABEL_CHARS = 40;
 // Below this the label stops being the point of the row, so shed the detail first.
 const MIN_LABEL_ROOM = 14;
-// Roughly 1.5k tokens: prompts say what you want, touched files say what the
-// agent is actually on, and neither grows with tool output.
-const PROMPT_CHARS = 300;
-const RECENT_PROMPTS = 5;
-const TOUCHED_FILES = 6;
-
-const SYSTEM = `You name a coding session so its owner can pick the right terminal window from a list.
-Reply with 2-6 lowercase words. No punctuation, no quotes, no "session", no trailing period.
-Use the user's own words and concrete nouns from the file names. Name the work, not the fact that you agreed to something.`;
+// A step cut shorter than this says nothing worth the columns.
+const MIN_DOING_ROOM = 8;
 
 // Sub-agent widgets already own `●`, `○`, `⟳` and `▸`, so states that need you
 // are words and "working" is either pi's spinner or a frozen frame of one.
@@ -84,7 +100,13 @@ const stateWord = (phase: Phase, waiting: boolean) =>
 
 const cleanLabel = (raw: string) => {
   const first = oneLine(raw).replace(/^(label|session|task)\s*:\s*/i, "");
-  const unquoted = first.replace(/^["'`]+|["'`.,;:]+$/g, "");
+  const unquoted = first
+    .replace(/^["'`]+|["'`.,;:]+$/g, "")
+    // A name is letters, digits, spaces and the odd hyphen: an emoji or a stray
+    // bracket from a small model costs two columns and reads as decoration.
+    .replace(/[^\p{L}\p{N} '\-/]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (unquoted.length <= MAX_LABEL_CHARS) return unquoted;
   const cut = unquoted.slice(0, MAX_LABEL_CHARS);
   const lastSpace = cut.lastIndexOf(" ");
@@ -114,16 +136,31 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   let repaintTimer: ReturnType<typeof setTimeout> | undefined;
   let warnedModel = false;
   let label: Label | undefined;
-  // Derived labels improve as a session goes on, so they are cached against the
-  // branch leaf that produced them rather than persisted.
-  let derivedCache: { leaf: string | null; text: string; source: Source } | undefined;
+  let meta: Meta = {};
+  let calls = 0;
+  let costUsd = 0;
+  let failures = 0;
+  let lastCallAt = 0;
+  /** A label the user set here, which `/name` aside is the only one the model must not touch. */
+  let manualName = false;
+  /** The step the last call named; shown while the turn runs, dropped when it settles. */
+  let doing: string | undefined;
 
   const sessionId = () => state.ctx?.sessionManager.getSessionId() ?? "";
   const shortId = () => sessionId().slice(0, 8);
 
   const persist = () => {
-    if (!label) return;
-    pi.appendEntry<Label>(CUSTOM_TYPE, label);
+    const data: Persisted = {
+      text: label?.text,
+      source: label?.source,
+      at: label?.at ?? Date.now(),
+      calls,
+      costUsd,
+      summary: meta.summary,
+      tags: meta.tags ? [...meta.tags] : undefined,
+      autoName: label?.autoName,
+    };
+    pi.appendEntry<Persisted>(CUSTOM_TYPE, data);
   };
 
   /**
@@ -135,43 +172,43 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     return name && name !== label?.autoName ? name : undefined;
   };
 
+  /** Whether the label is the user's to set, through `/name` or a label set here. */
+  const ownsLabel = () => manualName || explicitName() !== undefined;
+
   /**
-   * Stores a model or manual label and, unless the user named the session,
-   * renames it to match: `/resume` lists sessions by name, the one place the
+   * Stores a model or manual label and, unless the user owns the name, renames
+   * the session to match: `/resume` lists sessions by name, the one place the
    * label helps before the window is even open.
    */
   const adopt = (next: Omit<Label, "autoName">) => {
-    const owned = explicitName() !== undefined;
+    const owned = ownsLabel();
     label = { ...next, autoName: owned ? label?.autoName : next.text };
     if (owned) return;
     setAutoName(sessionId(), next.text);
     if (pi.getSessionName() !== next.text) pi.setSessionName(next.text);
   };
 
-  const derive = (ctx: ExtensionContext): { text: string; source: Source } => {
-    const leaf = ctx.sessionManager.getLeafId();
-    if (derivedCache?.leaf === leaf) return derivedCache;
-    let prompt = firstRequest(ctx) ?? "";
-    derivedCache = prompt
-      ? { leaf, text: cleanLabel(stripRequest(prompt)), source: "prompt" }
-      : { leaf, text: basename(ctx.cwd) || ctx.cwd, source: "cwd" };
-    return derivedCache;
-  };
+  /** The first request cut to a name: only for a session the model could not reach. */
+  const fallback = (ctx: ExtensionContext) =>
+    failures > 0 ? cleanLabel(stripRequest(firstRequest(ctx) ?? "")) : "";
 
-  const currentLabel = (ctx: ExtensionContext): { text: string; source: Source } => {
+  const currentLabel = (ctx: ExtensionContext): Label | undefined => {
     const name = explicitName();
-    if (name) return { text: name, source: "name" };
-    if (label) return { text: label.text, source: label.source };
-    return derive(ctx);
+    if (name) return { text: name, source: "name", at: label?.at ?? Date.now() };
+    if (label) return label;
+    const text = fallback(ctx);
+    return text ? { text, source: "prompt", at: Date.now() } : undefined;
   };
 
   const renderTitle = (ctx: ExtensionContext) => {
-    const { text } = currentLabel(ctx);
+    const text = currentLabel(ctx)?.text;
     const age = formatAge(Date.now() - since);
-    const state = stateWord(phase, waitingOnUser(ctx));
+    const stateText = stateWord(phase, waitingOnUser(ctx));
     // A frozen frame, not the animation: the title is rewritten by the OS.
-    const lead = busy || phase === "working" ? `${WORK_GLYPH} ` : "";
-    return `${lead}${text} · ${shortPath(cwd)} · ${age}${state ? ` · ${state}` : ""}`;
+    const lead = phase === "working" ? `${WORK_GLYPH} ` : "";
+    return `${lead}${text ? `${text} · ` : ""}${shortPath(cwd)} · ${age}${
+      stateText ? ` · ${stateText}` : ""
+    }`;
   };
 
   const paint = () => {
@@ -218,7 +255,10 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     const ctx = state.ctx;
     if (!ctx) return { left: "", right: "", controls: [] };
     const theme = ctx.ui.theme;
-    const { text } = currentLabel(ctx);
+    const current = currentLabel(ctx);
+    const name = current?.text ?? "";
+    // A step is a plan made at turn start, so it is shown only while that turn runs.
+    const step = phase === "working" ? doing : undefined;
     const stateText = stateWord(phase, waitingOnUser(ctx));
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
     // so it belongs next to the label rather than in the session detail.
@@ -236,9 +276,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     const lead =
       status?.kind === "working"
         ? `${border("──")} ${status.renderSpinnerInBorder(width)} `
-        : busy && !message
-          ? `${border("──")} ${theme.fg("accent", WORK_GLYPH)} `
-          : border("── ");
+        : border("── ");
     const separator = border(" ── ");
     const tail = border(" ──");
 
@@ -286,13 +324,25 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       }
       // The label wears the input's own border color (pi keys it to the
       // thinking level), so it reads as box chrome rather than prompt text.
-      const shown = truncateToWidth(text, room, "…");
-      const label = state.hover === LABEL_ID ? theme.fg("text", shown) : border(shown);
+      const shown = name ? truncateToWidth(name, room, "…") : "";
+      // The step gives way before the label is shortened: it is the part that can lie.
+      const roomForStep = room - visibleWidth(shown) - 3;
+      const shownStep =
+        step && shown === name && roomForStep >= MIN_DOING_ROOM
+          ? truncateToWidth(step, roomForStep, "…")
+          : undefined;
+      const painted =
+        current?.source === "prompt"
+          ? theme.fg("dim", shown)
+          : state.hover === LABEL_ID
+            ? theme.fg("text", shown)
+            : border(shown);
+      const detail = shownStep ? `${theme.fg("dim", " · ")}${theme.fg("dim", shownStep)}` : "";
       const x0 = visibleWidth(lead);
       return {
-        left: `${lead}${label}${theme.fg("dim", hint)} `,
+        left: `${lead}${painted}${detail}${theme.fg("dim", hint)}${name ? " " : ""}`,
         right,
-        label: { x0, x1: x0 + visibleWidth(shown) },
+        label: name ? { x0, x1: x0 + visibleWidth(shown) } : undefined,
         controls,
       };
     }
@@ -314,87 +364,87 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       // The label and the measurements that carry an action; the rest is plain border.
       regions: [
         ...(label
-          ? [{ ...label, id: LABEL_ID, action: (ctx: ExtensionContext) => relabel(ctx, true) }]
+          ? [{ ...label, id: LABEL_ID, action: (ctx: ExtensionContext) => refresh(ctx, true) }]
           : []),
         ...controls.map((c) => ({ ...c, x0: rightStart + c.x0, x1: rightStart + c.x1 })),
       ],
     };
   };
 
-  const model = (ctx: ExtensionContext) => {
+  /**
+   * The model to ask. A missing one is a warning, not a reason to spend the
+   * session's own model: an automatic fallback would name the session on every
+   * turn at roughly thirty times the price of the one it was told to use.
+   */
+  const model = (ctx: ExtensionContext, manual: boolean) => {
     const configured = process.env.PI_IDENTITY_MODEL || NAME_MODEL;
     const found = catalogModel(ctx, configured);
     if (found) return found;
     if (!warnedModel) {
       warnedModel = true;
       ctx.ui.notify(
-        `identity: ${configured} is not in the catalog, using the active model`,
+        `identity: ${configured} is not in the catalog${
+          manual ? ", using the active model" : ", not labeling with the active model"
+        }`,
         "warning",
       );
     }
-    return ctx.model;
+    return manual ? ctx.model : undefined;
   };
 
-  const buildPrompt = (ctx: ExtensionContext, current: string) => {
-    const files = touchedFiles(ctx, cwd, TOUCHED_FILES);
-    const lines = [`directory: ${shortPath(cwd)}`, `current label: ${current || "(none)"}`];
-    if (files.length > 0) lines.push(`files touched: ${files.join(", ")}`);
-    lines.push(
-      "requests:",
-      ...requests(ctx, RECENT_PROMPTS, PROMPT_CHARS).map((prompt) => `- ${prompt}`),
-    );
-    return lines.join("\n");
+  /** Takes what the sidecar said, keeping whatever it left out. */
+  const apply = (fields: Fields) => {
+    if (fields.summary) meta = { ...meta, summary: fields.summary };
+    if (fields.tags) meta = { ...meta, tags: fields.tags };
+    // An omitted key keeps the step; an empty one clears it.
+    if (phase === "working" && fields.doing !== undefined) {
+      doing = fields.doing ? oneLine(fields.doing).slice(0, MAX_DOING) : undefined;
+    }
+    const next = fields.label ? cleanLabel(fields.label) : "";
+    if (next && next !== label?.text && !ownsLabel()) {
+      adopt({ text: next, source: "model", at: Date.now() });
+      repaintSoon();
+    }
+    persist();
   };
 
-  const relabel = async (ctx: ExtensionContext, manual: boolean) => {
-    if (busy || !state.live) return;
-    const name = explicitName();
-    if (name) {
-      if (manual) ctx.ui.notify(`identity: /name owns the label (${name})`, "warning");
+  /**
+   * Asks the sidecar for the session's identity. `manual` is a click or the
+   * shortcut, which skips the debounce and reports failures instead of hiding them.
+   */
+  const refresh = async (ctx: ExtensionContext, manual = false) => {
+    if (!state.live || busy) return;
+    const muted = failures >= MAX_FAILURES;
+    const capped = calls >= CALL_CAP;
+    if (muted || capped) {
+      if (manual) {
+        ctx.ui.notify(
+          muted
+            ? "identity: the label model keeps failing, staying quiet until the next session"
+            : `identity: label call cap (${CALL_CAP}) reached`,
+          "warning",
+        );
+      }
       return;
     }
-    if ((label?.calls ?? 0) >= CALL_CAP) {
-      if (manual) ctx.ui.notify(`identity: label call cap (${CALL_CAP}) reached`, "warning");
-      return;
-    }
-    const chosen = model(ctx);
-    if (!chosen) {
-      if (manual) ctx.ui.notify("identity: no model available for labeling", "warning");
-      return;
-    }
+    if (!manual && Date.now() - lastCallAt < MIN_CALL_GAP_MS) return;
+    const chosen = model(ctx, manual);
+    if (!chosen) return;
 
     const controller = new AbortController();
     inflight = controller;
     busy = true;
-    paint();
+    lastCallAt = Date.now();
     try {
-      const current = currentLabel(ctx).text;
-      const response = await ctx.modelRegistry
-        .streamSimple(
-          chosen,
-          {
-            systemPrompt: SYSTEM,
-            messages: [
-              {
-                role: "user",
-                content: [{ type: "text", text: buildPrompt(ctx, current) }],
-                timestamp: Date.now(),
-              },
-            ],
-          },
-          {
-            // deepseek spends 60-70 tokens thinking before it writes the label,
-            // and a smaller cap comes back as `length` with no text at all.
-            maxTokens: 256,
-            temperature: 0,
-            timeoutMs: 12_000,
-            // The opencode gateway routes on `x-opencode-session`, which pi
-            // derives from this; without it the request fails with 400.
-            sessionId: ctx.sessionManager.getSessionId(),
-            signal: controller.signal,
-          },
-        )
-        .result();
+      const current = currentLabel(ctx);
+      // A fallback is a cut of the user's sentence, not a name: do not ask the
+      // model to repeat it, or the first guess becomes sticky.
+      const prompt = buildPrompt(ctx, {
+        label: current?.source === "prompt" ? undefined : current?.text,
+        summary: meta.summary,
+        tags: meta.tags,
+      });
+      const response = await ask(ctx, chosen, prompt, controller.signal);
       if (controller.signal.aborted) return;
       recordSideCall(pi, "session label", response);
       if (response.stopReason === "error" || response.stopReason === "aborted") {
@@ -402,19 +452,17 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       }
       const reply = response.content
         .flatMap((block) => (block.type === "text" ? [block.text] : []))
-        .join(" ");
-      const text = cleanLabel(reply);
-      if (text === "") throw new Error(`no text in reply (${response.stopReason})`);
-
-      adopt({
-        text,
-        source: "model",
-        at: Date.now(),
-        calls: (label?.calls ?? 0) + 1,
-        costUsd: (label?.costUsd ?? 0) + (response.usage?.cost?.total ?? 0),
-      });
-      persist();
+        .join("\n");
+      const fields = parseFields(reply);
+      if (Object.keys(fields).length === 0) {
+        throw new Error(`no fields in reply (${response.stopReason})`);
+      }
+      calls += 1;
+      costUsd += response.usage?.cost?.total ?? 0;
+      failures = 0;
+      apply(fields);
     } catch (error) {
+      failures += 1;
       if (manual && !controller.signal.aborted) {
         const reason = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(`identity: relabel failed: ${reason}`, "error");
@@ -433,37 +481,39 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
 
   const resumeCommand = () => `cd ${quote(cwd)} && pi --session ${shortId()}`;
   const summary = (ctx: ExtensionContext) => {
-    const { text, source } = currentLabel(ctx);
-    const calls = label?.calls ?? 0;
+    const current = currentLabel(ctx);
     const persisted = ctx.sessionManager.getSessionFile();
     return [
-      `${text}  (${source})`,
+      `${current?.text ?? "(unnamed)"}  (${current?.source ?? "none"})`,
+      meta.summary,
+      meta.tags?.length ? `tags: ${meta.tags.join(", ")}` : undefined,
+      phase === "working" && doing ? `doing: ${doing}` : undefined,
       `path: ${cwd}`,
       persisted
         ? `session: ${sessionId()}`
         : "session: ephemeral (--no-session), nothing to resume",
-      `labels: ${calls} call${calls === 1 ? "" : "s"} · ${formatCost(label?.costUsd ?? 0)}`,
+      `label calls: ${calls} · ${formatCost(costUsd)}`,
       persisted ? `resume: ${resumeCommand()}` : undefined,
     ]
       .filter(Boolean)
       .join("\n");
   };
 
-  const setManual = (text: string): "set" | "empty" | "named" => {
+  const setManual = (text: string): "set" | "empty" | "owned" => {
     const cleaned = cleanLabel(text);
     if (cleaned === "") return "empty";
-    if (explicitName()) return "named";
-    adopt({
-      text: cleaned,
-      source: "manual",
-      at: Date.now(),
-      calls: label?.calls ?? 0,
-      costUsd: label?.costUsd ?? 0,
-    });
-    derivedCache = undefined;
+    if (explicitName()) return "owned";
+    manualName = true;
+    adopt({ text: cleaned, source: "manual", at: Date.now() });
     persist();
     paint();
     return "set";
+  };
+
+  const reportManual = (ctx: ExtensionContext, result: "set" | "empty" | "owned") => {
+    if (result === "empty") ctx.ui.notify("identity: empty label ignored", "warning");
+    if (result === "owned")
+      ctx.ui.notify("identity: /name owns the label, run /name to change it", "warning");
   };
 
   pi.registerCommand("header", {
@@ -471,20 +521,17 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     handler: async (args, ctx) => {
       const trimmed = args.trim();
       if (trimmed) {
-        const result = setManual(trimmed);
-        if (result === "empty") ctx.ui.notify("identity: empty label ignored", "warning");
-        if (result === "named")
-          ctx.ui.notify("identity: /name owns the label, run /name to change it", "warning");
+        reportManual(ctx, setManual(trimmed));
         return;
       }
       ctx.ui.notify(summary(ctx), "info");
       if (!ctx.hasUI) return;
       const choice = await ctx.ui.select("Session identity", [
-        "Relabel now",
+        "Refresh label now",
         "Copy resume command",
         "Set label…",
       ]);
-      if (choice === "Relabel now") await relabel(ctx, true);
+      if (choice === "Refresh label now") await refresh(ctx, true);
       else if (choice === "Copy resume command") {
         if (!ctx.sessionManager.getSessionFile()) {
           ctx.ui.notify("identity: this session is ephemeral (--no-session)", "warning");
@@ -493,18 +540,16 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
         await copyToClipboard(resumeCommand());
         ctx.ui.notify("identity: resume command copied", "info");
       } else if (choice === "Set label…") {
-        const input = await ctx.ui.input("Session label", currentLabel(ctx).text);
+        const input = await ctx.ui.input("Session label", currentLabel(ctx)?.text ?? "");
         if (!input) return;
-        const result = setManual(input);
-        if (result === "named")
-          ctx.ui.notify("identity: /name owns the label, run /name to change it", "warning");
+        reportManual(ctx, setManual(input));
       }
     },
   });
 
   pi.registerShortcut(SHORTCUT, {
-    description: "Relabel this session",
-    handler: (ctx) => relabel(ctx, true),
+    description: "Relabel this session now",
+    handler: (ctx) => refresh(ctx, true),
   });
 
   // Before this module's own ui_prompt_start handler, which reads the state it keeps.
@@ -512,26 +557,34 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
 
   pi.on("session_start", (_event, ctx) => {
     cwd = ctx.cwd;
-    // The last persisted label on this branch wins, so a resumed session paints
+    // The last persisted record on this branch wins, so a resumed session paints
     // instantly and without a model call.
     let firstModel: string | undefined;
     for (const entry of ctx.sessionManager.getBranch()) {
-      if (entry.type === "custom" && entry.customType === CUSTOM_TYPE) {
-        const data = entry.data as (Partial<Label> & { namedSession?: boolean }) | undefined;
-        if (data && typeof data.text === "string" && data.text !== "") {
-          const source = data.source ?? "model";
-          if (source === "model") firstModel ??= data.text;
-          label = {
-            text: data.text,
-            source,
-            at: data.at ?? Date.now(),
-            calls: data.calls ?? 0,
-            costUsd: data.costUsd ?? 0,
-            // Labels from before autoName mark that the first model label named the session.
-            autoName: data.autoName ?? (data.namedSession ? firstModel : undefined),
-          };
-        }
+      if (entry.type !== "custom" || entry.customType !== CUSTOM_TYPE) continue;
+      const data = entry.data as Persisted | undefined;
+      if (!data) continue;
+      if (typeof data.calls === "number") calls = data.calls;
+      if (typeof data.costUsd === "number") costUsd = data.costUsd;
+      if (typeof data.summary === "string") meta = { ...meta, summary: data.summary };
+      if (Array.isArray(data.tags)) {
+        meta = { ...meta, tags: data.tags.filter((tag) => typeof tag === "string") };
       }
+      if (typeof data.text !== "string" || data.text === "") continue;
+      // The directory was never a name, so an old entry that recorded it as one
+      // leaves the session unnamed for the next call to fix.
+      const stored = data.source as Source | "cwd" | undefined;
+      if (stored === "cwd") continue;
+      const source = stored ?? "model";
+      if (source === "model") firstModel ??= data.text;
+      manualName = source === "manual";
+      label = {
+        text: data.text,
+        source,
+        at: data.at ?? Date.now(),
+        // Labels from before autoName mark that the first model label named the session.
+        autoName: data.autoName ?? (data.namedSession ? firstModel : undefined),
+      };
     }
     setAutoName(sessionId(), label?.autoName);
 
@@ -542,9 +595,19 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     repaintSoon();
   });
 
+  // The turn's request is new information, and the call runs beside the run
+  // rather than after it, so the name is ready by the time anyone looks up.
+  pi.on("before_agent_start", (event, ctx) => {
+    if (event.messageType !== "user") return;
+    if (isAcknowledgement(event.prompt)) return;
+    void refresh(ctx).catch(() => {});
+  });
+
   pi.on("agent_start", () => {
     since = Date.now();
     phase = "working";
+    // The turn's step is unknown until its call answers.
+    doing = undefined;
     paint();
   });
 
@@ -552,6 +615,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     since = Date.now();
     // Failure is sticky until the next run starts.
     if (phase !== "failed") phase = "idle";
+    // The step described a turn that is over.
+    doing = undefined;
     paint();
   });
 
@@ -578,9 +643,9 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   pi.on("tool_execution_end", () => paint());
 
   pi.on("session_compact", (_event, ctx) => {
-    // Compaction already paid for a summary, so the marginal label is cheap and
+    // Compaction already paid for a summary, so the marginal call is cheap and
     // the work has usually moved on by the time one happens.
-    void relabel(ctx, false).catch(() => {});
+    void refresh(ctx).catch(() => {});
     paint();
   });
 
@@ -591,6 +656,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
 
   pi.on("session_shutdown", () => {
     inflight?.abort();
+    inflight = undefined;
+    busy = false;
     setAutoName(sessionId(), undefined);
     if (timer) clearInterval(timer);
     timer = undefined;
@@ -600,10 +667,10 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     if (state.ctx && state.live) {
       // Leave an honest title for the shell prompt that follows; the fish title
       // takes over from here, but a crash-free exit should not show a stale run.
-      const { text } = currentLabel(state.ctx);
-      state.ctx.ui.setTitle(`${text} · ${shortPath(cwd)}`);
+      const text = currentLabel(state.ctx)?.text;
+      state.ctx.ui.setTitle(`${text ? `${text} · ` : ""}${shortPath(cwd)}`);
     }
   });
 
-  return { drawTop, relabel };
+  return { drawTop, refresh };
 };

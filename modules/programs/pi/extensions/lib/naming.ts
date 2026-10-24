@@ -14,8 +14,20 @@ export const NAME_MODEL = "opencode-go/deepseek-v4.1-flash";
 export const NAME_MAX_TOKENS = 256;
 export const NAME_TIMEOUT_MS = 12_000;
 
-const TRIVIAL =
-  /^(yes|yeah|yep|ok|okay|sure|agreed?|agree|continue|go on|go ahead|proceed|do it|sounds good|perfect|thanks|lgtm|carry on|next)\b/i;
+// Bare acknowledgements only. A word count cannot tell "sounds good, but make
+// it async" from "sounds good", and dropping that sentence silently freezes the
+// name on the work before it.
+const ACK = new Set(
+  "ok okay k yes yeah yep yup sure continue proceed thanks thank ty lgtm agreed agree perfect great nice cool fine good sounds right correct carry on next go ahead do it please".split(
+    " ",
+  ),
+);
+
+/** True when `text` only agrees, continues or thanks: nothing to re-read the work for. */
+export const isAcknowledgement = (text: string) => {
+  const words = text.toLowerCase().match(/[a-z']+/g) ?? [];
+  return words.length > 0 && words.length <= 3 && words.every((word) => ACK.has(word));
+};
 
 const userText = (content: string | Array<{ type: string; text?: string }>) =>
   typeof content === "string"
@@ -26,37 +38,30 @@ const userText = (content: string | Array<{ type: string; text?: string }>) =>
 
 export const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
 
-/** Short agreement replies are the bulk of a long session and say nothing new. */
-const isSubstantive = (text: string) => {
-  const trimmed = text.trim();
-  const words = trimmed.split(/\s+/).length;
-  return words >= 5 && !(words <= 8 && TRIVIAL.test(trimmed));
-};
-
-const substantivePrompts = (ctx: ExtensionContext) => {
+const sessionPrompts = (ctx: ExtensionContext) => {
   const prompts: string[] = [];
   for (const entry of ctx.sessionManager.getBranch()) {
     if (entry.type !== "message" || entry.message.role !== "user") continue;
     const text = userText(entry.message.content as string | Array<{ type: string; text?: string }>);
-    if (isSubstantive(text)) prompts.push(text);
+    if (!isAcknowledgement(text)) prompts.push(text);
   }
   return prompts;
 };
 
 /**
- * The session's requests, oldest first: the first substantive prompt and the
- * latest `recent`, each on one line cut to `chars`. Answers what the agent is
- * working on without growing with tool output.
+ * The session's requests, oldest first: the first real prompt and the latest
+ * `recent`, each on one line cut to `chars`. Answers what the agent is working
+ * on without growing with tool output.
  */
 export const requests = (ctx: ExtensionContext, recent: number, chars: number) => {
-  const prompts = substantivePrompts(ctx);
+  const prompts = sessionPrompts(ctx);
   const latest = prompts.slice(-recent);
   const picked = prompts[0] && !latest.includes(prompts[0]) ? [prompts[0], ...latest] : latest;
   return picked.map((prompt) => oneLine(prompt).slice(0, chars));
 };
 
-/** The first substantive prompt, whole: a deterministic name is cut from a sentence. */
-export const firstRequest = (ctx: ExtensionContext) => substantivePrompts(ctx)[0];
+/** The first prompt that is not a bare acknowledgement, whole. */
+export const firstRequest = (ctx: ExtensionContext) => sessionPrompts(ctx)[0];
 
 // The deterministic name comes from a whole sentence, so drop the asking part.
 const REQUEST_PREFIX = /^(?:(?:can|could|would|will) you (?:please )?|(?:please|help me|to) )/i;
