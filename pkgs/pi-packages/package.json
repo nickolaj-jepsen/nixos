@@ -3,8 +3,8 @@
   "private": true,
   "dependencies": {
     "@gotgenes/pi-permission-system": "41.0.0",
-    "@juicesharp/rpiv-ask-user-question": "2.13.9",
-    "@juicesharp/rpiv-todo": "2.13.9",
+    "@juicesharp/rpiv-ask-user-question": "2.15.0",
+    "@juicesharp/rpiv-todo": "2.15.0",
     "@tintinweb/pi-subagents": "0.22.0",
     "pi-background-tasks": "2.6.10"
   }
