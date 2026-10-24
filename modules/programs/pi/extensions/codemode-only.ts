@@ -54,7 +54,7 @@ const DELEGATING = [
 const LEAN =
   "Don't delegate on this model: it serves one request at a time, so a subagent would only queue behind you. Do the work yourself; call `subagent` only when the user explicitly asks for it, as `/delegate` and `/workflow` do.";
 // Every file read here is paid for again on each later turn, so volume work
-// belongs on a cheap child and judgment stays put. Plan inherits this model.
+// belongs on a cheap child and judgment stays put.
 const EXPENSIVE =
   "This model costs several times a cheap subagent's: hand the wide reads and multi-file searches to `Explore` and independent second opinions to `reviewer`, and keep design, review and small edits here. What you read into this context is paid for again on every later turn.";
 

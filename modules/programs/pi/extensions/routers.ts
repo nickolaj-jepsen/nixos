@@ -1,36 +1,18 @@
 /**
- * Virtual models (see pi's docs/virtual-models.md), one per kind, with the
- * ladders and one-line descriptions in ./routers/kinds.ts: `vm/flash`,
- * `vm/strong`, `vm/planner` and `vm/architect`, whose rated planning entries
- * run on the planner or flash, and whose build phase runs on flash until
- * `/replan` sends the next prompt back to planning.
+ * Virtual models (see pi's docs/virtual-models.md) for the kinds in
+ * ./routers/kinds.ts, plus `vm/architect`: Jev rates each planning prompt,
+ * complex ones plan on deep and standard ones on flash, and the first edit hands
+ * the rest to flash until `/replan`. docs/models.md has the why.
  *
- * A kind only ever walks its own ladder; nothing escalates to a pricier kind on
- * its own. Each subscription meters one shared pool, so a stage is a pool, not
- * a model: availability is asked once per provider, and the model chosen inside
- * a stage is whichever fits the turn. Request counts come from ai-usage
- * (`ai-usage --json`) and from each provider's own limit errors, which pi does
- * not retry, so those never reach `route()` as a retry: the extension flags them
- * and continues the interrupted turn one stage down. No kind spends the
- * Anthropic credit below CREDIT_RESERVE_USD, which keeps it as a reserve to
- * spend by hand.
- *
- * Three bends on top of the ladder order, all visible in `/vm`:
- * - Background requests (`reason: "direct"`, e.g. compaction summaries) hold
- *   the credit stage back to last, so it serves background work only when every
- *   other pool is out.
- * - While Go's monthly window is under pace near its reset (kinds.ts: bankable
- *   allowance about to strand), its stage swaps ahead of Synthetic's.
- * - The architect's planning entry is rated by Jev (typesafe/jev-latest):
- *   standard prompts plan on flash, complex prompts on the planner, and no
- *   verdict fails open to the planner — the gate is an optimisation, not a
- *   policy. The architect's complex plans lead with Kimi K3.1 Pro on the Kimi
- *   Code plan, then Opus; vm/planner keeps Opus first.
- * - The plan→build boundary re-rates the finished plan on the same question
- *   (shadow): the verdict is marked in the chat and kept in the /vm trace
- *   but never acted on, until it has earned a threshold on real sessions.
+ * Each subscription meters one shared pool, so a stage is a pool. A pool is out
+ * while ai-usage (`ai-usage --json`) reports a used-up window, and for a while
+ * after its own limit error, which pi does not retry: the extension continues
+ * the interrupted turn one stage down. A Go timeout moves only that retry down.
+ * No kind spends the Anthropic credit below CREDIT_RESERVE_USD, and background
+ * requests (`reason: "direct"`, e.g. compaction) try it last.
  */
-import type { Message, ThinkingLevel } from "@earendil-works/pi-ai";
+import { createHash } from "node:crypto";
+import type { Message, Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -38,13 +20,13 @@ import type {
   ModelRouteRequest,
 } from "@earendil-works/pi-coding-agent";
 import { createUsageReader, exhaustedWindow, type UsageProvider } from "./lib/ai-usage.ts";
+import { entryItems } from "./lib/usage-ledger.ts";
 import {
-  ARCHITECT_PLANNER,
+  DEEP,
   FLASH,
   KIND_META,
   KINDS,
   PROVIDER,
-  STRONG,
   type Kind,
   type Ladder,
   type Stage,
@@ -64,30 +46,17 @@ const LIMIT_ERROR: Record<string, RegExp> = {
   synthetic: /quota|credit|rate.?limit|429/i,
   "kimi-coding": /reached your (5-hour|weekly|monthly) usage limit|credit balance is insufficient/i,
 };
-// How long a limit error blocks a provider when ai-usage can't say when it comes back.
-const GO_BLOCK_FALLBACK_MS = 30 * 60_000;
-// Kimi Code's window is a rolling five hours with no reader in ai-usage, so its
-// own limit errors are the only signal: long enough that a burst clears, short
-// enough that a spent plan comes back within the session.
-const KIMI_BLOCK_FALLBACK_MS = 10 * 60_000;
-// Synthetic regenerates 2% of the weekly credit every 202 minutes, so a spent
-// meter is usable again at the tick its window reports, or one tick from now
-// when that tick is already behind the snapshot.
-const SYNTHETIC_REFILL_MS = 202 * 60_000;
+// Transient failures pi retries: the retry goes one stage down, the pool stays open.
+const TRANSIENT_ERROR: Record<string, RegExp> = {
+  "opencode-go": /timed? ?out|timeout|overloaded|ended without|stream ended|terminated/i,
+};
+// How long a limit error blocks its pool on its own; ai-usage lags the error, and
+// once it reports the used-up window that window's reset blocks instead.
+const BLOCK_FALLBACK_MS = 10 * 60_000;
 // The share of the weekly meter the router leaves unspent: a turn that spends it
 // to the last drop ends in a hard 429 that no pool can cover, while a reserve
 // regenerates at 2% per 202 minutes and keeps the pool usable next session.
 const SYNTHETIC_RESERVE_PCT = 10;
-// A limit error ai-usage does not corroborate: let the turn finish, then retry.
-const UNCORROBORATED_BLOCK_MS = 60_000;
-
-// Go's monthly window, whose allowance strands at the reset. Synthetic's weekly
-// meter refills continuously and can never be banked, so only Go promotes.
-const GO_WINDOW_MS = 30 * 24 * 60 * 60_000;
-// How much of the monthly window must be left before an under-pace pool counts
-// as stranding. Earlier than this and the promotion spends 3.6x Go rates all
-// month on a risk that never materialises.
-const GO_STRAND_LEFT_MS = 0.3 * GO_WINDOW_MS;
 
 // Route decisions kept per session, for `/vm`.
 const TRACE_KEEP = 12;
@@ -95,16 +64,12 @@ const TRACE_KEEP = 12;
 /** Tools whose successful result means implementation has started. */
 const EDIT_TOOLS = new Set(["edit", "write"]);
 
-/** A place on a ladder: the stage (pool) and the model inside it. */
-type Position = { stage: number; model: number };
-type KindState = { at: Position };
-type ArchitectState = {
-  phase: "plan" | "build";
-  at: Position;
-  verdict?: boolean;
-  /** The shadow re-rate at the plan→build boundary; see classifyPlan. */
-  reRate?: boolean;
-};
+/** One custom entry per Jev verdict, to compare the gate against another classifier later. */
+const JEV_ENTRY = "vm-jev";
+
+/** `at` is the stage index on the ladder in use. */
+type KindState = { at: number };
+type ArchitectState = { phase: "plan" | "build"; at: number; verdict?: boolean };
 
 /** One route decision, as `/vm` shows it. */
 type TraceEntry = {
@@ -124,8 +89,6 @@ export default function (pi: ExtensionAPI) {
   let resumeAfter: string | undefined;
   /** Sessions whose next prompt goes back to planning. */
   const replan = new Set<string>();
-  /** Per session, the Anthropic credit spent, as accumulated from message usage. */
-  const creditSpentBySession = new Map<string, number>();
   /** Per session, the last route decisions (`/vm` shows the tail). */
   const traces = new Map<string, TraceEntry[]>();
 
@@ -140,14 +103,14 @@ export default function (pi: ExtensionAPI) {
     if (stage.provider === "anthropic") {
       return creditAboveReserve() ? undefined : `credit below the $${CREDIT_RESERVE_USD} reserve`;
     }
-    const until = blockedUntil[stage.provider] ?? 0;
-    if (Date.now() < until) return `blocked by its own limit error until ${fmtWhen(until)}`;
     const window = exhaustedWindow(usage.provider(stage.provider));
     if (window) {
       return window.meter
         ? `out of credits until the next top-up ${fmtWhen(window.resetsAt)}`
         : `out of requests until ${fmtWhen(window.resetsAt)}`;
     }
+    const until = blockedUntil[stage.provider] ?? 0;
+    if (Date.now() < until) return `blocked by its own limit error until ${fmtWhen(until)}`;
     const meter = usage.provider(stage.provider)?.windows.find((w) => w.meter);
     if (meter && 100 - meter.usedPct <= SYNTHETIC_RESERVE_PCT) {
       return `${Math.round(100 - meter.usedPct)}% credits left, under the ${SYNTHETIC_RESERVE_PCT}% reserve`;
@@ -155,96 +118,44 @@ export default function (pi: ExtensionAPI) {
     return undefined;
   };
 
-  /**
-   * Go's monthly window under pace with little of it left: the remaining
-   * allowance can no longer be spent down in time and will strand at the
-   * reset, so its stages go ahead of Synthetic's. The text explains the state
-   * for `/vm`; falsy when the promotion is inactive.
-   */
-  const goStrandingWhy = (): string | undefined => {
-    const window = usage.provider("opencode-go")?.windows.find((w) => w.label === "monthly");
-    if (!window || window.pace !== "under") return undefined;
-    const left = Date.parse(window.resetsAt) - Date.now();
-    if (left > GO_STRAND_LEFT_MS) return undefined;
-    const days = Math.max(1, Math.round(left / 86_400_000));
-    return `monthly ${Math.round(window.usedPct)}% used with ~${days}d to reset, on pace to strand`;
-  };
-
-  /**
-   * The order stages are tried in, as indices into the ladder: a stranding Go
-   * window swaps its stage ahead of an adjacent Synthetic one, and background
-   * requests hold the credit stage back to last.
-   */
+  /** The order stages are tried in, as ladder indices: background requests hold the credit back to last. */
   const layout = (ladder: Ladder, background: boolean): number[] => {
     const order = ladder.map((_, i) => i);
-    if (goStrandingWhy()) {
-      for (let i = 0; i + 1 < order.length; i++) {
-        if (ladder[i].provider === "synthetic" && ladder[i + 1].provider === "opencode-go") {
-          [order[i], order[i + 1]] = [order[i + 1], order[i]];
-        }
-      }
-    }
-    if (background) {
-      const held = order.filter((i) => ladder[i].provider === "anthropic");
-      const rest = order.filter((i) => ladder[i].provider !== "anthropic");
-      return [...rest, ...held];
-    }
-    return order;
+    if (!background) return order;
+    const credit = (i: number) => ladder[i].provider === "anthropic";
+    return [...order.filter((i) => !credit(i)), ...order.filter(credit)];
   };
 
-  const find = (ctx: ExtensionContext, stage: Stage, model: number) => {
-    const variant = stage.variants[model];
-    const found = ctx.modelRegistry.find(stage.provider, variant.id);
-    if (!found) throw new Error(`${stage.provider}/${variant.id} is not in the catalog`);
+  const find = (ctx: ExtensionContext, stage: Stage) => {
+    const found = ctx.modelRegistry.find(stage.provider, stage.id);
+    if (!found) throw new Error(`${stage.provider}/${stage.id} is not in the catalog`);
     return found;
   };
 
   /**
-   * Where to send this request: the first ready stage in `layout` order, taking
-   * the model that fits the turn (a text-only one is skipped while the
-   * conversation carries images). `from` is the current position for a
-   * continuation, so a working model keeps its prompt cache; a fresh prompt
-   * starts at the front so a recovered pool is used again. Returns the position
-   * plus, for `/vm`, why each stage passed over was skipped.
+   * The first ready stage in `layout` order, from `from` for a continuation so a
+   * working model keeps its prompt cache; a fresh prompt starts at the front so
+   * a recovered pool is used again. `at` is undefined when no pool can serve;
+   * `notes` say, for `/vm`, why each stage passed over was skipped.
    */
   const pick = async (
     ladder: Ladder,
-    from: Position | undefined,
-    messages: readonly Message[],
-    background = false,
-  ): Promise<{ at: Position; notes: string[] }> => {
+    from: number | undefined,
+    background: boolean,
+  ): Promise<{ at?: number; notes: string[] }> => {
     // Only the first decision waits; later ones use the last snapshot.
     if (!usage.known()) await usage.refresh();
     else void usage.refresh();
     const order = layout(ladder, background);
-    const images = hasImages(messages);
-    const fits = (stage: Stage, model: number) => !images || stage.variants[model].vision !== false;
-
+    const start = from === undefined ? 0 : Math.max(0, order.indexOf(from));
     const notes: string[] = [];
-    const search = (fromIdx: number): Position | undefined => {
-      const sequence = [...order.slice(fromIdx), ...order.slice(0, fromIdx)];
-      for (const s of sequence) {
-        const stage = ladder[s];
-        const why = stageWhy(stage);
-        if (why !== undefined) {
-          const note = `${stage.label}: ${why}`;
-          if (!notes.includes(note)) notes.push(note);
-          continue;
-        }
-        // Staying on the same model keeps the cache; otherwise the preferred one.
-        const preferred = from?.stage === s && fits(stage, from.model) ? from.model : 0;
-        for (const m of [preferred, ...stage.variants.keys()]) {
-          if (fits(stage, m)) return { stage: s, model: m };
-        }
-        notes.push(`${stage.label}: no variant can read this turn's images`);
-      }
-      return undefined;
-    };
-
-    const startIdx = from ? Math.max(0, order.indexOf(from.stage)) : 0;
     // Down the layout first, then up it, for a pool that recovered mid-turn.
-    const at = search(startIdx) ?? from ?? { stage: order[0], model: 0 };
-    return { at, notes };
+    for (const s of [...order.slice(start), ...order.slice(0, start)]) {
+      const why = stageWhy(ladder[s]);
+      if (why === undefined) return { at: s, notes };
+      notes.push(`${ladder[s].label}: ${why}`);
+    }
+    return { notes };
   };
 
   const toTrace = (
@@ -252,135 +163,94 @@ export default function (pi: ExtensionAPI) {
     kind: string,
     reason: string,
     stage: Stage,
-    at: Position,
     notes: string[],
   ) => {
     const sid = ctx.sessionManager.getSessionId();
     const list = traces.get(sid) ?? [];
-    list.push({
-      at: Date.now(),
-      kind,
-      reason,
-      provider: stage.provider,
-      model: stage.variants[at.model].id,
-      notes,
-    });
+    list.push({ at: Date.now(), kind, reason, provider: stage.provider, model: stage.id, notes });
     traces.set(sid, list.slice(-TRACE_KEEP));
   };
 
-  /** Route within one kind's ladder, keeping `state` unless the position changes. */
+  /**
+   * A retry keeps the failed model, so its cache and reasoning replay stay valid,
+   * unless that model's pool failed transiently: then this retry alone goes to
+   * the next ready stage. Undefined when routing itself failed (no `failed`).
+   */
+  const routeRetry = (
+    ladder: Ladder,
+    kind: string,
+    request: ModelRouteRequest<unknown>,
+    ctx: ExtensionContext,
+  ): ModelRoute<never> | undefined => {
+    const failed = request.failed;
+    if (!failed) return undefined;
+    const keep = { model: failed.model, thinkingLevel: request.thinkingLevel };
+    const error = failed.message.errorMessage ?? "";
+    if (!TRANSIENT_ERROR[failed.model.provider]?.test(error)) return keep;
+    const index = ladder.findIndex((s) => sameModel(s, failed.model));
+    const next = ladder.findIndex((s, i) => i > index && stageWhy(s) === undefined);
+    if (index === -1 || next === -1) return keep;
+    toTrace(ctx, kind, "retry", ladder[next], [
+      `${ladder[index].label}: ${oneLine(error)} (this retry only)`,
+    ]);
+    return { model: find(ctx, ladder[next]), thinkingLevel: request.thinkingLevel };
+  };
+
+  /** Route within one ladder, keeping `state` unless the stage changes. */
   const routeKind = async <S extends object>(
     ladder: Ladder,
     kind: string,
     request: ModelRouteRequest<S>,
     ctx: ExtensionContext,
-    current: Position | undefined,
-    withAt: (at: Position) => S,
+    current: number | undefined,
+    withAt: (at: number) => S,
     preNotes: string[] = [],
   ): Promise<ModelRoute<S>> => {
-    // Retries keep the failed model, so its cache and reasoning replay stay valid.
-    if (request.reason === "retry" && request.failed) {
-      return { model: request.failed.model, thinkingLevel: request.thinkingLevel };
+    if (request.reason === "retry") {
+      const retry = routeRetry(ladder, kind, request, ctx);
+      if (retry) return retry;
     }
     // A new prompt walks the whole ladder again; anything else starts where it is.
     const fresh = request.reason === "user" || request.reason === "direct";
     const { at, notes } = await pick(
       ladder,
       fresh ? undefined : current,
-      request.messages,
       request.reason === "direct",
     );
-    if (current && current.stage !== at.stage) {
-      notifySwitch(
-        ctx,
-        ladder[current.stage],
-        ladder[at.stage],
-        stageWhy(ladder[current.stage]) !== undefined,
-      );
+    if (at === undefined) {
+      throw new Error(`vm/${kind}: no pool can serve this request (${notes.join("; ")})`);
     }
-    toTrace(ctx, kind, request.reason, ladder[at.stage], at, [...preNotes, ...notes]);
+    if (current !== undefined && current !== at && ladder[current] && stageWhy(ladder[current])) {
+      notifySwitch(ctx, ladder[current], ladder[at]);
+    }
+    toTrace(ctx, kind, request.reason, ladder[at], [...preNotes, ...notes]);
     return {
-      model: find(ctx, ladder[at.stage], at.model),
+      model: find(ctx, ladder[at]),
       thinkingLevel: request.thinkingLevel,
-      state: samePosition(current, at) ? request.state : withAt(at),
+      state: current === at ? request.state : withAt(at),
     };
   };
 
-  /**
-   * The shadow re-rate at the plan→build boundary: with the plan text in
-   * state, the same complexity question that gated the prompt. A plan that
-   * reads complex after a standard prompt is the misclassification the
-   * prompt gate cannot see. Shadow only: the verdict is marked and
-   * traced, never routed on, until it has earned a threshold on real
-   * sessions. No verdict is not a signal.
-   */
-  const classifyPlan = async (
-    ctx: ExtensionContext,
-    request: ModelRouteRequest<ArchitectState>,
-  ): Promise<{ complex?: boolean; note: string }> => {
-    const jev = ctx.modelRegistry.findOfType("classifier", "typesafe", "jev-latest");
-    if (!jev) return { note: "re-rate off: no typesafe credentials" };
-    try {
-      const result = await ctx.modelRegistry.classify(
-        jev,
-        {
-          state: {
-            prompt: lastUserText(request.messages).slice(0, 4_000),
-            plan: planText(request.messages).slice(0, 12_000),
-          },
-          questions: {
-            complexity: {
-              type: "choice",
-              instructions:
-                "The finished plan for `prompt` is in `plan`. Does the plan reveal work more demanding than an ordinary feature, fix, review or question?",
-              criteria: {
-                standard: "The plan covers ordinary work with straightforward steps",
-                complex: "The plan reveals subtle design, cross-cutting changes, or hard debugging",
-              },
-            },
-          },
-        },
-        { signal: request.signal },
-      );
-      const answer = result.stopReason === "stop" ? result.answers.complexity : undefined;
-      if (answer?.type === "choice") {
-        const complex = (answer.probabilities.complex ?? 0) >= 0.5;
-        return { complex, note: complex ? "re-rate: complex" : "re-rate: standard" };
-      }
-      return { note: `re-rate inconclusive (${result.errorMessage ?? result.stopReason})` };
-    } catch (error) {
-      return { note: `re-rate failed (${errorText(error)}): no verdict` };
-    }
+  const notifySwitch = (ctx: ExtensionContext, from: Stage, to: Stage) => {
+    if (!ctx.hasUI) return;
+    ctx.ui.notify(`${from.label} is used up: continuing on ${to.label}`, "info");
   };
 
-  const notifySwitch = (ctx: ExtensionContext, from: Stage, to: Stage, down: boolean) => {
+  /** A phase marker in the chat; subagents run without a UI. */
+  const marker = (ctx: ExtensionContext, text: string) => {
     if (!ctx.hasUI) return;
-    ctx.ui.notify(
-      down
-        ? `${from.label} is used up: continuing on ${to.label}`
-        : `${to.label} goes first while its window can still strand: continuing on it`,
-      "info",
-    );
-  };
-
-  /**
-   * A phase marker in the chat: gate verdicts and transitions as they happen.
-   * `warning` is for the ones worth a second look — a shadow re-rate changing
-   * its mind. Subagents run without a UI.
-   */
-  const marker = (ctx: ExtensionContext, text: string, type: "info" | "warning" = "info") => {
-    if (!ctx.hasUI) return;
-    ctx.ui.notify(text, type);
+    ctx.ui.notify(text, "info");
   };
 
   /**
    * The Jev verdict for a planning entry: `false` plans on flash, anything
-   * else on the planner. No verdict fails open to the planner — the gate is
-   * missing credentials, a quota or a bad answer, not a signal.
+   * else on deep. No verdict fails open to deep — the gate is missing
+   * credentials, a quota or a bad answer, not a signal.
    */
   const classifyPlanning = async (
     ctx: ExtensionContext,
     request: ModelRouteRequest<ArchitectState>,
+    prompt: string,
   ): Promise<{ verdict?: boolean; note: string }> => {
     const jev = ctx.modelRegistry.findOfType("classifier", "typesafe", "jev-latest");
     if (!jev) return { note: "gate off: Jev not available (no typesafe credentials)" };
@@ -388,7 +258,7 @@ export default function (pi: ExtensionAPI) {
       const result = await ctx.modelRegistry.classify(
         jev,
         {
-          state: { prompt: lastUserText(request.messages).slice(0, 16_000) },
+          state: { prompt: prompt.slice(0, 16_000) },
           questions: {
             complexity: {
               type: "choice",
@@ -408,29 +278,40 @@ export default function (pi: ExtensionAPI) {
         return { verdict: complex, note: complex ? "jev: complex" : "jev: standard" };
       }
       return {
-        note: `gate inconclusive (${result.errorMessage ?? result.stopReason}): planning on the planner`,
+        note: `gate inconclusive (${result.errorMessage ?? result.stopReason}): planning on deep`,
       };
     } catch (error) {
-      return { note: `gate failed (${errorText(error)}): planning on the planner` };
+      return { note: `gate failed (${errorText(error)}): planning on deep` };
     }
   };
 
-  const register = (
-    id: string,
-    ladder: Ladder,
-    meta: { name: string; thinkingLevels: ThinkingLevel[]; contextWindow: number },
-  ) =>
+  const recordVerdict = (prompt: string, verdict: boolean | undefined, latencyMs: number) => {
+    try {
+      pi.appendEntry(JEV_ENTRY, {
+        promptHash: createHash("sha256").update(prompt).digest("hex").slice(0, 16),
+        verdict: verdict === undefined ? null : verdict ? "complex" : "standard",
+        latencyMs,
+        ladder: verdict === false ? "flash" : "deep",
+      });
+    } catch {
+      // No session to write to (shutting down); the verdict goes unrecorded.
+    }
+  };
+
+  for (const kind of Object.keys(KINDS) as Kind[]) {
+    const meta = KIND_META[kind];
     pi.registerVirtualModel<KindState>({
       provider: PROVIDER,
-      id,
+      id: kind,
       name: meta.name,
       thinkingLevels: meta.thinkingLevels,
       contextWindow: meta.contextWindow,
       route: (request, ctx) =>
-        routeKind<KindState>(ladder, id, request, ctx, request.state?.at, (at) => ({ at })),
+        routeKind<KindState>(KINDS[kind], kind, request, ctx, stageOf(request.state), (at) => ({
+          at,
+        })),
     });
-
-  for (const kind of Object.keys(KINDS) as Kind[]) register(kind, KINDS[kind], KIND_META[kind]);
+  }
 
   pi.registerVirtualModel<ArchitectState>({
     provider: PROVIDER,
@@ -439,82 +320,47 @@ export default function (pi: ExtensionAPI) {
     thinkingLevels: KIND_META.architect.thinkingLevels,
     contextWindow: KIND_META.architect.contextWindow,
     async route(request, ctx) {
-      // Retries keep the failed model, so its cache and reasoning replay stay valid.
-      if (request.reason === "retry" && request.failed) {
-        return { model: request.failed.model, thinkingLevel: request.thinkingLevel };
-      }
-      // Background requests never start or continue a planning phase; they go
-      // to the flash ladder in background order (credit last).
+      // Background requests never start or continue a planning phase; pi ignores their state.
       if (request.reason === "direct") {
-        const { at, notes } = await pick(FLASH, undefined, request.messages, true);
-        toTrace(ctx, "architect", "direct", FLASH[at.stage], at, notes);
-        return {
-          model: find(ctx, FLASH[at.stage], at.model),
-          thinkingLevel: request.thinkingLevel,
-        };
+        return routeKind(FLASH, "architect", request, ctx, undefined, () => ({}) as ArchitectState);
       }
       const state = request.state;
       const sessionId = ctx.sessionManager.getSessionId();
-      const startPlanning = !state || (request.reason === "user" && replan.delete(sessionId));
+      // Consumed on every prompt, so a /replan never outlives the prompt it was for.
+      const replanned = request.reason === "user" && replan.delete(sessionId);
+      const startPlanning = !state || replanned;
       if (startPlanning || (state.phase === "plan" && !editedThisTurn(request.messages))) {
-        // Every entry into planning is rated: complex prompts on the planner
-        // kind, standard ones on flash, no verdict on the planner.
-        // The verdict persists across planning continuations in the branch state.
-        const gate = startPlanning
-          ? await classifyPlanning(ctx, request)
-          : { verdict: state.verdict, note: "" };
-        const ladder = gate.verdict === false ? FLASH : ARCHITECT_PLANNER;
-        if (startPlanning) {
+        let gate: { verdict?: boolean; note: string } = { verdict: state?.verdict, note: "" };
+        if (startPlanning && request.reason !== "retry") {
+          const prompt = lastUserText(request.messages);
+          const started = Date.now();
+          gate = await classifyPlanning(ctx, request, prompt);
+          recordVerdict(prompt, gate.verdict, Date.now() - started);
           marker(
             ctx,
-            `architect: planning on ${gate.verdict === false ? "flash" : "the planner"} — ${gate.note}`,
+            `architect: planning on ${gate.verdict === false ? "flash" : "deep"} — ${gate.note}`,
           );
         }
-        const at = startPlanning ? undefined : state.at;
         return routeKind(
-          ladder,
+          gate.verdict === false ? FLASH : DEEP,
           "architect",
           request,
           ctx,
-          at,
-          (position) => ({ phase: "plan", at: position, verdict: gate.verdict }),
+          startPlanning ? undefined : stageOf(state),
+          (at) => ({ phase: "plan", at, verdict: gate.verdict }),
           gate.note ? [gate.note] : [],
         );
       }
-      // Planning made the first edit: the rest goes to the flash ladder. The
-      // crossing itself re-rates the finished plan (shadow): marked in the
-      // chat, kept in the trace and the branch state, never routed on.
       const crossing = state.phase === "plan";
-      const at = state.phase === "build" ? state.at : undefined;
-      const reRate = crossing ? await classifyPlan(ctx, request) : undefined;
-      if (reRate) {
-        const clause =
-          reRate.complex === undefined
-            ? reRate.note
-            : `re-rate: ${reRate.complex ? "complex" : "standard"}` +
-              (reRate.complex === state.verdict
-                ? " (agrees)"
-                : state.verdict === false
-                  ? " (would have planned on the planner; shadow)"
-                  : " (the planner could have been skipped; shadow)");
-        marker(
-          ctx,
-          `architect: plan → build on flash — ${clause}`,
-          reRate.complex !== undefined && reRate.complex !== state.verdict ? "warning" : "info",
-        );
-      }
+      if (crossing) marker(ctx, "architect: plan → build on flash");
       return routeKind(
         FLASH,
         "architect",
         request,
         ctx,
-        at,
-        (position) => ({
-          phase: "build",
-          at: position,
-          ...(reRate?.complex !== undefined ? { reRate: reRate.complex } : {}),
-        }),
-        reRate ? ["planning made the first edit", reRate.note] : [],
+        crossing ? undefined : stageOf(state),
+        (at) => ({ phase: "build", at }),
+        crossing ? ["planning made the first edit"] : [],
       );
     },
   });
@@ -522,8 +368,14 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("replan", {
     description: "Send the next prompt (or the given one) back to vm/architect's planning",
     handler: async (args, ctx) => {
+      // Only vm/architect consumes the entry; on any other model it would wait for a later switch.
+      if (ctx.model?.provider !== PROVIDER || ctx.model.id !== "architect") {
+        ctx.ui.notify("/replan only applies while vm/architect is the model", "warning");
+        return;
+      }
       replan.add(ctx.sessionManager.getSessionId());
-      if (args.trim()) pi.sendUserMessage(args.trim());
+      const prompt = args.trim();
+      if (prompt) pi.sendUserMessage(prompt, ctx.isIdle() ? undefined : { deliverAs: "followUp" });
       else ctx.ui.notify("The next prompt goes back to planning", "info");
     },
   });
@@ -541,20 +393,25 @@ export default function (pi: ExtensionAPI) {
 
   const statusLines = (ctx: ExtensionContext): string[] => {
     const credit = usage.provider("anthropic")?.credit;
-    const sessionId = ctx.sessionManager.getSessionId();
+    const spent = ctx.sessionManager
+      .getEntries()
+      .flatMap((entry) => entryItems(entry))
+      .filter((item) => item.provider === "anthropic")
+      .reduce((sum, item) => sum + (item.usage.cost?.total ?? 0), 0);
     const creditLine = credit
-      ? `$${credit.remaining.toFixed(2)} left, $${Math.max(0, credit.remaining - CREDIT_RESERVE_USD).toFixed(2)} above the $${CREDIT_RESERVE_USD} reserve; this session has spent $${(creditSpentBySession.get(sessionId) ?? 0).toFixed(2)} of it`
+      ? `$${credit.remaining.toFixed(2)} left, $${Math.max(0, credit.remaining - CREDIT_RESERVE_USD).toFixed(2)} above the $${CREDIT_RESERVE_USD} reserve; this session has spent $${spent.toFixed(2)} of it`
       : "unknown (ai-usage off or its key missing?)";
     const lines: string[] = [`the Anthropic credit: ${creditLine}`];
     for (const provider of usage.providers()) {
       if (provider.id === "anthropic") continue;
-      lines.push(`${PROVIDER_NAME[provider.id] ?? provider.id}: ${describeWindows(provider)}`);
+      const until = blockedUntil[provider.id] ?? 0;
+      const blocked =
+        Date.now() < until ? `; blocked by a limit error until ${fmtWhen(until)}` : "";
+      lines.push(
+        `${PROVIDER_NAME[provider.id] ?? provider.id}: ${describeWindows(provider)}${blocked}`,
+      );
     }
-    const stranding = goStrandingWhy();
-    lines.push(
-      `Go promotion: ${stranding ? `active (${stranding})` : "off (Go monthly not both late and under pace)"}`,
-    );
-    const tail = (traces.get(sessionId) ?? []).slice(-5);
+    const tail = (traces.get(ctx.sessionManager.getSessionId()) ?? []).slice(-5);
     if (tail.length > 0) lines.push("last routes:");
     for (const entry of tail) {
       lines.push(
@@ -575,37 +432,15 @@ export default function (pi: ExtensionAPI) {
 
   const routedHere = (ctx: ExtensionContext) => ctx.model?.provider === PROVIDER;
 
-  pi.on("message_end", async (event, ctx) => {
+  pi.on("message_end", (event, ctx) => {
     const message = event.message;
-    if (message.role !== "assistant") return;
-    if (message.provider === "anthropic" && message.usage) {
-      const sessionId = ctx.sessionManager.getSessionId();
-      creditSpentBySession.set(
-        sessionId,
-        (creditSpentBySession.get(sessionId) ?? 0) + message.usage.cost.total,
-      );
-    }
-    if (message.stopReason !== "error") return;
+    if (message.role !== "assistant" || message.stopReason !== "error") return;
     const provider = message.provider;
     if (!LIMIT_ERROR[provider]?.test(message.errorMessage ?? "")) return;
-    await usage.refresh();
-    if (provider === "opencode-go") {
-      const window = exhaustedWindow(usage.provider(provider));
-      blockedUntil[provider] = window
-        ? Date.parse(window.resetsAt)
-        : Date.now() + GO_BLOCK_FALLBACK_MS;
-    } else if (provider === "kimi-coding") {
-      blockedUntil[provider] = Date.now() + KIMI_BLOCK_FALLBACK_MS;
-    } else {
-      // The error can land before ai-usage's next refresh; the meter's reported
-      // tick is the real wait.
-      const window = exhaustedWindow(usage.provider(provider));
-      const tick = window ? Date.parse(window.resetsAt) : 0;
-      blockedUntil[provider] =
-        tick > Date.now()
-          ? tick
-          : Date.now() + (window ? SYNTHETIC_REFILL_MS : UNCORROBORATED_BLOCK_MS);
-    }
+    blockedUntil[provider] = Date.now() + BLOCK_FALLBACK_MS;
+    // The snapshot that sent the request predates the error; once ai-usage
+    // reports the used-up window, stageWhy blocks until its reset.
+    void usage.refresh({ force: true });
     // Continue the turn only if that block left another pool to continue on.
     const elsewhere = Object.values(KINDS).some((ladder) =>
       ladder.some((stage) => stage.provider !== provider && stageWhy(stage) === undefined),
@@ -613,24 +448,37 @@ export default function (pi: ExtensionAPI) {
     if (routedHere(ctx) && elsewhere) resumeAfter = provider;
   });
 
-  pi.on("agent_settled", (event, ctx) => {
+  // Continuing before the run settles keeps settle listeners from seeing it finish and restart.
+  pi.on("agent_before_settle", (event, ctx) => {
     const ended = resumeAfter;
     resumeAfter = undefined;
-    if (!ended || event.aborted || !routedHere(ctx)) return;
-    pi.sendMessage(
-      {
-        customType: "vm-router",
-        content: `${PROVIDER_NAME[ended] ?? ended} ran out of quota mid-turn. Continue where you left off.`,
-        display: true,
-      },
-      { triggerTurn: true },
-    );
+    if (!ended || event.outcome === "aborted" || !routedHere(ctx)) return;
+    return {
+      entries: [
+        ...event.entries,
+        {
+          type: "custom_message",
+          customType: "vm-router",
+          content: `${PROVIDER_NAME[ended] ?? ended} ran out of quota mid-turn. Continue where you left off.`,
+          display: true,
+        },
+      ],
+      continue: true,
+    };
+  });
+
+  // An aborted run skips agent_before_settle; the flag must not carry into the next one.
+  pi.on("agent_settled", () => {
+    resumeAfter = undefined;
   });
 }
 
-/** Whether two positions point at the same pool and model. */
-const samePosition = (a: Position | undefined, b: Position) =>
-  a?.stage === b.stage && a.model === b.model;
+/** The stage index in stored state; sessions from before one model per stage stored an object. */
+const stageOf = (state: { at?: unknown } | undefined) =>
+  typeof state?.at === "number" ? state.at : undefined;
+
+const sameModel = (stage: Stage, model: Model<any>) =>
+  stage.provider === model.provider && stage.id === model.id;
 
 /** Localized short date-time for trace, block and reset times. */
 const fmtWhen = (t: number | string) =>
@@ -643,16 +491,7 @@ const fmtWhen = (t: number | string) =>
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** Whether any message in the conversation carries an image. */
-function hasImages(messages: readonly Message[]): boolean {
-  return messages.some((message) => {
-    const content = (message as { content?: unknown }).content;
-    return (
-      Array.isArray(content) &&
-      content.some((block) => (block as { type?: string }).type === "image")
-    );
-  });
-}
+const oneLine = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 120);
 
 /** The text of the last user message, for the classifier. */
 function lastUserText(messages: readonly Message[]): string {
@@ -662,33 +501,15 @@ function lastUserText(messages: readonly Message[]): string {
     : content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
 }
 
-/** The assistant text since the last user message: the finished plan, for the re-rate. */
-function planText(messages: readonly Message[]): string {
-  const lastUser = [...messages].reverse().findIndex((message) => message.role === "user");
-  const sinceUser = lastUser === -1 ? messages : messages.slice(messages.length - lastUser);
-  const plan = sinceUser
-    .filter((message) => message.role === "assistant")
-    .map((message) => {
-      const content = message.content;
-      return typeof content === "string"
-        ? content
-        : content
-            .filter((block) => block.type === "text")
-            .map((block) => block.text)
-            .join("\n");
-    })
-    .join("\n");
-  // An empty plan (no assistant text) says nothing; fall back to the prompt so a
-  // wrong rerun of the boundary classifies the same evidence as the gate.
-  return plan || lastUserText(messages);
-}
-
 /** Whether a tool call since the last user message edited a file successfully. */
 function editedThisTurn(messages: readonly Message[]): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message.role === "user") return false;
-    if (message.role === "toolResult" && EDIT_TOOLS.has(message.toolName) && !message.isError) {
+    if (message.role !== "toolResult") continue;
+    if (EDIT_TOOLS.has(message.toolName) && !message.isError) return true;
+    // A codemode script's edits only show up as nested calls; they count even if the script failed later.
+    if (message.nestedCalls?.calls.some((c) => EDIT_TOOLS.has(c.name) && c.status === "ok")) {
       return true;
     }
   }

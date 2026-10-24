@@ -173,7 +173,7 @@ in {
         environment.PI_SPELLFIX_LOG.value = fpLib.spellfixLog config;
         environment.PI_SPELLFIX_MODEL.value = "anthropic/claude-haiku-5-5";
         # Session labels (extensions/chrome/identity.ts) go through the router,
-        # so they bridge to Haiku while Go's quota is out instead of failing.
+        # so they fall through the flash ladder while Go's quota is out.
         environment.PI_IDENTITY_MODEL.value = "vm/flash";
         # The fireproof.agents.lspServers registry, read by extensions/lsp.ts.
         environment.PI_LSP_SERVERS = lib.mkIf (config.fireproof.agents.lspServers != {}) {
@@ -189,26 +189,21 @@ in {
         environment.PI_BG_POSIX_SHELL_PATH.value = lib.getExe pkgs.bash;
         settings = {
           # The model picker's "save as default" reverts at launch; change it here.
-          # The kinds live in extensions/routers.ts: flash is DeepSeek V4.1 Flash on
-          # Go, then Synthetic, then Haiku.
+          # The kinds and their ladders: docs/models.md.
           defaultProvider = "vm";
           defaultModel = "flash";
           defaultThinkingLevel = "high";
-          # /model opens on these and ctrl+p cycles them; its All tab still lists
-          # every model. A default outside the list would start on the first entry
-          # instead, so the virtual models lead.
+          # The pickers open on these and ctrl+p cycles them; their All tab still
+          # lists every model. A default outside the list would start on the first
+          # entry instead, so the virtual models lead. Each entry's role:
+          # docs/models.md.
           enabledModels =
             [
               "vm/*"
               "anthropic/claude-opus-5-5"
               "anthropic/claude-sonnet-5-5"
-              "anthropic/claude-haiku-5-5"
               "kimi-coding/k3.1-pro"
-              "opencode-go/deepseek-v4.1-flash"
-              "opencode-go/kimi-k3.1-pro"
-              "opencode-go/qwen3.8-flash"
-              "opencode-go/minimax-m3"
-              "opencode-go/kimi-k3"
+              "opencode-go/*"
               # `**`: the ids hold a slash (qwen/…), which a glob `*` doesn't cross.
               "tensorx/**"
             ]

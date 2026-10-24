@@ -135,13 +135,11 @@ const virtualLabels = (id: string, find: Find): Label[] => {
   let shared: Set<Label> | undefined;
   const anywhere = new Set<Label>();
   for (const stage of ladder) {
-    for (const variant of stage.variants) {
-      const model = find(stage.provider, variant.id);
-      if (!model) continue;
-      const labels = new Set(providerLabels(model));
-      for (const label of labels) if (RISK.has(label)) anywhere.add(label);
-      shared = shared ? new Set([...shared].filter((label) => labels.has(label))) : labels;
-    }
+    const model = find(stage.provider, stage.id);
+    if (!model) continue;
+    const labels = new Set(providerLabels(model));
+    for (const label of labels) if (RISK.has(label)) anywhere.add(label);
+    shared = shared ? new Set([...shared].filter((label) => labels.has(label))) : labels;
   }
   const labels = new Set<Label>([
     ...[...(shared ?? [])].filter((label) => !RISK.has(label)),

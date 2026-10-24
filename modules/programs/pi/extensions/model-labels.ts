@@ -106,10 +106,10 @@ export default function (pi: ExtensionAPI) {
     if (model.provider === PROVIDER) {
       const ladder = LADDERS[model.id as keyof typeof LADDERS];
       const prices = (ladder ?? [])
-        .flatMap((stage) => stage.variants.map((v) => at(stage.provider, v.id)))
+        .map((stage) => at(stage.provider, stage.id))
         .map((m) => (m ? blended(m) : undefined))
         .filter((usd): usd is number => usd !== undefined);
-      const first = ladder ? at(ladder[0].provider, ladder[0].variants[0].id) : undefined;
+      const first = ladder ? at(ladder[0].provider, ladder[0].id) : undefined;
       const min = prices.length > 0 ? Math.min(...prices) : undefined;
       const max = prices.length > 0 ? Math.max(...prices) : undefined;
       return {
