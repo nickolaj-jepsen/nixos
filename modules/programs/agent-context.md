@@ -18,7 +18,7 @@ Repository-local instructions and existing conventions take precedence over thes
   (it prints the path); `git worktree add` anywhere else is blocked. `wt` also
   lists, diffs, lands and cleans them; cleaning drops the branch with it.
 - In Digital-Udvikling repositories, use `ds` when it supports the operation; check `ds --help` when uncertain.
-- A wrapper (`xargs`, `sh -c`, `eval`, `sudo`, `find -exec`) hides the command that runs, so it asks for approval even when the inner command is harmless. A plain command or a glob avoids the prompt.
+- A wrapper (`env CMD`, `xargs`, `nohup`, `sh -c`, `eval`, `sudo`, `find -exec`) hides the command it runs, so it asks for approval even when that command is harmless. Set variables as `VAR=x cmd`, not `env VAR=x cmd`. `timeout` and `time` pass through only when the command after them is spelled literally (`timeout 180 ./result/bin/pi`, not `timeout 180 $builtpi`).
 
 ## Code style
 
