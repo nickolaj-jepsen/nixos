@@ -24,9 +24,8 @@
  * - The architect's planning entry is rated by Jev (typesafe/jev-latest):
  *   standard prompts plan on flash, complex prompts on the planner, and no
  *   verdict fails open to the planner — the gate is an optimisation, not a
- *   policy. Kimi K3.1 Pro sits past Opus in the planner ladder: it is reached
- *   only when a genuinely hard problem outlives the credit, the only place its
- *   edge over DS 4.1 Flash is worth its price.
+ *   policy. The architect's complex plans lead with Kimi K3.1 Pro on the Kimi
+ *   Code plan, then Opus; vm/planner keeps Opus first.
  * - The plan→build boundary re-rates the finished plan on the same question
  *   (shadow): the verdict is marked in the chat and kept in the /vm trace
  *   but never acted on, until it has earned a threshold on real sessions.
@@ -40,10 +39,10 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { createUsageReader, exhaustedWindow, type UsageProvider } from "./lib/ai-usage.ts";
 import {
+  ARCHITECT_PLANNER,
   FLASH,
   KIND_META,
   KINDS,
-  PLANNER,
   PROVIDER,
   STRONG,
   type Kind,
@@ -464,7 +463,7 @@ export default function (pi: ExtensionAPI) {
         const gate = startPlanning
           ? await classifyPlanning(ctx, request)
           : { verdict: state.verdict, note: "" };
-        const ladder = gate.verdict === false ? FLASH : PLANNER;
+        const ladder = gate.verdict === false ? FLASH : ARCHITECT_PLANNER;
         if (startPlanning) {
           marker(
             ctx,

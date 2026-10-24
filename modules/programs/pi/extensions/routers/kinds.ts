@@ -76,17 +76,19 @@ export const FLASH: Ladder = [
   { provider: "anthropic", label: "the Anthropic credit", variants: [{ id: "claude-haiku-5-5" }] },
 ];
 
+const kimiCode: Stage = {
+  provider: "kimi-coding",
+  label: "Kimi Code",
+  variants: [kimiPlan],
+};
+
 /**
  * Domain gaps, second opinions, and the escape hatch for work Claude-lineage
  * models decline. No Anthropic stage on purpose: a refusal from a Claude model
  * would look like a successful turn, so running out has to fail loudly instead.
  */
 export const STRONG: Ladder = [
-  {
-    provider: "kimi-coding",
-    label: "Kimi Code",
-    variants: [kimiPlan],
-  },
+  kimiCode,
   {
     provider: "synthetic",
     label: "Synthetic",
@@ -99,11 +101,17 @@ export const STRONG: Ladder = [
   },
 ];
 
+const opus: Stage = {
+  provider: "anthropic",
+  label: "the Anthropic credit",
+  variants: [{ id: "claude-opus-5-5" }],
+};
+
 /** Opus first while the credit lasts, then the strong kind's pools. */
-export const PLANNER: Ladder = [
-  { provider: "anthropic", label: "the Anthropic credit", variants: [{ id: "claude-opus-5-5" }] },
-  ...STRONG,
-];
+export const PLANNER: Ladder = [opus, ...STRONG];
+
+/** The architect's complex path: K3.1 Pro on the Kimi Code plan first, then Opus, then the rest of the strong pools. */
+export const ARCHITECT_PLANNER: Ladder = [kimiCode, opus, ...STRONG.slice(1)];
 
 export const KINDS = { flash: FLASH, strong: STRONG, planner: PLANNER } as const;
 export type Kind = keyof typeof KINDS;
@@ -115,7 +123,7 @@ export const PROVIDER = "vm";
  * and flash ladders flattened in dispatch order, for registries that display. */
 export const LADDERS: Record<Kind | "architect", Ladder> = {
   ...KINDS,
-  architect: [...PLANNER, ...FLASH],
+  architect: [...ARCHITECT_PLANNER, ...FLASH],
 };
 
 export type ModelMeta = {
