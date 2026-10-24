@@ -13,21 +13,20 @@
  * child appends to the same transcript, a `/reload` re-runs this, and either way
  * only the messages no entry has claimed yet are added.
  *
- * Parent-only. A child gets no `subagent` tool, so every hook below returns
- * there rather than filing a grandchild's spend twice.
+ * Parent-only: a child's hooks return rather than filing a grandchild's spend twice.
  */
-import { readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import type { Usage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { addUsage, emptyUsage, LEDGER_TYPE, type LedgerData } from "./lib/usage-ledger.ts";
+import { childTranscriptDir, isSubagentSession } from "./lib/subagent-session.ts";
+import { addUsage, emptyUsage, isSpend, LEDGER_TYPE, type LedgerData } from "./lib/usage-ledger.ts";
 
 /** The custom entry the agent package appends for each terminal run. */
 const RECORD_TYPE = "subagents:record";
 
-/** A transcript keeps growing only while its agent runs; past this, stop reading it. */
-const MAX_TRANSCRIPT_BYTES = 32 * 1024 * 1024;
-
-type RunRecord = { file: string; agent: string };
+/** A transcript and the agent type that wrote it, `""` when no record names one. */
+type Run = { file: string; agent: string };
 
 /** One transcript, as the usage of each assistant message per `provider/model`. */
 type Transcript = Map<string, Usage[]>;
@@ -35,18 +34,39 @@ type Transcript = Map<string, Usage[]>;
 const key = (provider: string, model: string) => `${provider}/${model}`;
 
 /** Terminal runs recorded in this session, one per transcript. */
-const runRecords = (ctx: ExtensionContext): RunRecord[] => {
-  const records = new Map<string, RunRecord>();
+const recordedRuns = (ctx: ExtensionContext): Map<string, Run> => {
+  const runs = new Map<string, Run>();
   for (const entry of ctx.sessionManager.getEntries()) {
     if (entry.type !== "custom" || entry.customType !== RECORD_TYPE) continue;
     const data = entry.data as { type?: unknown; outputFile?: unknown } | undefined;
     if (typeof data?.outputFile !== "string" || data.outputFile === "") continue;
-    records.set(data.outputFile, {
+    runs.set(data.outputFile, {
       file: data.outputFile,
       agent: typeof data.type === "string" ? data.type : "",
     });
   }
-  return [...records.values()];
+  return runs;
+};
+
+/**
+ * Every transcript in this session's child directory. A child still running when
+ * the parent quits is aborted without a record reaching this session, so only
+ * the directory knows it.
+ */
+const unrecordedRuns = (ctx: ExtensionContext, recorded: Map<string, Run>): Run[] => {
+  const dir = childTranscriptDir(ctx);
+  if (!dir) return [];
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return []; // no child has run
+  }
+  return names
+    .filter((name) => name.endsWith(".jsonl"))
+    .map((name) => join(dir, name))
+    .filter((file) => !recorded.has(file))
+    .map((file) => ({ file, agent: "" }));
 };
 
 /** Messages each recorded model already accounts for, by transcript. */
@@ -67,11 +87,10 @@ const claimed = (ctx: ExtensionContext): Map<string, Map<string, number>> => {
 const readTranscript = (file: string): Transcript | undefined => {
   let text: string;
   try {
-    if (statSync(file).size > MAX_TRANSCRIPT_BYTES) return undefined;
     text = readFileSync(file, "utf8");
   } catch {
-    // A transcript is retained for minutes after a run, and a session restored
-    // elsewhere may point at one this machine no longer has.
+    // An unsaved parent keeps its children's transcripts in a temp dir, and a
+    // session restored elsewhere may point at one this machine never had.
     return undefined;
   }
   const transcript: Transcript = new Map();
@@ -115,33 +134,32 @@ const cachedTranscript = (file: string): Transcript | undefined => {
   return transcript;
 };
 
-const hasSpend = (usage: Usage) =>
-  usage.input + usage.output + usage.cacheRead + usage.cacheWrite > 0 ||
-  (usage.cost?.total ?? 0) !== 0;
-
 export default function (pi: ExtensionAPI) {
-  let parent = false;
-
-  /** Records whatever of the children's spend no entry has accounted for yet. */
-  const file = (ctx: ExtensionContext) => {
-    if (!parent) return;
+  /**
+   * Records whatever of the children's spend no entry has accounted for yet.
+   * `sweep` also files transcripts no record names, at the cost of an agent label.
+   */
+  const file = (ctx: ExtensionContext, sweep = false) => {
+    if (isSubagentSession(ctx)) return;
     const alreadyClaimed = claimed(ctx);
-    for (const record of runRecords(ctx)) {
-      const transcript = cachedTranscript(record.file);
+    const recorded = recordedRuns(ctx);
+    const runs = [...recorded.values(), ...(sweep ? unrecordedRuns(ctx, recorded) : [])];
+    for (const run of runs) {
+      const transcript = cachedTranscript(run.file);
       if (!transcript) continue;
-      const counts = alreadyClaimed.get(record.file) ?? new Map<string, number>();
+      const counts = alreadyClaimed.get(run.file) ?? new Map<string, number>();
       for (const [id, usages] of transcript) {
         const unclaimed = usages.slice(counts.get(id) ?? 0);
         if (unclaimed.length === 0) continue;
         const usage = emptyUsage();
         for (const spent of unclaimed) addUsage(usage, spent);
-        if (!hasSpend(usage)) continue;
+        if (!isSpend(usage)) continue;
         const slash = id.indexOf("/");
         try {
           pi.appendEntry<LedgerData>(LEDGER_TYPE, {
             kind: "child",
-            file: record.file,
-            agent: record.agent,
+            file: run.file,
+            agent: run.agent,
             messages: usages.length,
             provider: id.slice(0, slash),
             model: id.slice(slash + 1),
@@ -154,15 +172,11 @@ export default function (pi: ExtensionAPI) {
     }
   };
 
-  pi.on("session_start", (_event, ctx) => {
-    // The agent core never gives a child the tool that spawns agents.
-    parent = pi.getAllTools().some((tool) => tool.name === "subagent");
-    file(ctx);
-  });
+  pi.on("session_start", (_event, ctx) => file(ctx));
 
   // Once per run, after pi's own follow-up work is done: a background agent's
   // record is appended when it finishes, which is before the run its completion
-  // notice starts.
+  // notice starts. A running child is left for its record, which names its agent.
   pi.on("agent_settled", (_event, ctx) => file(ctx));
-  pi.on("session_shutdown", (_event, ctx) => file(ctx));
+  pi.on("session_shutdown", (_event, ctx) => file(ctx, true));
 }

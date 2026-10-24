@@ -9,7 +9,6 @@ import {
   type ExtensionContext,
   type ReadonlyFooterDataProvider,
   type Theme,
-  VIRTUAL_MODEL_STATE_ENTRY,
 } from "@earendil-works/pi-coding-agent";
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
@@ -22,6 +21,7 @@ import { createGit, PR_COMMAND } from "./git.ts";
 import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";
 import { modelAlias, providerName, providerShortName } from "../lib/model-names.ts";
+import { createRouted } from "../lib/routed-model.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage, usageAlarm } from "./usage.ts";
@@ -35,51 +35,6 @@ const ICON_EFFORT = "\uf0e7";
 
 const CACHE_WARN_PCT = 90;
 const CACHE_ERROR_PCT = 50;
-
-/**
- * Under a virtual selection (extensions/routers.ts), the physical model that
- * answered last on the branch, and the router's phase when its state carries
- * one. Undefined for a physical selection or before the first answer. Rescanned
- * only when the leaf or selection moves.
- */
-const createRouted = () => {
-  type Routed = { model: ActiveModel; phase?: string };
-  let cache: { leafId: string | null; selected: string; routed: Routed | undefined } | undefined;
-  return (ctx: ExtensionContext): Routed | undefined => {
-    const selected = ctx.model;
-    if (selected?.api !== "pi-virtual") return undefined;
-    const leafId = ctx.sessionManager.getLeafId();
-    const key = `${selected.provider}/${selected.id}`;
-    if (cache && cache.leafId === leafId && cache.selected === key) return cache.routed;
-    let model: ActiveModel | undefined;
-    let phase: string | undefined;
-    let stateSeen = false;
-    const branch = ctx.sessionManager.getBranch();
-    for (let i = branch.length - 1; i >= 0 && (!model || !stateSeen); i--) {
-      const entry = branch[i];
-      // The latest state the router stored for this selection: the phase is the
-      // only field the footer reads, and only a router that keeps one shows it.
-      if (entry.type === "custom" && entry.customType === VIRTUAL_MODEL_STATE_ENTRY) {
-        if (stateSeen) continue;
-        const data = entry.data as
-          | { provider?: string; modelId?: string; state?: { phase?: unknown } }
-          | undefined;
-        if (data?.provider !== selected.provider || data.modelId !== selected.id) continue;
-        stateSeen = true;
-        phase = typeof data.state?.phase === "string" ? data.state.phase : undefined;
-        continue;
-      }
-      if (model || entry.type !== "message" || entry.message.role !== "assistant") continue;
-      const { stopReason, provider, model: id } = entry.message;
-      if (stopReason !== "error" && stopReason !== "aborted") {
-        model = ctx.modelRegistry.find(provider, id);
-      }
-    }
-    const routed = model ? { model, phase } : undefined;
-    cache = { leafId, selected: key, routed };
-    return routed;
-  };
-};
 
 // Any CSI (private and colon forms too), then OSC, DCS, PM and APC strings up to BEL or ST.
 const TERMINAL_SEQUENCE = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b[\]P^_][\s\S]*?(?:\x07|\x1b\\)/g;

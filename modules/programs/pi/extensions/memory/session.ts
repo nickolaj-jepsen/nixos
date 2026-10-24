@@ -7,6 +7,7 @@
  * now, for the footer and for telling the model where a fresh save will land.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { isSubagentSession } from "../lib/subagent-session.ts";
 import { buildHotSection, type HotIndex } from "./hot.ts";
 import {
   invalidateAll,
@@ -42,8 +43,7 @@ export function createSessions() {
     if (known && known.scope.cwd === ctx.cwd) return known;
     const scope = resolveScope(ctx.cwd);
     const hot = buildHot(scope);
-    // @gotgenes/pi-subagents writes child transcripts under <parent>/tasks.
-    const subagent = ctx.sessionManager.getSessionDir().endsWith("/tasks");
+    const subagent = isSubagentSession(ctx);
     const state: SessionState = { scope, hot, injected: hot.text, subagent };
     states.set(id, state);
     return state;

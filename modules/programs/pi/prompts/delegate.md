@@ -7,7 +7,8 @@ Delegate ${@:-the reading for the task above}. This is my explicit opt-in to spe
 subagent tokens, so don't stop to ask whether to.
 
 Do the cheap part inline first: name the files, directories or questions the sweep
-covers, and the decision you need back from it. Then launch one to four agents with
+covers, and the decision you need back from it. Then launch a few `Explore` agents
+(`reviewer` for a second opinion) with
 `tools.subagent` (codemode-only, so `await describeTool("subagent")` the first time),
 `run_in_background: true`, and join them with `get_subagent_result({ agent_id, wait: true })`.
 
@@ -22,5 +23,4 @@ covers, and the decision you need back from it. Then launch one to four agents w
   quote. A claim you cannot check is worse than no answer.
 - If a child comes back shallow or wrong, do the part yourself rather than re-delegating
   the same question, and say what changed.
-- Report what the sweep found and what it did not cover. Four run at a time; anything
-  beyond that queued.
+- Report what the sweep found and what it did not cover.

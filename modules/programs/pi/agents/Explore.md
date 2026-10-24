@@ -2,7 +2,7 @@
 name: Explore
 description: Finds code fast: locates files, symbols and call sites, and reports what it read. Read-only.
 tools: read, bash, grep, find, ls
-model: opencode-go/deepseek-v4.1-flash
+model: vm/flash
 thinking: low
 prompt_mode: replace
 locked: model, thinking

@@ -2,7 +2,7 @@
 name: reviewer
 description: Reviews a diff for defects, read-only, and reports them with file:line. Never edits and never fixes.
 tools: bash, read, grep, find, ls
-model: opencode-go/deepseek-v4.1-flash
+model: vm/flash
 thinking: high
 prompt_mode: replace
 locked: model, thinking

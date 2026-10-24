@@ -14,8 +14,8 @@ Then write one codemode script. `subagent` is codemode-only, so the first line i
 
 The shape:
 
-- Launch every item with `run_in_background: true` and collect the ids. Four run at a
-  time; the rest queue, so pass the whole list rather than batching it by hand.
+- Launch every item with `run_in_background: true` and collect the ids. A few run at
+  once and the rest queue, so pass the whole list rather than batching it by hand.
 - Wait with `get_subagent_result({ agent_id, wait: true })`, and use
   `Promise.allSettled` so one failed agent does not discard the others' results.
 - For stages that depend on each other, give each item its own async chain and await

@@ -129,8 +129,8 @@ in {
     # exclusion list in subagents.json cannot drift.
     packagePath = name: "${piPackages}/node_modules/${name}";
     extensionsPath = mkExtensions pkgs pi;
-    # Children keep the router (the parent model may be a vm/* virtual model,
-    # which only our extensions register) and the permission system, whose
+    # Children keep the router (their models are vm/* virtual models, which
+    # only our extensions register) and the permission system, whose
     # `ask` forwards to this session. The UI and process-managing packages have
     # nothing to do in a headless child.
     childExcludedPackages =
@@ -143,16 +143,9 @@ in {
         enable = true;
         package = pi;
         # agent-context.md is shared by every agent; keep it agent-agnostic.
-        rules = ''
-          ${builtins.readFile ../agent-context.md}
-          ## Delegating
-
-          - `subagent` is not declared: call it from codemode after `await describeTool("subagent")`. It runs one agent in the background and notifies you when it finishes; `run_in_background: false` blocks and returns its report instead.
-          - Reach for one when the work can't be scoped in one guess: a sweep over many files, a search you would otherwise read the whole tree to answer, a second opinion on a change. Not for a path you already know.
-          - Launch several in one script and join them with `get_subagent_result({ agent_id, wait: true })`; four run at a time and the rest queue. Hand over the question, not a step list, and say what you want back.
-          - A result is not shown to the user: summarise it, and check an agent's claimed edits before reporting them done.
-          - Fanning out over many items is scripted orchestration and needs an explicit ask, such as `/delegate` or `/workflow` — a task that would merely benefit from parallelism is not one.
-        '';
+        # How to delegate is in extensions/codemode-only.ts: these rules reach every
+        # child as project context, and a child holds no agent tools.
+        rules = builtins.readFile ../agent-context.md;
         themes = [theme];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
@@ -547,11 +540,14 @@ in {
       # `/delegate`: the same opt-in for a plain sweep, which is the common case.
       home.file.".pi/agent/prompts/delegate.md".source = ./prompts/delegate.md;
 
-      # Subagent roles, one file each (./agents): a pinned model and tool set per
-      # role, so a delegation can't spend the Anthropic credit or the parent's
-      # cache. Explore and Plan override the package's own definitions.
+      # Subagent roles, one file each (./agents): a tool set per role, and vm/flash
+      # locked on every role but Plan, so a delegation reaches the Anthropic credit
+      # only after both cheap pools, above its reserve. Plan inherits the parent's
+      # model, since planning is judgment. general-purpose, Explore and Plan
+      # override the package's own definitions.
       home.file.".pi/agent/agents/verifier.md".source = ./agents/verifier.md;
       home.file.".pi/agent/agents/reviewer.md".source = ./agents/reviewer.md;
+      home.file.".pi/agent/agents/general-purpose.md".source = ./agents/general-purpose.md;
       home.file.".pi/agent/agents/Explore.md".source = ./agents/Explore.md;
       home.file.".pi/agent/agents/Plan.md".source = ./agents/Plan.md;
 

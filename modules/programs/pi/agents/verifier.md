@@ -2,7 +2,7 @@
 name: verifier
 description: Verifies a change by running the build, tests and linters, then reports what failed. Read-only on sources.
 tools: bash, read, grep, find, ls
-model: opencode-go/deepseek-v4.1-flash
+model: vm/flash
 thinking: low
 prompt_mode: append
 locked: model, thinking
