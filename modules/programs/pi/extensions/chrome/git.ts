@@ -2,31 +2,23 @@
  * Git branch, status and pull request for the footer, refreshed off the render
  * path: `git status --porcelain=v2` runs asynchronously, so rendering never
  * waits on a subprocess, and it is asked again on a timer as well as after
- * pi's own events because other sessions share the checkout. A pull request for
- * the branch replaces its name with a
- * linked `#123`: the local gh-stack index answers synchronously, the GitHub API
- * refines the state in the background, and the last answer is cached on disk so
- * a fresh session paints before the network does.
+ * pi's own events because other sessions share the checkout. The branch's pull
+ * request is a linked glyph, looked up with `gh` only when something could have
+ * changed it: the session starting, the branch moving, a first push, or a
+ * command that pushes or edits a pull request.
  */
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, join } from "node:path";
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { getCapabilities, hyperlink } from "@earendil-works/pi-tui";
 import type { BranchMode } from "./footer-line.ts";
 import type { Part } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
 
-type GitPaths = { gitDir: string; commonDir: string };
-
 type PrKind = "open" | "draft" | "merged" | "closed";
 
-/** `state` is missing when only the local gh-stack index knew the pull request. */
-type PrRef = { number: number; url: string; state?: PrKind };
-
-type PrCacheEntry = { pr: PrRef | null; fetchedAt: number };
+type PrRef = { url: string; state: PrKind };
 
 type GitState = {
   branch: string | null;
@@ -42,19 +34,9 @@ type GitState = {
   operation: string | undefined;
 };
 
-// Each lookup is a ~0.5s GitHub round trip for a value that moves a few times a
-// day, so a cached answer is good enough until the branch or a gh command moves.
-const PR_TTL_MS = 60_000;
-const PR_RETRY_MS = 20_000;
 const PR_TIMEOUT_MS = 5000;
-const PR_CACHE_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
-const PR_CACHE_FILE = join(
-  process.env.XDG_CACHE_HOME || join(homedir(), ".cache"),
-  "pi",
-  "pr-cache.json",
-);
-// Commands that can change which pull request a branch carries.
-export const PR_COMMAND = /\bgh\s+pr\s+(create|merge|close|reopen|edit|ready)\b/;
+// Commands that can change which pull request a branch carries, or its state.
+export const PR_COMMAND = /\bgit\s+push\b|\bgh\s+pr\s+(create|merge|close|reopen|edit|ready)\b/;
 // Pi emits events only for its own work, so a peer session, a subagent in this
 // checkout or an external formatter changes the tree silently. `git status` costs
 // milliseconds on a normal repo, and the busy guard keeps a slow one from stacking.
@@ -112,7 +94,7 @@ const readStep = (numFile: string, endFile: string) => {
 export const createGit = (chrome: ChromeState) => {
   let gitState: GitState | null | undefined;
   // Only a repository is cached: a plain directory can become one with `git init`.
-  let gitPaths: GitPaths | undefined;
+  let gitDir: string | undefined;
   let gitBusy = false;
   let gitQueued = false;
   let gitTimer: ReturnType<typeof setTimeout> | undefined;
@@ -121,14 +103,10 @@ export const createGit = (chrome: ChromeState) => {
   let activeCwd = "";
 
   let currentPr: PrRef | null = null;
-  let prRequestKey = "";
+  // Bumped per lookup, so only the latest one's answer is painted.
+  let prLookup = 0;
   let prDirty = false;
-  let prCache: Record<string, PrCacheEntry> | undefined;
   let ghMissing = false;
-  // Failures are not cached: a lookup that never reached GitHub says nothing
-  // about the branch, so it only backs off for a moment.
-  const prRetryAt = new Map<string, number>();
-  const prInFlight = new Set<string>();
 
   const runGit = (cwd: string, args: string[]) =>
     new Promise<string | null>((resolve) => {
@@ -141,74 +119,12 @@ export const createGit = (chrome: ChromeState) => {
       );
     });
 
-  const loadPrCache = (): Record<string, PrCacheEntry> => {
-    if (prCache) return prCache;
-    try {
-      const parsed: unknown = JSON.parse(readFileSync(PR_CACHE_FILE, "utf8"));
-      prCache =
-        parsed && typeof parsed === "object" && !Array.isArray(parsed)
-          ? (parsed as Record<string, PrCacheEntry>)
-          : {};
-    } catch {
-      prCache = {};
-    }
-    return prCache;
-  };
-
-  const savePrCache = () => {
-    const cache = loadPrCache();
-    const cutoff = Date.now() - PR_CACHE_KEEP_MS;
-    for (const [key, entry] of Object.entries(cache)) {
-      if (!(entry?.fetchedAt > cutoff)) delete cache[key];
-    }
-    void mkdir(dirname(PR_CACHE_FILE), { recursive: true })
-      .then(() => writeFile(PR_CACHE_FILE, `${JSON.stringify(cache)}\n`))
-      .catch(() => {});
-  };
-
-  // gh-stack records the pull request each stacked branch carries, so this is
-  // the one answer that needs neither a subprocess nor the network. It is a
-  // cache of its own: an entry outlives the merge until the next `gh stack sync`.
-  const readStackPr = (paths: GitPaths, branch: string): PrRef | null => {
-    const dirs =
-      paths.gitDir === paths.commonDir ? [paths.commonDir] : [paths.commonDir, paths.gitDir];
-    for (const dir of dirs) {
-      try {
-        const data: unknown = JSON.parse(readFileSync(join(dir, "gh-stack"), "utf8"));
-        const stacks = (data as { stacks?: unknown })?.stacks;
-        if (!Array.isArray(stacks)) continue;
-        for (const stack of stacks) {
-          const branches = (stack as { branches?: unknown })?.branches;
-          if (!Array.isArray(branches)) continue;
-          for (const entry of branches) {
-            const { branch: name, pullRequest } = (entry ?? {}) as {
-              branch?: unknown;
-              pullRequest?: { number?: unknown; url?: unknown };
-            };
-            if (name !== branch) continue;
-            if (typeof pullRequest?.number === "number" && typeof pullRequest.url === "string") {
-              return { number: pullRequest.number, url: pullRequest.url };
-            }
-          }
-        }
-      } catch {}
-    }
-    return null;
-  };
-
-  /** Resolve a branch's pull request from the cached answer, the local index, or both. */
-  const resolvePr = (key: string, stack: PrRef | null): PrRef | null => {
-    const entry = loadPrCache()[key];
-    // A fresh API answer is authority, including "no pull request".
-    if (entry && Date.now() - entry.fetchedAt < PR_TTL_MS) return entry.pr;
-    return stack ?? entry?.pr ?? null;
-  };
-
+  /** The branch's pull request, `null` for none, `undefined` when gh could not say. */
   const fetchPr = (cwd: string) =>
-    new Promise<{ pr: PrRef | null } | null>((resolve) => {
+    new Promise<PrRef | null | undefined>((resolve) => {
       execFile(
         "gh",
-        ["pr", "view", "--json", "number,url,state,isDraft"],
+        ["pr", "view", "--json", "url,state,isDraft"],
         { cwd, timeout: PR_TIMEOUT_MS, maxBuffer: 1 << 16 },
         (error, stdout, stderr) => {
           if (error) {
@@ -216,12 +132,11 @@ export const createGit = (chrome: ChromeState) => {
             if (error.code === "ENOENT") ghMissing = true;
             // These two are answers; anything else (offline, auth, timeout) is not.
             const none = /no pull requests found|no git remotes found/.test(stderr);
-            resolve(none ? { pr: null } : null);
+            resolve(none ? null : undefined);
             return;
           }
           try {
             const data = JSON.parse(stdout) as {
-              number: number;
               url: string;
               state: string;
               isDraft?: boolean;
@@ -233,71 +148,41 @@ export const createGit = (chrome: ChromeState) => {
                 : data.state === "CLOSED"
                   ? "closed"
                   : "open";
-            resolve({ pr: { number: data.number, url: data.url, state } });
+            resolve({ url: data.url, state });
           } catch {
-            resolve(null);
+            resolve(undefined);
           }
         },
       );
     });
 
   const setPr = (pr: PrRef | null) => {
-    if (currentPr?.number === pr?.number && currentPr?.state === pr?.state) return;
+    if (currentPr?.url === pr?.url && currentPr?.state === pr?.state) return;
     currentPr = pr;
     chrome.tui?.requestRender();
   };
 
-  const refreshPr = async (state: GitState, paths: GitPaths, force: boolean) => {
-    if (!state.branch) {
-      prRequestKey = "";
+  /** Looks the branch's pull request up again; a failed lookup keeps the last answer. */
+  const refreshPr = async (state: GitState) => {
+    const lookup = ++prLookup;
+    // A branch that was never pushed has no pull request yet.
+    if (!state.branch || !state.upstream) {
       setPr(null);
       return;
     }
-    const key = `${paths.commonDir}\0${state.branch}`;
-    prRequestKey = key;
-    const stack = readStackPr(paths, state.branch);
-    const cache = loadPrCache();
-    setPr(resolvePr(key, stack));
     if (ghMissing) return;
-
-    // A branch that was never pushed has no pull request yet; one already known
-    // stays visible after its remote branch is deleted on merge.
-    if (!cache[key] && !state.upstream && !stack) return;
-    const now = Date.now();
-    if (!force && now - (cache[key]?.fetchedAt ?? 0) < PR_TTL_MS) return;
-    if (!force && now < (prRetryAt.get(key) ?? 0)) return;
-    if (prInFlight.has(key)) return;
-
-    prInFlight.add(key);
-    const result = await fetchPr(activeCwd);
-    prInFlight.delete(key);
-    if (result) {
-      cache[key] = { pr: result.pr, fetchedAt: Date.now() };
-      savePrCache();
-      prRetryAt.delete(key);
-    } else {
-      prRetryAt.set(key, Date.now() + PR_RETRY_MS);
-    }
-    // The cache keeps the answer either way; only the painted line can be stale.
-    if (prRequestKey !== key) return;
-    setPr(resolvePr(key, stack));
+    const pr = await fetchPr(activeCwd);
+    if (lookup === prLookup && pr !== undefined) setPr(pr);
   };
 
-  const resolveGitPaths = async (cwd: string): Promise<GitPaths | null> => {
-    if (gitPaths) return gitPaths;
-    const output = await runGit(cwd, [
-      "rev-parse",
-      "--path-format=absolute",
-      "--git-dir",
-      "--git-common-dir",
-    ]);
-    const [gitDir, commonDir] = output?.split("\n").filter(Boolean) ?? [];
-    if (!gitDir || !commonDir) return null;
-    gitPaths = { gitDir, commonDir };
-    return gitPaths;
+  const resolveGitDir = async (cwd: string): Promise<string | null> => {
+    if (gitDir) return gitDir;
+    const output = await runGit(cwd, ["rev-parse", "--path-format=absolute", "--git-dir"]);
+    gitDir = output?.trim() || undefined;
+    return gitDir ?? null;
   };
 
-  const parseStatus = (output: string, paths: GitPaths): GitState => {
+  const parseStatus = (output: string, dir: string): GitState => {
     let branch: string | null = null;
     let detached = false;
     let oid = "";
@@ -346,7 +231,7 @@ export const createGit = (chrome: ChromeState) => {
       conflicts,
       ahead,
       behind,
-      operation: detectOperation(paths.gitDir),
+      operation: detectOperation(dir),
     };
   };
 
@@ -361,12 +246,12 @@ export const createGit = (chrome: ChromeState) => {
     gitBusy = true;
     const cwd = activeCwd;
     try {
-      const paths = await resolveGitPaths(cwd);
-      if (!paths) {
+      const dir = await resolveGitDir(cwd);
+      if (!dir) {
         const changed = gitState !== null;
         gitState = null;
         prDirty = false;
-        prRequestKey = "";
+        prLookup++;
         setPr(null);
         if (changed) chrome.tui?.requestRender();
         return;
@@ -375,22 +260,20 @@ export const createGit = (chrome: ChromeState) => {
       // Keep the last state through a slow status; probe again in case the
       // worktree itself is gone.
       if (!status) {
-        gitPaths = undefined;
+        gitDir = undefined;
         return;
       }
       const previous = gitState;
-      const next = parseStatus(status, paths);
+      const next = parseStatus(status, dir);
       const changed = stateKey(previous) !== stateKey(next);
       gitState = next;
-      // A branch switch or a first push changes which pull request the branch
-      // carries; everything else, a fresh session included, waits for the cached
-      // answer to expire, so panes on one branch share a lookup.
-      const force =
+      const lookup =
         prDirty ||
-        (previous != null &&
-          (previous.branch !== gitState.branch || (!previous.upstream && gitState.upstream)));
+        previous == null ||
+        previous.branch !== next.branch ||
+        previous.upstream !== next.upstream;
       prDirty = false;
-      void refreshPr(gitState, paths, force);
+      if (lookup) void refreshPr(next);
       if (changed) chrome.tui?.requestRender();
     } finally {
       gitBusy = false;
@@ -462,7 +345,7 @@ export const createGit = (chrome: ChromeState) => {
     }
     if (dirtyColor) spans.push({ text: "*", color: dirtyColor, attached: true });
     // The icon alone says a pull request exists; it links to it where the terminal can.
-    if (pr) spans.push({ text: PR_GLYPHS[pr.state ?? "open"], color: prColor(pr), url: pr.url });
+    if (pr) spans.push({ text: PR_GLYPHS[pr.state], color: prColor(pr), url: pr.url });
     if (state.operation) spans.push({ text: state.operation, color: "accent" });
     if (state.untracked > 0) spans.push({ text: "?", color: "warning" });
     if (state.conflicts > 0) spans.push({ text: `~${state.conflicts}`, color: "error" });
@@ -503,6 +386,7 @@ export const createGit = (chrome: ChromeState) => {
       polling = true;
       armPoll();
     },
+    /** Looks the pull request up again with the next status, which sees the command's effect. */
     markPrDirty: () => {
       prDirty = true;
     },

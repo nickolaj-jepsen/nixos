@@ -144,9 +144,9 @@ export const createFooter = (
     const phased = !selection && phase !== undefined && model === selected;
     const provider = model ? providerName(model.provider, ctx.modelRegistry) : undefined;
 
-    const statusEntries = [...footerData.getExtensionStatuses()]
-      .filter(([key]) => key !== "pi-cache-stats")
-      .sort(([a], [b]) => a.localeCompare(b));
+    const statusEntries = [...footerData.getExtensionStatuses()].sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
     // Called even when the package published nothing, so the spinner stops.
     const published = statusEntries.find(([key]) => key === "background-tasks")?.[1];
     const backgroundStatus = background.parts(
@@ -310,18 +310,12 @@ export const createFooter = (
   pi.on("session_compact", rescan);
   pi.on("session_tree", rescan);
 
-  // A pull request created or merged a moment ago should not wait out the TTL.
-  // Marked once the command is done: a lookup forced while `gh pr create` still
-  // runs finds nothing, and caches that.
-  const prCalls = new Set<string>();
-  pi.on("tool_execution_start", (event) => {
-    const command = event.toolName === "bash" ? event.args?.command : undefined;
-    if (typeof command === "string" && PR_COMMAND.test(command)) prCalls.add(event.toolCallId);
+  // Once the command is done: a lookup while `gh pr create` still runs finds nothing.
+  pi.on("tool_result", (event) => {
+    const command = event.toolName === "bash" ? event.input.command : undefined;
+    if (typeof command === "string" && PR_COMMAND.test(command)) git.markPrDirty();
   });
-  pi.on("tool_execution_end", (event) => {
-    if (prCalls.delete(event.toolCallId)) git.markPrDirty();
-    repaintAndGit();
-  });
+  pi.on("tool_execution_end", repaintAndGit);
 
   // user_bash fires before a `!command` runs and nothing fires after it, so the
   // refresh rides on the operations that run it. These are pi's default when no

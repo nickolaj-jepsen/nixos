@@ -1,7 +1,7 @@
 import { matchesKey, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { EditorWrapper } from "../lib/prompt-editor.ts";
 import { hitTest, hoverAt, isPlainClick, type Region } from "./layout.ts";
-import type { Action, ChromeState, Renderer } from "./state.ts";
+import type { ChromeState, Renderer } from "./state.ts";
 
 type Border = (text: string) => string;
 type Inner = {
