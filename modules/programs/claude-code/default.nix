@@ -54,6 +54,24 @@
       text = builtins.readFile ./worktree-guard.sh;
     };
 
+    # Claude Code's own worktrees (EnterWorktree, `claude -w`, agent isolation)
+    # made and removed by `wt`; one verb per hook event.
+    worktreeHooks = pkgs.writeShellApplication {
+      name = "claude-worktree-hooks";
+      runtimeInputs = [pkgs.jq pkgs.git pkgs.gawk pkgs.coreutils] ++ lib.optional pkgs.stdenv.isLinux pkgs.util-linux;
+      text = builtins.readFile ./worktree-hooks.sh;
+    };
+    worktreeHook = verb: [
+      {
+        hooks = [
+          {
+            type = "command";
+            command = "${lib.getExe worktreeHooks} ${verb}";
+          }
+        ];
+      }
+    ];
+
     # claude-code resolves the checker off PATH by bare name, so it has to be a
     # real package rather than a store path like the LSP servers. hunspell
     # over aspell because only it takes several dictionaries at once (`-d a,b`).
@@ -173,7 +191,21 @@
     home.packages = [spellChecker] ++ lib.optional cfg.work.enable claudeWorkWrapper;
 
     # Shared by every agent; keep it agent-agnostic.
-    programs.claude-code.context = builtins.readFile ../agent-context.md;
+    programs.claude-code.context = ''
+      ${builtins.readFile ../agent-context.md}
+      ## Worktrees in Claude Code
+
+      - Make or enter a worktree with `EnterWorktree` (`name` for a new one, which
+        becomes its branch; `path` for an existing one) and leave with `ExitWorktree`.
+        They run `wt`, so the session moves with them; `wt create` in Bash does not.
+      - `ExitWorktree` cannot see what a remove would discard, so it always asks for
+        `discard_changes: true`. Check `git status` and `git log origin/<default>..`
+        in the worktree first, and ask the user unless nothing would be lost.
+      - An isolated agent's worktree is removed when the agent stops if nothing in it
+        would be lost; otherwise it stays to review, land with `wt apply`, or remove.
+      - On exit, the worktree the session was launched in is removed if it is clean,
+        has nothing ahead of the default branch, and nobody else's cwd is inside it.
+    '';
 
     programs.claude-code = {
       enable = true;
@@ -210,8 +242,12 @@
         };
         hooks =
           {
-            SessionStart = direnvHooks;
+            SessionStart = direnvHooks ++ worktreeHook "session-start";
+            SessionEnd = worktreeHook "session-end";
             CwdChanged = direnvHooks;
+            WorktreeCreate = worktreeHook "create";
+            WorktreeRemove = worktreeHook "remove";
+            SubagentStop = worktreeHook "subagent-stop";
             PreToolUse = [
               {
                 matcher = "Bash";

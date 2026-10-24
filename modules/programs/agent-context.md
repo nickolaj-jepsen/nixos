@@ -17,12 +17,6 @@ Repository-local instructions and existing conventions take precedence over thes
 - Git worktrees live in `~/worktrees/<repo>/<name>`, created with `wt create <name>`
   (it prints the path); `git worktree add` anywhere else is blocked. `wt` also
   lists, diffs, lands and cleans them; cleaning drops the branch with it.
-- Pi removes the worktree its session was in when it exits, if that worktree is
-  clean and has nothing ahead of the default branch, and nobody's cwd is inside
-  it. Anything with uncommitted work or unpushed commits is left in place.
-- `/new` inside a worktree moves the session to the primary checkout first and
-  asks what to do with the worktree it left; `/back` makes the same move without
-  starting a fresh conversation.
 - In Digital-Udvikling repositories, use `ds` when it supports the operation; check `ds --help` when uncertain.
 - A wrapper (`xargs`, `sh -c`, `eval`, `sudo`, `find -exec`) hides the command that runs, so it asks for approval even when the inner command is harmless. A plain command or a glob avoids the prompt.
 

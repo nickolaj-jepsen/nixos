@@ -145,7 +145,17 @@ in {
         # agent-context.md is shared by every agent; keep it agent-agnostic.
         # How to delegate is in extensions/codemode-only.ts: these rules reach every
         # child as project context, and a child holds no agent tools.
-        rules = builtins.readFile ../agent-context.md;
+        rules = ''
+          ${builtins.readFile ../agent-context.md}
+          ## Worktrees in pi
+
+          - Pi removes the worktree its session was in when it exits, if that worktree is
+            clean and has nothing ahead of the default branch, and nobody's cwd is inside
+            it. Anything with uncommitted work or unpushed commits is left in place.
+          - `/new` inside a worktree moves the session to the primary checkout first and
+            asks what to do with the worktree it left; `/back` makes the same move without
+            starting a fresh conversation.
+        '';
         themes = [theme];
         # Nix-built pi can't self-update; extension-update notices still show.
         environment.PI_SKIP_VERSION_CHECK.value = "1";
