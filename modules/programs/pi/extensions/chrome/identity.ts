@@ -18,6 +18,12 @@
  * the border is plain; the deterministic cut of the first prompt survives only
  * as the fallback for a session the model could not name.
  *
+ * A second call reads the turn once it settles, for the one thing a wall of
+ * prose hides: what it wants from you. That ask takes the border's detail slot
+ * when the agent is idle, and its draft answer becomes the row under the input,
+ * offered with tab. The call is skipped for a turn that ran no tools and said
+ * little, since those are read at a glance.
+ *
  * The border belongs to the editor; the wrapper in `editor.ts` calls `drawTop`
  * for the border row. Until you run `/name`, the session name follows the label,
  * so `/resume` lists something useful.
@@ -37,7 +43,13 @@ import {
   oneLine,
   stripRequest,
 } from "../lib/naming.ts";
-import { ask, buildPrompt, type Fields, MAX_DOING, parseFields } from "../lib/sidecar.ts";
+import {
+  ask as askSidecar,
+  buildPrompt,
+  type Fields,
+  MAX_DOING,
+  parseFields,
+} from "../lib/sidecar.ts";
 import { recordSideCall } from "../lib/usage-ledger.ts";
 import { trackUserWait, waitingOnUser } from "../lib/user-wait.ts";
 import { shortPath } from "./format.ts";
@@ -51,6 +63,8 @@ const LABEL_ID = "label";
 
 type Phase = "working" | "idle" | "failed";
 type Source = "name" | "model" | "manual" | "prompt";
+/** Which moment the call is reading: a request that just arrived, or a turn that just ended. */
+type Moment = "start" | "settle";
 
 type Label = {
   text: string;
@@ -91,6 +105,11 @@ const MAX_LABEL_CHARS = 40;
 const MIN_LABEL_ROOM = 14;
 // A step cut shorter than this says nothing worth the columns.
 const MIN_DOING_ROOM = 8;
+// The ask carries a "needs: " prefix, so it needs room for that plus a word.
+const MIN_ASK_ROOM = 14;
+// A turn that ran no tools and wrote less than this is read at a glance, so the
+// settle call would only tell you what is already on screen.
+const WORTH_ASKING_CHARS = 800;
 
 // Sub-agent widgets already own `●`, `○`, `⟳` and `▸`, so states that need you
 // are words and "working" is either pi's spinner or a frozen frame of one.
@@ -143,8 +162,16 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   let lastCallAt = 0;
   /** A label the user set here, which `/name` aside is the only one the model must not touch. */
   let manualName = false;
+  /** A settle call that arrived while the turn-start call was still out. */
+  let pending: Moment | undefined;
   /** The step the last call named; shown while the turn runs, dropped when it settles. */
   let doing: string | undefined;
+  /** What the finished turn asked for, and the draft that answers it. Both die with the next turn. */
+  let ask: string | undefined;
+  let reply: string | undefined;
+  /** What the running turn has done so far, for deciding whether its outcome is worth a call. */
+  let turnTools = 0;
+  let lastText = 0;
 
   const sessionId = () => state.ctx?.sessionManager.getSessionId() ?? "";
   const shortId = () => sessionId().slice(0, 8);
@@ -257,8 +284,9 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     const theme = ctx.ui.theme;
     const current = currentLabel(ctx);
     const name = current?.text ?? "";
-    // A step is a plan made at turn start, so it is shown only while that turn runs.
-    const step = phase === "working" ? doing : undefined;
+    // A step is a plan made at turn start, so it is shown only while that turn
+    // runs. What the turn wants from you outlives it, until the next one starts.
+    const detail = phase === "working" ? doing : ask !== undefined ? `needs: ${ask}` : undefined;
     const stateText = stateWord(phase, waitingOnUser(ctx));
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
     // so it belongs next to the label rather than in the session detail.
@@ -326,10 +354,11 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       // thinking level), so it reads as box chrome rather than prompt text.
       const shown = name ? truncateToWidth(name, room, "…") : "";
       // The step gives way before the label is shortened: it is the part that can lie.
-      const roomForStep = room - visibleWidth(shown) - 3;
-      const shownStep =
-        step && shown === name && roomForStep >= MIN_DOING_ROOM
-          ? truncateToWidth(step, roomForStep, "…")
+      const roomForDetail = room - visibleWidth(shown) - 3;
+      const minDetail = ask !== undefined && phase !== "working" ? MIN_ASK_ROOM : MIN_DOING_ROOM;
+      const shownDetail =
+        detail && shown === name && roomForDetail >= minDetail
+          ? truncateToWidth(detail, roomForDetail, "…")
           : undefined;
       const painted =
         current?.source === "prompt"
@@ -337,10 +366,12 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
           : state.hover === LABEL_ID
             ? theme.fg("text", shown)
             : border(shown);
-      const detail = shownStep ? `${theme.fg("dim", " · ")}${theme.fg("dim", shownStep)}` : "";
+      const detailLine = shownDetail
+        ? `${theme.fg("dim", " · ")}${theme.fg("dim", shownDetail)}`
+        : "";
       const x0 = visibleWidth(lead);
       return {
-        left: `${lead}${painted}${detail}${theme.fg("dim", hint)}${name ? " " : ""}`,
+        left: `${lead}${painted}${detailLine}${theme.fg("dim", hint)}${name ? " " : ""}`,
         right,
         label: name ? { x0, x1: x0 + visibleWidth(shown) } : undefined,
         controls,
@@ -393,12 +424,18 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   };
 
   /** Takes what the sidecar said, keeping whatever it left out. */
-  const apply = (fields: Fields) => {
+  const apply = (fields: Fields, moment: Moment) => {
     if (fields.summary) meta = { ...meta, summary: fields.summary };
     if (fields.tags) meta = { ...meta, tags: fields.tags };
     // An omitted key keeps the step; an empty one clears it.
     if (phase === "working" && fields.doing !== undefined) {
       doing = fields.doing ? oneLine(fields.doing).slice(0, MAX_DOING) : undefined;
+    }
+    // Only a turn that ended has anything to ask for; at turn start the keys are
+    // guesses about work that has not happened.
+    if (moment === "settle") {
+      ask = fields.ask ? oneLine(fields.ask) : undefined;
+      reply = ask ? oneLine(fields.reply ?? "") || undefined : undefined;
     }
     const next = fields.label ? cleanLabel(fields.label) : "";
     if (next && next !== label?.text && !ownsLabel()) {
@@ -412,8 +449,14 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
    * Asks the sidecar for the session's identity. `manual` is a click or the
    * shortcut, which skips the debounce and reports failures instead of hiding them.
    */
-  const refresh = async (ctx: ExtensionContext, manual = false) => {
-    if (!state.live || busy) return;
+  const refresh = async (ctx: ExtensionContext, manual = false, moment: Moment = "start") => {
+    if (!state.live) return;
+    if (busy) {
+      // A turn that settles while the turn-start call is still out keeps its ask:
+      // it runs as soon as that call is done.
+      if (moment === "settle") pending = "settle";
+      return;
+    }
     const muted = failures >= MAX_FAILURES;
     const capped = calls >= CALL_CAP;
     if (muted || capped) {
@@ -427,7 +470,9 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       }
       return;
     }
-    if (!manual && Date.now() - lastCallAt < MIN_CALL_GAP_MS) return;
+    // A settled turn is one call no matter how quickly it followed the last one;
+    // the debounce exists for prompts typed in bursts.
+    if (!manual && moment === "start" && Date.now() - lastCallAt < MIN_CALL_GAP_MS) return;
     const chosen = model(ctx, manual);
     if (!chosen) return;
 
@@ -443,10 +488,16 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
         label: current?.source === "prompt" ? undefined : current?.text,
         summary: meta.summary,
         tags: meta.tags,
+        settle: moment === "settle",
       });
-      const response = await ask(ctx, chosen, prompt, controller.signal);
+      const response = await askSidecar(ctx, chosen, prompt, controller.signal);
       if (controller.signal.aborted) return;
-      recordSideCall(pi, "session label", response);
+      // The ask is the half that runs once per turn, so /cost shows it on its own.
+      recordSideCall(pi, moment === "settle" ? "session ask" : "session label", response);
+      // Counted before validation: a reply that failed or came back empty was
+      // billed all the same, and /header must agree with the ledger.
+      calls += 1;
+      costUsd += response.usage?.cost?.total ?? 0;
       if (response.stopReason === "error" || response.stopReason === "aborted") {
         throw new Error(response.errorMessage ?? response.stopReason);
       }
@@ -457,10 +508,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       if (Object.keys(fields).length === 0) {
         throw new Error(`no fields in reply (${response.stopReason})`);
       }
-      calls += 1;
-      costUsd += response.usage?.cost?.total ?? 0;
       failures = 0;
-      apply(fields);
+      apply(fields, moment);
     } catch (error) {
       failures += 1;
       if (manual && !controller.signal.aborted) {
@@ -472,6 +521,10 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       if (!controller.signal.aborted) {
         busy = false;
         paint();
+        const next = pending;
+        pending = undefined;
+        const live = state.ctx;
+        if (next && live) void refresh(live, false, next).catch(() => {});
       }
     }
   };
@@ -488,6 +541,8 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
       meta.summary,
       meta.tags?.length ? `tags: ${meta.tags.join(", ")}` : undefined,
       phase === "working" && doing ? `doing: ${doing}` : undefined,
+      ask ? `needs: ${ask}` : undefined,
+      reply ? `reply: ${reply}` : undefined,
       `path: ${cwd}`,
       persisted
         ? `session: ${sessionId()}`
@@ -514,6 +569,45 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     if (result === "empty") ctx.ui.notify("identity: empty label ignored", "warning");
     if (result === "owned")
       ctx.ui.notify("identity: /name owns the label, run /name to change it", "warning");
+  };
+
+  /**
+   * The row under the input: the draft that answers the finished turn's ask.
+   * It exists only while the editor is empty, so it is never something you have
+   * to delete before typing, and it is dropped as soon as you do type.
+   */
+  const hint = (width: number, empty: boolean): { line: string } | undefined => {
+    const ctx = state.ctx;
+    if (!ctx || !state.live) return undefined;
+    if (!empty) {
+      reply = undefined;
+      return undefined;
+    }
+    if (!reply) return undefined;
+    const theme = ctx.ui.theme;
+    // Inset like the editor's own content, so the row reads as a line of the box.
+    const inset = 1;
+    const lead = theme.fg("dim", "⇥ ");
+    const accept = theme.fg("dim", "tab ");
+    const room = width - inset * 2 - visibleWidth(lead) - visibleWidth(accept);
+    if (room < 12) return undefined;
+    const text = truncateToWidth(reply, room, "…");
+    const pad = " ".repeat(
+      Math.max(
+        0,
+        width - inset * 2 - visibleWidth(lead) - visibleWidth(text) - visibleWidth(accept),
+      ),
+    );
+    const edge = " ".repeat(inset);
+    return { line: `${edge}${lead}${theme.fg("text", text)}${pad}${accept}${edge}` };
+  };
+
+  /** The draft to insert, at most once: a second tab is pi's own again. */
+  const takeHint = () => {
+    const draft = reply;
+    reply = undefined;
+    if (draft) paint();
+    return draft;
   };
 
   pi.registerCommand("header", {
@@ -557,6 +651,9 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
 
   pi.on("session_start", (_event, ctx) => {
     cwd = ctx.cwd;
+    ask = undefined;
+    reply = undefined;
+    doing = undefined;
     // The last persisted record on this branch wins, so a resumed session paints
     // instantly and without a model call.
     let firstModel: string | undefined;
@@ -598,6 +695,10 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   // The turn's request is new information, and the call runs beside the run
   // rather than after it, so the name is ready by the time anyone looks up.
   pi.on("before_agent_start", (event, ctx) => {
+    // A new turn retires the last one's ask, its draft and its step.
+    ask = undefined;
+    reply = undefined;
+    doing = undefined;
     if (event.messageType !== "user") return;
     if (isAcknowledgement(event.prompt)) return;
     void refresh(ctx).catch(() => {});
@@ -606,17 +707,24 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   pi.on("agent_start", () => {
     since = Date.now();
     phase = "working";
-    // The turn's step is unknown until its call answers.
-    doing = undefined;
+    turnTools = 0;
+    lastText = 0;
     paint();
   });
 
-  pi.on("agent_settled", () => {
+  pi.on("tool_execution_start", () => {
+    turnTools += 1;
+  });
+
+  pi.on("agent_settled", (_event, ctx) => {
     since = Date.now();
     // Failure is sticky until the next run starts.
     if (phase !== "failed") phase = "idle";
     // The step described a turn that is over.
     doing = undefined;
+    if (turnTools > 0 || lastText >= WORTH_ASKING_CHARS) {
+      void refresh(ctx, false, "settle").catch(() => {});
+    }
     paint();
   });
 
@@ -634,8 +742,12 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   pi.on("ui_prompt_end", (_event, ctx) => promptChanged(ctx));
 
   pi.on("message_end", (event) => {
-    if (event.message.role === "assistant" && event.message.stopReason === "error") {
-      phase = "failed";
+    if (event.message.role === "assistant") {
+      if (event.message.stopReason === "error") phase = "failed";
+      const text = event.message.content
+        .flatMap((block) => (block.type === "text" ? [block.text] : []))
+        .join(" ");
+      if (text.trim() !== "") lastText = text.length;
     }
     paint();
   });
@@ -657,6 +769,7 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
   pi.on("session_shutdown", () => {
     inflight?.abort();
     inflight = undefined;
+    pending = undefined;
     busy = false;
     setAutoName(sessionId(), undefined);
     if (timer) clearInterval(timer);
@@ -672,5 +785,5 @@ export const createIdentity = (pi: ExtensionAPI, state: ChromeState) => {
     }
   });
 
-  return { drawTop, refresh };
+  return { drawTop, refresh, hint, takeHint };
 };

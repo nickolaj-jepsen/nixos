@@ -1,4 +1,4 @@
-import type { TuiMouseEvent } from "@earendil-works/pi-tui";
+import { matchesKey, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { EditorWrapper } from "../lib/prompt-editor.ts";
 import { hitTest, hoverAt, isPlainClick, type Region } from "./layout.ts";
 import type { Action, ChromeState, Renderer } from "./state.ts";
@@ -6,7 +6,10 @@ import type { Action, ChromeState, Renderer } from "./state.ts";
 type Border = (text: string) => string;
 type Inner = {
   render(width: number): string[];
+  handleInput?(data: string): unknown;
   handleMouse?(event: TuiMouseEvent): unknown;
+  getText?(): string;
+  setText?(text: string): void;
   borderColor?: Border;
   actionHandlers?: Map<string, () => void>;
 };
@@ -25,6 +28,13 @@ export type Painters = {
     border: Border,
     status: BorderStatus | undefined,
   ) => { line: string; regions: Region[] };
+  /**
+   * The row under the box: `empty` is whether the editor holds anything. The
+   * painter owns the content, the wrapper owns inserting it into the editor.
+   */
+  hint?: (width: number, empty: boolean) => { line: string } | undefined;
+  /** The text to insert when that row is accepted, taken at most once. */
+  takeHint?: () => string | undefined;
 };
 
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
@@ -104,7 +114,26 @@ export const createEditorChrome = (state: ChromeState, painters: Painters): Edit
             const top = painters.top(width, topHidden(lines[lead] ?? ""), border, status);
             lines[lead] = top.line;
             topRegions = top.regions;
+            // The suggestion belongs inside the box, above its bottom border. It
+            // only exists while the editor is empty, so the box is exactly one
+            // content line and the bottom border sits right behind it.
+            const hint = painters.hint?.(width, (target.getText?.() ?? "") === "");
+            if (hint) lines.splice(lead + 2, 0, hint.line);
             return lines;
+          };
+        }
+        if (property === "handleInput") {
+          return (data: string) => {
+            // Tab is pi's autocomplete, but an empty editor has nothing to
+            // complete: that keystroke means "use the suggestion" instead.
+            if (matchesKey(data, "tab") && (target.getText?.() ?? "") === "") {
+              const draft = painters.takeHint?.();
+              if (draft !== undefined) {
+                target.setText?.(draft);
+                return;
+              }
+            }
+            return target.handleInput?.(data);
           };
         }
         if (property === "handleMouse") {
