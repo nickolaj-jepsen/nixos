@@ -14,7 +14,8 @@
  * `/wt` for when the turn has settled, and the move then re-prompts the agent.
  * A bare `/wt` asks the naming model for a branch name from the session, so a
  * worktree costs no more than the move. `/back` runs the same machinery the
- * other way and then asks what should become of the worktree left behind.
+ * other way and then asks what should become of the worktree left behind;
+ * quitting pi inside a worktree removes it only when `wt clean` would.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, statSync, writeFileSync } from "node:fs";
@@ -35,11 +36,13 @@ import {
   requests,
   stripRequest,
 } from "./lib/naming.ts";
-import { linkedWorktree, park, removableAt, worktreeAt } from "./lib/park.ts";
+import { isLeanModel } from "./lib/lean-model.ts";
+import { linkedWorktree, park, removableAt, sessionWorktree, worktreeAt } from "./lib/park.ts";
 import { sideCall } from "./lib/side-call.ts";
 import { branches, names, status, wt, type RepoStatus } from "./lib/wt.ts";
 
 const fallback = "Blocked: git worktree add outside ~/worktrees/<repo>/. Use `wt create <name>`.";
+const TOOL = "enter_worktree";
 const MOVED = "worktree-moved";
 const PARKED = "worktree-parked";
 // Tools that would still act on the old checkout between enter_worktree and the move.
@@ -148,6 +151,23 @@ export default function (pi: ExtensionAPI) {
       (await modelName(ctx)) || slug(stripRequest(firstRequest(ctx) ?? "")) || "worktree",
       new Set([...(await names(ctx.cwd)), ...(await branches(ctx.cwd))]),
     );
+
+  // Once, before the first request: a later tool-set change can cost a cache-invalidating
+  // re-read. The move needs a UI, and a local model's window has no room to spare.
+  pi.on("session_start", (_event, ctx) => {
+    if (!ctx.hasUI || isLeanModel(ctx.model) || pi.getActiveTools().includes(TOOL)) return;
+    pi.setActiveTools([...pi.getActiveTools(), TOOL]);
+  });
+
+  // A move, fork, resume, new session or reload also shuts the session down; only an exit
+  // leaves the worktree behind, and there is no TUI left to ask in.
+  pi.on("session_shutdown", async (event, ctx) => {
+    if (event.reason !== "quit" || ctx.mode !== "tui") return;
+    const found = await sessionWorktree(ctx.cwd);
+    const main = found?.repo.worktrees.find((tree) => tree.isMain);
+    if (!found?.tree.safeToRemove || !main) return;
+    await wt(["clean", found.tree.name], main.path).catch(() => {});
+  });
 
   pi.on("tool_call", (event, ctx) => {
     if (pending && MUTATING.has(event.toolName))
@@ -293,7 +313,7 @@ export default function (pi: ExtensionAPI) {
       // Before the question, not after: the answer may remove the directory this
       // process is standing in.
       follow(main.path);
-      const parked = left ? await park(pi, ctx, repo, left) : undefined;
+      const parked = left ? await park(pi, ctx, left) : undefined;
 
       await ctx.switchSession(file, {
         withSession: async (next) => {
@@ -325,7 +345,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "enter_worktree",
+    name: TOOL,
     label: "Enter worktree",
     description:
       "Create a git worktree (or pick an existing one) and move this session into it, keeping the conversation. " +
@@ -335,7 +355,7 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: [
       "Use enter_worktree before your first edit when other agent sessions are active in this checkout and your task edits files; skip it for read-only work.",
       "To work in a worktree use enter_worktree (`wt list` shows existing ones), not `wt create`/`wt cd` in bash: those leave this session in the current checkout.",
-      "Leave landing (`wt apply`) and removal (`wt clean`) to your user; end by naming the worktree.",
+      "When your user asks to commit to main from a worktree, commit in the worktree, then run `wt apply <name>`; if wt refuses, report its reason instead of landing another way (no `git push`, no merge from the primary checkout).",
     ],
     parameters: Type.Object({
       name: Type.String({
@@ -344,7 +364,7 @@ export default function (pi: ExtensionAPI) {
       }),
     }),
     exposure: "model-only",
-    // Activated by claude-peers only when the checkout is shared, so a solo clean tree pays nothing.
+    // Activated at session_start, so a subagent child never declares it.
     defaultActive: false,
     executionMode: "sequential",
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

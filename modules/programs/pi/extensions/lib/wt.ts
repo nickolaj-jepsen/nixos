@@ -19,23 +19,15 @@ export type Worktree = {
   behind?: number;
   locked: boolean;
   ageSeconds: number;
-  /** `wt clean` would remove it: clean, nothing ahead, unlocked, not the main checkout. */
+  /** `wt clean` would remove it: clean, nothing unlanded ahead, unlocked, nobody else's cwd inside, not the main checkout. */
   safeToRemove: boolean;
   isMain: boolean;
 };
 
-/** A repo's worktrees plus the facts that decide whether a `wt apply` could land. */
-export type RepoStatus = {
-  worktrees: Worktree[];
-  defaultBranch: string;
-  /** clean | dirty | untracked | detached: whether the main checkout could take a land. */
-  mainState: string;
-  /** The branch the main checkout is on, empty when detached. */
-  mainBranch: string;
-};
+export type RepoStatus = { worktrees: Worktree[]; defaultBranch: string };
 
 /** `wt status` field order; see the usage text in wt.bash. */
-const FIELDS = 14;
+const FIELDS = 12;
 
 const num = (value: string | undefined) => {
   const parsed = Number(value);
@@ -55,8 +47,6 @@ export const status = async (cwd: string, name?: string): Promise<RepoStatus> =>
   const out = await wt(name === undefined ? ["status"] : ["status", name], cwd);
   const worktrees: Worktree[] = [];
   let defaultBranch = "";
-  let mainState = "";
-  let mainBranch = "";
   for (const line of out.split("\n")) {
     if (line === "") continue;
     const field = line.split("\x1f");
@@ -76,11 +66,9 @@ export const status = async (cwd: string, name?: string): Promise<RepoStatus> =>
       isMain: field[10] === "1",
     });
     defaultBranch = field[11];
-    mainState = field[12];
-    mainBranch = field[13];
   }
   if (worktrees.length === 0) throw new Error("wt status: no rows");
-  return { worktrees, defaultBranch, mainState, mainBranch };
+  return { worktrees, defaultBranch };
 };
 
 /** Every worktree name, for completion and as the set an automatic name must avoid. */

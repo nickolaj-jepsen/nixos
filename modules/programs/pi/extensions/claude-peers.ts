@@ -14,8 +14,6 @@
  * Unlike Claude Code, which leaves noticing a shared checkout to the model,
  * each run's system prompt names the peers working in the same git working
  * tree and asks the model to coordinate destructive git operations with them.
- * It also declares `enter_worktree`, which worktree.ts registers inactive, once
- * the checkout is shared and the model has room for the extra declaration.
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
@@ -61,7 +59,6 @@ import {
 } from "./claude-peers/protocol.ts";
 import { isAutoName } from "./lib/auto-name.ts";
 import { IDENTITY_ENTRY, SIDECAR_CHANNEL, type SidecarUpdate } from "./lib/sidecar.ts";
-import { isLeanModel } from "./lib/lean-model.ts";
 import { markAgentPrompt } from "./lib/user-wait.ts";
 
 const MESSAGE_TYPE = "claude-peer-message";
@@ -455,15 +452,6 @@ export default function (pi: ExtensionAPI) {
     owner[OWNER] = undefined;
   }
 
-  /** Declares enter_worktree when the checkout is shared; worktree.ts registers it inactive. */
-  async function activateWorktree(c: ExtensionContext) {
-    if (!c.hasUI || isLeanModel(c.model)) return;
-    const peers = (await sameTreePeers(c.cwd).catch(() => undefined))?.list.length ?? 0;
-    if (peers === 0 && !(await dirtyTree(c.cwd))) return;
-    if (!pi.getAllTools().some((tool) => tool.name === WORKTREE_TOOL)) return;
-    pi.setActiveTools([...pi.getActiveTools(), WORKTREE_TOOL]);
-  }
-
   /** Keeps the registry's summary and step current, so peers can tell what this session is on. */
   function onSidecar(data: unknown) {
     const update = data as SidecarUpdate;
@@ -479,9 +467,6 @@ export default function (pi: ExtensionAPI) {
     live = true;
     unsubscribeSidecar?.();
     unsubscribeSidecar = pi.events.on(SIDECAR_CHANNEL, onSidecar);
-    // Once, before the first request: a later tool-set change is a prompt transition that
-    // can cost a cache-invalidating re-read, far more than the declaration it saves.
-    await activateWorktree(c);
     await start(c);
   });
   pi.on("session_shutdown", async (event) => {
@@ -790,15 +775,6 @@ function treeRoot(dir: string): Promise<string> {
     treeRoots.set(dir, root);
   }
   return root;
-}
-
-/** Whether the working tree holds edits someone may be building on; a worktree starts from the default branch. */
-function dirtyTree(dir: string): Promise<boolean> {
-  return new Promise((resolve) =>
-    execFile("git", ["-C", dir, "status", "--porcelain"], { timeout: 2000 }, (err, out) =>
-      resolve(!err && out.trim() !== ""),
-    ),
-  );
 }
 
 /** Live sessions of other processes whose cwd is in the same working tree as `cwd`. */

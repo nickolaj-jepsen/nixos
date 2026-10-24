@@ -35,8 +35,8 @@ Usage:
   wt names                       Print every worktree name, one per line (shell completions).
   wt status [<name>]             Machine-readable: one \x1f-separated row per worktree
                                  (name path registered branch state ahead behind locked
-                                 age_seconds safe_clean is_main default_branch main_state
-                                 main_branch). Agent hooks read this instead of `wt list`.
+                                 age_seconds safe_clean is_main default_branch). Agent hooks
+                                 read this instead of `wt list`.
   wt guard <command>             Exit 1 with a reason when <command> runs `git worktree add`
                                  outside the root, else exit 0. Agent hooks call this.
 EOF
@@ -425,9 +425,8 @@ cmd_list() {
     printf '%s\n' "$rows" | format_display | print_table
 }
 
-# Machine-readable state: gather_worktrees' rows plus the repo facts that decide
-# whether a `wt apply` could land — the default branch, and a non-fatal version of
-# require_main_on_clean_default's answer. Agents read this instead of `wt list`.
+# Machine-readable state: gather_worktrees' rows plus the default branch. Agents
+# read this instead of `wt list`, and ask `wt apply --dry-run` whether a land would go.
 cmd_status() {
     local target=""
     while (( $# > 0 )); do
@@ -436,22 +435,6 @@ cmd_status() {
             *)  target="$1"; shift ;;
         esac
     done
-
-    local main_state="" main_branch porcelain
-    porcelain=$(git -C "$MAIN_WT" status --porcelain 2>/dev/null || true)
-    if ! main_branch=$(git -C "$MAIN_WT" symbolic-ref --short --quiet HEAD 2>/dev/null); then
-        main_branch=""
-        main_state="detached"
-    fi
-    if [[ -z "$main_state" ]]; then
-        if [[ -z "$porcelain" ]]; then
-            main_state="clean"
-        elif grep -qvE '^\?\?' <<<"$porcelain"; then
-            main_state="dirty"
-        else
-            main_state="untracked"
-        fi
-    fi
 
     local rows
     rows=$(gather_worktrees "$MAIN_WT" "$DEFAULT_BRANCH")
@@ -464,7 +447,7 @@ cmd_status() {
             continue
         fi
         matched=1
-        printf '%s\x1f%s\x1f%s\x1f%s\n' "$row" "$DEFAULT_BRANCH" "$main_state" "$main_branch"
+        printf '%s\x1f%s\n' "$row" "$DEFAULT_BRANCH"
     done <<<"$rows"
 
     if [[ -n "$target" && "$matched" -eq 0 ]]; then
