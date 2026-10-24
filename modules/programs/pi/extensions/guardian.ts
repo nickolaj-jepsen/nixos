@@ -8,9 +8,7 @@
  *   file it read never reaches it.
  * - Only allows or defers, never denies: a wrong "no" would block work you
  *   asked for, while a deferral costs one dialog.
- * - An allow needs two models to agree. The flash model answers first and its
- *   "ask" goes straight to the dialog; only its "allow" pays for the second,
- *   which is never of the family that made the call (judgesFor).
+ * - One judge, never of the family that made the call (judgeFor).
  * - Never less private than the session: a local or TensorX model's asks go
  *   straight to the dialog.
  * - Every failure, timeout and missing model defers, so a broken judge means
@@ -32,16 +30,13 @@ const LINK = "guardian";
 const SERVICES = Symbol.for("@gotgenes/pi-permission-system:session-services");
 const READY_CHANNEL = "permissions:ready";
 
-// Not vm/flash: its last stage is Claude, which must not check a Claude actor.
-const CHECK_MODEL = "opencode-go/deepseek-v4.1-flash";
-// Second opinions, each from another lineage than the model that made the call.
-const CONFIRM_MODEL = "anthropic/claude-sonnet-5-5";
-const CLAUDE_CONFIRM_MODEL = "opencode-go/kimi-k3.1-pro";
+// Pinned, not vm/flash: its last stage is Claude, which must not judge a Claude actor.
+const DEEPSEEK_JUDGE = "opencode-go/deepseek-v4.1-flash";
+const CLAUDE_JUDGE = "anthropic/claude-sonnet-5-5";
 // No remote judge is as private as these, so their asks skip the judge.
 const PRIVATE_PROVIDERS = new Set(["local", "tensorx"]);
-// The dialog waits on these, so a slow judge is a slower prompt.
-const CHECK_TIMEOUT_MS = 12_000;
-const CONFIRM_TIMEOUT_MS = 25_000;
+// The dialog waits on this, so a slow judge is a slower prompt.
+const TIMEOUT_MS = 20_000;
 // Room for reasoning before two short lines.
 const MAX_TOKENS = 2048;
 const MAX_FAILURES = 3;
@@ -64,14 +59,13 @@ reason: one sentence of at most 20 words
 type Verdict = { kind: "allow" } | { kind: "defer" };
 
 /**
- * The check and confirm models for an ask made by `actor`, the physical model
- * (a vm/* selection resolved to the one that answered); undefined when no
- * remote judge may see the action.
+ * The judge for an ask made by `actor`, the physical model (a vm/* selection
+ * resolved to the one that answered): Sonnet for DeepSeek, DeepSeek for every
+ * other family; undefined when no remote judge may see the action.
  */
-const judgesFor = (actor: Model<any> | undefined) => {
+const judgeFor = (actor: Model<any> | undefined) => {
   if (!actor || PRIVATE_PROVIDERS.has(actor.provider)) return undefined;
-  const claude = actor.provider === "anthropic" || /claude/i.test(actor.id);
-  return { check: CHECK_MODEL, confirm: claude ? CLAUDE_CONFIRM_MODEL : CONFIRM_MODEL };
+  return /deepseek/i.test(actor.id) ? CLAUDE_JUDGE : DEEPSEEK_JUDGE;
 };
 
 /** The slice of the package's ask details this link reads; the rest is ignored. */
@@ -138,25 +132,17 @@ export default function (pi: ExtensionAPI) {
     return lines.filter(Boolean).join("\n");
   };
 
-  const ask = async (
-    session: ExtensionContext,
-    model: string,
-    prompt: string,
-    timeoutMs: number,
-    source: string,
-    temperature?: number | null,
-  ) => {
+  const ask = async (session: ExtensionContext, model: string, prompt: string) => {
     const controller = new AbortController();
     inflight.add(controller);
     try {
       const reply = await sideCall(pi, session, {
-        source,
+        source: "guardian",
         system: SYSTEM,
         prompt,
         model,
         maxTokens: MAX_TOKENS,
-        timeoutMs,
-        temperature,
+        timeoutMs: TIMEOUT_MS,
         signal: controller.signal,
       });
       if ("error" in reply) throw new Error(reply.error);
@@ -174,8 +160,8 @@ export default function (pi: ExtensionAPI) {
     const session = ctx;
     const surface = details.payload?.request?.surface ?? "";
     if (!session || outOfReach(surface) || failures >= MAX_FAILURES) return { kind: "defer" };
-    const judges = judgesFor(routed(session)?.model ?? session.model);
-    if (!judges) return { kind: "defer" };
+    const judge = judgeFor(routed(session)?.model ?? session.model);
+    if (!judge) return { kind: "defer" };
 
     const { repo, branch } = await gitContext(session.cwd);
     const prompt = [
@@ -188,38 +174,16 @@ export default function (pi: ExtensionAPI) {
     ].join("\n");
 
     try {
-      const first = await ask(session, judges.check, prompt, CHECK_TIMEOUT_MS, "guardian check");
-      if (!first.allow) {
-        failures = 0;
-        log.review("guardian_deferred", {
-          requestId: details.requestId,
-          stage: "check",
-          reason: first.reason,
-        });
-        return { kind: "defer" };
-      }
-      // Kimi, which confirms for Claude, rejects any temperature but its own.
-      const second = await ask(
-        session,
-        judges.confirm,
-        prompt,
-        CONFIRM_TIMEOUT_MS,
-        "guardian confirm",
-        null,
-      );
+      const verdict = await ask(session, judge, prompt);
       failures = 0;
-      if (!second.allow) {
-        log.review("guardian_deferred", {
-          requestId: details.requestId,
-          stage: "confirm",
-          reason: second.reason,
-        });
+      if (!verdict.allow) {
+        log.review("guardian_deferred", { requestId: details.requestId, reason: verdict.reason });
         return { kind: "defer" };
       }
-      log.review("guardian_allowed", { requestId: details.requestId, reason: second.reason });
+      log.review("guardian_allowed", { requestId: details.requestId, reason: verdict.reason });
       if (session.hasUI) {
         const value = oneLine(details.payload?.request?.value ?? surface).slice(0, 80);
-        session.ui.notify(`guardian allowed ${value}: ${second.reason || first.reason}`, "info");
+        session.ui.notify(`guardian allowed ${value}: ${verdict.reason}`, "info");
       }
       return { kind: "allow" };
     } catch (error) {

@@ -67,7 +67,9 @@ against a DeepSeek classifier. It comes up at the 2026-11-07 usage review.
 
 Every subagent role locks its model; none inherits the parent's, because
 inheritance once ran cheap children on Opus. Explore, general-purpose, reviewer
-and verifier run on `vm/flash`, Plan on `vm/deep`.
+and verifier run on `vm/flash`. Plan runs on `vm/architect`: it has no edit
+tool, so it never leaves planning, and Jev rates the parent's brief once to put
+the whole run on deep or flash.
 
 `enabledModels` has one entry per reason to hand-pick: `vm/*` for the tiers,
 Opus and Sonnet on the credit, `kimi-coding/k3.1-pro` for work Claude declines,
@@ -83,8 +85,8 @@ Dedicated cyber tiers are deferred.
 
 ## Guardian
 
-`guardian.ts` picks its judges from the physical model that made the tool call,
-so a `vm/*` failover counts as the model it failed over to. The confirming judge
-is never from the actor's family, and no judge is less private than the actor:
-a local or TensorX session's asks skip the judge and go straight to the dialog.
-The table is `judgesFor`.
+`guardian.ts` asks one judge, picked from the physical model that made the tool
+call, so a `vm/*` failover counts as the model it failed over to. The judge is
+never from the actor's family (`judgeFor`): Sonnet judges DeepSeek, DeepSeek
+judges everyone else. No judge is less private than the actor: a local or
+TensorX session's asks skip the judge and go straight to the dialog.
