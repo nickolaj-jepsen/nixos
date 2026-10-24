@@ -13,7 +13,6 @@ import {
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
 import { agentParts } from "./agents.ts";
-import { createBackground } from "./background.ts";
 import { borderShown } from "./editor.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { formatCost, splitPath } from "./format.ts";
@@ -55,7 +54,6 @@ export const createFooter = (
   const usage = createUsage(state);
   const stats = createStats();
   const routed = createRouted();
-  const background = createBackground(() => state.tui?.requestRender());
   let regions: Region[] = [];
 
   /** Cost and speed as text; `undefined` when there is nothing worth showing. */
@@ -147,20 +145,12 @@ export const createFooter = (
     const statusEntries = [...footerData.getExtensionStatuses()].sort(([a], [b]) =>
       a.localeCompare(b),
     );
-    // Called even when the package published nothing, so the spinner stops.
-    const published = statusEntries.find(([key]) => key === "background-tasks")?.[1];
-    const backgroundStatus = background.parts(
-      published === undefined ? undefined : sanitize(published),
-      actions.backgroundTasks,
-      actions.dismissBackgroundTasks,
-    );
     const agentStatus = statusEntries.find(([key]) => key === "subagents")?.[1];
     const badges = agentParts(
       agentStatus === undefined ? undefined : sanitize(agentStatus),
       actions.agents,
     );
     const statuses = statusEntries.flatMap(([key, text], index) => {
-      if (key === "background-tasks") return backgroundStatus;
       // A wording `agents.ts` cannot read would hide the count altogether, so the
       // package's own text stands in until it learns the new shape.
       if (key === "subagents" && badges.length > 0) return badges;
@@ -271,7 +261,6 @@ export const createFooter = (
         },
         dispose: () => {
           unsubscribe();
-          background.dispose();
           git.dispose();
         },
       };

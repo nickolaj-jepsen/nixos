@@ -36,10 +36,6 @@ const HIDDEN: Record<string, string> = {
   [SUBAGENT]: "{ subagent_type, description, prompt }",
   get_subagent_result: "{ agent_id }",
   steer_subagent: "{ agent_id, message }",
-  // pi-background-tasks: bg_run stays declared; its completion notice makes these rarely needed.
-  bg_status: "",
-  bg_logs: "{ taskId }",
-  bg_kill: "{ taskId }",
 };
 const HIDDEN_NAMES = Object.keys(HIDDEN);
 
@@ -72,11 +68,6 @@ const guidelines = (active: Set<string>, lean: boolean, expensive: boolean) => {
     const calls = reachable.map((name) => `tools.${name}(${HIDDEN[name]})`);
     lines.push(
       `${list(calls)} ${reachable.length === 1 ? "is" : "are"} left out of your tool list but stay callable from codemode, with the required arguments shown; \`await describeTool("<name>")\` for the optional ones.`,
-    );
-  }
-  if (reachable.includes("bg_logs") && active.has("bg_run")) {
-    lines.push(
-      "A background task's output is also at the path `bg_run` returned; `read` it instead.",
     );
   }
   if (!active.has(SUBAGENT)) return lines;

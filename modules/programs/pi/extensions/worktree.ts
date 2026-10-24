@@ -176,7 +176,7 @@ export default function (pi: ExtensionAPI) {
         reason: `This session moves to ${pending} when the turn ends; end your turn now and continue there.`,
       };
 
-    // bg_run (pi-background-tasks) is a shell too.
+    // bg_run (bg.ts) is a shell too.
     const command = isToolCallEventType("bash", event)
       ? event.input.command
       : event.toolName === "bg_run"

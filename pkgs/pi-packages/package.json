@@ -5,7 +5,6 @@
     "@gotgenes/pi-permission-system": "41.0.0",
     "@gotgenes/pi-subagents": "25.0.1",
     "@juicesharp/rpiv-ask-user-question": "2.13.9",
-    "@juicesharp/rpiv-todo": "2.13.9",
-    "pi-background-tasks": "2.6.10"
+    "@juicesharp/rpiv-todo": "2.13.9"
   }
 }

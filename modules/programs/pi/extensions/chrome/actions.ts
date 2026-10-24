@@ -64,8 +64,6 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState) => {
     // so ctrl+o and alt+t keep their meaning and the click reads as one more key.
     tools: ((ctx) => ctx.ui.setToolsExpanded(!ctx.ui.getToolsExpanded())) as Action,
     thinking: appAction(state, "app.thinking.toggle", "alt+t"),
-    backgroundTasks: command(state, pi, "/tasks"),
-    dismissBackgroundTasks: closeOverlay,
     agents: command(state, pi, "/agents"),
     cost: command(state, pi, "/cost"),
     // A full window is where the session tree earns its keep, so the context pill

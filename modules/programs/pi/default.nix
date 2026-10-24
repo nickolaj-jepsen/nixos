@@ -75,9 +75,7 @@ in {
     ...
   }: let
     pi = pkgs.pi-coding-agent;
-    # Instance for this host's palette: pi-background-tasks hardcodes its selection
-    # band (see pkgs/pi-packages), so the override keeps it on the theme colors.
-    piPackages = pkgs.pi-packages.override {themeColors = config.fireproof.theme.colors;};
+    piPackages = pkgs.pi-packages;
     # Shared with the Claude Code spellchecker (lib/default.nix), so a word
     # learned in one agent's picker is known to the other.
     spellChecker = fpLib.mkHunspell pkgs;
@@ -174,14 +172,6 @@ in {
         environment.PI_LSP_SERVERS = lib.mkIf (config.fireproof.agents.lspServers != {}) {
           value = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
         };
-        # Plain background shell only: the default set adds seven more tools, and its
-        # `attribution` feature rewrites Anthropic requests and rejects API-key credentials.
-        environment.PI_BG_FEATURES.value = "process";
-        environment.PI_BG_DISABLE_UPDATE_CHECK.value = "1";
-        # $SHELL is fish, which the package won't treat as POSIX. The path skips
-        # its /bin/bash probe, which on darwin finds Apple's bash 3.2.
-        environment.PI_BG_POSIX_SHELL.value = "bash";
-        environment.PI_BG_POSIX_SHELL_PATH.value = lib.getExe pkgs.bash;
         settings = {
           # The model picker's "save as default" reverts at launch; change it here.
           # The kinds and their ladders: docs/models.md.
@@ -250,9 +240,6 @@ in {
         in
           lib.optionalAttrs (servers != {}) {mcpServers = servers;};
       };
-
-      # pi-background-tasks writes task output to <cwd>/.pi/tasks, with no setting to move it.
-      programs.git.ignores = [".pi/tasks/"];
 
       # The extension spawns its own hunspell; keep the package in the profile too
       # so the same dictionaries are available outside pi.
