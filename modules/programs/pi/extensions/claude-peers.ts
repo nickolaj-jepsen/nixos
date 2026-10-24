@@ -59,9 +59,9 @@ import {
 import { isAutoName } from "./lib/auto-name.ts";
 import { IDENTITY_ENTRY, SIDECAR_CHANNEL, type SidecarUpdate } from "./lib/sidecar.ts";
 import { markAgentPrompt } from "./lib/user-wait.ts";
+import { ENTER_WORKTREE_TOOL } from "./lib/wt.ts";
 
 const MESSAGE_TYPE = "claude-peer-message";
-const WORKTREE_TOOL = "enter_worktree";
 const OWN_MODE: PermissionClass = "prompting";
 const IDLE_SUBSCRIPTION_TTL_MS = 12 * 60 * 60 * 1000;
 const HOLD_DIALOG_MS = 5 * 60 * 1000;
@@ -129,7 +129,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   /** listPeers, warning once about peers on a newer protocol; they stay listed, since a bump may still take v1 frames. */
-  async function reachablePeers(): Promise<Peer[]> {
+  async function listPeersWarned(): Promise<Peer[]> {
     const list = await listPeers();
     const newer = list.filter((p) => (p.peerProtocol ?? 0) > PEER_PROTOCOL);
     if (newer.length && !warnedProtocol) {
@@ -450,7 +450,7 @@ export default function (pi: ExtensionAPI) {
   // section changes when a peer crosses STALE_AFTER_MS rather than every turn.
   pi.on("before_agent_start", async (event, c) => {
     const sections = event.systemPromptOptions.sections;
-    const peers = await reachablePeers()
+    const peers = await listPeersWarned()
       .then((list) => sameTreePeers(c.cwd, list))
       .catch(() => undefined);
     if (!peers?.list.length) {
@@ -471,7 +471,7 @@ export default function (pi: ExtensionAPI) {
         "You share uncommitted changes with them. Before you commit, switch branches, rebase, merge, or run git " +
           "checkout/restore/reset/stash/clean, tell them with send_message. Don't send acknowledgements, status, " +
           "or replies to messages that need no answer.",
-        ...(c.hasUI && pi.getActiveTools().includes(WORKTREE_TOOL)
+        ...(c.hasUI && pi.getActiveTools().includes(ENTER_WORKTREE_TOOL)
           ? [
               "If your task edits files, call enter_worktree before your first edit so your work stays out of theirs.",
             ]
@@ -545,7 +545,7 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "List Claude Code and pi sessions on this machine that send_message can reach",
     parameters: Type.Object({}),
     async execute() {
-      const peers = await reachablePeers();
+      const peers = await listPeersWarned();
       const self = isOwner() && entry ? `This session: ${ownLabel()}\n` : "";
       if (!peers.length)
         return {
@@ -598,7 +598,7 @@ export default function (pi: ExtensionAPI) {
       const message = params.message?.trim() ?? "";
       if (!message && !params.notify_when_idle)
         throw new Error("Nothing to send: give a message or set notify_when_idle.");
-      const found = resolvePeer(await reachablePeers(), params.to);
+      const found = resolvePeer(await listPeersWarned(), params.to);
       if ("error" in found) throw new Error(found.error);
       const target = found.peer;
       const label = `${target.name} [${shortId(target)}]`;
@@ -671,7 +671,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("list-agents", {
     description: "Show the Claude Code and pi sessions this session can message",
     handler: async (_args, c) => {
-      const peers = await reachablePeers();
+      const peers = await listPeersWarned();
       const self = isOwner() && entry ? `This session: ${ownLabel()}` : "This session has no inbox";
       const rows = peers.map((p) => {
         const about = aboutLine(p);

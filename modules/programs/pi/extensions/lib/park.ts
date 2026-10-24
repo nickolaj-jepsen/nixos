@@ -92,9 +92,9 @@ export const sessionWorktree = async (cwd: string) => {
   return tree === undefined ? undefined : { repo, tree };
 };
 
-/** Why `wt apply` would refuse the worktree, or undefined when its dry run accepts it. */
-const landBlocker = (ctx: ExtensionContext, tree: Worktree) =>
-  wt(["apply", "--dry-run", tree.name], ctx.cwd).then(
+/** Why `wt <verb>` would refuse the worktree, or undefined when its dry run accepts it. */
+const refusal = (ctx: ExtensionContext, tree: Worktree, verb: "apply" | "clean") =>
+  wt([verb, "--dry-run", tree.name], ctx.cwd).then(
     () => undefined,
     (error: Error) => error.message.replace(/^wt: /, ""),
   );
@@ -168,7 +168,6 @@ const dispose = async (
 /**
  * Asks what should become of `tree` — land it, remove it, keep it, or commit and
  * keep a dirty one — and does it, in a session that still belongs to the caller.
- * `repo` is the `wt status` that named `tree`.
  *
  * The answer comes back rather than being drawn on the spot: a caller that moves
  * the session afterwards has nothing left to draw in, and carries the line into
@@ -180,8 +179,11 @@ export const park = async (
   tree: Worktree,
 ): Promise<ParkResult> => {
   const dirty = tree.state !== "clean";
+  // With nothing ahead, only `wt clean` can say why a clean tree is unsafe: in use, or locked.
   const blocker =
-    dirty || tree.safeToRemove || !tree.ahead ? undefined : await landBlocker(ctx, tree);
+    dirty || tree.safeToRemove
+      ? undefined
+      : await refusal(ctx, tree, tree.ahead ? "apply" : "clean");
   const canLand = !dirty && !tree.safeToRemove && !!tree.ahead && blocker === undefined;
   // Where commits could be dropped, keep leads: a stray Enter must not be what
   // drops them. A `wt clean`-safe worktree has nothing to drop, so removal leads.
@@ -197,7 +199,7 @@ export const park = async (
     `Worktree ${tree.name}`,
     tree.state,
     ...(tree.ahead ? [`${tree.ahead} ahead`] : []),
-    ...(blocker ? [`no land: ${blocker}`] : []),
+    ...(blocker ? [tree.ahead ? `no land: ${blocker}` : blocker] : []),
   ].join(" · ");
   const picked = await ctx.ui.select(title, choices);
 

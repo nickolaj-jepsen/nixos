@@ -26,6 +26,9 @@ export type Worktree = {
 
 export type RepoStatus = { worktrees: Worktree[]; defaultBranch: string };
 
+/** The tool that moves a pi session into a worktree. */
+export const ENTER_WORKTREE_TOOL = "enter_worktree";
+
 /** `wt status` field order; see the usage text in wt.bash. */
 const FIELDS = 12;
 

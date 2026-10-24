@@ -39,10 +39,9 @@ import {
 import { isLeanModel } from "./lib/lean-model.ts";
 import { linkedWorktree, park, removableAt, sessionWorktree, worktreeAt } from "./lib/park.ts";
 import { sideCall } from "./lib/side-call.ts";
-import { branches, names, status, wt, type RepoStatus } from "./lib/wt.ts";
+import { branches, ENTER_WORKTREE_TOOL, names, status, wt, type RepoStatus } from "./lib/wt.ts";
 
 const fallback = "Blocked: git worktree add outside ~/worktrees/<repo>/. Use `wt create <name>`.";
-const TOOL = "enter_worktree";
 const MOVED = "worktree-moved";
 const PARKED = "worktree-parked";
 // Tools that would still act on the old checkout between enter_worktree and the move.
@@ -155,8 +154,9 @@ export default function (pi: ExtensionAPI) {
   // Once, before the first request: a later tool-set change can cost a cache-invalidating
   // re-read. The move needs a UI, and a local model's window has no room to spare.
   pi.on("session_start", (_event, ctx) => {
-    if (!ctx.hasUI || isLeanModel(ctx.model) || pi.getActiveTools().includes(TOOL)) return;
-    pi.setActiveTools([...pi.getActiveTools(), TOOL]);
+    if (!ctx.hasUI || isLeanModel(ctx.model) || pi.getActiveTools().includes(ENTER_WORKTREE_TOOL))
+      return;
+    pi.setActiveTools([...pi.getActiveTools(), ENTER_WORKTREE_TOOL]);
   });
 
   // A move, fork, resume, new session or reload also shuts the session down; only an exit
@@ -345,7 +345,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: TOOL,
+    name: ENTER_WORKTREE_TOOL,
     label: "Enter worktree",
     description:
       "Create a git worktree (or pick an existing one) and move this session into it, keeping the conversation. " +
