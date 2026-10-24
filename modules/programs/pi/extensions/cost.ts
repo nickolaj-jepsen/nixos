@@ -1,11 +1,10 @@
 /**
- * `/cost`: where this session's money went. A breakdown by conversation model
- * (tokens, cache hits, 1h cache writes), upkeep (compaction, cache warming),
- * extensions' side calls (spellfix, labels) and tools (Exa,
- * subagents, codemode); why (spend per prompt, cache rebuilds, reasoning share,
- * what the re-sent context is made of); then who pays for each provider:
- * prepaid credit, a subscription (spend at list price, with its quota windows),
- * or nothing.
+ * `/cost`: where this session's money went, in three panes. The verdict answers
+ * what it cost and why — the drivers that add up to the total, and the causes
+ * inside them (cache rebuilds, reasoning, re-sent context, the 1h premium).
+ * The receipts hold every row's tokens and cost, the costliest turns and the
+ * figures behind the verdict. The quota pane shows who pays: plan windows with
+ * their pace and reset, prepaid credit, and the burn rate at list price.
  * A click on the cost in the editor border opens it (chrome/actions.ts).
  *
  * It also records which nested tool a codemode script's usage came from
@@ -14,8 +13,9 @@
 import type { Usage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { buildBreakdown } from "./cost/breakdown.ts";
+import { CostDialog } from "./cost/dialog.ts";
 import { type Catalog, cacheRebuilds, contextDrivers, thinkingByLevel } from "./cost/insights.ts";
-import { type Billing, CostDialog, type ProviderView, type View } from "./cost/dialog.ts";
+import type { Billing, ProviderView, View } from "./cost/view.ts";
 import { createUsageReader, type UsageProvider } from "./lib/ai-usage.ts";
 import { addUsage, emptyUsage, isSpend, LEDGER_TYPE, type LedgerData } from "./lib/usage-ledger.ts";
 
@@ -58,6 +58,8 @@ export default function (pi: ExtensionAPI) {
         label: w.label,
         usedPct: w.usedPct,
         delta: before?.has(w.label) ? w.usedPct - before.get(w.label)! : 0,
+        resetsAt: w.resetsAt,
+        pace: w.pace,
       })),
     };
   };
@@ -72,7 +74,7 @@ export default function (pi: ExtensionAPI) {
     const breakdown = buildBreakdown(
       entries,
       (provider, model) => catalog(provider, model)?.price,
-      new Map(rebuilds.map((r) => [r.entryId, r.usd])),
+      new Map(rebuilds.map((r) => [r.entryId, r])),
     );
     const contextTokens = ctx.getContextUsage()?.tokens ?? undefined;
     const providers: ProviderView[] = [...breakdown.providers]
@@ -86,6 +88,8 @@ export default function (pi: ExtensionAPI) {
         };
       })
       .sort((a, b) => b.usd - a.usd || b.tokens - a.tokens);
+    // Rows leave out the model the session is mostly on, so it is stated once.
+    const dominant = breakdown.rows.find((row) => row.kind === "conversation" && row.model);
     return {
       breakdown,
       providers,
@@ -94,6 +98,10 @@ export default function (pi: ExtensionAPI) {
       thinking: thinkingByLevel(entries),
       context: contextDrivers(ctx.sessionManager.getBranch(), contextTokens),
       contextTokens,
+      dominantModel:
+        dominant?.provider && dominant.model
+          ? ctx.modelRegistry.find(dominant.provider, dominant.model)?.name || dominant.model
+          : undefined,
       modelName: (provider, model) => ctx.modelRegistry.find(provider, model)?.name || model,
     };
   };

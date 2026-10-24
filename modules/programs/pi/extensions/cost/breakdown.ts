@@ -13,6 +13,8 @@ export type Row = {
   /** Calls, replies or tool results that spent something. */
   calls: number;
   failed: number;
+  /** What those failed replies cost; they are usually billed all the same. */
+  failedUsd: number;
   usage: Usage;
   /** What the cache reads would have cost at the input price; undefined without a catalog price. */
   saved?: number;
@@ -23,8 +25,17 @@ export type Row = {
   longWrite?: { usd: number; premium: number };
 };
 
-/** A prompt with everything spent until the next one; `rebuildUsd` of it went on cache rebuilds. */
-export type Prompt = { text: string; usd: number; rebuildUsd: number };
+/**
+ * A prompt with everything spent until the next one; `rebuildUsd` of it went on
+ * cache rebuilds, and `drivers` is its spend on the upkeep and tool calls it ran.
+ */
+export type Prompt = {
+  text: string;
+  usd: number;
+  rebuildUsd: number;
+  rebuilds: number;
+  drivers: Array<{ name: string; usd: number; calls: number }>;
+};
 
 export type Breakdown = {
   total: number;
@@ -53,7 +64,7 @@ const tokens = (usage: Usage) => usage.input + usage.output + usage.cacheRead + 
 export const buildBreakdown = (
   entries: readonly SessionEntry[],
   priceOf: (provider: string, model: string) => Price | undefined,
-  rebuildCost: ReadonlyMap<string, number> = new Map(),
+  rebuilds: ReadonlyMap<string, { usd: number }> = new Map(),
 ): Breakdown => {
   const toolNames = new Map<string, string>();
   for (const entry of entries) {
@@ -63,8 +74,9 @@ export const buildBreakdown = (
   }
 
   const rows = new Map<string, Row>();
-  const prompts: Prompt[] = [];
-  let prompt: Prompt | undefined;
+  // The drivers a prompt ran, by name, kept off `Prompt` until the walk is done.
+  const drafts: Array<Prompt & { index: Map<string, { usd: number; calls: number }> }> = [];
+  let prompt: (typeof drafts)[number] | undefined;
   let lastModel: { provider: string; model: string } | undefined;
   let total = 0;
 
@@ -74,10 +86,17 @@ export const buildBreakdown = (
         text: promptText(entry.message.content).replace(/\s+/g, " ").trim(),
         usd: 0,
         rebuildUsd: 0,
+        rebuilds: 0,
+        drivers: [],
+        index: new Map(),
       };
-      prompts.push(prompt);
+      drafts.push(prompt);
     }
-    if (prompt) prompt.rebuildUsd += rebuildCost.get(entry.id) ?? 0;
+    const rebuilt = rebuilds.get(entry.id);
+    if (prompt && rebuilt) {
+      prompt.rebuildUsd += rebuilt.usd;
+      prompt.rebuilds += 1;
+    }
     for (const item of entryItems(entry, (id) => toolNames.get(id))) {
       if (item.kind === "conversation" && item.provider && item.model) {
         lastModel = { provider: item.provider, model: item.model };
@@ -96,16 +115,27 @@ export const buildBreakdown = (
           model,
           calls: 0,
           failed: 0,
+          failedUsd: 0,
           usage: emptyUsage(),
         };
         rows.set(key, row);
       }
       addUsage(row.usage, item.usage);
-      if (!item.transfer) row.calls += 1;
-      if (item.failed) row.failed += 1;
       const usd = item.usage.cost?.total ?? 0;
+      if (!item.transfer) row.calls += 1;
+      if (item.failed) {
+        row.failed += 1;
+        row.failedUsd += usd;
+      }
       total += usd;
-      if (prompt) prompt.usd += usd;
+      if (!prompt) continue;
+      prompt.usd += usd;
+      // A prompt's own replies are its cost; only the calls it made are a driver of it.
+      if (item.kind === "conversation") continue;
+      const driver = prompt.index.get(item.name) ?? { usd: 0, calls: 0 };
+      driver.usd += usd;
+      if (!item.transfer) driver.calls += 1;
+      prompt.index.set(item.name, driver);
     }
   }
 
@@ -141,6 +171,12 @@ export const buildBreakdown = (
     total,
     rows: kept,
     providers,
-    timeline: prompts,
+    timeline: drafts.map(({ text, usd, rebuildUsd, rebuilds, index }) => ({
+      text,
+      usd,
+      rebuildUsd,
+      rebuilds,
+      drivers: [...index].map(([name, d]) => ({ name, ...d })).sort((a, b) => b.usd - a.usd),
+    })),
   };
 };
