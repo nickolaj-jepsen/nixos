@@ -24,7 +24,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
       "Only a rule, preference, environment quirk, gotcha or external reference that is still true next month. " +
       "Rejected for status/plans, for anything AGENTS.md or the repo already says, for citations that do not resolve, and for duplicates of an existing entry.",
     promptGuidelines: [
-      "Save a memory only when the user asks, or when you hit something an agent with this repo checked out would get wrong and the repo cannot tell them (environment quirks, hard rules, owner preferences). Never save plans, status, or anything the tree already documents.",
+      "Save a memory yourself when you hit something the repo cannot explain: a failed attempt whose retry worked for an environment reason (direnv, nix, a missing or oddly-spelled tool), a correction from the user to a choice you made from principle, or something you had to leave the repo to learn. Cite the moment (the command, file or correction); no citation, no save.",
     ],
     parameters: Type.Object({
       statement: Type.String({
