@@ -776,6 +776,27 @@
         "type": "github"
       }
     },
+    "podroid": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792961476,
+        "narHash": "sha256-fxzxU6hWW9Z4s29EI+GFcRMksEnDNKZXO5YUSBMIyaE=",
+        "owner": "nickolaj-jepsen",
+        "repo": "Podroid",
+        "rev": "bcd854a4835ac42118cfdfdc44b06f45eae04763",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nickolaj-jepsen",
+        "ref": "nixos-image",
+        "repo": "Podroid",
+        "type": "github"
+      }
+    },
     "pre-commit-hooks": {
       "inputs": {
         "flake-compat": "flake-compat_2",
@@ -877,6 +898,7 @@
         "obsidian-extensions": "obsidian-extensions",
         "obsidian-skills": "obsidian-skills",
         "opencode": "opencode",
+        "podroid": "podroid",
         "treefmt-nix": "treefmt-nix",
         "walldye": "walldye",
         "zero-x-cb-media": "zero-x-cb-media",
