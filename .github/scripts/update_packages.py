@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bump the hand-pinned packages in pkgs/ to their latest upstream release.
+"""Bump the hand-pinned packages in pkgs/ to their newest upstream release.
 
 Each package with an updater gets its latest version looked up and
 pkgs/<name>/ rewritten in place, prefetching a new hash where the package pins
