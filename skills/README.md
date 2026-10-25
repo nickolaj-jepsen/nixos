@@ -46,3 +46,6 @@ claude plugin install skills@nickolaj-jepsen
 - **pi-plugin-dev** — build and debug pi extensions by observation: tmux-driven TUI
   sessions, color screenshots, session digests that replay the prompt and tool
   loadout, and a replay provider so tool and error paths run without a model.
+- **memory-sync** — sync one repo's memories both ways between pi's memory store and
+  Claude Code's auto-memory: adds and updates proposed for one approval, never deletes.
+  Runs in pi.
