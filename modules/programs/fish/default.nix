@@ -93,6 +93,10 @@
           ];
         };
       };
+
+      # fish writes a stub config.fish on its first run; a login before HM's first
+      # activation (a fresh host) would otherwise block HM from linking its own.
+      xdg.configFile."fish/config.fish".force = true;
     };
   };
 }
