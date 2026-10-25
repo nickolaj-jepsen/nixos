@@ -129,7 +129,10 @@ home-manager and the overlays):
   - `parent/` loads only in the session you started: the leaf names it in
     subagents.json's `excludedExtensionPackages`. A feature there is a default
     export that `parent/index.ts`, the package's one entry, calls; a feature
-    that throws is reported and the rest still load.
+    that throws is reported and the rest still load. What features share
+    (user-wait, identity, editor decorators, …) is a service in
+    `parent/services.ts`, passed as the second argument and built before any
+    feature registers, never a module variable another feature imports.
   - `shared/` is not a package: helpers both import. Every `core/` file and
     `parent/index.ts` evaluates its own copy of each module it imports, so
     module state is shared only among parent features. Keep `shared/` and

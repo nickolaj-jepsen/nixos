@@ -1,7 +1,7 @@
 /**
  * The session's label and what the last turn wants from you, kept by the
- * sidecar (`shared/sidecar.ts`) and persisted on the branch; `border.ts` and
- * `title.ts` paint them.
+ * sidecar (`identity/sidecar.ts`) and persisted on the branch as the
+ * `shared/identity.ts` record; chrome's border and title paint them.
  *
  * The label is model-written, not cut from the first prompt: a sidecar call
  * runs at each substantive turn, beside the run, and is asked to repeat the
@@ -26,21 +26,23 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { setAutoName } from "../lib/auto-name.ts";
-import { firstRequest, isAcknowledgement, oneLine, stripRequest } from "../../shared/naming.ts";
+import {
+  IDENTITY_ENTRY,
+  type IdentityRecord,
+  readIdentity,
+  SIDECAR_CHANNEL,
+  type SidecarUpdate,
+  type TurnState,
+} from "../shared/identity.ts";
+import { firstRequest, isAcknowledgement, oneLine, stripRequest } from "../shared/naming.ts";
 import {
   ask as askSidecar,
   buildPrompt,
   type Fields,
-  IDENTITY_ENTRY,
   MAX_DOING,
   parseFields,
-  SIDECAR_CHANNEL,
-  type SidecarUpdate,
-  type TurnState,
-} from "../../shared/sidecar.ts";
-import { waitingOnUser } from "../lib/user-wait.ts";
-import type { ChromeState } from "./state.ts";
+} from "./identity/sidecar.ts";
+import type { UserWait } from "./lib/user-wait.ts";
 
 type Phase = "working" | "idle" | "failed";
 type Source = "name" | "model" | "prompt";
@@ -56,15 +58,6 @@ export type Label = {
 
 /** What the sidecar says beside the label; it outlives a rename and survives `/name`. */
 type Meta = { summary?: string; tags?: readonly string[] };
-
-/** The persisted record, as read back: any field may be missing. */
-type Persisted = {
-  text?: string;
-  calls?: number;
-  summary?: string;
-  tags?: string[];
-  autoName?: string;
-};
 
 const SHORTCUT = "alt+r";
 // A runaway guard rather than a budget: a call costs ~$0.0002 and a turn buys one.
@@ -97,7 +90,14 @@ const cleanLabel = (raw: string) => {
   return `${(lastSpace > 20 ? cut.slice(0, lastSpace) : cut).trim()}…`;
 };
 
-export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
+/**
+ * Registers the identity's handlers, `/header` and its shortcut. Create it
+ * before any feature whose handlers read it on the same event.
+ */
+export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
+  let session: ExtensionContext | undefined;
+  /** Whether the session draws pi's TUI; a headless one (`pi -p`, RPC) makes no call. */
+  let live = false;
   let cwd = process.cwd();
   let phase: Phase = "idle";
   let busy = false;
@@ -108,7 +108,7 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
   let calls = 0;
   let failures = 0;
   let lastCallAt = 0;
-  let changed = () => {};
+  const listeners = new Set<() => void>();
   /** A settle call that arrived while the turn-start call was still out. */
   let pending: Moment | undefined;
   /** The step the last call named; shown while the turn runs, dropped when it settles. */
@@ -126,22 +126,21 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
   let turnTools = 0;
   let lastText = 0;
 
-  const sessionId = () => state.ctx?.sessionManager.getSessionId() ?? "";
+  const sessionId = () => session?.sessionManager.getSessionId() ?? "";
 
   const paint = () => {
-    changed();
-    state.tui?.requestRender();
+    for (const listener of listeners) listener();
   };
 
   const persist = () => {
-    const data: Persisted = {
+    const data: IdentityRecord = {
       text: label?.text,
       calls,
       summary: meta.summary,
       tags: meta.tags ? [...meta.tags] : undefined,
       autoName: label?.autoName,
     };
-    pi.appendEntry<Persisted>(IDENTITY_ENTRY, data);
+    pi.appendEntry<IdentityRecord>(IDENTITY_ENTRY, data);
   };
 
   /**
@@ -160,7 +159,6 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
    */
   const adopt = (text: string) => {
     label = { text, source: "model", autoName: text };
-    setAutoName(sessionId(), text);
     if (pi.getSessionName() !== text) pi.setSessionName(text);
   };
 
@@ -179,7 +177,7 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
   // Sub-agent widgets already own `●`, `○`, `⟳` and `▸`, so states that need you
   // are words and "working" is either pi's spinner or a frozen frame of one.
   const stateWord = (ctx: ExtensionContext) =>
-    waitingOnUser(ctx)
+    userWait.waitingOnUser(ctx)
       ? "waiting"
       : phase === "failed" || (phase === "idle" && turnState === "failed")
         ? "failed"
@@ -193,7 +191,7 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
       sessionId: sessionId(),
       moment,
       asked,
-      label: state.ctx ? current(state.ctx)?.text : label?.text,
+      label: session ? current(session)?.text : label?.text,
       summary: meta.summary,
       doing: phase === "working" ? doing : undefined,
       state: moment === "settle" ? turnState : undefined,
@@ -246,7 +244,7 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
     const skip = () => {
       if (moment === "settle") announce(moment, false);
     };
-    if (!state.live) return skip();
+    if (!live) return skip();
     if (busy) {
       // A turn that settles while the turn-start call is still out keeps its ask:
       // it runs as soon as that call is done.
@@ -308,8 +306,7 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
         paint();
         const next = pending;
         pending = undefined;
-        const live = state.ctx;
-        if (next && live) void refresh(live, false, next).catch(() => {});
+        if (next && session) void refresh(session, false, next).catch(() => {});
       }
     }
   };
@@ -367,23 +364,20 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
   });
 
   pi.on("session_start", (_event, ctx) => {
+    session = ctx;
+    live = ctx.mode === "tui" && ctx.hasUI;
     cwd = ctx.cwd;
     // The last persisted record on this branch wins, so a resumed session paints
     // instantly and without a model call.
     for (const entry of ctx.sessionManager.getBranch()) {
-      if (entry.type !== "custom" || entry.customType !== IDENTITY_ENTRY) continue;
-      const data = entry.data as Persisted | undefined;
+      const data = readIdentity(entry);
       if (!data) continue;
-      if (typeof data.calls === "number") calls = data.calls;
-      if (typeof data.summary === "string") meta = { ...meta, summary: data.summary };
-      if (Array.isArray(data.tags)) {
-        meta = { ...meta, tags: data.tags.filter((tag) => typeof tag === "string") };
-      }
-      if (typeof data.text === "string" && data.text !== "") {
+      if (data.calls !== undefined) calls = data.calls;
+      if (data.summary !== undefined) meta = { ...meta, summary: data.summary };
+      if (data.tags !== undefined) meta = { ...meta, tags: data.tags };
+      if (data.text !== undefined)
         label = { text: data.text, source: "model", autoName: data.autoName };
-      }
     }
-    setAutoName(sessionId(), label?.autoName);
   });
 
   // The turn's request is new information, and the call runs beside the run
@@ -452,7 +446,8 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
     inflight = undefined;
     pending = undefined;
     busy = false;
-    setAutoName(sessionId(), undefined);
+    live = false;
+    session = undefined;
   });
 
   return {
@@ -481,11 +476,15 @@ export const createLabel = (pi: ExtensionAPI, state: ChromeState) => {
       }
       return draft;
     },
-    /** Called whenever an async reading changes what the label shows. */
+    /** The sidecar's sentence about the session, persisted across reloads. */
+    summary: () => meta.summary,
+    /** Whether `name` is the session name identity wrote, not one the user chose with `/name`. */
+    isAutoName: (name: string | undefined) => name !== undefined && name === label?.autoName,
+    /** Calls `listener` whenever an async reading changes what the label shows. */
     onChange: (listener: () => void) => {
-      changed = listener;
+      listeners.add(listener);
     },
   };
 };
 
-export type LabelState = ReturnType<typeof createLabel>;
+export type Identity = ReturnType<typeof createIdentity>;

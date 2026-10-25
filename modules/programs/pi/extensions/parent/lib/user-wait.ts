@@ -8,21 +8,20 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 type SessionWait = { prompting: boolean; tools: Set<string>; agentPrompts: number };
 
-const sessions = new Map<string, SessionWait>();
-
-const state = (ctx: ExtensionContext): SessionWait => {
-  const id = ctx.sessionManager.getSessionId();
-  let wait = sessions.get(id);
-  if (!wait) sessions.set(id, (wait = { prompting: false, tools: new Set(), agentPrompts: 0 }));
-  return wait;
-};
-
 /**
- * Registers the handlers that keep the state `waitingOnUser` reads, per
- * session. Register it once, before any `ui_prompt_start` handler that reads
- * the state.
+ * Registers the handlers that keep the per-session state current; create it
+ * before any `ui_prompt_start` handler that reads `waitingOnUser`.
  */
-export function trackUserWait(pi: ExtensionAPI): void {
+export const createUserWait = (pi: ExtensionAPI) => {
+  const sessions = new Map<string, SessionWait>();
+
+  const state = (ctx: ExtensionContext): SessionWait => {
+    const id = ctx.sessionManager.getSessionId();
+    let wait = sessions.get(id);
+    if (!wait) sessions.set(id, (wait = { prompting: false, tools: new Set(), agentPrompts: 0 }));
+    return wait;
+  };
+
   // tool_execution_start fires before tool_call hooks, so a permission ask counts as in flight.
   pi.on("tool_execution_start", (event, ctx) => {
     state(ctx).tools.add(event.toolCallId);
@@ -42,29 +41,29 @@ export function trackUserWait(pi: ExtensionAPI): void {
   pi.on("session_shutdown", (_event, ctx) => {
     sessions.delete(ctx.sessionManager.getSessionId());
   });
-}
 
-/**
- * Runs `open`, which opens one dialog in `ctx`'s UI, and counts that dialog as
- * the agent waiting on the user until it settles. Use it for a dialog raised
- * on the agent's behalf while no tool call of `ctx`'s session may be in flight.
- */
-export async function markAgentPrompt<T>(
-  ctx: ExtensionContext,
-  open: () => Promise<T>,
-): Promise<T> {
-  // Set before `open` runs: pi emits ui_prompt_start on a later microtask.
-  const wait = state(ctx);
-  wait.agentPrompts++;
-  try {
-    return await open();
-  } finally {
-    wait.agentPrompts--;
-  }
-}
+  return {
+    /**
+     * Runs `open`, which opens one dialog in `ctx`'s UI, and counts that dialog as
+     * the agent waiting on the user until it settles. Use it for a dialog raised
+     * on the agent's behalf while no tool call of `ctx`'s session may be in flight.
+     */
+    async markAgentPrompt<T>(ctx: ExtensionContext, open: () => Promise<T>): Promise<T> {
+      // Set before `open` runs: pi emits ui_prompt_start on a later microtask.
+      const wait = state(ctx);
+      wait.agentPrompts++;
+      try {
+        return await open();
+      } finally {
+        wait.agentPrompts--;
+      }
+    },
+    /** True while `ctx`'s session has a dialog open and a tool call or `markAgentPrompt` dialog in flight. */
+    waitingOnUser(ctx: ExtensionContext): boolean {
+      const wait = sessions.get(ctx.sessionManager.getSessionId());
+      return !!wait?.prompting && (wait.tools.size > 0 || wait.agentPrompts > 0);
+    },
+  };
+};
 
-/** True while `ctx`'s session has a dialog open and a tool call or `markAgentPrompt` dialog in flight. */
-export function waitingOnUser(ctx: ExtensionContext): boolean {
-  const wait = sessions.get(ctx.sessionManager.getSessionId());
-  return !!wait?.prompting && (wait.tools.size > 0 || wait.agentPrompts > 0);
-}
+export type UserWait = ReturnType<typeof createUserWait>;

@@ -3,7 +3,7 @@
  * prompt: they are cited when asked for, never injected, so an old conversation
  * cannot quietly become a fact.
  *
- * A session's label and summary, which chrome's identity keeps current, are
+ * A session's label and summary, which parent/identity.ts keeps current, are
  * searched too: they say what a whole session was about where any one message
  * only says what was said, so a match there ranks above a message.
  *
@@ -15,7 +15,7 @@ import { open, readdir, readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { IDENTITY_ENTRY } from "../../shared/sidecar.ts";
+import { IDENTITY_ENTRY, readIdentity } from "../../shared/identity.ts";
 import { gitRoots } from "./store.ts";
 
 export type SessionScope = "repo" | "all";
@@ -43,16 +43,14 @@ type Card = { label?: string; summary?: string; tags: string[]; timestamp: strin
 
 /** The identity record a transcript line holds, if it is one. */
 function identityCard(entry: unknown): Card | undefined {
-  const row = entry as { type?: string; customType?: string; timestamp?: string; data?: unknown };
-  if (row?.type !== "custom" || row.customType !== IDENTITY_ENTRY) return undefined;
-  const data = row.data as { text?: unknown; summary?: unknown; tags?: unknown } | undefined;
+  const record = readIdentity(entry);
+  if (!record) return undefined;
+  const { timestamp } = entry as { timestamp?: string };
   return {
-    label: typeof data?.text === "string" && data.text ? data.text : undefined,
-    summary: typeof data?.summary === "string" && data.summary ? data.summary : undefined,
-    tags: Array.isArray(data?.tags)
-      ? data.tags.filter((tag): tag is string => typeof tag === "string")
-      : [],
-    timestamp: row.timestamp ?? "",
+    label: record.text,
+    summary: record.summary,
+    tags: record.tags ?? [],
+    timestamp: timestamp ?? "",
   };
 }
 

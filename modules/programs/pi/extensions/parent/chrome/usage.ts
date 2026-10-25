@@ -6,7 +6,7 @@ import {
   usageReader,
 } from "../../shared/ai-usage.ts";
 import { bucketOf, forecastMovedCloser } from "./forecast.ts";
-import { formatCredit, formatWhen } from "./format.ts";
+import { formatCredit, formatWhen } from "../lib/format.ts";
 import type { Part } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
 

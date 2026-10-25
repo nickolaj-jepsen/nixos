@@ -11,11 +11,11 @@
  * the agent touched and the commands it ran say what the session is about for a
  * few hundred tokens; the raw tool output would say less for thousands.
  */
-import { execFile } from "node:child_process";
-import { basename } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { NAME_TIMEOUT_MS, oneLine, requests, touchedFiles } from "./naming.ts";
-import { sideCall } from "./side-call.ts";
+import { createGitContext } from "../../shared/git.ts";
+import { type SidecarUpdate, type TurnState } from "../../shared/identity.ts";
+import { NAME_TIMEOUT_MS, oneLine, requests, touchedFiles } from "../../shared/naming.ts";
+import { sideCall } from "../../shared/side-call.ts";
 
 export type Fields = {
   /** Absent means the work has not moved on; the current label stands. */
@@ -32,30 +32,7 @@ export type Fields = {
   state?: TurnState;
 };
 
-/** How a finished turn ended: it did the work, it needs the person, or it could not finish. */
-export type TurnState = "done" | "blocked" | "failed";
 const TURN_STATES: readonly string[] = ["done", "blocked", "failed"];
-
-/** Session entries the identity extension appends; the last one on a branch is current. */
-export const IDENTITY_ENTRY = "identity_label";
-
-/** `pi.events` channel for each sidecar answer, so other extensions can use it without asking again. */
-export const SIDECAR_CHANNEL = "fireproof:sidecar";
-
-/**
- * One sidecar outcome. `settle` fires once per finished turn even when no call
- * was made (`asked: false`), so a listener waiting on the turn never has to time out.
- */
-export type SidecarUpdate = {
-  sessionId: string;
-  moment: "start" | "settle";
-  asked: boolean;
-  label?: string;
-  summary?: string;
-  doing?: string;
-  state?: TurnState;
-  ask?: string;
-};
 
 export const MAX_DOING = 32;
 export const MAX_SUMMARY = 120;
@@ -73,8 +50,6 @@ const PROMPT_CHARS = 300;
 const MAX_FILES = 6;
 const MAX_COMMANDS = 5;
 const COMMAND_CHARS = 48;
-// A branch moves a few times a day and every call would otherwise pay a subprocess.
-const GIT_TTL_MS = 30_000;
 
 const SYSTEM = `You keep a coding session's identity current for the person working in it.
 Answer with exactly these seven lines, in this order, and nothing else:
@@ -102,31 +77,7 @@ reply: what the person would most likely type to answer ask, or empty
   Leave it empty when you cannot tell which way they would answer.
 - No quotes, no preamble, no commentary, no other lines.`;
 
-type GitContext = { repo: string; branch?: string };
-
-let gitCache: { cwd: string; at: number; value: GitContext } | undefined;
-
-/** The repository and checked-out branch, or the directory name outside git. */
-export const gitContext = async (cwd: string): Promise<GitContext> => {
-  if (gitCache && gitCache.cwd === cwd && Date.now() - gitCache.at < GIT_TTL_MS) {
-    return gitCache.value;
-  }
-  const stdout = await new Promise<string>((resolve) =>
-    execFile(
-      "git",
-      ["rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD"],
-      { cwd, timeout: 1000 },
-      // Not a checkout, or git is missing: the directory still says which project this is.
-      (error, out) => resolve(error ? "" : out),
-    ),
-  );
-  const [top, head] = stdout.trim().split("\n");
-  const value: GitContext = top
-    ? { repo: basename(top), branch: head && head !== "HEAD" ? head : undefined }
-    : { repo: basename(cwd) || cwd };
-  gitCache = { cwd, at: Date.now(), value };
-  return value;
-};
+const gitContext = createGitContext();
 
 /** The last `limit` shell commands of the branch, with whether each one failed. */
 const commands = (ctx: ExtensionContext, limit: number) => {

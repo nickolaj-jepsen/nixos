@@ -1,5 +1,5 @@
 import type { ContextUsage, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
-import { formatTokens } from "./format.ts";
+import { formatTokens } from "../lib/format.ts";
 import type { Action, ChromeState } from "./state.ts";
 
 /** One measurement on the border, painted; one with an action is a control lit on hover. */

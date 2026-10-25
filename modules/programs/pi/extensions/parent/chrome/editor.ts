@@ -7,7 +7,7 @@ import {
   type TuiMouseEventResult,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { onEdit, underline } from "../spellfix.ts";
+import type { EditorHooks, PromptDraft } from "../lib/editor-hooks.ts";
 import { hitTest, hoverAt, isPlainClick, type Region } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
 
@@ -37,10 +37,10 @@ export type Painters = {
 const EDGE = 1;
 
 /**
- * pi's editor with chrome's top border, spellfix's underlines and the drafted
+ * pi's editor with chrome's top border, the decorators' styling and the drafted
  * reply after the cursor. It draws plainly once its session has ended.
  */
-export class PromptEditor extends CustomEditor {
+export class PromptEditor extends CustomEditor implements PromptDraft {
   private status: BorderStatus | undefined;
   private topRegions: Region[] = [];
 
@@ -50,6 +50,7 @@ export class PromptEditor extends CustomEditor {
     keybindings: KeybindingsManager,
     private readonly chrome: ChromeState,
     private readonly painters: Painters,
+    private readonly hooks: EditorHooks,
   ) {
     // pi embeds its working status in the top border only for an editor that asks.
     super(tui, theme, keybindings, { embedWorkingStatus: true });
@@ -73,7 +74,7 @@ export class PromptEditor extends CustomEditor {
     const lines = super.render(width);
     if (!this.chrome.live) return lines;
     // Line 0 is the border, whose label is no prompt text to spellcheck.
-    for (let i = 1; i < lines.length; i++) lines[i] = underline(lines[i]!);
+    for (let i = 1; i < lines.length; i++) lines[i] = this.hooks.decorateLine(lines[i]!);
     // The suggestion belongs on the line you are about to type on, right after
     // the cursor, so the box keeps its height. With the editor empty the cursor
     // ends that row, so its padding is what the ghost spends.
@@ -98,18 +99,32 @@ export class PromptEditor extends CustomEditor {
       }
     }
     super.handleInput(data);
-    onEdit(this, this.tui);
+    this.hooks.edited(this);
   }
 
   override setText(text: string): void {
     super.setText(text);
-    onEdit(this, this.tui);
+    this.hooks.edited(this);
   }
 
   // pi's clipboard paste lands here once read, after its keystroke's check has run.
   override insertTextAtCursor(text: string): void {
     super.insertTextAtCursor(text);
-    onEdit(this, this.tui);
+    this.hooks.edited(this);
+  }
+
+  replaceText(text: string): void {
+    // pi-tui's paste map and counter are private, and setText clears them.
+    const self = this as unknown as { pastes: Map<number, string>; pasteCounter: number };
+    const pastes = new Map(self.pastes);
+    const counter = self.pasteCounter;
+    this.setText(text);
+    for (const [id, paste] of pastes) self.pastes.set(id, paste);
+    self.pasteCounter = counter;
+  }
+
+  requestRender(): void {
+    this.tui.requestRender();
   }
 
   override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {

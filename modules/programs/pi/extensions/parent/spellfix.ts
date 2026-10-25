@@ -24,7 +24,7 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { Component, Editor, KeyId, TUI } from "@earendil-works/pi-tui";
+import type { Component, KeyId, TUI } from "@earendil-works/pi-tui";
 
 import {
   addInput,
@@ -49,6 +49,8 @@ import {
 import type { Found, Verdict } from "./lib/spellfix/hooks/core.ts";
 import type { Extra, Miss } from "./lib/spellfix/types/index.d.ts";
 import { sideCall } from "../shared/side-call.ts";
+import type { PromptDraft } from "./lib/editor-hooks.ts";
+import type { Services } from "./services.ts";
 
 const HUNSPELL = process.env.PI_SPELLFIX_HUNSPELL || "hunspell";
 const DICTIONARIES = process.env.PI_SPELLFIX_DICTS || "en_US";
@@ -74,8 +76,8 @@ const unadded = new Set<string>();
 
 /** The live TUI session; the editor's hooks act only while there is one. */
 let live: ExtensionContext | undefined;
-/** The prompt editor that reported the latest edit, and what repaints it. */
-let editor: { draft: Editor; tui: TUI } | undefined;
+/** The prompt editor that reported the latest edit. */
+let editor: PromptDraft | undefined;
 /** The words the editor underlines: by word, not offset, so every occurrence is marked. */
 let underlined: ReadonlySet<string> = new Set();
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -252,7 +254,7 @@ function setUnderlined(misses: readonly (Miss | Extra)[]) {
   const words = new Set(misses.map((m) => m.word));
   if (words.size === 0 && underlined.size === 0) return;
   underlined = words;
-  editor?.tui.requestRender();
+  editor?.requestRender();
 }
 
 /** The cached batch's extras when it is for `text`, skipped words left out. */
@@ -265,7 +267,7 @@ function cachedExtras(text: string): Extra[] {
  * marker: the words in a paste are neither checked nor sent to the model.
  */
 function draftText(ctx: ExtensionContext): string {
-  return editor?.draft.getText() ?? ctx.ui.getEditorText();
+  return editor?.getText() ?? ctx.ui.getEditorText();
 }
 
 /** pi's own test for a draft it runs as a shell command (`!cmd`, `!!cmd`). */
@@ -274,7 +276,7 @@ function isShellDraft(text: string): boolean {
 }
 
 /** The cursor as an offset into `getText`, for "nearest misspelling". */
-function cursorOffset(draft: Editor): number {
+function cursorOffset(draft: PromptDraft): number {
   const { line, col } = draft.getCursor();
   const lines = draft.getLines();
   let offset = 0;
@@ -284,14 +286,8 @@ function cursorOffset(draft: Editor): number {
 
 /** Puts back a draft read with `draftText`, keeping the pastes its markers name. */
 function writeDraft(ui: ExtensionUIContext, text: string) {
-  if (!editor) return ui.setEditorText(text);
-  // pi-tui's paste map and counter are private, and setText clears them.
-  const self = editor.draft as unknown as { pastes: Map<number, string>; pasteCounter: number };
-  const pastes = new Map(self.pastes);
-  const counter = self.pasteCounter;
-  editor.draft.setText(text);
-  for (const [id, paste] of pastes) self.pastes.set(id, paste);
-  self.pasteCounter = counter;
+  if (editor) editor.replaceText(text);
+  else ui.setEditorText(text);
 }
 
 /** Hunspell's misses plus the cached model extras, in draft order. */
@@ -326,7 +322,7 @@ function styleWords(
 }
 
 /** The prompt editor's line with the misspelled words underlined. */
-export function underline(line: string): string {
+function underline(line: string): string {
   if (underlined.size === 0 || !live) return line;
   const theme = live.ui.theme;
   return styleWords(line, underlined, (word) =>
@@ -334,9 +330,9 @@ export function underline(line: string): string {
   );
 }
 
-/** Tells spellfix the prompt editor's draft changed; `tui` repaints it once a check lands. */
-export function onEdit(draft: Editor, tui: TUI) {
-  editor = { draft, tui };
+/** Tells spellfix the prompt editor's draft changed; it repaints the editor once a check lands. */
+function onEdit(draft: PromptDraft) {
+  editor = draft;
   if (live) scheduleCheck(sessionGen, live);
 }
 
@@ -792,7 +788,7 @@ async function openPicker(ctx: ExtensionContext) {
     return;
   }
   const gen = sessionGen;
-  const cursor = editor ? cursorOffset(editor.draft) : text.length;
+  const cursor = editor ? cursorOffset(editor) : text.length;
   suspended = true;
   if (timer) clearTimeout(timer);
   try {
@@ -813,8 +809,9 @@ async function openPicker(ctx: ExtensionContext) {
   }
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ExtensionAPI, { editorHooks }: Services) {
   api = pi;
+  editorHooks.add({ decorateLine: underline, onEdit });
   pi.registerShortcut("ctrl+q", {
     description: "Fix spelling in the prompt draft",
     handler: (ctx) => openPicker(ctx),

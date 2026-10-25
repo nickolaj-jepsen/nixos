@@ -6,13 +6,13 @@
  * Also rings the terminal bell, like Claude Code's terminal_bell channel, which
  * sets niri's urgency hint.
  *
- * A finished run's toast says what it wants from you: chrome's identity reads
+ * A finished run's toast says what it wants from you: identity reads
  * the settled turn with a sidecar call, and the toast waits briefly for it.
  */
 import { spawn } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { SIDECAR_CHANNEL, type SidecarUpdate } from "../shared/sidecar.ts";
-import { waitingOnUser } from "./lib/user-wait.ts";
+import { SIDECAR_CHANNEL, type SidecarUpdate } from "../shared/identity.ts";
+import type { Services } from "./services.ts";
 
 // The settle call usually lands in a second or two; past this a plain toast beats a late one.
 const SETTLE_WAIT_MS = 5_000;
@@ -39,7 +39,7 @@ const finished = (update: SidecarUpdate | undefined) => {
   return "Finished, waiting for input";
 };
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ExtensionAPI, { userWait }: Services) {
   /** The settle reading of the current run, once it arrives. */
   let settled: SidecarUpdate | undefined;
   let waiter: ((update: SidecarUpdate) => void) | undefined;
@@ -66,7 +66,7 @@ export default function (pi: ExtensionAPI) {
     settled = undefined;
   });
   pi.on("ui_prompt_start", (event, ctx) => {
-    if (waitingOnUser(ctx)) notify(ctx, event.title ?? "Needs your input");
+    if (userWait.waitingOnUser(ctx)) notify(ctx, event.title ?? "Needs your input");
   });
   pi.on("agent_settled", (event, ctx) => {
     if (event.aborted) return;

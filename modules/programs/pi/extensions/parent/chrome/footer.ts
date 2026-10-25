@@ -14,7 +14,7 @@ import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
 import { agentParts } from "./agents.ts";
 import { layoutFooter } from "./footer-line.ts";
-import { formatCost, splitPath } from "./format.ts";
+import { formatCost, splitPath } from "../lib/format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
 import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";

@@ -9,7 +9,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { BorderStatus } from "./editor.ts";
-import type { LabelState } from "./label.ts";
+import type { Identity } from "../identity.ts";
 import type { Region } from "./layout.ts";
 import type { Segment } from "./measurements.ts";
 import type { ChromeState } from "./state.ts";
@@ -23,7 +23,7 @@ const MIN_DOING_ROOM = 8;
 // An ask is a sentence beside the label; cut to a word or two it says nothing.
 const MIN_ASK_ROOM = 14;
 
-export const createBorder = (state: ChromeState, label: LabelState) => {
+export const createBorder = (state: ChromeState, label: Identity) => {
   /**
    * One continuous line, inset like the footer's text: the leading and trailing
    * dashes stand in for its padding, and the detail is separated by the same

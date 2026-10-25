@@ -4,9 +4,9 @@
  * session wants you.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { waitingOnUser } from "../lib/user-wait.ts";
-import { shortPath } from "./format.ts";
-import type { LabelState } from "./label.ts";
+import type { UserWait } from "../lib/user-wait.ts";
+import { shortPath } from "../lib/format.ts";
+import type { Identity } from "../identity.ts";
 import type { ChromeState } from "./state.ts";
 
 const TICK_MS = 60_000;
@@ -20,7 +20,12 @@ const formatAge = (ms: number) => {
   return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
 };
 
-export const createTitle = (pi: ExtensionAPI, state: ChromeState, label: LabelState) => {
+export const createTitle = (
+  pi: ExtensionAPI,
+  state: ChromeState,
+  label: Identity,
+  userWait: UserWait,
+) => {
   let timer: ReturnType<typeof setInterval> | undefined;
   let repaintTimer: ReturnType<typeof setTimeout> | undefined;
   let cwd = process.cwd();
@@ -87,7 +92,7 @@ export const createTitle = (pi: ExtensionAPI, state: ChromeState, label: LabelSt
   // Only a dialog the run is blocked on says "waiting"; the phase underneath is
   // untouched, so the spinner stays and a run that settles meanwhile shows it.
   const promptChanged = (ctx: ExtensionContext) => {
-    const waiting = waitingOnUser(ctx);
+    const waiting = userWait.waitingOnUser(ctx);
     if (waiting !== waited) {
       waited = waiting;
       since = Date.now();

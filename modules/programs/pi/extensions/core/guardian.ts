@@ -21,9 +21,9 @@
 import type { Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { oneLine, requests } from "../shared/naming.ts";
+import { createGitContext } from "../shared/git.ts";
 import { createRouted } from "../shared/routed-model.ts";
 import { sideCall } from "../shared/side-call.ts";
-import { gitContext } from "../shared/sidecar.ts";
 
 const LINK = "guardian";
 // The permission package's process-global service map, keyed by session id.
@@ -117,6 +117,7 @@ export default function (pi: ExtensionAPI) {
   let failures = 0;
   const inflight = new Set<AbortController>();
   const routed = createRouted();
+  const gitContext = createGitContext();
 
   /** The action as the judge reads it: the gate's facts, never the agent's words about them. */
   const describe = (details: AskDetails) => {

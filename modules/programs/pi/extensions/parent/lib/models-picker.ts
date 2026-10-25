@@ -4,17 +4,18 @@
  * so close that first": opening a second overlay on top of one is how a click
  * stacks two UIs.
  */
-let close: (() => void) | undefined;
-
-/** Whether the picker is open. */
-export const modelsOpen = (): boolean => close !== undefined;
-
-/** Closes the picker if it is open; it reports back through `setModelsClose`. */
-export const closeModels = (): void => {
-  close?.();
+export const createModelsPicker = () => {
+  let close: (() => void) | undefined;
+  return {
+    /** Whether the picker is open. */
+    isOpen: (): boolean => close !== undefined,
+    /** Closes the picker if it is open; it reports back through `setClose`. */
+    close: (): void => close?.(),
+    /** The open picker's close, or `undefined` once it has closed. */
+    setClose: (next: (() => void) | undefined): void => {
+      close = next;
+    },
+  };
 };
 
-/** The open picker's close, or `undefined` once it has closed. */
-export const setModelsClose = (next: (() => void) | undefined): void => {
-  close = next;
-};
+export type ModelsPicker = ReturnType<typeof createModelsPicker>;

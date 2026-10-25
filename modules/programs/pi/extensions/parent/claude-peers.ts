@@ -56,9 +56,8 @@ import {
   userFrame,
   writeRegistryEntry,
 } from "./claude-peers/protocol.ts";
-import { isAutoName } from "./lib/auto-name.ts";
-import { IDENTITY_ENTRY, SIDECAR_CHANNEL, type SidecarUpdate } from "../shared/sidecar.ts";
-import { markAgentPrompt } from "./lib/user-wait.ts";
+import { SIDECAR_CHANNEL, type SidecarUpdate } from "../shared/identity.ts";
+import type { Services } from "./services.ts";
 import { ENTER_WORKTREE_TOOL } from "./lib/wt.ts";
 
 const MESSAGE_TYPE = "claude-peer-message";
@@ -91,7 +90,7 @@ interface Subscription {
   expires: number;
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   let ctx: ExtensionContext | undefined;
   /** Inbound frames arrive on socket callbacks, where a used-up ctx is an uncaught throw. */
   let live = false;
@@ -222,7 +221,7 @@ export default function (pi: ExtensionAPI) {
       const c = ctx;
       const approved =
         c?.hasUI === true &&
-        (await markAgentPrompt(c, () =>
+        (await userWait.markAgentPrompt(c, () =>
           c.ui.confirm(
             `Deliver message from @${fromName}${env.fromMode === "bypass" ? " (a session that skips permission prompts)" : ""}?`,
             env.body.slice(0, 2000),
@@ -381,9 +380,9 @@ export default function (pi: ExtensionAPI) {
       pidDomain: pidDomain(),
       messagingSocketPath: socketPath,
       name: displayName(),
-      nameSource: named && !isAutoName(c.sessionManager.getSessionId(), named) ? "user" : "derived",
+      nameSource: named && !identity.isAutoName(named) ? "user" : "derived",
       nameSince: Date.now(),
-      summary: persistedSummary(c),
+      summary: identity.summary(),
     };
     await publish({ status: "idle" });
   }
@@ -485,10 +484,7 @@ export default function (pi: ExtensionAPI) {
     if (isOwner())
       await publish({
         name: displayName(),
-        nameSource:
-          event.name && !isAutoName(c.sessionManager.getSessionId(), event.name)
-            ? "user"
-            : "derived",
+        nameSource: event.name && !identity.isAutoName(event.name) ? "user" : "derived",
         nameSince: Date.now(),
       });
   });
@@ -670,17 +666,6 @@ export default function (pi: ExtensionAPI) {
       c.ui.notify([self, `Other sessions (${peers.length}):`, ...rows].join("\n"), "info");
     },
   });
-}
-
-/** The last summary chrome's identity persisted on this branch, so a reload or resume keeps it. */
-function persistedSummary(c: ExtensionContext): string | undefined {
-  let summary: string | undefined;
-  for (const entry of c.sessionManager.getBranch()) {
-    if (entry.type !== "custom" || entry.customType !== IDENTITY_ENTRY) continue;
-    const data = entry.data as { summary?: unknown } | undefined;
-    if (typeof data?.summary === "string") summary = data.summary;
-  }
-  return summary;
 }
 
 /** What a pi peer says it is doing; Claude Code entries carry neither field. */

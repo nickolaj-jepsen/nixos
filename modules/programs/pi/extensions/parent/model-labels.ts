@@ -24,9 +24,9 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import { modelName, providerName } from "./lib/model-names.ts";
-import { setModelsClose } from "./lib/models-picker.ts";
 import { descriptionFor, LABELS, type Label, labelsFor } from "./model-labels/registry.ts";
 import { LADDERS, PROVIDER } from "../shared/kinds.ts";
+import type { Services } from "./services.ts";
 
 /** Rows kept free above the footer, so the picker never crowds the editor out. */
 const MARGIN_ROWS = 2;
@@ -95,7 +95,7 @@ const costGlyph = (tier: number): string => (tier < 0 ? "?" : COST_GLYPH);
 const costColor = (tier: number): "muted" | "success" | "warning" | "error" =>
   tier < 0 || tier === 0 ? "muted" : tier === 1 ? "success" : tier === 2 ? "warning" : "error";
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ExtensionAPI, { modelsPicker }: Services) {
   const find = (ctx: ExtensionContext) => (provider: string, id: string) =>
     ctx.modelRegistry.find(provider, id);
 
@@ -167,11 +167,11 @@ export default function (pi: ExtensionAPI) {
     const picked = await ctx.ui.custom<Model<any> | undefined>((tui, theme, _keybindings, done) => {
       picker = new ModelPicker(tui, theme, available, scoped, ctx.model, (result) => {
         picker = undefined;
-        setModelsClose(undefined);
+        modelsPicker.setClose(undefined);
         done(result);
       });
       // Told to the footer, so its click on the model name closes this instead of stacking a second one.
-      setModelsClose(() => picker?.cancel());
+      modelsPicker.setClose(() => picker?.cancel());
       return picker;
     });
     picker = undefined;
@@ -193,7 +193,7 @@ export default function (pi: ExtensionAPI) {
   }
   // A picker torn down with its session never reports back, and a stale handle
   // would make the footer's click do nothing in the next one.
-  pi.on("session_start", () => setModelsClose(undefined));
+  pi.on("session_start", () => modelsPicker.setClose(undefined));
 }
 
 /** Whether two catalogue entries name the same model. */

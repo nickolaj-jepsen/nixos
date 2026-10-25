@@ -1,7 +1,7 @@
 /**
  * The features only the session you started needs; subagent children never
  * load this package. One entry, so the features share one copy of each module
- * they import.
+ * they import, and what they share goes through `Services`.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import aliases from "./aliases.ts";
@@ -12,18 +12,15 @@ import claudePeers from "./claude-peers.ts";
 import condense from "./condense.ts";
 import cost from "./cost.ts";
 import gutter from "./gutter.ts";
-import { trackUserWait } from "./lib/user-wait.ts";
 import modelLabels from "./model-labels.ts";
 import notify from "./notify.ts";
+import { createServices, type Services } from "./services.ts";
 import spellfix from "./spellfix.ts";
 import stash from "./stash.ts";
 import subagentUsage from "./subagent-usage.ts";
 import worktree from "./worktree.ts";
 
-// Registration order is handler order: user-wait's state has to be current
-// before anything reads it on ui_prompt_start.
-const FEATURES: [string, (pi: ExtensionAPI) => void][] = [
-  ["user-wait", trackUserWait],
+const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["aliases", aliases],
   ["bg", bg],
   ["browser-gate", browserGate],
@@ -40,14 +37,23 @@ const FEATURES: [string, (pi: ExtensionAPI) => void][] = [
   ["worktree", worktree],
 ];
 
+const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 export default function (pi: ExtensionAPI) {
-  // One broken feature must not take the rest down with it.
   const failed: string[] = [];
+  let services: Services | undefined;
+  try {
+    services = createServices(pi);
+  } catch (error) {
+    failed.push(`services: ${message(error)}`);
+  }
+  // One broken feature must not take the rest down with it.
   for (const [name, feature] of FEATURES) {
+    if (!services) break;
     try {
-      feature(pi);
+      feature(pi, services);
     } catch (error) {
-      failed.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
+      failed.push(`${name}: ${message(error)}`);
     }
   }
   if (failed.length === 0) return;

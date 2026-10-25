@@ -4,7 +4,7 @@
  */
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { formatCost, formatCredit, formatTokens, formatWhen } from "../chrome/format.ts";
+import { formatCost, formatCredit, formatTokens, formatWhen } from "../lib/format.ts";
 import type { UsageWindow } from "../../shared/ai-usage.ts";
 import type { RowKind, Turn } from "./breakdown.ts";
 import { type Billing, billed, onPlans, type View } from "./view.ts";
