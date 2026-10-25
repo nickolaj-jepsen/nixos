@@ -29,6 +29,11 @@ const LINK = "guardian";
 // The permission package's process-global service map, keyed by session id.
 const SERVICES = Symbol.for("@gotgenes/pi-permission-system:session-services");
 const READY_CHANNEL = "permissions:ready";
+// Every instance's routed model by session id: a child's asks are judged in the
+// parent, which cannot otherwise see the model the child runs.
+const ACTORS = Symbol.for("fireproof.pi.guardian.actors");
+const actors = ((globalThis as { [ACTORS]?: Map<string, () => Model<any> | undefined> })[ACTORS] ??=
+  new Map());
 
 // Pinned, not vm/flash: its last stage is Claude, which must not judge a Claude actor.
 const DEEPSEEK_JUDGE = "opencode-go/deepseek-v4.1-flash";
@@ -80,7 +85,7 @@ type AskDetails = {
       value?: string;
       matchedPattern?: string | null;
       executedUnit?: string | null;
-      requester?: { agentName: string | null; forwarded: boolean };
+      requester?: { agentName: string | null; forwarded: boolean; sessionId?: string | null };
     };
   };
 };
@@ -106,6 +111,7 @@ const verdictOf = (text: string) => {
 
 export default function (pi: ExtensionAPI) {
   let ctx: ExtensionContext | undefined;
+  let ownId: string | undefined;
   let dispose: (() => void) | undefined;
   let unsubscribe: (() => void) | undefined;
   let failures = 0;
@@ -160,7 +166,11 @@ export default function (pi: ExtensionAPI) {
     const session = ctx;
     const surface = details.payload?.request?.surface ?? "";
     if (!session || outOfReach(surface) || failures >= MAX_FAILURES) return { kind: "defer" };
-    const judge = judgeFor(routed(session)?.model ?? session.model);
+    const requester = details.payload?.request?.requester;
+    const actor = requester?.forwarded
+      ? actors.get(requester.sessionId ?? "")?.()
+      : (routed(session)?.model ?? session.model);
+    const judge = judgeFor(actor);
     if (!judge) return { kind: "defer" };
 
     const { repo, branch } = await gitContext(session.cwd);
@@ -209,6 +219,8 @@ export default function (pi: ExtensionAPI) {
   };
 
   pi.on("session_start", (_event, c) => {
+    ownId = c.sessionManager.getSessionId();
+    actors.set(ownId, () => routed(c)?.model ?? c.model);
     // Only where a person types the requests: a subagent's "requests" are the
     // agent's own delegation, and its asks are judged by the session it relays to.
     if (!c.hasUI) return;
@@ -223,6 +235,8 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", () => {
+    if (ownId) actors.delete(ownId);
+    ownId = undefined;
     for (const controller of inflight) controller.abort();
     inflight.clear();
     dispose?.();

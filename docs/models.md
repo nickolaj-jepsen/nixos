@@ -86,7 +86,8 @@ Dedicated cyber tiers are deferred.
 ## Guardian
 
 `guardian.ts` asks one judge, picked from the physical model that made the tool
-call, so a `vm/*` failover counts as the model it failed over to. The judge is
-never from the actor's family (`judgeFor`): Sonnet judges DeepSeek, DeepSeek
-judges everyone else. No judge is less private than the actor: a local or
-TensorX session's asks skip the judge and go straight to the dialog.
+call, so a `vm/*` failover counts as the model it failed over to, and a
+subagent's forwarded ask goes by the child's model. The judge is never from the
+actor's family (`judgeFor`): Sonnet judges DeepSeek, DeepSeek judges everyone
+else. No judge is less private than the actor: a local or TensorX session's
+asks skip the judge and go straight to the dialog.
