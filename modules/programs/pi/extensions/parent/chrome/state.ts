@@ -1,7 +1,9 @@
 import type { CustomEditor, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export type Renderer = { requestRender(): void; getFocusedComponent?(): unknown };
-export type Action = (ctx: ExtensionContext) => void | Promise<void>;
+/** Where a click landed: its terminal column, and the width of what was clicked. */
+export type ClickAt = { column: number; columns: number };
+export type Action = (ctx: ExtensionContext, at?: ClickAt) => void | Promise<void>;
 
 /** State shared by the chrome modules; one instance per extension load. */
 export type ChromeState = {

@@ -15,7 +15,8 @@ import type { createActions } from "./actions.ts";
 import { agentParts } from "./agents.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { formatCost, splitPath } from "../lib/format.ts";
-import { createGit, PR_COMMAND } from "./git.ts";
+import type { Git } from "./git.ts";
+import { PR_COMMAND } from "./git.ts";
 import { click, hoverAt, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";
 import { modelAlias, providerName, providerShortName } from "../lib/model-names.ts";
@@ -49,8 +50,8 @@ export const createFooter = (
   pi: ExtensionAPI,
   state: ChromeState,
   actions: ReturnType<typeof createActions>,
+  git: Git,
 ) => {
-  const git = createGit(state);
   const usage = createUsage(state);
   const stats = createStats();
   const routed = createRouted();
@@ -215,14 +216,19 @@ export const createFooter = (
           color: "dim",
           // The last segment names the worktree or checkout, so it is the part that reads.
           styled: (t) => t.fg("dim", path.parent) + t.fg("text", path.name),
-          action: actions.openFolder,
+          action: actions.folder,
         },
         cost:
           costText && !bordered
             ? { id: "cost", text: costText, color: "dim", action: actions.cost }
             : undefined,
         speed: speedText && !bordered ? { id: "speed", text: speedText, color: "dim" } : undefined,
-        git: git.view,
+        git: (mode) => {
+          const part = git.view(mode);
+          // One target for the whole block: a click anywhere on the branch, its
+          // status or the PR glyph opens the same menu.
+          return part ? { ...part, action: actions.git } : null;
+        },
       },
       state.hover,
     );

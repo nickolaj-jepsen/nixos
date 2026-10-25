@@ -150,14 +150,36 @@ export const layoutFooter = (
   const gitBlock = layout.git ? layout.gitGap + layout.gitWidth : 0;
   const fill = Math.max(0, inner - layout.leftWidth - layout.rightWidth - gitBlock);
   const right = paintParts(layout.right, theme, PAD + layout.leftWidth + fill, hovered);
+  // Git is painted outside the part list, so it gets its region and its hover
+  // here: the branch, its status and the PR glyph are one target.
+  const gitStart =
+    PAD + layout.leftWidth + fill + layout.rightWidth + (layout.git ? layout.gitGap : 0);
+  const lit = layout.git?.action !== undefined && layout.git.id === hovered;
   const git = layout.git
     ? " ".repeat(layout.gitGap) +
-      (layout.git.styled ? layout.git.styled(theme) : theme.fg(layout.git.color, layout.git.text))
+      (layout.git.styled
+        ? lit
+          ? theme.bold(layout.git.styled(theme))
+          : layout.git.styled(theme)
+        : theme.fg(
+            lit ? "text" : layout.git.color,
+            layout.git.bold ? theme.bold(layout.git.text) : layout.git.text,
+          ))
     : "";
   const line = pad + left.text + " ".repeat(fill) + right.text + git;
   // Still too wide after every step: cut the tail and keep only the left clicks.
   if (layout.used > inner) {
     return { line: truncateToWidth(line, width, "…"), regions: left.regions };
   }
-  return { line: line + pad, regions: [...left.regions, ...right.regions] };
+  const gitRegion = layout.git?.action
+    ? [
+        {
+          x0: gitStart,
+          x1: gitStart + layout.gitWidth,
+          id: layout.git.id,
+          action: layout.git.action,
+        },
+      ]
+    : [];
+  return { line: line + pad, regions: [...left.regions, ...right.regions, ...gitRegion] };
 };

@@ -74,8 +74,11 @@ export const click = (
     event.type === "click" && event.button === "left" && !event.alt && !event.shift && !event.ctrl;
   const action = plain ? regionAt(regions, event.x)?.action : undefined;
   if (!action || !ctx) return false;
+  // The footer passes the click's column on, so a popover can open where the
+  // pointer is rather than at a fixed edge.
+  const at = { column: event.screenX, columns: event.width };
   void Promise.resolve()
-    .then(() => action(ctx))
+    .then(() => action(ctx, at))
     .catch((error: unknown) => ctx.ui.notify(`chrome: ${String(error)}`, "error"));
   return true;
 };

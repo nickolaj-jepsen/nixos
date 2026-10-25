@@ -5,22 +5,22 @@
  * pi's own events because other sessions share the checkout. The branch's pull
  * request is a linked glyph, looked up with `gh` only when something could have
  * changed it: the session starting, the branch moving, a first push, or a
- * command that pushes or edits a pull request.
+ * command that pushes or edits a pull request. A click opens `./links.ts`,
+ * which reads the last answer through `snapshot()`.
  */
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
-import { getCapabilities, hyperlink } from "@earendil-works/pi-tui";
 import type { BranchMode } from "./footer-line.ts";
 import type { Part } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
 
-type PrKind = "open" | "draft" | "merged" | "closed";
+export type PrKind = "open" | "draft" | "merged" | "closed";
 
-type PrRef = { url: string; state: PrKind };
+export type PrRef = { url: string; number: number; state: PrKind };
 
-type GitState = {
+export type GitState = {
   branch: string | null;
   detached: boolean;
   oid: string;
@@ -32,6 +32,16 @@ type GitState = {
   ahead: number;
   behind: number;
   operation: string | undefined;
+};
+
+/** What the footer knows when a click asks for the git menu. */
+export type GitSnapshot = {
+  /** Null when the directory is not a repository. */
+  state: GitState | null;
+  pr: PrRef | null;
+  /** Whether `pr` is an answer rather than the absence of one. */
+  prKnown: boolean;
+  ghMissing: boolean;
 };
 
 const PR_TIMEOUT_MS = 5000;
@@ -93,6 +103,9 @@ const readStep = (numFile: string, endFile: string) => {
 /** Git branch, status and pull request for the footer, refreshed off the render path. */
 export const createGit = (chrome: ChromeState) => {
   let gitState: GitState | null | undefined;
+  // Whether git has answered at all: `null` says "not a repository", undefined
+  // says "not asked yet", and the menu must not confuse the two.
+  let asked = false;
   // Only a repository is cached: a plain directory can become one with `git init`.
   let gitDir: string | undefined;
   let gitBusy = false;
@@ -107,6 +120,9 @@ export const createGit = (chrome: ChromeState) => {
   let prLookup = 0;
   let prDirty = false;
   let ghMissing = false;
+  // Whether the branch's pull request has been answered: `null` alone cannot say
+  // whether there is none or whether nobody has looked yet.
+  let prKnown = false;
 
   const runGit = (cwd: string, args: string[]) =>
     new Promise<string | null>((resolve) => {
@@ -124,7 +140,7 @@ export const createGit = (chrome: ChromeState) => {
     new Promise<PrRef | null | undefined>((resolve) => {
       execFile(
         "gh",
-        ["pr", "view", "--json", "url,state,isDraft"],
+        ["pr", "view", "--json", "url,number,state,isDraft"],
         { cwd, timeout: PR_TIMEOUT_MS, maxBuffer: 1 << 16 },
         (error, stdout, stderr) => {
           if (error) {
@@ -138,6 +154,7 @@ export const createGit = (chrome: ChromeState) => {
           try {
             const data = JSON.parse(stdout) as {
               url: string;
+              number: number;
               state: string;
               isDraft?: boolean;
             };
@@ -148,7 +165,7 @@ export const createGit = (chrome: ChromeState) => {
                 : data.state === "CLOSED"
                   ? "closed"
                   : "open";
-            resolve({ url: data.url, state });
+            resolve({ url: data.url, number: data.number, state });
           } catch {
             resolve(undefined);
           }
@@ -165,14 +182,17 @@ export const createGit = (chrome: ChromeState) => {
   /** Looks the branch's pull request up again; a failed lookup keeps the branch's last answer. */
   const refreshPr = async (state: GitState) => {
     const lookup = ++prLookup;
-    // A branch that was never pushed has no pull request yet.
+    // A branch that was never pushed has no pull request yet, and that is an answer.
     if (!state.branch || !state.upstream) {
       setPr(null);
+      prKnown = true;
       return;
     }
     if (ghMissing) return;
     const pr = await fetchPr(activeCwd);
-    if (lookup === prLookup && pr !== undefined) setPr(pr);
+    if (lookup !== prLookup || pr === undefined) return;
+    setPr(pr);
+    prKnown = true;
   };
 
   const resolveGitDir = async (cwd: string): Promise<string | null> => {
@@ -250,6 +270,7 @@ export const createGit = (chrome: ChromeState) => {
       if (!dir) {
         const changed = gitState !== null;
         gitState = null;
+        asked = true;
         prDirty = false;
         prLookup++;
         setPr(null);
@@ -267,6 +288,7 @@ export const createGit = (chrome: ChromeState) => {
       const next = parseStatus(status, dir);
       const changed = stateKey(previous) !== stateKey(next);
       gitState = next;
+      asked = true;
       const lookup =
         prDirty ||
         previous == null ||
@@ -274,7 +296,10 @@ export const createGit = (chrome: ChromeState) => {
         previous.upstream !== next.upstream;
       prDirty = false;
       // The last answer belongs to the old branch, so it must not outlive it.
-      if (previous?.branch !== next.branch) setPr(null);
+      if (previous?.branch !== next.branch) {
+        setPr(null);
+        prKnown = false;
+      }
       if (lookup) void refreshPr(next);
       if (changed) chrome.tui?.requestRender();
     } finally {
@@ -338,7 +363,7 @@ export const createGit = (chrome: ChromeState) => {
     const dirtyColor: ThemeColor | undefined =
       state.unstaged > 0 ? "error" : state.staged > 0 ? "warning" : undefined;
 
-    const spans: { text: string; color: ThemeColor; attached?: boolean; url?: string }[] = [];
+    const spans: { text: string; color: ThemeColor; attached?: boolean }[] = [];
     spans.push({ text: glyph, color: stateColor });
     // `wt` names a worktree's folder and its branch alike, so the name only earns
     // its columns when it says something the path does not.
@@ -346,8 +371,9 @@ export const createGit = (chrome: ChromeState) => {
       spans.push({ text: name, color: "muted" });
     }
     if (dirtyColor) spans.push({ text: "*", color: dirtyColor, attached: true });
-    // The icon alone says a pull request exists; it links to it where the terminal can.
-    if (pr) spans.push({ text: PR_GLYPHS[pr.state], color: prColor(pr), url: pr.url });
+    // The glyph says a pull request exists; its link belongs to the git menu, so a
+    // click here opens the menu rather than a browser through the terminal.
+    if (pr) spans.push({ text: PR_GLYPHS[pr.state], color: prColor(pr) });
     if (state.operation) spans.push({ text: state.operation, color: "accent" });
     if (state.untracked > 0) spans.push({ text: "?", color: "warning" });
     if (state.conflicts > 0) spans.push({ text: `~${state.conflicts}`, color: "error" });
@@ -363,12 +389,7 @@ export const createGit = (chrome: ChromeState) => {
         .map((span, index) => {
           const space = index > 0 && !span.attached ? " " : "";
           const colored = withColor && theme ? theme.fg(span.color, span.text) : span.text;
-          // Only painted lines link, so the width computed from `text` stays true.
-          const body =
-            withColor && span.url && getCapabilities().hyperlinks
-              ? hyperlink(colored, span.url)
-              : colored;
-          return space + body;
+          return space + colored;
         })
         .join("");
 
@@ -382,6 +403,9 @@ export const createGit = (chrome: ChromeState) => {
 
   return {
     view: (mode: BranchMode): Part | null => branchView(gitState, currentPr, mode),
+    /** The last git answer, for the menu a click opens; stale by a poll at most. */
+    snapshot: (): GitSnapshot | undefined =>
+      asked ? { state: gitState ?? null, pr: currentPr, prKnown, ghMissing } : undefined,
     schedule: scheduleGit,
     /** Keep asking while the footer is on screen; stops on `dispose`. */
     startPolling: () => {
@@ -405,3 +429,6 @@ export const createGit = (chrome: ChromeState) => {
     },
   };
 };
+
+/** The git state the footer and its menu share. */
+export type Git = ReturnType<typeof createGit>;

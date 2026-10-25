@@ -1,6 +1,14 @@
-import { spawn } from "node:child_process";
-import type { AppKeybinding, ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { Action, ChromeState } from "./state.ts";
+import type {
+  AppKeybinding,
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
+import type { Git } from "./git.ts";
+import type { Menu } from "./menu.ts";
+import { createMenuPopper } from "./menu.ts";
+import { gitMenu } from "./links.ts";
+import { folderMenu } from "./places.ts";
+import type { Action, ChromeState, ClickAt } from "./state.ts";
 
 /** Runs one of pi's own keybinding actions, or names the key when the editor has none. */
 const appAction =
@@ -36,19 +44,59 @@ const dismissOverlay =
     (focus as { handleInput?(data: string): void }).handleInput?.("\x1b");
   };
 
-export const createActions = (pi: ExtensionAPI, state: ChromeState) => {
+export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git) => {
   const openModels = command(state, pi, "/models");
   const closeOverlay = dismissOverlay(state);
+  const menus = createMenuPopper();
+  // Building the git menu asks git and gh, so a double click could queue a second
+  // one behind the first; the build is the slow half, not the popover.
+  let building = false;
+
+  const show = async (ctx: ExtensionContext, build: () => Menu | Promise<Menu>, at?: ClickAt) => {
+    // The footer is how a popover is dismissed: an overlay never reports a click
+    // outside itself, so the control that opened it closes it.
+    if (menus.isOpen()) {
+      menus.close();
+      return;
+    }
+    // Only the build is guarded: a second click while git answers must not queue
+    // another lookup, but the open menu has to stay reachable above.
+    if (building) return;
+    building = true;
+    let menu: Menu;
+    try {
+      menu = await build();
+    } finally {
+      building = false;
+    }
+    await menus.open(ctx, menu, at);
+  };
+
+  /**
+   * The path is the checkout the session works in, so its menu opens the place
+   * the work continues rather than acting on the first click: the footer sits one
+   * row under the shell prompt, and a stray click there used to start an editor.
+   */
+  const folder = ((ctx, at) => show(ctx, () => folderMenu(ctx.cwd), at)) as Action;
+
+  const gitLinks = ((ctx, at) => {
+    const snapshot = git.snapshot();
+    // Undefined is the first status still in flight, not a missing repository.
+    if (!snapshot) {
+      ctx.ui.notify("chrome: git status is still loading", "warning");
+      return;
+    }
+    if (!snapshot.state) {
+      ctx.ui.notify("chrome: this directory is not a git repository", "warning");
+      return;
+    }
+    const repo = { ...snapshot, state: snapshot.state };
+    return show(ctx, () => gitMenu(ctx, repo), at);
+  }) as Action;
 
   return {
-    // The path is the checkout the session works in, so it opens where the work
-    // continues rather than in a file manager. Plain `code` focuses a window that
-    // already has it open and makes one otherwise.
-    openFolder: ((ctx) => {
-      const child = spawn("code", [ctx.cwd], { detached: true, stdio: "ignore" });
-      child.on("error", () => ctx.ui.notify("chrome: cannot run code", "error"));
-      child.unref();
-    }) as Action,
+    folder,
+    git: gitLinks,
     // The picker is this repo's own (/models: labels, cost, context). A click while
     // it or any other dialog holds focus closes that instead of stacking the
     // picker on top: pi closes those on Escape without telling anyone.

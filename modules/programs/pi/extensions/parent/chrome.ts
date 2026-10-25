@@ -7,6 +7,7 @@ import { createActions } from "./chrome/actions.ts";
 import { createBorder } from "./chrome/border.ts";
 import { PromptEditor, type Painters } from "./chrome/editor.ts";
 import { createFooter } from "./chrome/footer.ts";
+import { createGit } from "./chrome/git.ts";
 import { measurementLevels } from "./chrome/measurements.ts";
 import { createState } from "./chrome/state.ts";
 import { createTitle } from "./chrome/title.ts";
@@ -17,17 +18,32 @@ type EditorFactory = NonNullable<Parameters<ExtensionUIContext["setEditorCompone
 
 export default function (pi: ExtensionAPI, { identity, userWait, editorHooks }: Services) {
   const state = createState();
+  const git = createGit(state);
   // Registered before the modules, so their handlers already see the session. pi
   // builds a fresh runtime, and so a fresh instance of this, for every session.
   pi.on("session_start", (_event, ctx) => {
     state.ctx = ctx;
     state.live = ctx.mode === "tui" && ctx.hasUI;
   });
-  const actions = createActions(pi, state);
+  const actions = createActions(pi, state, git);
+  // The footer's two menus, reachable without a mouse: the same popovers, so the
+  // keys and a click cannot drift apart.
+  pi.registerCommand("open", {
+    description: "Open this folder in an editor, file manager or terminal, or copy its path",
+    handler: async (_args, ctx) => {
+      await actions.folder(ctx);
+    },
+  });
+  pi.registerCommand("git", {
+    description: "Open this branch, repository or pull request in the browser",
+    handler: async (_args, ctx) => {
+      await actions.git(ctx);
+    },
+  });
   identity.onChange(() => state.tui?.requestRender());
   createTitle(pi, state, identity, userWait);
   const border = createBorder(state, identity);
-  const footer = createFooter(pi, state, actions);
+  const footer = createFooter(pi, state, actions, git);
   const painters: Painters = {
     top: (width, hidden, color, status) =>
       border.drawTop(
