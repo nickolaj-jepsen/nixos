@@ -154,9 +154,10 @@ home-manager and the overlays):
   no hash to bump).
 - **Pi itself**: `pkgs/pi-coding-agent/` pins the upstream release independently
   of nixpkgs — `release.json` holds the version plus the source, npm-lock and
-  model-catalog hashes, and the build is nixpkgs'. The `pi` flake input still
-  supplies the home-manager module. Bumps go through `UPDATERS`
-  (`pi-coding-agent`).
+  model-catalog hashes, and the build is nixpkgs'. The pi leaf wraps it in its
+  own `pi` script, which exports the env and merges the config, and places
+  the rules in `~/.pi/agent/APPEND_SYSTEM.md` and the theme in
+  `~/.pi/agent/themes/`. Bumps go through `UPDATERS` (`pi-coding-agent`).
 - **Pi settings and MCP servers**: the pi wrapper merges the leaf's `settings`
   and `mcp` into `~/.pi/agent/settings.json` and `mcp.json` at every launch, so a
   key or server dropped from the leaf stays in the file until removed by hand;

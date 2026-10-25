@@ -43,7 +43,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("before_agent_start", (event, ctx) => {
     const session = sessions.get(ctx);
     const options = event.systemPromptOptions;
-    // pi's own context discovery, --append-system-prompt included, for the save gate.
+    // pi's own context discovery, APPEND_SYSTEM.md included, for the save gate.
     session.contextText = [
       options.appendSystemPrompt,
       ...options.contextFiles.map((file) => file.content),

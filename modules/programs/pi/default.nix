@@ -1,8 +1,7 @@
-# Pi coding agent: pi.nix supplies the home-manager module, the package comes
-# from pkgs/pi-coding-agent. The package roster is based on the lazypi catalog
-# (https://lazypi.org).
+# Pi coding agent: the package comes from pkgs/pi-coding-agent, wrapped here.
+# The package roster is based on the lazypi catalog (https://lazypi.org).
 #
-# The packages array is authoritative: pi.nix jq-merges settings into
+# The packages array is authoritative: the wrapper jq-merges settings into
 # ~/.pi/agent/settings.json on every launch and arrays replace wholesale —
 # imperative `pi install`/`pi remove` edits revert at next start, and entries
 # removed here stop loading but leave their download in ~/.pi/agent/{npm,git}.
@@ -137,115 +136,132 @@ in {
     childExcludedPackages =
       map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages)
       ++ [parentPath];
-  in {
-    imports = [inputs.pi.homeModules.default];
+    # agent-context.md is shared by every agent; keep it agent-agnostic.
+    # How to delegate is in extensions/core/codemode-only.ts: these rules reach every
+    # child as project context, and a child holds no agent tools.
+    rules = ''
+      ${builtins.readFile ../agent-context.md}
+      ## Worktrees in pi
 
-    config = lib.mkIf config.fireproof.dev.pi.enable {
-      programs.pi.coding-agent = {
-        enable = true;
-        package = pi;
-        # agent-context.md is shared by every agent; keep it agent-agnostic.
-        # How to delegate is in extensions/core/codemode-only.ts: these rules reach every
-        # child as project context, and a child holds no agent tools.
-        rules = ''
-          ${builtins.readFile ../agent-context.md}
-          ## Worktrees in pi
-
-          - Pi removes the worktree its session was in when it exits, if `wt clean` would:
-            clean, every commit already on the default branch, and nobody's cwd inside it.
-            Anything with uncommitted work or unlanded commits is left in place.
-          - `/new` inside a worktree moves the session to the primary checkout first and
-            asks what to do with the worktree it left; `/back` makes the same move without
-            starting a fresh conversation.
-        '';
-        themes = [theme];
+      - Pi removes the worktree its session was in when it exits, if `wt clean` would:
+        clean, every commit already on the default branch, and nobody's cwd inside it.
+        Anything with uncommitted work or unlanded commits is left in place.
+      - `/new` inside a worktree moves the session to the primary checkout first and
+        asks what to do with the worktree it left; `/back` makes the same move without
+        starting a fresh conversation.
+    '';
+    env =
+      {
         # Nix-built pi can't self-update; extension-update notices still show.
-        environment.PI_SKIP_VERSION_CHECK.value = "1";
+        PI_SKIP_VERSION_CHECK = "1";
         # A path, not the key: extensions/core/exa.ts reads it, so the key stays out
         # of the environment every tool and MCP server inherits.
-        environment.PI_EXA_KEY_FILE.value = config.age.secrets.exa-api-key.path;
+        PI_EXA_KEY_FILE = config.age.secrets.exa-api-key.path;
         # Spellfix (extensions/parent/spellfix.ts) shares its dictionary with the
         # Claude Code mod.
-        environment.PI_SPELLFIX_HUNSPELL.value = lib.getExe spellChecker;
-        environment.PI_SPELLFIX_DICTS.value = lib.concatStringsSep "," fpLib.hunspellLanguages;
-        environment.PI_SPELLFIX_PERSONAL.value = fpLib.hunspellPersonalDictionary config;
-        # The fireproof.agents.lspServers registry, read by extensions/core/lsp.ts.
-        environment.PI_LSP_SERVERS = lib.mkIf (config.fireproof.agents.lspServers != {}) {
-          value = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
-        };
-        settings = {
-          # The model picker's "save as default" reverts at launch; change it here.
-          # The kinds and their ladders: docs/models.md.
-          defaultProvider = "vm";
-          defaultModel = "flash";
-          defaultThinkingLevel = "high";
-          # The pickers open on these and ctrl+p cycles them; their All tab still
-          # lists every model. A default outside the list would start on the first
-          # entry instead, so the virtual models lead. Each entry's role:
-          # docs/models.md.
-          enabledModels =
-            [
-              "vm/*"
-              "anthropic/claude-opus-5-5"
-              "anthropic/claude-sonnet-5-5"
-              "kimi-coding/k3.1-pro"
-              "opencode-go/*"
-              # `**`: the ids hold a slash (qwen/…), which a glob `*` doesn't cross.
-              "tensorx/**"
-            ]
-            ++ lib.optional config.fireproof.dev.llm.enable "local/*";
-          # The defaults (reserve 16k, keep 20k) overrun a 32k window: compaction would
-          # start at 16k, with the system prompt and tools already taking ~9k of it.
-          compaction.modelOverrides = lib.optionalAttrs config.fireproof.dev.llm.enable (lib.mapAttrs' (id: m:
-            lib.nameValuePair "local/${id}" {
-              reserveTokens = localMaxTokens;
-              keepRecentTokens = lib.min 20000 (m.ctx / 4);
-            })
-          localModels);
-          # Pinned, not `system`, so the accent is the desktop accent.
-          theme = "fireproof";
-          # Keeps the version and key hints; drops the loaded-resource listing.
-          quietStartup = "header";
-          # One line per reasoning run instead of the whole block, and the resting
-          # state for the thinking chip on the editor border. alt+t or a click still
-          # opens it for a session, but a value written that way is merged away at
-          # the next launch, like every other setting here.
-          hideThinkingBlock = true;
-          # `/tree` opens on my prompts; ctrl+d returns to the default view and
-          # ctrl+a shows every entry.
-          treeFilterMode = "user-only";
-          # OSC 9;4 progress in ghostty's tab, for runs long enough to switch away from.
-          terminal.showTerminalProgress = true;
-          # Loads the cwd's direnv/nix-direnv env into the bash tool, which
-          # otherwise keeps the env pi was launched with. Blocked or missing
-          # .envrc files export nothing.
-          shellCommandPrefix = ''eval "$(${lib.getExe config.programs.direnv.package} export bash 2>/dev/null)"'';
-          # extensions/core/codemode-only.ts moves the expensive tools behind it.
-          defaultTools = ["+codemode"];
-        };
-        # Local paths: pi loads the Nix-built tree as-is (see
-        # pkgs/pi-packages for how the npm dependencies get there).
-        # parent/ first: chained before_agent_start and tool_result handlers run
-        # in package order, which sets the system prompt's section order.
-        settings.packages =
-          map packagePath thirdPartyPackages
-          ++ [parentPath "${extensions}/core"];
-        # Arrays replace wholesale, so `pi config` toggles of built-ins revert at launch.
-        settings.extensions = [];
-        # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
-        # ~/.config/mcp/mcp.json. Merged at launch: /mcp toggles persist, but a
-        # server dropped here stays in the file until removed by hand.
-        mcp = let
-          # pi rejects the null/empty fields home-manager's option fills in.
-          shared = lib.mapAttrs (_: lib.filterAttrs (_: v: v != null && v != {} && v != [])) config.programs.mcp.servers;
-          servers = shared // lib.optionalAttrs hasBrowser {inherit chrome-devtools;};
-        in
-          lib.optionalAttrs (servers != {}) {mcpServers = servers;};
+        PI_SPELLFIX_HUNSPELL = lib.getExe spellChecker;
+        PI_SPELLFIX_DICTS = lib.concatStringsSep "," fpLib.hunspellLanguages;
+        PI_SPELLFIX_PERSONAL = fpLib.hunspellPersonalDictionary config;
+      }
+      # The fireproof.agents.lspServers registry, read by extensions/core/lsp.ts.
+      // lib.optionalAttrs (config.fireproof.agents.lspServers != {}) {
+        PI_LSP_SERVERS = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
       };
+    settings = {
+      # The model picker's "save as default" reverts at launch; change it here.
+      # The kinds and their ladders: docs/models.md.
+      defaultProvider = "vm";
+      defaultModel = "flash";
+      defaultThinkingLevel = "high";
+      # The pickers open on these and ctrl+p cycles them; their All tab still
+      # lists every model. A default outside the list would start on the first
+      # entry instead, so the virtual models lead. Each entry's role:
+      # docs/models.md.
+      enabledModels =
+        [
+          "vm/*"
+          "anthropic/claude-opus-5-5"
+          "anthropic/claude-sonnet-5-5"
+          "kimi-coding/k3.1-pro"
+          "opencode-go/*"
+          # `**`: the ids hold a slash (qwen/…), which a glob `*` doesn't cross.
+          "tensorx/**"
+        ]
+        ++ lib.optional config.fireproof.dev.llm.enable "local/*";
+      # The defaults (reserve 16k, keep 20k) overrun a 32k window: compaction would
+      # start at 16k, with the system prompt and tools already taking ~9k of it.
+      compaction.modelOverrides = lib.optionalAttrs config.fireproof.dev.llm.enable (lib.mapAttrs' (id: m:
+        lib.nameValuePair "local/${id}" {
+          reserveTokens = localMaxTokens;
+          keepRecentTokens = lib.min 20000 (m.ctx / 4);
+        })
+      localModels);
+      # Pinned, not `system`, so the accent is the desktop accent.
+      theme = "fireproof";
+      # Keeps the version and key hints; drops the loaded-resource listing.
+      quietStartup = "header";
+      # One line per reasoning run instead of the whole block, and the resting
+      # state for the thinking chip on the editor border. alt+t or a click still
+      # opens it for a session, but a value written that way is merged away at
+      # the next launch, like every other setting here.
+      hideThinkingBlock = true;
+      # `/tree` opens on my prompts; ctrl+d returns to the default view and
+      # ctrl+a shows every entry.
+      treeFilterMode = "user-only";
+      # OSC 9;4 progress in ghostty's tab, for runs long enough to switch away from.
+      terminal.showTerminalProgress = true;
+      # Loads the cwd's direnv/nix-direnv env into the bash tool, which
+      # otherwise keeps the env pi was launched with. Blocked or missing
+      # .envrc files export nothing.
+      shellCommandPrefix = ''eval "$(${lib.getExe config.programs.direnv.package} export bash 2>/dev/null)"'';
+      # extensions/core/codemode-only.ts moves the expensive tools behind it.
+      defaultTools = ["+codemode"];
+      # Local paths: pi loads the Nix-built tree as-is (see
+      # pkgs/pi-packages for how the npm dependencies get there).
+      # parent/ first: chained before_agent_start and tool_result handlers run
+      # in package order, which sets the system prompt's section order.
+      packages =
+        map packagePath thirdPartyPackages
+        ++ [parentPath "${extensions}/core"];
+      # Arrays replace wholesale, so `pi config` toggles of built-ins revert at launch.
+      extensions = [];
+    };
+    # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
+    # ~/.config/mcp/mcp.json. Merged at launch: /mcp toggles persist, but a
+    # server dropped here stays in the file until removed by hand.
+    mcp = let
+      # pi rejects the null/empty fields home-manager's option fills in.
+      shared = lib.mapAttrs (_: lib.filterAttrs (_: v: v != null && v != {} && v != [])) config.programs.mcp.servers;
+      servers = shared // lib.optionalAttrs hasBrowser {inherit chrome-devtools;};
+    in
+      lib.optionalAttrs (servers != {}) {mcpServers = servers;};
+    # jq's `*` merges objects key by key and replaces arrays. Rewrites only on a
+    # change, so running sessions don't see the file churn.
+    merge = name: value:
+      lib.optionalString (value != {}) ''
+        f="$dir/${name}"
+        tmp=$(mktemp "$f.XXXXXX")
+        ${lib.getExe pkgs.jq} -s '.[0] * .[1]' <(cat "$f" 2>/dev/null || echo '{}') ${pkgs.writeText "pi-${name}" (builtins.toJSON value)} > "$tmp"
+        chmod 600 "$tmp"
+        if cmp -s "$tmp" "$f"; then rm "$tmp"; else mv "$tmp" "$f"; fi
+      '';
+    wrapper = pkgs.writeShellScriptBin "pi" ''
+      ${lib.concatLines (lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}") env)}
+      dir="''${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
+      mkdir -p "$dir"
+      ${merge "settings.json" settings}
+      ${merge "mcp.json" mcp}
+      exec ${lib.getExe pi} "$@"
+    '';
+  in {
+    config = lib.mkIf config.fireproof.dev.pi.enable {
+      # A trusted project's .pi/APPEND_SYSTEM.md replaces this one, not adds to it.
+      home.file.".pi/agent/APPEND_SYSTEM.md".text = rules;
+      home.file.".pi/agent/themes/fireproof.json".source = theme;
 
       # The extension spawns its own hunspell; keep the package in the profile too
       # so the same dictionaries are available outside pi.
-      home.packages = [spellChecker];
+      home.packages = [wrapper spellChecker];
 
       # Literal path: the wrapper single-quotes it, so the default secretsDir
       # spelling would reach `cat` unexpanded. It's a symlink into secretsDir.
@@ -261,7 +277,6 @@ in {
         mode = "0600";
       };
 
-      # Not the module's `models` option — it only writes once, never updates.
       home.file.".pi/agent/models.json".text = builtins.toJSON {
         providers =
           {
@@ -520,12 +535,12 @@ in {
         excludedExtensionPackages = childExcludedPackages;
       };
 
-      # The fireproof.agents.skills registry, in a user skills dir rather than
-      # the module's `skills` (a --skill flag): the agent package builds each child
-      # session with its own resource loader, which scans this dir but never
-      # sees the main process's flags. The cross-tool Agent Skills dir, not
-      # ~/.pi/agent/skills, as one store link: `npx skills add` writes here, and
-      # a read-only target makes that fail instead of slipping skills into the prompt.
+      # The fireproof.agents.skills registry, in a user skills dir rather than a
+      # --skill flag: the agent package builds each child session with its own
+      # resource loader, which scans this dir but never sees the main process's
+      # flags. The cross-tool Agent Skills dir, not ~/.pi/agent/skills, as one
+      # store link: `npx skills add` writes here, and a read-only target makes
+      # that fail instead of slipping skills into the prompt.
       home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" config.fireproof.agents.skills;
 
       home.file.".pi/agent/prompts" = {

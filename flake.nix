@@ -73,16 +73,6 @@
     # instead of maintained as hand-written `imports = [ … ]` lists.
     import-tree.url = "github:vic/import-tree";
 
-    # Follows ours: the closure override in modules/programs/pi/default.nix already misses
-    # pi.cachix.org, so a private nixpkgs only bought duplicate nodejs/icu/glibc.
-    pi.url = "github:lukasl-dev/pi.nix";
-    pi.inputs.nixpkgs.follows = "nixpkgs";
-    pi.inputs.flake-parts.follows = "flake-parts";
-    # pi only reads its *-x86_64-darwin inputs on that system, which no host is.
-    pi.inputs.nixpkgs-x86_64-darwin.follows = "nixpkgs";
-    pi.inputs.bun2nix-x86_64-darwin.follows = "pi/bun2nix";
-    pi.inputs.bun2nix.inputs.treefmt-nix.follows = "treefmt-nix";
-
     # Tracks `dev`: nixpkgs is still on 1.x. Upstream pins nixpkgs-unstable, whose
     # bun its node_modules hash is computed against; there's no binary cache.
     opencode.url = "github:anomalyco/opencode";
