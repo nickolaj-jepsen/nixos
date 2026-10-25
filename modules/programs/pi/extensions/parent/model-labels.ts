@@ -11,7 +11,7 @@
  * switches this session's model, never the saved default: settings.json is
  * Nix-managed, and stock /model keeps alt+s for the default.
  */
-import type { Model } from "@earendil-works/pi-ai";
+import { type Model, modelsAreEqual } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
@@ -26,7 +26,6 @@ import {
 import { modelName, providerName } from "./lib/model-names.ts";
 import { descriptionFor, LABELS, type Label, labelsFor } from "./model-labels/registry.ts";
 import { LADDERS, PROVIDER } from "../shared/kinds.ts";
-import type { Services } from "./services.ts";
 
 /** Rows kept free above the footer, so the picker never crowds the editor out. */
 const MARGIN_ROWS = 2;
@@ -95,7 +94,7 @@ const costGlyph = (tier: number): string => (tier < 0 ? "?" : COST_GLYPH);
 const costColor = (tier: number): "muted" | "success" | "warning" | "error" =>
   tier < 0 || tier === 0 ? "muted" : tier === 1 ? "success" : tier === 2 ? "warning" : "error";
 
-export default function (pi: ExtensionAPI, { modelsPicker }: Services) {
+export default function (pi: ExtensionAPI) {
   const find = (ctx: ExtensionContext) => (provider: string, id: string) =>
     ctx.modelRegistry.find(provider, id);
 
@@ -152,7 +151,7 @@ export default function (pi: ExtensionAPI, { modelsPicker }: Services) {
       picker.cancel();
       return;
     }
-    const isCurrent = (model: Model<any>) => (ctx.model ? sameModel(model, ctx.model) : false);
+    const isCurrent = (model: Model<any>) => modelsAreEqual(model, ctx.model);
     // The catalogue's order, current model first like the built-in selector.
     const available = [...ctx.modelRegistry.getAvailable()]
       .sort((a, b) => {
@@ -161,17 +160,14 @@ export default function (pi: ExtensionAPI, { modelsPicker }: Services) {
       })
       .map((model) => row(ctx, model));
     const scoped = ctx.scopedModels
-      .map((scoped) => available.find((r) => sameModel(r.model, scoped.model)))
+      .map((scoped) => available.find((r) => modelsAreEqual(r.model, scoped.model)))
       .filter((r): r is Row => r !== undefined);
 
     const picked = await ctx.ui.custom<Model<any> | undefined>((tui, theme, _keybindings, done) => {
       picker = new ModelPicker(tui, theme, available, scoped, ctx.model, (result) => {
         picker = undefined;
-        modelsPicker.setClose(undefined);
         done(result);
       });
-      // Told to the footer, so its click on the model name closes this instead of stacking a second one.
-      modelsPicker.setClose(() => picker?.cancel());
       return picker;
     });
     picker = undefined;
@@ -191,13 +187,7 @@ export default function (pi: ExtensionAPI, { modelsPicker }: Services) {
       handler: open,
     });
   }
-  // A picker torn down with its session never reports back, and a stale handle
-  // would make the footer's click do nothing in the next one.
-  pi.on("session_start", () => modelsPicker.setClose(undefined));
 }
-
-/** Whether two catalogue entries name the same model. */
-const sameModel = (a: Model<any>, b: Model<any>) => a.provider === b.provider && a.id === b.id;
 
 /** One label as its coloured glyph; capability labels have no colour and stay muted. */
 const glyph = (theme: Theme, label: Label): string => {
@@ -205,11 +195,11 @@ const glyph = (theme: Theme, label: Label): string => {
   return color ? theme.style(glyph, { fg: parseColor(color) }) : theme.fg("muted", glyph);
 };
 
-const pad = (text: string, plain: string, width: number) =>
-  text + " ".repeat(Math.max(0, width - visibleWidth(plain)));
+const pad = (text: string, width: number) =>
+  text + " ".repeat(Math.max(0, width - visibleWidth(text)));
 
-const padLeft = (text: string, plain: string, width: number) =>
-  " ".repeat(Math.max(0, width - visibleWidth(plain))) + text;
+const padLeft = (text: string, width: number) =>
+  " ".repeat(Math.max(0, width - visibleWidth(text))) + text;
 
 /**
  * The picker, laid out like pi's built-in model selector: full-width border
@@ -410,7 +400,7 @@ class ModelPicker implements Component {
     const { nameWidth, providerWidth, glyphWidth, costWidth, contextWidth } = columns;
     const theme = this.theme;
     const cursor = selected ? theme.fg("accent", "→ ") : "  ";
-    const current = this.current !== undefined && sameModel(row.model, this.current);
+    const current = modelsAreEqual(row.model, this.current);
     const marker = current ? theme.fg("accent", "✓ ") : "  ";
     // Bold marks the model in use: with the provider column beside it, the check
     // alone is too easy to lose.
@@ -421,16 +411,15 @@ class ModelPicker implements Component {
         : theme.fg("text", row.name);
     const provider = padLeft(
       theme.fg("dim", truncateToWidth(row.provider, providerWidth, "…")),
-      row.provider,
       providerWidth,
     );
     const glyphs = row.labels.map((label) => glyph(theme, label)).join(" ");
     const cost = costGlyph(row.cost.tier);
-    const price = padLeft(theme.fg(costColor(row.cost.tier), cost), cost, costWidth);
-    const context = padLeft(theme.fg("dim", row.context), row.context, contextWidth);
+    const price = padLeft(theme.fg(costColor(row.cost.tier), cost), costWidth);
+    const context = padLeft(theme.fg("dim", row.context), contextWidth);
     const line =
-      `${cursor}${marker}${provider}  ${pad(name, row.name, nameWidth)}  ` +
-      `${context}  ${price}  ${pad(glyphs, row.glyphs, glyphWidth)}  ${theme.fg("muted", row.description)}`;
+      `${cursor}${marker}${provider}  ${pad(name, nameWidth)}  ` +
+      `${context}  ${price}  ${pad(glyphs, glyphWidth)}  ${theme.fg("muted", row.description)}`;
     return truncateToWidth(line, width, "…", true);
   }
 }

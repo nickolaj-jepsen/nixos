@@ -32,6 +32,8 @@ export type ChildCall = {
   file: string;
   agent: string;
   parts: Array<{ provider: string; model: string; usage: Usage }>;
+  /** The transcript's size and mtime when read; absent in older entries. */
+  stamp?: string;
 };
 
 export type LedgerData = SideCall | ChildCall;
@@ -225,9 +227,11 @@ export const walkSpend = (
 };
 
 /**
- * `compute` cached until the session moves. Entries are append-only and every
- * append moves the leaf, so the session and leaf ids and the entry count, plus
- * `extra` for whatever else `compute` reads, say whether a result is current.
+ * `compute` cached until the session moves. Every append moves the leaf, so the
+ * session and leaf ids, plus `extra` for whatever else `compute` reads, say
+ * whether a result is current. Only moving the leaf back to an earlier entry
+ * escapes that, so callers `reset` on `session_tree`. The key skips the entry
+ * count because `getEntries()` copies the session and footers call this every frame.
  */
 export const memoizeOnSession = <A extends unknown[], T>(
   compute: (ctx: ExtensionContext, ...args: A) => T,
@@ -236,12 +240,7 @@ export const memoizeOnSession = <A extends unknown[], T>(
   let cache: { key: string; value: T } | undefined;
   const get = (ctx: ExtensionContext, ...args: A): T => {
     const session = ctx.sessionManager;
-    const key = [
-      session.getSessionId(),
-      session.getLeafId(),
-      session.getEntries().length,
-      extra(...args),
-    ].join("\n");
+    const key = [session.getSessionId(), session.getLeafId(), extra(...args)].join("\n");
     if (cache?.key === key) return cache.value;
     const value = compute(ctx, ...args);
     cache = { key, value };

@@ -69,8 +69,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: BG_RUN,
     label: "Background",
-    description:
-      "Runs a shell command detached in the cwd and returns at once. When it ends you are woken with its exit code and last 40 lines. Use it for builds and tests longer than ~30 s. Full output is at the returned path; to stop it, `kill -- -<pid>`.",
+    description: `Runs a shell command detached in the cwd and returns at once. When it ends you are woken with its exit code and last ${TAIL_LINES} lines. Use it for builds and tests longer than ~30 s. Full output is at the returned path; to stop it, \`kill -- -<pid>\`.`,
     parameters: Type.Object({
       command: Type.String({ description: "Bash command line" }),
       name: Type.Optional(Type.String({ description: "Short label for the wake message" })),

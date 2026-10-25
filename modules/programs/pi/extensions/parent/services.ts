@@ -6,7 +6,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createIdentity } from "./identity.ts";
 import { createEditorHooks } from "./lib/editor-hooks.ts";
-import { createModelsPicker } from "./lib/models-picker.ts";
 import { createUserWait } from "./lib/user-wait.ts";
 
 export const createServices = (pi: ExtensionAPI) => {
@@ -15,7 +14,6 @@ export const createServices = (pi: ExtensionAPI) => {
     userWait,
     identity: createIdentity(pi, userWait),
     editorHooks: createEditorHooks(),
-    modelsPicker: createModelsPicker(),
   };
 };
 

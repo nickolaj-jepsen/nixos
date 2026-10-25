@@ -21,6 +21,7 @@
  * it without paying for a call of their own. Until you run `/name`, the session
  * name follows the label, so `/resume` lists something useful.
  */
+import { contentText } from "@earendil-works/pi-ai";
 import {
   copyToClipboard,
   type ExtensionAPI,
@@ -47,7 +48,7 @@ import type { UserWait } from "./lib/user-wait.ts";
 type Phase = "working" | "idle" | "failed";
 type Source = "name" | "model" | "prompt";
 /** Which moment the call is reading: a request that just arrived, or a turn that just ended. */
-type Moment = "start" | "settle";
+type Moment = SidecarUpdate["moment"];
 
 export type Label = {
   text: string;
@@ -98,10 +99,8 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
   let session: ExtensionContext | undefined;
   /** Whether the session draws pi's TUI; a headless one (`pi -p`, RPC) makes no call. */
   let live = false;
-  let cwd = process.cwd();
   let phase: Phase = "idle";
-  let busy = false;
-  // Aborted at session_shutdown, after which every ctx and pi call throws.
+  // The call out now; aborted at session_shutdown, after which every ctx and pi call throws.
   let inflight: AbortController | undefined;
   let label: Label | undefined;
   let meta: Meta = {};
@@ -245,7 +244,7 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
       if (moment === "settle") announce(moment, false);
     };
     if (!live) return skip();
-    if (busy) {
+    if (inflight) {
       // A turn that settles while the turn-start call is still out keeps its ask:
       // it runs as soon as that call is done.
       if (moment === "settle") pending = "settle";
@@ -270,7 +269,6 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
 
     const controller = new AbortController();
     inflight = controller;
-    busy = true;
     lastCallAt = Date.now();
     try {
       const shown = current(ctx);
@@ -300,9 +298,9 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
         ctx.ui.notify(`identity: relabel failed: ${reason}`, "error");
       }
     } finally {
-      inflight = undefined;
+      // A call aborted at shutdown may finish after the next session started its own.
+      if (inflight === controller) inflight = undefined;
       if (!controller.signal.aborted) {
-        busy = false;
         paint();
         const next = pending;
         pending = undefined;
@@ -314,7 +312,8 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
   const quote = (path: string) =>
     /^[a-zA-Z0-9_\-./~:@]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`;
 
-  const resumeCommand = () => `cd ${quote(cwd)} && pi --session ${sessionId().slice(0, 8)}`;
+  const resumeCommand = (ctx: ExtensionContext) =>
+    `cd ${quote(ctx.cwd)} && pi --session ${sessionId().slice(0, 8)}`;
   const summary = (ctx: ExtensionContext) => {
     const shown = current(ctx);
     const persisted = ctx.sessionManager.getSessionFile();
@@ -326,12 +325,12 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
       ask ? `needs: ${ask}` : undefined,
       reply ? `reply: ${reply}` : undefined,
       turnState ? `last turn: ${turnState}` : undefined,
-      `path: ${cwd}`,
+      `path: ${ctx.cwd}`,
       persisted
         ? `session: ${sessionId()}`
         : "session: ephemeral (--no-session), nothing to resume",
       `label calls: ${calls}`,
-      persisted ? `resume: ${resumeCommand()}` : undefined,
+      persisted ? `resume: ${resumeCommand(ctx)}` : undefined,
     ]
       .filter(Boolean)
       .join("\n");
@@ -352,7 +351,7 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
           ctx.ui.notify("identity: this session is ephemeral (--no-session)", "warning");
           return;
         }
-        await copyToClipboard(resumeCommand());
+        await copyToClipboard(resumeCommand(ctx));
         ctx.ui.notify("identity: resume command copied", "info");
       }
     },
@@ -366,7 +365,6 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
   pi.on("session_start", (_event, ctx) => {
     session = ctx;
     live = ctx.mode === "tui" && ctx.hasUI;
-    cwd = ctx.cwd;
     // The last persisted record on this branch wins, so a resumed session paints
     // instantly and without a model call.
     for (const entry of ctx.sessionManager.getBranch()) {
@@ -429,9 +427,7 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
   pi.on("message_end", (event) => {
     if (event.message.role !== "assistant") return;
     if (event.message.stopReason === "error") phase = "failed";
-    const text = event.message.content
-      .flatMap((block) => (block.type === "text" ? [block.text] : []))
-      .join(" ");
+    const text = contentText(event.message.content, " ");
     if (text.trim() !== "") lastText = text.length;
   });
 
@@ -445,7 +441,6 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
     inflight?.abort();
     inflight = undefined;
     pending = undefined;
-    busy = false;
     live = false;
     session = undefined;
   });

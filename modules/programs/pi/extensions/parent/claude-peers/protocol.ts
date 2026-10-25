@@ -23,6 +23,7 @@ import { readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { connect, createServer, type Server } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
+import { formatAge } from "../lib/format.ts";
 
 export const PEER_PROTOCOL = 1;
 export const FEATURE_NOTIFY_IDLE = "notify_idle";
@@ -143,15 +144,18 @@ export function procStart(pid: number): string | undefined {
   }
 }
 
+let domain: { value?: string } | undefined;
+
 /** Identifies the PID namespace; Claude treats entries from another domain as foreign. */
 export function pidDomain(): string | undefined {
+  if (domain) return domain.value;
+  domain = {};
   if (process.platform !== "linux") return undefined;
   try {
     const machineId = readFileSync("/etc/machine-id", "utf8").trim();
-    return `linux:${machineId}:${readlinkSync("/proc/self/ns/pid")}`;
-  } catch {
-    return undefined;
-  }
+    domain.value = `linux:${machineId}:${readlinkSync("/proc/self/ns/pid")}`;
+  } catch {}
+  return domain.value;
 }
 
 /** `uds:` address with every byte outside `A-Za-z0-9:_/.-` percent-encoded. */
@@ -194,46 +198,53 @@ export function socketReachable(socketPath: string, timeoutMs = 300): Promise<bo
   });
 }
 
+async function readEntry(file: string): Promise<RegistryEntry | undefined> {
+  try {
+    return JSON.parse(await readFile(file, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Live, messageable sessions of other processes from every Claude registry,
- * newest first.
+ * newest first. `narrow` drops peers before the socket probe, the slow part.
  */
-export async function listPeers(): Promise<Peer[]> {
+export async function listPeers(
+  narrow: (peers: Peer[]) => Peer[] | Promise<Peer[]> = (peers) => peers,
+): Promise<Peer[]> {
   const domain = pidDomain();
+  const files = (
+    await Promise.all(
+      registryDirs().map((dir) =>
+        readdir(dir).then(
+          (names) => names.filter((n) => /^\d+\.json$/.test(n)).map((n) => path.join(dir, n)),
+          () => [],
+        ),
+      ),
+    )
+  ).flat();
+  const read = await Promise.all(files.map(readEntry));
   // A pi session registers in every registry, so the socket path is the key.
   const candidates = new Map<string, Peer>();
-  for (const dir of registryDirs()) {
-    let files: string[];
-    try {
-      files = await readdir(dir);
-    } catch {
+  for (const entry of read) {
+    if (!entry) continue;
+    const sock = entry.messagingSocketPath;
+    if (typeof sock !== "string" || !sock) continue;
+    if (candidates.has(sock)) continue;
+    if ((entry.peerProtocol ?? 0) < PEER_PROTOCOL) continue;
+    if (entry.pidDomain !== undefined && domain !== undefined && entry.pidDomain !== domain)
       continue;
-    }
-    for (const file of files) {
-      if (!/^\d+\.json$/.test(file)) continue;
-      let entry: RegistryEntry;
-      try {
-        entry = JSON.parse(await readFile(path.join(dir, file), "utf8"));
-      } catch {
-        continue;
-      }
-      const sock = entry.messagingSocketPath;
-      if (typeof sock !== "string" || !sock) continue;
-      if (candidates.has(sock)) continue;
-      if ((entry.peerProtocol ?? 0) < PEER_PROTOCOL) continue;
-      if (entry.pidDomain !== undefined && domain !== undefined && entry.pidDomain !== domain)
-        continue;
-      if (entry.pid === process.pid) continue;
-      if (!pidAlive(entry.pid)) continue;
-      if (entry.procStart !== undefined && procStart(entry.pid) !== entry.procStart) continue;
-      candidates.set(sock, {
-        ...entry,
-        messagingSocketPath: sock,
-        name: entry.name || `pid ${entry.pid}`,
-      });
-    }
+    if (entry.pid === process.pid) continue;
+    if (!pidAlive(entry.pid)) continue;
+    if (entry.procStart !== undefined && procStart(entry.pid) !== entry.procStart) continue;
+    candidates.set(sock, {
+      ...entry,
+      messagingSocketPath: sock,
+      name: entry.name || `pid ${entry.pid}`,
+    });
   }
-  const peers = [...candidates.values()];
+  const peers = await narrow([...candidates.values()]);
   const reachable = await Promise.all(peers.map((p) => socketReachable(p.messagingSocketPath)));
   return peers.filter((_, i) => reachable[i]).sort((a, b) => b.startedAt - a.startedAt);
 }
@@ -265,11 +276,7 @@ export function lastActive(peer: Peer, now = Date.now()): number {
 /** "busy", or how long ago the session went idle, coarsely ("idle 3h"). */
 export function activityLabel(peer: Peer, now = Date.now()): string {
   if (peer.status !== "idle") return peer.status ?? "unknown";
-  const mins = Math.floor((now - lastActive(peer, now)) / 60_000);
-  if (mins < 1) return "idle <1m";
-  if (mins < 60) return `idle ${mins}m`;
-  if (mins < 48 * 60) return `idle ${Math.floor(mins / 60)}h`;
-  return `idle ${Math.floor(mins / (24 * 60))}d`;
+  return `idle ${formatAge(now - lastActive(peer, now), "<1m")}`;
 }
 
 export type Resolution = { peer: Peer } | { error: string };

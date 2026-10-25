@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ExtensionAPI, ToolResultEvent } from "@earendil-works/pi-coding-agent";
+import { writtenPath } from "../shared/tools.ts";
 
 interface ServerConfig {
   command: string;
@@ -273,9 +274,8 @@ export default function (pi: ExtensionAPI) {
   if (Object.keys(configs).length === 0) return;
 
   async function checkEdit(event: ToolResultEvent, cwd: string): Promise<string | undefined> {
-    if ((event.toolName !== "edit" && event.toolName !== "write") || event.isError) return;
-    const { path } = event.input as { path?: unknown };
-    if (typeof path !== "string") return;
+    const path = event.isError ? undefined : writtenPath(event.toolName, event.input);
+    if (path === undefined) return;
     const file = resolve(cwd, path);
     const ext = extname(file);
     const match = Object.entries(configs).find(([, config]) => ext in config.extensionToLanguage);

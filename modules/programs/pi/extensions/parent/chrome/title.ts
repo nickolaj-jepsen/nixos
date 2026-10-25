@@ -5,20 +5,12 @@
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { UserWait } from "../lib/user-wait.ts";
-import { shortPath } from "../lib/format.ts";
+import { formatAge, shortPath } from "../lib/format.ts";
 import type { Identity } from "../identity.ts";
 import type { ChromeState } from "./state.ts";
 
 const TICK_MS = 60_000;
 const WORK_GLYPH = "⠿";
-
-const formatAge = (ms: number) => {
-  const minutes = Math.floor(ms / 60_000);
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
-};
 
 export const createTitle = (
   pi: ExtensionAPI,
@@ -28,7 +20,6 @@ export const createTitle = (
 ) => {
   let timer: ReturnType<typeof setInterval> | undefined;
   let repaintTimer: ReturnType<typeof setTimeout> | undefined;
-  let cwd = process.cwd();
   let since = Date.now();
   let waited = false;
   let painted = "";
@@ -38,7 +29,7 @@ export const createTitle = (
     const word = label.stateWord(ctx);
     // A frozen frame, not the animation: the title is rewritten by the OS.
     const lead = label.working() ? `${WORK_GLYPH} ` : "";
-    return `${lead}${text ? `${text} · ` : ""}${shortPath(cwd)} · ${formatAge(Date.now() - since)}${
+    return `${lead}${text ? `${text} · ` : ""}${shortPath(ctx.cwd)} · ${formatAge(Date.now() - since, "now")}${
       word ? ` · ${word}` : ""
     }`;
   };
@@ -57,24 +48,25 @@ export const createTitle = (
   };
 
   /**
-   * Pi owns the title too (`π - <name> - <cwd>`) and rewrites it on startup and
-   * whenever the session name changes, which includes our own auto-naming. Win
-   * that race once per rename instead of on every render.
+   * Pi owns the title too (`π - <name> - <cwd>`). It writes it before any
+   * extension hears of a rename, but at startup only after session_start.
    */
+  const repaintOver = () => {
+    painted = "";
+    paint();
+  };
   const repaintSoon = () => {
     if (repaintTimer) clearTimeout(repaintTimer);
     repaintTimer = setTimeout(() => {
       repaintTimer = undefined;
-      painted = "";
-      paint();
+      repaintOver();
     }, 250);
     repaintTimer.unref?.();
   };
 
   label.onChange(paint);
 
-  pi.on("session_start", (_event, ctx) => {
-    cwd = ctx.cwd;
+  pi.on("session_start", () => {
     if (!state.live) return;
     timer = setInterval(paint, TICK_MS);
     timer.unref?.();
@@ -105,10 +97,7 @@ export const createTitle = (
   pi.on("message_end", paint);
   pi.on("tool_execution_end", paint);
   pi.on("session_compact", paint);
-  pi.on("session_info_changed", () => {
-    paint();
-    repaintSoon();
-  });
+  pi.on("session_info_changed", repaintOver);
 
   pi.on("session_shutdown", () => {
     if (timer) clearInterval(timer);
@@ -119,7 +108,7 @@ export const createTitle = (
       // Leave an honest title for the shell prompt that follows; the fish title
       // takes over from here, but a crash-free exit should not show a stale run.
       const text = label.current(state.ctx)?.text;
-      state.ctx.ui.setTitle(`${text ? `${text} · ` : ""}${shortPath(cwd)}`);
+      state.ctx.ui.setTitle(`${text ? `${text} · ` : ""}${shortPath(state.ctx.cwd)}`);
     }
   });
 };

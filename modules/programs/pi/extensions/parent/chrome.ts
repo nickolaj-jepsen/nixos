@@ -15,10 +15,7 @@ import type { Services } from "./services.ts";
 // pi's root types omit EditorFactory, so it comes from the one API that takes it.
 type EditorFactory = NonNullable<Parameters<ExtensionUIContext["setEditorComponent"]>[0]>;
 
-export default function (
-  pi: ExtensionAPI,
-  { identity, userWait, editorHooks, modelsPicker }: Services,
-) {
+export default function (pi: ExtensionAPI, { identity, userWait, editorHooks }: Services) {
   const state = createState();
   // Registered before the modules, so their handlers already see the session. pi
   // builds a fresh runtime, and so a fresh instance of this, for every session.
@@ -26,7 +23,7 @@ export default function (
     state.ctx = ctx;
     state.live = ctx.mode === "tui" && ctx.hasUI;
   });
-  const actions = createActions(pi, state, modelsPicker);
+  const actions = createActions(pi, state);
   identity.onChange(() => state.tui?.requestRender());
   createTitle(pi, state, identity, userWait);
   const border = createBorder(state, identity);

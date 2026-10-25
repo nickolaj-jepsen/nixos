@@ -6,7 +6,14 @@ import type { HotIndex } from "./hot.ts";
 import { planSave, type SaveRequest } from "./save.ts";
 import type { Sessions } from "./session.ts";
 import { searchSessions } from "./sessions.ts";
-import { CITATION_KINDS, KINDS, writeEntry, type Citation, type Entry } from "./store.ts";
+import {
+  CITATION_KINDS,
+  KINDS,
+  STATEMENT_MAX,
+  writeEntry,
+  type Citation,
+  type Entry,
+} from "./store.ts";
 
 export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
   pi.registerTool({
@@ -21,8 +28,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
     ],
     parameters: Type.Object({
       statement: Type.String({
-        description:
-          "The fact, one line, under 200 chars. Imperative for a rule; present tense otherwise.",
+        description: `The fact, one line, under ${STATEMENT_MAX} chars. Imperative for a rule; present tense otherwise.`,
       }),
       kind: StringEnum(KINDS),
       priority: Type.Number({
@@ -95,10 +101,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
       }
       await writeEntry(outcome.entry);
       sessions.refresh(ctx, outcome.entry.store);
-      const where =
-        outcome.entry.store.origin === "global"
-          ? "global memory"
-          : `${outcome.entry.store.origin} memory`;
+      const where = `${outcome.entry.store.origin} memory`;
       const hot = priorityNote(sessions.get(ctx).hot, outcome.entry);
       return {
         content: [

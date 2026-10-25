@@ -8,7 +8,7 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import type { EditorHooks, PromptDraft } from "../lib/editor-hooks.ts";
-import { hitTest, hoverAt, isPlainClick, type Region } from "./layout.ts";
+import { click, hoverAt, type Region } from "./layout.ts";
 import type { ChromeState } from "./state.ts";
 
 type Border = (text: string) => string;
@@ -28,7 +28,7 @@ export type Painters = {
    * the cursor and `empty` is whether the editor holds anything. The painter owns
    * the text, the editor owns placing it after the cursor.
    */
-  hint: (room: number, empty: boolean) => { ghost: string } | undefined;
+  hint: (room: number, empty: boolean) => string | undefined;
   /** The text to insert when that suggestion is accepted, taken at most once. */
   takeHint: () => string | undefined;
 };
@@ -82,8 +82,8 @@ export class PromptEditor extends CustomEditor implements PromptDraft {
     if (typed === undefined) return lines;
     const hint = this.painters.hint(width - visibleWidth(typed) - EDGE, this.getText() === "");
     if (hint) {
-      const pad = width - visibleWidth(typed) - visibleWidth(hint.ghost);
-      lines[1] = typed + hint.ghost + " ".repeat(Math.max(0, pad));
+      const pad = width - visibleWidth(typed) - visibleWidth(hint);
+      lines[1] = typed + hint + " ".repeat(Math.max(0, pad));
     }
     return lines;
   }
@@ -135,13 +135,7 @@ export class PromptEditor extends CustomEditor implements PromptDraft {
     }
     // Only a control on the top border: the rest keeps pi's behaviour, including
     // click-to-place-cursor in the input.
-    const action =
-      event.y === 0 && isPlainClick(event) ? hitTest(this.topRegions, event.x) : undefined;
-    const ctx = this.chrome.ctx;
-    if (!action || !ctx) return super.handleMouse(event);
-    void Promise.resolve()
-      .then(() => action(ctx))
-      .catch(() => {});
-    return { handled: true };
+    if (event.y === 0 && click(this.topRegions, event, this.chrome.ctx)) return { handled: true };
+    return super.handleMouse(event);
   }
 }

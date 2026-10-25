@@ -38,16 +38,16 @@ const num = (value: string | undefined) => {
 };
 
 /** Runs `wt`, resolving its stdout; a non-zero exit rejects with what it said on stderr. */
-export const wt = (args: string[], cwd: string, timeoutMs = 120_000) =>
+export const wt = (args: string[], cwd: string) =>
   new Promise<string>((resolve, reject) =>
-    execFile("wt", args, { cwd, encoding: "utf8", timeout: timeoutMs }, (error, stdout, stderr) =>
+    execFile("wt", args, { cwd, encoding: "utf8", timeout: 120_000 }, (error, stdout, stderr) =>
       error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout.trim()),
     ),
   );
 
-/** Every worktree of the repo containing `cwd`, or the one named `name`. */
-export const status = async (cwd: string, name?: string): Promise<RepoStatus> => {
-  const out = await wt(name === undefined ? ["status"] : ["status", name], cwd);
+/** Every worktree of the repo containing `cwd`. */
+export const status = async (cwd: string): Promise<RepoStatus> => {
+  const out = await wt(["status"], cwd);
   const worktrees: Worktree[] = [];
   let defaultBranch = "";
   for (const line of out.split("\n")) {

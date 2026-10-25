@@ -51,12 +51,12 @@ const line = (entry: Entry) => {
 const home = homedir();
 const tilde = (dir: string) => (dir.startsWith(`${home}/`) ? `~${dir.slice(home.length)}` : dir);
 
-/** Highest-priority entries that fit `budget` characters, and where the rest are. */
+/** Highest-priority entries that fit HOT_BUDGET characters, and where the rest are. */
 export function buildHotSection(
   entries: Entry[],
   verify: (entry: Entry) => Verification,
-  budget = HOT_BUDGET,
 ): HotIndex {
+  const budget = HOT_BUDGET;
   const picks: HotPick[] = [];
   let used = 0;
   let stale = 0;

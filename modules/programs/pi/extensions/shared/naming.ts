@@ -4,7 +4,9 @@
  * both are prompted with this and both answer in a handful of words.
  */
 import { relative } from "node:path";
+import { contentText } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { writtenPath } from "./tools.ts";
 
 // deepseek spends 60-70 tokens thinking before it answers, and a smaller cap
 // comes back as `length` with no text at all.
@@ -26,20 +28,13 @@ export const isAcknowledgement = (text: string) => {
   return words.length > 0 && words.length <= 3 && words.every((word) => ACK.has(word));
 };
 
-const userText = (content: string | Array<{ type: string; text?: string }>) =>
-  typeof content === "string"
-    ? content
-    : content
-        .flatMap((block) => (block.type === "text" && block.text ? [block.text] : []))
-        .join("\n");
-
 export const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
 
 const sessionPrompts = (ctx: ExtensionContext) => {
   const prompts: string[] = [];
   for (const entry of ctx.sessionManager.getBranch()) {
     if (entry.type !== "message" || entry.message.role !== "user") continue;
-    const text = userText(entry.message.content as string | Array<{ type: string; text?: string }>);
+    const text = contentText(entry.message.content);
     if (!isAcknowledgement(text)) prompts.push(text);
   }
   return prompts;
@@ -80,10 +75,8 @@ export const touchedFiles = (ctx: ExtensionContext, cwd: string, limit: number) 
   for (const entry of ctx.sessionManager.getBranch()) {
     if (entry.type !== "message" || entry.message.role !== "assistant") continue;
     for (const block of entry.message.content) {
-      if (block.type !== "toolCall" || (block.name !== "edit" && block.name !== "write")) continue;
-      const args = block.arguments as { path?: unknown; file_path?: unknown };
-      const path = typeof args.path === "string" ? args.path : args.file_path;
-      if (typeof path === "string") files.push(path);
+      const path = block.type === "toolCall" ? writtenPath(block.name, block.arguments) : undefined;
+      if (path !== undefined) files.push(path);
     }
   }
   return [...new Set(files.map((path) => relative(cwd, path) || path))].slice(-limit);

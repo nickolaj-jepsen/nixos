@@ -70,11 +70,6 @@ export type Entry = {
 
 export type Scope = {
   cwd: string;
-  /** Worktree root of the cwd, unset outside git. */
-  root?: string;
-  /** Main checkout of the repo, unset outside git. */
-  main?: string;
-  isWorktree: boolean;
   /** The store `memory_save` writes project entries to. */
   project?: Store;
   global: Store;
@@ -150,7 +145,7 @@ export function resolveScope(cwd: string): Scope {
     writable: true,
   };
   const { root, main } = gitRoots(cwd);
-  if (!root || !main) return { cwd, isWorktree: false, global, visible: [global], orphans: [] };
+  if (!root || !main) return { cwd, global, visible: [global], orphans: [] };
 
   const isWorktree = root !== main;
   const projects = join(base, "projects");
@@ -191,9 +186,6 @@ export function resolveScope(cwd: string): Scope {
   const project = wtStore ?? mainStore;
   return {
     cwd,
-    root,
-    main,
-    isWorktree,
     project,
     global,
     visible: wtStore ? [wtStore, mainStore, global] : [mainStore, global],

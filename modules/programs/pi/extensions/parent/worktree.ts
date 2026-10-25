@@ -31,7 +31,7 @@ import {
   stripRequest,
 } from "../shared/naming.ts";
 import { isLeanModel } from "../shared/lean-model.ts";
-import { BG_RUN } from "../shared/tools.ts";
+import { SHELL_TOOLS, WRITE_TOOLS } from "../shared/tools.ts";
 import { linkedWorktree, park, removableAt, sessionWorktree, worktreeAt } from "./lib/park.ts";
 import { sideCall } from "../shared/side-call.ts";
 import { branches, ENTER_WORKTREE_TOOL, names, status, wt, type RepoStatus } from "./lib/wt.ts";
@@ -39,7 +39,7 @@ import { branches, ENTER_WORKTREE_TOOL, names, status, wt, type RepoStatus } fro
 const MOVED = "worktree-moved";
 const PARKED = "worktree-parked";
 // Tools that would still act on the old checkout between enter_worktree and the move.
-const MUTATING = new Set(["bash", BG_RUN, "edit", "write"]);
+const MUTATING = new Set([...SHELL_TOOLS, ...WRITE_TOOLS]);
 
 /** What `/back` leaves in the transcript: where the session went and what became of the worktree. */
 type ParkedDetails = { from: string; to: string; worktree: string; outcome: string };
@@ -68,11 +68,10 @@ const free = (base: string, claimed: Set<string>) => {
   return candidate;
 };
 
-/** An existing worktree's path for a name or path; `create` makes a missing name. */
-async function resolveWorktree(target: string, cwd: string, create: boolean): Promise<string> {
+/** A worktree's path for a name or path, creating a missing name. */
+async function resolveWorktree(target: string, cwd: string): Promise<string> {
   if (isAbsolute(target) && existsSync(target) && statSync(target).isDirectory()) return target;
   if ((await names(cwd)).includes(target)) return wt(["cd", target], cwd);
-  if (!create) throw new Error(`no worktree named '${target}'`);
   return wt(["create", target], cwd);
 }
 
@@ -216,7 +215,7 @@ export default function (pi: ExtensionAPI) {
       let path: string;
       let file: string;
       try {
-        path = await resolveWorktree(target, ctx.cwd, true);
+        path = await resolveWorktree(target, ctx.cwd);
         if (path === ctx.cwd) {
           ctx.ui.notify(`Already in ${path}`, "info");
           return;
@@ -302,11 +301,11 @@ export default function (pi: ExtensionAPI) {
             from,
             to: main.path,
             worktree: left.name,
-            outcome: parked.text,
+            outcome: parked,
           };
           await next.sendMessage({
             customType: PARKED,
-            content: parked.text,
+            content: parked,
             display: true,
             details,
           });
@@ -349,7 +348,7 @@ export default function (pi: ExtensionAPI) {
     executionMode: "sequential",
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       if (!ctx.hasUI) throw new Error("enter_worktree needs an interactive session");
-      const path = await resolveWorktree(params.name, ctx.cwd, true);
+      const path = await resolveWorktree(params.name, ctx.cwd);
       if (path === ctx.cwd) throw new Error(`Already working in ${path}`);
       pending = path;
       return {

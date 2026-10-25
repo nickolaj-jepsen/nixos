@@ -8,6 +8,7 @@
  * So do the tools whose result body is the payload rather than a report about
  * work done.
  */
+import { contentText } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, Theme, ToolRenderers } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 
@@ -31,9 +32,6 @@ const QUOTE_LAST_LINE = new Set(["bash"]);
 // pick the glyph's width instead of the font's.
 const CHECK = "\uf00c";
 
-const textOf = (result: Result) =>
-  (result.content ?? []).flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
-
 const showsImage = (result: Result) =>
   (result.content ?? []).some((block) => block.type === "image");
 
@@ -47,7 +45,7 @@ const oneLine = (text: string) => ({
 });
 
 const summarize = (toolName: string, result: Result, theme: Theme, context: Context) => {
-  const body = textOf(result).trimEnd();
+  const body = contentText(result.content ?? []).trimEnd();
   const separator = theme.fg("dim", " · ");
   const meta: string[] = [];
   if (context.durationMs !== undefined) meta.push(theme.fg("dim", seconds(context.durationMs)));

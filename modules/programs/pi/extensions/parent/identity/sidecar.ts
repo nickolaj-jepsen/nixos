@@ -11,11 +11,13 @@
  * the agent touched and the commands it ran say what the session is about for a
  * few hundred tokens; the raw tool output would say less for thousands.
  */
+import { contentText } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createGitContext } from "../../shared/git.ts";
-import { type SidecarUpdate, type TurnState } from "../../shared/identity.ts";
+import { type SidecarUpdate, TURN_STATES, type TurnState } from "../../shared/identity.ts";
 import { NAME_TIMEOUT_MS, oneLine, requests, touchedFiles } from "../../shared/naming.ts";
 import { sideCall } from "../../shared/side-call.ts";
+import { shellCommand } from "../../shared/tools.ts";
 
 export type Fields = {
   /** Absent means the work has not moved on; the current label stands. */
@@ -31,8 +33,6 @@ export type Fields = {
   /** How the finished turn ended; absent when the model left it out. */
   state?: TurnState;
 };
-
-const TURN_STATES: readonly string[] = ["done", "blocked", "failed"];
 
 export const MAX_DOING = 32;
 export const MAX_SUMMARY = 120;
@@ -92,9 +92,9 @@ const commands = (ctx: ExtensionContext, limit: number) => {
     }
     if (message.role !== "assistant") continue;
     for (const block of message.content) {
-      if (block.type !== "toolCall" || block.name !== "bash") continue;
-      const command = (block.arguments as { command?: unknown }).command;
-      if (typeof command !== "string") continue;
+      if (block.type !== "toolCall") continue;
+      const command = shellCommand(block.name, block.arguments);
+      if (command === undefined) continue;
       const line = command.split("\n").find((part) => part.trim() !== "") ?? "";
       calls.push({ id: block.id, text: oneLine(line).slice(0, COMMAND_CHARS) });
     }
@@ -119,9 +119,7 @@ export type Input = {
 const closingWords = (ctx: ExtensionContext) => {
   for (const entry of [...ctx.sessionManager.getBranch()].reverse()) {
     if (entry.type !== "message" || entry.message.role !== "assistant") continue;
-    const text = entry.message.content
-      .flatMap((block) => (block.type === "text" ? [block.text] : []))
-      .join(" ");
+    const text = contentText(entry.message.content, " ");
     if (text.trim() !== "") return oneLine(text).slice(0, 500);
   }
   return undefined;
@@ -171,7 +169,7 @@ export const parseFields = (reply: string): Fields => {
       if (value) fields.summary = value.slice(0, MAX_SUMMARY);
     } else if (key === "state") {
       const state = value.toLowerCase();
-      if (TURN_STATES.includes(state)) fields.state = state as TurnState;
+      if ((TURN_STATES as readonly string[]).includes(state)) fields.state = state as TurnState;
     } else if (key === "ask") {
       fields.ask = value.slice(0, MAX_ASK);
     } else if (key === "reply") {

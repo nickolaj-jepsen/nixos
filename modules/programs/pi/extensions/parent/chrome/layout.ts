@@ -1,4 +1,4 @@
-import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { Action } from "./state.ts";
 
@@ -58,10 +58,24 @@ export const paintParts = (parts: readonly Part[], theme: Theme, x: number, hove
 const regionAt = (regions: readonly Region[], x: number) =>
   regions.find((region) => x >= region.x0 && x < region.x1);
 
-export const hitTest = (regions: readonly Region[], x: number) => regionAt(regions, x)?.action;
-
 export const hoverAt = (regions: readonly Region[], x: number) => regionAt(regions, x)?.id;
 
-/** Modified clicks and drags stay with pi, so the transcript remains selectable. */
-export const isPlainClick = (event: TuiMouseEvent) =>
-  event.type === "click" && event.button === "left" && !event.alt && !event.shift && !event.ctrl;
+/**
+ * Runs the action of the region a plain click landed on, reporting a failure;
+ * false when the click is pi's. Modified clicks and drags stay with pi, so the
+ * transcript remains selectable.
+ */
+export const click = (
+  regions: readonly Region[],
+  event: TuiMouseEvent,
+  ctx: ExtensionContext | undefined,
+): boolean => {
+  const plain =
+    event.type === "click" && event.button === "left" && !event.alt && !event.shift && !event.ctrl;
+  const action = plain ? regionAt(regions, event.x)?.action : undefined;
+  if (!action || !ctx) return false;
+  void Promise.resolve()
+    .then(() => action(ctx))
+    .catch((error: unknown) => ctx.ui.notify(`chrome: ${String(error)}`, "error"));
+  return true;
+};

@@ -12,7 +12,7 @@
  * requests (`reason: "direct"`, e.g. compaction) try it last.
  */
 import { createHash } from "node:crypto";
-import type { Message, Model } from "@earendil-works/pi-ai";
+import { contentText, type Message, type Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -20,6 +20,8 @@ import type {
   ModelRouteRequest,
 } from "@earendil-works/pi-coding-agent";
 import { exhaustedWindow, type UsageProvider, usageReader } from "../shared/ai-usage.ts";
+import { oneLine } from "../shared/naming.ts";
+import { WRITE_TOOLS } from "../shared/tools.ts";
 import { walkSpend } from "../shared/usage-ledger.ts";
 import {
   type ArchitectState,
@@ -29,6 +31,8 @@ import {
   KINDS,
   type KindState,
   PROVIDER,
+  PROVIDER_NAME,
+  type Provider,
   type Kind,
   type Ladder,
   type Stage,
@@ -36,12 +40,7 @@ import {
 
 /** Below this the Anthropic credit is the reserve; no kind spends it. */
 const CREDIT_RESERVE_USD = 20;
-const PROVIDER_NAME: Record<string, string> = {
-  "opencode-go": "OpenCode Go",
-  synthetic: "Synthetic",
-  "kimi-coding": "Kimi Code",
-  anthropic: "the Anthropic credit",
-};
+const poolName = (id: string) => PROVIDER_NAME[id as Provider] ?? id;
 // The providers whose own subscription limits pi lists as non-retryable.
 const LIMIT_ERROR: Record<string, RegExp> = {
   "opencode-go": /GoUsageLimitError|Monthly usage limit reached|available balance/i,
@@ -64,8 +63,6 @@ const SYNTHETIC_RESERVE_PCT = 10;
 const TRACE_KEEP = 12;
 
 /** Tools whose successful result means implementation has started. */
-const EDIT_TOOLS = new Set(["edit", "write"]);
-
 /** One custom entry per Jev verdict, to compare the gate against another classifier later. */
 const JEV_ENTRY = "vm-jev";
 
@@ -151,7 +148,7 @@ export default function (pi: ExtensionAPI) {
     for (const s of [...order.slice(start), ...order.slice(0, start)]) {
       const why = stageWhy(ladder[s]);
       if (why === undefined) return { at: s, notes };
-      notes.push(`${ladder[s].label}: ${why}`);
+      notes.push(`${poolName(ladder[s].provider)}: ${why}`);
     }
     return { notes };
   };
@@ -189,7 +186,7 @@ export default function (pi: ExtensionAPI) {
     const next = ladder.findIndex((s, i) => i > index && stageWhy(s) === undefined);
     if (index === -1 || next === -1) return keep;
     toTrace(ctx, kind, "retry", ladder[next], [
-      `${ladder[index].label}: ${oneLine(error)} (this retry only)`,
+      `${poolName(ladder[index].provider)}: ${oneLine(error).slice(0, 120)} (this retry only)`,
     ]);
     return { model: find(ctx, ladder[next]), thinkingLevel: request.thinkingLevel };
   };
@@ -219,7 +216,10 @@ export default function (pi: ExtensionAPI) {
       throw new Error(`vm/${kind}: no pool can serve this request (${notes.join("; ")})`);
     }
     if (current !== undefined && current !== at && ladder[current] && stageWhy(ladder[current])) {
-      notifySwitch(ctx, ladder[current], ladder[at]);
+      marker(
+        ctx,
+        `${poolName(ladder[current].provider)} is used up: continuing on ${poolName(ladder[at].provider)}`,
+      );
     }
     toTrace(ctx, kind, request.reason, ladder[at], [...preNotes, ...notes]);
     return {
@@ -229,12 +229,7 @@ export default function (pi: ExtensionAPI) {
     };
   };
 
-  const notifySwitch = (ctx: ExtensionContext, from: Stage, to: Stage) => {
-    if (!ctx.hasUI) return;
-    ctx.ui.notify(`${from.label} is used up: continuing on ${to.label}`, "info");
-  };
-
-  /** A phase marker in the chat; subagents run without a UI. */
+  /** A switch or phase marker in the chat; subagents run without a UI. */
   const marker = (ctx: ExtensionContext, text: string) => {
     if (!ctx.hasUI) return;
     ctx.ui.notify(text, "info");
@@ -399,15 +394,13 @@ export default function (pi: ExtensionAPI) {
     const creditLine = credit
       ? `$${credit.remaining.toFixed(2)} left, $${Math.max(0, credit.remaining - CREDIT_RESERVE_USD).toFixed(2)} above the $${CREDIT_RESERVE_USD} reserve; this session has spent $${spent.toFixed(2)} of it`
       : "unknown (ai-usage off or its key missing?)";
-    const lines: string[] = [`the Anthropic credit: ${creditLine}`];
+    const lines: string[] = [`${PROVIDER_NAME.anthropic}: ${creditLine}`];
     for (const provider of usage.providers()) {
       if (provider.id === "anthropic") continue;
       const until = blockedUntil[provider.id] ?? 0;
       const blocked =
         Date.now() < until ? `; blocked by a limit error until ${fmtWhen(until)}` : "";
-      lines.push(
-        `${PROVIDER_NAME[provider.id] ?? provider.id}: ${describeWindows(provider)}${blocked}`,
-      );
+      lines.push(`${poolName(provider.id)}: ${describeWindows(provider)}${blocked}`);
     }
     const tail = (traces.get(ctx.sessionManager.getSessionId()) ?? []).slice(-5);
     if (tail.length > 0) lines.push("last routes:");
@@ -457,7 +450,7 @@ export default function (pi: ExtensionAPI) {
         {
           type: "custom_message",
           customType: "vm-router",
-          content: `${PROVIDER_NAME[ended] ?? ended} ran out of quota mid-turn. Continue where you left off.`,
+          content: `${poolName(ended)} ran out of quota mid-turn. Continue where you left off.`,
           display: true,
         },
       ],
@@ -489,14 +482,11 @@ const fmtWhen = (t: number | string) =>
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-const oneLine = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 120);
-
 /** The text of the last user message, for the classifier. */
 function lastUserText(messages: readonly Message[]): string {
-  const content = [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
-  return typeof content === "string"
-    ? content
-    : content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
+  return contentText(
+    [...messages].reverse().find((message) => message.role === "user")?.content ?? "",
+  );
 }
 
 /** Whether a tool call since the last user message edited a file successfully. */
@@ -505,9 +495,9 @@ function editedThisTurn(messages: readonly Message[]): boolean {
     const message = messages[i];
     if (message.role === "user") return false;
     if (message.role !== "toolResult") continue;
-    if (EDIT_TOOLS.has(message.toolName) && !message.isError) return true;
+    if (WRITE_TOOLS.has(message.toolName) && !message.isError) return true;
     // A codemode script's edits only show up as nested calls; they count even if the script failed later.
-    if (message.nestedCalls?.calls.some((c) => EDIT_TOOLS.has(c.name) && c.status === "ok")) {
+    if (message.nestedCalls?.calls.some((c) => WRITE_TOOLS.has(c.name) && c.status === "ok")) {
       return true;
     }
   }

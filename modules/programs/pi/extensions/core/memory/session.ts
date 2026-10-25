@@ -17,7 +17,7 @@ import {
   type Scope,
   type Store,
 } from "./store.ts";
-import { verify } from "./verify.ts";
+import { verifyRecent } from "./verify.ts";
 
 export type SessionState = {
   scope: Scope;
@@ -33,7 +33,7 @@ export type Sessions = ReturnType<typeof createSessions>;
 const buildHot = (scope: Scope) =>
   buildHotSection(
     scope.visible.flatMap((store) => loadStoreCached(store)),
-    verify,
+    verifyRecent,
   );
 
 export function createSessions() {

@@ -12,7 +12,8 @@ export const IDENTITY_ENTRY = "identity_label";
 export const SIDECAR_CHANNEL = "fireproof:sidecar";
 
 /** How a finished turn ended: it did the work, it needs the person, or it could not finish. */
-export type TurnState = "done" | "blocked" | "failed";
+export const TURN_STATES = ["done", "blocked", "failed"] as const;
+export type TurnState = (typeof TURN_STATES)[number];
 
 /** One persisted identity record; any field may be missing in an old one. */
 export type IdentityRecord = {
@@ -56,13 +57,4 @@ export const readIdentity = (entry: unknown): IdentityRecord | undefined => {
       : undefined,
     autoName: str(data.autoName),
   };
-};
-
-/** The last identity record on `branch`. */
-export const latestIdentity = (branch: readonly SessionEntry[]): IdentityRecord | undefined => {
-  for (let i = branch.length - 1; i >= 0; i--) {
-    const record = readIdentity(branch[i]);
-    if (record) return record;
-  }
-  return undefined;
 };

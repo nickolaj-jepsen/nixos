@@ -132,9 +132,6 @@ const writeMessage = async (
   return message === "" ? fallback : message.slice(0, 72);
 };
 
-/** What became of a parked worktree, in one line, and how loud to say it. */
-export type ParkResult = { text: string; type: "info" | "error" };
-
 type Commit = { ok: true; message?: string } | { ok: false; error: string };
 
 /** Stages everything (`.gitignore` still filters) and commits it, if there is anything to commit. */
@@ -151,23 +148,20 @@ const commit = async (pi: ExtensionAPI, ctx: ExtensionContext, tree: Worktree): 
 };
 
 /** Runs a `wt` verb that ends in the worktree's removal, and says where it went wrong. */
-const dispose = async (
-  ctx: ExtensionContext,
-  tree: Worktree,
-  verb: string[],
-): Promise<ParkResult> => {
+const dispose = async (ctx: ExtensionContext, tree: Worktree, verb: string[]): Promise<string> => {
   const said = verb[0] === "apply" ? "Landed" : "Removed";
   try {
     await wt(verb, ctx.cwd);
-    return { text: `${said} ${tree.name}`, type: "info" };
+    return `${said} ${tree.name}`;
   } catch (error) {
-    return { text: `Kept ${tree.name}: ${(error as Error).message}`, type: "error" };
+    return `Kept ${tree.name}: ${(error as Error).message}`;
   }
 };
 
 /**
  * Asks what should become of `tree` — land it, remove it, keep it, or commit and
  * keep a dirty one — and does it, in a session that still belongs to the caller.
+ * Returns what became of it, in one line.
  *
  * The answer comes back rather than being drawn on the spot: a caller that moves
  * the session afterwards has nothing left to draw in, and carries the line into
@@ -177,7 +171,7 @@ export const park = async (
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   tree: Worktree,
-): Promise<ParkResult> => {
+): Promise<string> => {
   const dirty = tree.state !== "clean";
   // With nothing ahead, only `wt clean` can say why a clean tree is unsafe: in use, or locked.
   const blocker =
@@ -206,14 +200,10 @@ export const park = async (
   if (picked === LAND) return dispose(ctx, tree, ["apply", tree.name]);
   if (picked === REMOVE) return dispose(ctx, tree, ["clean", "--force", tree.name]);
   // Keep, or dismissed: the worktree stays as it is.
-  if (picked !== COMMIT_KEEP) return { text: `Kept ${tree.name}`, type: "info" };
+  if (picked !== COMMIT_KEEP) return `Kept ${tree.name}`;
   const committed = await commit(pi, ctx, tree);
-  if (!committed.ok)
-    return { text: `Could not commit ${tree.name}: ${committed.error}`, type: "error" };
-  return {
-    text: committed.message
-      ? `Committed ${tree.name}: ${committed.message}`
-      : `Nothing to commit in ${tree.name}`,
-    type: "info",
-  };
+  if (!committed.ok) return `Could not commit ${tree.name}: ${committed.error}`;
+  return committed.message
+    ? `Committed ${tree.name}: ${committed.message}`
+    : `Nothing to commit in ${tree.name}`;
 };

@@ -1,3 +1,4 @@
+import { contentText } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { type ItemKind, walkSpend } from "../../shared/usage-ledger.ts";
 import type { Rebuilds } from "./rebuilds.ts";
@@ -36,14 +37,6 @@ export type Breakdown = {
 export const TOOL_FEES = "tool fees";
 const MAIN_LOOP = "main loop";
 
-const promptText = (content: unknown): string => {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((block) => (block?.type === "text" && typeof block.text === "string" ? block.text : ""))
-    .join(" ");
-};
-
 /**
  * Every entry of the session file. Compaction and branch summaries name no
  * model, so they are put on the provider of the reply before them, which is
@@ -60,7 +53,7 @@ export const buildBreakdown = (entries: readonly SessionEntry[], rebuilds: Rebui
   walkSpend(entries, (entry, items) => {
     if (entry.type === "message" && entry.message.role === "user") {
       turn = {
-        text: promptText(entry.message.content).replace(/\s+/g, " ").trim(),
+        text: contentText(entry.message.content, " ").replace(/\s+/g, " ").trim(),
         usd: 0,
         replies: 0,
         rebuilds: 0,

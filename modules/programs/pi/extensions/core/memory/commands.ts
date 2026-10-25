@@ -45,28 +45,22 @@ export function registerCommands(pi: ExtensionAPI, sessions: Sessions) {
     ctx.ui.notify(`Forgot ${entry.id}`, "info");
   }
 
-  async function promote(
-    ctx: ExtensionCommandContext,
-    scope: Scope,
-    entries: Entry[],
-    target: Target,
-  ) {
+  async function promote(ctx: ExtensionCommandContext, scope: Scope, entry: Entry, target: Target) {
     const store = targetStore(scope, target);
     if (!store) {
       ctx.ui.notify("No main checkout store to promote into.", "warning");
       return;
     }
-    const movable = entries.filter((entry) => entry.store.dir !== store.dir);
-    if (movable.length === 0) {
+    if (entry.store.dir === store.dir) {
       ctx.ui.notify(`Already in ${store.origin} memory`, "info");
       return;
     }
-    const names = movable.map((entry) => `  ${entry.id}: ${entry.statement}`).join("\n");
-    if (!(await ctx.ui.confirm(`Promote to ${store.origin} memory?`, `${names}\n\n${store.dir}`)))
+    const name = `  ${entry.id}: ${entry.statement}`;
+    if (!(await ctx.ui.confirm(`Promote to ${store.origin} memory?`, `${name}\n\n${store.dir}`)))
       return;
-    for (const entry of movable) await copyEntry(entry, store);
+    await copyEntry(entry, store);
     sessions.refresh(ctx, store);
-    ctx.ui.notify(`Promoted ${movable.length} to ${store.origin}`, "info");
+    ctx.ui.notify(`Promoted ${entry.id} to ${store.origin}`, "info");
   }
 
   async function edit(ctx: ExtensionCommandContext, entry: Entry) {
@@ -168,7 +162,7 @@ export function registerCommands(pi: ExtensionAPI, sessions: Sessions) {
       await runReview(ctx, scope);
       return false;
     }
-    if (action.type === "promote") await promote(ctx, scope, [action.entry], action.target);
+    if (action.type === "promote") await promote(ctx, scope, action.entry, action.target);
     else if (action.type === "forget") await forget(ctx, action.entry);
     else if (action.type === "edit") await edit(ctx, action.entry);
     else await adjustPriority(ctx, action.entry, action.delta);
@@ -212,7 +206,7 @@ export function registerCommands(pi: ExtensionAPI, sessions: Sessions) {
           targets.length === 1
             ? targets[0]
             : await ctx.ui.select(`Promote ${entry.id} to`, targets);
-        if (choice) await promote(ctx, scope, [entry], choice as Target);
+        if (choice) await promote(ctx, scope, entry, choice as Target);
         return;
       }
       ctx.ui.notify(

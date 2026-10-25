@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
 import type { AppKeybinding, ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { ModelsPicker } from "../lib/models-picker.ts";
 import type { Action, ChromeState } from "./state.ts";
 
 /** Runs one of pi's own keybinding actions, or names the key when the editor has none. */
@@ -37,7 +36,7 @@ const dismissOverlay =
     (focus as { handleInput?(data: string): void }).handleInput?.("\x1b");
   };
 
-export const createActions = (pi: ExtensionAPI, state: ChromeState, picker: ModelsPicker) => {
+export const createActions = (pi: ExtensionAPI, state: ChromeState) => {
   const openModels = command(state, pi, "/models");
   const closeOverlay = dismissOverlay(state);
 
@@ -50,11 +49,10 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState, picker: Mode
       child.on("error", () => ctx.ui.notify("chrome: cannot run code", "error"));
       child.unref();
     }) as Action,
-    // The picker is this repo's own (/models: labels, cost, context), and a
-    // second click closes it. Any other overlay closes instead of opening the
+    // The picker is this repo's own (/models: labels, cost, context). A click while
+    // it or any other dialog holds focus closes that instead of stacking the
     // picker on top: pi closes those on Escape without telling anyone.
     model: ((ctx) => {
-      if (picker.isOpen()) return picker.close();
       const focus = state.tui?.getFocusedComponent?.();
       if (focus && focus !== state.editor) return closeOverlay(ctx);
       return openModels(ctx);

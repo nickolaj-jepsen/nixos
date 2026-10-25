@@ -39,8 +39,7 @@ const PACE: Record<UsageWindow["pace"], { text: string; color: ThemeColor }> = {
 const right = (text: string, width: number) =>
   " ".repeat(Math.max(0, width - visibleWidth(text))) + text;
 
-const left = (text: string, width: number) =>
-  truncateToWidth(text, width, "…") + " ".repeat(Math.max(0, width - visibleWidth(text)));
+const left = (text: string, width: number) => truncateToWidth(text, width, "…", true);
 
 const pctText = (fraction: number) => {
   const pct = fraction * 100;

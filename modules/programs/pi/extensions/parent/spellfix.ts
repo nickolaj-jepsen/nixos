@@ -78,6 +78,8 @@ const unadded = new Set<string>();
 let live: ExtensionContext | undefined;
 /** The prompt editor that reported the latest edit. */
 let editor: PromptDraft | undefined;
+/** Its text at that edit: a cursor move reports an edit too, and needs no check. */
+let editedText: string | undefined;
 /** The words the editor underlines: by word, not offset, so every occurrence is marked. */
 let underlined: ReadonlySet<string> = new Set();
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -333,6 +335,9 @@ function underline(line: string): string {
 /** Tells spellfix the prompt editor's draft changed; it repaints the editor once a check lands. */
 function onEdit(draft: PromptDraft) {
   editor = draft;
+  const text = draft.getText();
+  if (text === editedText) return;
+  editedText = text;
   if (live) scheduleCheck(sessionGen, live);
 }
 
@@ -374,8 +379,6 @@ function rows(items: readonly string[], width: number, sep: string): string[] {
   return out;
 }
 
-type PickerResult = { changed: boolean };
-
 /**
  * The overlay picker. It owns the draft text while open: every fix writes the
  * whole editor text, since pi exposes no range replace. The editor is not
@@ -385,7 +388,7 @@ class SpellPicker implements Component {
   private text: string;
   private items: (Miss | Extra)[] = [];
   private index = 0;
-  private ai = new Map<string, string>();
+  private verdicts: ReadonlyMap<string, Verdict> = new Map();
   private aiDone = false;
   private aiError: string | undefined;
   private suggestions = new Map<string, string[]>();
@@ -404,7 +407,7 @@ class SpellPicker implements Component {
     private readonly ui: ExtensionUIContext,
     text: string,
     private readonly cursor: number,
-    private readonly done: (result: PickerResult) => void,
+    private readonly done: () => void,
   ) {
     this.text = text;
   }
@@ -430,11 +433,34 @@ class SpellPicker implements Component {
     return this.items[this.index];
   }
 
-  private close(result: PickerResult = { changed: false }) {
+  private close() {
     if (this.closed) return;
     this.closed = true;
     this.abort.abort();
-    this.done(result);
+    this.done();
+  }
+
+  private clampIndex() {
+    this.index = Math.max(0, Math.min(this.index, this.items.length - 1));
+  }
+
+  /** Takes `item` off the list; the picker closes with the last one. */
+  private drop(item: Miss | Extra) {
+    this.items = this.items.filter((m) => m !== item);
+    this.clampIndex();
+    this.tui.requestRender();
+    if (this.items.length === 0) this.close();
+  }
+
+  /** The model has answered, or failed to: a waiting "fix all" can run. */
+  private settle() {
+    this.aiDone = true;
+    this.prefetch();
+    this.tui.requestRender();
+    if (this.pendingAll) {
+      this.pendingAll = false;
+      void this.fixAll();
+    }
   }
 
   /** Replaces start..end of the picker's text with `fix`, keeping the batch's extras in place. */
@@ -471,12 +497,7 @@ class SpellPicker implements Component {
     if (!this.live) return;
     if (!answer) {
       this.aiError = "no answer";
-      this.aiDone = true;
-      this.tui.requestRender();
-      if (this.pendingAll) {
-        this.pendingAll = false;
-        void this.fixAll();
-      }
+      this.settle();
       return;
     }
     const { verdicts, found } = answer;
@@ -494,9 +515,7 @@ class SpellPicker implements Component {
 
   /** Acts on a fresh answer, which may add words to the personal dictionary. */
   private async applyFresh(verdicts: ReadonlyMap<string, Verdict>) {
-    for (const [word, verdict] of verdicts) {
-      if (verdict.kind === "fix") this.ai.set(word, verdict.word);
-    }
+    this.verdicts = verdicts;
     const correct = autoAdds(verdicts, (word) => ignored.has(word) || unadded.has(word));
     if (correct.length) {
       await addWords(this.gen, this.ctx, correct);
@@ -505,38 +524,25 @@ class SpellPicker implements Component {
       this.items = this.items.filter((item) => !correct.includes(item.word));
     }
     this.items = withExtras(this.items, cachedExtras(this.text));
-    this.index = Math.max(0, Math.min(this.index, this.items.length - 1));
-    this.aiDone = true;
-    this.prefetch();
-    this.refreshUnderline();
-    if (this.pendingAll) {
-      this.pendingAll = false;
-      void this.fixAll();
-    }
+    this.clampIndex();
+    setUnderlined(this.items);
+    this.settle();
   }
 
   /** Applies a cached answer without adding anything to the personal dictionary again. */
   private restore(result: { verdicts: Map<string, Verdict> }) {
-    for (const [word, verdict] of result.verdicts) {
-      if (verdict.kind === "fix") this.ai.set(word, verdict.word);
-    }
+    this.verdicts = result.verdicts;
     this.items = this.items.filter(
       (item) => !(result.verdicts.get(item.word)?.kind === "correct" && !unadded.has(item.word)),
     );
-    this.index = Math.max(0, Math.min(this.index, this.items.length - 1));
-    this.aiDone = true;
-    this.prefetch();
-    this.tui.requestRender();
-  }
-
-  /** Rebuilds the editor's underlines from the current answers, once they land. */
-  private refreshUnderline() {
-    setUnderlined(this.items);
-    this.tui.requestRender();
+    this.clampIndex();
+    this.settle();
   }
 
   private aiFix(item: Miss | Extra): string | null {
-    return this.ai.get(item.word) ?? (isExtra(item) ? item.fix : null);
+    const verdict = this.verdicts.get(item.word);
+    if (verdict?.kind === "fix") return verdict.word;
+    return isExtra(item) ? item.fix : null;
   }
 
   private pick(fix: string) {
@@ -547,19 +553,16 @@ class SpellPicker implements Component {
     this.items = this.items
       .filter((m) => m !== item)
       .flatMap((m) => shift(m, item.start, item.end, delta) ?? []);
-    this.index = Math.min(this.index, Math.max(0, this.items.length - 1));
+    this.clampIndex();
     this.changed();
-    if (this.items.length === 0) this.close({ changed: true });
+    if (this.items.length === 0) this.close();
   }
 
   private skip() {
     const item = this.item;
     if (!item) return;
     ignored.add(item.word);
-    this.items = this.items.filter((m) => m !== item);
-    this.index = Math.min(this.index, Math.max(0, this.items.length - 1));
-    this.tui.requestRender();
-    if (this.items.length === 0) this.close();
+    this.drop(item);
   }
 
   private async add() {
@@ -572,10 +575,7 @@ class SpellPicker implements Component {
     }
     await addWords(this.gen, this.ctx, [item.word]);
     if (!this.live) return;
-    this.items = this.items.filter((m) => m !== item);
-    this.index = Math.min(this.index, Math.max(0, this.items.length - 1));
-    this.tui.requestRender();
-    if (this.items.length === 0) this.close();
+    this.drop(item);
   }
 
   private async undoAdd() {
@@ -586,7 +586,7 @@ class SpellPicker implements Component {
     if (!this.live) return;
     this.items = await allMisses(this.gen, this.ctx, this.text);
     if (!this.live) return;
-    this.index = Math.max(0, Math.min(this.index, this.items.length - 1));
+    this.clampIndex();
     this.prefetch();
     this.tui.requestRender();
   }
@@ -611,7 +611,7 @@ class SpellPicker implements Component {
     }
     this.items = [];
     writeDraft(this.ui, this.text);
-    this.close({ changed: true });
+    this.close();
   }
 
   private move(by: number) {
@@ -792,7 +792,7 @@ async function openPicker(ctx: ExtensionContext) {
   suspended = true;
   if (timer) clearTimeout(timer);
   try {
-    await ctx.ui.custom<PickerResult>(
+    await ctx.ui.custom<void>(
       (tui, _theme, _kb, done) => {
         const picker = new SpellPicker(tui, gen, ctx, ctx.ui, text, cursor, done);
         void picker.start();
@@ -845,6 +845,7 @@ export default function (pi: ExtensionAPI, { editorHooks }: Services) {
     suspended = false;
     live = undefined;
     editor = undefined;
+    editedText = undefined;
     underlined = new Set();
     batch = undefined;
   });

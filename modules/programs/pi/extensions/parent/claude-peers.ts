@@ -16,7 +16,7 @@
  * tree and asks the model to coordinate destructive git operations with them.
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { Type } from "@earendil-works/pi-ai";
+import { contentText, Type } from "@earendil-works/pi-ai";
 import {
   VERSION,
   type ExtensionAPI,
@@ -57,6 +57,7 @@ import {
   writeRegistryEntry,
 } from "./claude-peers/protocol.ts";
 import { SIDECAR_CHANNEL, type SidecarUpdate } from "../shared/identity.ts";
+import { oneLine } from "../shared/naming.ts";
 import type { Services } from "./services.ts";
 import { ENTER_WORKTREE_TOOL } from "./lib/wt.ts";
 
@@ -107,7 +108,6 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   let unsubscribeSidecar: (() => void) | undefined;
   let warnedProtocol = false;
 
-  const isOwner = () => server !== undefined;
   const ownName = () => entry?.name ?? displayName();
   const ownLabel = () => `${ownName()} [${shortId({ messagingSocketPath: socketPath })}]`;
 
@@ -123,8 +123,8 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   }
 
   /** listPeers, warning once about peers on a newer protocol; they stay listed, since a bump may still take v1 frames. */
-  async function listPeersWarned(): Promise<Peer[]> {
-    const list = await listPeers();
+  async function listPeersWarned(narrow?: Parameters<typeof listPeers>[0]): Promise<Peer[]> {
+    const list = await listPeers(narrow);
     const newer = list.filter((p) => (p.peerProtocol ?? 0) > PEER_PROTOCOL);
     if (newer.length && !warnedProtocol) {
       warnedProtocol = true;
@@ -223,7 +223,7 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
         c?.hasUI === true &&
         (await userWait.markAgentPrompt(c, () =>
           c.ui.confirm(
-            `Deliver message from @${fromName}${env.fromMode === "bypass" ? " (a session that skips permission prompts)" : ""}?`,
+            `Deliver message from @${fromName} (a session that skips permission prompts)?`,
             env.body.slice(0, 2000),
             { timeout: HOLD_DIALOG_MS },
           ),
@@ -415,7 +415,7 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   /** Keeps the registry's summary and step current, so peers can tell what this session is on. */
   function onSidecar(data: unknown) {
     const update = data as SidecarUpdate;
-    if (!isOwner() || !entry || update.sessionId !== entry.sessionId) return;
+    if (!entry || update.sessionId !== entry.sessionId) return;
     // The step is a plan for the turn in flight; a settled turn has none.
     const doing = update.moment === "start" ? update.doing : undefined;
     const summary = update.summary ?? entry.summary;
@@ -439,20 +439,18 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   // section changes when a peer crosses STALE_AFTER_MS rather than every turn.
   pi.on("before_agent_start", async (event, c) => {
     const sections = event.systemPromptOptions.sections;
-    const peers = await listPeersWarned()
-      .then((list) => sameTreePeers(c.cwd, list))
-      .catch(() => undefined);
-    if (!peers?.list.length) {
+    const root = await treeRoot(c.cwd);
+    const list = await listPeersWarned((all) => inTree(root, all)).catch(() => undefined);
+    if (!list?.length) {
       delete sections.peer_sessions;
       return;
     }
     const now = Date.now();
     // No summaries here: a peer's changes every turn and would re-key the cached prompt.
-    const row = (p: Peer) =>
-      `- ${p.name} [${shortId(p)}] (${p.entrypoint === "pi" ? "pi" : "claude-code"})`;
-    const active = peers.list.filter((p) => !isStale(p, now));
-    const stale = peers.list.filter((p) => isStale(p, now));
-    const lines = [`Other agent sessions are open in this same working tree (${peers.root}).`];
+    const row = (p: Peer) => `- ${p.name} [${shortId(p)}] (${harness(p)})`;
+    const active = list.filter((p) => !isStale(p, now));
+    const stale = list.filter((p) => isStale(p, now));
+    const lines = [`Other agent sessions are open in this same working tree (${root}).`];
     if (active.length)
       lines.push(
         "Active within the last hour:",
@@ -478,22 +476,21 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   });
   pi.on("agent_start", async (_event, c) => {
     ctx = c;
-    if (isOwner()) await publish({ status: "busy" });
+    await publish({ status: "busy" });
   });
-  pi.on("session_info_changed", async (event, c) => {
-    if (isOwner())
-      await publish({
-        name: displayName(),
-        nameSource: event.name && !identity.isAutoName(event.name) ? "user" : "derived",
-        nameSince: Date.now(),
-      });
+  pi.on("session_info_changed", async (event) => {
+    await publish({
+      name: displayName(),
+      nameSource: event.name && !identity.isAutoName(event.name) ? "user" : "derived",
+      nameSince: Date.now(),
+    });
   });
   pi.on("agent_end", async (event) => {
-    lastTurnText = oneLine(lastAssistantText(event.messages));
+    lastTurnText = clip(oneLine(lastAssistantText(event.messages)), 120);
   });
   pi.on("agent_settled", async (_event, c) => {
     ctx = c;
-    if (!isOwner()) return;
+    if (!entry) return;
     await publish({ status: "idle", doing: undefined });
     const now = Date.now();
     const due = [...idleSubscribers.values()];
@@ -532,19 +529,13 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
     parameters: Type.Object({}),
     async execute() {
       const peers = await listPeersWarned();
-      const self = isOwner() && entry ? `This session: ${ownLabel()}\n` : "";
+      const self = entry ? `This session: ${ownLabel()}\n` : "";
       if (!peers.length)
         return {
           content: [{ type: "text", text: `${self}No other sessions are reachable.` }],
           details: undefined,
         };
-      const rows = peers.map((p) => {
-        const harness = p.entrypoint === "pi" ? "pi" : "claude-code";
-        const about = aboutLine(p);
-        return `- ${p.name} [${shortId(p)}] · ${harness} · ${activityLabel(p)} · ${p.cwd}${
-          about ? `\n  ${about}` : ""
-        }`;
-      });
+      const rows = peers.map((p) => `- ${peerLine(p, "  ")}`);
       return {
         content: [
           { type: "text", text: `${self}Other sessions (${peers.length}):\n${rows.join("\n")}` },
@@ -576,7 +567,7 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
       ),
       notify_when_idle: Type.Optional(
         Type.Boolean({
-          description: "Ask the target for one notice when it next goes idle or exits (12h limit)",
+          description: `Ask the target for one notice when it next goes idle or exits (${IDLE_SUBSCRIPTION_TTL_MS / 3_600_000}h limit)`,
         }),
       ),
     }),
@@ -588,7 +579,7 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
       if ("error" in found) throw new Error(found.error);
       const target = found.peer;
       const label = `${target.name} [${shortId(target)}]`;
-      const from = isOwner() ? ownAddress : undefined;
+      const from = entry ? ownAddress : undefined;
       const notes: string[] = [];
 
       // It won't start a turn, so there is no wake-up cost to confirm; its receipt tells the model.
@@ -656,16 +647,21 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
     description: "Show the Claude Code and pi sessions this session can message",
     handler: async (_args, c) => {
       const peers = await listPeersWarned();
-      const self = isOwner() && entry ? `This session: ${ownLabel()}` : "This session has no inbox";
-      const rows = peers.map((p) => {
-        const about = aboutLine(p);
-        return `  [${activityLabel(p)}] ${p.name} [${shortId(p)}] · ${p.entrypoint ?? "?"} · ${p.cwd}${
-          about ? `\n    ${about}` : ""
-        }`;
-      });
+      const self = entry ? `This session: ${ownLabel()}` : "This session has no inbox";
+      const rows = peers.map((p) => `  ${peerLine(p, "    ")}`);
       c.ui.notify([self, `Other sessions (${peers.length}):`, ...rows].join("\n"), "info");
     },
   });
+}
+
+const harness = (peer: Peer) => (peer.entrypoint === "pi" ? "pi" : "claude-code");
+
+/** One peer for a listing, what it is doing on a second line indented by `indent`. */
+function peerLine(peer: Peer, indent: string): string {
+  const about = aboutLine(peer);
+  return `${peer.name} [${shortId(peer)}] · ${harness(peer)} · ${activityLabel(peer)} · ${peer.cwd}${
+    about ? `\n${indent}${about}` : ""
+  }`;
 }
 
 /** What a pi peer says it is doing; Claude Code entries carry neither field. */
@@ -700,28 +696,22 @@ function treeRoot(dir: string): Promise<string> {
   return root;
 }
 
-/** The `peers` whose cwd is in the same working tree as `cwd`. */
-async function sameTreePeers(cwd: string, peers: Peer[]) {
-  const root = await treeRoot(cwd);
+/** The `peers` whose cwd is in the working tree at `root`. */
+async function inTree(root: string, peers: Peer[]) {
   const roots = await Promise.all(peers.map((p) => treeRoot(p.cwd)));
-  return { root, list: peers.filter((_, i) => roots[i] === root) };
+  return peers.filter((_, i) => roots[i] === root);
 }
 
 function lastAssistantText(messages: AgentMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i] as { role?: string; content?: unknown };
-    if (m.role !== "assistant" || !Array.isArray(m.content)) continue;
-    const text = m.content
-      .filter((b): b is { type: "text"; text: string } => b?.type === "text")
-      .map((b) => b.text)
-      .join(" ")
-      .trim();
+    const m = messages[i];
+    if (m.role !== "assistant") continue;
+    const text = contentText(m.content, " ").trim();
     if (text) return text;
   }
   return "";
 }
 
-function oneLine(text: string): string {
-  const line = text.replace(/\s+/g, " ").trim();
-  return line.length > 120 ? `${line.slice(0, 119)}…` : line;
+function clip(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }

@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { accessSync, constants, existsSync, readdirSync, readFileSync } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { processGlobal } from "../../shared/process-global.ts";
 import type { Citation, Entry } from "./store.ts";
 
 export type Status = "verified" | "stale" | "unverified";
@@ -149,4 +150,25 @@ export function verify(entry: Entry): Verification {
       ? "verified"
       : "unverified";
   return { status, checks };
+}
+
+const RECENT_MS = 60_000;
+const recent = processGlobal(
+  "memory.verified",
+  () => new Map<string, { at: number; result: Verification }>(),
+);
+
+/**
+ * `verify`, reusing a result from the last minute. Every session start builds
+ * a hot section, and a burst of subagents would otherwise re-run each git grep
+ * on the event loop they share with the parent.
+ */
+export function verifyRecent(entry: Entry): Verification {
+  const key = `${entry.file}\n${JSON.stringify(entry.citations)}`;
+  const now = Date.now();
+  const hit = recent.get(key);
+  if (hit && now - hit.at < RECENT_MS) return hit.result;
+  const result = verify(entry);
+  recent.set(key, { at: now, result });
+  return result;
 }

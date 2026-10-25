@@ -16,7 +16,11 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  parseSessionEntries,
+} from "@earendil-works/pi-coding-agent";
 import { childTranscriptDir } from "../shared/subagent-session.ts";
 import {
   addUsage,
@@ -74,15 +78,31 @@ const unrecordedRuns = (ctx: ExtensionContext, recorded: Map<string, Run>): Run[
 /** A reading as text, so a new one can be told apart from the last one filed. */
 const readingKey = (agent: string, parts: Parts) => JSON.stringify([agent, parts]);
 
-/** The latest reading filed for each transcript. */
-const filed = (ctx: ExtensionContext): Map<string, string> => {
-  const byFile = new Map<string, string>();
+/** The latest reading filed for each transcript, and the file's size and mtime when it was read. */
+type Filed = { key: string; agent: string; stamp?: string };
+
+const filed = (ctx: ExtensionContext): Map<string, Filed> => {
+  const byFile = new Map<string, Filed>();
   for (const entry of ctx.sessionManager.getEntries()) {
     if (entry.type !== "custom" || entry.customType !== LEDGER_TYPE) continue;
     const data = entry.data as LedgerData | undefined;
-    if (data?.kind === "child") byFile.set(data.file, readingKey(data.agent, data.parts));
+    if (data?.kind === "child")
+      byFile.set(data.file, {
+        key: readingKey(data.agent, data.parts),
+        agent: data.agent,
+        stamp: data.stamp,
+      });
   }
   return byFile;
+};
+
+const stampOf = (file: string): string | undefined => {
+  try {
+    const stat = statSync(file);
+    return `${stat.size}:${stat.mtimeMs}`;
+  } catch {
+    return undefined;
+  }
 };
 
 /** One child transcript's whole spend, by the model that spent it. */
@@ -98,14 +118,8 @@ const readTranscript = (file: string): Parts | undefined => {
   const groups = new Map<string, Parts[number]>();
   // Compaction and branch summaries name no model; file them on the reply before them, as /cost does.
   let last = { provider: "", model: "" };
-  for (const line of text.split("\n")) {
-    if (line === "") continue;
-    let entry: SessionEntry;
-    try {
-      entry = JSON.parse(line) as SessionEntry;
-    } catch {
-      continue; // a line still being written
-    }
+  for (const entry of parseSessionEntries(text)) {
+    if (entry.type === "session") continue;
     for (const item of entryItems(entry)) {
       if (item.kind === "conversation")
         last = { provider: item.provider ?? "", model: item.model ?? "" };
@@ -127,14 +141,7 @@ const readTranscript = (file: string): Parts | undefined => {
  */
 const cache = new Map<string, { stamp: string; parts: Parts | undefined }>();
 
-const cachedTranscript = (file: string): Parts | undefined => {
-  let stamp: string;
-  try {
-    const stat = statSync(file);
-    stamp = `${stat.size}:${stat.mtimeMs}`;
-  } catch {
-    return undefined;
-  }
+const cachedTranscript = (file: string, stamp: string): Parts | undefined => {
   const hit = cache.get(file);
   if (hit?.stamp === stamp) return hit.parts;
   const parts = readTranscript(file);
@@ -152,15 +159,20 @@ export default function (pi: ExtensionAPI) {
     const recorded = recordedRuns(ctx);
     const runs = [...recorded.values(), ...(sweep ? unrecordedRuns(ctx, recorded) : [])];
     for (const run of runs) {
-      const parts = cachedTranscript(run.file);
+      const stamp = stampOf(run.file);
+      const last = latest.get(run.file);
+      // Unchanged since it was filed, even by an earlier process: no need to read it.
+      if (!stamp || (last?.stamp === stamp && last.agent === run.agent)) continue;
+      const parts = cachedTranscript(run.file, stamp);
       if (!parts || parts.length === 0) continue;
-      if (latest.get(run.file) === readingKey(run.agent, parts)) continue;
+      if (last?.key === readingKey(run.agent, parts)) continue;
       try {
         pi.appendEntry<LedgerData>(LEDGER_TYPE, {
           kind: "child",
           file: run.file,
           agent: run.agent,
           parts,
+          stamp,
         });
       } catch {
         // No session to write to (shutting down); the spend goes unrecorded.

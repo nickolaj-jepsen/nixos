@@ -30,12 +30,7 @@ export type Review = {
 export function review(scope: Scope): Review {
   const entries: Entry[] = [];
   const skipped: string[] = [];
-  for (const store of scope.visible) {
-    const loaded = loadStore(store);
-    entries.push(...loaded.entries);
-    skipped.push(...loaded.skipped);
-  }
-  for (const store of scope.orphans) {
+  for (const store of [...scope.visible, ...scope.orphans]) {
     const loaded = loadStore(store);
     entries.push(...loaded.entries);
     skipped.push(...loaded.skipped);

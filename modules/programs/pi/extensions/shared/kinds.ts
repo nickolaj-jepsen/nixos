@@ -7,26 +7,29 @@ import type { ThinkingLevel } from "@earendil-works/pi-ai";
 
 export type Provider = "opencode-go" | "synthetic" | "anthropic" | "kimi-coding";
 
-export type Stage = {
-  provider: Provider;
-  id: string;
-  /** For switch notices: what ran out. */
-  label: string;
+/** Each pool as notices name it: what ran out, what the turn continues on. */
+export const PROVIDER_NAME: Record<Provider, string> = {
+  "opencode-go": "OpenCode Go",
+  synthetic: "Synthetic",
+  "kimi-coding": "Kimi Code",
+  anthropic: "the Anthropic credit",
 };
+
+export type Stage = { provider: Provider; id: string };
 
 export type Ladder = readonly Stage[];
 
 export const FLASH: Ladder = [
-  { provider: "opencode-go", id: "deepseek-v4.1-flash", label: "OpenCode Go" },
-  { provider: "synthetic", id: "hf:deepseek-ai/DeepSeek-V4.1-Flash", label: "Synthetic" },
-  { provider: "anthropic", id: "claude-sonnet-5-5", label: "the Anthropic credit" },
+  { provider: "opencode-go", id: "deepseek-v4.1-flash" },
+  { provider: "synthetic", id: "hf:deepseek-ai/DeepSeek-V4.1-Flash" },
+  { provider: "anthropic", id: "claude-sonnet-5-5" },
 ];
 
 /** No Go stage: Go is kept for flash, so running out here fails loudly instead. */
 export const DEEP: Ladder = [
-  { provider: "kimi-coding", id: "k3.1-pro", label: "Kimi Code" },
-  { provider: "anthropic", id: "claude-opus-5-5", label: "the Anthropic credit" },
-  { provider: "synthetic", id: "hf:moonshotai/Kimi-K3", label: "Synthetic" },
+  { provider: "kimi-coding", id: "k3.1-pro" },
+  { provider: "anthropic", id: "claude-opus-5-5" },
+  { provider: "synthetic", id: "hf:moonshotai/Kimi-K3" },
 ];
 
 export const KINDS = { flash: FLASH, deep: DEEP } as const;

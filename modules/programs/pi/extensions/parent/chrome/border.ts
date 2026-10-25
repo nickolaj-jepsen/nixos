@@ -145,7 +145,7 @@ export const createBorder = (state: ChromeState, label: Identity) => {
     hidden: number,
     border: (text: string) => string,
     status: BorderStatus | undefined,
-    levels: readonly Segment[][] = [],
+    levels: readonly Segment[][],
   ): { line: string; regions: Region[] } => {
     const sides = borderSides(width, hidden, border, status, levels);
     const { left, right, controls } = sides;
@@ -177,7 +177,7 @@ export const createBorder = (state: ChromeState, label: Identity) => {
    * It exists only while the editor is empty, so it is never something to delete
    * before typing, and it is dropped as soon as you do type.
    */
-  const hint = (room: number, empty: boolean): { ghost: string } | undefined => {
+  const hint = (room: number, empty: boolean): string | undefined => {
     const ctx = state.ctx;
     if (!ctx || !state.live) return undefined;
     if (!empty) {
@@ -191,7 +191,7 @@ export const createBorder = (state: ChromeState, label: Identity) => {
     if (room < 12 + visibleWidth(cue)) return undefined;
     // Dim, because text at the cursor's weight would read as something already typed.
     const text = truncateToWidth(reply, room - visibleWidth(cue), "…");
-    return { ghost: ctx.ui.theme.fg("dim", cue + text) };
+    return ctx.ui.theme.fg("dim", cue + text);
   };
 
   return { drawTop, hint, takeHint: label.takeReply };

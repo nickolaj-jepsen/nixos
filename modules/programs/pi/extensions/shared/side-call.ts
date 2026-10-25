@@ -1,5 +1,5 @@
 /** One model call made beside the conversation, billed to the session's ledger under `source`, failed replies included. */
-import type { SimpleStreamOptions } from "@earendil-works/pi-ai";
+import { contentText, type SimpleStreamOptions } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { recordSideCall } from "./usage-ledger.ts";
 
@@ -15,8 +15,6 @@ export type SideCall = {
   model?: string;
   maxTokens: number;
   timeoutMs: number;
-  /** 0 unless set; null leaves it to the model, for one that rejects any but its own. */
-  temperature?: number | null;
   reasoning?: SimpleStreamOptions["reasoning"];
   signal?: AbortSignal;
 };
@@ -28,7 +26,7 @@ export type SideResult = { text: string; cost: number } | { error: string; cost:
 export const sideCall = async (
   pi: ExtensionAPI,
   ctx: ExtensionContext,
-  { source, system, prompt, model = SIDE_MODEL, temperature = 0, ...options }: SideCall,
+  { source, system, prompt, model = SIDE_MODEL, ...options }: SideCall,
 ): Promise<SideResult> => {
   const slash = model.indexOf("/");
   const found =
@@ -46,7 +44,7 @@ export const sideCall = async (
         },
         {
           ...options,
-          temperature: temperature ?? undefined,
+          temperature: 0,
           // The opencode gateway routes on `x-opencode-session`, which pi derives
           // from this; without it the request fails with 400.
           sessionId: ctx.sessionManager.getSessionId(),
@@ -58,10 +56,7 @@ export const sideCall = async (
     if (response.stopReason === "error" || response.stopReason === "aborted") {
       return { error: response.errorMessage ?? response.stopReason, cost };
     }
-    const text = response.content
-      .flatMap((block) => (block.type === "text" ? [block.text] : []))
-      .join("\n");
-    return { text, cost };
+    return { text: contentText(response.content), cost };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error), cost: 0 };
   }

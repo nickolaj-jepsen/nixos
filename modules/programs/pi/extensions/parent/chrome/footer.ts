@@ -16,7 +16,7 @@ import { agentParts } from "./agents.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { formatCost, splitPath } from "../lib/format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
-import { hitTest, hoverAt, isPlainClick, type Part, type Region } from "./layout.ts";
+import { click, hoverAt, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";
 import { modelAlias, providerName, providerShortName } from "../lib/model-names.ts";
 import { createRouted } from "../../shared/routed-model.ts";
@@ -24,6 +24,7 @@ import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { createUsage } from "./usage.ts";
 import { stageTone } from "../../shared/kinds.ts";
+import { shellCommand } from "../../shared/tools.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
@@ -145,15 +146,10 @@ export const createFooter = (
     const statusEntries = [...footerData.getExtensionStatuses()].sort(([a], [b]) =>
       a.localeCompare(b),
     );
-    const agentStatus = statusEntries.find(([key]) => key === "subagents")?.[1];
-    const badges = agentParts(
-      agentStatus === undefined ? undefined : sanitize(agentStatus),
-      actions.agents,
-    );
+    // The package's status is still the repaint signal; the tallies come from its service.
+    const badges = agentParts(actions.agents);
     const statuses = statusEntries.flatMap(([key, text], index) => {
-      // A wording `agents.ts` cannot read would hide the count altogether, so the
-      // package's own text stands in until it learns the new shape.
-      if (key === "subagents" && badges.length > 0) return badges;
+      if (key === "subagents" && badges) return badges;
       const plain = sanitize(text);
       return plain ? [{ id: `status-${index}`, text: plain, color: "dim" as const }] : [];
     });
@@ -251,13 +247,7 @@ export const createFooter = (
             state.setHover(hoverAt(regions, event.x));
             return undefined;
           }
-          const ctx = state.ctx;
-          const action = isPlainClick(event) ? hitTest(regions, event.x) : undefined;
-          if (!ctx || !action) return undefined;
-          void Promise.resolve()
-            .then(() => action(ctx))
-            .catch(() => {});
-          return { handled: true };
+          return click(regions, event, state.ctx) ? { handled: true } : undefined;
         },
         dispose: () => {
           unsubscribe();
@@ -301,8 +291,8 @@ export const createFooter = (
 
   // Once the command is done: a lookup while `gh pr create` still runs finds nothing.
   pi.on("tool_result", (event) => {
-    const command = event.toolName === "bash" ? event.input.command : undefined;
-    if (typeof command === "string" && PR_COMMAND.test(command)) git.markPrDirty();
+    const command = shellCommand(event.toolName, event.input);
+    if (command && PR_COMMAND.test(command)) git.markPrDirty();
   });
   pi.on("tool_execution_end", repaintAndGit);
 

@@ -95,12 +95,12 @@ const chipSegments = (state: ChromeState, controls: Controls): Segment[] => {
 export const measurementLevels = (
   state: ChromeState,
   { context: usage, meters }: Measurements,
-  controls?: Controls,
+  controls: Controls,
 ): Segment[][] => {
   const ctx = state.ctx;
   if (!ctx?.model) return [];
   const theme = ctx.ui.theme;
-  const chips = controls ? chipSegments(state, controls) : [];
+  const chips = chipSegments(state, controls);
   const window = usage?.contextWindow || ctx.model.contextWindow || 0;
   const percent = usage?.percent == null ? undefined : Math.max(0, Math.min(100, usage.percent));
   const color = contextColor(percent);
@@ -112,10 +112,10 @@ export const measurementLevels = (
   const windowText = window > 0 ? ` / ${formatTokens(window)}` : "";
   const context: Segment = {
     id: "context",
-    action: controls?.tree,
+    action: controls.tree,
     text: fill(pct) + (windowText ? theme.fg("dim", windowText) : ""),
   };
-  const bare: Segment = { id: "context", action: controls?.tree, text: fill(pct) };
+  const bare: Segment = { id: "context", action: controls.tree, text: fill(pct) };
   const extra = meters.map(({ id, text, action }) => ({
     id,
     action,

@@ -66,6 +66,8 @@ export default function (pi: ExtensionAPI) {
   const open = async (ctx: ExtensionContext) => {
     if (ctx.mode !== "tui" || !ctx.hasUI) return;
     if (dialog) return;
+    // The leaf may have moved back to an earlier entry since the last open.
+    view.reset();
     void quotas.refresh().then(() => dialog?.refresh());
     try {
       await ctx.ui.custom<void>(
