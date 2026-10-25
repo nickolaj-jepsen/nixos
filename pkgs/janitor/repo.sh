@@ -1,5 +1,6 @@
 # Everything the plan lists is one tab-separated line:
-#   id, category, bytes, preset, title, detail
+#   id, category, bytes, preset, title, label, detail
+# `title` is the path for the terminal, `label` the short form the widget shows.
 # The id is what `apply` gets back, so it has to be enough to act on and to
 # re-check the rule that produced it.
 
@@ -13,8 +14,8 @@ scan_jobs() {
       age=$(age_of "$dir")
       [ "$age" -ge "$JOB_TMP_AGE_SECONDS" ] || continue
       size=$(size_of "$dir")
-      printf 'jobs:%s\tjobs\t%s\t1\t%s\tjob idle %d days\n' \
-        "$dir" "$size" "$dir" "$((age / 86400))"
+      printf 'jobs:%s\tjobs\t%s\t1\t%s\t%s\tidle %dd\n' \
+        "$dir" "$size" "$dir" "$(label_for "$dir")" "$((age / 86400))"
     done
   done
 }
@@ -29,8 +30,8 @@ scan_transcripts() {
       age=$(age_of "$file")
       [ "$age" -ge "$TRANSCRIPT_AGE_SECONDS" ] || continue
       size=$(file_bytes "$file")
-      printf 'transcript:%s\ttranscripts\t%s\t1\t%s\t%d days old\n' \
-        "$file" "$size" "$file" "$((age / 86400))"
+      printf 'transcript:%s\ttranscripts\t%s\t1\t%s\t%s\t%dd old\n' \
+        "$file" "$size" "$file" "$(label_for "$file")" "$((age / 86400))"
     done < <(find "$root/projects" -mindepth 2 -maxdepth 3 -name '*.jsonl' -type f -print0 2>/dev/null)
   done
 }
@@ -47,15 +48,15 @@ scan_branches() {
       [ "$branch" = "$def" ] && continue
       grep -qxF -- "$branch" <<<"$checked" && continue
       if git -C "$repo" merge-base --is-ancestor -- "$branch" "$def" 2>/dev/null; then
-        printf 'branch:%s|%s\tbranch\t0\t1\t%s@%s\tmerged into %s\n' \
-          "$repo" "$branch" "$repo" "$branch" "$def"
+        printf 'branch:%s|%s\tbranch\t0\t1\t%s@%s\t%s@%s\tmerged\n' \
+          "$repo" "$branch" "$repo" "$branch" "$(label_for "$repo")" "$branch"
         continue
       fi
       [ $((now - age)) -ge "$BRANCH_IDLE_SECONDS" ] || continue
       ahead=$(git -C "$repo" rev-list --count "$def..$branch" 2>/dev/null) || continue
       [ "${ahead:-0}" -gt 0 ] || continue
-      printf 'branch:%s|%s\tbranch\t0\t0\t%s@%s\t%s commit(s) ahead, idle %s days\n' \
-        "$repo" "$branch" "$repo" "$branch" "$ahead" "$(((now - age) / 86400))"
+      printf 'branch:%s|%s\tbranch\t0\t0\t%s@%s\t%s@%s\t%s ahead · %sd\n' \
+        "$repo" "$branch" "$repo" "$branch" "$(label_for "$repo")" "$branch" "$ahead" "$(((now - age) / 86400))"
     done < <(git -C "$repo" for-each-ref --format='%(refname:short)%09%(committerdate:unix)' refs/heads 2>/dev/null)
   done
 }
@@ -68,8 +69,8 @@ scan_worktrees() {
   while IFS=$'\t' read -r main name path idle; do
     [ -n "$path" ] || continue
     size=$(size_of "$path")
-    printf 'worktree:%s|%s\tworktree\t%s\t1\t%s@%s\tidle %s days\n' \
-      "$main" "$name" "$size" "$main" "$name" "$((idle / 86400))"
+    printf 'worktree:%s|%s\tworktree\t%s\t1\t%s@%s\t%s@%s\tidle %sd\n' \
+      "$main" "$name" "$size" "$main" "$name" "$(label_for "$main")" "$name" "$((idle / 86400))"
   done < <(wt status --all 2>/dev/null |
     jq -r '.repos[] | .main as $main | .worktrees[] | select(.safeToRemove == true) |
       [$main, .name, .path, (.idleSeconds // 0)] | @tsv' 2>/dev/null)
@@ -88,8 +89,8 @@ scan_build_dirs() {
       age=$(age_of "$dir")
       [ "$age" -ge "$BUILD_DIR_AGE_SECONDS" ] || continue
       size=$(size_of "$dir")
-      printf 'build:%s\tbuild\t%s\t1\t%s\trepo idle %s days, untouched %s days\n' \
-        "$dir" "$size" "$dir" "$(((now - last_commit) / 86400))" "$((age / 86400))"
+      printf 'build:%s\tbuild\t%s\t1\t%s\t%s\tidle %sd\n' \
+        "$dir" "$size" "$dir" "$(label_for "$dir")" "$(((now - last_commit) / 86400))"
     done < <(find "$repo" -maxdepth 3 \( -name .git -o -name .hg -o -name .jj \) -prune -o \
       -type d \( -name node_modules -o -name .venv -o -name target -o -name dist \
       -o -name .pytest_cache -o -name __pycache__ \) -prune -print0 2>/dev/null)
@@ -106,7 +107,7 @@ scan_tmp() {
   [ "$avail" -lt "$floor_bytes" ] && low=1
   tmp_candidates | while IFS=$'\t' read -r age size kind path; do
     if ! tmp_deletable "$age" "$kind" "$size" || protected "$path"; then continue; fi
-    printf 'tmp:%s\ttmp\t%s\t1\t%s\t%s\n' "$path" "$size" "$path" "$kind"
+    printf 'tmp:%s\ttmp\t%s\t1\t%s\t%s\t%s\n' "$path" "$size" "$path" "$(label_for "$path")" "$kind"
   done
 }
 
@@ -149,7 +150,8 @@ write_plan_cache() {
     --argjson used "$(total_tmp_bytes)" \
     --argjson dead "$dead" \
     '[inputs | split("\t") |
-      {id: .[0], category: .[1], bytes: (.[2] | tonumber), preset: (.[3] == "1"), title: .[4], detail: .[5]}] as $items |
+      {id: .[0], category: .[1], bytes: (.[2] | tonumber), preset: (.[3] == "1"),
+       title: .[4], label: .[5], detail: .[6]}] as $items |
      {generated: $generated,
       disk: {avail: $avail, total: $total, usedPct: $pct},
       tmp: {used: $used, budget: $budget, dead: $dead},
@@ -173,7 +175,7 @@ cmd_report() {
     count=$(awk -F'\t' -v c="$category" '$2 == c {n++} END {print n + 0}' "$PLAN_TMP")
     [ "$count" -gt 0 ] || continue
     printf '\n%s (%d)\n' "$category" "$count"
-    awk -F'\t' -v c="$category" '$2 == c {printf "%s\t%s\t%s\n", $3, $5, $6}' "$PLAN_TMP" |
+    awk -F'\t' -v c="$category" '$2 == c {printf "%s\t%s\t%s\n", $3, $5, $7}' "$PLAN_TMP" |
       sort -t$'\t' -k1,1nr | head -15 |
       while IFS=$'\t' read -r bytes title detail; do
         printf '  %8s  %s  %s\n' "$(gib "$bytes")" "$title" "$detail"
@@ -276,7 +278,7 @@ apply_item() {
 # The checklist. Branches start unticked because that is the only row whose loss
 # is not merely a rebuild.
 cmd_apply() {
-  local ids_file="" have_ids=0 freed_before freed_after freed id bytes preset title detail
+  local ids_file="" have_ids=0 freed id bytes preset title detail
   local -a explicit_ids=()
   if [ "${1:-}" = --ids ]; then
     shift
@@ -310,7 +312,6 @@ cmd_apply() {
     fi
   fi
 
-  freed_before=$(df --output=avail -B1 / | tail -1)
   if [ "$have_ids" = 1 ]; then
     for id in ${explicit_ids[@]+"${explicit_ids[@]}"}; do
       [ -n "$id" ] && apply_item "$id"
@@ -322,7 +323,6 @@ cmd_apply() {
         [ -n "$id" ] && apply_item "$id"
       done
   fi
-  freed_after=$(df --output=avail -B1 / | tail -1)
   freed=$(awk '{s += $1} END {print s + 0}' "$PLAN_TMP.freed" 2>/dev/null || echo 0)
   printf 'janitor: freed %s\n' "$(gib "$freed")"
   [ "${freed:-0}" -ge 1073741824 ] &&
@@ -345,9 +345,7 @@ cmd_repo_plan_refresh() {
 # The daily pass: merged branches, finished worktrees, transcripts, and the
 # cached numbers the widget reads.
 cmd_repo_pass() {
-  local freed_before freed_after repo branch def checked path size removed=0
-  freed_before=$(df --output=avail -B1 / | tail -1)
-
+  local freed=0 repo branch def checked path size removed=0
   for repo in $(repos); do
     def=$(default_branch "$repo") || continue
     checked=$(checked_out_branches "$repo")
@@ -370,24 +368,30 @@ cmd_repo_pass() {
       jq -r '.repos[] | select(.worktrees | map(select(.safeToRemove == true)) | length > 0) | .main' 2>/dev/null)
   fi
 
-  while IFS=$'\t' read -r _ _ _ _ path _; do
+  while IFS=$'\t' read -r _ _ _ _ path _ _; do
     [ -f "$path" ] || continue
     [ "$(age_of "$path")" -ge "$TRANSCRIPT_AGE_SECONDS" ] || continue
-    rm -f -- "$path" && printf 'janitor: removed transcript %s\n' "$path"
+    size=$(file_bytes "$path")
+    rm -f -- "$path" && {
+      freed=$((freed + size))
+      printf 'janitor: removed transcript %s\n' "$path"
+    }
   done < <(scan_transcripts)
 
-  while IFS=$'\t' read -r _ _ _ _ path _; do
+  while IFS=$'\t' read -r _ _ _ _ path _ _; do
     [ -d "$path" ] || continue
     [ "$(age_of "$path")" -ge "$JOB_TMP_AGE_SECONDS" ] || continue
     size=$(size_of "$path")
-    rm -rf -- "$path" && printf 'janitor: removed job tmp %s (%s)\n' "$path" "$(gib "$size")"
+    rm -rf -- "$path" && {
+      freed=$((freed + size))
+      printf 'janitor: removed job tmp %s (%s)\n' "$path" "$(gib "$size")"
+    }
   done < <(scan_jobs)
 
-  freed_after=$(df --output=avail -B1 / | tail -1)
-  printf 'janitor: repo pass freed %s, %d branch(es)\n' \
-    "$(gib $((freed_after - freed_before)))" "$removed"
-  [ $((freed_after - freed_before)) -ge 1073741824 ] &&
-    toast "Freed $(gib $((freed_after - freed_before))) of agent and repo leftovers"
+  # Sum of what was deleted, not the df delta: other processes write while this
+  # runs, and a 1.4 GB deletion that df reports as 158 MB reads like a bug.
+  printf 'janitor: repo pass freed %s, %d branch(es)\n' "$(gib "$freed")" "$removed"
+  [ "$freed" -ge 1073741824 ] && toast "Freed $(gib "$freed") of agent and repo leftovers"
   cmd_repo_plan_refresh
   cmd_state
 }

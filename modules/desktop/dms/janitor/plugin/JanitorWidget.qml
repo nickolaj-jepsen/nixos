@@ -8,6 +8,7 @@
 // scan, at most once an hour.
 import QtQuick
 import qs.Common
+import qs.DCommon.Widgets
 import qs.Widgets
 import qs.Modules.Plugins
 
@@ -22,8 +23,27 @@ PluginComponent {
         })
     readonly property int scanIntervalMs: 3600000
 
+    readonly property var categoryOrder: ["build", "tmp", "jobs", "transcripts", "worktree", "branch"]
+    readonly property var categoryTitles: ({
+            "build": "Build dirs",
+            "tmp": "Agent temp",
+            "jobs": "Finished jobs",
+            "transcripts": "Transcripts",
+            "worktree": "Worktrees",
+            "branch": "Branches"
+        })
+    readonly property var categoryIcons: ({
+            "build": "folder",
+            "tmp": "hourglass_empty",
+            "jobs": "work_history",
+            "transcripts": "description",
+            "worktree": "account_tree",
+            "branch": "alt_route"
+        })
+
     property var snapshot: null
     property var items: []
+    property var rows: []
     property var checked: ({})
     property bool scanning: false
     property bool applying: false
@@ -39,8 +59,11 @@ PluginComponent {
     readonly property real tmpBytes: snapshot?.tmp?.used ?? 0
     readonly property real tmpBudget: snapshot?.tmp?.budget ?? 0
     readonly property color levelColor: root.usedPct > 90 ? Theme.tempDanger : root.usedPct > 75 ? Theme.tempWarning : Theme.widgetIconColor
-    readonly property int selectedCount: Object.keys(root.checked).filter(key => root.checked[key]).length
+    readonly property int selectedCount: root.items.filter(item => root.checked[item.id]).length
     readonly property real selectedBytes: root.items.reduce((sum, item) => root.checked[item.id] ? sum + item.bytes : sum, 0)
+    // Every row's bar is drawn against the biggest item, so the shape of the list
+    // says where the space is without a second column of numbers.
+    readonly property real maxBytes: Math.max(1, ...root.items.map(item => item.bytes))
 
     function gib(bytes) {
         if (!bytes)
@@ -50,6 +73,27 @@ PluginComponent {
         if (bytes >= 1048576)
             return Math.round(bytes / 1048576) + "M";
         return Math.ceil(bytes / 1024) + "K";
+    }
+
+    function groupRows(list) {
+        const built = [];
+        root.categoryOrder.forEach(category => {
+            const group = list.filter(item => item.category === category).sort((a, b) => b.bytes - a.bytes);
+            if (group.length === 0)
+                return;
+            built.push({
+                header: true,
+                category: category,
+                label: root.categoryTitles[category] ?? category,
+                icon: root.categoryIcons[category] ?? "folder",
+                bytes: group.reduce((sum, item) => sum + item.bytes, 0),
+                count: group.length
+            });
+            group.forEach(item => built.push(Object.assign({
+                header: false
+            }, item)));
+        });
+        return built;
     }
 
     function refreshState() {
@@ -86,6 +130,7 @@ PluginComponent {
                         preset[item.id] = true;
                 });
                 root.items = plan.items;
+                root.rows = root.groupRows(plan.items);
                 root.checked = preset;
                 root.snapshot = Object.assign({}, root.snapshot, {
                     disk: plan.disk,
@@ -108,6 +153,22 @@ PluginComponent {
     function toggle(id) {
         const next = Object.assign({}, root.checked);
         next[id] = !next[id];
+        root.checked = next;
+    }
+
+    // A category header is the bulk control: all of it, or none of it.
+    function groupSelected(category) {
+        const group = root.items.filter(item => item.category === category);
+        return group.length > 0 && group.every(item => root.checked[item.id]);
+    }
+
+    function toggleGroup(category) {
+        const next = Object.assign({}, root.checked);
+        const wanted = !root.groupSelected(category);
+        root.items.forEach(item => {
+            if (item.category === category)
+                next[item.id] = wanted;
+        });
         root.checked = next;
     }
 
@@ -150,7 +211,7 @@ PluginComponent {
         Row {
             spacing: Theme.spacingXS + 2
 
-            DankIcon {
+            DIcon {
                 anchors.verticalCenter: parent.verticalCenter
                 name: "storage"
                 size: root.iconSize
@@ -180,7 +241,7 @@ PluginComponent {
         Column {
             spacing: Theme.spacingXS
 
-            DankIcon {
+            DIcon {
                 anchors.horizontalCenter: parent.horizontalCenter
                 name: "storage"
                 size: root.iconSize
@@ -197,12 +258,12 @@ PluginComponent {
         }
     }
 
-    popoutWidth: 520
+    popoutWidth: 640
 
     popoutContent: Component {
         PopoutComponent {
             headerText: "Janitor"
-            detailsText: root.error.length > 0 ? root.error : root.result
+            detailsText: root.error
 
             headerActions: Component {
                 Row {
@@ -220,9 +281,9 @@ PluginComponent {
                         width: Theme.iconSize + Theme.spacingXS * 2
                         height: width
                         radius: width / 2
-                        color: scanArea.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.1) : "transparent"
+                        color: scanArea.containsMouse ? Theme.surfaceHover : "transparent"
 
-                        DankIcon {
+                        DIcon {
                             id: scanIcon
                             anchors.centerIn: parent
                             name: "refresh"
@@ -250,6 +311,7 @@ PluginComponent {
                 }
             }
 
+            // Disk first, because that is what the widget it replaced showed.
             Item {
                 width: parent.width
                 height: diskColumn.implicitHeight + Theme.spacingM
@@ -263,14 +325,37 @@ PluginComponent {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: Theme.spacingXS
 
-                    StyledText {
+                    Item {
                         width: parent.width
-                        text: "root   " + root.gib(root.totalBytes - root.availBytes) + " of " + root.gib(root.totalBytes) + "   ·   " + root.gib(root.availBytes) + " free"
-                        font.pixelSize: Theme.fontSizeMedium
-                        color: Theme.surfaceText
+                        height: summaryLeft.implicitHeight
+
+                        StyledText {
+                            id: summaryLeft
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.gib(root.totalBytes - root.availBytes) + " of " + root.gib(root.totalBytes) + " used"
+                            font.pixelSize: Theme.fontSizeMedium
+                            color: Theme.surfaceText
+                        }
+
+                        StyledText {
+                            anchors.left: summaryLeft.right
+                            anchors.leftMargin: Theme.spacingS
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "· " + root.gib(root.availBytes) + " free"
+                            font.pixelSize: Theme.fontSizeMedium
+                            color: root.usedPct > 90 ? Theme.tempDanger : Theme.surfaceVariantText
+                        }
+
+                        StyledText {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.gib(root.reclaimBytes) + " reclaimable"
+                            font.pixelSize: Theme.fontSizeMedium
+                            color: Theme.primary
+                        }
                     }
 
-                    // The storage widget's fill, as a bar rather than a ring.
                     Rectangle {
                         width: parent.width
                         height: 6
@@ -287,71 +372,156 @@ PluginComponent {
 
                     StyledText {
                         width: parent.width
-                        text: root.gib(root.reclaimBytes) + " reclaimable   ·   agent temp " + root.gib(root.tmpBytes) + " of " + root.gib(root.tmpBudget)
+                        text: "agent temp " + root.gib(root.tmpBytes) + " of " + root.gib(root.tmpBudget)
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.surfaceVariantText
                     }
                 }
             }
 
+            // The checklist: one line per row, sized and aligned in columns, with a
+            // bar behind each row drawn against the biggest item.
             ListView {
+                id: checklist
                 width: parent.width
-                height: Math.min(contentHeight, 320)
+                height: Math.min(contentHeight, 360)
                 clip: true
-                model: root.items
+                model: root.rows
                 boundsBehavior: Flickable.StopAtBounds
 
-                delegate: Rectangle {
+                delegate: Item {
+                    id: row
                     required property var modelData
-                    readonly property bool ticked: !!root.checked[modelData.id]
+                    readonly property bool isHeader: modelData.header === true
+                    readonly property bool ticked: !row.isHeader && !!root.checked[modelData.id]
 
                     width: ListView.view.width
-                    height: rowContent.implicitHeight + Theme.spacingS
-                    color: rowArea.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.06) : "transparent"
+                    height: row.isHeader ? 32 : 30
+
+                    // Category header: icon, name, what the group holds, and a
+                    // click that toggles the whole group.
+                    Item {
+                        visible: row.isHeader
+                        anchors.fill: parent
+
+                        Rectangle {
+                            anchors.top: parent.top
+                            width: parent.width - Theme.spacingS * 2
+                            x: Theme.spacingS
+                            height: 1
+                            color: Theme.withAlpha(Theme.surfaceText, 0.1)
+                            visible: index > 0
+                        }
+
+                        Row {
+                            anchors.left: parent.left
+                            anchors.leftMargin: Theme.spacingS
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Theme.spacingS
+
+                            DIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: row.isHeader ? modelData.icon : ""
+                                size: Theme.iconSizeSmall
+                                color: Theme.surfaceVariantText
+                            }
+
+                            StyledText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: row.isHeader ? modelData.label : ""
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Font.DemiBold
+                                color: Theme.surfaceText
+                            }
+
+                            StyledText {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: row.isHeader ? root.gib(modelData.bytes) + " · " + modelData.count : ""
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.features: root.tabular
+                                color: Theme.surfaceVariantText
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.toggleGroup(modelData.category)
+                        }
+                    }
+
+                    // The row's own bar, behind everything else.
+                    Rectangle {
+                        visible: !row.isHeader
+                        anchors.left: parent.left
+                        anchors.leftMargin: Theme.spacingS
+                        width: Math.max(2, (parent.width - Theme.spacingS * 2) * modelData.bytes / root.maxBytes)
+                        height: parent.height - 2
+                        y: 1
+                        radius: 4
+                        color: Theme.withAlpha(root.selectedCount > 0 && row.ticked ? Theme.primary : Theme.surfaceText, row.ticked ? 0.16 : 0.06)
+                    }
+
+                    Rectangle {
+                        visible: !row.isHeader && rowArea.containsMouse
+                        anchors.fill: parent
+                        color: Theme.surfaceHover
+                        opacity: 0.5
+                    }
 
                     Row {
-                        id: rowContent
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
+                        visible: !row.isHeader
+                        anchors.fill: parent
                         anchors.leftMargin: Theme.spacingS
                         anchors.rightMargin: Theme.spacingS
                         spacing: Theme.spacingS
 
-                        DankIcon {
+                        DIcon {
                             anchors.verticalCenter: parent.verticalCenter
-                            name: parent.parent.ticked ? "check_box" : "check_box_outline_blank"
-                            size: Theme.iconSizeSmall
-                            color: parent.parent.ticked ? Theme.primary : Theme.surfaceVariantText
+                            name: row.ticked ? "check_box" : "check_box_outline_blank"
+                            size: Theme.iconSize
+                            color: row.ticked ? Theme.primary : Theme.surfaceVariantText
                         }
 
-                        StyledText {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: root.gib(modelData.bytes)
-                            font.pixelSize: Theme.fontSizeSmall
-                            font.features: root.tabular
-                            color: Theme.surfaceVariantText
-                        }
-
-                        Column {
-                            width: parent.width - Theme.iconSize - 310
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: 1
+                        // Size, right-aligned in a fixed column so the numbers line up.
+                        Item {
+                            width: 56
+                            height: parent.height
 
                             StyledText {
-                                width: parent.width
-                                text: modelData.title
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: root.gib(modelData.bytes)
                                 font.pixelSize: Theme.fontSizeSmall
-                                color: Theme.surfaceText
-                                elide: Text.ElideMiddle
+                                font.features: root.tabular
+                                color: Theme.surfaceVariantText
                             }
+                        }
+
+                        // The short label, elided in the middle so both the repo and
+                        // the directory name survive a narrow row.
+                        StyledText {
+                            width: parent.width - 20 - 56 - 76 - Theme.spacingS * 3
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.label ?? modelData.title
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceText
+                            elide: Text.ElideMiddle
+                        }
+
+                        // Age, right-aligned, the reason the row is offered at all.
+                        Item {
+                            width: 76
+                            height: parent.height
 
                             StyledText {
-                                width: parent.width
-                                text: modelData.detail
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.detail ?? ""
                                 font.pixelSize: Theme.fontSizeSmall - 1
+                                font.features: root.tabular
                                 color: Theme.surfaceVariantText
-                                elide: Text.ElideRight
                             }
                         }
                     }
@@ -359,11 +529,23 @@ PluginComponent {
                     MouseArea {
                         id: rowArea
                         anchors.fill: parent
-                        hoverEnabled: true
+                        enabled: !row.isHeader
+                        hoverEnabled: !row.isHeader
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.toggle(modelData.id)
                     }
                 }
+            }
+
+            StyledText {
+                width: parent.width
+                leftPadding: Theme.spacingS
+                rightPadding: Theme.spacingS
+                topPadding: Theme.spacingXS
+                visible: root.items.length === 0 && !root.scanning
+                text: "Nothing to reclaim."
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.surfaceVariantText
             }
 
             Item {
@@ -379,16 +561,16 @@ PluginComponent {
 
                     StyledText {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: root.selectedCount + " selected"
+                        text: root.result.length > 0 ? root.result : root.selectedCount + " of " + root.items.length + " selected"
                         font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.surfaceVariantText
+                        color: root.result.length > 0 ? Theme.success : Theme.surfaceVariantText
                     }
 
                     Rectangle {
                         width: applyLabel.implicitWidth + Theme.spacingL * 2
                         height: applyLabel.implicitHeight + Theme.spacingS * 2
                         radius: height / 2
-                        color: root.selectedCount === 0 || root.applying ? Theme.withAlpha(Theme.surfaceText, 0.08) : Theme.primary
+                        color: root.selectedCount === 0 || root.applying ? Theme.surfaceContainerHigh : Theme.primary
 
                         StyledText {
                             id: applyLabel
@@ -406,17 +588,6 @@ PluginComponent {
                         }
                     }
                 }
-            }
-
-            StyledText {
-                width: parent.width
-                leftPadding: Theme.spacingS
-                rightPadding: Theme.spacingS
-                bottomPadding: Theme.spacingS
-                visible: root.items.length === 0 && !root.scanning
-                text: "Nothing to reclaim."
-                font.pixelSize: Theme.fontSizeSmall
-                color: Theme.surfaceVariantText
             }
         }
     }

@@ -202,6 +202,24 @@ default_branch() {
   return 1
 }
 
+# A short label for the widget's rows: home truncated, session uuids cut to eight
+# characters, and Claude's project slugs stripped of their "-home-<user>-dev-"
+# prefix so the row says which project rather than repeating the home directory.
+label_for() {
+  local path=$1 tilde='~'
+  case "$path" in
+    "$HOME"/dev/*) path=${path#"$HOME"/dev/} ;;
+    "$HOME"/*) path="$tilde/${path#"$HOME"/}" ;;
+    /tmp/*) path=${path#/tmp/} ;;
+  esac
+  printf '%s\n' "$path" | sed -E '
+    s@^~/?\.claude(-work)?/(projects|jobs)/@@
+    s@^claude-1000/@@
+    s@^-home-[a-z0-9]+-(dev-)?@@
+    s@([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@\1@g
+  '
+}
+
 # Branches that some worktree has checked out; git will not delete those.
 checked_out_branches() {
   git -C "$1" worktree list --porcelain 2>/dev/null | awk '/^branch / {sub("refs/heads/", "", $2); print $2}'
