@@ -25,8 +25,6 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     const session = sessions.begin(ctx);
-    if (session.subagent)
-      pi.setActiveTools(pi.getActiveTools().filter((name) => name !== "memory_save"));
     if (session.scope.orphans.length > 0 && ctx.hasUI) {
       const count = session.scope.orphans.reduce(
         (sum, store) => sum + loadStore(store).entries.length,

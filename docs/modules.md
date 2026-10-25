@@ -145,6 +145,7 @@ home-manager and the overlays):
   `just dev-setup` links `node_modules` into the folder for editor types; then
   this runs the tree without a rebuild:
   `pi -ne -e builtin:codemode -e builtin:mcp -e modules/programs/pi/extensions/core -e modules/programs/pi/extensions/parent`.
+
 - **Third-party pi package**: `pkgs/pi-packages/` is one npm tree whose
   `package.json` holds the roster and the exact pins; the pi leaf lists each
   `$out/node_modules/<name>` as a local path in `settings.packages`, so pi
