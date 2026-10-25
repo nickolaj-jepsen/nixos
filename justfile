@@ -163,6 +163,20 @@ deploy-remote hostname target:
 factor hostname=`hostname -s` target='':
     scripts/factor.sh {{ hostname }} '{{ target }}'
 
+# A pipe would hand the target an empty key if the decrypt failed, so check it first.
+[arg('hostname', pattern='[a-zA-Z0-9._-]+')]
+[arg('target', pattern='[a-zA-Z0-9._@:+-]+')]
+[doc('Install a host its committed SSH host key over ssh (YubiKey) and reboot it, so agenix can decrypt on a freshly imaged host')]
+[group('install')]
+[script]
+push-host-key hostname target *SSHARGS="":
+    key=$(just decrypt secrets/hosts/{{ hostname }}/id_ed25519.age)
+    case $key in *"PRIVATE KEY"*) ;; *) echo "Decrypting the host key failed; {{ target }} is untouched." >&2; exit 1 ;; esac
+    printf '%s\n' "$key" | ssh {{ SSHARGS }} '{{ target }}' sudo install -m 600 /dev/stdin /etc/ssh/ssh_host_ed25519_key
+    ssh {{ SSHARGS }} '{{ target }}' sudo install -m 644 /dev/stdin /etc/ssh/ssh_host_ed25519_key.pub < secrets/hosts/{{ hostname }}/id_ed25519.pub
+    # The connection drops as it goes down.
+    ssh {{ SSHARGS }} '{{ target }}' sudo systemctl reboot || true
+
 [doc('Runs (r)age with yubikey identity')]
 [group('secret')]
 age *ARGS="--help":
