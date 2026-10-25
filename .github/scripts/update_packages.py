@@ -19,11 +19,14 @@ import re
 import subprocess
 import sys
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[2]
 PKGS = ROOT / "pkgs"
+# The npm-sourced bumps automerge, and a broken or hijacked release is usually pulled within days.
+NPM_COOLDOWN_CUTOFF = datetime.now(timezone.utc) - timedelta(days=3)
 
 
 def fetch(url: str) -> bytes:
@@ -117,6 +120,21 @@ def version_key(v: str) -> list:
     return [int(p) if p.isdigit() else p for p in re.split(r"[.\-+~]", v)]
 
 
+def npm_cooled(name: str, current: str) -> str:
+    """The highest stable release of `name` up to its `latest` tag that was published before
+    NPM_COOLDOWN_CUTOFF, or `current` when that is newer."""
+    doc = json.loads(fetch(f"https://registry.npmjs.org/{quote(name, safe='@')}"))
+    ceiling = version_key(doc["dist-tags"]["latest"])
+    ripe = [
+        v
+        for v in doc["versions"]
+        if "-" not in v
+        and version_key(v) <= ceiling
+        and datetime.fromisoformat(doc["time"][v]) <= NPM_COOLDOWN_CUTOFF
+    ]
+    return max([current, *ripe], key=version_key)
+
+
 def update_claude_code() -> tuple[str, str]:
     path = PKGS / "claude-code" / "manifest.zst.json"
     old = json.loads(path.read_text())["version"]
@@ -135,7 +153,7 @@ def update_pi_coding_agent() -> tuple[str, str]:
     path = PKGS / "pi-coding-agent" / "release.json"
     pins = json.loads(path.read_text())
     old = pins["version"]
-    new = json.loads(fetch("https://registry.npmjs.org/@earendil-works/pi-coding-agent/latest"))["version"]
+    new = npm_cooled("@earendil-works/pi-coding-agent", old)
     if new != old:
         src_hash, src = prefetch_unpacked(
             f"https://github.com/earendil-works/pi/archive/refs/tags/v{new}.tar.gz", f"pi-{new}-src"
@@ -255,18 +273,14 @@ def update_pi_packages() -> tuple[str, str]:
     path = PKGS / "pi-packages" / "package.json"
     package = json.loads(path.read_text())
     deps = package["dependencies"]
-    latest = {
-        name: json.loads(fetch(f"https://registry.npmjs.org/{quote(name, safe='@')}").decode())[
-            "dist-tags"
-        ]["latest"]
-        for name in deps
-    }
-    changed = {name: (deps[name], latest[name]) for name in deps if deps[name] != latest[name]}
+    cooled = {name: npm_cooled(name, deps[name]) for name in deps}
+    changed = {name: (deps[name], cooled[name]) for name in deps if deps[name] != cooled[name]}
     if not changed:
         return "", ""
-    path.write_text(json.dumps({**package, "dependencies": latest}, indent=2) + "\n")
+    path.write_text(json.dumps({**package, "dependencies": cooled}, indent=2) + "\n")
     # importNpmLock hashes this lock at eval, so regenerating it is the whole
-    # bump. The build's nodejs writes it, not the runner's.
+    # bump. The build's nodejs writes it, not the runner's; --before holds new
+    # transitive deps to the same cooldown.
     proc = subprocess.run(
         [
             "nix",
@@ -279,6 +293,7 @@ def update_pi_packages() -> tuple[str, str]:
             "install",
             "--package-lock-only",
             "--legacy-peer-deps",
+            f"--before={NPM_COOLDOWN_CUTOFF.isoformat()}",
         ],
         cwd=path.parent,
         capture_output=True,

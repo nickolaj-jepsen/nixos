@@ -51,6 +51,14 @@ Reaching the escalation threshold usually means the package no longer matches
 the cache's build (an override in `pkgs/llama-cpp-cuda`), which is what the
 issue is for.
 
+## npm cooldown
+
+`pi-coding-agent` and `pi-packages` only move to an npm release published at
+least three days earlier (`npm_cooled` in `update_packages.py`), and the
+pi-packages lock is regenerated with `npm --before` at the same cutoff, so new
+transitive deps wait too. A broken or hijacked release is usually pulled within
+that window, and these bumps still automerge.
+
 ## Fix agent (`update-fix.yml`)
 
 Dispatched once per failure signature (unit + kind + failed drv names). It
