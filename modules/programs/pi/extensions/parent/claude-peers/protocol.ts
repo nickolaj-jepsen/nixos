@@ -59,6 +59,8 @@ export interface RegistryEntry {
   /** pi-only, ignored by Claude Code: the sidecar's sentence about the session, and the step in flight while busy. */
   summary?: string;
   doing?: string;
+  /** What a `waiting` session waits on; Claude Code writes its own, pi the open permission dialog. */
+  waitingFor?: string;
   [key: string]: unknown;
 }
 
