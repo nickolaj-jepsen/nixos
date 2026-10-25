@@ -464,7 +464,23 @@ def parse_duration(value: str) -> float:
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="pr.py", description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        prog="pr.py",
+        description=__doc__.splitlines()[0],
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Exit codes:\n"
+            "  0  printed status, or the command succeeded\n"
+            "  1  refused; the reason is on stderr, and only `watch` means 'still waiting'\n"
+            "  2  environment: git or gh missing, gh unauthenticated, no origin remote\n"
+            "  3  the branch conflicts with its base\n"
+            " 10  watch: approved and green / merge: merged\n"
+            " 11  changes requested\n"
+            " 12  checks failing\n"
+            " 13  closed or merged elsewhere\n"
+            " 14  watch timed out; re-run it to resume\n"
+        ),
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     status = sub.add_parser("status", help="report branch, base, commits, PR and checks")
@@ -473,7 +489,12 @@ def main(argv: list[str]) -> int:
     status.set_defaults(func=cmd_status)
 
     open_ = sub.add_parser("open", help="create the PR for this branch, or update it")
-    open_.add_argument("--draft", action="store_true", help="open as a draft")
+    style = open_.add_mutually_exclusive_group()
+    style.add_argument("--draft", action="store_true", help="open as a draft")
+    style.add_argument(
+        "--ready", dest="draft", action="store_false", help="open ready for review (default)"
+    )
+    open_.set_defaults(draft=False)
     open_.add_argument("--title", required=True)
     open_.add_argument("--body-file", required=True)
     open_.add_argument("--no-push", action="store_true", help="assume the branch is already pushed")

@@ -51,5 +51,5 @@ claude plugin install skills@nickolaj-jepsen
   Runs in pi.
 - **wt-land** — take finished work in a git worktree to landed commits: shape it into a
   few, run the repo's checks, stop at a review gate, then land with `wt apply` or open a
-  PR (draft, awaiting review, or CI automerge). Needs `wt` and `gh`; the PR half lives in
-  a bundled `scripts/pr.py`.
+  PR (draft, awaiting review, or merged on green). Needs `wt`, `gh` and `python3`; the PR
+  half lives in a bundled `scripts/pr.py`.

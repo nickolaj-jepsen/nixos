@@ -117,8 +117,8 @@ in {
 
       - `/wt <name>` moves the session into a worktree (creating it if new); `/back`
         moves it to the primary checkout. Neither touches the worktree's contents.
-      - Pi never commits, lands, or removes a worktree, including on exit; `wt --help`
-        states landing and cleanup.
+      - Pi never commits, lands or removes a worktree by itself, including on exit:
+        `/wt-land` is the commit-and-land path and it stops at a gate for review.
       - `/new` inside a worktree starts a fresh session in that worktree.
     '';
     env =
