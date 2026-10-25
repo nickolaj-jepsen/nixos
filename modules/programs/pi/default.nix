@@ -1,15 +1,3 @@
-# Pi coding agent: the package comes from pkgs/pi-coding-agent, wrapped here.
-# The package roster is based on the lazypi catalog (https://lazypi.org).
-#
-# The packages array is authoritative: the wrapper jq-merges settings into
-# ~/.pi/agent/settings.json on every launch and arrays replace wholesale —
-# imperative `pi install`/`pi remove` edits revert at next start, and entries
-# removed here stop loading but leave their download in ~/.pi/agent/{npm,git}.
-# Third-party packages are Nix-built (pkgs/pi-packages) and listed as local
-# paths, so pi never runs npm and `pi update` has nothing to reconcile.
-#
-# Own extensions live in ./extensions as two local pi packages: core/ loads in
-# every session, parent/ never in a subagent child. See docs/modules.md.
 {
   fpLib,
   inputs,
@@ -20,12 +8,10 @@
       pname = "pi-extensions";
       version = "0";
       src = ./extensions;
-      # Reads the lockfile directly: no npmDepsHash to bump when deps change.
       npmDeps = pkgs.importNpmLock {npmRoot = ./extensions;};
       inherit (pkgs.importNpmLock) npmConfigHook;
       nativeBuildInputs = [pkgs.typescript];
-      # parent/lib/spellfix links to the Claude Code mod, so the editor and `pi -e`
-      # see its core; in the store the link dangles, so the files are copied in.
+      # parent/lib/spellfix is a symlink to the Claude Code mod; it dangles in the store.
       postPatch = ''
         rm parent/lib/spellfix
         install -Dm644 ${../claude-code/mods/spellfix/hooks/core.ts} parent/lib/spellfix/hooks/core.ts
@@ -56,7 +42,7 @@
       '';
     };
 in {
-  # For `just dev-setup`, which links its node_modules into the repo for the editor.
+  # Used by `just dev-setup` for the editor's node_modules.
   perSystem = {system, ...}: let
     # flake-parts' pkgs has no overlay stack, so import one that does.
     pkgs = import inputs.nixpkgs {
@@ -75,24 +61,13 @@ in {
   }: let
     pi = pkgs.pi-coding-agent;
     piPackages = pkgs.pi-packages;
-    # Shared with the Claude Code spellchecker (lib/default.nix), so a word
-    # learned in one agent's picker is known to the other.
     spellChecker = fpLib.mkHunspell pkgs;
-    # Static flexoki theme; see _theme.nix for why `system` isn't used.
     theme = pkgs.writeText "fireproof.json" (builtins.toJSON (import ./_theme.nix {
       inherit lib;
       colors = config.fireproof.theme.colors;
     }));
-    # llama-swap's entries for this host's VRAM tier (modules/programs/llm.nix).
     localModels = (import ../_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
     localMaxTokens = 8192;
-    # Pi-only, not in the shared programs.mcp registry: Claude Code has its own
-    # browser tools. The server launches its own Chromium on a throwaway profile,
-    # never attaching to a running browser. Throwaway because a session that opens
-    # a second one would fight the first over a shared profile. A subagent never
-    # loads MCP: its tool allowlist names no `mcp__` tool, and that is what the
-    # agent package gates the extension on.
-    # extensions/parent/browser-gate.ts asks before its first call each session.
     hasBrowser = config.programs.chromium.enable || (pkgs.stdenv.isDarwin && config.fireproof.desktop.enable);
     chrome-devtools = {
       command = lib.getExe pkgs.chrome-devtools-mcp;
@@ -100,24 +75,21 @@ in {
         [
           "--no-usage-statistics"
           "--no-performance-crux"
+          # A shared profile would make a second session fight the first.
           "--isolated"
-          # Image tokens scale with pixels; full-size PNGs swamp small context windows.
           "--screenshotFormat=jpeg"
           "--screenshotMaxWidth=1280"
         ]
         # Puppeteer can't find a browser on NixOS unaided; darwin's Homebrew Chrome it finds.
         ++ lib.optional config.programs.chromium.enable "--executablePath=${lib.getExe config.programs.chromium.package}";
     };
-    # The roster and pins are pkgs/pi-packages/package.json; its alphabetical
-    # order loads the permission system first.
+    # Alphabetical order loads the permission system first.
     thirdPartyPackages = piPackages.packageNames;
-    # One source string per package, so settings.packages and the children's
-    # exclusion list in subagents.json cannot drift.
+    # settings.packages and the children's exclusions must match string for string.
     packagePath = name: "${piPackages}/node_modules/${name}";
     extensions = mkExtensions pkgs pi;
     parentPath = "${extensions}/parent";
-    # Parsed with pi's own reader: one role the package can't parse stops
-    # pi-subagents from loading at all.
+    # One role pi's reader can't parse stops pi-subagents from loading at all.
     agentRoles = pkgs.runCommand "pi-agent-roles" {nativeBuildInputs = [pkgs.nodejs];} ''
       for role in ${./agents}/*.md; do
         node --input-type=module -e "
@@ -130,15 +102,12 @@ in {
       done
       cp -r ${./agents} $out
     '';
-    # Children keep core/ (their models are vm/* virtual models, which only its
-    # router registers) and the permission system, whose `ask` forwards to this
-    # session. The other packages have nothing to do in a headless child.
+    # Children keep core/ (only its router registers vm/*) and the permission system.
     childExcludedPackages =
       map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages)
       ++ [parentPath];
-    # agent-context.md is shared by every agent; keep it agent-agnostic.
-    # How to delegate is in extensions/core/codemode-only.ts: these rules reach every
-    # child as project context, and a child holds no agent tools.
+    # agent-context.md is shared by every agent; keep it agent-agnostic. Children
+    # read these rules too and hold no agent tools, so no delegation how-to here.
     rules = ''
       ${builtins.readFile ../agent-context.md}
       ## Worktrees in pi
@@ -152,31 +121,21 @@ in {
     '';
     env =
       {
-        # Nix-built pi can't self-update; extension-update notices still show.
         PI_SKIP_VERSION_CHECK = "1";
-        # A path, not the key: extensions/core/exa.ts reads it, so the key stays out
-        # of the environment every tool and MCP server inherits.
+        # A path, so the key stays out of every tool's and MCP server's environment.
         PI_EXA_KEY_FILE = config.age.secrets.exa-api-key.path;
-        # Spellfix (extensions/parent/spellfix.ts) shares its dictionary with the
-        # Claude Code mod.
         PI_SPELLFIX_HUNSPELL = lib.getExe spellChecker;
         PI_SPELLFIX_DICTS = lib.concatStringsSep "," fpLib.hunspellLanguages;
         PI_SPELLFIX_PERSONAL = fpLib.hunspellPersonalDictionary config;
       }
-      # The fireproof.agents.lspServers registry, read by extensions/core/lsp.ts.
       // lib.optionalAttrs (config.fireproof.agents.lspServers != {}) {
         PI_LSP_SERVERS = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
       };
     settings = {
-      # The model picker's "save as default" reverts at launch; change it here.
-      # The kinds and their ladders: docs/models.md.
       defaultProvider = "vm";
       defaultModel = "flash";
       defaultThinkingLevel = "high";
-      # The pickers open on these and ctrl+p cycles them; their All tab still
-      # lists every model. A default outside the list would start on the first
-      # entry instead, so the virtual models lead. Each entry's role:
-      # docs/models.md.
+      # A default outside the list starts on the first entry, so vm/* leads.
       enabledModels =
         [
           "vm/*"
@@ -188,55 +147,36 @@ in {
           "tensorx/**"
         ]
         ++ lib.optional config.fireproof.dev.llm.enable "local/*";
-      # The defaults (reserve 16k, keep 20k) overrun a 32k window: compaction would
-      # start at 16k, with the system prompt and tools already taking ~9k of it.
+      # pi's defaults (reserve 16k, keep 20k) overrun a 32k window.
       compaction.modelOverrides = lib.optionalAttrs config.fireproof.dev.llm.enable (lib.mapAttrs' (id: m:
         lib.nameValuePair "local/${id}" {
           reserveTokens = localMaxTokens;
           keepRecentTokens = lib.min 20000 (m.ctx / 4);
         })
       localModels);
-      # Pinned, not `system`, so the accent is the desktop accent.
       theme = "fireproof";
-      # Keeps the version and key hints; drops the loaded-resource listing.
       quietStartup = "header";
-      # One line per reasoning run instead of the whole block, and the resting
-      # state for the thinking chip on the editor border. alt+t or a click still
-      # opens it for a session, but a value written that way is merged away at
-      # the next launch, like every other setting here.
       hideThinkingBlock = true;
-      # `/tree` opens on my prompts; ctrl+d returns to the default view and
-      # ctrl+a shows every entry.
       treeFilterMode = "user-only";
-      # OSC 9;4 progress in ghostty's tab, for runs long enough to switch away from.
       terminal.showTerminalProgress = true;
-      # Loads the cwd's direnv/nix-direnv env into the bash tool, which
-      # otherwise keeps the env pi was launched with. Blocked or missing
-      # .envrc files export nothing.
       shellCommandPrefix = ''eval "$(${lib.getExe config.programs.direnv.package} export bash 2>/dev/null)"'';
-      # extensions/core/codemode-only.ts moves the expensive tools behind it.
       defaultTools = ["+codemode"];
-      # Local paths: pi loads the Nix-built tree as-is (see
-      # pkgs/pi-packages for how the npm dependencies get there).
-      # parent/ first: chained before_agent_start and tool_result handlers run
-      # in package order, which sets the system prompt's section order.
+      # parent/ before core/: handlers chain in package order, which sets the
+      # system prompt's section order.
       packages =
         map packagePath thirdPartyPackages
         ++ [parentPath "${extensions}/core"];
-      # Arrays replace wholesale, so `pi config` toggles of built-ins revert at launch.
+      # Empty on purpose: arrays replace wholesale, reverting `pi config` toggles.
       extensions = [];
     };
-    # Built-in MCP reads ~/.pi/agent/mcp.json, not the shared
-    # ~/.config/mcp/mcp.json. Merged at launch: /mcp toggles persist, but a
-    # server dropped here stays in the file until removed by hand.
     mcp = let
       # pi rejects the null/empty fields home-manager's option fills in.
       shared = lib.mapAttrs (_: lib.filterAttrs (_: v: v != null && v != {} && v != [])) config.programs.mcp.servers;
       servers = shared // lib.optionalAttrs hasBrowser {inherit chrome-devtools;};
     in
       lib.optionalAttrs (servers != {}) {mcpServers = servers;};
-    # jq's `*` merges objects key by key and replaces arrays. Rewrites only on a
-    # change, so running sessions don't see the file churn.
+    # A key or server dropped here stays in the file until removed by hand.
+    # Rewrites only on a change, so running sessions don't see the file churn.
     merge = name: value:
       lib.optionalString (value != {}) ''
         f="$dir/${name}"
@@ -255,16 +195,12 @@ in {
     '';
   in {
     config = lib.mkIf config.fireproof.dev.pi.enable {
-      # A trusted project's .pi/APPEND_SYSTEM.md replaces this one, not adds to it.
       home.file.".pi/agent/APPEND_SYSTEM.md".text = rules;
       home.file.".pi/agent/themes/fireproof.json".source = theme;
 
-      # The extension spawns its own hunspell; keep the package in the profile too
-      # so the same dictionaries are available outside pi.
       home.packages = [wrapper spellChecker];
 
-      # Literal path: the wrapper single-quotes it, so the default secretsDir
-      # spelling would reach `cat` unexpanded. It's a symlink into secretsDir.
+      # Literal path: the wrapper single-quotes it, so a secretsDir spelling stays unexpanded.
       age.secrets.exa-api-key = {
         rekeyFile = ../../../secrets/exa-api-key.age;
         path = "${config.home.homeDirectory}/.pi/agent/exa-api-key";
@@ -280,9 +216,7 @@ in {
       home.file.".pi/agent/models.json".text = builtins.toJSON {
         providers =
           {
-            # No `opencode` (Zen) entry on purpose: its free models are free only
-            # inside opencode itself, and the Go subscription covers the paid ones.
-            # pi's bundled Go catalog predates K3.1 Pro; declare it until a refresh carries it.
+            # pi's bundled Go catalog predates K3.1 Pro.
             opencode-go = {
               apiKey = "!cat ${config.age.secrets.opencode-go-api-key.path}";
               models = [
@@ -308,8 +242,7 @@ in {
                 }
               ];
             };
-            # The plan serves k3.1-pro, which pi's bundled catalog predates too;
-            # its `kimi-for-coding` id is K2.8 Preview, not this model.
+            # pi's bundled `kimi-for-coding` is K2.8 Preview, not this model.
             kimi-coding = {
               apiKey = "!cat ${config.age.secrets.kimi-coding-api-key.path}";
               models = [
@@ -326,8 +259,7 @@ in {
                     cacheRead = 0.2;
                     cacheWrite = 0;
                   };
-                  # The plan rejects the `developer` role and wants prior reasoning
-                  # replayed; without this the entry inherits pi's defaults.
+                  # The plan rejects the `developer` role and wants prior reasoning replayed.
                   compat = {
                     supportsStore = false;
                     supportsDeveloperRole = false;
@@ -349,11 +281,9 @@ in {
                 }
               ];
             };
-            # API credits, not the Max subscription: run /login anthropic and
-            # that stored OAuth credential would take precedence over this.
+            # API credits; a `/login anthropic` OAuth credential would take precedence.
             anthropic.apiKey = "!cat ${config.age.secrets.anthropic-api-key.path}";
-            # Only for the Jev classifier gate in extensions/core/routers.ts; the
-            # provider itself is one of pi's built-ins.
+            # Built-in provider; only the router's Jev gate uses it.
             typesafe.apiKey = "!cat ${config.age.secrets.typesafe-api-key.path}";
             tensorx = {
               baseUrl = "https://api.tensorx.ai/v1";
@@ -370,8 +300,6 @@ in {
               };
               models = import ./_tensorx-models.nix;
             };
-            # Same catalog opencode reads (../_synthetic-models.nix); each client
-            # maps it to its own schema.
             synthetic = {
               baseUrl = "https://api.synthetic.new/openai/v1";
               api = "openai-completions";
@@ -394,7 +322,6 @@ in {
                   reasoning = true;
                   contextWindow = m.ctx;
                   maxTokens = m.maxOut;
-                  # A level the endpoint doesn't accept is null: pi hides it.
                   thinkingLevelMap = {
                     off =
                       if lib.elem "none" m.efforts
@@ -418,28 +345,21 @@ in {
             };
           }
           // lib.optionalAttrs config.fireproof.dev.llm.enable {
-            # Served by llama-swap (modules/programs/llm.nix), which unloads one
-            # entry to load the other — switching costs a ~15s reload.
             local = {
               baseUrl = "http://127.0.0.1:9292/v1";
               api = "openai-completions";
-              # llama-swap is loopback-only and default-allow; the field still has
-              # to be set for pi to treat the provider as configured.
+              # Unused by llama-swap, but pi ignores a provider without one.
               apiKey = "local";
               compat = {
                 supportsStore = false;
                 supportsDeveloperRole = false;
-                # llama.cpp drops top-level reasoning_effort (upstream PR #26941);
-                # the depth is pinned server-side per llama-swap entry instead.
+                # llama.cpp drops reasoning_effort; llama-swap pins the depth per entry.
                 supportsReasoningEffort = false;
                 maxTokensField = "max_tokens";
                 supportsStrictMode = false;
                 sendSessionAffinityHeaders = false;
-                # Sent as chat_template_kwargs, which llama.cpp merges over the
-                # server's --chat-template-kwargs rather than replacing them, so the
-                # thinking toggle works per request and the pinned effort survives.
-                # Not qwen-chat-template: its preserve_thinking keeps old reasoning
-                # in the prompt, which the small windows can't spare.
+                # llama.cpp merges these over the server's kwargs, so the pinned effort survives.
+                # Not qwen-chat-template: its preserve_thinking replays old reasoning.
                 thinkingFormat = "chat-template";
                 chatTemplateKwargs.enable_thinking = {"$var" = "thinking.enabled";};
               };
@@ -464,13 +384,8 @@ in {
           };
       };
 
-      # Claude Code's keys where pi leaves them free: alt+p and ctrl+l open the
-      # labelled model picker (extensions/parent/model-labels.ts), leaving the stock one
-      # to /model, and alt+t shows or hides thinking blocks (Claude Code's alt+t
-      # turns thinking itself on or off; shift+tab cycles that here). Frees ctrl+s for
-      # extensions/parent/stash.ts and ctrl+t for the todo overlay below. pi's conflict
-      # check ignores view, so every built-in on a key an extension claims moves,
-      # even the picker-only alt+s saves and the /tree filter.
+      # pi's conflict check ignores view, so every built-in on a key an extension
+      # claims moves, even the picker-only alt+s saves and the /tree filters.
       home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
         "$schema" = "https://pi.dev/schemas/keybindings.schema.json";
         # Reserved keys block an extension's, so the stock picker holds none.
@@ -481,30 +396,22 @@ in {
         "app.thinking.save" = "alt+s";
         "app.session.toggleSort" = "alt+s";
         "app.models.save" = "alt+s";
-        # Still reachable through the filter cycle.
         "app.tree.filter.noTools" = [];
-        # ctrl+l opens the labelled model picker.
         "app.tree.filter.labeledOnly" = [];
-        # Unbound by pi: the granular scroll between pageUp and the prompt
-        # jumps. alt+<page/arrow> stays clear of zellij's plain alt+<letter>.
         "tui.altScreen.halfPageUp" = "alt+pageUp";
         "tui.altScreen.halfPageDown" = "alt+pageDown";
         "tui.altScreen.lineUp" = "alt+shift+up";
         "tui.altScreen.lineDown" = "alt+shift+down";
-        # ctrl+end/ctrl+home are a two-hand reach; a list replaces the default, so
-        # keep it. alt+end is also what the scrolling pill advertises.
+        # A list replaces the default; the scrolling pill advertises alt+end.
         "tui.altScreen.top" = ["ctrl+home" "alt+home"];
         "tui.altScreen.bottom" = ["ctrl+end" "alt+end"];
-        # Unbound by pi. Plain alt+<key> belongs to zellij's default keybinds.
+        # Plain alt+<letter> belongs to zellij.
         "app.session.new" = "alt+shift+n";
         "app.session.resume" = "alt+shift+r";
         "app.session.tree" = "alt+shift+t";
         "app.session.fork" = "alt+shift+f";
       };
 
-      # Claude Code puts the todo checklist on ctrl+t (pi's ctrl+t became alt+t
-      # above). rpiv-todo only collapses and expands an overlay that is already
-      # showing, so the key does nothing while the list is empty.
       home.file.".config/rpiv-todo/config.json".text = builtins.toJSON {
         collapseKey = "ctrl+t";
         guidance.promptGuidelines = [
@@ -514,7 +421,6 @@ in {
         ];
       };
 
-      # Shorter than the guidance it ships with; the parameter schema can't be overridden.
       home.file.".config/rpiv-ask-user-question/config.json".text = builtins.toJSON {
         guidance = {
           description = ''Ask the user 1-4 structured questions, 2-4 options each, and wait for the answers. A "Type something." row and Esc are added to every question; never author "Other" or "Type something." options. Put a recommended option first and end its label with "(Recommended)". An option's `preview` (markdown in a side pane, single-select only) compares concrete artifacts: mockups, code, diagrams, configs; skip it for plain preferences.'';
@@ -525,22 +431,13 @@ in {
         };
       };
 
-      # Children inherit the parent session's extensions unless excluded here,
-      # and each child runs its own copy of them. `/subagents:settings` writes the
-      # project file only, so this one can stay read-only.
       home.file.".pi/agent/subagents.json".text = builtins.toJSON {
-        # A child that interrupts the parent mid-run competes with the turn that
-        # spawned it; its findings ride the completion notice instead.
         midRunUpdates = false;
         excludedExtensionPackages = childExcludedPackages;
       };
 
-      # The fireproof.agents.skills registry, in a user skills dir rather than a
-      # --skill flag: the agent package builds each child session with its own
-      # resource loader, which scans this dir but never sees the main process's
-      # flags. The cross-tool Agent Skills dir, not ~/.pi/agent/skills, as one
-      # store link: `npx skills add` writes here, and a read-only target makes
-      # that fail instead of slipping skills into the prompt.
+      # A dir, not --skill flags, which children never see. One read-only link, so
+      # `npx skills add` fails instead of slipping skills into the prompt.
       home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" config.fireproof.agents.skills;
 
       home.file.".pi/agent/prompts" = {
@@ -548,26 +445,17 @@ in {
         recursive = true;
       };
 
-      # Subagent roles; general-purpose, Explore and Plan override the package's own.
       home.file.".pi/agent/agents" = {
         source = agentRoles;
         recursive = true;
       };
 
-      # Nix-owned (read-only), so pi's "persist globally" approval won't stick;
-      # session approvals still work.
       home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
         # Otherwise bg_run is an ordinary extension tool and skips the bash rules below.
         shellTools.bg_run.commandArgument = "command";
-        # extensions/core/guardian.ts: a model judge that approves an ask your own
-        # prompts plainly asked for; anything else still reaches the dialog.
         authorizerChain = ["guardian"];
-        # A path whose read/write direction is unproven is checked against both
-        # external_directory directions and takes the stricter answer, so every
-        # routine reader outside the package's pure-reader core lands on the
-        # write ask below. Declaring one proves its operands are reads. Don't
-        # declare a core word (cat, grep, sed, …): the core wins and the
-        # package warns that the entry is ignored.
+        # An undeclared reader outside the package's core lands on the write ask
+        # below. Declaring a core word (cat, grep, sed, …) is ignored with a warning.
         commandEffects = {
           readlink.effects = "read";
           jq.effects = "read";
@@ -605,8 +493,7 @@ in {
               };
             };
           };
-          # eval and the read-only flake verbs; build and run stay undeclared so
-          # their store paths and links still ask.
+          # build and run stay undeclared so their store paths and links still ask.
           nix.subcommands = {
             eval = "read";
             search = "read";
@@ -621,11 +508,7 @@ in {
         };
         permission = {
           "*" = "allow";
-          # Gates bash too, and matches symlink targets as well as the path as
-          # typed. Every home-manager secret placed outside secretsDir is denied
-          # where it lands; the agenix globs cover secretsDir itself on both
-          # platforms, the agenix.d/<gen> dirs its symlinks resolve to, and
-          # system secrets under /run/agenix.
+          # Also matches symlink targets, hence the agenix.d/<gen> globs.
           path =
             {
               "*.env" = "deny";
@@ -638,42 +521,31 @@ in {
               "~/.ssh/id_*" = "deny";
               "~/.claude/.credentials.json" = "deny";
               "~/.claude-work/.credentials.json" = "deny";
-              # /login and MCP OAuth tokens.
               "~/.pi/agent/auth.json" = "deny";
               "~/.pi/agent/mcp-auth.json" = "deny";
             }
             // lib.listToAttrs (map (secret: lib.nameValuePair secret.path "deny")
               (lib.filter (secret: !lib.hasPrefix config.age.secretsDir secret.path)
                 (lib.attrValues config.age.secrets)));
-          # Where a write lands is decided here, not by bash text: the package
-          # also matches every bash path argument in its absolute spelling, so a
-          # pattern can't tell `rm -rf build` from `rm -rf /abs/build`. Covers rm,
-          # redirects and the write/edit tools alike. A subagent's ask reaches
-          # this session's dialog, naming the child. The cwd root
-          # counts as inside, so only `rm * ~*` below catches removing it, and
-          # only when typed with ~.
+          # Bash path args are also matched absolute, so gate write locations here,
+          # not in bash rules. The cwd root counts as inside; only `rm * ~*` catches it.
           external_directory_write = let
             roots =
-              # The store is read-only; listed so `rm result`, a link resolving
-              # into it, doesn't ask.
-              # One level into ~/worktrees, so a whole <repo> dir still asks.
+              # /nix/store so `rm result` doesn't ask; ~/worktrees/* so a whole <repo> does.
               ["/tmp" "~/.local/share/agents" "~/worktrees/*" "/nix/store"];
           in
             {"*" = "ask";}
             // lib.listToAttrs (lib.concatMap (root: [
                 (lib.nameValuePair "${root}/*" "allow")
-                # The typed spelling is matched too, so `/tmp/../home` would
-                # otherwise ride the allow.
+                # The typed spelling is matched too, so `/tmp/../home` would ride the allow.
                 (lib.nameValuePair "${root}/*..*" "ask")
               ])
               roots);
           bash = {
             # Explicit, or the top-level "*" still applies but warns at startup.
             "*" = "allow";
-            # Bash rules are last-match-wins and Nix sorts these keys, so the
-            # generic allow above stays first and narrower rules follow it.
-            # A computed path gets no absolute spelling, so the outside-cwd check
-            # above can't see it.
+            # Last match wins and Nix sorts keys: `*` sorts first, so narrower rules win.
+            # A computed path gets no absolute spelling, so the write gate can't see it.
             "rm * $*" = "ask";
             "rm * .*" = "ask";
             # Never produced from a relative argument, so only a typed ~ hits it.
@@ -683,12 +555,11 @@ in {
             "sudo rm *" = "deny";
             "sudo *" = "ask";
             "git push --force*" = "ask";
-            # Mirrors claude-code's ask list: these touch the live system or the outside world.
+            # Mirrored in claude-code's ask list.
             "just switch *" = "ask";
             "just boot *" = "ask";
             "just deploy-remote *" = "ask";
             "just gc *" = "ask";
-            # Prints plaintext secrets to the transcript.
             "just decrypt *" = "ask";
             "gh pr merge *" = "ask";
             "gh pr create *" = "ask";

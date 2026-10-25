@@ -1,18 +1,10 @@
-# Pi theme built from the fireproof palette. Pi's `system` theme derives its
-# accent hue from the terminal's ANSI magenta, which is why the editor border,
-# inline code and list bullets came out magenta; a static theme pins them to
-# `accent` instead. Pi paints no base background, so the transcript keeps the
-# terminal's own `bg` and only the surfaces below sit a step off it.
+# Static: pi's `system` theme takes its accent from the terminal's ANSI magenta.
 {
   lib,
   colors,
 }: let
   hex = name: "#${colors.${name}}";
 
-  # Fill for tinted panels: `name` mixed `pct` percent over `bg`. At 20 the panel
-  # lands just under `ui`'s luminance, so a hue as bright as flexoki `green`
-  # reads as a grey-green surface instead of a block of color; the container
-  # step `accentContainer` uses is for small elements with text on top.
   tint = pct: name: let
     # Nix has no hex parser; TOML's 0x integer literal is the shortest way in.
     parse = s: (builtins.fromTOML "v = 0x${s}").v;
@@ -53,13 +45,9 @@ in {
     customMessageText = hex "fgAlt";
     customMessageLabel = hex "accent";
 
-    # The only hue-coded box. A finished run sits at half the tint an error does:
-    # green is the common case and must not out-shout the prose beside it, while a
-    # failed tool is the one row worth looking at twice.
     toolPendingBg = hex "ui";
     toolSuccessBg = tint 10 "green";
     toolErrorBg = tint 20 "red";
-    # Dimmer than body text: a tool call is scaffolding around the answer.
     toolTitle = hex "fgAlt";
     toolOutput = hex "fgAlt";
 
@@ -88,9 +76,7 @@ in {
     syntaxOperator = hex "fgAlt";
     syntaxPunctuation = hex "fgAlt";
 
-    # Same order as pi's own ramp (quiet → deep), re-hued to end at the accent
-    # instead of violet: this is the editor frame, so its default level shows
-    # as the desktop accent.
+    # The editor frame: the default level (high) shows the desktop accent.
     thinkingOff = hex "ui";
     thinkingMinimal = hex "muted";
     thinkingLow = hex "cyan";

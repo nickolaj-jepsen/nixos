@@ -1,12 +1,4 @@
-# The TensorX models pi sessions actually pick, by hand for data-sensitive work.
-# pi has no discovery for hosted OpenAI-compatible endpoints (only llama.cpp's
-# router), so limits, capabilities and prices from `/v1/model/info` are static
-# here — update them when TensorX changes them, since pi charges the session's
-# cost against `cost`.
-#
-# Per-model quirks live next to their model: `compat` for wire differences the
-# endpoint can't declare, `thinkingLevelMap` for which levels it actually accepts
-# (null = rejected, missing = pi's default).
+# Static copy of TensorX's /v1/model/info: pi can't discover hosted endpoints.
 [
   {
     id = "qwen/qwen3.8-flash-next";
