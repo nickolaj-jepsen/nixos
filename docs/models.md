@@ -89,5 +89,6 @@ Dedicated cyber tiers are deferred.
 call, so a `vm/*` failover counts as the model it failed over to, and a
 subagent's forwarded ask goes by the child's model. The judge is never from the
 actor's family (`judgeFor`): Sonnet judges DeepSeek, DeepSeek judges everyone
-else. No judge is less private than the actor: a local or TensorX session's
-asks skip the judge and go straight to the dialog.
+else. No judge is less private than the actor or the session it reads: an ask
+from a local or TensorX model, or forwarded into a local or TensorX session,
+skips the judge and goes straight to the dialog.

@@ -9,8 +9,8 @@
  * - Only allows or defers, never denies: a wrong "no" would block work you
  *   asked for, while a deferral costs one dialog.
  * - One judge, never of the family that made the call (judgeFor).
- * - Never less private than the session: a local or TensorX model's asks go
- *   straight to the dialog.
+ * - Never less private than the session or the subagent that asked: a local
+ *   or TensorX model on either side sends the ask straight to the dialog.
  * - Every failure, timeout and missing model defers, so a broken judge means
  *   more prompting, never less.
  *
@@ -166,11 +166,10 @@ export default function (pi: ExtensionAPI) {
     const session = ctx;
     const surface = details.payload?.request?.surface ?? "";
     if (!session || outOfReach(surface) || failures >= MAX_FAILURES) return { kind: "defer" };
+    // The judge reads this session's prompts, so it must clear this session's model too.
+    let judge = judgeFor(routed(session)?.model ?? session.model);
     const requester = details.payload?.request?.requester;
-    const actor = requester?.forwarded
-      ? actors.get(requester.sessionId ?? "")?.()
-      : (routed(session)?.model ?? session.model);
-    const judge = judgeFor(actor);
+    if (judge && requester?.forwarded) judge = judgeFor(actors.get(requester.sessionId ?? "")?.());
     if (!judge) return { kind: "defer" };
 
     const { repo, branch } = await gitContext(session.cwd);
