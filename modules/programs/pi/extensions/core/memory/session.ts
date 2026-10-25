@@ -7,6 +7,7 @@
  * now, for the footer and for telling the model where a fresh save will land.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { publishMemoryTally } from "../../shared/memory-tally.ts";
 import { isSubagentSession } from "../../shared/subagent-session.ts";
 import { buildHotSection, type HotIndex } from "./hot.ts";
 import {
@@ -53,12 +54,18 @@ export function createSessions() {
 
   const setStatus = (ctx: ExtensionContext) => {
     if (!ctx.hasUI) return;
-    const { hot } = get(ctx);
-    // The chrome footer drops statuses first when the line is tight; keep it short.
-    const parts = [`mem ${compact(hot.used)}/${compact(hot.budget)}`];
-    if (hot.cold > 0) parts.push(`${hot.cold} cold`);
-    if (hot.stale > 0) parts.push(`${hot.stale} stale`);
-    ctx.ui.setStatus("memory", parts.join(" · "));
+    const state = get(ctx);
+    const { hot } = state;
+    // The count is what the next session is given; characters of budget are not a
+    // unit a reader can feel, so they stay in the panel. The text doubles as the
+    // repaint signal: chrome paints the segment from the tallies published below.
+    const count = hot.picks.length;
+    ctx.ui.setStatus(
+      "memory",
+      count === 0 ? undefined : `✦ ${count}${hot.stale > 0 ? ` · ${hot.stale} stale` : ""}`,
+    );
+    // One process serves the parent and its children; only the parent draws a footer.
+    if (!state.subagent) publishMemoryTally({ count, stale: hot.stale, cold: hot.cold });
   };
 
   return {
@@ -76,7 +83,9 @@ export function createSessions() {
 
     end(ctx: ExtensionContext) {
       states.delete(ctx.sessionManager.getSessionId());
-      if (ctx.hasUI) ctx.ui.setStatus("memory", undefined);
+      if (!ctx.hasUI) return;
+      ctx.ui.setStatus("memory", undefined);
+      if (!isSubagentSession(ctx)) publishMemoryTally(undefined);
     },
 
     /** Re-reads the stores after a write; the injected prompt text stays as it was. */
@@ -88,7 +97,3 @@ export function createSessions() {
     },
   };
 }
-
-/** 1840 → "1.8k", for the footer. */
-const compact = (count: number) =>
-  count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);

@@ -1,10 +1,13 @@
 /**
- * The human side: `/memory` and the operations behind it. The browser and the
- * subcommands share one implementation of forget, promote, edit and priority.
+ * The human side: `/memory` and the operations behind it. The panel owns the
+ * list and every action it can finish in place; this file owns the dialogs it
+ * cannot (pi's editor, an agent turn) and the subcommands that work without a
+ * TUI.
  */
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
-import { openBrowser, type BrowserAction } from "./browser.ts";
+import { MemoryBrowser, type BrowserEffect } from "./browser/index.ts";
+import { buildModel, emptyLines, plainRows } from "./browser/rows.ts";
 import { renderReview, review } from "./review.ts";
 import type { Sessions } from "./session.ts";
 import {
@@ -12,7 +15,6 @@ import {
   deleteEntry,
   loadStore,
   loadStoreCached,
-  memoryDir,
   parseEntry,
   pruneStore,
   updateEntryFile,
@@ -21,7 +23,6 @@ import {
   type Scope,
   type Store,
 } from "./store.ts";
-import { STATUS_MARK, verify } from "./verify.ts";
 
 type Target = "main" | "global";
 
@@ -37,12 +38,26 @@ export function registerCommands(pi: ExtensionAPI, sessions: Sessions) {
   const targetStore = (scope: Scope, target: Target): Store | undefined =>
     target === "global" ? scope.global : scope.visible.find((store) => store.origin === "main");
 
+  /** Deletes an entry and repaints; the caller has already asked. */
+  async function forgetNow(ctx: ExtensionCommandContext, entry: Entry) {
+    await deleteEntry(entry);
+    sessions.refresh(ctx, entry.store);
+  }
+
   async function forget(ctx: ExtensionCommandContext, entry: Entry) {
     if (!(await ctx.ui.confirm("Forget this memory?", `${entry.statement}\n\n${entry.file}`)))
       return;
-    await deleteEntry(entry);
-    sessions.refresh(ctx, entry.store);
+    await forgetNow(ctx, entry);
     ctx.ui.notify(`Forgot ${entry.id}`, "info");
+  }
+
+  /** Copies an entry into a store the session can write; the caller has already asked. */
+  async function promoteNow(ctx: ExtensionCommandContext, entry: Entry, target: Target) {
+    const store = targetStore(sessions.get(ctx).scope, target);
+    if (!store) throw new Error("no main checkout to promote into");
+    if (entry.store.dir === store.dir) throw new Error(`already in ${store.origin} memory`);
+    await copyEntry(entry, store);
+    sessions.refresh(ctx, store);
   }
 
   async function promote(ctx: ExtensionCommandContext, scope: Scope, entry: Entry, target: Target) {
@@ -113,21 +128,10 @@ export function registerCommands(pi: ExtensionAPI, sessions: Sessions) {
     );
   }
 
+  /** The same rows the panel draws, without colour: `/memory list` and a headless run. */
   async function list(ctx: ExtensionCommandContext, scope: Scope) {
-    const lines: string[] = [];
-    for (const store of [...scope.visible, ...scope.orphans]) {
-      const entries = loadStoreCached(store);
-      lines.push(
-        `${store.origin}${store.root ? ` (${store.root})` : ""}: ${entries.length} entries`,
-      );
-      for (const entry of entries) {
-        lines.push(
-          `  ${STATUS_MARK[verify(entry).status]} [${entry.priority}] ${entry.id} — ${entry.statement}`,
-        );
-      }
-    }
-    if (scope.visible.every((store) => loadStoreCached(store).length === 0))
-      lines.push(`No memories yet under ${memoryDir()}`);
+    const model = buildModel(scope, sessions.get(ctx).hot);
+    const lines = model.rows.length === 0 ? emptyLines(scope) : plainRows(model);
     ctx.ui.notify(lines.join("\n"), "info");
   }
 
@@ -152,32 +156,42 @@ export function registerCommands(pi: ExtensionAPI, sessions: Sessions) {
     );
   }
 
-  /** Runs a browser action; returns whether the browser should reopen. */
-  async function apply(
-    ctx: ExtensionCommandContext,
-    scope: Scope,
-    action: BrowserAction,
-  ): Promise<boolean> {
-    if (action.type === "review") {
-      await runReview(ctx, scope);
-      return false;
-    }
-    if (action.type === "promote") await promote(ctx, scope, action.entry, action.target);
-    else if (action.type === "forget") await forget(ctx, action.entry);
-    else if (action.type === "edit") await edit(ctx, action.entry);
-    else await adjustPriority(ctx, action.entry, action.delta);
-    return true;
-  }
-
-  /** The browser loop: each action returns control here, which reopens it. */
+  /**
+   * The panel, reopened on the same row after the two actions that need their
+   * own surface: pi's editor, and an agent turn that only recommends.
+   */
   async function browse(ctx: ExtensionCommandContext, scope: Scope) {
-    if (!ctx.hasUI) {
-      await list(ctx, scope);
-      return;
-    }
+    if (!ctx.hasUI || ctx.mode !== "tui") return list(ctx, scope);
+    let initial: string | undefined;
     for (;;) {
-      const action = await openBrowser(ctx, scope, sessions.get(ctx).hot);
-      if (!action || !(await apply(ctx, scope, action))) return;
+      const effect = await ctx.ui.custom<BrowserEffect | undefined>(
+        (tui, theme, _keybindings, done) =>
+          new MemoryBrowser(
+            tui,
+            theme,
+            {
+              scope,
+              reload: () => {
+                sessions.refresh(ctx);
+                return sessions.get(ctx).hot;
+              },
+              forget: (entry) => forgetNow(ctx, entry),
+              promote: (entry, target) => promoteNow(ctx, entry, target),
+              priority: (entry, delta) => adjustPriority(ctx, entry, delta),
+            },
+            done,
+            initial,
+          ),
+        {
+          overlay: true,
+          // A browser reads best wide: the list and the detail both want the columns.
+          overlayOptions: { anchor: "center", width: "92%", minWidth: 40, margin: 1 },
+        },
+      );
+      if (!effect) return;
+      if (effect.type === "review") return runReview(ctx, scope);
+      await edit(ctx, effect.entry);
+      initial = effect.entry.id;
     }
   }
 

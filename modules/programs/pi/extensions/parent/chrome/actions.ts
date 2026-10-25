@@ -112,6 +112,7 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git) =>
     thinking: appAction(state, "app.thinking.toggle", "alt+t"),
     agents: command(state, pi, "/agents"),
     cost: command(state, pi, "/cost"),
+    memory: command(state, pi, "/memory"),
     // A full window is where the session tree earns its keep, so the context pill
     // opens it. pi's own handler, not the slash command: /tree is a built-in that
     // only the interactive input path runs, while sendUserMessage would hand the

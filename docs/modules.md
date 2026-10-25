@@ -143,8 +143,8 @@ home-manager and the overlays):
     `core/lib/` stateless; state that has to outlive a module copy (across
     packages, children or reloads) goes through `shared/process-global.ts`,
     never a bare `globalThis`. What one package writes and the other reads
-    (session entries, `pi.events` payloads, tool names) is declared once in
-    `shared/` with its parser. A helper only one package needs lives in that
+    (session entries, `pi.events` payloads, tool names, the footer's tallies)
+    is declared once in `shared/` with its parser. A helper only one package needs lives in that
     package.
 
   The build runs `tsc --noEmit` over all three against the pi that ships, so a
@@ -190,3 +190,16 @@ home-manager and the overlays):
   `modules/programs/agent-lsp.nix`; each agent leaf maps it to its own
   schema. Desktop toasts for agent notification hooks go through
   `pkgs.agent-notify <app name>`.
+
+## Frameworks already evaluated
+
+Decided 2026-06-18, before the dendritic refactor merged. Don't re-propose them
+unless one of the reasons below stopped holding:
+
+- **Stylix** — the theme leaves are custom, not base16 mappings.
+- **clan.lol** — breaks standalone-HM portability and would force agenix → sops.
+- **snowfall-lib / blueprint / ez-configs / easy-hosts** — host-first, they
+  would put `mkIf` back in hosts.
+- **An `osConfig` bridge for `fireproof.*`** — the `shared` card is injected
+  into both evals instead.
+- **vic/den** — the closest match to this model; revisit at den 1.0.

@@ -3,14 +3,8 @@
  * scrolls only when the terminal is too short for it.
  */
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import {
-  Key,
-  matchesKey,
-  truncateToWidth,
-  visibleWidth,
-  type Component,
-  type TUI,
-} from "@earendil-works/pi-tui";
+import { Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
+import { frame, frameWidth } from "../../shared/panel.ts";
 import { pane } from "./pane.ts";
 import type { View } from "./view.ts";
 
@@ -62,31 +56,17 @@ export class CostDialog implements Component {
 
   render(width: number): string[] {
     const theme = this.theme;
-    // A border and two columns of padding either side: what the pane may draw in.
-    const inner = Math.max(10, width - 6);
     const room = Math.max(3, this.tui.terminal.rows - MARGIN_ROWS - 2);
-    const body = [...pane(this.view(), theme, inner), ""];
+    const body = [...pane(this.view(), theme, frameWidth(width)), ""];
     this.scroll = Math.min(this.scroll, Math.max(0, body.length - room));
     const shown = body.slice(this.scroll, this.scroll + room);
 
-    // Every reset inside a line would drop the panel background; put it back after each.
-    const bg = theme.getBgAnsi(PANEL_BG);
-    const onPanel = (line: string) =>
-      bg + line.replace(/\x1b\[0?m/g, (reset) => reset + bg).replace(/\x1b\[49m/g, bg) + "\x1b[49m";
-    const border = (text: string) => theme.fg("borderMuted", text);
-    const pad = (line: string) => truncateToWidth(`  ${line}`, width - 2, "…", true);
-
-    const title = " Session cost ";
     const hints = [body.length > room ? `↑↓ ${this.scroll + 1}/${body.length}` : "", "esc close"];
-    const footer = ` ${hints.filter(Boolean).join(" · ")} `;
-    const topFill = Math.max(0, width - 3 - visibleWidth(title));
-    const bottomFill = Math.max(0, width - 3 - visibleWidth(footer));
-    return [
-      onPanel(
-        border("╭─") + theme.fg("accent", theme.bold(title)) + border(`${"─".repeat(topFill)}╮`),
-      ),
-      ...shown.map((line) => onPanel(border("│") + pad(line) + border("│"))),
-      onPanel(border(`╰${"─".repeat(bottomFill)}`) + theme.fg("dim", footer) + border("─╯")),
-    ];
+    return frame(theme, width, {
+      title: " Session cost ",
+      hints: theme.fg("dim", ` ${hints.filter(Boolean).join(" · ")} `),
+      lines: shown,
+      background: PANEL_BG,
+    });
   }
 }
