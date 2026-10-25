@@ -10,6 +10,14 @@
     ccfg = config.programs.claude-code;
     hmLib = config.lib;
     homeDir = config.home.homeDirectory;
+    agentTmp = config.fireproof.agents.tmp.enable;
+
+    # Agent temp lives in one root the janitor sweeps, named after the wrapper's
+    # pid (exec keeps it), so a session that is gone can be proven gone. Falls
+    # back to the ambient TMPDIR when the root cannot be created.
+    tmpDir = ''
+      if TMPDIR=$(${lib.getExe pkgs.agent-tmp} dir "$$"); then export TMPDIR; fi
+    '';
 
     # Surfaces session state that settings.json can't pin (model, effort as
     # changed by /effort, fast mode), git state and the last response's
@@ -18,7 +26,7 @@
     # ANSI codes only, so the ghostty Flexoki palette stays authoritative.
     statusLine = pkgs.writeShellApplication {
       name = "claude-statusline";
-      runtimeInputs = [pkgs.jq pkgs.git pkgs.gh pkgs.coreutils];
+      runtimeInputs = [pkgs.jq pkgs.git pkgs.gh pkgs.coreutils pkgs.agent-tmp];
       text = builtins.readFile ./statusline.sh;
     };
 
@@ -137,6 +145,7 @@
     # `claude plugin test` refuses any option before `plugin`, and the
     # home-manager wrapper always prepends --plugin-dir.
     claudeEntry = pkgs.writeShellScript "claude" ''
+      ${lib.optionalString agentTmp tmpDir}
       if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
       exec -a "$0" ${ccfg.finalPackage}/bin/claude "$@"
     '';
@@ -162,6 +171,7 @@
       name = "claude-work";
       runtimeInputs = [config.programs.claude-code.finalPackage];
       text = ''
+        ${lib.optionalString agentTmp tmpDir}
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
         exec claude ${lib.escapeShellArgs workMcpArgs} "$@"
@@ -263,12 +273,19 @@
             PreToolUse = [
               {
                 matcher = "Bash";
-                hooks = [
-                  {
+                hooks =
+                  [
+                    {
+                      type = "command";
+                      command = lib.getExe worktreeGuard;
+                    }
+                  ]
+                  # Nudge, never block: the janitor evicts dead sessions, so a live
+                  # one holding the space is the one that has to give some back.
+                  ++ lib.optional agentTmp {
                     type = "command";
-                    command = lib.getExe worktreeGuard;
-                  }
-                ];
+                    command = "${lib.getExe pkgs.agent-tmp} warn";
+                  };
               }
             ];
           }

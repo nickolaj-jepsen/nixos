@@ -242,6 +242,10 @@ git_segment() {
 
 git_segment "$cwd"
 
+# The janitor's cached numbers, refreshed in the background past its TTL: it is
+# the only thing that knows what the agent temp root is holding.
+tmp_segment=$(agent-tmp statusline 2>/dev/null) || tmp_segment=""
+
 # The checkout's path, its last segment bright since it names the worktree.
 path=""
 if [ -n "$cwd" ]; then
@@ -273,6 +277,7 @@ jq -r \
   --arg warn "$warn" \
   --arg reset "$reset" \
   --arg speed "$speed" \
+  --arg tmp "$tmp_segment" \
   --arg pathGit "$path_git" \
   --arg git "$git_full" \
   --arg gitGlyph "$git_glyph" \
@@ -299,6 +304,7 @@ jq -r \
        then "\($warn)\(pct)%\($reset)"
        else "\($dim)\(pct)%\($reset)" end),
       (if $speed != "" then "\($dim)\($speed) t/s\($reset)" else empty end),
+      (if $tmp != "" then "\($dim)\($tmp)\($reset)" else empty end),
       limit("5h"; .rate_limits.five_hour; true),
       limit("7d"; .rate_limits.seven_day; false)
     ] | join("\($dim) · \($reset)") as $base

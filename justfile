@@ -266,6 +266,13 @@ gc days='7':
 clean:
     rm -rf result result-*
 
+# The timer sweeps every 15 minutes; this is for now, and `status` changes nothing.
+[arg('action', pattern='status|sweep|state|dir')]
+[doc('Report what the agents hold in temp; `just agent-tmp sweep` frees dead sessions now')]
+[group('maintenance')]
+agent-tmp action='status':
+    agent-tmp {{ action }}
+
 [doc('Generate Markdown reference for the fireproof.* options into docs/')]
 [group('dev')]
 [script]

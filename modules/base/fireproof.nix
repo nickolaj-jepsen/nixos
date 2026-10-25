@@ -88,6 +88,9 @@ let
         description = "Language servers by name, configured for every coding agent that speaks LSP.";
       };
 
+      # docs/agent-tmp.md: agents get TMPDIR under one root the sweeper owns.
+      agents.tmp.enable = cascade config.fireproof.dev.enable "Give coding agents a TMPDIR a sweeper owns (and a bottom to the disk they can fill)";
+
       # Cross-platform GUI app packaging: docs/hosts.md "Cross-platform apps".
 
       dev = {
