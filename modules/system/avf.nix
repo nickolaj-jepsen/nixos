@@ -1,8 +1,8 @@
 # Guest half of an Android Virtualization Framework VM booted by the Podroid
 # fork's disk-image mode: AVF's u-boot finds the image's ESP and runs
 # systemd-boot, so generations and rollback work as on any EFI host.
-# `nix build .#nixosConfigurations.<h>.config.system.build.avfImage`.
-{
+# `nix build .#nixosConfigurations.<h>.config.system.build.avfImage.<build-system>`.
+{inputs, ...}: {
   flake.modules.nixos.avf = {
     config,
     lib,
@@ -78,15 +78,49 @@
       .system
       .build
       .image;
+
+    # The same image assembled by another system's tools: systemd-repart needs
+    # `unshare --map-root-user`, which fails under multithreaded qemu-user, so
+    # a binfmt host must assemble it natively.
+    imageArgs = removeAttrs (lib.functionArgs (import (modulesPath + "/image/repart-image.nix"))) [
+      "name"
+      "version"
+      "baseName"
+      "compression"
+      "fileSystems"
+      "finalPartitions"
+      "split"
+      "seed"
+      "definitionsDirectory"
+      "imageSize"
+      "sectorSize"
+      "mkfsEnv"
+      "createEmpty"
+    ];
+    imageBuiltOn = system:
+      (image.override (lib.intersectAttrs imageArgs inputs.nixpkgs.legacyPackages.${system})).overrideAttrs {
+        # The override's stdenv sets --architecture, which picks the root partition's GPT type.
+        inherit (image) systemdRepartFlags;
+        # CopyFiles= follows a store path that is itself a symlink and copies its target.
+        postPatch = ''
+          chmod u+w $finalRepartDefinitions/
+          for conf in $finalRepartDefinitions/*.conf; do
+            links=$(sed -n 's|^CopyFiles=\(/nix/store/[^:]*\).*|\1|p' "$conf" | while read -r p; do if [ -L "$p" ]; then echo "$p"; fi; done)
+            for p in $links; do
+              sed -i "s|^CopyFiles=$p\(:$p\)\?\$|MakeSymlinks=$p:$(readlink "$p")|" "$conf"
+            done
+          done
+        '';
+      };
   in {
     options.system.build.avfImage = lib.mkOption {
-      type = lib.types.package;
+      type = lib.types.attrsOf lib.types.package;
       readOnly = true;
-      description = "Raw GPT disk image for the Podroid fork's disk-image mode.";
+      description = "Raw GPT disk image for the Podroid fork's disk-image mode, keyed by the system that assembles it.";
     };
 
     config = lib.mkIf config.fireproof.avf.enable {
-      system.build.avfImage = image;
+      system.build.avfImage = lib.genAttrs ["aarch64-linux" "x86_64-linux"] imageBuiltOn;
 
       fileSystems."/" = {
         device = "/dev/disk/by-label/nixos";
