@@ -39,6 +39,8 @@ must be `git add`ed or flake eval ignores them.
 - `docs/secrets.md` — anything under `secrets/`.
 - `docs/updates.md` — the nightly update bot (`.github/`).
 - `docs/homelab.md` — adding or changing a service under `modules/homelab/`.
+- `docs/agent-hub.md` — the agent hub: `pkgs/agent-hub`, its DMS plugin, and
+  its pi and Claude Code halves.
 - `docs/models.md` — pi's router (`extensions/core/routers.ts` and
   `shared/kinds.ts`), its `models.json`, `enabledModels` or
   `modules/programs/pi/agents/`.
