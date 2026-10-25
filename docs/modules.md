@@ -136,8 +136,12 @@ home-manager and the overlays):
   - `shared/` is not a package: helpers both import. Every `core/` file and
     `parent/index.ts` evaluates its own copy of each module it imports, so
     module state is shared only among parent features. Keep `shared/` and
-    `core/lib/` stateless; ai-usage's one reader per process, on `globalThis`,
-    is the exception. A helper only one package needs lives in that package.
+    `core/lib/` stateless; state that has to outlive a module copy (across
+    packages, children or reloads) goes through `shared/process-global.ts`,
+    never a bare `globalThis`. What one package writes and the other reads
+    (session entries, `pi.events` payloads, tool names) is declared once in
+    `shared/` with its parser. A helper only one package needs lives in that
+    package.
 
   The build runs `tsc --noEmit` over all three against the pi that ships, so a
   type error fails `just build`. npm dependencies go in

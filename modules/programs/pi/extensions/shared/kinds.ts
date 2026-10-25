@@ -41,6 +41,13 @@ export const LADDERS: Record<Kind | "architect", Ladder> = {
   architect: [...DEEP, ...FLASH],
 };
 
+/** What a kind's router keeps per selection: `at` is the stage index on the ladder in use. */
+export type KindState = { at: number };
+
+export type ArchitectPhase = "plan" | "build";
+/** What vm/architect keeps per selection; readers outside the router use only `phase`. */
+export type ArchitectState = { phase: ArchitectPhase; at: number; verdict?: boolean };
+
 export type ModelMeta = {
   name: string;
   /** One line for /models; docs/models.md is the long form. */

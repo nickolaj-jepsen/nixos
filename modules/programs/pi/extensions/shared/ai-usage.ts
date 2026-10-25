@@ -4,6 +4,7 @@
  * (`usageReader`).
  */
 import { execFile } from "node:child_process";
+import { processGlobal } from "./process-global.ts";
 
 export type UsageWindow = {
   label: string;
@@ -99,12 +100,5 @@ const createUsageReader = () => {
   };
 };
 
-type UsageReader = ReturnType<typeof createUsageReader>;
-
-// On globalThis because every extension entry evaluates its own copy of this module. The
-// only state shared across core/ and parent/; keep it that way.
-const KEY = Symbol.for("fireproof.pi.ai-usage");
-
-/** The process's one ai-usage reader. */
-export const usageReader = (): UsageReader =>
-  ((globalThis as { [KEY]?: UsageReader })[KEY] ??= createUsageReader());
+/** The process's one ai-usage reader, shared by core/ and parent/. */
+export const usageReader = () => processGlobal("ai-usage", createUsageReader);

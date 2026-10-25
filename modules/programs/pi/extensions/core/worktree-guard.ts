@@ -6,6 +6,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { type ExtensionAPI, isToolCallEventType } from "@earendil-works/pi-coding-agent";
+import { BG_RUN } from "../shared/tools.ts";
 
 const fallback = "Blocked: git worktree add outside ~/worktrees/<repo>/. Use `wt create <name>`.";
 
@@ -14,7 +15,7 @@ export default function (pi: ExtensionAPI) {
     // bg_run is a shell too.
     const command = isToolCallEventType("bash", event)
       ? event.input.command
-      : event.toolName === "bg_run"
+      : event.toolName === BG_RUN
         ? event.input.command
         : undefined;
     // Substring test first: spawning wt on every bash call would be waste.

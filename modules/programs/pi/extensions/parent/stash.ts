@@ -10,6 +10,7 @@
  * this extension instance and clear its widget.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { processGlobal } from "../shared/process-global.ts";
 
 const WIDGET_KEY = "stash";
 const PREVIEW_CHARS = 60;
@@ -19,14 +20,13 @@ const preview = (text: string) => {
   return line.length > PREVIEW_CHARS ? `${line.slice(0, PREVIEW_CHARS)}…` : line;
 };
 
-// On globalThis because each session replacement loads a fresh copy of this module.
-const KEY = Symbol.for("fireproof.pi.stash");
-const store = globalThis as { [KEY]?: string };
+// Process-wide because each session replacement loads a fresh copy of this module.
+const store = processGlobal("stash.draft", (): { text?: string } => ({}));
 
 export default function (pi: ExtensionAPI) {
   // A widget rather than setStatus so the preview keeps its own line.
   const showStash = (ctx: ExtensionContext) => {
-    const stash = store[KEY];
+    const stash = store.text;
     ctx.ui.setWidget(
       WIDGET_KEY,
       stash === undefined
@@ -47,13 +47,13 @@ export default function (pi: ExtensionAPI) {
     description: "Stash the prompt until the next submit",
     handler: (ctx) => {
       const text = ctx.ui.getEditorText();
-      const stash = store[KEY];
+      const stash = store.text;
       if (text.trim()) {
         ctx.ui.setEditorText(stash ?? "");
-        store[KEY] = text;
+        store.text = text;
       } else if (stash !== undefined) {
         ctx.ui.setEditorText(stash);
-        store[KEY] = undefined;
+        store.text = undefined;
       }
       showStash(ctx);
     },
@@ -61,7 +61,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("input", (event, ctx) => {
     // The editor is already cleared by the time input handlers run; anything in it is newly typed.
-    const stash = store[KEY];
+    const stash = store.text;
     if (
       !hasEditor(ctx) ||
       event.source !== "interactive" ||
@@ -70,7 +70,7 @@ export default function (pi: ExtensionAPI) {
     )
       return;
     ctx.ui.setEditorText(stash);
-    store[KEY] = undefined;
+    store.text = undefined;
     showStash(ctx);
   });
 }

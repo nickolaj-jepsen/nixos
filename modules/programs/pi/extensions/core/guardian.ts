@@ -30,15 +30,17 @@ import {
 } from "@gotgenes/pi-permission-system";
 import { oneLine, requests } from "../shared/naming.ts";
 import { createGitContext } from "../shared/git.ts";
+import { processGlobal } from "../shared/process-global.ts";
 import { createRouted } from "../shared/routed-model.ts";
 import { sideCall } from "../shared/side-call.ts";
 
 const LINK = "guardian";
 // Every instance's routed model by session id: a child's asks are judged in the
 // parent, which cannot otherwise see the model the child runs.
-const ACTORS = Symbol.for("fireproof.pi.guardian.actors");
-const actors = ((globalThis as { [ACTORS]?: Map<string, () => Model<any> | undefined> })[ACTORS] ??=
-  new Map());
+const actors = processGlobal(
+  "guardian.actors",
+  () => new Map<string, () => Model<any> | undefined>(),
+);
 
 // Pinned, not vm/flash: its last stage is Claude, which must not judge a Claude actor.
 const DEEPSEEK_JUDGE = "opencode-go/deepseek-v4.1-flash";

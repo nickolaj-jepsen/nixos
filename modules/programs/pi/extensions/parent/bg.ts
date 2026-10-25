@@ -13,8 +13,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { BG_RUN } from "../shared/tools.ts";
 
-const TOOL = "bg_run";
 const STATUS = "bg";
 const TAIL_LINES = 40;
 const TAIL_BYTES = 4096;
@@ -67,7 +67,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: TOOL,
+    name: BG_RUN,
     label: "Background",
     description:
       "Runs a shell command detached in the cwd and returns at once. When it ends you are woken with its exit code and last 40 lines. Use it for builds and tests longer than ~30 s. Full output is at the returned path; to stop it, `kill -- -<pid>`.",

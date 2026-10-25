@@ -22,10 +22,12 @@ import type {
 import { exhaustedWindow, type UsageProvider, usageReader } from "../shared/ai-usage.ts";
 import { walkSpend } from "../shared/usage-ledger.ts";
 import {
+  type ArchitectState,
   DEEP,
   FLASH,
   KIND_META,
   KINDS,
+  type KindState,
   PROVIDER,
   type Kind,
   type Ladder,
@@ -66,10 +68,6 @@ const EDIT_TOOLS = new Set(["edit", "write"]);
 
 /** One custom entry per Jev verdict, to compare the gate against another classifier later. */
 const JEV_ENTRY = "vm-jev";
-
-/** `at` is the stage index on the ladder in use. */
-type KindState = { at: number };
-type ArchitectState = { phase: "plan" | "build"; at: number; verdict?: boolean };
 
 /** One route decision, as `/vm` shows it. */
 type TraceEntry = {

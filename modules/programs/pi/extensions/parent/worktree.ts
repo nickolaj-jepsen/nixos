@@ -31,6 +31,7 @@ import {
   stripRequest,
 } from "../shared/naming.ts";
 import { isLeanModel } from "../shared/lean-model.ts";
+import { BG_RUN } from "../shared/tools.ts";
 import { linkedWorktree, park, removableAt, sessionWorktree, worktreeAt } from "./lib/park.ts";
 import { sideCall } from "../shared/side-call.ts";
 import { branches, ENTER_WORKTREE_TOOL, names, status, wt, type RepoStatus } from "./lib/wt.ts";
@@ -38,7 +39,7 @@ import { branches, ENTER_WORKTREE_TOOL, names, status, wt, type RepoStatus } fro
 const MOVED = "worktree-moved";
 const PARKED = "worktree-parked";
 // Tools that would still act on the old checkout between enter_worktree and the move.
-const MUTATING = new Set(["bash", "bg_run", "edit", "write"]);
+const MUTATING = new Set(["bash", BG_RUN, "edit", "write"]);
 
 /** What `/back` leaves in the transcript: where the session went and what became of the worktree. */
 type ParkedDetails = { from: string; to: string; worktree: string; outcome: string };
