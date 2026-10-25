@@ -72,9 +72,19 @@
           hotkey-overlay.title = "Toggle Power Menu";
         };
         # Mod+D / Mod+Ctrl+D / Mod+Shift+D are taken by niri-dynamic-workspaces.
-        "Mod+B" = {
-          action.spawn = ["dms" "ipc" "dash" "toggle" ""];
-          hotkey-overlay.title = "Toggle Dashboard";
+        "Mod+B" =
+          if config.fireproof.dev.agent-hub.enable
+          then {
+            action.spawn = ["dms" "ipc" "widget" "toggle" "agentHub"];
+            hotkey-overlay.title = "Toggle Agent Hub";
+          }
+          else {
+            action.spawn = ["dms" "ipc" "dash" "toggle" ""];
+            hotkey-overlay.title = "Toggle Dashboard";
+          };
+        "Mod+Shift+B" = lib.mkIf config.fireproof.dev.agent-hub.enable {
+          action.spawn = [(lib.getExe pkgs.agent-hub) "focus-next"];
+          hotkey-overlay.title = "Focus the Next Agent That Wants You";
         };
         "Mod+Shift+N" = {
           action.spawn = ["dms" "ipc" "notepad" "toggle"];
@@ -95,10 +105,6 @@
         "Mod+Alt+L" = {
           action.spawn = ["dms" "ipc" "lock" "lock"];
           hotkey-overlay.title = "Lock Screen";
-        };
-        "Mod+Shift+B" = {
-          action.spawn = ["dms" "ipc" "night" "toggle"];
-          hotkey-overlay.title = "Toggle Night Mode (warm tint)";
         };
         "Mod+Ctrl+N" = {
           action.spawn = ["dms" "ipc" "notifications" "toggleDoNotDisturb"];

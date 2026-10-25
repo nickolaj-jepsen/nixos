@@ -65,6 +65,7 @@
             "music"
             "systemTray"
           ]
+          ++ lib.optional config.fireproof.dev.agent-hub.enable "agentHub"
           ++ lib.optional config.fireproof.dev.ai-usage.enable "aiUsage"
           ++ [
             "cpuUsage"

@@ -1,0 +1,15 @@
+{
+  "id": "agentHub",
+  "name": "Agent Hub",
+  "description": "Live coding-agent sessions, and a quick jump to the ones waiting on you",
+  "version": "2.0.0",
+  "author": "fireproof",
+  "type": "composite",
+  "capabilities": ["dankbar-widget"],
+  "components": {
+    "daemon": "./HubDaemon.qml",
+    "widget": "./AgentHubWidget.qml"
+  },
+  "icon": "smart_toy",
+  "permissions": ["settings_read"]
+}
