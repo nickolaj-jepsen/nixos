@@ -133,6 +133,7 @@ let
 
       networkd.enable = lib.mkEnableOption "systemd-networkd wired networking";
       wsl.enable = lib.mkEnableOption "WSL configuration";
+      avf.enable = lib.mkEnableOption "an Android Virtualization Framework guest (the phone's Podroid VM)";
 
       tailscale = {
         enable = lib.mkOption {
@@ -194,7 +195,7 @@ let
       };
 
       hardware = {
-        physical = cascade (!config.fireproof.wsl.enable) "Whether this is a physical machine (not WSL/VM). Gates baseline hardware hygiene for physical machines.";
+        physical = cascade (!config.fireproof.wsl.enable && !config.fireproof.avf.enable) "Whether this is a physical machine (not WSL/VM). Gates baseline hardware hygiene for physical machines.";
         zram = cascade config.fireproof.hardware.physical "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
         nvidia.enable = lib.mkEnableOption "NVIDIA GPU support (open kernel module + VA-API video offload)";
         laptop = lib.mkEnableOption "laptop-specific configurations and tools";

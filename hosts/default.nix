@@ -69,7 +69,7 @@
     inputs.nixpkgs.lib.nixosSystem {
       modules =
         [
-          {nixpkgs.hostPlatform = "x86_64-linux";}
+          {nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";}
           inputs.home-manager.nixosModules.home-manager
           inputs.self.nixosModules.overlays
           (embeddedHome (homeManagerModules ++ shared))

@@ -14,8 +14,9 @@ set -uo pipefail
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
 
+# phone-vm is aarch64-linux and builds on its own arm runner.
 mapfile -t hosts < <(nix eval --json .#nixosConfigurations --apply builtins.attrNames |
-  jq -r '.[] | select(startswith("bootstrap") | not)')
+  jq -r '.[] | select((startswith("bootstrap") or . == "phone-vm") | not)')
 if [ "${#hosts[@]}" -eq 0 ]; then
   echo "::error::no nixosConfigurations to plan; refusing to skip the build"
   exit 1

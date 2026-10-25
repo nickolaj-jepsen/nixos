@@ -35,11 +35,12 @@ the whole host:
 - `nixos` → `nixosConfigurations.<h>` via `nixosSystem`. The host builder
   defines `home-manager.users.<fireproof.username>` and routes all homeManager
   leaves + the card's `shared`/`homeManager` buckets into `sharedModules`.
+  It defaults to x86_64-linux; another platform sets
+  `nixos.nixpkgs.hostPlatform` in the card (`phone-vm`).
 - `home` → `homeConfigurations.<h>` via `mkHome` in `hosts/default.nix` (standalone HM, no
-  NixOS eval; `osConfig = null`). Example: `dev-ao`. Activate with
-  `just switch <h> [user@target]`; the target needs the user in
-  `trusted-users`. HM services that assume system bits (e.g. an ssh-agent)
-  must self-provide them in HM or the host card.
+  NixOS eval; `osConfig = null`). Example: `dev-ao`. Activate on the host
+  itself with `just switch <h>`. HM services that assume system bits (e.g. an
+  ssh-agent) must self-provide them in HM or the host card.
 - `darwin` → `darwinConfigurations.<h>` via nix-darwin + embedded HM. Example:
   `macbook`. nix-darwin system config (homebrew, …) goes in the `darwin`
   bucket. Activate ON the Mac with `just switch`; the first switch on a fresh
