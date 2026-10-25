@@ -11,6 +11,8 @@
  */
 import { execFile } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, join, sep } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import {
   type ExtensionAPI,
@@ -22,6 +24,8 @@ import { SHELL_TOOLS, WRITE_TOOLS } from "../shared/tools.ts";
 
 const MOVED = "worktree-moved";
 const ENTER_WORKTREE_TOOL = "enter_worktree";
+// Where `wt` puts worktrees, so a move can tell a worktree from the primary checkout.
+const WORKTREE_ROOT = process.env.WT_WORKTREE_ROOT ?? join(homedir(), "worktrees");
 // Tools that would still act on the old checkout between enter_worktree and the move.
 const MUTATING = new Set([...SHELL_TOOLS, ...WRITE_TOOLS]);
 
@@ -45,6 +49,17 @@ async function resolveWorktree(target: string, cwd: string): Promise<string> {
   if ((await names(cwd)).includes(target)) return wt(["cd", target], cwd);
   return wt(["create", target], cwd);
 }
+
+/** How to land the work this session is about to do; nothing here does it for the agent. */
+const landingTip = (path: string) => {
+  if (!path.startsWith(WORKTREE_ROOT + sep)) return "";
+  const name = basename(path);
+  return (
+    ` Commit here, then \`wt apply ${name}\` lands the commits and keeps this worktree; ` +
+    `\`wt apply --remove ${name}\` from the primary checkout also deletes it, and ` +
+    `\`wt clean\` sweeps landed worktrees.`
+  );
+};
 
 /** Writes the active branch of the conversation to a new session file rooted at `cwd`. */
 function forkInto(ctx: ExtensionCommandContext, cwd: string): string {
@@ -103,6 +118,7 @@ export default function (pi: ExtensionAPI) {
             content:
               `This session moved from ${from} to ${path}; that is now your cwd and workspace. ` +
               `Paths under ${from} belong to the old checkout: don't edit them.` +
+              landingTip(path) +
               (resume ? " Continue the task here." : ""),
             display: true,
             details: { from, to: path },

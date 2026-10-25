@@ -14,10 +14,9 @@ Repository-local instructions and existing conventions take precedence over thes
 - Prefer rebase over merge — even when asked to "merge" — unless a merge over rebase is explicitly requested.
 - Never discard uncommitted work or force-push without approval.
 - Prefer `gh` for GitHub operations (PRs, issues, API).
-- Git worktrees live in `~/worktrees/<repo>/<name>`, created with `wt create <name>`
-  (it prints the path); `git worktree add` anywhere else is blocked. `wt` lists,
-  reviews, syncs, lands, sweeps (`wt clean`), and removes them; `wt remove --force`
-  archives the work in `wt trash`, and `wt restore` brings it back.
+- Git worktrees live in `~/worktrees/<repo>/<name>`, and `git worktree add` elsewhere is
+  blocked; `wt` creates, lists, lands and sweeps them, and `wt --help` states each verb's
+  preconditions.
 - In Digital-Udvikling repositories, use `ds` when it supports the operation; check `ds --help` when uncertain.
 - A wrapper (`env CMD`, `xargs`, `nohup`, `sh -c`, `eval`, `sudo`, `find -exec`) hides the command it runs, so it asks for approval even when that command is harmless. Set variables as `VAR=x cmd`, not `env VAR=x cmd`. `timeout` and `time` pass through only when the command after them is spelled literally (`timeout 180 ./result/bin/pi`, not `timeout 180 $builtpi`).
 

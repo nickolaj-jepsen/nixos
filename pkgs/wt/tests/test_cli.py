@@ -286,14 +286,36 @@ class Fixture(unittest.TestCase):
 
     # apply and sync ----------------------------------------------------------
 
-    def test_apply_lands_and_deletes_the_branch(self) -> None:
+    def test_apply_lands_and_keeps_the_worktree(self) -> None:
         path = self.create("land-me")
-        Path(path, "b.txt").write_text("work\n")
+        self.write("b.txt", "work\n", cwd=str(path))
         self.commit("work", cwd=str(path))
         self.wt("apply", "land-me")
+        self.assertTrue(path.exists())
+        self.assertEqual(self.git("log", "--oneline", "-1").strip().split(" ", 1)[1], "work")
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(path)).strip(), "land-me")
+        landed = self.entry("land-me")
+        self.assertTrue(landed["landed"])
+        self.assertEqual(landed["ahead"], 0)
+
+    def test_apply_remove_deletes_the_worktree_and_branch(self) -> None:
+        path = self.create("finish-me")
+        self.write("b.txt", "work\n", cwd=str(path))
+        self.commit("work", cwd=str(path))
+        self.wt("apply", "--remove", "finish-me")
         self.assertFalse(path.exists())
-        self.assertIn("work", self.git("log", "--oneline", "-1"))
-        self.assertEqual(self.git("branch", "--list", "land-me").strip(), "")
+        self.assertEqual(self.git("branch", "--list", "finish-me").strip(), "")
+        self.assertEqual(self.git("log", "--oneline", "-1").strip().split(" ", 1)[1], "work")
+
+    def test_apply_remove_refuses_to_delete_its_own_cwd(self) -> None:
+        path = self.create("inside")
+        self.write("b.txt", "work\n", cwd=str(path))
+        self.commit("work", cwd=str(path))
+        result = self.wt("apply", "--remove", "inside", cwd=str(path), check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(path.exists())
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD").strip(), "main")
+        self.assertFalse(self.entry("inside")["landed"])
 
     def test_apply_conflict_pauses_and_abort_restores(self) -> None:
         path = self.create("conflict")
@@ -320,15 +342,26 @@ class Fixture(unittest.TestCase):
         self.assertEqual(self.git("status", "--porcelain", cwd=str(path)), "")
         self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(path)).strip(), "conflict")
 
-    def test_apply_refuses_a_dirty_main_checkout(self) -> None:
+    def test_apply_leaves_unrelated_uncommitted_main_changes_alone(self) -> None:
         path = self.create("land-me")
-        Path(path, "b.txt").write_text("work\n")
+        self.write("b.txt", "work\n", cwd=str(path))
         self.commit("work", cwd=str(path))
-        Path(self.main, "a.txt").write_text("uncommitted\n")
+        self.write("a.txt", "uncommitted\n")
+        self.wt("apply", "land-me")
+        self.assertTrue(self.entry("land-me")["landed"])
+        self.assertEqual(Path(self.main, "a.txt").read_text(), "uncommitted\n")
+        self.assertIn("a.txt", self.git("status", "--porcelain"))
+
+    def test_apply_refuses_when_the_branch_touches_dirty_main_paths(self) -> None:
+        path = self.create("land-me")
+        self.write("a.txt", "branch\n", cwd=str(path))
+        self.commit("branch change", cwd=str(path))
+        self.write("a.txt", "uncommitted\n")
         result = self.wt("apply", "land-me", check=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("uncommitted changes", result.stderr)
         self.assertTrue(path.exists())
+        self.assertEqual(Path(self.main, "a.txt").read_text(), "uncommitted\n")
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD").strip(), "main")
 
     def test_sync_rebases_onto_local_default(self) -> None:
         path = self.create("behind")

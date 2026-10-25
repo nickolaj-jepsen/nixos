@@ -97,6 +97,11 @@ def cmd_create(args: argparse.Namespace) -> None:
         info(f"creating worktree '{directory_name}' on new branch '{branch}' off {base_ref}")
         run(["git", "-C", repo.main, "worktree", "add", "-b", branch, path, base_ref])
         copy_worktreeinclude(repo, path)
+        info(
+            f"landing: commit here, then 'wt apply {branch}' puts the commits on {repo.default} and\n"
+            f"keeps this worktree; 'wt apply --remove {branch}' from {repo.main} deletes it;\n"
+            "'wt clean' sweeps landed worktrees"
+        )
         print(path)
 
 
@@ -275,18 +280,69 @@ def _conflicted(path: str) -> list[str]:
     return [line for line in proc.stdout.splitlines() if line]
 
 
-def _require_main_clean(repo: Repo) -> None:
+def _dirty_paths(path: str) -> set[str]:
+    """Every path whose working-tree or index state a fast-forward could disturb."""
+    proc = run(["git", "-C", path, "status", "--porcelain", "-z"], check=False)
+    names: set[str] = set()
+    entries = proc.stdout.split("\0")
+    index = 0
+    while index < len(entries):
+        entry = entries[index]
+        index += 1
+        if len(entry) > 3:
+            names.add(entry[3:])
+            # A rename carries its source path as the next field.
+            if entry[0] in "RC" and index < len(entries) and entries[index]:
+                names.add(entries[index])
+                index += 1
+    return names
+
+
+def _incoming_paths(repo: Repo, row: Worktree) -> set[str]:
+    proc = run(
+        ["git", "-C", repo.main, "diff", "--name-only", f"{repo.default}...{row.branch}"], check=False
+    )
+    return {line for line in proc.stdout.splitlines() if line}
+
+
+def _require_main_ready(repo: Repo, row: Worktree) -> None:
+    """Refuse when the primary checkout cannot fast-forward onto `row.branch`."""
     branch = run(["git", "-C", repo.main, "symbolic-ref", "--short", "--quiet", "HEAD"], check=False)
     if branch.returncode != 0:
         die(f"main checkout is in detached HEAD; checkout {repo.default} first")
     if branch.stdout.strip() != repo.default:
         die(f"main checkout is on '{branch.stdout.strip()}', not '{repo.default}'; park it on '{repo.default}' first")
-    status = run(["git", "-C", repo.main, "status", "--porcelain"], check=False)
-    if status.stdout.strip():
-        die(f"main checkout has uncommitted changes; commit or stash in {repo.main} first")
+    dirty = _dirty_paths(repo.main)
+    if not dirty:
+        return
+    clash = sorted(dirty & _incoming_paths(repo, row))
+    if not clash:
+        info(
+            f"main checkout has uncommitted changes in {len(dirty)} path(s) this branch does not touch; "
+            "leaving them as they are"
+        )
+        return
+    die(
+        f"the main checkout has uncommitted changes to {', '.join(clash)}, which {row.branch} also "
+        "changes, so git cannot fast-forward over them.\n"
+        f"  Yours: commit or stash them in {repo.main} first.\n"
+        "  Another session's: leave them alone and land this branch once that checkout is clean."
+    )
 
 
-def _rebase(repo: Repo, row: Worktree, *, abort_on_conflict: bool) -> bool:
+def _require_outside_worktree(repo: Repo, row: Worktree) -> None:
+    """Refuse a removal that would delete the directory the caller is standing in."""
+    if not is_within(os.getcwd(), os.path.realpath(row.path)):
+        return
+    die(
+        f"you are inside worktree '{row.name}', and removing it deletes that directory.\n"
+        f"Run it from the primary checkout instead:\n  cd {repo.main} && wt apply --remove {row.name}\n"
+        f"Or land now and delete the worktree once nothing works in it:\n"
+        f"  wt apply {row.name} && wt remove {row.name}"
+    )
+
+
+def _rebase(repo: Repo, row: Worktree, *, abort_on_conflict: bool, verb: str) -> bool:
     """Rebase `row` onto local default. Returns True on success, False on conflict."""
     target = repo.default
     if not git_ok(row.path, "rev-parse", "--verify", "--quiet", f"refs/heads/{target}"):
@@ -304,24 +360,30 @@ def _rebase(repo: Repo, row: Worktree, *, abort_on_conflict: bool) -> bool:
         raise SystemExit(1)
     info(
         f"rebase paused in {row.path}; resolve the conflicts, then "
-        f"'wt apply --continue {row.name}' or 'wt apply --abort {row.name}'"
+        f"'wt {verb} --continue {row.name}' or 'wt {verb} --abort {row.name}'"
     )
     raise SystemExit(1)
 
 
-def _finish_apply(repo: Repo, row: Worktree, landed_before: int) -> None:
-    info(f"removing worktree {row.path}")
-    run(["git", "-C", repo.main, "worktree", "remove", row.path])
+def _finish_apply(repo: Repo, row: Worktree, landed_before: int, *, remove: bool) -> None:
+    if remove:
+        _require_outside_worktree(repo, row)
+    # Fast-forward before removing anything, so a refused FF leaves the worktree to fix in.
     if run(["git", "-C", repo.main, "merge", "--ff-only", row.branch], check=False).returncode != 0:
         die(
             f"could not fast-forward {repo.default} onto {row.branch}; "
             f"the rebased branch is left in place — merge it manually"
         )
+    if not remove:
+        info(f"landed {row.branch} ({landed_before} commit(s)) onto {repo.default}; worktree kept at {row.path}")
+        return
+    info(f"removing worktree {row.path}")
+    run(["git", "-C", repo.main, "worktree", "remove", row.path])
     if git_ok(repo.main, "merge-base", "--is-ancestor", row.branch, "HEAD"):
         run(["git", "-C", repo.main, "branch", "-D", row.branch], check=False)
     else:
-        info(f"landed {row.branch} but it is not contained in {repo.default}; left in place")
-    info(f"landed {row.branch} ({landed_before} commit(s)) onto {repo.default}")
+        info(f"landed {row.branch} but it is not contained in {repo.default}; branch left in place")
+    info(f"landed and removed {row.branch} ({landed_before} commit(s)) onto {repo.default}")
 
 
 def cmd_apply(args: argparse.Namespace) -> None:
@@ -342,13 +404,12 @@ def cmd_apply(args: argparse.Namespace) -> None:
                 detail = f": {', '.join(conflicts)}" if conflicts else ""
                 die(f"rebase still has conflicts{detail}")
             row = resolve_row(repo, args.target or row.name, gather(repo))
-            _require_main_clean(repo)
+            _require_main_ready(repo, row)
             landed = int(git(repo.main, "rev-list", "--count", f"{repo.default}..{row.branch}", check=False).strip() or 0)
-            _finish_apply(repo, row, landed)
+            _finish_apply(repo, row, landed, remove=args.remove)
             return
 
         row = resolve_row(repo, args.target or ".", rows) if args.target else _pick_target(repo, rows, "apply", applyable=True)
-        _require_main_clean(repo)
         if row.is_main:
             die(f"'{row.name}' is the main checkout — nothing to apply")
         if not row.registered:
@@ -364,13 +425,24 @@ def cmd_apply(args: argparse.Namespace) -> None:
         if _rebase_in_progress(row.path):
             die(f"a rebase is in progress in {row.path}; finish it with 'wt apply --continue' or 'wt apply --abort'")
         if not row.ahead:
-            die(f"'{row.name}' has no commits ahead of {repo.default}; run 'clean'")
+            die(f"'{row.name}' has nothing to land: no commits ahead of {repo.default}; run 'wt clean' to remove it")
+        _require_main_ready(repo, row)
+        if args.remove and not args.dry_run:
+            _require_outside_worktree(repo, row)
         if args.dry_run:
-            info(f"would rebase {row.branch} onto {repo.default}, remove worktree, fast-forward {repo.default}, and delete {row.branch}")
+            if args.remove:
+                if is_within(os.getcwd(), os.path.realpath(row.path)):
+                    info(f"note: --remove would refuse here, since it deletes {row.path}, which holds this cwd")
+                info(
+                    f"would rebase {row.branch} onto {repo.default}, fast-forward it, then remove "
+                    f"the worktree and delete the branch"
+                )
+            else:
+                info(f"would rebase {row.branch} onto {repo.default} and fast-forward it, keeping the worktree")
             return
-        _rebase(repo, row, abort_on_conflict=bool(args.abort_on_conflict))
+        _rebase(repo, row, abort_on_conflict=bool(args.abort_on_conflict), verb="apply")
         landed = int(git(repo.main, "rev-list", "--count", f"{repo.default}..{row.branch}", check=False).strip() or 0)
-        _finish_apply(repo, row, landed)
+        _finish_apply(repo, row, landed, remove=args.remove)
 
 
 def cmd_sync(args: argparse.Namespace) -> None:
@@ -405,7 +477,7 @@ def cmd_sync(args: argparse.Namespace) -> None:
         if args.dry_run:
             info(f"would rebase {row.branch} onto {repo.default}")
             return
-        _rebase(repo, row, abort_on_conflict=bool(args.abort_on_conflict))
+        _rebase(repo, row, abort_on_conflict=bool(args.abort_on_conflict), verb="sync")
         info(f"synced {row.branch} onto {repo.default}")
 
 

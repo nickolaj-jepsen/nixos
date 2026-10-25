@@ -228,8 +228,8 @@
         `discard_changes: true`. Check `git status` and `git log origin/<default>..`
         in the worktree first, and ask the user unless nothing would be lost. Claude's
         native removal leaves the branch behind.
-      - Landing and clearing worktrees are explicit commands the user or agent chooses
-        (`wt apply`, `wt sync`, `wt clean`, `wt remove`); nothing removes them at exit.
+      - Landing and clearing are explicit, and `wt --help` states their preconditions;
+        nothing removes a worktree at exit.
     '';
 
     programs.claude-code = {
