@@ -187,10 +187,18 @@ export default function (pi: ExtensionAPI) {
       const verdict = await ask(session, judge, prompt);
       failures = 0;
       if (!verdict.allow) {
-        log.review("guardian_deferred", { requestId: details.requestId, reason: verdict.reason });
+        log.review("guardian_deferred", {
+          requestId: details.requestId,
+          judge,
+          reason: verdict.reason,
+        });
         return { kind: "defer" };
       }
-      log.review("guardian_allowed", { requestId: details.requestId, reason: verdict.reason });
+      log.review("guardian_allowed", {
+        requestId: details.requestId,
+        judge,
+        reason: verdict.reason,
+      });
       if (session.hasUI) {
         const value = oneLine(details.payload?.request?.value ?? surface).slice(0, 80);
         session.ui.notify(`guardian allowed ${value}: ${verdict.reason}`, "info");
@@ -199,7 +207,7 @@ export default function (pi: ExtensionAPI) {
     } catch (error) {
       failures += 1;
       const reason = error instanceof Error ? error.message : String(error);
-      log.review("guardian_failed", { requestId: details.requestId, reason });
+      log.review("guardian_failed", { requestId: details.requestId, judge, reason });
       if (failures === MAX_FAILURES && session.hasUI) {
         session.ui.notify(
           "guardian: the judge keeps failing, every ask goes to you this session",
