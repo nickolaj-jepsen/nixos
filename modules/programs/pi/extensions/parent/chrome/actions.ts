@@ -1,13 +1,13 @@
 import { spawn } from "node:child_process";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AppKeybinding, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { closeModels, modelsOpen } from "../lib/models-picker.ts";
 import type { Action, ChromeState } from "./state.ts";
 
 /** Runs one of pi's own keybinding actions, or names the key when the editor has none. */
 const appAction =
-  (state: ChromeState, id: string, key: string): Action =>
+  (state: ChromeState, id: AppKeybinding, key: string): Action =>
   (ctx) => {
-    const handler = state.editor?.actionHandlers?.get(id);
+    const handler = state.editor?.actionHandlers.get(id);
     if (handler) handler();
     else ctx.ui.notify(`chrome: press ${key}`, "info");
   };
@@ -21,7 +21,7 @@ const command =
   (state: ChromeState, pi: ExtensionAPI, text: string): Action =>
   () => {
     const focus = state.tui?.getFocusedComponent?.();
-    if (focus && focus !== state.editorComponent) return;
+    if (focus && focus !== state.editor) return;
     pi.sendUserMessage(text, { expandPromptTemplates: true });
   };
 
@@ -33,7 +33,7 @@ const dismissOverlay =
   (state: ChromeState): Action =>
   () => {
     const focus = state.tui?.getFocusedComponent?.();
-    if (!focus || focus === state.editorComponent) return;
+    if (!focus || focus === state.editor) return;
     (focus as { handleInput?(data: string): void }).handleInput?.("\x1b");
   };
 
@@ -56,7 +56,7 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState) => {
     model: ((ctx) => {
       if (modelsOpen()) return closeModels();
       const focus = state.tui?.getFocusedComponent?.();
-      if (focus && focus !== state.editorComponent) return closeOverlay(ctx);
+      if (focus && focus !== state.editor) return closeOverlay(ctx);
       return openModels(ctx);
     }) as Action,
     effort: appAction(state, "app.thinking.cycle", "shift+tab"),

@@ -1,25 +1,20 @@
-import { matchesKey, type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui";
-import type { EditorWrapper } from "../lib/prompt-editor.ts";
+import { CustomEditor, type KeybindingsManager } from "@earendil-works/pi-coding-agent";
+import {
+  type EditorTheme,
+  matchesKey,
+  type TUI,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
+import { onEdit, underline } from "../spellfix.ts";
 import { hitTest, hoverAt, isPlainClick, type Region } from "./layout.ts";
-import type { ChromeState, Renderer } from "./state.ts";
+import type { ChromeState } from "./state.ts";
 
 type Border = (text: string) => string;
-type Inner = {
-  render(width: number): string[];
-  handleInput?(data: string): unknown;
-  handleMouse?(event: TuiMouseEvent): unknown;
-  getText?(): string;
-  setText?(text: string): void;
-  borderColor?: Border;
-  actionHandlers?: Map<string, () => void>;
-};
 
 /** What pi shows while it works, retries, compacts or summarises a branch; pi animates it. */
-export type BorderStatus = {
-  kind: string;
-  renderInBorder(width: number): string;
-  renderSpinnerInBorder(width: number): string;
-};
+export type BorderStatus = NonNullable<Parameters<CustomEditor["setWorkingStatusIndicator"]>[0]>;
 
 export type Painters = {
   top: (
@@ -31,156 +26,107 @@ export type Painters = {
   /**
    * The suggestion for the prompt's line: `room` is what the row has left after
    * the cursor and `empty` is whether the editor holds anything. The painter owns
-   * the text, the wrapper owns placing it after the cursor.
+   * the text, the editor owns placing it after the cursor.
    */
-  hint?: (room: number, empty: boolean) => { ghost: string } | undefined;
+  hint: (room: number, empty: boolean) => { ghost: string } | undefined;
   /** The text to insert when that suggestion is accepted, taken at most once. */
-  takeHint?: () => string | undefined;
+  takeHint: () => string | undefined;
 };
 
-const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
-const plain = (line: string) => line.replace(ANSI, "");
-const topHidden = (line: string) => Number(/↑\s*(\d+)\s*more/.exec(plain(line))?.[1] ?? 0);
 // One clear column between a suggestion and the edge of the box.
 const EDGE = 1;
 
-const mounted = (state: ChromeState) => {
-  const children = (state.tui as { children?: Array<{ children?: unknown[] }> } | undefined)
-    ?.children;
-  return Array.isArray(children) ? children : [];
-};
-
-/** Which of the TUI's top-level containers holds the wrapped editor; -1 when none does. */
-const editorSlot = (state: ChromeState) =>
-  state.editorComponent === undefined
-    ? -1
-    : mounted(state).findIndex((child) => child.children?.includes(state.editorComponent));
-
 /**
- * Whether pi mounted a widget directly above the editor. It puts the
- * above-editor container immediately before the editor's own, seeded with a
- * spacer row, so a widget makes it hold more than that one child. Anything
- * unexpected counts as "no widget": the blank row is spacing, not information,
- * and must not appear on its own.
+ * pi's editor with chrome's top border, spellfix's underlines and the drafted
+ * reply after the cursor. It draws plainly once its session has ended.
  */
-const widgetAbove = (state: ChromeState): boolean => {
-  const index = editorSlot(state);
-  if (index <= 0) return false;
-  return (mounted(state)[index - 1]?.children?.length ?? 0) > 1;
-};
+export class PromptEditor extends CustomEditor {
+  private status: BorderStatus | undefined;
+  private topRegions: Region[] = [];
 
-/**
- * Whether the top border is on screen: not before the wrapper is installed,
- * after another factory replaced it, or while pi shows a dialog in its place.
- */
-export const borderShown = (state: ChromeState) => editorSlot(state) >= 0;
+  constructor(
+    tui: TUI,
+    theme: EditorTheme,
+    keybindings: KeybindingsManager,
+    private readonly chrome: ChromeState,
+    private readonly painters: Painters,
+  ) {
+    // pi embeds its working status in the top border only for an editor that asks.
+    super(tui, theme, keybindings, { embedWorkingStatus: true });
+  }
 
-/**
- * Owns the editor's top border without owning the editor: spellfix supplies it
- * through lib/prompt-editor, and this wraps that instance. The proxy forwards
- * everything pi wires up (submit, text, keybindings, border color) and
- * intercepts only `render`, `handleMouse` and the status pi embeds in the
- * border; the border is rewritten after the inner render, so spellfix's styling
- * never reaches it.
- */
-export const createEditorChrome = (state: ChromeState, painters: Painters): EditorWrapper => {
-  let topRegions: Region[] = [];
-  let status: BorderStatus | undefined;
+  override setWorkingStatusIndicator(indicator: BorderStatus | undefined): void {
+    this.status = indicator;
+    super.setWorkingStatusIndicator(indicator);
+  }
 
-  const decorate = (inner: Inner, tui: Renderer) => {
-    state.tui = tui;
-    state.editor = inner;
-    const wrapper: Inner = new Proxy(inner, {
-      get(target, property) {
-        // Kept here rather than passed on, so the inner editor draws the plain
-        // border whose `↑ N more` the top reads, and the top places the status.
-        if (property === "setWorkingStatusIndicator") {
-          return (indicator: BorderStatus | undefined) => {
-            status = indicator;
-          };
-        }
-        if (property === "render") {
-          return (width: number) => {
-            const drawn = target.render(width);
-            if (!state.ctx || width <= 0 || drawn.length === 0) return drawn;
-            // Resolved per render: pi assigns the border color after the factory
-            // returns, and that is the one that tracks thinking level and bash mode.
-            const color = target.borderColor;
-            const border: Border =
-              typeof color === "function" ? color.bind(target) : (text) => text;
+  protected override renderTopBorder(width: number, hidden: number): string {
+    if (!this.chrome.live || width <= 0) return super.renderTopBorder(width, hidden);
+    // pi reassigns borderColor as the thinking level or bash mode changes.
+    const top = this.painters.top(width, hidden, (text) => this.borderColor(text), this.status);
+    this.topRegions = top.regions;
+    this.chrome.borderDrawn = true;
+    return top.line;
+  }
 
-            // A widget above the input needs air between it and the border; the
-            // border is the editor's first line, so the row goes in front of it.
-            const lead = widgetAbove(state) ? 1 : 0;
-            const lines = lead === 1 ? ["", ...drawn] : drawn;
+  override render(width: number): string[] {
+    const lines = super.render(width);
+    if (!this.chrome.live) return lines;
+    // Line 0 is the border, whose label is no prompt text to spellcheck.
+    for (let i = 1; i < lines.length; i++) lines[i] = underline(lines[i]!);
+    // The suggestion belongs on the line you are about to type on, right after
+    // the cursor, so the box keeps its height. With the editor empty the cursor
+    // ends that row, so its padding is what the ghost spends.
+    const typed = lines[1]?.replace(/ +$/, "");
+    if (typed === undefined) return lines;
+    const hint = this.painters.hint(width - visibleWidth(typed) - EDGE, this.getText() === "");
+    if (hint) {
+      const pad = width - visibleWidth(typed) - visibleWidth(hint.ghost);
+      lines[1] = typed + hint.ghost + " ".repeat(Math.max(0, pad));
+    }
+    return lines;
+  }
 
-            const top = painters.top(width, topHidden(lines[lead] ?? ""), border, status);
-            lines[lead] = top.line;
-            topRegions = top.regions;
-            // The suggestion belongs on the line you are about to type on, right
-            // after the cursor, so the box keeps its height. With the editor empty
-            // the cursor ends that row, so its padding is what the ghost spends.
-            const row = lead + 1;
-            const typed = (lines[row] ?? "").replace(/ +$/, "");
-            const hint = painters.hint?.(
-              width - visibleWidth(typed) - EDGE,
-              (target.getText?.() ?? "") === "",
-            );
-            if (hint && lines[row] !== undefined) {
-              const pad = width - visibleWidth(typed) - visibleWidth(hint.ghost);
-              lines[row] = typed + hint.ghost + " ".repeat(Math.max(0, pad));
-            }
-            return lines;
-          };
-        }
-        if (property === "handleInput") {
-          return (data: string) => {
-            // Tab is pi's autocomplete, but an empty editor has nothing to
-            // complete: that keystroke means "use the suggestion" instead.
-            if (matchesKey(data, "tab") && (target.getText?.() ?? "") === "") {
-              const draft = painters.takeHint?.();
-              if (draft !== undefined) {
-                target.setText?.(draft);
-                return;
-              }
-            }
-            return target.handleInput?.(data);
-          };
-        }
-        if (property === "handleMouse") {
-          return (event: TuiMouseEvent) => {
-            // The border sits a row lower while the blank row above it is drawn.
-            const borderRow = widgetAbove(state) ? 1 : 0;
-            if (event.type === "move") {
-              // Leaving the border downward is the only exit pi reports for it.
-              state.setHover(event.y === borderRow ? hoverAt(topRegions, event.x) : undefined);
-              return target.handleMouse?.(event);
-            }
-            // Only a control on the top border: the rest keeps pi's behaviour, including
-            // click-to-place-cursor in the input.
-            const action =
-              event.y === borderRow && isPlainClick(event)
-                ? hitTest(topRegions, event.x)
-                : undefined;
-            const ctx = state.ctx;
-            if (action && ctx) {
-              void Promise.resolve()
-                .then(() => action(ctx))
-                .catch(() => {});
-              return { handled: true };
-            }
-            return target.handleMouse?.(event);
-          };
-        }
-        return Reflect.get(target, property, target);
-      },
-      set(target, property, value) {
-        return Reflect.set(target, property, value, target);
-      },
-    });
-    state.editorComponent = wrapper;
-    return wrapper;
-  };
+  override handleInput(data: string): void {
+    // Tab is pi's autocomplete, but an empty editor has nothing to complete:
+    // that keystroke means "use the suggestion" instead.
+    if (matchesKey(data, "tab") && this.getText() === "") {
+      const draft = this.painters.takeHint();
+      if (draft !== undefined) {
+        this.setText(draft);
+        return;
+      }
+    }
+    super.handleInput(data);
+    onEdit(this, this.tui);
+  }
 
-  return (inner, host) => decorate(inner as Inner, host[0] as unknown as Renderer) as never;
-};
+  override setText(text: string): void {
+    super.setText(text);
+    onEdit(this, this.tui);
+  }
+
+  // pi's clipboard paste lands here once read, after its keystroke's check has run.
+  override insertTextAtCursor(text: string): void {
+    super.insertTextAtCursor(text);
+    onEdit(this, this.tui);
+  }
+
+  override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    if (event.type === "move") {
+      // Leaving the border downward is the only exit pi reports for it.
+      this.chrome.setHover(event.y === 0 ? hoverAt(this.topRegions, event.x) : undefined);
+      return super.handleMouse(event);
+    }
+    // Only a control on the top border: the rest keeps pi's behaviour, including
+    // click-to-place-cursor in the input.
+    const action =
+      event.y === 0 && isPlainClick(event) ? hitTest(this.topRegions, event.x) : undefined;
+    const ctx = this.chrome.ctx;
+    if (!action || !ctx) return super.handleMouse(event);
+    void Promise.resolve()
+      .then(() => action(ctx))
+      .catch(() => {});
+    return { handled: true };
+  }
+}

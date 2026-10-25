@@ -13,7 +13,6 @@ import {
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
 import { agentParts } from "./agents.ts";
-import { borderShown } from "./editor.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { formatCost, splitPath } from "./format.ts";
 import { createGit, PR_COMMAND } from "./git.ts";
@@ -115,7 +114,8 @@ export const createFooter = (
       });
     }
     // The editor's top border carries the measurements whenever it is drawn.
-    const bordered = borderShown(state);
+    const bordered = state.borderDrawn;
+    state.borderDrawn = false;
     const percent = bordered ? undefined : stats.contextFor(ctx, model)?.percent;
     if (percent != null) {
       alarms.push({

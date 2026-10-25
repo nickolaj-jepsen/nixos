@@ -17,15 +17,14 @@ import { spawn } from "node:child_process";
 import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { CustomEditor, type Theme } from "@earendil-works/pi-coding-agent";
 import type {
   ExtensionAPI,
   ExtensionContext,
   ExtensionUIContext,
-  KeybindingsManager,
+  Theme,
 } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { Component, EditorTheme, KeyId, TUI } from "@earendil-works/pi-tui";
+import type { Component, Editor, KeyId, TUI } from "@earendil-works/pi-tui";
 
 import {
   addInput,
@@ -49,7 +48,6 @@ import {
 } from "./lib/spellfix/hooks/core.ts";
 import type { Found, Verdict } from "./lib/spellfix/hooks/core.ts";
 import type { Extra, Miss } from "./lib/spellfix/types/index.d.ts";
-import { providePromptEditor, withdrawPromptEditor } from "./lib/prompt-editor.ts";
 import { sideCall } from "../shared/side-call.ts";
 
 const HUNSPELL = process.env.PI_SPELLFIX_HUNSPELL || "hunspell";
@@ -74,7 +72,12 @@ const ignored = new Set<string>();
 // Auto-added words taken back with `u`; the model's "correct" leaves them flagged for this draft.
 const unadded = new Set<string>();
 
-let editor: SpellEditor | undefined;
+/** The live TUI session; the editor's hooks act only while there is one. */
+let live: ExtensionContext | undefined;
+/** The prompt editor that reported the latest edit, and what repaints it. */
+let editor: { draft: Editor; tui: TUI } | undefined;
+/** The words the editor underlines: by word, not offset, so every occurrence is marked. */
+let underlined: ReadonlySet<string> = new Set();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let checkId = 0;
 /**
@@ -245,9 +248,11 @@ async function askModel(
   return undefined;
 }
 
-/** The words the editor underlines: by word, not offset, so every occurrence is marked. */
-function underlinedWords(misses: readonly (Miss | Extra)[]): Set<string> {
-  return new Set(misses.map((m) => m.word));
+function setUnderlined(misses: readonly (Miss | Extra)[]) {
+  const words = new Set(misses.map((m) => m.word));
+  if (words.size === 0 && underlined.size === 0) return;
+  underlined = words;
+  editor?.tui.requestRender();
 }
 
 /** The cached batch's extras when it is for `text`, skipped words left out. */
@@ -260,7 +265,7 @@ function cachedExtras(text: string): Extra[] {
  * marker: the words in a paste are neither checked nor sent to the model.
  */
 function draftText(ctx: ExtensionContext): string {
-  return editor?.getText() ?? ctx.ui.getEditorText();
+  return editor?.draft.getText() ?? ctx.ui.getEditorText();
 }
 
 /** pi's own test for a draft it runs as a shell command (`!cmd`, `!!cmd`). */
@@ -268,10 +273,25 @@ function isShellDraft(text: string): boolean {
   return text.trimStart().startsWith("!");
 }
 
-/** Puts back a draft read with `draftText`. */
+/** The cursor as an offset into `getText`, for "nearest misspelling". */
+function cursorOffset(draft: Editor): number {
+  const { line, col } = draft.getCursor();
+  const lines = draft.getLines();
+  let offset = 0;
+  for (let i = 0; i < line && i < lines.length; i++) offset += lines[i]!.length + 1;
+  return offset + col;
+}
+
+/** Puts back a draft read with `draftText`, keeping the pastes its markers name. */
 function writeDraft(ui: ExtensionUIContext, text: string) {
-  if (editor) editor.replaceDraft(text);
-  else ui.setEditorText(text);
+  if (!editor) return ui.setEditorText(text);
+  // pi-tui's paste map and counter are private, and setText clears them.
+  const self = editor.draft as unknown as { pastes: Map<number, string>; pasteCounter: number };
+  const pastes = new Map(self.pastes);
+  const counter = self.pasteCounter;
+  editor.draft.setText(text);
+  for (const [id, paste] of pastes) self.pastes.set(id, paste);
+  self.pasteCounter = counter;
 }
 
 /** Hunspell's misses plus the cached model extras, in draft order. */
@@ -305,74 +325,19 @@ function styleWords(
   );
 }
 
-/**
- * The default editor with misspelled words underlined and a cursor offset the
- * picker can start from. `CustomEditor` keeps pi's shortcuts, history and
- * autocomplete; only `render` and the change signal are added.
- */
-class SpellEditor extends CustomEditor {
-  private words: ReadonlySet<string> = new Set();
+/** The prompt editor's line with the misspelled words underlined. */
+export function underline(line: string): string {
+  if (underlined.size === 0 || !live) return line;
+  const theme = live.ui.theme;
+  return styleWords(line, underlined, (word) =>
+    theme.style(word, { fg: "error", underline: true }),
+  );
+}
 
-  constructor(
-    tui: TUI,
-    editorTheme: EditorTheme,
-    keybindings: KeybindingsManager,
-    private readonly appTheme: () => Theme,
-    private readonly onEdit: () => void,
-  ) {
-    // pi's own editor embeds the working status in its top border; a bare
-    // CustomEditor would move it to the separate loader row.
-    super(tui, editorTheme, keybindings, { embedWorkingStatus: true });
-  }
-
-  setUnderlined(words: ReadonlySet<string>) {
-    this.words = words;
-  }
-
-  /** The cursor as an offset into `getText`, for "nearest misspelling". */
-  cursorOffset(): number {
-    const { line, col } = this.getCursor();
-    const lines = this.getLines();
-    let offset = 0;
-    for (let i = 0; i < line && i < lines.length; i++) offset += lines[i]!.length + 1;
-    return offset + col;
-  }
-
-  override handleInput(data: string): void {
-    super.handleInput(data);
-    this.onEdit();
-  }
-
-  override setText(text: string): void {
-    super.setText(text);
-    this.onEdit();
-  }
-
-  // pi's clipboard paste lands here once read, after its keystroke's check has run.
-  override insertTextAtCursor(text: string): void {
-    super.insertTextAtCursor(text);
-    this.onEdit();
-  }
-
-  /** `setText` for a draft from `getText`, keeping the pastes its markers name. */
-  replaceDraft(text: string): void {
-    // pi-tui's paste map and counter are private, and setText clears them.
-    const self = this as unknown as { pastes: Map<number, string>; pasteCounter: number };
-    const pastes = new Map(self.pastes);
-    const counter = self.pasteCounter;
-    this.setText(text);
-    for (const [id, paste] of pastes) self.pastes.set(id, paste);
-    self.pasteCounter = counter;
-  }
-
-  override render(width: number): string[] {
-    const lines = super.render(width);
-    if (this.words.size === 0) return lines;
-    const theme = this.appTheme();
-    return lines.map((line) =>
-      styleWords(line, this.words, (word) => theme.style(word, { fg: "error", underline: true })),
-    );
-  }
+/** Tells spellfix the prompt editor's draft changed; `tui` repaints it once a check lands. */
+export function onEdit(draft: Editor, tui: TUI) {
+  editor = { draft, tui };
+  if (live) scheduleCheck(sessionGen, live);
 }
 
 /* ------------------------------------------------------------------ picker */
@@ -570,7 +535,7 @@ class SpellPicker implements Component {
 
   /** Rebuilds the editor's underlines from the current answers, once they land. */
   private refreshUnderline() {
-    if (editor) editor.setUnderlined(underlinedWords(this.items));
+    setUnderlined(this.items);
     this.tui.requestRender();
   }
 
@@ -804,12 +769,12 @@ async function refreshUnderlines(gen: number, ctx: ExtensionContext) {
   const id = ++checkId;
   const text = draftText(ctx);
   if (!text.trim() || isShellDraft(text)) {
-    editor?.setUnderlined(new Set());
+    setUnderlined([]);
     return;
   }
   const misses = await allMisses(gen, ctx, text);
   if (id !== checkId || gen !== sessionGen) return;
-  editor?.setUnderlined(underlinedWords(misses));
+  setUnderlined(misses);
 }
 
 async function openPicker(ctx: ExtensionContext) {
@@ -827,7 +792,7 @@ async function openPicker(ctx: ExtensionContext) {
     return;
   }
   const gen = sessionGen;
-  const cursor = editor?.cursorOffset() ?? text.length;
+  const cursor = editor ? cursorOffset(editor.draft) : text.length;
   suspended = true;
   if (timer) clearTimeout(timer);
   try {
@@ -860,9 +825,6 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args, ctx) => openPicker(ctx),
   });
 
-  // Closes over one session's ctx, so it is withdrawn when that session ends.
-  let provided: Parameters<typeof providePromptEditor>[1] | undefined;
-
   pi.on("session_start", (_event, ctx) => {
     sessionGen++;
     const gen = sessionGen;
@@ -872,20 +834,9 @@ export default function (pi: ExtensionAPI) {
     warnedHunspell = false;
     suspended = false;
     if (ctx.mode !== "tui") return;
+    live = ctx;
     // hunspell neither creates a missing personal dictionary nor saves into one.
     void ensurePersonal();
-    editor = undefined;
-    provided = (tui, editorTheme, keybindings) => {
-      editor = new SpellEditor(
-        tui,
-        editorTheme,
-        keybindings,
-        () => ctx.ui.theme,
-        () => scheduleCheck(gen, ctx),
-      );
-      return editor;
-    };
-    providePromptEditor(ctx, provided);
     scheduleCheck(gen, ctx);
   });
 
@@ -895,10 +846,10 @@ export default function (pi: ExtensionAPI) {
     timer = undefined;
     checkId++;
     suspended = false;
+    live = undefined;
     editor = undefined;
+    underlined = new Set();
     batch = undefined;
-    if (provided) withdrawPromptEditor(provided);
-    provided = undefined;
   });
 
   // A submitted or cleared draft starts with a clean ignore list, as in the Claude Code mod.

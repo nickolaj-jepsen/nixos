@@ -1,4 +1,4 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { CustomEditor, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export type Renderer = { requestRender(): void; getFocusedComponent?(): unknown };
 export type Action = (ctx: ExtensionContext) => void | Promise<void>;
@@ -13,10 +13,14 @@ export type ChromeState = {
    */
   live: boolean;
   tui: Renderer | undefined;
-  /** pi copies its app keybinding handlers onto a CustomEditor, so clicks can reuse them. */
-  editor: { actionHandlers?: Map<string, () => void> } | undefined;
-  /** What pi focuses while the prompt is active: the wrapper around `editor`. */
-  editorComponent: unknown;
+  /** The prompt editor; pi copies its app keybinding handlers onto it, so clicks can reuse them. */
+  editor: CustomEditor | undefined;
+  /**
+   * Set by each render that draws the top border, cleared by the footer's: the
+   * footer renders after the editor, and nothing renders the editor while a
+   * dialog holds its slot.
+   */
+  borderDrawn: boolean;
   /** Group of the clickable thing under the pointer; footer parts and the `label` on the top border. */
   hover: string | undefined;
   /** Moves the hover; it lapses on its own because pi never reports the pointer leaving. */
@@ -33,7 +37,7 @@ export const createState = (): ChromeState => {
     live: false,
     tui: undefined,
     editor: undefined,
-    editorComponent: undefined,
+    borderDrawn: false,
     hover: undefined,
     setHover: (group) => {
       if (timer) clearTimeout(timer);
