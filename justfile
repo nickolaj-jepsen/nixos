@@ -13,7 +13,8 @@ system := `nix --experimental-features 'nix-command flakes' eval --impure --raw 
 list:
     just --list
 
-# A host's routing facts from the flake, space separated: class, rebuild tool, needs-root, activation attrpath.
+# A host's routing facts from the flake, space separated: class, needs-root, activation attrpath, rebuild tool.
+# The tool goes last: it may contain spaces (`nix run .#home-manager --`), so a final `read` var takes the rest.
 [private]
 [script]
 _meta hostname:
@@ -21,7 +22,7 @@ _meta hostname:
         echo "Not a host name: '{{ hostname }}'" >&2
         exit 1
     fi
-    meta=$({{ nixcmd }} eval --raw .#hostMeta --apply 'm: let h = m."{{ hostname }}" or null; in if h == null then "" else "${h.class} ${h.tool} ${if h.root then "1" else "0"} ${h.activation}"')
+    meta=$({{ nixcmd }} eval --raw .#hostMeta --apply 'm: let h = m."{{ hostname }}" or null; in if h == null then "" else "${h.class} ${if h.root then "1" else "0"} ${h.activation} ${h.tool}"')
     if [ -z "$meta" ]; then
         echo "No host '{{ hostname }}' in hosts/ (no host.nix card)." >&2
         exit 1
@@ -43,7 +44,7 @@ _require-nixos hostname verb:
 [group('host')]
 [script]
 build hostname=`hostname -s` *ARGS="":
-    read -r _ _ _ activation <<<"$(just _meta {{ hostname }})"
+    read -r _ _ activation _ <<<"$(just _meta {{ hostname }})"
     $(command -v nom || echo nix) build ".#$activation" {{ ARGS }}
 
 [doc('Print one config value of a host as JSON without building it; an hm. prefix reads its home-manager config')]
@@ -71,7 +72,7 @@ eval attr hostname=`hostname -s` *ARGS="":
 [group('host')]
 [script]
 switch hostname=`hostname -s` target='' *ARGS="":
-    read -r class tool root _ <<<"$(just _meta {{ hostname }})"
+    read -r class root _ tool <<<"$(just _meta {{ hostname }})"
     if [ -n '{{ target }}' ]; then
         if [ "$class" != nixos ]; then
             echo "Only a nixos host switches remotely: run 'just switch {{ hostname }}' on {{ target }} itself." >&2
@@ -131,7 +132,7 @@ diff hostname=`hostname -s`: (build hostname)
 [group('host')]
 [script]
 tree hostname=`hostname -s` *ARGS="":
-    read -r _ _ _ activation <<<"$(just _meta {{ hostname }})"
+    read -r _ _ activation _ <<<"$(just _meta {{ hostname }})"
     nix-tree --derivation ".#$activation" {{ ARGS }}
 
 [arg('package', pattern='[a-zA-Z0-9._+-]+')]
@@ -140,7 +141,7 @@ tree hostname=`hostname -s` *ARGS="":
 [script]
 why-depends package hostname=`hostname -s`:
     just _require-nixos {{ hostname }} why-depends
-    read -r _ _ _ activation <<<"$(just _meta {{ hostname }})"
+    read -r _ _ activation _ <<<"$(just _meta {{ hostname }})"
     {{ nixcmd }} why-depends --all ".#$activation" ".#nixosConfigurations.{{ hostname }}.pkgs.{{ package }}"
 
 [arg('username', pattern='[a-z_][a-z0-9_-]*')]
