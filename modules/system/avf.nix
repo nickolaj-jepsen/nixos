@@ -113,6 +113,8 @@
         '';
       };
   in {
+    imports = [inputs.podroid.nixosModules.guest];
+
     options.system.build.avfImage = lib.mkOption {
       type = lib.types.attrsOf lib.types.package;
       readOnly = true;
@@ -144,8 +146,9 @@
       # Other modules still ask for drivers (tpm-crb, …) this fixed kernel lacks.
       boot.initrd.allowMissingModules = true;
       boot.initrd.availableKernelModules = ["virtio_pci" "virtio_blk"];
+      # hvc0 console and getty, the vsock agent, and the boot-stage lines the app waits for.
+      podroid.guest.enable = true;
       boot.kernelParams = [
-        "console=hvc0"
         # Pixel 8 Pro's hypervisor advertises MPAM but traps MPAMIDR_EL1: an
         # oops in init_cpu_features at t=0 under the match_host topology.
         "arm64.nompam"
