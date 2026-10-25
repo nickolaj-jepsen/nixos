@@ -20,7 +20,7 @@
  * are the scarce ones.
  */
 import { Type } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ToolInfo } from "@earendil-works/pi-coding-agent";
 import { isLeanModel } from "../shared/lean-model.ts";
 import { isExpensiveModel } from "./lib/model-tier.ts";
 import { createRouted } from "../shared/routed-model.ts";
@@ -29,15 +29,9 @@ import { isSubagentSession } from "../shared/subagent-session.ts";
 const NAME = "codemode_only";
 const CODEMODE = "codemode";
 const SUBAGENT = "subagent";
-// Each name maps to its required arguments. Delegation is here on every model:
-// the agent tool's declaration is the second largest in the roster, and a run
-// that does not delegate should not pay for it.
-const HIDDEN: Record<string, string> = {
-  [SUBAGENT]: "{ subagent_type, description, prompt }",
-  get_subagent_result: "{ agent_id }",
-  steer_subagent: "{ agent_id, message }",
-};
-const HIDDEN_NAMES = Object.keys(HIDDEN);
+// Delegation is here on every model: the agent tool's declaration is the second
+// largest in the roster, and a run that does not delegate should not pay for it.
+const HIDDEN_NAMES = [SUBAGENT, "get_subagent_result", "steer_subagent"];
 
 // Lean models get this too: it is how `/delegate` and `/workflow` run their children.
 const JOIN =
@@ -61,11 +55,23 @@ const list = (items: string[]) => {
     : `${quoted.slice(0, -1).join(", ")} and ${quoted.at(-1)}`;
 };
 
-const guidelines = (active: Set<string>, lean: boolean, expensive: boolean) => {
+/** The call with its required arguments, as the tool's own schema names them. */
+const signature = (tool: ToolInfo | undefined) => {
+  const required = (tool?.parameters as { required?: unknown } | undefined)?.required;
+  const names = Array.isArray(required) ? required.filter((name) => typeof name === "string") : [];
+  return `tools.${tool?.name}(${names.length > 0 ? `{ ${names.join(", ")} }` : ""})`;
+};
+
+const guidelines = (
+  tools: Map<string, ToolInfo>,
+  active: Set<string>,
+  lean: boolean,
+  expensive: boolean,
+) => {
   const reachable = HIDDEN_NAMES.filter((name) => active.has(name));
   const lines: string[] = [];
   if (reachable.length > 0) {
-    const calls = reachable.map((name) => `tools.${name}(${HIDDEN[name]})`);
+    const calls = reachable.map((name) => signature(tools.get(name)));
     lines.push(
       `${list(calls)} ${reachable.length === 1 ? "is" : "are"} left out of your tool list but stay callable from codemode, with the required arguments shown; \`await describeTool("<name>")\` for the optional ones.`,
     );
@@ -102,8 +108,9 @@ export default function (pi: ExtensionAPI) {
     const active = new Set(pi.getActiveTools());
     if (!active.has(NAME) || !active.has(CODEMODE)) return;
     const answering = routed(ctx)?.model ?? ctx.model;
+    const tools = new Map(pi.getAllTools().map((tool) => [tool.name, tool]));
     event.systemPromptOptions.promptGuidelines.push(
-      ...guidelines(active, isLeanModel(ctx.model), isExpensiveModel(answering)),
+      ...guidelines(tools, active, isLeanModel(ctx.model), isExpensiveModel(answering)),
     );
   });
 

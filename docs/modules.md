@@ -144,7 +144,9 @@ home-manager and the overlays):
   `modules/programs/pi/extensions/package.json` + lockfile, the npm root, never
   in `core/` or `parent/package.json` (`npm install --package-lock-only`; read
   via `importNpmLock`, no hash to bump); never add packages the pi leaf links
-  in from pi itself (`mkExtensions` in `modules/programs/pi/default.nix`).
+  in from pi itself or from `pkgs/pi-packages` (`@gotgenes/*`, so an
+  integration imports the package's published API instead of copying it;
+  `mkExtensions` in `modules/programs/pi/default.nix`).
   `just dev-setup` links `node_modules` into the folder for editor types; then
   this runs the tree without a rebuild:
   `pi -ne -e builtin:codemode -e builtin:mcp -e modules/programs/pi/extensions/core -e modules/programs/pi/extensions/parent`.

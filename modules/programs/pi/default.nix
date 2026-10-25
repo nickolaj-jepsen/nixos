@@ -3,7 +3,7 @@
   inputs,
   ...
 }: let
-  mkExtensions = pkgs: pi:
+  mkExtensions = pkgs: pi: piPackages:
     pkgs.buildNpmPackage {
       pname = "pi-extensions";
       version = "0";
@@ -32,6 +32,9 @@
         done
         ln -s ${pi}/lib/node_modules/pi-monorepo/node_modules/typebox node_modules/
         ln -s ${pi}/lib/node_modules/pi-monorepo/node_modules/@types/node node_modules/@types/
+        # The third-party packages pi loads, so an extension uses their published
+        # API and a bump that breaks it fails here.
+        ln -s ${piPackages}/node_modules/@gotgenes node_modules/
         tsc --noEmit
         runHook postBuild
       '';
@@ -50,7 +53,7 @@ in {
       overlays = [inputs.self.overlays.default];
     };
   in {
-    packages.pi-extensions = mkExtensions pkgs pkgs.pi-coding-agent;
+    packages.pi-extensions = mkExtensions pkgs pkgs.pi-coding-agent pkgs.pi-packages;
   };
 
   flake.modules.homeManager.pi = {
@@ -87,7 +90,7 @@ in {
     thirdPartyPackages = piPackages.packageNames;
     # settings.packages and the children's exclusions must match string for string.
     packagePath = name: "${piPackages}/node_modules/${name}";
-    extensions = mkExtensions pkgs pi;
+    extensions = mkExtensions pkgs pi piPackages;
     parentPath = "${extensions}/parent";
     # One role pi's reader can't parse stops pi-subagents from loading at all.
     agentRoles = pkgs.runCommand "pi-agent-roles" {nativeBuildInputs = [pkgs.nodejs];} ''
