@@ -195,6 +195,23 @@ class Fixture(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(path.exists())
 
+    def test_remove_refuses_the_directory_it_is_run_from(self) -> None:
+        path = self.create("self")
+        result = self.wt("remove", "self", cwd=str(path), check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("inside worktree 'self'", result.stderr)
+        self.assertTrue(path.exists())
+
+    def test_clean_skips_the_worktree_it_is_run_from(self) -> None:
+        path = self.create("self")
+        Path(path, "note.txt").write_text("landed\n")
+        self.commit("one", cwd=str(path))
+        self.git("merge", "--ff-only", "self")
+        self.wt("clean", cwd=str(path))
+        self.assertTrue(path.exists())
+        self.wt("clean")
+        self.assertFalse(path.exists())
+
     def test_locked_worktree_is_refused_even_with_force(self) -> None:
         path = self.create("locked")
         self.git("worktree", "lock", str(path))

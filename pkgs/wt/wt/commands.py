@@ -215,6 +215,10 @@ def cmd_clean(args: argparse.Namespace) -> None:
             if row.branch == repo.default:
                 skipped += 1
                 continue
+            if is_within(os.getcwd(), os.path.realpath(row.path)):
+                info(f"skipping {row.name}: it holds this cwd, so run 'wt clean' from {repo.main}")
+                skipped += 1
+                continue
             if args.dry_run:
                 info(f"would remove {row.name}")
                 removed += 1
@@ -241,7 +245,9 @@ def cmd_remove(args: argparse.Namespace) -> None:
         if row.is_main:
             die(f"'{row.name}' is the main checkout — cannot remove")
         if args.dry_run:
-            if row.safe_to_remove:
+            if is_within(os.getcwd(), os.path.realpath(row.path)):
+                info(f"would refuse {row.name}: holds this cwd")
+            elif row.safe_to_remove:
                 info(f"would remove {row.name}")
             elif row.busy and not args.ignore_in_use:
                 info(f"would refuse {row.name}: in use")
@@ -254,6 +260,7 @@ def cmd_remove(args: argparse.Namespace) -> None:
             else:
                 info(f"would archive and remove {row.name}")
             return
+        _require_outside_worktree(repo, row)
         _remove_row(repo, row, force=args.force, ignore_in_use=args.ignore_in_use)
         run(["git", "-C", repo.main, "worktree", "prune"], check=False)
 
@@ -309,9 +316,16 @@ def _require_main_ready(repo: Repo, row: Worktree) -> None:
     """Refuse when the primary checkout cannot fast-forward onto `row.branch`."""
     branch = run(["git", "-C", repo.main, "symbolic-ref", "--short", "--quiet", "HEAD"], check=False)
     if branch.returncode != 0:
-        die(f"main checkout is in detached HEAD; checkout {repo.default} first")
+        die(
+            f"main checkout is in detached HEAD; check out {repo.default} first, unless another\n"
+            f"session owns that checkout:\n  git -C {repo.main} switch {repo.default}"
+        )
     if branch.stdout.strip() != repo.default:
-        die(f"main checkout is on '{branch.stdout.strip()}', not '{repo.default}'; park it on '{repo.default}' first")
+        die(
+            f"main checkout is on '{branch.stdout.strip()}', not '{repo.default}'.\n"
+            f"  Park it there first, unless another session owns that checkout:\n"
+            f"  git -C {repo.main} switch {repo.default}"
+        )
     dirty = _dirty_paths(repo.main)
     if not dirty:
         return
@@ -336,9 +350,9 @@ def _require_outside_worktree(repo: Repo, row: Worktree) -> None:
         return
     die(
         f"you are inside worktree '{row.name}', and removing it deletes that directory.\n"
-        f"Run it from the primary checkout instead:\n  cd {repo.main} && wt apply --remove {row.name}\n"
-        f"Or land now and delete the worktree once nothing works in it:\n"
-        f"  wt apply {row.name} && wt remove {row.name}"
+        f"From the primary checkout instead:\n"
+        f"  cd {repo.main} && wt apply --remove {row.name}   # land it, then delete it\n"
+        f"  cd {repo.main} && wt remove {row.name}           # delete it as it stands"
     )
 
 
