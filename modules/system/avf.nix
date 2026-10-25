@@ -138,6 +138,11 @@
       # u-boot's EFI variables don't persist; systemd-boot lives at the removable path.
       boot.loader.efi.canTouchEfiVariables = false;
       boot.loader.timeout = 1;
+      boot.kernelPackages = pkgs.linuxPackagesFor pkgs.avf-kernel;
+      # The defaults name PC storage/USB drivers this kernel doesn't ship; virtio is built in.
+      boot.initrd.includeDefaultModules = false;
+      # Other modules still ask for drivers (tpm-crb, …) this fixed kernel lacks.
+      boot.initrd.allowMissingModules = true;
       boot.initrd.availableKernelModules = ["virtio_pci" "virtio_blk"];
       boot.kernelParams = [
         "console=hvc0"
