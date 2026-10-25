@@ -117,9 +117,9 @@ age_of() {
 free_space() { df --output=avail,size -B1 / 2>/dev/null | tail -1; }
 
 toast() {
-  # agent-notify is on PATH only on Linux desktops; elsewhere there is nowhere to toast.
-  command -v agent-notify >/dev/null 2>&1 || return 0
-  jq -cn --arg message "$1" '{cwd: "/", message: $message}' | agent-notify janitor >/dev/null 2>&1 || true
+  # notify-send ships only on Linux; a host without a notification daemon just fails quietly.
+  command -v notify-send >/dev/null 2>&1 || return 0
+  notify-send --app-name=janitor janitor "$1" >/dev/null 2>&1 || true
 }
 
 # Never delete the temp dir of the process doing the sweeping.

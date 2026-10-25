@@ -188,8 +188,9 @@ home-manager and the overlays):
 - **Agent language servers**: the `fireproof.agents.lspServers` registry
   (`command`/`args`/`extensionToLanguage`), filled by
   `modules/programs/agent-lsp.nix`; each agent leaf maps it to its own
-  schema. Desktop toasts for agent notification hooks go through
-  `pkgs.agent-notify <app name>`.
+  schema.
+- **Agent desktop toasts and the bar**: agent-hub (`docs/agent-hub.md`) sees
+  every pi and Claude Code session; don't add per-agent toast hooks.
 
 ## Frameworks already evaluated
 

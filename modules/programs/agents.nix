@@ -7,29 +7,6 @@
   }: {
     config = lib.mkIf config.fireproof.dev.enable (lib.mkMerge [
       {
-        # On PATH for pi's extensions/parent/notify.ts; the CLI hooks below use its store path.
-        home.packages = lib.optional (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) pkgs.agent-notify;
-
-        # Copilot reads this dir as user hooks, in Claude Code's nested format. Not
-        # the module's `settings`: that writes config.json, which Copilot now
-        # owns as mutable state (trusted folders); user settings.json is herdr's.
-        home.file."${config.programs.github-copilot-cli.configDir}/hooks/agent-notify.json" = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
-          text = builtins.toJSON {
-            version = 1;
-            hooks.Notification = [
-              {
-                matcher = "permission_prompt|elicitation_dialog";
-                hooks = [
-                  {
-                    type = "command";
-                    command = "${lib.getExe pkgs.agent-notify} Copilot";
-                  }
-                ];
-              }
-            ];
-          };
-        };
-
         programs.github-copilot-cli = {
           enable = true;
           # Stable node: unstable's would be a second ~130 MB nodejs + icu in the closure.
