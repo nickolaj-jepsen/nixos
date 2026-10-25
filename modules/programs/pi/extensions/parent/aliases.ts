@@ -1,18 +1,12 @@
 /**
- * Claude Code's slash habits in pi:
- *
- * - `/clear` does what `/new` does. Pi matches built-in slash commands by exact
- *   name, so muscle memory from other agents lands as a prompt instead.
- * - `/effort [level]` sets the thinking level, or shows it and the levels the
- *   current model offers.
- * - `/<skill>` anywhere in a prompt invokes that skill, as `/skill:<skill>` does
- *   at the start.
+ * Claude Code's slash habits in pi, which matches built-in slash commands by
+ * exact name, so muscle memory from other agents would land as a prompt.
  */
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-// A name standing alone, so paths like /tmp/x never match.
-const SKILL_TOKEN = /(?<=^|\s)\/(?:skill:)?([a-z0-9-]+)(?=$|[\s.,;:!?)])/g;
+// A name standing alone, so paths like /tmp/x never match; the separator after it is consumed.
+const SKILL_TOKEN = /(?<=^|\s)\/(?:skill:)?([a-z0-9-]+)(?:$|[\s.,;:!?)])/g;
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("clear", {
@@ -27,9 +21,10 @@ export default function (pi: ExtensionAPI) {
       "Set the thinking level: /effort <level>. Without one, show it and the allowed levels",
     handler: async (args, ctx) => {
       const allowed = ctx.model ? getSupportedThinkingLevels(ctx.model) : [];
-      const level = allowed.find((l) => l === args.trim());
+      const wanted = args.trim().toLowerCase();
+      const level = allowed.find((l) => l === wanted);
       if (!level) {
-        const refused = args.trim() ? `No "${args.trim()}" effort on this model. ` : "";
+        const refused = wanted ? `No "${wanted}" effort on this model. ` : "";
         ctx.ui.notify(
           `${refused}Effort: ${pi.getThinkingLevel()} (allowed: ${allowed.join(", ") || "none"})`,
           refused ? "warning" : "info",
@@ -41,7 +36,8 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // Pi expands only a leading `/skill:<name>`, so hand it one; the prompt stays its arguments.
+  // `/<skill>` anywhere invokes it: pi expands only a leading `/skill:<name>`, so hand it one with
+  // the prompt as its arguments. The name must end at a space, which pi splits on.
   pi.on("input", (event) => {
     if (event.source === "extension" || event.text.startsWith("/skill:")) return;
     const skills = new Set(
@@ -54,7 +50,7 @@ export default function (pi: ExtensionAPI) {
     if (!token) return;
     const text =
       token.index === 0
-        ? `/skill:${token[1]}${event.text.slice(token[0].length)}`
+        ? `/skill:${token[1]} ${event.text.slice(token[0].length)}`
         : `/skill:${token[1]} ${event.text}`;
     return { action: "transform", text };
   });
