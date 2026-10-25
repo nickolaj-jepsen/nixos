@@ -72,20 +72,6 @@
       }
     ];
 
-    # pi toasts the moment a run ends; idle_prompt only fires a minute later.
-    # Scripted runs (`claude -p`) have no terminal and nobody waiting on them,
-    # and a turn paused on background work hasn't finished.
-    finishNotify = pkgs.writeShellApplication {
-      name = "claude-finish-notify";
-      runtimeInputs = [pkgs.jq pkgs.coreutils pkgs.agent-notify];
-      text = ''
-        input=$(cat)
-        case "$(readlink "/proc/$PPID/fd/0" 2>/dev/null)" in /dev/pts/* | /dev/tty*) ;; *) exit 0 ;; esac
-        jq -e '(.background_tasks // []) == []' <<<"$input" >/dev/null || exit 0
-        jq '.message = "Finished, waiting for input"' <<<"$input" | agent-notify 'Claude Code'
-      '';
-    };
-
     # claude-code resolves the checker off PATH by bare name, so it has to be a
     # real package rather than a store path like the LSP servers. hunspell
     # over aspell because only it takes several dictionaries at once (`-d a,b`).
@@ -241,7 +227,7 @@
         # Transcripts are training/eval data for the pi auto-gate judge; the
         # default prunes them after 30 days.
         cleanupPeriodDays = 3650;
-        # Drives niri's urgency hint; desktop toasts come from the Notification and Stop hooks.
+        # Drives niri's urgency hint; desktop toasts come from agent-hub.
         preferredNotifChannel = "terminal_bell";
         # /effort saves per model under modelSettings, but settings.json is a
         # read-only store symlink, so those picks only last the session. Keys are
@@ -255,47 +241,22 @@
           fable.effortLevel = "xhigh";
           sonnet.effortLevel = "medium";
         };
-        hooks =
-          {
-            SessionStart = direnvHooks;
-            CwdChanged = direnvHooks;
-            WorktreeCreate = worktreeCreate;
-            PreToolUse = [
-              {
-                matcher = "Bash";
-                hooks = [
-                  {
-                    type = "command";
-                    command = lib.getExe worktreeGuard;
-                  }
-                ];
-              }
-            ];
-          }
-          # macOS has desktop.enable too, but no notification daemon for notify-send.
-          // lib.optionalAttrs (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
-            Stop = [
-              {
-                hooks = [
-                  {
-                    type = "command";
-                    command = lib.getExe finishNotify;
-                  }
-                ];
-              }
-            ];
-            Notification = [
-              {
-                matcher = "permission_prompt|elicitation_dialog";
-                hooks = [
-                  {
-                    type = "command";
-                    command = "${lib.getExe pkgs.agent-notify} 'Claude Code'";
-                  }
-                ];
-              }
-            ];
-          };
+        hooks = {
+          SessionStart = direnvHooks;
+          CwdChanged = direnvHooks;
+          WorktreeCreate = worktreeCreate;
+          PreToolUse = [
+            {
+              matcher = "Bash";
+              hooks = [
+                {
+                  type = "command";
+                  command = lib.getExe worktreeGuard;
+                }
+              ];
+            }
+          ];
+        };
         # Context for the auto-mode classifier, adapted from /auto-mode-setup
         # (run per-project) to every project and host. Replaces the built-in
         # environment wholesale, like the setup's own output: no "$defaults".
