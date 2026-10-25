@@ -38,6 +38,8 @@ throws. The class routes the whole host:
 - `nixos` → `nixosConfigurations.<h>` via `nixosSystem`. The host builder
   defines `home-manager.users.<fireproof.username>` and routes all homeManager
   leaves plus the card's `shared`/`homeManager` buckets into `sharedModules`.
+  - It defaults to x86_64-linux; another platform sets
+    `nixos.nixpkgs.hostPlatform` in the card (`phone-vm`).
 - `home` → `homeConfigurations.<h>` via `mkHome` in `hosts/default.nix`.
   Example: `dev-ao`.
   - It is standalone HM with no NixOS eval; `osConfig = null`.
