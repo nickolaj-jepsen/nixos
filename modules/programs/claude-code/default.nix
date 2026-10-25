@@ -157,9 +157,11 @@
     # Every config surface home-manager generates under ~/.claude, derived from the
     # options rather than hand-listed: a surface added below (agents, rules, hooks,
     # output-styles) would otherwise silently never reach the work profile.
-    # `plugins` is shared mutable state, so it is always mirrored.
+    # `plugins` and `sessions` are shared mutable state, so they are always
+    # mirrored; one session registry lets both profiles' sessions see each other
+    # as peers and reach agent-hub.
     mirroredNames =
-      ["settings.json" "CLAUDE.md" "plugins" "keybindings.json"]
+      ["settings.json" "CLAUDE.md" "plugins" "sessions" "keybindings.json"]
       ++ lib.optional (ccfg.skills != {}) "skills"
       ++ lib.optional (ccfg.outputStyles != {}) "output-styles"
       ++ lib.concatMap (name: lib.optional (ccfg.${name} != {} || ccfg."${name}Dir" != null) name)
@@ -241,22 +243,37 @@
           fable.effortLevel = "xhigh";
           sonnet.effortLevel = "medium";
         };
-        hooks = {
-          SessionStart = direnvHooks;
-          CwdChanged = direnvHooks;
-          WorktreeCreate = worktreeCreate;
-          PreToolUse = [
-            {
-              matcher = "Bash";
-              hooks = [
-                {
-                  type = "command";
-                  command = lib.getExe worktreeGuard;
-                }
-              ];
-            }
-          ];
-        };
+        hooks =
+          {
+            SessionStart = direnvHooks;
+            CwdChanged = direnvHooks;
+            WorktreeCreate = worktreeCreate;
+            PreToolUse = [
+              {
+                matcher = "Bash";
+                hooks = [
+                  {
+                    type = "command";
+                    command = lib.getExe worktreeGuard;
+                  }
+                ];
+              }
+            ];
+          }
+          # Labels the dialog the registry already marks `waiting`, so the bar can say what it is.
+          // lib.optionalAttrs (config.fireproof.dev.agent-hub.enable && pkgs.stdenv.isLinux) {
+            PermissionRequest = [
+              {
+                hooks = [
+                  {
+                    type = "command";
+                    command = "${lib.getExe pkgs.agent-hub} hook";
+                    async = true;
+                  }
+                ];
+              }
+            ];
+          };
         # Context for the auto-mode classifier, adapted from /auto-mode-setup
         # (run per-project) to every project and host. Replaces the built-in
         # environment wholesale, like the setup's own output: no "$defaults".

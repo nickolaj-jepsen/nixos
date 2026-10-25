@@ -24,6 +24,12 @@ import {
   type SessionShutdownEvent,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Text } from "@earendil-works/pi-tui";
+import {
+  PERMISSIONS_DECISION_CHANNEL,
+  PERMISSIONS_UI_PROMPT_CHANNEL,
+  type PermissionDecisionEvent,
+  type PermissionUiPromptEvent,
+} from "@gotgenes/pi-permission-system";
 import { execFile } from "node:child_process";
 import { unlinkSync } from "node:fs";
 import type { Server } from "node:net";
@@ -105,6 +111,9 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   const sentMessages = new Map<string, string>();
   const recentBySender = new Map<string, { at: number; body: string }[]>();
   let unsubscribeSidecar: (() => void) | undefined;
+  // Open permission dialogs, request id → one-line label; the entry says `waiting` while any is.
+  const dialogs = new Map<string, string>();
+  let unsubscribeDialogs: (() => void)[] = [];
   let warnedProtocol = false;
 
   const ownName = () => entry?.name ?? displayName();
@@ -422,15 +431,43 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
     void publish({ summary, doing });
   }
 
+  function onPrompt(data: unknown) {
+    const event = data as PermissionUiPromptEvent;
+    const what = `${event.request?.toolName ?? event.surface ?? "permission"}: ${event.value ?? ""}`;
+    const requester = event.forwarding?.requesterAgentName;
+    const first = dialogs.size === 0;
+    dialogs.set(event.requestId, clip(oneLine(requester ? `${requester} · ${what}` : what), 200));
+    const waitingFor = dialogs.values().next().value;
+    // Re-stating the status would restart how long the session has been waiting.
+    void publish(first ? { status: "waiting", waitingFor } : { waitingFor });
+  }
+
+  function onDecision(data: unknown) {
+    if (!dialogs.delete((data as PermissionDecisionEvent).requestId)) return;
+    const waitingFor = dialogs.values().next().value;
+    void publish(waitingFor === undefined ? { status: "busy", waitingFor } : { waitingFor });
+  }
+
+  function unsubscribe() {
+    unsubscribeSidecar?.();
+    unsubscribeSidecar = undefined;
+    for (const off of unsubscribeDialogs) off();
+    unsubscribeDialogs = [];
+    dialogs.clear();
+  }
+
   pi.on("session_start", async (_event, c) => {
     live = true;
-    unsubscribeSidecar?.();
+    unsubscribe();
     unsubscribeSidecar = pi.events.on(SIDECAR_CHANNEL, onSidecar);
+    unsubscribeDialogs = [
+      pi.events.on(PERMISSIONS_UI_PROMPT_CHANNEL, onPrompt),
+      pi.events.on(PERMISSIONS_DECISION_CHANNEL, onDecision),
+    ];
     await start(c);
   });
   pi.on("session_shutdown", async (event) => {
-    unsubscribeSidecar?.();
-    unsubscribeSidecar = undefined;
+    unsubscribe();
     await stop(event.reason);
   });
 
@@ -485,7 +522,8 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   pi.on("agent_settled", async (_event, c) => {
     ctx = c;
     if (!entry) return;
-    await publish({ status: "idle", doing: undefined });
+    dialogs.clear();
+    await publish({ status: "idle", doing: undefined, waitingFor: undefined });
     const now = Date.now();
     const due = [...idleSubscribers.values()];
     idleSubscribers.clear();
