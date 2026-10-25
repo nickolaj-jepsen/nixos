@@ -1,0 +1,9 @@
+{
+  "name": "git-menu",
+  "version": "0.1.0",
+  "description": "The checkout's git and folder menus from /git and /open: forge links, copies and desktop apps",
+  "author": {
+    "name": "Nickolaj Jepsen"
+  },
+  "types": "./types/index.d.ts"
+}

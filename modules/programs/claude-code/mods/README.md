@@ -9,6 +9,7 @@ published through this repo's marketplace (`.claude-plugin/marketplace.json`).
 claude plugin marketplace add nickolaj-jepsen/nixos
 claude plugin install spellfix@nickolaj-jepsen
 claude plugin install linear-issue@nickolaj-jepsen
+claude plugin install git-menu@nickolaj-jepsen
 ```
 
 My nix build validates and tests each mod against the Claude Code version it
@@ -28,3 +29,8 @@ Code update can break one.
   `~/.claude/keybindings.json` (I use `ctrl+q`), which works on any draft.
 - **linear-issue**: drafts a Linear issue for approval from the You should know
   card or `/linear`. Needs a Linear MCP server connected and signed in.
+- **git-menu**: `/git` opens the checkout's repository, branch, commit or pull
+  request on GitHub, GitLab or Codeberg, links the compare page for a new pull
+  request, and copies the branch, SHA or PR URL; `/open` hands the checkout to
+  VS Code, Sublime Merge, the file manager or Ghostty. Rows that can't run say
+  why. Needs `git`, and `gh` for the pull request.

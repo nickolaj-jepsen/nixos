@@ -9,7 +9,6 @@ input=$(cat)
 transcript=$(jq -r '.transcript_path // empty' <<<"$input")
 cwd=$(jq -r '.workspace.current_dir // .cwd // empty' <<<"$input")
 model=$(jq -r '.model.id // empty' <<<"$input")
-worktree=$(jq -r '.workspace.git_worktree // empty' <<<"$input")
 
 dim=$(printf '\033[2m')
 warn=$(printf '\033[33m')
@@ -19,7 +18,6 @@ red=$(printf '\033[31m')
 cyan=$(printf '\033[36m')
 branch_glyph=$'\uf418'
 detached_glyph=$'\uf417'
-worktree_glyph=$'\uf1bb'
 
 # Last main-model response with enough output to make tokens/second meaningful.
 # The transcript has no start timestamp, so the user/tool result that prompted
@@ -91,10 +89,70 @@ detect_op() {
   printf '%s' "$op"
 }
 
+# The branch's pull request costs a network round trip, so `gh` answers in the
+# background into a cache per checkout and branch, read on the next refresh.
+# It is asked again when the upstream or the commits ahead of it change (a
+# push), and otherwise once a minute, which catches a `gh pr create` or merge.
+pr_cache=${XDG_CACHE_HOME:-$HOME/.cache}/claude-statusline/pr
+pr_ttl=60
+# A lookup that failed (offline, auth) is not retried sooner than this.
+pr_retry=20
+
+file_age() {
+  local mtime
+  mtime=$(stat -c %Y "$1" 2>/dev/null) || { echo 999999; return; }
+  echo $(($(date +%s) - mtime))
+}
+
+refresh_pr() {
+  local top=$1 file=$2 tag=$3
+  if [ -f "$file.pending" ] && [ "$(file_age "$file.pending")" -lt "$pr_retry" ]; then return 0; fi
+  mkdir -p "$pr_cache"
+  : >"$file.pending"
+  (
+    # Claude Code cancels a status line run that a newer update overtakes.
+    trap '' HUP TERM
+    out=$(cd "$top" && timeout 10 gh pr view --json state,isDraft 2>&1) && rc=0 || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      state=$(jq -r 'if .isDraft then "draft" else .state | ascii_downcase end' <<<"$out") || exit 0
+    elif [[ "$out" == *"no pull requests found"* ]]; then
+      state=none
+    else
+      exit 0
+    fi
+    printf '%s %s\n' "$tag" "$state" >"$file.tmp" && mv "$file.tmp" "$file"
+    rm -f "$file.pending"
+  ) </dev/null >/dev/null 2>&1 &
+  disown
+}
+
+pr_glyph() {
+  local top=$1 branch=$2 tag=$3 file line cached state
+  file="$pr_cache/$(printf '%s\n%s' "$top" "$branch" | md5sum | cut -c1-32)"
+  line=""
+  if [ -f "$file" ]; then read -r line <"$file" || line=""; fi
+  cached=${line%% *}
+  if [ "$cached" != "$tag" ] || [ "$(file_age "$file")" -ge "$pr_ttl" ]; then
+    refresh_pr "$top" "$file" "$tag"
+  fi
+  # The last answer stands until the next one lands: a push rarely changes it.
+  state=${line#* }
+  case "$state" in
+    open) printf '%s' "${cyan}"$'\uf407'"${reset}" ;;
+    draft) printf '%s' "${dim}"$'\uf4dd'"${reset}" ;;
+    merged) printf '%s' "${green}"$'\uf419'"${reset}" ;;
+    closed) printf '%s' "${red}"$'\uf4dc'"${reset}" ;;
+  esac
+}
+
+# Sets git_full and git_glyph, the block with and without the branch name;
+# both empty outside a repository.
+git_full=""
+git_glyph=""
 git_segment() {
-  local dir=$1 wt=$2
-  local status line head oid ab ahead behind staged unstaged untracked conflicts
-  local gitdir op step color dirty glyph name out arrows xy top
+  local dir=$1
+  local status line head oid ab ahead behind staged unstaged untracked conflicts upstream
+  local paths gitdir top op color dirty glyph name tail arrows xy pr
 
   if [ -z "$dir" ]; then return 0; fi
   status=$(git --no-optional-locks -C "$dir" status --porcelain=v2 --branch 2>/dev/null) || return 0
@@ -103,6 +161,7 @@ git_segment() {
   head=""
   oid=""
   ab=""
+  upstream=""
   ahead=0
   behind=0
   staged=0
@@ -113,6 +172,7 @@ git_segment() {
     case "$line" in
       "# branch.head "*) head=${line:14} ;;
       "# branch.oid "*) oid=${line:13} ;;
+      "# branch.upstream "*) upstream=${line:18} ;;
       "# branch.ab "*) ab=${line:12} ;;
       "1 "*|"2 "*)
         xy=${line:2:2}
@@ -133,7 +193,10 @@ git_segment() {
     case "$behind" in ''|*[!0-9]*) behind=0 ;; esac
   fi
 
-  gitdir=$(git --no-optional-locks -C "$dir" rev-parse --absolute-git-dir 2>/dev/null) || gitdir=""
+  paths=$(git --no-optional-locks -C "$dir" rev-parse --absolute-git-dir --show-toplevel 2>/dev/null) || paths=""
+  gitdir=${paths%%$'\n'*}
+  top=""
+  if [[ "$paths" == *$'\n'* ]]; then top=${paths#*$'\n'}; fi
   op=""
   if [ -n "$gitdir" ]; then op=$(detect_op "$gitdir"); fi
 
@@ -150,31 +213,51 @@ git_segment() {
     glyph=$branch_glyph
     name=$head
   fi
-  out="${color}${glyph}${reset}"
-  if [ -n "$name" ]; then out+=" ${dim}${name}${reset}"; fi
-  # In a worktree the glyph and branch open it in VS Code (OSC 8), like pi's footer.
-  if [ -n "$wt" ]; then
-    top=$(git --no-optional-locks -C "$dir" rev-parse --show-toplevel 2>/dev/null) || top=""
-    out="${dim}${worktree_glyph}${reset} ${out}"
-    if [ -n "$top" ]; then out=$'\e]8;;'"vscode://file${top}"$'\e\\'"${out}"$'\e]8;;\e\\'; fi
-  fi
+  tail=""
   if [ "$staged" -gt 0 ] || [ "$unstaged" -gt 0 ]; then
     if [ "$unstaged" -gt 0 ]; then dirty=$red; else dirty=$warn; fi
-    out+="${dirty}*${reset}"
+    tail+="${dirty}*${reset}"
   fi
-  if [ -n "$op" ]; then out+=" ${cyan}${op}${reset}"; fi
-  if [ "$untracked" -gt 0 ]; then out+=" ${warn}?${reset}"; fi
-  if [ "$conflicts" -gt 0 ]; then out+=" ${red}~${conflicts}${reset}"; fi
+  # A branch that was never pushed has no pull request to look up.
+  if [ "$head" != "(detached)" ] && [ -n "$upstream" ] && [ -n "$top" ]; then
+    pr=$(pr_glyph "$top" "$head" "${upstream}:${ahead}")
+    if [ -n "$pr" ]; then tail+=" ${pr}"; fi
+  fi
+  if [ -n "$op" ]; then tail+=" ${cyan}${op}${reset}"; fi
+  if [ "$untracked" -gt 0 ]; then tail+=" ${warn}?${reset}"; fi
+  if [ "$conflicts" -gt 0 ]; then tail+=" ${red}~${conflicts}${reset}"; fi
   if [ "$ahead" -gt 0 ] || [ "$behind" -gt 0 ]; then
     arrows=""
     if [ "$ahead" -gt 0 ]; then arrows+="⇡${ahead}"; fi
     if [ "$behind" -gt 0 ]; then arrows+="⇣${behind}"; fi
-    out+=" ${dim}${arrows}${reset}"
+    tail+=" ${dim}${arrows}${reset}"
   fi
-  printf '%s' "$out"
+  git_glyph="${color}${glyph}${reset}${tail}"
+  git_full=$git_glyph
+  # `wt` names a worktree's folder after its branch, so the name shows only when the path doesn't say it.
+  if [ -n "$name" ] && [ "$name" != "${dir##*/}" ]; then
+    git_full="${color}${glyph}${reset} ${dim}${name}${reset}${tail}"
+  fi
 }
 
-git_seg=$(git_segment "$cwd" "$worktree")
+git_segment "$cwd"
+
+# The checkout's path, its last segment bright since it names the worktree.
+path=""
+if [ -n "$cwd" ]; then
+  shown=$cwd
+  case "$cwd" in
+    "$HOME") shown="~" ;;
+    "$HOME"/*) shown="~${cwd#"$HOME"}" ;;
+  esac
+  parent=""
+  if [[ "$shown" == */* ]]; then parent=${shown%/*}/; fi
+  path="${dim}${parent}${reset}${shown##*/}"
+fi
+# Git follows the path as one phrase, one space apart, as in pi's footer.
+path_git=$path
+if [ -n "$path" ] && [ -n "$git_full" ]; then path_git+=" "; fi
+path_git+=$git_full
 
 # Claude renders the status line with a 2-cell built-in indent, so pad to the
 # width inside it and leave a 2-cell right margin.
@@ -190,7 +273,9 @@ jq -r \
   --arg warn "$warn" \
   --arg reset "$reset" \
   --arg speed "$speed" \
-  --arg git "$git_seg" \
+  --arg pathGit "$path_git" \
+  --arg git "$git_full" \
+  --arg gitGlyph "$git_glyph" \
   --argjson target "$target" '
     def pct: (.context_window.used_percentage // 0);
     def vlen: gsub("\u001b\\[[0-9;]*m|\u001b\\]8;[^\u001b]*\u001b\\\\"; "") | length;
@@ -217,14 +302,14 @@ jq -r \
       limit("5h"; .rate_limits.five_hour; true),
       limit("7d"; .rate_limits.seven_day; false)
     ] | join("\($dim) · \($reset)") as $base
-    | if $git == "" then $base
-      else
-        ($base | vlen) as $baseLen
-        | ($git | vlen) as $gitLen
-        | ($target - $baseLen - $gitLen) as $gap
-        | if $target > 0 and $gap >= 2
-          then $base + (" " * $gap) + $git
-          else $base + "\($dim) · \($reset)" + $git
-          end
+    | ($base | vlen) as $baseLen
+    # Giving way in the order pi does: the path, then the branch name, then git.
+    # The path keeps two cells from the left zone, git alone three.
+    | [{text: $pathGit, min: 2}, {text: $git, min: 3}, {text: $gitGlyph, min: 3}]
+    | map(select(.text != "") | .gap = ($target - $baseLen - (.text | vlen)))
+    | (map(select(.gap >= .min)) | first) as $fit
+    | if $target == 0 and $pathGit != "" then $base + "\($dim) · \($reset)" + $pathGit
+      elif $fit then $base + (" " * $fit.gap) + $fit.text
+      else $base
       end
   ' <<<"$input"

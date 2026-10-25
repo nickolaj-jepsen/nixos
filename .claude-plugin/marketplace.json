@@ -21,6 +21,10 @@
     {
       "name": "linear-issue",
       "source": "./modules/programs/claude-code/mods/linear-issue"
+    },
+    {
+      "name": "git-menu",
+      "source": "./modules/programs/claude-code/mods/git-menu"
     }
   ]
 }

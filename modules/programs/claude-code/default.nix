@@ -18,7 +18,7 @@
     # ANSI codes only, so the ghostty Flexoki palette stays authoritative.
     statusLine = pkgs.writeShellApplication {
       name = "claude-statusline";
-      runtimeInputs = [pkgs.jq pkgs.git pkgs.coreutils];
+      runtimeInputs = [pkgs.jq pkgs.git pkgs.gh pkgs.coreutils];
       text = builtins.readFile ./statusline.sh;
     };
 
@@ -120,6 +120,7 @@
     # Its button is spliced into the built-in you-should-know card by label; a
     # card redesign only hides it, with a toast (mods/linear-issue).
     linearIssue = mkMod "linear-issue";
+    gitMenu = mkMod "git-menu";
 
     # ctrl+q presses spellfix's band button, which borrows this action; a
     # single modified key reaches a plugin Button only from the Global context.
@@ -371,11 +372,13 @@
         statusLine = {
           type = "command";
           command = lib.getExe statusLine;
+          # Event-driven updates miss what other sessions and editors do to the checkout.
+          refreshInterval = 2;
         };
         env = {
           CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
           # Not programs.claude-code.plugins: the env block also reaches desktop-app sessions.
-          CLAUDE_CODE_PLUGIN_DIRS = "${spellfix}:${linearIssue}";
+          CLAUDE_CODE_PLUGIN_DIRS = "${spellfix}:${linearIssue}:${gitMenu}";
           # hunspell's personal dictionary for the underline's checker too.
           WORDLIST = personalDictionary;
         };
