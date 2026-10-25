@@ -73,6 +73,45 @@ Run ON the Mac:
    Confirm Settings > General > Sharing > Remote Login access is "All users"
    (or includes the user). Key-only auth; reach it over Tailscale/LAN.
 
+## The phone (Podroid)
+
+`phone-vm` is NixOS on the Pixel 8 Pro (GrapheneOS), a headless aarch64 dev
+env run by a fork of Podroid (input `podroid`, branch `nixos-image`) in its AVF
+disk-image mode: AVF's u-boot finds the image's ESP and runs systemd-boot, so
+generations and rollback work as on any EFI host. The guest half is
+`modules/system/avf.nix` (`fireproof.avf.enable`) plus the fork's
+`nixosModules.guest`. CI builds it on an arm runner into attic; never evaluate
+or build on the phone, it freezes.
+
+- **Kernel**: `pkgs/avf-kernel`, Google's prebuilt guest kernel from the
+  Android Terminal's image archive. Every nixpkgs kernel tried (6.1 to 6.18)
+  reads corrupted data from the virtio disk under the Pixel's pKVM (ext4
+  checksum errors, random SEGVs); re-test with a read-hash loop before
+  switching back. The archive's URL is unversioned, so a hash failure means
+  Google shipped a new kernel to vet.
+- **Image**: `nix build .#nixosConfigurations.phone-vm.config.system.build.avfImage.x86_64-linux`
+  (the `x86_64-linux` key assembles it with this machine's tools; the closure
+  builds through the desktop's aarch64 binfmt).
+
+One-time bootstrap:
+
+1. Install the fork's APK and finish its first-run setup; pick the storage
+   size there (Settings later). It only offers sizes that fit the phone's free
+   space, and the image grows on the next VM start.
+2. Settings → Disk image → import the `.raw`, then start the VM. It boots to an
+   autologin shell; Home Manager fails until step 4.
+3. Add a port forward `2222 → 22` (it binds every interface; sshd is key-only)
+   and `adb forward tcp:2222 tcp:2222`.
+4. `just push-host-key phone-vm nickolaj@localhost -p 2222` installs the
+   committed host key and reboots, so agenix decrypts and HM activates. The
+   host key changes under you here: drop any `[localhost]:2222` entry first.
+5. `NIX_SSHOPTS="-p 2222" just switch phone-vm nickolaj@localhost`. tailscaled
+   enrols it as `phone-vm`; point the `phone-vm` alias in
+   `modules/system/ssh.nix` at its tailnet IP (MagicDNS is off), then
+   `just switch phone-vm phone-vm` from then on.
+
+A guest `reboot` makes the app relaunch the VM; `poweroff` leaves it stopped.
+
 ## Cross-platform apps
 
 Everyday GUI apps have no toggle of their own: they gate on `desktop.enable`

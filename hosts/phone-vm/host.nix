@@ -1,13 +1,16 @@
-# phone-vm — NixOS on the Pixel 8 Pro, booted by the Podroid fork's AVF
-# disk-image mode (modules/system/avf.nix). Stripped to the boot path while
-# the PoC proves it; dev and Tailscale come back once it boots.
+# phone-vm — NixOS on the Pixel 8 Pro, a lean headless dev env booted by the
+# Podroid fork's AVF disk-image mode (modules/system/avf.nix). Bootstrap per docs/hosts.md.
 {
   class = "nixos";
 
   shared = {
     fireproof.hostname = "phone-vm";
     fireproof.avf.enable = true;
-    fireproof.tailscale.enable = false;
+
+    fireproof.dev.enable = true;
+    fireproof.dev.intellij.enable = false;
+    fireproof.dev.clickhouse.enable = false;
+    fireproof.dev.opencode.enable = false;
   };
 
   nixos = {

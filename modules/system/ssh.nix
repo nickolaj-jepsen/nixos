@@ -125,6 +125,11 @@ in {
             HostName = "10.0.2.101";
             User = "nickolaj";
           };
+          # phone-vm's tailnet IP (MagicDNS is off); stable while it keeps its tailscale state.
+          phone-vm = {
+            HostName = "100.115.18.88";
+            User = "nickolaj";
+          };
         }
         // lib.optionalAttrs workEnabled {
           "bastion.ao" = {
