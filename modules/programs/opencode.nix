@@ -259,7 +259,7 @@
           # Nix owns the binary.
           update = "disable";
           # Refuses `git worktree add` outside ~/worktrees/<repo>/; the layout and
-          # the check live in `wt guard` (modules/scripts/wt.bash), shared with the
+          # the check live in `wt guard` (modules/scripts/wt.py), shared with the
           # Claude Code and pi adapters. A store path, so no plugin install step.
           plugins = ["file://${./opencode/worktree-guard.js}"];
           # Not Kimi K3.1 Pro: on Go's metered rate it would eat the monthly

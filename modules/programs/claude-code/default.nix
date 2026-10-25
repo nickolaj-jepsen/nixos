@@ -55,18 +55,18 @@
     };
 
     # Claude Code's own worktrees (EnterWorktree, `claude -w`, agent isolation)
-    # made and removed by `wt`; one verb per hook event.
+    # are created by `wt create`; removal stays Claude Code's own git fallback.
     worktreeHooks = pkgs.writeShellApplication {
       name = "claude-worktree-hooks";
-      runtimeInputs = [pkgs.jq pkgs.git pkgs.gawk pkgs.coreutils] ++ lib.optional pkgs.stdenv.isLinux pkgs.util-linux;
+      runtimeInputs = [pkgs.jq pkgs.coreutils];
       text = builtins.readFile ./worktree-hooks.sh;
     };
-    worktreeHook = verb: [
+    worktreeCreate = [
       {
         hooks = [
           {
             type = "command";
-            command = "${lib.getExe worktreeHooks} ${verb}";
+            command = lib.getExe worktreeHooks;
           }
         ];
       }
@@ -211,14 +211,14 @@
 
       - Make or enter a worktree with `EnterWorktree` (`name` for a new one, which
         becomes its branch; `path` for an existing one) and leave with `ExitWorktree`.
-        They run `wt`, so the session moves with them; `wt create` in Bash does not.
+        They create through `wt`, so the worktree lands under the shared root;
+        `wt create` in Bash does not move the session.
       - `ExitWorktree` cannot see what a remove would discard, so it always asks for
         `discard_changes: true`. Check `git status` and `git log origin/<default>..`
-        in the worktree first, and ask the user unless nothing would be lost.
-      - An isolated agent's worktree is removed when the agent stops if nothing in it
-        would be lost; otherwise it stays to review, land with `wt apply`, or remove.
-      - On exit, the worktree the session was launched in is removed if it is clean,
-        has nothing ahead of the default branch, and nobody else's cwd is inside it.
+        in the worktree first, and ask the user unless nothing would be lost. Claude's
+        native removal leaves the branch behind.
+      - Landing and clearing worktrees are explicit commands the user or agent chooses
+        (`wt apply`, `wt sync`, `wt clean`, `wt remove`); nothing removes them at exit.
     '';
 
     programs.claude-code = {
@@ -256,12 +256,9 @@
         };
         hooks =
           {
-            SessionStart = direnvHooks ++ worktreeHook "session-start";
-            SessionEnd = worktreeHook "session-end";
+            SessionStart = direnvHooks;
             CwdChanged = direnvHooks;
-            WorktreeCreate = worktreeHook "create";
-            WorktreeRemove = worktreeHook "remove";
-            SubagentStop = worktreeHook "subagent-stop";
+            WorktreeCreate = worktreeCreate;
             PreToolUse = [
               {
                 matcher = "Bash";

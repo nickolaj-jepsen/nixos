@@ -115,12 +115,11 @@ in {
       ${builtins.readFile ../agent-context.md}
       ## Worktrees in pi
 
-      - Pi removes the worktree its session was in when it exits, if `wt clean` would:
-        clean, every commit already on the default branch, and nobody's cwd inside it.
-        Anything with uncommitted work or unlanded commits is left in place.
-      - `/new` inside a worktree moves the session to the primary checkout first and
-        asks what to do with the worktree it left; `/back` makes the same move without
-        starting a fresh conversation.
+      - `/wt <name>` moves the session into a worktree (creating it if new); `/back`
+        moves it to the primary checkout. Neither touches the worktree's contents.
+      - Pi never commits, lands, or removes a worktree, including on exit. Use
+        explicit `wt sync`, `wt apply`, `wt clean`, or `wt remove` when you choose to.
+      - `/new` inside a worktree starts a fresh session in that worktree.
     '';
     env =
       {

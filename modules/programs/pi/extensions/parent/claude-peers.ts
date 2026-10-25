@@ -59,7 +59,6 @@ import {
 import { SIDECAR_CHANNEL, type SidecarUpdate } from "../shared/identity.ts";
 import { oneLine } from "../shared/naming.ts";
 import type { Services } from "./services.ts";
-import { ENTER_WORKTREE_TOOL } from "./lib/wt.ts";
 
 const MESSAGE_TYPE = "claude-peer-message";
 const OWN_MODE: PermissionClass = "prompting";
@@ -458,11 +457,6 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
         "You share uncommitted changes with them. Before you commit, switch branches, rebase, merge, or run git " +
           "checkout/restore/reset/stash/clean, tell them with send_message. Don't send acknowledgements, status, " +
           "or replies to messages that need no answer.",
-        ...(c.hasUI && pi.getActiveTools().includes(ENTER_WORKTREE_TOOL)
-          ? [
-              "If your task edits files, call enter_worktree before your first edit so your work stays out of theirs.",
-            ]
-          : []),
       );
     if (stale.length)
       lines.push(

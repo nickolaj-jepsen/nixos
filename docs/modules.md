@@ -96,17 +96,21 @@ home-manager and the overlays):
 
 ## Adding other things
 
-- **Script**: `modules/scripts/`, `pkgs.writeShellApplication`, include
-  `set -euo pipefail`.
+- **Script**: a one-off shell script lives in `modules/scripts/`, built with
+  `pkgs.writeShellApplication` and `set -euo pipefail`. A tool with Python
+  modules or tests belongs in `pkgs/<name>/` instead.
 - **Package** not in nixpkgs (or replacing it): `pkgs/<name>/package.nix`, a
   plain `callPackage` file (`unstable` and `inputs` are in scope too). It
-  becomes `pkgs.<name>` on every host and `nix build .#<name>`. Keep its pins
-  updated: a source that tracks a branch is a `flake = false` input (bumped
-  like any input); one that tracks releases gets an updater in `UPDATERS` in
-  `.github/scripts/update_packages.py` (finds the latest release, prefetches
-  the hash, rewrites `pkgs/<name>/`), tried with `just update-packages <name>`.
-  See `docs/updates.md`. Tweaks to an existing package stay in the leaf that
-  uses it (`.override`/`.overrideAttrs`).
+  becomes `pkgs.<name>` on every host and `nix build .#<name>`. `wt` is the
+  multi-file example: a `pyproject.toml`, its `wt/` package and `tests/`, built
+  with `buildPythonApplication`; `unittestCheckHook` runs `tests/` on every
+  `nix build .#wt`. Run them directly with
+  `PYTHONPATH=pkgs/wt python3 pkgs/wt/tests/test_cli.py`. Keep its pins updated: a source that tracks a branch is a `flake = false`
+  input (bumped like any input); one that tracks releases gets an updater in
+  `UPDATERS` in `.github/scripts/update_packages.py` (finds the latest release,
+  prefetches the hash, rewrites `pkgs/<name>/`), tried with
+  `just update-packages <name>`. See `docs/updates.md`. Tweaks to an existing
+  package stay in the leaf that uses it (`.override`/`.overrideAttrs`).
 - **Agent skill**: skills for the coding agents flow through the
   `fireproof.agents.skills` registry (`attrsOf path`, merged across leaves).
   Own skills: repo-root `skills/<name>/SKILL.md` (auto-registered by

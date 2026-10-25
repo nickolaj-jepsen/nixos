@@ -29,6 +29,8 @@ in {
     lib.optionalAttrs (system == "x86_64-linux") {
       checks =
         lib.mapAttrs' (name: hc: lib.nameValuePair "${name}-home" hc.activationPackage) config.flake.homeConfigurations
-        // {disko-templates = assert lib.all checkTemplate templates; pkgs.emptyFile;};
+        // {
+          disko-templates = assert lib.all checkTemplate templates; pkgs.emptyFile;
+        };
     };
 }
