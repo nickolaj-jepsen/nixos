@@ -18,6 +18,8 @@ in {
       mode = "0600";
       owner = username;
     };
+    # agenix creates the secret's parent as root on a fresh host, which blocks HM's ~/.ssh links.
+    systemd.tmpfiles.rules = ["d /home/${username}/.ssh 0700 ${username} ${config.users.users.${username}.group} -"];
 
     # ssh-agent runs from the home-manager half (services.ssh-agent) so it
     # covers standalone home hosts too; keep gcr from hijacking SSH_AUTH_SOCK.
