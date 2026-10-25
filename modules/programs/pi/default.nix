@@ -190,7 +190,7 @@ in {
     wrapper = pkgs.writeShellScriptBin "pi" ''
       ${lib.concatLines (lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}") env)}
       # Agent temp in the root the janitor sweeps, named after this pid (exec keeps it).
-      ${lib.optionalString config.fireproof.agents.tmp.enable ''TMPDIR=$(${lib.getExe pkgs.agent-tmp} dir "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
+      ${lib.optionalString config.fireproof.janitor.enable ''TMPDIR=$(${lib.getExe pkgs.janitor} dir "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
       dir="''${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
       mkdir -p "$dir"
       ${merge "settings.json" settings}

@@ -1,0 +1,12 @@
+{
+  "id": "janitor",
+  "name": "Janitor",
+  "description": "Disk usage as the storage widget showed it, plus what the janitor could reclaim and the checklist to reclaim it",
+  "version": "1.0.0",
+  "author": "fireproof",
+  "type": "widget",
+  "capabilities": ["dankbar-widget"],
+  "component": "./JanitorWidget.qml",
+  "icon": "storage",
+  "permissions": ["settings_read"]
+}

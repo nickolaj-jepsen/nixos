@@ -68,7 +68,12 @@
           ++ lib.optional config.fireproof.dev.ai-usage.enable "aiUsage"
           ++ [
             "cpuUsage"
-            "diskUsage"
+          ]
+          # The janitor's pill replaces the plain storage one: same icon and
+          # percentage, plus what a cleanup would win back.
+          ++ lib.optional config.fireproof.janitor.enable "janitor"
+          ++ lib.optional (!config.fireproof.janitor.enable) "diskUsage"
+          ++ [
             "controlCenterButton"
           ]
           ++ lib.optional config.fireproof.hardware.battery "battery"
