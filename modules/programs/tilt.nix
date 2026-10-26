@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.dev.enable {
+    config = lib.mkIf config.fireproof.dev.tilt.enable {
       home.packages = [
         pkgs.unstable.tilt
       ];
