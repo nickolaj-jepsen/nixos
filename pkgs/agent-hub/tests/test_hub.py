@@ -12,7 +12,7 @@ import unittest
 import uuid
 from pathlib import Path
 
-HUB = Path(os.environ.get("AGENT_HUB", Path(__file__).resolve().parent.parent / "agent_hub.py"))
+HUB = Path(__file__).resolve().parent.parent / "agent_hub.py"
 TIMEOUT = 5
 
 FAKE_NIRI = """#!{python}

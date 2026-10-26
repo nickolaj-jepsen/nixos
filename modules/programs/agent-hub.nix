@@ -32,15 +32,4 @@
       };
     };
   };
-
-  perSystem = {pkgs, ...}: {
-    checks.agent-hub-tests =
-      pkgs.runCommand "agent-hub-tests" {
-        nativeBuildInputs = [pkgs.python3];
-      } ''
-        cp ${../../pkgs/agent-hub/tests/test_hub.py} test_hub.py
-        AGENT_HUB=${../../pkgs/agent-hub/agent_hub.py} python3 -m unittest -v test_hub
-        touch $out
-      '';
-  };
 }

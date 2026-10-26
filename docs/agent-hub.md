@@ -64,5 +64,5 @@ front's place, under the front's window.
 
 - `agent-hub demo` puts fake sessions in every state on the bar until Ctrl-C.
 - `journalctl --user -u agent-hub` shows the daemon's log.
-- The protocol tests run with `nix build .#checks.x86_64-linux.agent-hub-tests`,
-  or with `python3 -m unittest tests/test_hub.py` from `pkgs/agent-hub`.
+- The protocol tests run in every `nix build .#agent-hub`, or with
+  `python3 -m unittest tests/test_hub.py` from `pkgs/agent-hub`.
