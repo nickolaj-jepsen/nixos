@@ -11,8 +11,6 @@
  */
 import { execFile } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, join, sep } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import {
   type ExtensionAPI,
@@ -24,8 +22,6 @@ import { SHELL_TOOLS, WRITE_TOOLS } from "../shared/tools.ts";
 
 const MOVED = "worktree-moved";
 const ENTER_WORKTREE_TOOL = "enter_worktree";
-// Where `wt` puts worktrees, so a move can tell a worktree from the primary checkout.
-const WORKTREE_ROOT = process.env.WT_WORKTREE_ROOT ?? join(homedir(), "worktrees");
 // Tools that would still act on the old checkout between enter_worktree and the move.
 const MUTATING = new Set([...SHELL_TOOLS, ...WRITE_TOOLS]);
 
@@ -44,22 +40,11 @@ const names = (cwd: string) =>
     () => [] as string[],
   );
 
-/** A worktree's path for a name, creating the worktree when the name is new. */
-async function resolveWorktree(target: string, cwd: string): Promise<string> {
+/** A worktree's path for a name, creating it off `base` (default: the default branch) when new. */
+async function resolveWorktree(target: string, cwd: string, base?: string): Promise<string> {
   if ((await names(cwd)).includes(target)) return wt(["cd", target], cwd);
-  return wt(["create", target], cwd);
+  return wt(base ? ["create", target, base] : ["create", target], cwd);
 }
-
-/** How to land the work this session is about to do; nothing here does it for the agent. */
-const landingTip = (path: string) => {
-  if (!path.startsWith(WORKTREE_ROOT + sep)) return "";
-  const name = basename(path);
-  return (
-    ` Commit here, then \`wt apply ${name}\` lands the commits and keeps this worktree; ` +
-    `\`wt apply --remove ${name}\` from the primary checkout also deletes it, and ` +
-    `\`wt clean\` sweeps landed worktrees.`
-  );
-};
 
 /** Writes the active branch of the conversation to a new session file rooted at `cwd`. */
 function forkInto(ctx: ExtensionCommandContext, cwd: string): string {
@@ -118,7 +103,6 @@ export default function (pi: ExtensionAPI) {
             content:
               `This session moved from ${from} to ${path}; that is now your cwd and workspace. ` +
               `Paths under ${from} belong to the old checkout: don't edit them.` +
-              landingTip(path) +
               (resume ? " Continue the task here." : ""),
             display: true,
             details: { from, to: path },
@@ -163,7 +147,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("wt", {
     description:
-      "Move this session into a git worktree, creating it if needed: /wt <name>. Without a name it picks an existing worktree.",
+      "Move this session into a git worktree, creating it if needed: /wt <name> [base]. Without a name it picks an existing worktree.",
     getArgumentCompletions: async (prefix) =>
       (await names(process.cwd()))
         .filter((name) => name.startsWith(prefix))
@@ -171,7 +155,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       const resume = agentMove !== undefined && agentMove === args.trim();
       agentMove = undefined;
-      let target = args.trim();
+      let [target = "", base] = args.trim().split(/\s+/);
       if (!target) {
         const existing = await names(ctx.cwd);
         if (existing.length === 0) {
@@ -186,7 +170,7 @@ export default function (pi: ExtensionAPI) {
       await ctx.waitForIdle();
       let path: string;
       try {
-        path = await resolveWorktree(target, ctx.cwd);
+        path = await resolveWorktree(target, ctx.cwd, base);
       } catch (error) {
         ctx.ui.notify(`Could not enter worktree: ${(error as Error).message}`, "error");
         return;
@@ -216,11 +200,11 @@ export default function (pi: ExtensionAPI) {
     label: "Enter worktree",
     description:
       "Create a git worktree (or pick an existing one) and move this session into it, keeping the conversation. " +
-      "The worktree starts from the default branch, so uncommitted changes in the current checkout don't come along. " +
-      "The move happens when this turn ends: call it alone, before editing anything, and the session continues in the worktree automatically.",
+      "A new worktree starts from `base`, by default the default branch, so uncommitted changes in the current checkout don't come along. " +
+      "Calling it ends your turn; the session then continues in the worktree on its own.",
     promptSnippet: "Move this session into its own git worktree before editing",
     promptGuidelines: [
-      "Use enter_worktree before your first edit when other agent sessions are active in this checkout and your task edits files; skip it for read-only work.",
+      "Use enter_worktree before your first edit when a peer session listed as active works in this checkout and your task is more than a quick edit; make a quick edit in place and tell that peer instead. Skip it for read-only work.",
       "To work in a worktree use enter_worktree (`wt list` shows existing ones), not `wt create`/`wt cd` in bash: those leave this session in the current checkout.",
     ],
     parameters: Type.Object({
@@ -228,6 +212,11 @@ export default function (pi: ExtensionAPI) {
         description:
           "Short kebab-case name for the branch and worktree directory, or the name of an existing worktree",
       }),
+      base: Type.Optional(
+        Type.String({
+          description: "Ref a new worktree branches from; ignored for an existing one",
+        }),
+      ),
     }),
     exposure: "model-only",
     // Activated at session_start, only where the move can run.
@@ -235,7 +224,7 @@ export default function (pi: ExtensionAPI) {
     executionMode: "sequential",
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       if (!ctx.hasUI) throw new Error("enter_worktree needs an interactive session");
-      const path = await resolveWorktree(params.name, ctx.cwd);
+      const path = await resolveWorktree(params.name, ctx.cwd, params.base);
       if (path === ctx.cwd) throw new Error(`Already working in ${path}`);
       pending = { name: params.name, path };
       return {

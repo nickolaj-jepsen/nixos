@@ -48,7 +48,9 @@
         core.fsmonitor = pkgs.stdenv.hostPlatform.isDarwin;
         alias.fixup = "!git log -n 50 --pretty=format:'%h %s' --no-merges | ${lib.getExe pkgs.fzf} | cut -c -7 | xargs -o git commit --fixup";
       };
-      ignores = ["**/.claude/settings.local.json"];
+      # pi's background tasks write their output into the checkout, and untracked
+      # files there would keep `wt clean` from sweeping a landed worktree.
+      ignores = ["**/.claude/settings.local.json" "**/.pi/tasks/"];
       includes = [
         {
           condition = "hasconfig:remote.*.url:git@github.com:Digital-Udvikling/**";

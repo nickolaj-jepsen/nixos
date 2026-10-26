@@ -115,7 +115,7 @@ in {
       ${builtins.readFile ../agent-context.md}
       ## Worktrees in pi
 
-      - `/wt <name>` moves the session into a worktree (creating it if new); `/back`
+      - `/wt <name> [base]` moves the session into a worktree (creating it if new); `/back`
         moves it to the primary checkout. Neither touches the worktree's contents.
       - Pi never commits, lands or removes a worktree by itself, including on exit:
         `/wt-land` is the commit-and-land path and it stops at a gate for review.

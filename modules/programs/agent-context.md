@@ -15,8 +15,9 @@ Repository-local instructions and existing conventions take precedence over thes
 - Never discard uncommitted work or force-push without approval.
 - Prefer `gh` for GitHub operations (PRs, issues, API).
 - Git worktrees live in `~/worktrees/<repo>/<name>`, and `git worktree add` elsewhere is
-  blocked. `wt create` makes one, `wt apply` lands the commits and keeps it, `wt clean`
-  sweeps what landed, and `wt --help` states each verb's preconditions.
+  blocked; `wt --help` states each verb's preconditions. Land (`wt land`) or open a PR
+  only when the current message asks for it, and ask before `wt remove --force` or
+  `--ignore-in-use`.
 - In Digital-Udvikling repositories, use `ds` when it supports the operation; check `ds --help` when uncertain.
 - A wrapper (`env CMD`, `xargs`, `nohup`, `sh -c`, `eval`, `sudo`, `find -exec`) hides the command it runs, so it asks for approval even when that command is harmless. Set variables as `VAR=x cmd`, not `env VAR=x cmd`. `timeout` and `time` pass through only when the command after them is spelled literally (`timeout 180 ./result/bin/pi`, not `timeout 180 $builtpi`).
 

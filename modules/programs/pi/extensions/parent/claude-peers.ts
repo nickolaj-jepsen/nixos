@@ -497,6 +497,9 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
         "You share uncommitted changes with them. Before you commit, switch branches, rebase, merge, or run git " +
           "checkout/restore/reset/stash/clean, tell them with send_message. Don't send acknowledgements, status, " +
           "or replies to messages that need no answer.",
+        ...(pi.getActiveTools().includes("enter_worktree")
+          ? ["For more than a quick edit, enter_worktree gives you a checkout of your own instead."]
+          : []),
       );
     if (stale.length)
       lines.push(

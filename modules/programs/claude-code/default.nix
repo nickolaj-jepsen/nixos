@@ -63,13 +63,14 @@
     };
 
     # Claude Code's own worktrees (EnterWorktree, `claude -w`, agent isolation)
-    # are created by `wt create`; removal stays Claude Code's own git fallback.
+    # are created by `wt create` and removed by `wt remove`. Without the remove
+    # half Claude falls back to `git worktree remove --force` and keeps the branch.
     worktreeHooks = pkgs.writeShellApplication {
       name = "claude-worktree-hooks";
       runtimeInputs = [pkgs.jq pkgs.coreutils];
       text = builtins.readFile ./worktree-hooks.sh;
     };
-    worktreeCreate = [
+    worktreeLifecycle = [
       {
         hooks = [
           {
@@ -210,14 +211,10 @@
 
       - Make or enter a worktree with `EnterWorktree` (`name` for a new one, which
         becomes its branch; `path` for an existing one) and leave with `ExitWorktree`.
-        They create through `wt`, so the worktree lands under the shared root;
-        `wt create` in Bash does not move the session.
-      - `ExitWorktree` cannot see what a remove would discard, so it always asks for
-        `discard_changes: true`. Check `git status` and `git log origin/<default>..`
-        in the worktree first, and ask the user unless nothing would be lost. Claude's
-        native removal leaves the branch behind.
-      - Landing and clearing are explicit, and `wt --help` states their preconditions;
-        nothing removes a worktree at exit.
+        They create through `wt create`, which in Bash would not move the session; for
+        another base, run `wt create <name> <base>`, then `EnterWorktree` with its path.
+      - Removing goes through `wt remove`, so `ExitWorktree` with `discard_changes: true`
+        still refuses dirty or unlanded work and keeps the worktree; tell the user then.
     '';
 
     programs.claude-code = {
@@ -257,7 +254,8 @@
           {
             SessionStart = direnvHooks;
             CwdChanged = direnvHooks;
-            WorktreeCreate = worktreeCreate;
+            WorktreeCreate = worktreeLifecycle;
+            WorktreeRemove = worktreeLifecycle;
             PreToolUse = [
               {
                 matcher = "Bash";

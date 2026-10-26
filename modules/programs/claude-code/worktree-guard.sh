@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse gate for Bash: an agent calling git directly must not scatter
 # worktrees across the disk. The layout and the check live in `wt guard`
-# (modules/scripts/wt.py), shared with the pi and opencode adapters; this file
+# (pkgs/wt), shared with the pi and opencode adapters; this file
 # only speaks Claude Code's hook contract — exit 2 blocks the call and shows
 # stderr to the model.
 set -euo pipefail
