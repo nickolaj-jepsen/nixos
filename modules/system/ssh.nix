@@ -127,7 +127,7 @@ in {
           };
           # phone-vm's tailnet IP (MagicDNS is off); stable while it keeps its tailscale state.
           phone-vm = {
-            HostName = "100.115.18.88";
+            HostName = "100.68.210.98";
             User = "nickolaj";
           };
         }

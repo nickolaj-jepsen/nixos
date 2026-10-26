@@ -15,6 +15,8 @@
     fireproof.docker.enable = false;
     fireproof.dev.tilt.enable = false;
     fireproof.dev.copilot.enable = false;
+    # Not "physical", so zram doesn't cascade on; a dev env in a few GB of guest RAM wants it.
+    fireproof.hardware.zram = true;
   };
 
   nixos = {
