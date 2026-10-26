@@ -63,8 +63,11 @@ GIT_GLOBAL_FLAGS = {
 DYNAMIC = re.compile(r"[$`]")
 
 
-def _resolve(token: str, base: str) -> Optional[str]:
+def _resolve(token: str, base: Optional[str]) -> Optional[str]:
+    """`token` as an absolute path against `base`, or None when either is unknowable."""
     if not token or DYNAMIC.search(token):
+        return None
+    if base is None and not os.path.isabs(token):
         return None
     return normpath(token, base)
 
@@ -75,7 +78,8 @@ def guard_command(command: str) -> tuple[bool, str]:
     tokens = shell_tokens(command)
     index = 0
     at_start = True
-    cwd = os.getcwd()
+    # None once a dynamic `cd`/`-C` makes it unknowable; only a relative add/move path then blocks.
+    cwd: Optional[str] = os.getcwd()
     while index < len(tokens):
         token = tokens[index]
         if token == "__SEP__":
@@ -91,11 +95,7 @@ def guard_command(command: str) -> tuple[bool, str]:
                 continue
             if token == "cd":
                 target = tokens[index + 1] if index + 1 < len(tokens) else ""
-                resolved = _resolve(target, cwd)
-                if resolved is None:
-                    # Cannot tell where the rest of the command runs.
-                    return True, guard_reason("", "", dynamic=True)
-                cwd = resolved
+                cwd = _resolve(target, cwd)
                 index += 2
                 at_start = False
                 continue
@@ -106,10 +106,7 @@ def guard_command(command: str) -> tuple[bool, str]:
                     value = tokens[cursor]
                     if value in GIT_GLOBAL_WITH_VALUE:
                         if value == "-C" and cursor + 1 < len(tokens):
-                            resolved = _resolve(tokens[cursor + 1], invocation_cwd)
-                            if resolved is None:
-                                return True, guard_reason("", "", dynamic=True)
-                            invocation_cwd = resolved
+                            invocation_cwd = _resolve(tokens[cursor + 1], invocation_cwd)
                         cursor += 2
                         continue
                     if value.startswith("--git-dir=") or value.startswith("--work-tree=") or value.startswith("--exec-path=") or value.startswith("--namespace=") or value.startswith("--config-env=") or value.startswith("--super-prefix="):
@@ -168,7 +165,8 @@ def guard_reason(path: str, branch: str, *, dynamic: bool = False) -> str:
     name = name or "<name>"
     branch = branch or "<branch>"
     why = (
-        "The path uses a variable or command substitution, so wt cannot tell where it lands."
+        "The path, or the directory it is relative to, uses a variable or command substitution,\n"
+        "so wt cannot tell where it lands."
         if dynamic
         else "Worktrees live in the shared root, never inside a checkout."
     )

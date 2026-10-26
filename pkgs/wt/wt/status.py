@@ -1,4 +1,4 @@
-"""Worktree state: rows, landed detection, occupancy, JSON and the list verbs."""
+"""Worktree state: rows, landed detection, occupancy, JSON and the list verb."""
 
 from __future__ import annotations
 
@@ -89,6 +89,15 @@ def busy_pid(path: str) -> Optional[int]:
         if is_within(real, root):
             return pid
     return None
+
+
+def describe_pid(pid: int) -> str:
+    """`<command> (pid N)`, or `pid N` when the process name cannot be read."""
+    try:
+        name = Path(f"/proc/{pid}/comm").read_text().strip()
+    except OSError:
+        name = run(["ps", "-o", "comm=", "-p", str(pid)], check=False).stdout.strip()
+    return f"{os.path.basename(name)} (pid {pid})" if name else f"pid {pid}"
 
 
 def _binary_change(path: str, merge_base: str) -> bool:
@@ -386,12 +395,13 @@ def status_document(repos: Iterable[tuple[Repo, list[Worktree]]]) -> dict:
 
 def resolve_row(repo: Repo, target: str, rows: Optional[list[Worktree]] = None) -> Worktree:
     rows = rows if rows is not None else gather(repo)
-    if target == ".":
-        cwd = os.path.realpath(os.getcwd())
-        for row in rows:
-            if is_within(cwd, os.path.realpath(row.path)):
+    if target == "." or os.path.isabs(target):
+        inside = os.path.realpath(os.getcwd() if target == "." else target)
+        # Longest path first, so a worktree nested under the primary checkout wins over it.
+        for row in sorted(rows, key=lambda row: len(row.path), reverse=True):
+            if is_within(inside, os.path.realpath(row.path)):
                 return row
-        die("current directory is not inside a known worktree")
+        die(f"{'current directory' if target == '.' else target} is not inside a known worktree")
     matches = [row for row in rows if row.name == target]
     if not matches:
         matches = [row for row in rows if os.path.basename(row.path) == target]
@@ -405,13 +415,22 @@ def resolve_row(repo: Repo, target: str, rows: Optional[list[Worktree]] = None) 
 
 
 def cmd_list(args: argparse.Namespace) -> None:
-    repos = repos_under_root() if args.all else [current_repo()]
+    if args.all and args.target:
+        die("--all lists every repository; drop it to narrow to one worktree")
+    if args.all:
+        repos = [(repo, gather(repo)) for repo in repos_under_root()]
+    else:
+        repo = current_repo()
+        rows = gather(repo)
+        repos = [(repo, [resolve_row(repo, args.target, rows)] if args.target else rows)]
+    if args.json:
+        print(json.dumps(status_document(repos), indent=2, sort_keys=False))
+        return
     if not repos:
         info("no worktrees")
         return
     blocks: list[str] = []
-    for repo in repos:
-        rows = gather(repo)
+    for repo, rows in repos:
         body = [
             [row.name, row.branch or ("(main)" if row.is_main else "(detached)"), _state_cell(row),
              _vs_cell(row), _landed_cell(row), format_age(row.idle_seconds)]
@@ -421,17 +440,3 @@ def cmd_list(args: argparse.Namespace) -> None:
         table = _table(body, headers)
         blocks.append(table if not args.all else f"{repo.key}  ({repo.main})\n{table}")
     print("\n\n".join(blocks))
-
-
-def cmd_status(args: argparse.Namespace) -> None:
-    if args.all:
-        repos = repos_under_root()
-        document = status_document((repo, gather(repo)) for repo in repos)
-    else:
-        repo = current_repo()
-        rows = gather(repo)
-        if args.target:
-            row = resolve_row(repo, args.target, rows)
-            rows = [row]
-        document = status_document([(repo, rows)])
-    print(json.dumps(document, indent=2, sort_keys=False))

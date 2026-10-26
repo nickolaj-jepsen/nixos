@@ -71,7 +71,7 @@ scan_worktrees() {
     size=$(size_of "$path")
     printf 'worktree:%s|%s\tworktree\t%s\t1\t%s@%s\t%s@%s\tidle %sd\n' \
       "$main" "$name" "$size" "$main" "$name" "$(label_for "$main")" "$name" "$((idle / 86400))"
-  done < <(wt status --all 2>/dev/null |
+  done < <(wt list --all --json 2>/dev/null |
     jq -r '.repos[] | .main as $main | .worktrees[] | select(.safeToRemove == true) |
       [$main, .name, .path, (.idleSeconds // 0)] | @tsv' 2>/dev/null)
 }
@@ -433,7 +433,7 @@ cmd_repo_pass() {
     while IFS= read -r repo; do
       [ -d "$repo" ] || continue
       (cd -- "$repo" && wt clean 2>&1) | sed 's/^/janitor: /' || true
-    done < <(wt status --all 2>/dev/null |
+    done < <(wt list --all --json 2>/dev/null |
       jq -r '.repos[] | select(.worktrees | map(select(.safeToRemove == true)) | length > 0) | .main' 2>/dev/null)
   fi
 

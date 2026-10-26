@@ -82,7 +82,7 @@ class Fixture(unittest.TestCase):
         return Path(self.wt("create", name).stdout.strip())
 
     def status(self, *args: str) -> dict:
-        return json.loads(self.wt("status", *args).stdout)
+        return json.loads(self.wt("list", "--json", *args).stdout)
 
     def entry(self, name: str) -> dict:
         document = self.status()
@@ -114,12 +114,12 @@ class Fixture(unittest.TestCase):
         self.create("feature")
         listing = self.wt("list", "--all", cwd=self.root).stdout
         self.assertIn("feature", listing)
-        document = json.loads(self.wt("status", "--all", cwd=self.root).stdout)
+        document = json.loads(self.wt("list", "--all", "--json", cwd=self.root).stdout)
         self.assertEqual(len(document["repos"]), 1)
 
     def test_dot_target_is_the_containing_worktree(self) -> None:
         path = self.create("feature")
-        document = json.loads(self.wt("status", ".", cwd=str(path)).stdout)
+        document = json.loads(self.wt("list", "--json", ".", cwd=str(path)).stdout)
         rows = document["repos"][0]["worktrees"]
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["name"], "feature")
@@ -135,7 +135,7 @@ class Fixture(unittest.TestCase):
         first = self.create("feature")
         second = Path(self.wt("create", "feature", cwd=other).stdout.strip())
         self.assertNotEqual(first, second)
-        document = json.loads(self.wt("status", "--all", cwd=self.root).stdout)
+        document = json.loads(self.wt("list", "--all", "--json", cwd=self.root).stdout)
         self.assertEqual(len(document["repos"]), 2)
         for repo in document["repos"]:
             self.assertEqual(len(repo["worktrees"]), 2)
@@ -194,6 +194,12 @@ class Fixture(unittest.TestCase):
         result = self.wt("remove", "dirty", check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(path.exists())
+
+    def test_remove_takes_a_path_and_deletes_the_branch(self) -> None:
+        path = self.create("by-path")
+        self.wt("remove", str(path), cwd=self.root)
+        self.assertFalse(path.exists())
+        self.assertEqual(self.git("branch", "--list", "by-path").strip(), "")
 
     def test_remove_refuses_the_directory_it_is_run_from(self) -> None:
         path = self.create("self")
@@ -301,13 +307,13 @@ class Fixture(unittest.TestCase):
         self.git("commit", "-qm", "squash landed")
         self.assertFalse(self.entry("binary")["landed"])
 
-    # apply and sync ----------------------------------------------------------
+    # land --------------------------------------------------------------------
 
-    def test_apply_lands_and_keeps_the_worktree(self) -> None:
+    def test_land_keeps_the_worktree(self) -> None:
         path = self.create("land-me")
         self.write("b.txt", "work\n", cwd=str(path))
         self.commit("work", cwd=str(path))
-        self.wt("apply", "land-me")
+        self.wt("land", "land-me")
         self.assertTrue(path.exists())
         self.assertEqual(self.git("log", "--oneline", "-1").strip().split(" ", 1)[1], "work")
         self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(path)).strip(), "land-me")
@@ -315,85 +321,74 @@ class Fixture(unittest.TestCase):
         self.assertTrue(landed["landed"])
         self.assertEqual(landed["ahead"], 0)
 
-    def test_apply_remove_deletes_the_worktree_and_branch(self) -> None:
-        path = self.create("finish-me")
-        self.write("b.txt", "work\n", cwd=str(path))
-        self.commit("work", cwd=str(path))
-        self.wt("apply", "--remove", "finish-me")
-        self.assertFalse(path.exists())
-        self.assertEqual(self.git("branch", "--list", "finish-me").strip(), "")
-        self.assertEqual(self.git("log", "--oneline", "-1").strip().split(" ", 1)[1], "work")
-
-    def test_apply_remove_refuses_to_delete_its_own_cwd(self) -> None:
-        path = self.create("inside")
-        self.write("b.txt", "work\n", cwd=str(path))
-        self.commit("work", cwd=str(path))
-        result = self.wt("apply", "--remove", "inside", cwd=str(path), check=False)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertTrue(path.exists())
-        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD").strip(), "main")
-        self.assertFalse(self.entry("inside")["landed"])
-
-    def test_apply_conflict_pauses_and_abort_restores(self) -> None:
+    def test_land_conflict_pauses_and_abort_restores(self) -> None:
         path = self.create("conflict")
         Path(path, "a.txt").write_text("theirs\n")
         self.commit("theirs", cwd=str(path))
         Path(self.main, "a.txt").write_text("ours\n")
         self.commit("ours")
-        result = self.wt("apply", "conflict", check=False)
+        result = self.wt("land", "conflict", check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("rebase conflict", result.stderr)
         self.assertTrue((path / ".git").exists())
-        self.wt("apply", "--abort", "conflict")
+        self.wt("land", "--abort", "conflict")
         self.assertEqual(self.git("status", "--porcelain", cwd=str(path)), "")
         self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(path)).strip(), "conflict")
 
-    def test_apply_abort_on_conflict_restores_the_worktree(self) -> None:
+    def test_land_abort_on_conflict_restores_the_worktree(self) -> None:
         path = self.create("conflict")
         Path(path, "a.txt").write_text("theirs\n")
         self.commit("theirs", cwd=str(path))
         Path(self.main, "a.txt").write_text("ours\n")
         self.commit("ours")
-        result = self.wt("apply", "--abort-on-conflict", "conflict", check=False)
+        result = self.wt("land", "--abort-on-conflict", "conflict", check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.git("status", "--porcelain", cwd=str(path)), "")
         self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(path)).strip(), "conflict")
 
-    def test_apply_leaves_unrelated_uncommitted_main_changes_alone(self) -> None:
+    def test_land_leaves_unrelated_uncommitted_main_changes_alone(self) -> None:
         path = self.create("land-me")
         self.write("b.txt", "work\n", cwd=str(path))
         self.commit("work", cwd=str(path))
         self.write("a.txt", "uncommitted\n")
-        self.wt("apply", "land-me")
+        self.wt("land", "land-me")
         self.assertTrue(self.entry("land-me")["landed"])
         self.assertEqual(Path(self.main, "a.txt").read_text(), "uncommitted\n")
         self.assertIn("a.txt", self.git("status", "--porcelain"))
 
-    def test_apply_refuses_when_the_branch_touches_dirty_main_paths(self) -> None:
+    def test_land_refuses_when_the_branch_touches_dirty_main_paths(self) -> None:
         path = self.create("land-me")
         self.write("a.txt", "branch\n", cwd=str(path))
         self.commit("branch change", cwd=str(path))
         self.write("a.txt", "uncommitted\n")
-        result = self.wt("apply", "land-me", check=False)
+        result = self.wt("land", "land-me", check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(path.exists())
         self.assertEqual(Path(self.main, "a.txt").read_text(), "uncommitted\n")
         self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD").strip(), "main")
 
-    def test_sync_rebases_onto_local_default(self) -> None:
-        path = self.create("behind")
-        Path(self.main, "main.txt").write_text("main moved\n")
-        self.commit("main moved")
-        self.wt("sync", "behind")
-        self.assertEqual(self.git("rev-list", "--count", "main..behind", cwd=str(path)).strip(), "0")
-        self.assertEqual(self.git("rev-list", "--count", "behind..main", cwd=str(path)).strip(), "0")
+    def test_land_moves_only_the_ref_when_no_checkout_has_the_default(self) -> None:
+        path = self.create("land-me")
+        self.write("b.txt", "work\n", cwd=str(path))
+        self.commit("work", cwd=str(path))
+        self.git("switch", "-qc", "elsewhere")
+        self.write("c.txt", "theirs, uncommitted\n")
+        self.wt("land", "land-me")
+        self.assertEqual(self.git("rev-parse", "main").strip(), self.git("rev-parse", "land-me").strip())
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD").strip(), "elsewhere")
+        self.assertFalse(Path(self.main, "b.txt").exists())
+        self.assertTrue(self.entry("land-me")["landed"])
 
-    def test_sync_refuses_dirty_worktree(self) -> None:
-        path = self.create("dirty")
-        Path(path, "a.txt").write_text("changed\n")
-        result = self.wt("sync", "dirty", check=False)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("uncommitted changes", result.stderr)
+    def test_land_names_a_live_process_in_the_default_checkout(self) -> None:
+        path = self.create("land-me")
+        self.write("b.txt", "work\n", cwd=str(path))
+        self.commit("work", cwd=str(path))
+        process = subprocess.Popen(["sleep", "30"], cwd=self.main)
+        self.addCleanup(lambda: (process.kill(), process.wait()))
+        time.sleep(0.2)
+        result = self.wt("land", "land-me")
+        self.assertIn(f"pid {process.pid}", result.stderr)
+        self.assertTrue(Path(self.main, "b.txt").exists())
 
     # occupancy and locking ---------------------------------------------------
 
@@ -462,6 +457,16 @@ class Fixture(unittest.TestCase):
         for command in ('git worktree add $(mktemp -d)', "git worktree add $DIR/x", "cd $X && git worktree add y"):
             with self.subTest(command=command):
                 self.assertEqual(self.wt("guard", command, check=False).returncode, 1)
+
+    def test_guard_lets_dynamic_directories_through_when_nothing_is_added(self) -> None:
+        root = self.env["WT_WORKTREE_ROOT"]
+        for command in (
+            'cd "$HOME" && git worktree list',
+            "P=/tmp; git -C $P log --oneline  # worktree",
+            f"cd $X && git worktree add {root}/repo/ok -b ok",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self.wt("guard", command, check=False).returncode, 0)
 
 
 if __name__ == "__main__":
