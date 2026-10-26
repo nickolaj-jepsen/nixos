@@ -158,7 +158,7 @@ in {
       localModels);
       theme = "fireproof";
       quietStartup = "header";
-      hideThinkingBlock = true;
+      hideThinkingBlock = false;
       treeFilterMode = "user-only";
       terminal.showTerminalProgress = true;
       shellCommandPrefix = ''eval "$(${lib.getExe config.programs.direnv.package} export bash 2>/dev/null)"'';
