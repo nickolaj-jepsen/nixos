@@ -1,5 +1,6 @@
 {
   lib,
+  stdenv,
   writeShellApplication,
   coreutils,
   findutils,
@@ -20,7 +21,10 @@ in
   writeShellApplication {
     name = "janitor";
     inherit text;
-    runtimeInputs = [coreutils findutils gawk jq git wt newt];
+    # whiptail and wt are the two things only a Linux desktop needs: the checklist
+    # and the worktree rows. On darwin the wrappers still need `dir`, and the rest
+    # degrades to "not available" instead of a build on packages that may not be.
+    runtimeInputs = [coreutils findutils gawk jq git] ++ lib.optionals stdenv.isLinux [wt newt];
     meta = {
       description = "Reclaim what agents and dev tools leave behind";
       platforms = lib.platforms.unix;

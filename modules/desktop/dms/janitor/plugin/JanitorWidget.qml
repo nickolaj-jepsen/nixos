@@ -392,6 +392,7 @@ PluginComponent {
                 delegate: Item {
                     id: row
                     required property var modelData
+                    required property int index
                     readonly property bool isHeader: modelData.header === true
                     readonly property bool ticked: !row.isHeader && !!root.checked[modelData.id]
 

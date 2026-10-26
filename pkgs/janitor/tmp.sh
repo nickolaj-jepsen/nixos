@@ -173,6 +173,9 @@ pressure_line() {
   read -r avail total < <(free_space) || return 1
   [ "$avail" -lt "$WARN_FREE_BYTES" ] || return 1
   mkdir -p -- "$STATE_DIR/warned"
+  # One file per session id; without this they accumulate for the life of the
+  # machine, and STATE_DIR is exactly what the sweep refuses to prune.
+  find "$STATE_DIR/warned" -type f -mtime +1 -delete 2>/dev/null || true
   throttle=$STATE_DIR/warned/${session:-global}
   if [ -f "$throttle" ]; then
     last=$(cat -- "$throttle" 2>/dev/null) || last=0

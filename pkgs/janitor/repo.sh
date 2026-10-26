@@ -40,7 +40,7 @@ scan_transcripts() {
 # it loses nothing. An unmerged one is offered only in `apply`, bundled first.
 scan_branches() {
   local repo def branch age ahead checked
-  for repo in $(repos); do
+  while IFS= read -r repo; do
     def=$(default_branch "$repo") || continue
     checked=$(checked_out_branches "$repo")
     while IFS=$'\t' read -r branch age; do
@@ -58,7 +58,7 @@ scan_branches() {
       printf 'branch:%s|%s\tbranch\t0\t0\t%s@%s\t%s@%s\t%s ahead · %sd\n' \
         "$repo" "$branch" "$repo" "$branch" "$(label_for "$repo")" "$branch" "$ahead" "$(((now - age) / 86400))"
     done < <(git -C "$repo" for-each-ref --format='%(refname:short)%09%(committerdate:unix)' refs/heads 2>/dev/null)
-  done
+  done < <(repos)
 }
 
 # wt owns what a worktree is worth: its safeToRemove already means clean tree,
@@ -81,7 +81,7 @@ scan_worktrees() {
 # check is what stops a deletion from under a dev server.
 scan_build_dirs() {
   local repo last_commit dir age size
-  for repo in $(repos); do
+  while IFS= read -r repo; do
     last_commit=$(git -C "$repo" log -1 --format=%ct 2>/dev/null) || continue
     [ $((now - last_commit)) -ge "$BUILD_DIR_AGE_SECONDS" ] || continue
     anything_running_in "$repo" && continue
@@ -94,7 +94,7 @@ scan_build_dirs() {
     done < <(find "$repo" -maxdepth 3 \( -name .git -o -name .hg -o -name .jj \) -prune -o \
       -type d \( -name node_modules -o -name .venv -o -name target -o -name dist \
       -o -name .pytest_cache -o -name __pycache__ \) -prune -print0 2>/dev/null)
-  done
+  done < <(repos)
 }
 
 # The dead temp dirs, in the plan like everything else: the widget shows one
@@ -208,18 +208,37 @@ bundle_branch() {
   printf '%s\n' "$file"
 }
 
+# The temp decision, recomputed at apply time: the plan can be an hour old, and a
+# path that was four days stale when it was written may have been used since.
+tmp_recheck() {
+  local avail total floor_bytes age size kind path over=0 low=0
+  [ -n "${APPLY_TMP_SET:-}" ] && return 0
+  APPLY_TMP_SET=$(mktemp)
+  export APPLY_TMP_SET
+  read -r avail total < <(free_space) || { avail=0; total=1; }
+  floor_bytes=$((total * FREE_FLOOR_PCT / 100))
+  [ "$(total_tmp_bytes)" -gt "$BUDGET_BYTES" ] && over=1
+  [ "$avail" -lt "$floor_bytes" ] && low=1
+  tmp_candidates | while IFS=$'\t' read -r age size kind path; do
+    if tmp_deletable "$age" "$kind" "$size" && ! protected "$path"; then
+      printf '%s\n' "$path"
+    fi
+  done >"$APPLY_TMP_SET"
+}
+
+# Whatever an id says, it has to name something the rules would free *now*, and
+# something in scope: ids arrive from a checklist a user can edit and from a plan
+# that may be minutes old by the time Apply is pressed.
 apply_item() {
-  local id=$1 kind=${1%%:*} rest=${1#*:} repo branch size file
+  local id=$1 kind=${1%%:*} rest=${1#*:} repo branch size file last_commit
   local freed_log=${PLAN_TMP:-/dev/null}.freed
   case "$kind" in
   tmp)
-    [ -e "$rest" ] || return 0
-    protected "$rest" && return 0
-    # The plan may be minutes old; a pid-named dir is only dead while its pid is.
-    case ${rest##*/} in
-    '' | *[!0-9]*) ;;
-    *) [ -d "/proc/${rest##*/}" ] && return 0 ;;
-    esac
+    tmp_recheck
+    if ! grep -qxF -- "$rest" "$APPLY_TMP_SET"; then
+      printf '  refused %s (no rule frees it any more)\n' "$rest"
+      return 0
+    fi
     size=$(size_of "$rest")
     rm -rf -- "$rest" && {
       printf '  freed   %8s  %s\n' "$(gib "$size")" "$rest"
@@ -227,6 +246,10 @@ apply_item() {
     }
     ;;
   jobs)
+    in_jobs "$rest" || {
+      printf '  refused %s (not a job tmp)\n' "$rest"
+      return 0
+    }
     [ -d "$rest" ] && [ "$(age_of "$rest")" -ge "$JOB_TMP_AGE_SECONDS" ] || return 0
     size=$(size_of "$rest")
     rm -rf -- "$rest" && {
@@ -235,6 +258,10 @@ apply_item() {
     }
     ;;
   transcript)
+    in_projects "$rest" || {
+      printf '  refused %s (not a session transcript)\n' "$rest"
+      return 0
+    }
     [ -f "$rest" ] && [ "$(age_of "$rest")" -ge "$TRANSCRIPT_AGE_SECONDS" ] || return 0
     size=$(file_bytes "$rest")
     rm -f -- "$rest" && {
@@ -243,8 +270,30 @@ apply_item() {
     }
     ;;
   build)
+    case ${rest##*/} in
+    node_modules | .venv | target | dist | .pytest_cache | __pycache__) ;;
+    *)
+      printf '  refused %s (not a rebuildable directory)\n' "$rest"
+      return 0
+      ;;
+    esac
+    repo=$(repo_of_path "$(dirname -- "$rest")") || {
+      printf '  refused %s (not inside a repo)\n' "$rest"
+      return 0
+    }
+    is_known_repo "$repo" || {
+      printf '  refused %s (repo is not in the roster)\n' "$rest"
+      return 0
+    }
     [ -d "$rest" ] && [ "$(age_of "$rest")" -ge "$BUILD_DIR_AGE_SECONDS" ] || return 0
-    anything_running_in "$(dirname "$rest")" && return 0
+    last_commit=$(git -C "$repo" log -1 --format=%ct 2>/dev/null) || return 0
+    [ $((now - last_commit)) -ge "$BUILD_DIR_AGE_SECONDS" ] || return 0
+    # Checked against the repo, not the directory's parent: a dev server rooted at
+    # the repo has to block a deletion inside it.
+    anything_running_in "$repo" && {
+      printf '  refused %s (something is running in %s)\n' "$rest" "$repo"
+      return 0
+    }
     size=$(size_of "$rest")
     rm -rf -- "$rest" && {
       printf '  freed   %8s  %s\n' "$(gib "$size")" "$rest"
@@ -253,20 +302,30 @@ apply_item() {
     ;;
   worktree)
     repo=${rest%%|*}
-    [ -d "$repo" ] || return 0
+    branch=${rest#*|}
+    is_known_repo "$repo" || {
+      printf '  refused %s (repo is not in the roster)\n' "$rest"
+      return 0
+    }
     command -v wt >/dev/null 2>&1 || return 0
-    (cd -- "$repo" && wt clean 2>&1) | sed 's/^/  /'
+    # One row at a time: `wt clean` takes every finished worktree in the repo,
+    # which is not the granularity the checklist just promised.
+    (cd -- "$repo" && wt remove -- "$branch" 2>&1) | sed 's/^/  /'
     ;;
   branch)
     repo=${rest%%|*}
     branch=${rest#*|}
     [ -d "$repo" ] || return 0
+    is_known_repo "$repo" || {
+      printf '  refused %s (repo is not in the roster)\n' "$rest"
+      return 0
+    }
     git -C "$repo" rev-parse --verify --quiet "refs/heads/$branch" >/dev/null || return 0
     checked_out_branches "$repo" | grep -qxF -- "$branch" && return 0
     if ! git -C "$repo" merge-base --is-ancestor -- "$branch" "$(default_branch "$repo")" 2>/dev/null; then
       file=$(bundle_branch "$repo" "$branch") || {
         printf '  failed  could not bundle %s@%s\n' "$repo" "$branch"
-        return 0
+        return 1
       }
       printf '  bundle  %s\n' "$file"
     fi
@@ -278,8 +337,9 @@ apply_item() {
 # The checklist. Branches start unticked because that is the only row whose loss
 # is not merely a rebuild.
 cmd_apply() {
-  local ids_file="" have_ids=0 freed id bytes preset title detail
+  local ids_file="" have_ids=0 freed id bytes preset title detail tag failures=0
   local -a explicit_ids=()
+  local -a picked=()
   if [ "${1:-}" = --ids ]; then
     shift
     explicit_ids=("$@")
@@ -287,8 +347,8 @@ cmd_apply() {
   else
     ids_file=${1:-}
   fi
-  if [ "$have_ids" = 0 ] && [ -z "$ids_file" ]; then :; fi
   build_plan
+  APPLY_TMP_SET=""
 
   if [ "$have_ids" = 0 ] && [ -z "$ids_file" ]; then
     if [ ! -t 0 ] || ! command -v whiptail >/dev/null 2>&1; then
@@ -296,9 +356,13 @@ cmd_apply() {
       rm -f -- "$PLAN_TMP" "$CWD_CACHE"
       return 2
     fi
+    # Whiptail tags are row numbers: a path with a space or a quote would
+    # otherwise have to survive its own shell quoting on the way back.
     local -a args=()
+    tag=0
     while IFS=$'\t' read -r id _ bytes preset title detail; do
-      args+=("$id" "$(printf '%8s  %s  %s' "$(gib "$bytes")" "$title" "$detail")" "$([ "$preset" = 1 ] && echo ON || echo OFF)")
+      tag=$((tag + 1))
+      args+=("$tag" "$(printf '%8s  %s  %s' "$(gib "$bytes")" "$title" "$detail")" "$([ "$preset" = 1 ] && echo ON || echo OFF)")
     done <"$PLAN_TMP"
     ids_file=$(mktemp)
     if ! whiptail --title "janitor" --checklist \
@@ -306,31 +370,36 @@ cmd_apply() {
         "$(gib "$(plan_total)")")" \
       26 110 16 "${args[@]}" 2>"$ids_file" >/dev/null; then
       printf 'janitor: nothing selected\n'
-      rm -f -- "$PLAN_TMP" "$CWD_CACHE"
-  [ -n "$ids_file" ] && rm -f -- "$ids_file"
+      rm -f -- "$PLAN_TMP" "$CWD_CACHE" "$ids_file"
       return 0
     fi
+    for tag in $(tr -d '"' <"$ids_file"); do
+      case "$tag" in
+      '' | *[!0-9]*) continue ;;
+      esac
+      picked+=("$(sed -n "${tag}p" "$PLAN_TMP" | cut -f1)")
+    done
+    rm -f -- "$ids_file"
+    explicit_ids=(${picked[@]+"${picked[@]}"})
+    have_ids=1
   fi
 
-  if [ "$have_ids" = 1 ]; then
-    for id in ${explicit_ids[@]+"${explicit_ids[@]}"}; do
-      [ -n "$id" ] && apply_item "$id"
-    done
-  else
-    # whiptail (and a saved plan) write one id per line, quoted when it has a space.
-    xargs -r -n1 <"$ids_file" 2>/dev/null |
-      while IFS= read -r id; do
-        [ -n "$id" ] && apply_item "$id"
-      done
-  fi
+  # `|| failures=…` is what keeps one unremovable path from aborting the run and
+  # skipping the summary; it also exempts apply_item from `set -e`.
+  for id in ${explicit_ids[@]+"${explicit_ids[@]}"}; do
+    [ -n "$id" ] || continue
+    apply_item "$id" || failures=$((failures + 1))
+  done
+
   freed=$(awk '{s += $1} END {print s + 0}' "$PLAN_TMP.freed" 2>/dev/null || echo 0)
   printf 'janitor: freed %s\n' "$(gib "$freed")"
-  [ "${freed:-0}" -ge 1073741824 ] &&
-    toast "Freed $(gib "$freed") of agent and repo leftovers"
-  rm -f -- "$PLAN_TMP.freed"
+  if [ "$failures" -gt 0 ]; then
+    printf 'janitor: %d item(s) could not be removed\n' "$failures"
+  fi
+  [ "$freed" -ge 1073741824 ] && toast "Freed $(gib "$freed") of agent and repo leftovers"
 
-  rm -f -- "$PLAN_TMP" "$CWD_CACHE"
-  [ -n "$ids_file" ] && rm -f -- "$ids_file"
+  rm -f -- "$PLAN_TMP.freed" "$PLAN_TMP" "$CWD_CACHE"
+  [ -n "$APPLY_TMP_SET" ] && rm -f -- "$APPLY_TMP_SET"
   cmd_repo_plan_refresh
   cmd_state
 }
@@ -346,7 +415,7 @@ cmd_repo_plan_refresh() {
 # cached numbers the widget reads.
 cmd_repo_pass() {
   local freed=0 repo branch def checked path size removed=0
-  for repo in $(repos); do
+  while IFS= read -r repo; do
     def=$(default_branch "$repo") || continue
     checked=$(checked_out_branches "$repo")
     while IFS= read -r branch; do
@@ -358,7 +427,7 @@ cmd_repo_pass() {
         removed=$((removed + 1))
       fi
     done < <(git -C "$repo" branch --merged "$def" --format='%(refname:short)' 2>/dev/null)
-  done
+  done < <(repos)
 
   if command -v wt >/dev/null 2>&1; then
     while IFS= read -r repo; do

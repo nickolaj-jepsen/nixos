@@ -62,15 +62,23 @@ pill. It does not reach into working trees for build directories; that is always
 just janitor              # what is here and what a pass would free; deletes nothing
 just janitor plan         # the same as JSON
 just janitor apply        # the checklist: space toggles, enter applies
-just janitor run repo     # what the daily timer does
+just janitor run repo     # what the daily timer does (run tmp for the other one)
 journalctl --user -u janitor-repo   # what it actually did
 ```
 
-`apply` is a terminal checklist for the same rows the popout shows. Build
-directories and dead temp start ticked, branches do not — a branch is the one
-row whose loss is not merely a rebuild, so it takes a deliberate tick and is
-bundled to `~/.local/state/janitor/bundles/<repo>/<branch>.bundle` before
-`git branch -D`. Restore one with `git fetch <bundle> <branch>:<branch>`.
+`apply` is a terminal checklist for the same rows the popout shows, one row per
+item: build directories and dead temp start ticked, branches do not. A branch is
+the one row whose loss is not merely a rebuild, so it takes a deliberate tick and
+is bundled first, to
+`~/.local/state/janitor/bundles/<repo>/<branch with / written as %>.bundle`, then
+deleted. Restore one with `git fetch <bundle> <branch>:<branch>`.
+
+An id is not a licence: every row is re-checked when it is applied, against the
+rules as they stand at that moment, because the checklist can be an hour old and
+`apply --ids` accepts ids from anyone. A transcript must still be a `.jsonl`
+under a `projects` directory, a build directory must still be one of the named
+ones inside a repo in the roster with nothing running in it, and a temp path must
+still fail the liveness test right then.
 
 ## The widget
 
@@ -108,7 +116,9 @@ a temp tree.
   from every `.jsonl` under `~/.claude/projects` and `~/.claude-work/projects`.
   Their 30-day age is the window in which a re-run of `extract` can still see
   them.
-- **`pi-auto-sandbox/disks` is not touched.** `pi-auto-gate` has its own
-  `collectGarbage` and knows which qcow2 is a template.
+- **The sandbox's qcow2 images are not touched.** That is
+  `~/.local/state/pi-auto-sandbox/disks`, outside every root here: `pi-auto-gate`
+  has its own `collectGarbage` and knows which disk is a template. What the stray
+  rule does reach is `/tmp/pi-*`, which is temp space like any other.
 - **`wt clean` deletes what it deletes.** The janitor only decides _when_ to run
   it, never what a worktree is worth.

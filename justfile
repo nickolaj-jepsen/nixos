@@ -267,11 +267,11 @@ clean:
     rm -rf result result-*
 
 # Two timers do the safe work; `report` changes nothing, `apply` is the checklist.
-[arg('action', pattern='report|plan|apply|state|dir')]
-[doc('What agents and dev tools left behind, and `just janitor apply` to pick what goes')]
+[arg('action', pattern='report|plan|apply|state|dir|run')]
+[doc('What agents and dev tools left behind; `just janitor apply` picks what goes, `just janitor run repo` is the daily pass')]
 [group('maintenance')]
-janitor action='report':
-    janitor {{ action }}
+janitor action='report' *ARGS:
+    janitor {{ action }} {{ ARGS }}
 
 [doc('Generate Markdown reference for the fireproof.* options into docs/')]
 [group('dev')]

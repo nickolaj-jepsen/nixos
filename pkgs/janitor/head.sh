@@ -220,6 +220,49 @@ label_for() {
   '
 }
 
+# The repo that owns a path, for re-checking the build-dir rule at apply time,
+# when the plan may be an hour old and the directory may have been used since.
+repo_of_path() {
+  local path=$1
+  while [ -n "$path" ] && [ "$path" != "/" ]; do
+    if [ -e "$path/.git" ]; then
+      printf '%s\n' "$path"
+      return 0
+    fi
+    path=$(dirname -- "$path")
+  done
+  return 1
+}
+
+# Membership in the roster, so an id naming a repo nobody scans is refused.
+is_known_repo() {
+  local repo
+  while IFS= read -r repo; do
+    [ "$repo" = "$1" ] && return 0
+  done < <(repos)
+  return 1
+}
+
+# A transcript is a session .jsonl under a projects directory, never a memory file.
+in_projects() {
+  local dir
+  case "$1" in *.jsonl) ;; *) return 1 ;; esac
+  for dir in "${CLAUDE_DIRS[@]}"; do
+    case "$1" in "$dir"/projects/*) return 0 ;; esac
+  done
+  return 1
+}
+
+# A job tmp is exactly <claude dir>/jobs/<id>/tmp.
+in_jobs() {
+  local dir
+  case "$1" in */tmp) ;; *) return 1 ;; esac
+  for dir in "${CLAUDE_DIRS[@]}"; do
+    case "$1" in "$dir"/jobs/*/tmp) return 0 ;; esac
+  done
+  return 1
+}
+
 # Branches that some worktree has checked out; git will not delete those.
 checked_out_branches() {
   git -C "$1" worktree list --porcelain 2>/dev/null | awk '/^branch / {sub("refs/heads/", "", $2); print $2}'
