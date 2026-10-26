@@ -20,12 +20,16 @@ The bar never answers anything: you answer in the agent's own terminal.
 In the order the popout lists them. The first four want you; looking at a
 session never clears one, only its next turn or `x` does.
 
-- **asking**: a dialog is open. Its entry in the session registry
-  (`~/.claude/sessions`) says `status: "waiting"`. Claude Code writes that
-  itself with a generic `waitingFor`; its `PermissionRequest` hook (`agent-hub
-hook`, set in `modules/programs/claude-code/default.nix`) sends the daemon a
-  one-line label of the call. pi's `claude-peers` extension writes it, with the
-  label, while pi-permission-system has a dialog open.
+- **asking**: a dialog is open that wants an answer. Its entry in the session
+  registry (`~/.claude/sessions`) says `status: "waiting"`. Claude Code writes
+  that itself, with a `waitingFor` naming the dialog (`permission prompt`,
+  `input needed`), and its `PermissionRequest` hook (`agent-hub hook`, set in
+  `modules/programs/claude-code/default.nix`) sends the daemon a one-line label
+  of the call. pi's `claude-peers` extension writes it, with the label, while
+  pi-permission-system has a dialog open. Claude also says `waiting` for modals
+  that only show something (the history view, `/config`): those carry
+  `waitingFor: "dialog open"` and leave the session in the state it was in, so
+  closing one neither re-announces its last turn nor forgets a dismissal.
 - **needs reply**, **failed**, **done**: how the last turn ended. pi's sidecar
   already judges every turn, and `claude-peers` writes its verdict into the
   registry (`turnState`, `ask`). Claude Code's `Stop` hook hands the daemon the

@@ -18,6 +18,8 @@
 
 A session is `asking` while its registry entry says `status: "waiting"`; Claude
 Code writes that itself, and pi's claude-peers extension does for its dialogs.
+Claude writes it for every open modal, so the ones it names as only showing
+something (the history view, /config) leave the session as it was.
 A finished turn stays `needs-reply`, `failed` or `done` until the next one starts
 or it is dismissed. pi writes how its turn ended into the registry (`turnState`,
 `ask`); a Claude Code turn is read from its transcript, and put to `claude -p`
@@ -44,6 +46,8 @@ RETRY = 2.0
 TOAST_GRACE_MS = 1000
 STATE_ORDER = {"asking": 0, "needs-reply": 1, "failed": 2, "done": 3, "working": 4, "idle": 5}
 ATTENTION = ("asking", "needs-reply", "failed", "done")
+# Claude marks every open modal `waiting`; one it names this only shows something (the history view, /config).
+SHOWING_DIALOGS = ("dialog open",)
 # How a turn ended (pi's `turnState`, or the classifier's) → the state it leaves the session in.
 FINISHED = {"blocked": "needs-reply", "failed": "failed", "done": "done"}
 SUMMARY_MAX = 120
@@ -482,7 +486,14 @@ class Hub:
         self.claude = cfg.get("claude")
         self.state_file = Path(cfg["state"]).expanduser()
         self.conns = set()
+        # Session id → the status it is last known to be doing, which a dialog that asks nothing leaves alone.
         self.status = {}
+        # Session id → the registry stamp of its last turn boundary: what a dismissal is for.
+        self.stamps = {}
+        # Session id → the registry stamp last read, so a stamp already accounted for is not read as a turn's.
+        self.seen = {}
+        # Session ids showing a modal that only displays something, whose stamps are no turn boundary.
+        self.showing = set()
         # Session id → the hook's label for the dialog it waits on, until its status moves on.
         self.labels = {}
         saved = self._load()
@@ -521,11 +532,32 @@ class Hub:
         async with server:
             await asyncio.gather(server.serve_forever(), niri)
 
+    def asking(self, sid, entry):
+        """Whether the session's open dialog wants an answer. Claude writes `waiting` for
+        every modal, but the history view or /config only shows something."""
+        return entry.get("status") == "waiting" and (
+            sid in self.labels or entry.get("waitingFor") not in SHOWING_DIALOGS)
+
     def changed(self):
         sessions = self.source.sessions
         saved = (dict(self.outcomes), dict(self.dismissed))
         for sid, entry in sessions.items():
-            status, before = entry.get("status"), self.status.get(sid)
+            raw, stamp, asking = entry.get("status"), since(entry), self.asking(sid, entry)
+            # A modal that only shows something (the history view, /config) stamps the
+            # registry when it opens and when it closes; neither ends a turn.
+            if raw == "waiting" and not asking:
+                self.showing.add(sid)
+            elif sid in self.showing and not asking:
+                self.showing.discard(sid)
+                if raw == "busy":
+                    self.stamps[sid] = stamp
+            elif stamp != self.seen.get(sid):
+                self.stamps[sid] = stamp
+                self.showing.discard(sid)
+            self.seen[sid] = stamp
+            # Nor is it a state of its own: the session stays as it was under the modal.
+            before = self.status.get(sid)
+            status = before if raw == "waiting" and not asking else raw
             # The hook can beat the registry to a dialog, so only a move away from it drops a label.
             if status != before and status != "waiting":
                 self.labels.pop(sid, None)
@@ -534,9 +566,12 @@ class Hub:
                 self.outcomes.pop(sid, None)
             self.status[sid] = status
         self.status = {sid: s for sid, s in self.status.items() if sid in sessions}
+        self.stamps = {sid: t for sid, t in self.stamps.items() if sid in sessions}
+        self.seen = {sid: t for sid, t in self.seen.items() if sid in sessions}
+        self.showing = {sid for sid in self.showing if sid in sessions}
         self.labels = {sid: text for sid, text in self.labels.items() if sid in sessions}
         self.outcomes = {sid: o for sid, o in self.outcomes.items() if sid in sessions}
-        self.dismissed = {sid: t for sid, t in self.dismissed.items() if sid in sessions and since(sessions[sid]) == t}
+        self.dismissed = {sid: t for sid, t in self.dismissed.items() if sid in sessions and self.stamps.get(sid) == t}
         if (self.outcomes, self.dismissed) != saved:
             self._save()
         self.publish()
@@ -547,7 +582,8 @@ class Hub:
             entries.update(conn.demo)
         rows = []
         for sid, entry in entries.items():
-            status = entry.get("status")
+            status = self.status.get(sid) if sid in self.source.sessions else entry.get("status")
+            at = self.stamps.get(sid, since(entry))
             turn = self.outcomes.get(sid) or ({"state": entry["turnState"], "ask": entry.get("ask") or ""} if entry.get("turnState") else None)
             doing = entry.get("doing") or ""
             if status == "waiting":
@@ -557,7 +593,7 @@ class Hub:
             elif turn and turn.get("jobs"):
                 state = "working"
                 doing = f"waiting on {turn['jobs']} background job" + ("s" if turn["jobs"] > 1 else "")
-            elif turn and self.dismissed.get(sid) != since(entry):
+            elif turn and self.dismissed.get(sid) != at:
                 state = FINISHED.get(turn["state"], "done")
             else:
                 state = "idle"
@@ -571,7 +607,7 @@ class Hub:
                 "summary": entry.get("summary") or (turn or {}).get("summary") or "",
                 "waitingFor": (self.labels.get(sid) or entry.get("waitingFor") or "") if state == "asking" else "",
                 "ask": turn["ask"] if state == "needs-reply" else "",
-                "since": since(entry),
+                "since": at,
                 "state": state,
                 "window": self.niri.window_of(entry.get("pid")),
             })

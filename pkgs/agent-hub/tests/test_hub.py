@@ -363,6 +363,16 @@ class ClaudeTurnTest(HubTest):
         self.hub.write_session(self.proc.pid, self.sid, status="busy")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
         self.hub.write_session(self.proc.pid, self.sid, status="idle")
+        # A session whose writes make the hub publish, for reading its own row when it does not.
+        self.canary = self.hub.process()
+        self.canaries = 0
+
+    def settled(self):
+        """This session's row, read off a canary write the hub may well ignore."""
+        self.canaries += 1
+        self.hub.write_session(self.canary.pid, "canary", status="busy", since=int(time.time() * 1000) + self.canaries)
+        # A rescan reads every entry, so this message also carries whatever changed in `sid`'s.
+        return session(self.bar.wait(has_session("canary")), self.sid)
 
     def stop(self, entries, session_id=None, **env):
         transcript = self.hub.write_transcript(self.sid, entries)
@@ -407,6 +417,20 @@ class ClaudeTurnTest(HubTest):
         bar = self.hub.connect()
         bar.send(op="subscribe")
         bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+
+    def test_dialog_that_only_shows_something_leaves_the_turn_alone(self):
+        self.stop([prompt("fix the build"), said("The build fails on darwin still.")])
+        self.bar.send(op="dismiss", session=self.sid)
+        state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        since = session(state, self.sid)["since"]
+        # Claude marks the history view `waiting` too, then stamps its close; neither is this turn's.
+        self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="dialog open", since=since + 5_000)
+        self.assertEqual(self.settled()["state"], "idle")
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", since=since + 9_000)
+        # The modal's stamps must not bring the dismissed turn back, then or on a later read.
+        for _ in range(2):
+            row = self.settled()
+            self.assertEqual((row["state"], row["since"]), ("idle", since))
 
 
 class WaitingTest(HubTest):
@@ -455,6 +479,14 @@ class WaitingTest(HubTest):
         self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="permission prompt")
         toast = logged(self.hub.toast_log)[0]
         self.assertEqual(toast[-2:], ["demo needs you", "Bash: rm -rf build"])
+
+    def test_dialog_that_only_shows_something_is_not_asking(self):
+        self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="dialog open")
+        # A dialog that asks nothing publishes nothing, so read the row off another session's change.
+        canary = self.hub.process()
+        self.hub.write_session(canary.pid, "canary", status="busy")
+        row = session(self.bar.wait(has_session("canary")), self.sid)
+        self.assertEqual(row["state"], "working")
 
 
 class OrderTest(HubTest):
