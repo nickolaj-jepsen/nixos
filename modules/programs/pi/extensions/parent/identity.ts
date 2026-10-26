@@ -13,15 +13,14 @@
  * A second call reads the turn once it settles, for the one thing a wall of
  * prose hides: what it wants from you. That ask becomes the border's detail
  * when the agent is idle, and its draft answer a suggestion on the input line.
- * The same call says whether the turn finished, waits on you or gave up. The
- * call is skipped for a turn that ran no tools and said little, since those are
- * read at a glance.
+ * The same call says whether the turn finished, waits on you or gave up. It runs
+ * for every settled turn, however short: the hub and the draft answer have only
+ * that call to learn a turn ended on a question.
  *
  * Every reading is broadcast on `SIDECAR_CHANNEL`, so other extensions can use
  * it without paying for a call of their own. Until you run `/name`, the session
  * name follows the label, so `/resume` lists something useful.
  */
-import { contentText } from "@earendil-works/pi-ai";
 import {
   copyToClipboard,
   type ExtensionAPI,
@@ -68,9 +67,6 @@ const MIN_CALL_GAP_MS = 10_000;
 // A dead gateway should stop being asked, not be asked again every turn.
 const MAX_FAILURES = 3;
 const MAX_LABEL_CHARS = 40;
-// A turn that ran no tools and wrote less than this is read at a glance, so the
-// settle call would only tell you what is already on screen.
-const WORTH_ASKING_CHARS = 800;
 // Drafts passed over this many turns running are noise; from then on only every
 // few turns gets one, until one is taken.
 const REPLY_BACKOFF_AFTER = 4;
@@ -121,9 +117,6 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
   let offered = false;
   let unusedReplies = 0;
   let backedOff = 0;
-  /** What the running turn has done so far, for deciding whether its outcome is worth a call. */
-  let turnTools = 0;
-  let lastText = 0;
 
   const sessionId = () => session?.sessionManager.getSessionId() ?? "";
 
@@ -404,12 +397,6 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
 
   pi.on("agent_start", () => {
     phase = "working";
-    turnTools = 0;
-    lastText = 0;
-  });
-
-  pi.on("tool_execution_start", () => {
-    turnTools += 1;
   });
 
   pi.on("agent_settled", (_event, ctx) => {
@@ -417,18 +404,14 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
     if (phase !== "failed") phase = "idle";
     // The step described a turn that is over.
     doing = undefined;
-    if (turnTools > 0 || lastText >= WORTH_ASKING_CHARS) {
-      void refresh(ctx, false, "settle").catch(() => {});
-    } else {
-      announce("settle", false);
-    }
+    // Every turn is judged: a short one can still end on a question, and the bar and
+    // the reply draft have only this call to learn it from.
+    void refresh(ctx, false, "settle").catch(() => {});
   });
 
   pi.on("message_end", (event) => {
     if (event.message.role !== "assistant") return;
     if (event.message.stopReason === "error") phase = "failed";
-    const text = contentText(event.message.content, " ");
-    if (text.trim() !== "") lastText = text.length;
   });
 
   pi.on("session_compact", (_event, ctx) => {

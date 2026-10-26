@@ -120,7 +120,9 @@ const closingWords = (ctx: ExtensionContext) => {
   for (const entry of [...ctx.sessionManager.getBranch()].reverse()) {
     if (entry.type !== "message" || entry.message.role !== "assistant") continue;
     const text = contentText(entry.message.content, " ");
-    if (text.trim() !== "") return oneLine(text).slice(0, 500);
+    // The ask is whatever the turn's last words put to you, so keep the tail: a
+    // long closing message buries it past the first 500 characters.
+    if (text.trim() !== "") return oneLine(text).slice(-500);
   }
   return undefined;
 };

@@ -115,6 +115,10 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   const dialogs = new Map<string, string>();
   let unsubscribeDialogs: (() => void)[] = [];
   let warnedProtocol = false;
+  // Turns started, and the one whose settle the sidecar is reading: its verdict decides
+  // the registry's turn state, so a late one is not read as the turn after it.
+  let turns = 0;
+  let judging = 0;
 
   const ownName = () => entry?.name ?? displayName();
   const ownLabel = () => `${ownName()} [${shortId({ messagingSocketPath: socketPath })}]`;
@@ -424,9 +428,13 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   function onSidecar(data: unknown) {
     const update = data as SidecarUpdate;
     if (!entry || update.sessionId !== entry.sessionId) return;
-    // A settle that lands after the next prompt describes a turn that is over.
-    if (update.moment === "settle" && entry.status !== "busy")
-      void publish({ turnState: update.state ?? "done", ask: update.ask });
+    // The sidecar reads a settled turn a moment later, and the registry says `busy` until
+    // then: a `done` guessed here would make the bar announce one turn end twice.
+    // A verdict that lands after the next prompt describes a turn that is over.
+    if (update.moment === "settle" && judging && judging === turns) {
+      judging = 0;
+      void publish({ status: "idle", turnState: update.state ?? "done", ask: update.ask });
+    }
     // The step is a plan for the turn in flight; a settled turn has none.
     const doing = update.moment === "start" ? update.doing : undefined;
     const summary = update.summary ?? entry.summary;
@@ -513,6 +521,8 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   });
   pi.on("agent_start", async (_event, c) => {
     ctx = c;
+    turns += 1;
+    judging = 0;
     await publish({ status: "busy", turnState: undefined, ask: undefined });
   });
   pi.on("session_info_changed", async (event) => {
@@ -529,12 +539,12 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
     ctx = c;
     if (!entry) return;
     dialogs.clear();
-    // The sidecar may have settled the turn first; otherwise it ended done until it says more.
+    // Busy until the sidecar's reading of the turn arrives; it carries how the turn ended.
+    judging = turns;
     await publish({
-      status: "idle",
+      ...(entry.status === "busy" ? {} : { status: "busy" }),
       doing: undefined,
       waitingFor: undefined,
-      turnState: entry.turnState ?? "done",
     });
     const now = Date.now();
     const due = [...idleSubscribers.values()];
