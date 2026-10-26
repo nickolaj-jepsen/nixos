@@ -571,6 +571,30 @@ true
 
 
 
+## fireproof\.dev\.agent-hub\.enable
+
+
+
+Enable agent-hub, the DMS bar hub for live coding-agent sessions and their permission asks
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.dev\.ai-usage\.enable
 
 
@@ -1273,6 +1297,30 @@ The hostname of the machine
 
 *Type:*
 string
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.janitor\.enable
+
+
+
+Reclaim what agents and dev tools leave behind
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
 
 *Declared by:*
  - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
@@ -2708,8 +2756,6 @@ string
 
 ## fireproof\.username
 
-
-
 The primary username for the machine
 
 
@@ -2763,6 +2809,8 @@ true
 
 
 ## fireproof\.wsl\.enable
+
+
 
 Whether to enable WSL configuration\.
 
