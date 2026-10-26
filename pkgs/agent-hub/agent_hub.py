@@ -20,10 +20,11 @@ A session is `asking` while its registry entry says `status: "waiting"`; Claude
 Code writes that itself, and pi's claude-peers extension does for its dialogs.
 Claude writes it for every open modal, so the ones it names as only showing
 something (the history view, /config) leave the session as it was.
-A finished turn stays `needs-reply`, `failed` or `done` until the next one starts
-or it is dismissed. pi writes how its turn ended into the registry (`turnState`,
-`ask`); a Claude Code turn is read from its transcript, and put to `claude -p`
-under the session's own profile when its words alone don't settle it.
+A `done` turn is read once its window has focus, as if dismissed; `needs-reply`
+and `failed` stay until the next turn starts or they are dismissed. pi writes how
+its turn ended into the registry (`turnState`, `ask`); a Claude Code turn is read
+from its transcript, and put to `claude -p` under the session's own profile when
+its words alone don't settle it.
 """
 
 import argparse
@@ -46,6 +47,8 @@ RETRY = 2.0
 TOAST_GRACE_MS = 1000
 STATE_ORDER = {"asking": 0, "needs-reply": 1, "failed": 2, "done": 3, "working": 4, "idle": 5}
 ATTENTION = ("asking", "needs-reply", "failed", "done")
+# The endings a focus reads, the same ones `x` dismisses; `asking` wants an answer, not a look.
+FINISHED_TURN = ("needs-reply", "failed", "done")
 # Claude marks every open modal `waiting`; one it names this only shows something (the history view, /config).
 SHOWING_DIALOGS = ("dialog open",)
 # How a turn ended (pi's `turnState`, or the classifier's) → the state it leaves the session in.
@@ -100,6 +103,32 @@ def socket_path():
 
 def now_ms():
     return int(time.time() * 1000)
+
+
+def niri_socket():
+    """The compositor's socket: NIRI_SOCKET while it still exists, else the newest
+    niri socket in the runtime dir. A unit started at login beside niri can miss the
+    variable, since niri names its socket after its own pid and imports it later."""
+    configured = os.environ.get("NIRI_SOCKET")
+    if configured and Path(configured).exists():
+        return configured
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")
+    try:
+        sockets = sorted(runtime.glob("niri.*.sock"), key=lambda path: path.stat().st_mtime, reverse=True)
+    except OSError:
+        return None
+    return str(sockets[0]) if sockets else None
+
+
+def niri_env():
+    """The environment `niri msg` needs: it finds its compositor by NIRI_SOCKET alone."""
+    env = dict(os.environ)
+    socket = niri_socket()
+    if socket:
+        env["NIRI_SOCKET"] = socket
+    else:
+        env.pop("NIRI_SOCKET", None)
+    return env
 
 
 def proc_stat(pid):
@@ -334,25 +363,40 @@ class Niri:
         self.on_change = on_change
         self.windows = {}
         self.focused = None
+        # Why the last event stream ended, so a stream that never connects is said once.
+        self.lost = None
 
     async def run(self):
         while True:
+            heard = False
             try:
                 proc = await asyncio.create_subprocess_exec(
                     self.command, "msg", "--json", "event-stream",
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL, limit=LINE_MAX,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL, limit=LINE_MAX, env=niri_env(),
                 )
                 async for line in proc.stdout:
+                    heard = True
                     try:
                         self._event(json.loads(line))
                     except (ValueError, TypeError, KeyError, AttributeError):
                         continue
                 await proc.wait()
-            except OSError:
-                pass
+            except OSError as error:
+                self._lost(f"can't run {self.command}: {error}")
+            # A stream that never reported a window never found the compositor.
+            if heard:
+                self.lost = None
+            else:
+                self._lost(f"no niri event stream (NIRI_SOCKET={niri_socket() or 'unset'})")
             self.windows, self.focused = {}, None
             self.on_change()
             await asyncio.sleep(RETRY)
+
+    def _lost(self, message):
+        """Says why the compositor went missing, once per reason rather than every retry."""
+        if message != self.lost:
+            self.lost = message
+            print(f"agent-hub: {message}", file=sys.stderr)
 
     def _event(self, event):
         before = (dict(self.windows), self.focused)
@@ -381,7 +425,7 @@ class Niri:
     async def focus(self, window):
         proc = await asyncio.create_subprocess_exec(
             self.command, "msg", "action", "focus-window", "--id", str(window),
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL, env=niri_env(),
         )
         await proc.wait()
 
@@ -496,6 +540,10 @@ class Hub:
         self.showing = set()
         # Session id → the hook's label for the dialog it waits on, until its status moves on.
         self.labels = {}
+        # Session ids whose finished turn is still being read, which the bar shows as working.
+        self.judging = {}
+        # Session id → the last settle started, so a slower reading cannot land on a newer turn.
+        self.settles = {}
         saved = self._load()
         # Session id → how its last Claude Code turn ended, until the next one starts.
         self.outcomes = saved.get("outcomes") or {}
@@ -570,11 +618,23 @@ class Hub:
         self.seen = {sid: t for sid, t in self.seen.items() if sid in sessions}
         self.showing = {sid for sid in self.showing if sid in sessions}
         self.labels = {sid: text for sid, text in self.labels.items() if sid in sessions}
+        self.settles = {sid: n for sid, n in self.settles.items() if sid in sessions}
         self.outcomes = {sid: o for sid, o in self.outcomes.items() if sid in sessions}
         self.dismissed = {sid: t for sid, t in self.dismissed.items() if sid in sessions and self.stamps.get(sid) == t}
+        self._seen()
         if (self.outcomes, self.dismissed) != saved:
             self._save()
         self.publish()
+
+    def _seen(self):
+        """A `done` turn whose window has focus has been read, so it reads as dismissed.
+        A turn that asks something, or failed, still wants you after you look at it."""
+        focused = self.niri.focused
+        if focused is None:
+            return
+        for row in self.state()["sessions"]:
+            if row["id"] in self.source.sessions and row["window"] == focused and row["state"] == "done":
+                self.dismissed[row["id"]] = row["since"]
 
     def state(self):
         entries = dict(self.source.sessions)
@@ -590,6 +650,9 @@ class Hub:
                 state = "asking"
             elif status == "busy":
                 state = "working"
+            elif sid in self.judging:
+                state = "working"
+                doing = "reading the turn"
             elif turn and turn.get("jobs"):
                 state = "working"
                 doing = f"waiting on {turn['jobs']} background job" + ("s" if turn["jobs"] > 1 else "")
@@ -643,23 +706,36 @@ class Hub:
         if turn is None:
             return
         outcome = {key: turn[key] for key in ("state", "ask", "summary", "jobs")}
-        self.outcomes[sid] = outcome
-        self._save()
-        self.publish()
+        self.settles[sid] = settling = self.settles.get(sid, 0) + 1
         # Pending jobs always go to the model: only it can tell a turn waiting on them from a server left running.
+        # So does a done-looking one, which can still put a question its last words don't mark.
         if not self.claude or not (turn["pending"] or (turn["worth"] and turn["state"] == "done")):
+            self._finished(sid, outcome)
             return
-        answer = await self._classify(turn, config_dir)
-        # A turn that started meanwhile, or a newer Stop, has the last word.
-        if answer is None or self.outcomes.get(sid) is not outcome:
+        # Read before it is shown: a guess the model then overrules announces the same turn twice.
+        self.judging[sid] = settling
+        self.publish()
+        try:
+            answer = await self._classify(turn, config_dir)
+        finally:
+            if self.judging.get(sid) == settling:
+                del self.judging[sid]
+        # A newer Stop, or a turn that started meanwhile, has the last word.
+        if self.settles.get(sid) != settling:
+            self.publish()
             return
-        waiting = answer["state"] == "waiting"
-        self.outcomes[sid] = {
-            "state": "done" if waiting else answer["state"],
-            "ask": answer["ask"],
-            "summary": answer["summary"] or turn["summary"],
-            "jobs": max(turn["pending"], 1) if waiting else 0,
-        }
+        if answer is not None:
+            waiting = answer["state"] == "waiting"
+            outcome = {
+                "state": "done" if waiting else answer["state"],
+                "ask": answer["ask"],
+                "summary": answer["summary"] or turn["summary"],
+                "jobs": max(turn["pending"], 1) if waiting else 0,
+            }
+        self._finished(sid, outcome)
+
+    def _finished(self, sid, outcome):
+        self.outcomes[sid] = outcome
         self._save()
         self.publish()
 
@@ -705,7 +781,7 @@ class Hub:
     def _toggle(self):
         rows = [r for r in self._last["sessions"] if r["window"] == self.niri.focused] if self._last and self.niri.focused is not None else []
         for row in rows:
-            if row["state"] in ("needs-reply", "failed", "done"):
+            if row["state"] in FINISHED_TURN:
                 self.dismissed[row["id"]] = row["since"]
             elif self.dismissed.get(row["id"]) == row["since"]:
                 del self.dismissed[row["id"]]
@@ -764,7 +840,7 @@ class Hub:
         elif op == "dismiss":
             sid = str(message.get("session") or "")
             row = next((r for r in self._last["sessions"] if r["id"] == sid), None) if self._last else None
-            if row and row["state"] in ("needs-reply", "failed", "done"):
+            if row and row["state"] in FINISHED_TURN:
                 self.dismissed[sid] = row["since"]
                 self._save()
                 self.publish()

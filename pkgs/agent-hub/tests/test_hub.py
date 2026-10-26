@@ -3,6 +3,7 @@ a scripted niri, driven over its socket."""
 
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -16,9 +17,11 @@ HUB = Path(__file__).resolve().parent.parent / "agent_hub.py"
 TIMEOUT = 5
 
 FAKE_NIRI = """#!{python}
-import sys
+import os, sys
 args = sys.argv[1:]
 if "event-stream" in args:
+    with open({sockets!r}, "a") as log:
+        log.write(str(os.environ.get("NIRI_SOCKET")) + "\\n")
     with open({fifo!r}) as events:
         for line in events:
             print(line, end="", flush=True)
@@ -96,8 +99,11 @@ class Hub:
         # Read-write so neither side blocks on open, and the stream outlives a reader.
         self.niri_events = os.open(fifo, os.O_RDWR)
         self.focus_log = self.tmp / "focus.log"
+        self.socket_log = self.tmp / "niri-socket.log"
         niri = self.tmp / "niri"
-        niri.write_text(FAKE_NIRI.format(python=sys.executable, fifo=str(fifo), log=str(self.focus_log)))
+        niri.write_text(
+            FAKE_NIRI.format(python=sys.executable, fifo=str(fifo), log=str(self.focus_log), sockets=str(self.socket_log))
+        )
         niri.chmod(0o755)
         self.toast_log = self.tmp / "toasts.log"
         self.close_log = self.tmp / "close.log"
@@ -125,21 +131,31 @@ class Hub:
         self.socket = runtime / "agent-hub" / "hub.sock"
         self.env = dict(os.environ, XDG_RUNTIME_DIR=str(runtime), AGENT_HUB_CONFIG=str(config))
         self.env.pop("CLAUDE_CONFIG_DIR", None)
+        # The compositor's socket is discovered, not inherited, so keep the runner's out of it.
+        self.env.pop("NIRI_SOCKET", None)
         self.processes = []
         self.clients = []
         self.start()
 
     def start(self):
-        self.daemon = subprocess.Popen([sys.executable, str(HUB), "daemon"], env=self.env)
+        # Its own process group, so a restart reaps the fake niri with it: an orphan
+        # would keep reading the event fifo behind the next daemon's back.
+        self.daemon = subprocess.Popen([sys.executable, str(HUB), "daemon"], env=self.env, start_new_session=True)
         deadline = time.monotonic() + TIMEOUT
         while not self.socket.exists():
             if time.monotonic() > deadline or self.daemon.poll() is not None:
                 raise RuntimeError("hub did not start")
             time.sleep(0.02)
 
-    def restart(self):
-        self.daemon.kill()
+    def kill(self):
+        try:
+            os.killpg(self.daemon.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         self.daemon.wait()
+
+    def restart(self):
+        self.kill()
         self.socket.unlink()
         self.start()
 
@@ -188,8 +204,7 @@ class Hub:
         for proc in self.processes:
             proc.kill()
             proc.wait()
-        self.daemon.kill()
-        self.daemon.wait()
+        self.kill()
         os.close(self.niri_events)
 
 
@@ -289,6 +304,15 @@ class TurnTest(HubTest):
         self.bar = self.hub.subscribe()
         self.hub.write_session(self.proc.pid, self.sid, status="busy")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["window"] == self.window))
+        self.canaries = 0
+
+    def focused_row(self, window):
+        """This session's row, read off a canary write that makes the hub publish."""
+        self.hub.niri({"WindowFocusChanged": {"id": window}})
+        self.canaries += 1
+        canary = self.hub.process()
+        self.hub.write_session(canary.pid, "canary", status="busy", since=int(time.time() * 1000) + self.canaries)
+        return session(self.bar.wait(has_session("canary")), self.sid)
 
     def test_pi_turn_leaves_the_state_its_sidecar_reported(self):
         self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="blocked", ask="keep the fixture?")
@@ -296,12 +320,21 @@ class TurnTest(HubTest):
         self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="failed")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed"))
 
-    def test_finished_turn_stays_done_while_watched_until_the_next_turn(self):
+    def test_a_finished_turn_whose_window_has_focus_is_read_and_the_next_one_announces(self):
         self.hub.niri({"WindowFocusChanged": {"id": self.window}})
         self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="done")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+        # Looking at it reads the ending, so the row goes idle without a dismissal.
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        self.assertFalse(self.hub.toast_log.exists())
         self.hub.write_session(self.proc.pid, self.sid, status="busy")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+
+    def test_a_finished_turn_under_another_window_stays_until_it_is_read(self):
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="done")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+        self.hub.niri({"WindowFocusChanged": {"id": 8}})
+        self.hub.niri({"WindowFocusChanged": {"id": self.window}})
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
 
     def test_dismissed_turn_is_idle_until_the_next_one_finishes(self):
         self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="done")
@@ -311,6 +344,17 @@ class TurnTest(HubTest):
         self.hub.write_session(self.proc.pid, self.sid, status="busy")
         self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="done", since=int(time.time() * 1000) + 1)
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+
+    def test_a_turn_that_asks_still_wants_you_when_its_window_is_focused(self):
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="blocked", ask="keep the fixture?")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        row = self.focused_row(self.window)
+        self.assertEqual((row["state"], row["ask"]), ("needs-reply", "keep the fixture?"))
+
+    def test_a_failed_turn_still_wants_you_when_its_window_is_focused(self):
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="failed")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed"))
+        self.assertEqual(self.focused_row(self.window)["state"], "failed")
 
     def test_toggle_dismisses_and_brings_back_the_focused_sessions_turn(self):
         self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="failed")
@@ -383,6 +427,23 @@ class ClaudeTurnTest(HubTest):
         self.stop([prompt("rebase it"), said("Rebased onto main.\n\nWant me to push?")])
         state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push?"))
         self.assertEqual(session(state, self.sid)["summary"], "Rebased onto main.")
+
+    def test_a_turn_is_read_before_it_shows_and_is_working_meanwhile(self):
+        # A guess read off the turn's words would show `done` first, then the model's verdict
+        # overrules it, announcing one turn end twice.
+        self.hub.claude_answer.write_text("state: blocked\nask: keep the old fixture?\nsummary: Regenerated the fixture.\n")
+        bar = self.hub.subscribe()
+        self.stop([prompt("regenerate the fixture"), *ran(), said("Regenerated; the build is green.")])
+        states = []
+        while True:
+            message = bar.recv()
+            if message["type"] != "state" or (row := session(message, self.sid)) is None:
+                continue
+            states.append(row["state"])
+            if row["state"] == "needs-reply":
+                break
+        self.assertEqual(states[-2:], ["working", "needs-reply"])
+        self.assertEqual(logged(self.hub.toast_log)[0][-2:], ["demo asks", "keep the old fixture?"])
 
     def test_turn_is_the_registered_sessions_after_a_clear_left_the_hook_an_old_id(self):
         self.stop([prompt("rebase it"), said("Want me to push?")], session_id="before-clear", CLAUDE_PID=str(self.proc.pid))
@@ -487,6 +548,34 @@ class WaitingTest(HubTest):
         self.hub.write_session(canary.pid, "canary", status="busy")
         row = session(self.bar.wait(has_session("canary")), self.sid)
         self.assertEqual(row["state"], "working")
+
+
+class NiriTest(HubTest):
+    """The compositor's socket name carries niri's pid, so a hub started beside it can
+    come up without NIRI_SOCKET; it has to find the socket itself."""
+
+    def streamed_socket(self, proc):
+        """The socket the daemon's event stream ran with, once it has mapped a window."""
+        bar = self.hub.subscribe()
+        self.hub.niri({"WindowsChanged": {"windows": [{"id": 9, "pid": proc.pid, "is_focused": False}]}})
+        self.hub.write_session(proc.pid, self.sid, status="busy")
+        bar.wait(has_session(self.sid, lambda s: s["window"] == 9))
+        return self.hub.socket_log.read_text().split()[-1]
+
+    def test_finds_the_compositors_socket_without_niri_socket_in_its_environment(self):
+        proc = self.hub.process()
+        socket = self.hub.tmp / "run" / f"niri.wayland-1.{proc.pid}.sock"
+        socket.touch()
+        self.hub.restart()
+        self.assertEqual(self.streamed_socket(proc), str(socket))
+
+    def test_a_socket_left_by_a_compositor_that_restarted_is_not_used(self):
+        proc = self.hub.process()
+        socket = self.hub.tmp / "run" / "niri.wayland-1.999.sock"
+        socket.touch()
+        self.hub.env["NIRI_SOCKET"] = str(self.hub.tmp / "gone.sock")
+        self.hub.restart()
+        self.assertEqual(self.streamed_socket(proc), str(socket))
 
 
 class OrderTest(HubTest):

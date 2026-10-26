@@ -17,8 +17,9 @@ The bar never answers anything: you answer in the agent's own terminal.
 
 ## States
 
-In the order the popout lists them. The first four want you; looking at a
-session never clears one, only its next turn or `x` does.
+In the order the popout lists them. The first four want you. Focusing the
+window of a `done` one reads it, as `x` does. `needs-reply` and `failed` stay
+until you answer, dismiss them, or their next turn starts.
 
 - **asking**: a dialog is open that wants an answer. Its entry in the session
   registry (`~/.claude/sessions`) says `status: "waiting"`. Claude Code writes
@@ -37,8 +38,10 @@ session never clears one, only its next turn or `x` does.
   turn that looks done, or one that left background jobs running, goes to
   `claude -p --model haiku` as the session's own profile (`CLAUDE_CONFIG_DIR`),
   so a `claude-work` transcript stays on the work account.
-- **working**: busy, or a Claude Code turn that ended only to wait for its own
-  background jobs. A dev server it left running for you doesn't count.
+- **working**: busy, a Claude Code turn that ended only to wait for its own
+  background jobs, or a finished turn the hub is still reading (it asks
+  `claude -p` before it shows the ending). A dev server it left running for you
+  doesn't count.
 - **idle**: fresh, or dismissed.
 
 Finished turns and dismissals live in `~/.local/state/agent-hub/state.json`, so
