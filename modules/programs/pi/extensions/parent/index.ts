@@ -14,6 +14,7 @@ import condense from "./condense.ts";
 import cost from "./cost.ts";
 import gutter from "./gutter.ts";
 import modelLabels from "./model-labels.ts";
+import questions from "./questions.ts";
 import notify from "./notify.ts";
 import { createServices, type Services } from "./services.ts";
 import spellfix from "./spellfix.ts";
@@ -32,6 +33,7 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["cost", cost],
   ["gutter", gutter],
   ["model-labels", modelLabels],
+  ["questions", questions],
   ["notify", notify],
   ["spellfix", spellfix],
   ["stash", stash],

@@ -442,16 +442,6 @@ in {
         ];
       };
 
-      home.file.".config/rpiv-ask-user-question/config.json".text = builtins.toJSON {
-        guidance = {
-          description = ''Ask the user 1-4 structured questions, 2-4 options each, and wait for the answers. A "Type something." row and Esc are added to every question; never author "Other" or "Type something." options. Put a recommended option first and end its label with "(Recommended)". An option's `preview` (markdown in a side pane, single-select only) compares concrete artifacts: mockups, code, diagrams, configs; skip it for plain preferences.'';
-          promptGuidelines = [
-            "Use ask_user_question when the request is underspecified and you cannot proceed without a decision; put every question in one call instead of several in a row."
-            "Option labels are 1-5 words and at most 60 characters, headers at most 16; longer ones are rejected."
-          ];
-        };
-      };
-
       home.file.".pi/agent/subagents.json".text = builtins.toJSON {
         midRunUpdates = false;
         excludedExtensionPackages = childExcludedPackages;
