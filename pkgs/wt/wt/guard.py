@@ -7,7 +7,7 @@ import os
 import re
 from typing import Optional
 
-from .git import is_within, normpath
+from .git import git, is_within, normpath
 from .repo import worktree_root
 
 
@@ -152,12 +152,50 @@ def guard_command(command: str) -> tuple[bool, str]:
                         index = cursor
                         at_start = False
                         continue
+                if cursor < len(tokens) and tokens[cursor] in ("switch", "checkout"):
+                    end = cursor + 1
+                    while end < len(tokens) and tokens[end] != "__SEP__":
+                        end += 1
+                    reason = branch_switch_reason(tokens[cursor], tokens[cursor + 1 : end], invocation_cwd)
+                    if reason:
+                        return True, reason
                 index = cursor
                 at_start = False
                 continue
             at_start = False
         index += 1
     return False, ""
+
+
+# `git checkout` flags that move HEAD off the worktree's branch.
+CHECKOUT_SWITCH_FLAGS = {"-b", "-B", "--orphan", "--detach"}
+
+
+def branch_switch_reason(verb: str, args: list[str], cwd: Optional[str]) -> str:
+    """Why `git <verb> <args>` run in `cwd` is refused, or "" when it is not a branch switch inside a wt worktree."""
+    if cwd is None or "-h" in args or "--help" in args:
+        return ""
+    flagged = bool(CHECKOUT_SWITCH_FLAGS.intersection(args)) or "-" in args
+    positional = [arg for arg in args if not arg.startswith("-")]
+    if verb == "checkout" and ("--" in args or (not flagged and len(positional) != 1)):
+        return ""
+    root = os.path.realpath(worktree_root())
+    top = git(cwd, "rev-parse", "--show-toplevel", check=False).strip()
+    if not top or not is_within(os.path.realpath(top), root) or os.path.realpath(top) == root:
+        return ""
+    if verb == "checkout" and not flagged:
+        # A lone argument is a branch or a path; only a branch moves HEAD.
+        name = positional[0]
+        if not git(top, "for-each-ref", "--count=1", f"refs/heads/{name}", f"refs/remotes/*/{name}", check=False).strip():
+            return ""
+    branch = git(top, "branch", "--show-current", check=False).strip() or "<branch>"
+    return (
+        f"Blocked: switching branches inside the worktree {top}, which holds '{branch}'.\n"
+        f"A worktree's branch is its name, and wt finds worktrees by name, so the folder\n"
+        f"would keep naming '{branch}' while holding another. A new branch gets its own worktree:\n"
+        f"  wt create <name> {branch}   # stacked on this branch; leave it off for the default branch\n"
+        f"then move the session into it. Restoring files (`git checkout -- <path>`, `git restore`) is fine."
+    )
 
 
 def guard_reason(path: str, branch: str, *, dynamic: bool = False) -> str:

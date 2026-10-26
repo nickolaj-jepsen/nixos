@@ -53,7 +53,8 @@
       }
     ];
 
-    # A PreToolUse hook that refuses `git worktree add` outside ~/worktrees/<repo>/.
+    # A PreToolUse hook that refuses `git worktree add` outside ~/worktrees/<repo>/,
+    # and branch switches inside a worktree there.
     # The layout and the check live in `wt guard`, so pi and opencode enforce the
     # same rule; this only adds Claude's hook contract around it.
     worktreeGuard = pkgs.writeShellApplication {
@@ -213,6 +214,10 @@
         becomes its branch; `path` for an existing one) and leave with `ExitWorktree`.
         They create through `wt create`, which in Bash would not move the session; for
         another base, run `wt create <name> <base>`, then `EnterWorktree` with its path.
+      - From inside a worktree, `EnterWorktree` takes neither `name` nor a `wt` path:
+        `ExitWorktree` with `keep` first, then enter the other one.
+      - A worktree's branch is its name: never `git switch` or `git checkout -b` inside
+        one. A new branch gets a new worktree.
       - Removing goes through `wt remove`, so `ExitWorktree` with `discard_changes: true`
         still refuses dirty or unlanded work and keeps the worktree; tell the user then.
     '';

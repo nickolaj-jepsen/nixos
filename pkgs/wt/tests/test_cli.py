@@ -208,6 +208,43 @@ class Fixture(unittest.TestCase):
         self.assertIn("inside worktree 'self'", result.stderr)
         self.assertTrue(path.exists())
 
+    def test_remove_drops_a_stacked_worktree_with_nothing_of_its_own(self) -> None:
+        base = self.create("base")
+        Path(base, "b.txt").write_text("work\n")
+        self.commit("work", cwd=str(base))
+        stacked = Path(self.wt("create", "stacked", "base").stdout.strip())
+        self.wt("remove", "stacked")
+        self.assertFalse(stacked.exists())
+        self.assertTrue(base.exists())
+
+    def test_remove_keeps_a_stacked_worktree_with_its_own_commit(self) -> None:
+        self.create("base")
+        stacked = Path(self.wt("create", "stacked", "base").stdout.strip())
+        Path(stacked, "c.txt").write_text("more\n")
+        self.commit("more", cwd=str(stacked))
+        result = self.wt("remove", "stacked", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(stacked.exists())
+
+    def test_a_pushed_branch_is_not_held_by_its_own_remote(self) -> None:
+        path = self.create("pushed")
+        Path(path, "b.txt").write_text("work\n")
+        self.commit("work", cwd=str(path))
+        self.git("update-ref", "refs/remotes/origin/pushed", "pushed")
+        result = self.wt("remove", "pushed", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(path.exists())
+
+    def test_clean_keeps_one_of_two_worktrees_on_the_same_unlanded_commit(self) -> None:
+        first = self.create("first")
+        Path(first, "b.txt").write_text("work\n")
+        self.commit("work", cwd=str(first))
+        commit = self.git("rev-parse", "first").strip()
+        second = Path(self.wt("create", "second", "first").stdout.strip())
+        self.wt("clean")
+        self.assertEqual(first.exists() + second.exists(), 1)
+        self.assertNotEqual(self.git("branch", "--contains", commit).strip(), "")
+
     def test_clean_skips_the_worktree_it_is_run_from(self) -> None:
         path = self.create("self")
         Path(path, "note.txt").write_text("landed\n")
@@ -320,6 +357,25 @@ class Fixture(unittest.TestCase):
         landed = self.entry("land-me")
         self.assertTrue(landed["landed"])
         self.assertEqual(landed["ahead"], 0)
+
+    def test_land_by_folder_refuses_a_folder_holding_another_branch(self) -> None:
+        path = self.create("folder")
+        self.git("switch", "-qc", "other", cwd=str(path))
+        self.write("b.txt", "work\n", cwd=str(path))
+        self.commit("work", cwd=str(path))
+        result = self.wt("land", "folder", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("wt land other", result.stderr)
+        self.assertEqual(self.git("log", "--oneline", "-1").strip().split(" ", 1)[1], "base")
+        self.wt("land", "other")
+        self.assertEqual(self.git("log", "--oneline", "-1").strip().split(" ", 1)[1], "work")
+
+    def test_land_takes_the_folder_name_of_a_slashed_branch(self) -> None:
+        path = Path(self.wt("create", "feat/x").stdout.strip())
+        self.write("b.txt", "work\n", cwd=str(path))
+        self.commit("work", cwd=str(path))
+        self.wt("land", "feat-x")
+        self.assertEqual(self.git("log", "--oneline", "-1").strip().split(" ", 1)[1], "work")
 
     def test_land_conflict_pauses_and_abort_restores(self) -> None:
         path = self.create("conflict")
@@ -465,6 +521,33 @@ class Fixture(unittest.TestCase):
             "P=/tmp; git -C $P log --oneline  # worktree",
             f"cd $X && git worktree add {root}/repo/ok -b ok",
         ):
+            with self.subTest(command=command):
+                self.assertEqual(self.wt("guard", command, check=False).returncode, 0)
+
+    def test_guard_blocks_branch_switches_inside_a_worktree(self) -> None:
+        path = self.create("feature")
+        self.git("branch", "spare")
+        blocked = [
+            "git switch -c other",
+            "git switch spare",
+            "git checkout -b other",
+            "git checkout spare",
+            "git checkout -",
+            f"cd {self.main} && git -C {path} switch spare",
+        ]
+        for command in blocked:
+            with self.subTest(command=command):
+                result = self.wt("guard", command, cwd=str(path), check=False)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("feature", result.stdout)
+        allowed = ["git checkout -- a.txt", "git checkout a.txt", "git checkout spare -- a.txt", "git restore a.txt"]
+        for command in allowed:
+            with self.subTest(command=command):
+                self.assertEqual(self.wt("guard", command, cwd=str(path), check=False).returncode, 0)
+
+    def test_guard_lets_the_main_checkout_switch_branches(self) -> None:
+        self.create("feature")
+        for command in ("git switch -c other", "git checkout -b other", f"git -C {self.main} switch -c other"):
             with self.subTest(command=command):
                 self.assertEqual(self.wt("guard", command, check=False).returncode, 0)
 

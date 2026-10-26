@@ -247,10 +247,14 @@ def build_parser() -> argparse.ArgumentParser:
         sub,
         "guard",
         help=None,
-        description="Refuse a `git worktree add` or `git worktree move` that would land outside the shared root.",
+        description=(
+            "Refuse a `git worktree add` or `git worktree move` that would land outside the shared root,\n"
+            "and a `git switch` or branch `git checkout` inside a worktree under it."
+        ),
         epilog=(
             "The agent hooks (pi, Claude Code, opencode) run this on each shell command that\n"
-            "mentions worktrees. It prints why it refused and exits 1, or prints nothing and exits 0."
+            "mentions worktree, switch or checkout. It prints why it refused and exits 1, or prints\n"
+            "nothing and exits 0."
         ),
     )
     guard.add_argument("command")

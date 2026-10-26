@@ -12,7 +12,7 @@ from typing import Optional
 
 from .git import die, git, git_ok, info, is_within, run
 from .repo import Repo, RepoLock, current_repo, registered_worktrees
-from .status import Worktree, busy_pid, describe_pid, gather, resolve_row
+from .status import Worktree, busy_pid, describe_pid, gather, held_elsewhere, resolve_row
 from .trash import archive_orphan, archive_worktree
 from .ui import pick
 
@@ -146,7 +146,7 @@ def _remove_row(repo: Repo, row: Worktree, *, force: bool, ignore_in_use: bool) 
     if not force:
         if row.state != "clean":
             die(f"'{row.name}' has uncommitted changes ({row.state}); commit/stash inside the worktree, or pass --force")
-        if not row.landed:
+        if not row.landed and not held_elsewhere(row.path, row.branch):
             die(f"'{row.name}' has work not on {repo.default}; run 'wt land {row.name}' to keep it, or pass --force")
         run(["git", "-C", repo.main, "worktree", "remove", row.path])
         drop_branch(repo, row.branch)
@@ -173,6 +173,10 @@ def cmd_clean(args: argparse.Namespace) -> None:
                 continue
             if is_within(os.getcwd(), os.path.realpath(row.path)):
                 info(f"skipping {row.name}: it holds this cwd, so run 'wt clean' from {repo.main}")
+                skipped += 1
+                continue
+            # Two worktrees on one unlanded commit each hold the other; once one goes, the other must stay.
+            if not args.dry_run and not row.landed and row.registered and not held_elsewhere(row.path, row.branch):
                 skipped += 1
                 continue
             if args.dry_run:
@@ -391,6 +395,10 @@ def cmd_land(args: argparse.Namespace) -> None:
             die(f"'{row.name}' is detached (no branch to land)")
         if row.branch == repo.default:
             die(f"'{row.name}' is on the default branch — nothing to land")
+        # A name resolves to a folder first, and someone may have switched that folder's branch.
+        named = args.target and args.target != "." and not os.path.isabs(args.target)
+        if named and args.target != row.branch and os.path.basename(args.target) != row.branch.replace("/", "-"):
+            die(f"'{args.target}' holds branch '{row.branch}', not '{args.target}'; run 'wt land {row.branch}' if that is the branch to land")
         if row.state != "clean":
             die(f"'{row.name}' has uncommitted changes ({row.state}); commit or stash inside the worktree first")
         if row.locked:

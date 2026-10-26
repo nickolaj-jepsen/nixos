@@ -122,6 +122,21 @@ def branch_landed(repo: Repo, path: str) -> bool:
     return squash_landed(repo, path)
 
 
+def held_elsewhere(path: str, branch: str) -> bool:
+    """Whether a branch other than `branch`, local or remote, contains HEAD, so dropping `branch` loses no commit.
+
+    A remote branch of the same name doesn't count: a pushed feature branch is still unlanded work.
+    """
+    refs = git(path, "for-each-ref", "--contains", "HEAD", "--format=%(refname)", "refs/heads", "refs/remotes", check=False)
+    for ref in refs.splitlines():
+        if ref.endswith("/HEAD") or ref == f"refs/heads/{branch}":
+            continue
+        if branch and ref.startswith("refs/remotes/") and ref.split("/", 3)[-1] == branch:
+            continue
+        return True
+    return False
+
+
 def squash_landed(repo: Repo, path: str) -> bool:
     default = repo.default
     merge_base = git(path, "merge-base", default, "HEAD", check=False).strip()
@@ -349,7 +364,7 @@ def gather(repo: Repo, *, deep: bool = True) -> list[Worktree]:
             not is_main
             and not locked
             and state == "clean"
-            and landed
+            and (landed or held_elsewhere(path, branch))
             and not busy
         )
         if is_main:

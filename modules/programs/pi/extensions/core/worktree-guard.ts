@@ -1,5 +1,5 @@
 /**
- * Keeps worktrees inside ~/worktrees/<repo>/. The layout and the guard check
+ * Keeps worktrees inside ~/worktrees/<repo>/, each on its own branch. The layout and the guard check
  * live in `wt`, shared with the Claude Code hook and the opencode plugin. The
  * guard blocks instead of rewriting the command, so the model gets the real
  * path back in the reason.
@@ -25,7 +25,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     const command = shellCommand(event.toolName, event.input);
     // Substring test first: spawning wt on every bash call would be waste.
-    if (!command?.includes("worktree")) return;
+    if (!command || !/worktree|switch|checkout/.test(command)) return;
 
     const { status, stdout } = await guard(command, ctx.cwd);
     if (status !== 1) return;
