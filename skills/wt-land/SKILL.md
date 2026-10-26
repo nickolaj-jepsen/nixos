@@ -1,6 +1,6 @@
 ---
 name: wt-land
-description: Take finished work in a git worktree to landed commits — shape the dirty tree into a few commits, run the repo's checks, stop at a gate for review, then land locally with `wt apply` or open a PR (draft, awaiting your review, or merged on green). Use when the user asks to land, ship, finish, merge, or open a PR for the current branch or worktree.
+description: Take finished work in a git worktree to landed commits — shape the dirty tree into a few commits, run the repo's checks, stop at a gate for review, then land locally with `wt land` or open a PR (draft, awaiting your review, or merged on green). Use when the user asks to land, ship, finish, merge, or open a PR for the current branch or worktree.
 disable-model-invocation: true
 argument-hint: "[worktree-or-branch]"
 ---
@@ -9,7 +9,7 @@ argument-hint: "[worktree-or-branch]"
 
 Requires `wt`, `gh` and `python3` (`gh` only for the PR endings). If `wt` is missing, stop and say so: every local ending lands through `wt`.
 
-Local landing is `wt apply`; `pr.py` fetches the default branch, reports remote state, pushes the branch, and opens/watches/merges the PR. It never touches the default branch. Never wrap one in the other, and never hand-write `gh pr merge`: the script re-checks state before merging so the flags can't drift.
+Local landing is `wt land`; `pr.py` fetches the default branch, reports remote state, pushes the branch, and opens/watches/merges the PR. It never touches the default branch. Never wrap one in the other, and never hand-write `gh pr merge`: the script re-checks state before merging so the flags can't drift.
 
 ```bash
 PR="python3 <skill-dir>/scripts/pr.py"   # substitute the absolute path of this skill directory
@@ -18,13 +18,13 @@ $PR status --json                        # everything the gate needs, in one cal
 
 ## Spine
 
-1. **Resolve the target.** No argument means the worktree containing cwd: `git rev-parse --show-toplevel`, then match against `wt status` (JSON, all worktrees of this repository, or one with `wt status <target>`). An argument names a worktree or branch.
-2. **Preflight** from plumbing, never from memory: `wt status <target>`, `wt list`, `git log`, `$PR status --json`. Refuse-and-stop on the entry states below.
+1. **Resolve the target.** No argument means the worktree containing cwd (`wt list --json .`); an argument names a worktree or branch (`wt list --json <target>`).
+2. **Preflight** from plumbing, never from memory: `wt list --json <target>`, `git log`, `$PR status --json`. Refuse-and-stop on the entry states below.
 3. **Shape commits** (see Commits) when the tree is dirty.
 4. **Fold fixups** if any subject starts with `fixup!` or `squash!`: `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <merge-base>`.
 5. **Run the repo's checks** (see Checks).
 6. **Gate** (see Gate). Nothing is landed before the user answers.
-7. **End.** `local`: `wt apply <name>` from the worktree, then rebuild the landed tree. PR endings: `$PR open`, `$PR watch`, `$PR merge`.
+7. **End.** `local`: `wt land <name>` from the worktree; if its rebase picked up new `<default>` commits, re-run the checks on the landed tree. When it names a live process in the checkout it fast-forwarded, tell the session there which paths moved (pi `send_message`, Claude `SendMessage`). PR endings: `$PR open`, `$PR watch`, `$PR merge`.
 8. **Report** what landed, what was left behind, and the cleanup line.
 
 ## Gate
@@ -34,7 +34,7 @@ Print the block, then ask. Use the harness's question tool when it has one (pi `
 ```
 LAND <branch> → <default>
 commits (2)
-  108be2bb feat(wt): let apply land a worktree without deleting it
+  108be2bb fix(wt): keep the worktree after landing
   5c1a2f30 feat(wt): name every verb's preconditions in --help
 diff     8 files, +390 −66
 checks   just fmt ✓ · just build desktop ✓ · just check ✓
@@ -89,21 +89,21 @@ Merging is `gh pr merge --rebase`. Post-merge, report `origin/<default>`'s new s
 
 ## Entry states
 
-Never re-implement a refusal `wt` already makes: `wt apply` is the authority on landing, and its line is reported verbatim.
+Never re-implement a refusal `wt` already makes: `wt land` is the authority on landing, and its line is reported verbatim.
 
-| state                                                                  | behaviour                                                                                                |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| in the primary checkout on the default branch                          | refuse; `/wt-land <name>` targets a worktree. Never commit on the default branch.                        |
-| already landed, nothing dirty (`wt status` → `ahead 0`, `landed true`) | stop: "already on `<default>` as `<sha>`; `cd <primary> && wt clean` removes it once this session exits" |
-| mid-rebase/merge/bisect, or detached HEAD                              | stop with the exact finish-or-abort command                                                              |
-| remote ahead of the branch                                             | stop: "`origin/<branch>` has N commits you don't have"                                                   |
-| history rewritten after a push                                         | ask explicitly about `--force-with-lease`; never silently force                                          |
-| PR already open                                                        | resume: requested changes first, then checks, then merge                                                 |
-| PR merged                                                              | report the merge commit and the pull line; don't merge twice                                             |
-| PR closed unmerged                                                     | stop and ask whether to reopen or drop the branch                                                        |
-| dirty tree with none of it ours                                        | stop: "nothing of yours to commit; N unrelated paths left behind"                                        |
-| `gh` unauthenticated or no remote                                      | offer only `local`, with one line saying why                                                             |
-| nothing new since the last gate                                        | legitimate: re-gate with `no new commits since the last gate`                                            |
+| state                                                                       | behaviour                                                                                                |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| in the primary checkout on the default branch                               | refuse; `/wt-land <name>` targets a worktree. Never commit on the default branch.                        |
+| already landed, nothing dirty (`wt list --json` → `ahead 0`, `landed true`) | stop: "already on `<default>` as `<sha>`; `cd <primary> && wt clean` removes it once this session exits" |
+| mid-rebase/merge/bisect, or detached HEAD                                   | stop with the exact finish-or-abort command                                                              |
+| remote ahead of the branch                                                  | stop: "`origin/<branch>` has N commits you don't have"                                                   |
+| history rewritten after a push                                              | ask explicitly about `--force-with-lease`; never silently force                                          |
+| PR already open                                                             | resume: requested changes first, then checks, then merge                                                 |
+| PR merged                                                                   | report the merge commit and the pull line; don't merge twice                                             |
+| PR closed unmerged                                                          | stop and ask whether to reopen or drop the branch                                                        |
+| dirty tree with none of it ours                                             | stop: "nothing of yours to commit; N unrelated paths left behind"                                        |
+| `gh` unauthenticated or no remote                                           | offer only `local`, with one line saying why                                                             |
+| nothing new since the last gate                                             | legitimate: re-gate with `no new commits since the last gate`                                            |
 
 ## PR body
 
