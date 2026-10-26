@@ -11,6 +11,10 @@
     fireproof.dev.intellij.enable = false;
     fireproof.dev.clickhouse.enable = false;
     fireproof.dev.opencode.enable = false;
+    # Disk is scarce on the phone (~500 MiB together) and these have no use there.
+    fireproof.docker.enable = false;
+    fireproof.dev.tilt.enable = false;
+    fireproof.dev.copilot.enable = false;
   };
 
   nixos = {

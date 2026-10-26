@@ -106,6 +106,8 @@ let
         };
         pi.enable = cascade config.fireproof.dev.enable "Enable the pi coding agent with the lazypi extension roster";
         opencode.enable = cascade config.fireproof.dev.enable "Enable the opencode 2.x coding agent";
+        copilot.enable = cascade config.fireproof.dev.enable "Enable the GitHub Copilot CLI";
+        tilt.enable = cascade config.fireproof.dev.enable "Enable tilt";
         ai-usage.enable = cascade config.fireproof.dev.enable "Enable ai-usage, the agent subscription quota CLI (and its DMS bar widget on desktops)";
         agent-hub.enable = cascade (config.fireproof.dev.enable && config.fireproof.desktop.enable) "Enable agent-hub, the DMS bar hub for live coding-agent sessions and their permission asks";
         llm = {
@@ -133,6 +135,11 @@ let
 
       networkd.enable = lib.mkEnableOption "systemd-networkd wired networking";
       wsl.enable = lib.mkEnableOption "WSL configuration";
+      docker.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Docker engine and CLI (Colima on darwin, which also needs dev.enable); homelab's oci-containers run on it";
+      };
       pocketnix.enable = lib.mkEnableOption "a pocketnix guest: NixOS run by the pocketnix app under Android's AVF";
 
       tailscale = {
