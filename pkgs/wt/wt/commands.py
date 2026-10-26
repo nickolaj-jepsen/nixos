@@ -159,24 +159,44 @@ def _remove_row(repo: Repo, row: Worktree, *, force: bool, ignore_in_use: bool) 
     info(f"archived {row.name} as {trash_id}; restore with: wt restore {trash_id}")
 
 
+def _keep_reasons(repo: Repo, row: Worktree) -> list[str]:
+    """Why `wt clean` leaves this worktree alone; empty when nothing in it would be lost.
+
+    Asks git afresh rather than reading `row.safe_to_remove`, because an earlier removal in
+    the same sweep can have dropped the branch that held this one.
+    """
+    if not row.registered:
+        return [] if row.safe_to_remove else ["orphan directory with files inside"]
+    reasons: list[str] = []
+    if row.branch == repo.default:
+        reasons.append(f"on {repo.default}, the default branch")
+    if row.state != "clean":
+        reasons.append("uncommitted changes" if row.state == "dirty" else f"only {row.state} files")
+    if not row.landed and not held_elsewhere(row.path, row.branch):
+        reasons.append(f"commits not in {repo.default}; run 'wt land {row.name}'")
+    if row.locked:
+        reasons.append("locked")
+    busy = busy_pid(row.path)
+    if busy:
+        reasons.append(f"in use by {describe_pid(busy)}")
+    if is_within(os.getcwd(), os.path.realpath(row.path)):
+        reasons.append(f"holds this cwd; run 'wt clean' from {repo.main}")
+    return reasons
+
+
 def cmd_clean(args: argparse.Namespace) -> None:
     repo = current_repo()
     with RepoLock(repo):
         rows = gather(repo)
         removed = skipped = 0
         for row in rows:
-            if row.is_main or not row.safe_to_remove:
+            # The primary checkout is never a candidate, and saying so on every run is noise.
+            if row.is_main:
                 skipped += 1
                 continue
-            if row.branch == repo.default:
-                skipped += 1
-                continue
-            if is_within(os.getcwd(), os.path.realpath(row.path)):
-                info(f"skipping {row.name}: it holds this cwd, so run 'wt clean' from {repo.main}")
-                skipped += 1
-                continue
-            # Two worktrees on one unlanded commit each hold the other; once one goes, the other must stay.
-            if not args.dry_run and not row.landed and row.registered and not held_elsewhere(row.path, row.branch):
+            reasons = _keep_reasons(repo, row)
+            if reasons:
+                info(f"keeping {row.name}: {'; '.join(reasons)}")
                 skipped += 1
                 continue
             if args.dry_run:

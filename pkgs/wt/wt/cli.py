@@ -160,11 +160,15 @@ def build_parser() -> argparse.ArgumentParser:
             "The primary checkout itself is never touched, nor is a worktree on the default branch.\n"
             "Orphan directories git no longer registers are removed when empty.\n"
             "\n"
+            "Every worktree it keeps is named with the reason: uncommitted changes, commits not in\n"
+            "the default branch, another process inside, locked, or on the default branch. So a\n"
+            "sweep that removes nothing still says what stands in the way.\n"
+            "\n"
             "This is how a landed worktree goes away, since `wt land` keeps it: `wt list` shows\n"
             "LANDED yes, `wt clean` removes it."
         ),
     )
-    clean.add_argument("--dry-run", action="store_true", help="show what would be removed")
+    clean.add_argument("--dry-run", action="store_true", help="show what would be removed, and why the rest stay")
     clean.set_defaults(func=cmd_clean)
 
     remove = _verb(

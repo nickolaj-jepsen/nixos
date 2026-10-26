@@ -188,6 +188,20 @@ class Fixture(unittest.TestCase):
         self.wt("remove", "second-main")
         self.assertFalse(path.exists())
 
+    def test_clean_names_why_each_worktree_stays(self) -> None:
+        self.git("checkout", "-qb", "scratch")
+        self.git("worktree", "add", str(Path(self.env["WT_WORKTREE_ROOT"]) / "repo" / "second-main"), "main")
+        dirty = self.create("dirty")
+        Path(dirty, "a.txt").write_text("changed\n")
+        unlanded = self.create("unlanded")
+        Path(unlanded, "b.txt").write_text("work\n")
+        self.commit("work", cwd=str(unlanded))
+        stderr = self.wt("clean").stderr
+        self.assertIn(f"keeping {Path(unlanded).name}: commits not in main", stderr)
+        self.assertIn(f"keeping {Path(dirty).name}: uncommitted changes", stderr)
+        self.assertIn("keeping second-main: on main", stderr)
+        self.assertIn("removed 0, 4 left", stderr)
+
     def test_remove_refuses_dirty_without_force(self) -> None:
         path = self.create("dirty")
         Path(path, "a.txt").write_text("changed\n")
