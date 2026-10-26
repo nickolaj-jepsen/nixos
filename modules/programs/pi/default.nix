@@ -571,6 +571,19 @@ in {
             "gh pr review *" = "ask";
             "gh issue create *" = "ask";
             "gh issue comment *" = "ask";
+            # Scaleway: ao-prod carries the same full-access user key as ao-dev, so
+            # the profile name and the destructive verbs are the only local gate.
+            # SCW_PROFILE= is stripped as an assignment prefix, so an exported
+            # profile is not caught here; -p/--profile is.
+            "*ao-prod*" = "ask";
+            "*b2c-production*" = "ask";
+            "scw * delete*" = "ask";
+            "scw * terminate*" = "ask";
+            "scw * poweroff*" = "ask";
+            "scw * reboot*" = "ask";
+            # Print the plaintext key into the transcript, sidestepping the path deny.
+            "scw config get secret-key*" = "deny";
+            "scw config dump*" = "deny";
           };
         };
       };

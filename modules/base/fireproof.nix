@@ -99,6 +99,7 @@ let
         intellij.enable = cascade config.fireproof.dev.enable "Enable IntelliJ-based IDEs";
         clickhouse.enable = cascade config.fireproof.dev.enable "Enable Clickhouse";
         k8s.enable = cascade (config.fireproof.dev.enable && config.fireproof.work.enable) "Enable kubectl and the AO kube configs";
+        scaleway.enable = cascade (config.fireproof.dev.enable && config.fireproof.work.enable) "Enable the Scaleway CLI (scw) and its b2c-devenv/b2c-production profiles";
         mcp = {
           enable = cascade config.fireproof.dev.enable "Enable MCP servers";
           homelab.enable = cascade config.fireproof.dev.mcp.enable "Enable the homelab Grafana MCP server and its token secret";

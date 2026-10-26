@@ -472,6 +472,14 @@
             "Bash(gh pr review:*)"
             "Bash(gh issue create:*)"
             "Bash(gh issue comment:*)"
+            # Scaleway: ao-prod is not read-only (same full-access user key as
+            # ao-dev), so the profile name carries the whole warning.
+            "Bash(*ao-prod*)"
+            "Bash(*b2c-production*)"
+            "Bash(scw * delete*)"
+            "Bash(scw * terminate *)"
+            "Bash(scw * poweroff *)"
+            "Bash(scw * reboot *)"
           ];
           # Read rules cover the file tools only — Bash can still cat these. agenix
           # decrypts to /run, and the ~/.ssh keys are symlinks into it.
@@ -482,6 +490,11 @@
             "Read(~/.claude/.credentials.json)"
             "Read(~/.claude-work/.credentials.json)"
             "Read(**/.env)"
+            # Holds both Scaleway key pairs; pi denies this path via age.secrets.
+            "Read(~/.config/scw/config.yaml)"
+            # Print the plaintext key into the transcript, sidestepping the Read deny.
+            "Bash(scw config get secret-key)"
+            "Bash(scw config dump)"
           ];
         };
       };
