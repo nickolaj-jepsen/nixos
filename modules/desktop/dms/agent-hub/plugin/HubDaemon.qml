@@ -20,6 +20,13 @@ Item {
         });
     }
 
+    function dismiss(sessionId) {
+        socket.send({
+            "op": "dismiss",
+            "session": sessionId
+        });
+    }
+
     function handle(line) {
         let message;
         try {

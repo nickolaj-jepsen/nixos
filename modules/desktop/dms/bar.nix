@@ -52,20 +52,21 @@
 
         screenPreferences = [{name = primaryMonitor.name or "";}];
         showOnLastDisplay = true;
-        leftWidgets = [
-          "launcherButton"
-          "clock"
-          "workspaceSwitcher"
-          "dankActions:variant_ndw"
-          "runningApps"
-        ];
+        leftWidgets =
+          [
+            "launcherButton"
+            "clock"
+            "workspaceSwitcher"
+            "dankActions:variant_ndw"
+          ]
+          ++ lib.optional config.fireproof.dev.agent-hub.enable "agentHub"
+          ++ ["runningApps"];
         centerWidgets = ["focusedWindow"];
         rightWidgets =
           [
             "music"
             "systemTray"
           ]
-          ++ lib.optional config.fireproof.dev.agent-hub.enable "agentHub"
           ++ lib.optional config.fireproof.dev.ai-usage.enable "aiUsage"
           ++ [
             "cpuUsage"

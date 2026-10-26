@@ -1,30 +1,42 @@
 # agent-hub
 
 A desktop overview of every live pi and Claude Code session, and a quick way
-to the ones stuck on you. The DMS bar shows a dot per session that needs you,
-has finished a turn you haven't looked at, or is working.
+to the ones that want you. The DMS bar shows a dot per session that isn't idle.
 
 - `Mod+B` opens the popout with the longest-waiting session selected; `Enter`
-  (or a click) focuses its window, `j`/`k` move.
+  (or a click) focuses its window, `x` dismisses a finished one, `j`/`k` move
+  and `g`/`G` jump to the ends. Idle sessions are listed too, dimmed, last.
 - `Mod+Shift+B` (`agent-hub focus-next`) jumps straight to the next session that
   wants you, cycling on repeat.
-- A toast fires when a session you aren't looking at starts waiting or ends its
-  turn; clicking it focuses the session.
+- A toast fires when a session you aren't looking at comes to want you;
+  clicking it focuses the session.
 
 The bar never answers anything: you answer in the agent's own terminal.
 
-## Where "needs you" comes from
+## States
 
-The session registry alone (`~/.claude/sessions`). A session needs you while
-its entry says `status: "waiting"`:
+In the order the popout lists them. The first four want you; looking at a
+session never clears one, only its next turn or `x` does.
 
-- Claude Code writes that itself for any dialog, with a generic `waitingFor`
-  ("permission prompt", "input needed", ...). Its `PermissionRequest` hook
-  (`agent-hub hook`, set in `modules/programs/claude-code/default.nix`) sends
-  the daemon a one-line label of the call; the daemon shows it until the
-  session's status moves on.
-- pi's `claude-peers` extension writes it, with the label, while
-  pi-permission-system has a dialog open.
+- **asking**: a dialog is open. Its entry in the session registry
+  (`~/.claude/sessions`) says `status: "waiting"`. Claude Code writes that
+  itself with a generic `waitingFor`; its `PermissionRequest` hook (`agent-hub
+hook`, set in `modules/programs/claude-code/default.nix`) sends the daemon a
+  one-line label of the call. pi's `claude-peers` extension writes it, with the
+  label, while pi-permission-system has a dialog open.
+- **needs reply**, **failed**, **done**: how the last turn ended. pi's sidecar
+  already judges every turn, and `claude-peers` writes its verdict into the
+  registry (`turnState`, `ask`). Claude Code's `Stop` hook hands the daemon the
+  transcript instead: a question in the turn's last words is an ask, and a long
+  turn that looks done, or one that left background jobs running, goes to
+  `claude -p --model haiku` as the session's own profile (`CLAUDE_CONFIG_DIR`),
+  so a `claude-work` transcript stays on the work account.
+- **working**: busy, or a Claude Code turn that ended only to wait for its own
+  background jobs. A dev server it left running for you doesn't count.
+- **idle**: fresh, or dismissed.
+
+Finished turns and dismissals live in `~/.local/state/agent-hub/state.json`, so
+a daemon restart keeps them.
 
 ## Pieces
 
@@ -35,6 +47,10 @@ its entry says `status: "waiting"`:
 - `modules/desktop/dms/agent-hub/`, the bar plugin. One socket subscription
   lives in its daemon component, which every bar's widget shares.
 - `modules/programs/pi/extensions/parent/claude-peers.ts`, pi's registry entry.
+
+Claude Code can park a conversation in a background job under its daemon (the
+front's entry gets `parkedJobId`); the daemon shows the job's entry in the
+front's place, under the front's window.
 
 ## Limits
 
