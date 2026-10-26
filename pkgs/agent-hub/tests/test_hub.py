@@ -208,6 +208,27 @@ class SessionTest(HubTest):
         state = bar.wait(has_session(self.sid))
         self.assertIsNone(session(state, "headless"))
 
+    def test_parked_session_shows_its_bg_jobs_state_under_the_fronts_window(self):
+        front, job = self.hub.process(), self.hub.process()
+        self.hub.niri({"WindowsChanged": {"windows": [{"id": 7, "pid": front.pid, "is_focused": False}]}})
+        bar = self.hub.subscribe()
+        self.hub.write_session(job.pid, self.sid, status="busy", kind="bg", jobId="job1", name="live")
+        self.hub.write_session(front.pid, "front", status="idle", parkedJobId="job1")
+        state = bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["window"] == 7))
+        self.assertEqual(session(state, self.sid)["name"], "live")
+        self.assertIsNone(session(state, "front"))
+        job.kill()
+        job.wait()
+        bar.wait(has_session("front", lambda s: s["state"] == "idle"))
+
+    def test_unparked_bg_jobs_are_not_shown(self):
+        bar = self.hub.subscribe()
+        job, shown = self.hub.process(), self.hub.process()
+        self.hub.write_session(job.pid, "job", kind="bg", jobId="job1")
+        self.hub.write_session(shown.pid, self.sid)
+        state = bar.wait(has_session(self.sid))
+        self.assertIsNone(session(state, "job"))
+
     def test_entry_of_a_dead_process_is_ignored(self):
         bar = self.hub.subscribe()
         proc = self.hub.process()

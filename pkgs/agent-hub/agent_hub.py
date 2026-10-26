@@ -138,15 +138,29 @@ class RegistrySource:
 
     def _rescan(self):
         self._pending = None
-        found = {}
+        fronts, jobs = [], {}
         for path in self.directory.glob("*.json"):
             try:
                 entry = json.loads(path.read_text())
             except (OSError, ValueError):
                 continue
-            if isinstance(entry, dict) and entry.get("kind") == "interactive" and entry.get("sessionId") and alive(entry):
-                found[str(entry["sessionId"])] = entry
-        self._watch_pids({entry["pid"] for entry in found.values()})
+            if not (isinstance(entry, dict) and entry.get("sessionId") and alive(entry)):
+                continue
+            if entry.get("kind") == "interactive":
+                fronts.append(entry)
+            elif entry.get("kind") == "bg" and entry.get("jobId"):
+                jobs[entry["jobId"]] = entry
+        found, pids = {}, set()
+        for entry in fronts:
+            pids.add(entry["pid"])
+            # Claude Code can park a conversation in a bg job that lives on under its daemon; the
+            # front's own entry goes stale, so the job speaks for it and the front keeps the window.
+            job = jobs.get(entry.get("parkedJobId"))
+            if job:
+                pids.add(job["pid"])
+                entry = {**job, "pid": entry["pid"]}
+            found[str(entry["sessionId"])] = entry
+        self._watch_pids(pids)
         if found != self.sessions:
             self.sessions = found
             self.on_change()
