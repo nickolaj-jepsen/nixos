@@ -392,6 +392,19 @@ in {
       # claims moves, even the picker-only alt+s saves and the /tree filters.
       home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
         "$schema" = "https://pi.dev/schemas/keybindings.schema.json";
+        # Where pi and Claude Code share an action, the key follows Claude Code.
+        # What it has no equivalent for stays out: chords (ctrl+x enter),
+        # ctrl+b, ctrl+e and ctrl+l.
+        # Claude Code's interrupt. pi's clear-editor and its second press to exit
+        # give way; ctrl+d still exits, and esc still interrupts. Its copy key is
+        # absent on purpose: ghostty binds ctrl+shift+c to copy_to_clipboard, so
+        # pi never sees it, and ctrl+c is now the interrupt.
+        "app.interrupt" = ["escape" "ctrl+c"];
+        "app.clear" = [];
+        # Claude Code's select:previous/next, minus its plain j/k: those are read
+        # before a picker's search field, which would stop accepting them.
+        "tui.select.up" = ["up" "ctrl+p"];
+        "tui.select.down" = ["down" "ctrl+n"];
         # Reserved keys block an extension's, so the stock picker holds none.
         "app.model.select" = [];
         # Drops WSL's alt+p default, which would win over the picker.
@@ -402,8 +415,11 @@ in {
         "app.models.save" = "alt+s";
         "app.tree.filter.noTools" = [];
         "app.tree.filter.labeledOnly" = [];
-        "tui.altScreen.halfPageUp" = "alt+pageUp";
-        "tui.altScreen.halfPageDown" = "alt+pageDown";
+        # Claude Code pages half a viewport; a full page keeps the ctrl pair.
+        "tui.altScreen.halfPageUp" = ["pageUp" "alt+pageUp"];
+        "tui.altScreen.halfPageDown" = ["pageDown" "alt+pageDown"];
+        "tui.altScreen.pageUp" = "ctrl+pageUp";
+        "tui.altScreen.pageDown" = "ctrl+pageDown";
         "tui.altScreen.lineUp" = "alt+shift+up";
         "tui.altScreen.lineDown" = "alt+shift+down";
         # A list replaces the default; the scrolling pill advertises alt+end.
