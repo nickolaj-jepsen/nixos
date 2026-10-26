@@ -395,12 +395,13 @@ in {
         # Where pi and Claude Code share an action, the key follows Claude Code.
         # What it has no equivalent for stays out: chords (ctrl+x enter),
         # ctrl+b, ctrl+e and ctrl+l.
-        # Claude Code's interrupt. pi's clear-editor and its second press to exit
-        # give way; ctrl+d still exits, and esc still interrupts. Its copy key is
-        # absent on purpose: ghostty binds ctrl+shift+c to copy_to_clipboard, so
-        # pi never sees it, and ctrl+c is now the interrupt.
-        "app.interrupt" = ["escape" "ctrl+c"];
-        "app.clear" = [];
+        # ctrl+c stays pi's clear-editor, and its second press within 500ms exits.
+        # It cannot also interrupt: the editor checks app.interrupt first, and two
+        # interrupts on an empty editor are the double-escape gesture (the tree).
+        # Claude Code's copy key is absent on purpose: ghostty binds ctrl+shift+c
+        # to copy_to_clipboard, so pi never sees it.
+        "app.interrupt" = "escape";
+        "app.clear" = "ctrl+c";
         # Claude Code's select:previous/next, minus its plain j/k: those are read
         # before a picker's search field, which would stop accepting them.
         "tui.select.up" = ["up" "ctrl+p"];
