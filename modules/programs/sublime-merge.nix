@@ -68,6 +68,56 @@
       '';
     };
 
+    # The folder half of pi's /open: hand a directory to the desktop apps this
+    # host actually has, or put its path on the clipboard. The same argv rule as
+    # sm-agent applies, and each binary comes from the store so the GUI process
+    # needs no PATH of its own.
+    openLauncher = let
+      fileManagerCmd =
+        if pkgs.stdenv.isDarwin
+        then ''exec open "$dir"''
+        else ''exec xdg-open "$dir"'';
+      terminalCmd =
+        if pkgs.stdenv.isDarwin
+        then ''exec open -na Ghostty --args --working-directory="$dir"''
+        else ''exec ghostty --working-directory="$dir"'';
+      copyCmd =
+        if pkgs.stdenv.isDarwin
+        then ''printf '%s' "$dir" | pbcopy''
+        else ''printf '%s' "$dir" | wl-copy'';
+    in
+      pkgs.writeShellApplication {
+        name = "sm-open";
+        runtimeInputs =
+          lib.optional config.programs.vscode.enable config.programs.vscode.package
+          ++ lib.optionals (!pkgs.stdenv.isDarwin) [
+            config.programs.ghostty.package
+            pkgs.xdg-utils
+            pkgs.wl-clipboard
+          ];
+        text = ''
+          # sm-open <code|files|ghostty|path> <dir>
+          app=''${1:?app}
+          dir=''${2:-.}
+
+          # An unsubstituted "$dir" from a menu, or "." from a palette command,
+          # falls back to the repo the command runs in.
+          if [ -d "$dir" ]; then
+            dir=$(cd "$dir" && pwd)
+          else
+            dir=$PWD
+          fi
+
+          case $app in
+            code) exec code "$dir" ;;
+            ghostty) ${terminalCmd} ;;
+            files) ${fileManagerCmd} ;;
+            path) ${copyCmd} ;;
+            *) echo "sm-open: unknown app '$app'" >&2; exit 2 ;;
+          esac
+        '';
+      };
+
     # A commit row only hands over its hash, so the branch has to be resolved
     # from the refs pointing at it. Menus cannot hide entries, so a commit with
     # no local branch reports that instead of disappearing.
@@ -102,6 +152,23 @@
           *) echo "sm-branch-at: unknown verb '$verb'" >&2; exit 2 ;;
         esac
       '';
+    };
+
+    filesLabel =
+      if pkgs.stdenv.isDarwin
+      then "Finder"
+      else "Files";
+
+    # The same destinations wherever a menu has a directory in hand; `caption`
+    # names which one, since a branch or commit row opens the checkout, not itself.
+    openMenu = caption: dir: {
+      inherit caption;
+      children = [
+        (run "VS Code" ["sm-open" "code" dir])
+        (run filesLabel ["sm-open" "files" dir])
+        (run "Ghostty" ["sm-open" "ghostty" dir])
+        (run "Copy Path" ["sm-open" "path" dir])
+      ];
     };
 
     agentMenu = dir: prompt: {
@@ -140,6 +207,10 @@
       (run "Stack: View" ["sm-view"])
       (run "PR: Open in Browser" ["sm-pr"])
       (run "Repo: Format (just fmt)" ["sm-fmt"])
+      (run "Open: VS Code" ["sm-open" "code" "."])
+      (run "Open: ${filesLabel}" ["sm-open" "files" "."])
+      (run "Open: Ghostty" ["sm-open" "ghostty" "."])
+      (run "Open: Copy Path" ["sm-open" "path" "."])
       # Palette commands cannot nest, so the agent gets one entry per front-end.
       (run "Agent: Review HEAD + Uncommitted in pi" ["sm-agent" "pi" "." reviewHead])
       (run "Agent: Review HEAD + Uncommitted in Claude" ["sm-agent" "claude" "." reviewHead])
@@ -153,6 +224,7 @@
       (run "Push $branch (force with lease)" ["push" "--force-with-lease" "origin" "$branch"])
       (run "Open $branch on GitHub" ["sm-browse-branch" "$branch"])
       (run "Create PR for $branch (fill)" ["sm-pr-create" "$branch"])
+      (openMenu "Open Folder In" "$working_dir")
       (agentMenu "$working_dir" "Review branch $branch: compare it with its base and report bugs, risky changes and missing tests.")
     ];
 
@@ -168,20 +240,12 @@
           (run "Create PR (fill)" ["sm-branch-at" "$commit" "pr"])
         ];
       }
+      (openMenu "Open Folder In" "$working_dir")
       (agentMenu "$working_dir" "Review commit $short_commit: show its diff, then report bugs, risky changes and missing tests.")
     ];
 
     worktreeMenu = [
-      {
-        caption = "Open in Terminal";
-        command = "open_terminal";
-        args = {dir = "$worktree_path";};
-      }
-      {
-        caption = "Copy Worktree Path";
-        command = "copy_to_clipboard";
-        args = {text = "$worktree_path";};
-      }
+      (openMenu "Open Worktree In" "$worktree_path")
       (run "Land $worktree_name with wt" ["sm-land" "$worktree_name"])
       (run "Remove $worktree_name with wt (archives work)" ["sm-remove" "$worktree_name"])
       (agentMenu "$worktree_path" "Review the changes in worktree $worktree_name and report bugs, risky changes and missing tests.")
@@ -251,6 +315,7 @@
       programs.git.settings.alias = {
         sm-agent = "!${lib.getExe agentLauncher}";
         sm-branch-at = "!${lib.getExe branchAt}";
+        sm-open = "!${lib.getExe openLauncher}";
       };
     };
   };
