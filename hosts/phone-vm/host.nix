@@ -1,11 +1,11 @@
-# phone-vm — NixOS on the Pixel 8 Pro, a lean headless dev env booted by the
-# Podroid fork's AVF disk-image mode (modules/system/avf.nix). Bootstrap per docs/hosts.md.
+# phone-vm — NixOS on the Pixel 8 Pro, a lean headless dev env run by the
+# pocketnix app (modules/system/pocketnix.nix). Bootstrap per docs/hosts.md.
 {
   class = "nixos";
 
   shared = {
     fireproof.hostname = "phone-vm";
-    fireproof.avf.enable = true;
+    fireproof.pocketnix.enable = true;
 
     fireproof.dev.enable = true;
     fireproof.dev.intellij.enable = false;

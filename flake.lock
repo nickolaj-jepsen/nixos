@@ -776,24 +776,24 @@
         "type": "github"
       }
     },
-    "podroid": {
+    "pocketnix": {
       "inputs": {
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1792961476,
-        "narHash": "sha256-fxzxU6hWW9Z4s29EI+GFcRMksEnDNKZXO5YUSBMIyaE=",
+        "lastModified": 1792980018,
+        "narHash": "sha256-f4zqZJ/Eu9KrggYcZ3kFc9C7gePd7wBHo8qW0zbYUtk=",
         "owner": "nickolaj-jepsen",
-        "repo": "Podroid",
-        "rev": "bcd854a4835ac42118cfdfdc44b06f45eae04763",
+        "repo": "pocketnix",
+        "rev": "4bd414755d13d880ed9528386889f30c6336fec1",
         "type": "github"
       },
       "original": {
         "owner": "nickolaj-jepsen",
-        "ref": "nixos-image",
-        "repo": "Podroid",
+        "ref": "m0-m1",
+        "repo": "pocketnix",
         "type": "github"
       }
     },
@@ -898,7 +898,7 @@
         "obsidian-extensions": "obsidian-extensions",
         "obsidian-skills": "obsidian-skills",
         "opencode": "opencode",
-        "podroid": "podroid",
+        "pocketnix": "pocketnix",
         "treefmt-nix": "treefmt-nix",
         "walldye": "walldye",
         "zero-x-cb-media": "zero-x-cb-media",

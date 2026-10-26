@@ -163,19 +163,19 @@ deploy-remote hostname target:
 factor hostname=`hostname -s` target='':
     scripts/factor.sh {{ hostname }} '{{ target }}'
 
-# A pipe would hand the target an empty key if the decrypt failed, so check it first.
+# A pipe would hand provision an empty key if the decrypt failed, so check it first.
 [arg('hostname', pattern='[a-zA-Z0-9._-]+')]
-[arg('target', pattern='[a-zA-Z0-9._@:+-]+')]
-[doc('Install a host its committed SSH host key over ssh (YubiKey) and reboot it, so agenix can decrypt on a freshly imaged host')]
+[doc('Provision a pocketnix host onto the adb-attached phone: the app, its AVF grants, and the image with the committed SSH host key injected (YubiKey)')]
 [group('install')]
 [script]
-push-host-key hostname target *SSHARGS="":
+provision hostname *ARGS="":
     key=$(just decrypt secrets/hosts/{{ hostname }}/id_ed25519.age)
-    case $key in *"PRIVATE KEY"*) ;; *) echo "Decrypting the host key failed; {{ target }} is untouched." >&2; exit 1 ;; esac
-    printf '%s\n' "$key" | ssh {{ SSHARGS }} '{{ target }}' sudo install -m 600 /dev/stdin /etc/ssh/ssh_host_ed25519_key
-    ssh {{ SSHARGS }} '{{ target }}' sudo install -m 644 /dev/stdin /etc/ssh/ssh_host_ed25519_key.pub < secrets/hosts/{{ hostname }}/id_ed25519.pub
-    # The connection drops as it goes down.
-    ssh {{ SSHARGS }} '{{ target }}' sudo systemctl reboot || true
+    case $key in *"PRIVATE KEY"*) ;; *) echo "Decrypting the host key failed; the phone is untouched." >&2; exit 1 ;; esac
+    printf '%s\n' "$key" | {{ nixcmd }} shell --inputs-from . pocketnix#pocketnix-cli -c pocketnix provision \
+        --image ".#nixosConfigurations.{{ hostname }}.config.system.build.pocketnixImage.{{ system }}" \
+        --inject /etc/ssh/ssh_host_ed25519_key=- --mode 0600 \
+        --inject /etc/ssh/ssh_host_ed25519_key.pub=secrets/hosts/{{ hostname }}/id_ed25519.pub --mode 0644 \
+        {{ ARGS }}
 
 [doc('Runs (r)age with yubikey identity')]
 [group('secret')]
