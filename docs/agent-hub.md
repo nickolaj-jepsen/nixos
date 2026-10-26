@@ -8,6 +8,8 @@ to the ones that want you. The DMS bar shows a dot per session that isn't idle.
   and `g`/`G` jump to the ends. Idle sessions are listed too, dimmed, last.
 - `Mod+Shift+B` (`agent-hub focus-next`) jumps straight to the next session that
   wants you, cycling on repeat.
+- `Mod+Ctrl+B` (`agent-hub toggle`) dismisses the finished turn of the session
+  you're looking at, or brings back the one you dismissed.
 - A toast fires when a session you aren't looking at comes to want you;
   clicking it focuses the session.
 

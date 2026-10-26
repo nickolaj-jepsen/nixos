@@ -7,6 +7,8 @@
 - `{"op": "focus-next"}`: focuses the first session that wants you, or the one
   after it when its window already has focus.
 - `{"op": "dismiss", "session"}`: a finished session goes idle until its next turn.
+- `{"op": "toggle"}`: dismisses the finished turn of the session under the focused
+  window, or brings back the one you dismissed.
 - `{"op": "waiting", "session": {"id"}, "text"}`: a one-line label for the dialog
   a Claude Code session is waiting on, from `agent-hub hook`.
 - `{"op": "settled", "session": {"id"}, "transcript", "configDir"}`: a Claude Code
@@ -664,6 +666,19 @@ class Hub:
         at = next((i for i, r in enumerate(targets) if r["window"] == self.niri.focused), None)
         await self.niri.focus(targets[0 if at is None else (at + 1) % len(targets)]["window"])
 
+    def _toggle(self):
+        rows = [r for r in self._last["sessions"] if r["window"] == self.niri.focused] if self._last and self.niri.focused is not None else []
+        for row in rows:
+            if row["state"] in ("needs-reply", "failed", "done"):
+                self.dismissed[row["id"]] = row["since"]
+            elif self.dismissed.get(row["id"]) == row["since"]:
+                del self.dismissed[row["id"]]
+            else:
+                continue
+            self._save()
+            self.publish()
+            return
+
     async def _serve(self, reader, writer):
         try:
             conn = Conn(writer)
@@ -717,6 +732,8 @@ class Hub:
                 self.dismissed[sid] = row["since"]
                 self._save()
                 self.publish()
+        elif op == "toggle":
+            self._toggle()
         elif op == "demo":
             entries = message.get("sessions") or []
             conn.demo = {str(e["sessionId"]): e for e in entries if isinstance(e, dict) and e.get("sessionId")}
@@ -792,6 +809,10 @@ def cmd_focus_next(_args):
     hub_message({"op": "focus-next"})
 
 
+def cmd_toggle(_args):
+    hub_message({"op": "toggle"})
+
+
 def demo_sessions():
     """Registry-shaped fake sessions, one or more per state."""
     t = now_ms()
@@ -835,6 +856,7 @@ def main(argv=None):
     commands.add_parser("demo", help="show fake sessions in every state on the bar").set_defaults(func=cmd_demo)
     commands.add_parser("hook", help="Claude Code Stop and PermissionRequest hook").set_defaults(func=cmd_hook)
     commands.add_parser("focus-next", help="focus the next session that wants you").set_defaults(func=cmd_focus_next)
+    commands.add_parser("toggle", help="dismiss or bring back the focused session's finished turn").set_defaults(func=cmd_toggle)
     args = parser.parse_args(argv)
     args.func(args)
 

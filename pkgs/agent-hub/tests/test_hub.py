@@ -312,6 +312,17 @@ class TurnTest(HubTest):
         self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="done", since=int(time.time() * 1000) + 1)
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
 
+    def test_toggle_dismisses_and_brings_back_the_focused_sessions_turn(self):
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="failed")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed"))
+        self.hub.niri({"WindowFocusChanged": {"id": self.window}})
+        # Focusing closes the turn's toast, which shows the hub has seen the focus.
+        logged(self.hub.close_log)
+        self.bar.send(op="toggle")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        self.bar.send(op="toggle")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed"))
+
     def test_turn_that_ends_unwatched_toasts_until_its_window_is_focused(self):
         self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="done")
         self.assertIn("Done: demo", logged(self.hub.toast_log)[0])
