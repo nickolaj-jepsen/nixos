@@ -15,10 +15,12 @@
         niri = lib.getExe pkgs.niri-unstable;
         notifySend = lib.getExe' pkgs.libnotify "notify-send";
         busctl = lib.getExe' pkgs.systemd "busctl";
+        # The bare package, without the wrapper's plugin dirs, for the turn classifier.
+        claude = lib.getExe config.programs.claude-code.package;
       };
 
-      # Everything but Claude's dialog labels is read back from the registry, so
-      # a restart loses at most a label.
+      # Everything but Claude's dialog labels is read back from the registry or the
+      # hub's state file, so a restart loses at most a label.
       systemd.user.services.agent-hub = {
         Unit.Description = "agent-hub, the desktop hub for coding-agent sessions";
         Service = {

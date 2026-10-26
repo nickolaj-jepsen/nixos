@@ -277,9 +277,10 @@
               }
             ];
           }
-          # Labels the dialog the registry already marks `waiting`, so the bar can say what it is.
-          // lib.optionalAttrs (config.fireproof.dev.agent-hub.enable && pkgs.stdenv.isLinux) {
-            PermissionRequest = [
+          # PermissionRequest labels the dialog the registry already marks `waiting`;
+          # Stop hands the hub the transcript, so it can tell how the turn ended.
+          // lib.optionalAttrs (config.fireproof.dev.agent-hub.enable && pkgs.stdenv.isLinux) (
+            lib.genAttrs ["PermissionRequest" "Stop"] (_: [
               {
                 hooks = [
                   {
@@ -289,8 +290,8 @@
                   }
                 ];
               }
-            ];
-          };
+            ])
+          );
         # Context for the auto-mode classifier, adapted from /auto-mode-setup
         # (run per-project) to every project and host. Replaces the built-in
         # environment wholesale, like the setup's own output: no "$defaults".

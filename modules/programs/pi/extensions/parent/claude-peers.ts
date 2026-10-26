@@ -424,6 +424,9 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   function onSidecar(data: unknown) {
     const update = data as SidecarUpdate;
     if (!entry || update.sessionId !== entry.sessionId) return;
+    // A settle that lands after the next prompt describes a turn that is over.
+    if (update.moment === "settle" && entry.status !== "busy")
+      void publish({ turnState: update.state ?? "done", ask: update.ask });
     // The step is a plan for the turn in flight; a settled turn has none.
     const doing = update.moment === "start" ? update.doing : undefined;
     const summary = update.summary ?? entry.summary;
@@ -507,7 +510,7 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   });
   pi.on("agent_start", async (_event, c) => {
     ctx = c;
-    await publish({ status: "busy" });
+    await publish({ status: "busy", turnState: undefined, ask: undefined });
   });
   pi.on("session_info_changed", async (event) => {
     await publish({
@@ -523,7 +526,13 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
     ctx = c;
     if (!entry) return;
     dialogs.clear();
-    await publish({ status: "idle", doing: undefined, waitingFor: undefined });
+    // The sidecar may have settled the turn first; otherwise it ended done until it says more.
+    await publish({
+      status: "idle",
+      doing: undefined,
+      waitingFor: undefined,
+      turnState: entry.turnState ?? "done",
+    });
     const now = Date.now();
     const due = [...idleSubscribers.values()];
     idleSubscribers.clear();

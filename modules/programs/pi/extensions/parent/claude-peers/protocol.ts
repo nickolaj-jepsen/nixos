@@ -61,6 +61,9 @@ export interface RegistryEntry {
   doing?: string;
   /** What a `waiting` session waits on; Claude Code writes its own, pi the open permission dialog. */
   waitingFor?: string;
+  /** pi-only: how the last turn ended (`done`, `blocked`, `failed`) and what it asks of the person; gone while busy. */
+  turnState?: string;
+  ask?: string;
   [key: string]: unknown;
 }
 

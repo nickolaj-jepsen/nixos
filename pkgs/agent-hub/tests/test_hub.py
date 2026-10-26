@@ -38,6 +38,19 @@ if {hold!r}:
 """
 
 
+# Answers with the classification in its answer file, or fails without one; logs the profile it ran as.
+FAKE_CLAUDE = """#!{python}
+import os, sys
+sys.stdin.read()
+with open({log!r}, "a") as log:
+    log.write(os.environ.get("CLAUDE_CONFIG_DIR", "-") + "\\n")
+try:
+    print(open({answer!r}).read())
+except OSError:
+    sys.exit(1)
+"""
+
+
 class Client:
     def __init__(self, path):
         self.sock = socket.socket(socket.AF_UNIX)
@@ -93,25 +106,42 @@ class Hub:
             tools[name] = self.tmp / name
             tools[name].write_text(FAKE_TOOL.format(python=sys.executable, log=str(log), hold=hold))
             tools[name].chmod(0o755)
+        self.claude_log = self.tmp / "claude.log"
+        self.claude_answer = self.tmp / "claude.answer"
+        claude = self.tmp / "claude"
+        claude.write_text(FAKE_CLAUDE.format(python=sys.executable, log=str(self.claude_log), answer=str(self.claude_answer)))
+        claude.chmod(0o755)
         config = self.tmp / "config.json"
         config.write_text(json.dumps({
             "registry": str(self.registry),
             "niri": str(niri),
             "notifySend": str(tools["notify-send"]),
             "busctl": str(tools["busctl"]),
+            "claude": str(claude),
+            "state": str(self.tmp / "state.json"),
         }))
         runtime = self.tmp / "run"
         runtime.mkdir(mode=0o700)
         self.socket = runtime / "agent-hub" / "hub.sock"
         self.env = dict(os.environ, XDG_RUNTIME_DIR=str(runtime), AGENT_HUB_CONFIG=str(config))
-        self.daemon = subprocess.Popen([sys.executable, str(HUB), "daemon"], env=self.env)
+        self.env.pop("CLAUDE_CONFIG_DIR", None)
         self.processes = []
         self.clients = []
+        self.start()
+
+    def start(self):
+        self.daemon = subprocess.Popen([sys.executable, str(HUB), "daemon"], env=self.env)
         deadline = time.monotonic() + TIMEOUT
         while not self.socket.exists():
             if time.monotonic() > deadline or self.daemon.poll() is not None:
                 raise RuntimeError("hub did not start")
             time.sleep(0.02)
+
+    def restart(self):
+        self.daemon.kill()
+        self.daemon.wait()
+        self.socket.unlink()
+        self.start()
 
     def connect(self):
         client = Client(self.socket)
@@ -124,8 +154,14 @@ class Hub:
         client.wait(lambda m: m["type"] == "state")
         return client
 
-    def command(self, *args, stdin=""):
-        subprocess.run([sys.executable, str(HUB), *args], env=self.env, input=stdin, text=True, check=True, timeout=TIMEOUT)
+    def command(self, *args, stdin="", **env):
+        subprocess.run([sys.executable, str(HUB), *args], env=dict(self.env, **env), input=stdin, text=True, check=True,
+                       timeout=TIMEOUT)
+
+    def write_transcript(self, name, entries):
+        path = self.tmp / f"{name}.jsonl"
+        path.write_text("".join(json.dumps(e) + "\n" for e in entries))
+        return path
 
     def process(self):
         proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
@@ -254,26 +290,108 @@ class TurnTest(HubTest):
         self.hub.write_session(self.proc.pid, self.sid, status="busy")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["window"] == self.window))
 
-    def test_turn_that_ends_unwatched_is_yours_until_its_window_is_focused(self):
-        self.hub.write_session(self.proc.pid, self.sid, status="idle")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "your-turn"))
+    def test_pi_turn_leaves_the_state_its_sidecar_reported(self):
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="blocked", ask="keep the fixture?")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "keep the fixture?"))
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="failed")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed"))
+
+    def test_finished_turn_stays_done_while_watched_until_the_next_turn(self):
         self.hub.niri({"WindowFocusChanged": {"id": self.window}})
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="done")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+        self.hub.write_session(self.proc.pid, self.sid, status="busy")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+
+    def test_dismissed_turn_is_idle_until_the_next_one_finishes(self):
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="done")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+        self.bar.send(op="dismiss", session=self.sid)
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        self.hub.write_session(self.proc.pid, self.sid, status="busy")
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="done", since=int(time.time() * 1000) + 1)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
 
     def test_turn_that_ends_unwatched_toasts_until_its_window_is_focused(self):
-        self.hub.write_session(self.proc.pid, self.sid, status="idle")
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", turnState="done")
         self.assertIn("Done: demo", logged(self.hub.toast_log)[0])
         self.hub.niri({"WindowFocusChanged": {"id": self.window}})
         self.assertEqual(logged(self.hub.close_log)[0][-1], "42")
 
-    def test_turn_that_ends_while_watched_is_idle(self):
-        self.hub.niri({"WindowFocusChanged": {"id": self.window}})
-        self.hub.write_session(self.proc.pid, self.sid, status="idle")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
-
     def test_focus_request_focuses_the_sessions_window(self):
         self.bar.send(op="focus", session=self.sid)
         eventually(lambda: self.hub.focused() == [str(self.window)])
+
+
+def prompt(text):
+    return {"type": "user", "message": {"role": "user", "content": text}}
+
+
+def said(text):
+    return {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": text}]}}
+
+
+def ran(job=None):
+    """A tool call and its result; `job` makes it a background job that hasn't reported back."""
+    result = {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1"}]},
+              "toolUseResult": {"backgroundTaskId": job} if job else {"stdout": ""}}
+    use = {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Bash"}]}}
+    return [use, result]
+
+
+def reported(job):
+    return {"type": "queue-operation", "operation": "enqueue",
+            "content": f"<task-notification>\n<task-id>{job}</task-id>\n<status>completed</status>"}
+
+
+class ClaudeTurnTest(HubTest):
+    def setUp(self):
+        super().setUp()
+        self.proc = self.hub.process()
+        self.bar = self.hub.subscribe()
+        self.hub.write_session(self.proc.pid, self.sid, status="busy")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+        self.hub.write_session(self.proc.pid, self.sid, status="idle")
+
+    def stop(self, entries, **env):
+        transcript = self.hub.write_transcript(self.sid, entries)
+        event = {"hook_event_name": "Stop", "session_id": self.sid, "transcript_path": str(transcript)}
+        self.hub.command("hook", stdin=json.dumps(event), **env)
+
+    def test_turn_that_ends_on_a_question_needs_a_reply(self):
+        self.stop([prompt("rebase it"), said("Rebased onto main.\n\nWant me to push?")])
+        state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push?"))
+        self.assertEqual(session(state, self.sid)["summary"], "Rebased onto main.")
+
+    def test_turn_that_waits_on_its_background_job_is_working_until_the_job_reports(self):
+        job = [prompt("build it"), *ran("b1"), said("The build runs in the background; I'll be notified when it finishes.")]
+        self.stop(job)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["doing"] == "waiting on 1 background job"))
+        self.stop([*job, reported("b1"), said("Built.")])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+
+    def test_background_server_left_running_does_not_keep_the_session_working(self):
+        self.stop([prompt("show me the site"), *ran("b1"), said("The preview is up at http://localhost:4321.")])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+
+    def test_claude_decides_whether_a_turn_waits_on_its_jobs(self):
+        self.hub.claude_answer.write_text("state: done\nask:\nsummary: Started the preview server.\n")
+        self.stop([prompt("show me the site"), *ran("b1"), said("Started it; waiting for you to look.")])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["summary"] == "Started the preview server."))
+
+    def test_long_turn_is_put_to_claude_as_the_sessions_profile(self):
+        self.hub.claude_answer.write_text("state: failed\nask: empty\nsummary: The build still fails on darwin.\n")
+        self.stop([prompt("fix the build"), *ran(), said("I changed the overlay.")], CLAUDE_CONFIG_DIR="/profiles/work")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed" and s["summary"] == "The build still fails on darwin."))
+        self.assertEqual(self.hub.claude_log.read_text().split(), ["/profiles/work"])
+
+    def test_finished_turn_survives_a_restart(self):
+        self.stop([prompt("rebase it"), said("Want me to push?")])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        self.hub.restart()
+        bar = self.hub.connect()
+        bar.send(op="subscribe")
+        bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
 
 
 class WaitingTest(HubTest):
@@ -292,9 +410,9 @@ class WaitingTest(HubTest):
     def label(self, text):
         self.hub.connect().send(op="waiting", session={"id": self.sid}, text=text)
 
-    def test_waiting_session_needs_you_with_the_agents_own_reason(self):
+    def test_waiting_session_is_asking_with_the_agents_own_reason(self):
         self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="permission prompt")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-you" and s["waitingFor"] == "permission prompt"))
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "asking" and s["waitingFor"] == "permission prompt"))
 
     def test_hook_label_stands_in_for_the_reason_until_the_session_moves_on(self):
         self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="permission prompt")
@@ -338,13 +456,13 @@ class OrderTest(HubTest):
         for name in ("done", "busy"):
             self.hub.write_session(self.procs[name].pid, name, status="busy")
         self.bar.wait(has_session("done", lambda s: s["window"] is not None))
-        self.hub.write_session(self.procs["done"].pid, "done", status="idle")
+        self.hub.write_session(self.procs["done"].pid, "done", status="idle", turnState="done")
         self.hub.write_session(self.procs["new"].pid, "new", status="waiting", since=now - 1_000)
         self.hub.write_session(self.procs["old"].pid, "old", status="waiting", since=now - 60_000)
         self.hub.write_session(self.procs["mark"].pid, "mark", status="idle")
         self.state = self.bar.wait(lambda m: m["type"] == "state" and len(m["sessions"]) == 5
                                    and all(s["window"] is not None for s in m["sessions"])
-                                   and session(m, "done")["state"] == "your-turn")
+                                   and session(m, "done")["state"] == "done")
         self.marks = 0
 
     def focus(self, window):
@@ -355,11 +473,10 @@ class OrderTest(HubTest):
         self.hub.niri({"WindowOpenedOrChanged": {"window": {"id": 1000 + self.marks, "pid": self.procs["mark"].pid}}})
         self.bar.wait(has_session("mark", lambda s: s["window"] == 1000 + self.marks))
 
-    def test_longest_waiting_first_then_your_turn_then_working(self):
+    def test_longest_waiting_first_then_finished_then_working(self):
         self.assertEqual([s["id"] for s in self.state["sessions"]], ["old", "new", "done", "busy", "mark"])
 
     def test_focus_next_walks_the_sessions_that_want_you_and_wraps(self):
-        # Looking at "done" settles its turn, so the walk wraps back to the oldest dialog.
         expected = [self.windows[name] for name in ("old", "new", "done", "old")]
         for i, window in enumerate(expected):
             self.hub.command("focus-next")
@@ -370,8 +487,8 @@ class OrderTest(HubTest):
     def test_focus_next_with_nothing_wanting_you_does_nothing(self):
         for name in ("old", "new"):
             self.hub.write_session(self.procs[name].pid, name, status="busy")
-        self.focus(self.windows["done"])
-        self.bar.wait(lambda m: m["type"] == "state" and not any(s["state"] in ("needs-you", "your-turn") for s in m["sessions"]))
+        self.bar.send(op="dismiss", session="done")
+        self.bar.wait(lambda m: m["type"] == "state" and all(s["state"] in ("working", "idle") for s in m["sessions"]))
         client = self.hub.connect()
         # One connection's messages are handled in order, so the state answers after focus-next is done.
         client.send(op="focus-next")
