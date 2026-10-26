@@ -783,11 +783,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792980018,
-        "narHash": "sha256-f4zqZJ/Eu9KrggYcZ3kFc9C7gePd7wBHo8qW0zbYUtk=",
+        "lastModified": 1792980425,
+        "narHash": "sha256-jvotcJDXVsubX3Cksejtg7QkVnXOjJzw4I+o8b3sYHE=",
         "owner": "nickolaj-jepsen",
         "repo": "pocketnix",
-        "rev": "4bd414755d13d880ed9528386889f30c6336fec1",
+        "rev": "9a31c18e009d73571f65c4bee779505a773d9b96",
         "type": "github"
       },
       "original": {

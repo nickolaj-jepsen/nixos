@@ -171,7 +171,7 @@ factor hostname=`hostname -s` target='':
 provision hostname *ARGS="":
     key=$(just decrypt secrets/hosts/{{ hostname }}/id_ed25519.age)
     case $key in *"PRIVATE KEY"*) ;; *) echo "Decrypting the host key failed; the phone is untouched." >&2; exit 1 ;; esac
-    printf '%s\n' "$key" | {{ nixcmd }} shell --inputs-from . pocketnix#pocketnix-cli -c pocketnix provision \
+    printf '%s\n' "$key" | {{ nixcmd }} run --inputs-from . pocketnix#provision -- \
         --image ".#nixosConfigurations.{{ hostname }}.config.system.build.pocketnixImage.{{ system }}" \
         --inject /etc/ssh/ssh_host_ed25519_key=- --mode 0600 \
         --inject /etc/ssh/ssh_host_ed25519_key.pub=secrets/hosts/{{ hostname }}/id_ed25519.pub --mode 0644 \
