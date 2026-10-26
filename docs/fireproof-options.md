@@ -847,6 +847,30 @@ true
 
 
 
+## fireproof\.dev\.scaleway\.enable
+
+
+
+Enable the Scaleway CLI (scw) and its b2c-devenv/b2c-production profiles
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.hardware\.battery
 
 
@@ -2684,8 +2708,6 @@ string
 
 ## fireproof\.theme\.font\.package
 
-
-
 Font package providing ` family ` and ` monoFamily `
 
 
@@ -2755,6 +2777,8 @@ string
 
 
 ## fireproof\.username
+
+
 
 The primary username for the machine
 
