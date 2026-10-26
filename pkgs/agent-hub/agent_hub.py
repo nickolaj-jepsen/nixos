@@ -782,6 +782,15 @@ def hub_message(message):
         pass
 
 
+def hook_session(event):
+    """The registry's id for the hook's own Claude Code, whose event id goes stale after /clear."""
+    try:
+        entry = json.loads((Path(load_config()["registry"]).expanduser() / f"{int(os.environ['CLAUDE_PID'])}.json").read_text())
+    except (KeyError, OSError, ValueError):
+        entry = None
+    return (entry.get("sessionId") if isinstance(entry, dict) else None) or event.get("session_id")
+
+
 def cmd_hook(_args):
     """A Claude Code hook that prints nothing, so Claude's own handling is unchanged:
     Stop hands the hub the transcript of the turn that ended, PermissionRequest labels
@@ -793,14 +802,14 @@ def cmd_hook(_args):
     if event.get("hook_event_name") == "Stop":
         hub_message({
             "op": "settled",
-            "session": {"id": event.get("session_id")},
+            "session": {"id": hook_session(event)},
             "transcript": event.get("transcript_path"),
             "configDir": os.environ.get("CLAUDE_CONFIG_DIR"),
         })
         return
     hub_message({
         "op": "waiting",
-        "session": {"id": event.get("session_id")},
+        "session": {"id": hook_session(event)},
         "text": claude_label(event.get("tool_name"), event.get("tool_input"), event.get("cwd")),
     })
 

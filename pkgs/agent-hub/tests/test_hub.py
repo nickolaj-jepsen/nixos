@@ -364,15 +364,19 @@ class ClaudeTurnTest(HubTest):
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
         self.hub.write_session(self.proc.pid, self.sid, status="idle")
 
-    def stop(self, entries, **env):
+    def stop(self, entries, session_id=None, **env):
         transcript = self.hub.write_transcript(self.sid, entries)
-        event = {"hook_event_name": "Stop", "session_id": self.sid, "transcript_path": str(transcript)}
+        event = {"hook_event_name": "Stop", "session_id": session_id or self.sid, "transcript_path": str(transcript)}
         self.hub.command("hook", stdin=json.dumps(event), **env)
 
     def test_turn_that_ends_on_a_question_needs_a_reply(self):
         self.stop([prompt("rebase it"), said("Rebased onto main.\n\nWant me to push?")])
         state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push?"))
         self.assertEqual(session(state, self.sid)["summary"], "Rebased onto main.")
+
+    def test_turn_is_the_registered_sessions_after_a_clear_left_the_hook_an_old_id(self):
+        self.stop([prompt("rebase it"), said("Want me to push?")], session_id="before-clear", CLAUDE_PID=str(self.proc.pid))
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
 
     def test_turn_that_waits_on_its_background_job_is_working_until_the_job_reports(self):
         job = [prompt("build it"), *ran("b1"), said("The build runs in the background; I'll be notified when it finishes.")]
