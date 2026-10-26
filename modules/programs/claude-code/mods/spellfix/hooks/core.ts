@@ -24,6 +24,7 @@ Then give one line per typo outside the marked words, which the spell checker ca
 
 Rules:
 - Spelling only: never grammar, style, punctuation or wording.
+- An acronym keeps all capitals (API, URL, JSON, CLI): never title case.
 - Never touch code, file paths, URLs, identifiers, command names, flags, @mentions, /slash-commands, or anything inside backticks.
 - Reply with these lines and nothing else.`;
 
@@ -234,4 +235,76 @@ export function nearest<T extends Miss>(found: readonly T[], cursor: number): T 
     (best, m) => (!best || distance(m) < distance(best) ? m : best),
     undefined,
   );
+}
+
+/** One replacement in a draft, by offset into it. */
+export type Splice = { start: number; end: number; text: string };
+
+/**
+ * `text` with every splice applied, the offsets all taken from `text`. Where
+ * two overlap the one that starts first wins and the other is dropped, and the
+ * surviving ones are then applied from the last offset to the first so each
+ * still points where it did.
+ */
+export function applyEdits(text: string, splices: readonly Splice[]): string {
+  const kept: Splice[] = [];
+  let end = -1;
+  for (const s of [...splices].sort((a, b) => a.start - b.start)) {
+    if (s.start < end) continue;
+    kept.push(s);
+    end = s.end;
+  }
+  let out = text;
+  for (const s of kept.reverse()) out = `${out.slice(0, s.start)}${s.text}${out.slice(s.end)}`;
+  return out;
+}
+
+/** A run of `wordDiff`'s answer: text both sides share, or text only the old or only the new one has. */
+export type DiffRun = { text: string; kind: "same" | "removed" | "added" };
+
+/**
+ * `before` and `after` compared by words, as runs in reading order: the
+ * review's inline diff, where a `removed` run is struck and an `added` one
+ * follows it. Words reordered rather than changed show as a removal and an
+ * addition, and spacing is normalised to one space between words.
+ */
+export function wordDiff(before: string, after: string): DiffRun[] {
+  const left = before.trim().split(/\s+/).filter(Boolean);
+  const right = after.trim().split(/\s+/).filter(Boolean);
+  // lengths[i][j]: how many words left[i:] and right[j:] still share in order.
+  const lengths: number[][] = Array.from({ length: left.length + 1 }, () =>
+    new Array<number>(right.length + 1).fill(0),
+  );
+  for (let i = left.length - 1; i >= 0; i--) {
+    for (let j = right.length - 1; j >= 0; j--) {
+      lengths[i]![j] =
+        left[i] === right[j]
+          ? lengths[i + 1]![j + 1]! + 1
+          : Math.max(lengths[i + 1]![j]!, lengths[i]![j + 1]!);
+    }
+  }
+  const runs: DiffRun[] = [];
+  const push = (text: string, kind: DiffRun["kind"]) => {
+    const last = runs[runs.length - 1];
+    if (last?.kind === kind) last.text = `${last.text} ${text}`;
+    else runs.push({ text, kind });
+  };
+  let i = 0;
+  let j = 0;
+  while (i < left.length && j < right.length) {
+    if (left[i] === right[j]) {
+      push(left[i]!, "same");
+      i++;
+      j++;
+    } else if (lengths[i + 1]![j]! >= lengths[i]![j + 1]!) {
+      push(left[i]!, "removed");
+      i++;
+    } else {
+      push(right[j]!, "added");
+      j++;
+    }
+  }
+  for (; i < left.length; i++) push(left[i]!, "removed");
+  for (; j < right.length; j++) push(right[j]!, "added");
+  return runs;
 }
