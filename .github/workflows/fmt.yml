@@ -20,29 +20,16 @@ jobs:
       - name: Check formatting
         run: nix fmt -- --fail-on-change
 
-  hosts:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      list: ${{ steps.list.outputs.list }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: ./.github/actions/setup-nix
-      - id: list
-        name: Enumerate nixosConfigurations
-        # Exclude the installer image (`bootstrap`): it builds an ISO and isn't
-        # worth the matrix slot on every PR. The real hosts are all that's needed
-        # for the build gate.
-        run: |
-          list=$(nix eval --json .#nixosConfigurations --apply builtins.attrNames \
-            | jq -c '[ .[] | select(startswith("bootstrap") | not) ]')
-          echo "list=$list" >> "$GITHUB_OUTPUT"
-          echo "Matrix: $list"
-
-  # What `nix flake check` covers minus the real hosts, which the build jobs already evaluate.
-  check:
+  # What `nix flake check` covers minus the real hosts, which the build jobs
+  # evaluate, plus the plan for that matrix: a configuration whose toplevel the
+  # attic cache can serve was built by an earlier run, so the matrix only
+  # carries the hosts this commit actually changes.
+  plan:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      linux: ${{ steps.plan.outputs.linux }}
+      darwin: ${{ steps.plan.outputs.darwin }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: ./.github/actions/setup-nix
@@ -61,17 +48,24 @@ jobs:
             | xargs -P 4 -I{} nix eval --no-eval-cache ".#nixosConfigurations.{}.config.system.build.toplevel.drvPath"
           nix eval --json .#packages.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
           nix eval --json .#devShells.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
+      - id: plan
+        name: Plan the build matrix
+        env:
+          ATTIC: https://attic.${{ secrets.HOMELAB_DOMAIN }}/nixos
+        run: .github/scripts/ci-plan.sh
 
-  # --skip-cached (in ci-build.sh): a host already in attic passes without pulling its closure onto the runner.
-  # Not gated on fmt: the gate still requires it, and waiting would add its runtime to every build.
+  # `if` on the outputs, not on `needs.plan.result`: a plan that fails leaves the
+  # outputs empty, and an empty matrix errors instead of skipping.
+  # --single: one toplevel per job, so nix-fast-build's parallel eval buys nothing.
   build:
-    needs: [hosts]
+    needs: [plan]
+    if: needs.plan.outputs.linux != '' && needs.plan.outputs.linux != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        host: ${{ fromJson(needs.hosts.outputs.list) }}
+        host: ${{ fromJson(needs.plan.outputs.linux) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: ./.github/actions/setup-nix
@@ -80,11 +74,13 @@ jobs:
           attic-cache: nixos
           attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Build ${{ matrix.host }}
-        run: .github/scripts/ci-build.sh ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
+        run: .github/scripts/ci-build.sh --single ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
 
   # The darwin host can't build on Linux (aarch64-darwin), so it gets its own
-  # macOS runner instead of a matrix slot (free on a public repo).
+  # macOS runner instead of a matrix slot.
   darwin:
+    needs: [plan]
+    if: needs.plan.outputs.darwin == 'true'
     runs-on: macos-latest
     timeout-minutes: 120
     steps:
@@ -95,19 +91,39 @@ jobs:
           attic-cache: nixos
           attic-token: ${{ secrets.ATTIC_TOKEN }}
       - name: Build macbook
-        run: .github/scripts/ci-build.sh ".#darwinConfigurations.macbook.system"
+        run: .github/scripts/ci-build.sh --single ".#darwinConfigurations.macbook.system"
 
-  # The required check on `main`: a stable name, unlike the matrix jobs. Skipped counts as failed.
+  # The required check on `main`: a stable name, unlike the matrix jobs. A job the
+  # plan skipped is fine; a job that failed, was cancelled, or never ran is not.
   gate:
     name: CI gate
     if: always()
-    needs: [fmt, check, build, darwin]
+    needs: [fmt, plan, build, darwin]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require every job to have succeeded
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          FMT: ${{ needs.fmt.result }}
+          PLAN: ${{ needs.plan.result }}
+          BUILD: ${{ needs.build.result }}
+          DARWIN: ${{ needs.darwin.result }}
         run: |
-          echo "Job results: $RESULTS"
-          for r in $RESULTS; do [ "$r" = success ] || exit 1; done
+          echo "fmt=$FMT plan=$PLAN build=$BUILD darwin=$DARWIN"
+          failed=0
+          require() {
+            [ "$2" = success ] && return
+            echo "::error::$1: $2"
+            failed=1
+          }
+          skipped_ok() {
+            case "$2" in success | skipped) return ;; esac
+            echo "::error::$1: $2"
+            failed=1
+          }
+          require fmt "$FMT"
+          require plan "$PLAN"
+          # The plan only carries hosts it can prove changed, so both may be skipped.
+          skipped_ok build "$BUILD"
+          skipped_ok darwin "$DARWIN"
+          exit "$failed"
