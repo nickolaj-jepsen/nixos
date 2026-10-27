@@ -112,6 +112,15 @@
             procps
           ];
         })
+        (makeScript {
+          path = ./ghostty-here.bash;
+          runtimeInputs = with pkgs; [
+            niri-unstable # match the running compositor's IPC
+            jq
+            procps
+            gawk
+          ];
+        })
       ]
       # Shadows the system xdg-open (per-user profile precedes it on PATH) so Ghostty link clicks land in VS Code.
       ++ lib.optionals (config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux) [

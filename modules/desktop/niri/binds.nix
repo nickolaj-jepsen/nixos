@@ -200,7 +200,7 @@
 
         "Mod+Slash".action.show-hotkey-overlay = {};
 
-        "Mod+Return".action.spawn = ["ghostty"];
+        "Mod+Return".action.spawn = ["ghostty-here"];
         "Mod+Backspace".action.close-window = {};
         "Mod+Shift+Backspace" = {
           action.spawn = ["window-kill"];
