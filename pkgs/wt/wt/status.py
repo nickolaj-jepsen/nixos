@@ -96,7 +96,11 @@ def describe_pid(pid: int) -> str:
     try:
         name = Path(f"/proc/{pid}/comm").read_text().strip()
     except OSError:
-        name = run(["ps", "-o", "comm=", "-p", str(pid)], check=False).stdout.strip()
+        # `ps` is cosmetic here, so a build without one still names the pid.
+        try:
+            name = run(["ps", "-o", "comm=", "-p", str(pid)], check=False).stdout.strip()
+        except OSError:
+            name = ""
     return f"{os.path.basename(name)} (pid {pid})" if name else f"pid {pid}"
 
 
