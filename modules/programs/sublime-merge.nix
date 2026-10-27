@@ -280,8 +280,13 @@
       # One window per repository, so two worktrees can be read side by side.
       open_files_in_new_window = "always";
       highlight_modified_tabs = true;
-      # Backs the built-in Open Repository in Terminal.
-      terminal_command = "${lib.getExe config.programs.ghostty.package} --working-directory=$dir";
+      # Backs the built-in Open Repository in Terminal. On darwin the app comes
+      # from the cask, so `package` is null there and the handoff goes through
+      # `open` like the other darwin launchers above.
+      terminal_command =
+        if pkgs.stdenv.isDarwin
+        then "open -na Ghostty --args --working-directory=$dir"
+        else "${lib.getExe config.programs.ghostty.package} --working-directory=$dir";
     };
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
