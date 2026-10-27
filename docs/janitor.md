@@ -36,6 +36,11 @@ All of it is behind `fireproof.janitor.enable`, which cascades from
 | Worktrees           | `wt clean` decides: clean tree, landed, not busy, not locked                                                                                                                          |
 | Build dirs          | `node_modules`, `.venv`, `target`, `dist`, `.pytest_cache`, `__pycache__` in a repo with no commit in 60 days, no process whose cwd is inside it, and a directory untouched that long |
 | Unmerged branches   | Only in `apply`, only when ticked, and bundled first                                                                                                                                  |
+| Stale scratch       | Only in `apply`, only when ticked: a `~/scratch` entry nothing inside has touched for 30 days                                                                                         |
+
+Strays, the top-level entries of `~` outside the home layout
+(docs/home-layout.md), are listed in `report` and the popout with a suggested
+destination, and never deleted.
 
 A _live_ temp session is never touched: the budget cannot reach it, so the only
 lever there is the warning line, and the agent has to give the space back itself.
@@ -95,9 +100,12 @@ Constants in `modules/programs/janitor.nix`'s CLI, overridable by environment
 variable for tests: `JANITOR_TMP_BUDGET_GIB` (16), `JANITOR_TMP_MAX_AGE_DAYS`
 (3), `JANITOR_FREE_FLOOR_PCT` (10), `JANITOR_WARN_FREE_GIB` (10),
 `JANITOR_TRANSCRIPT_AGE_DAYS` (30), `JANITOR_JOB_TMP_AGE_DAYS` (7),
-`JANITOR_BUILD_DIR_AGE_DAYS` (60), `JANITOR_BRANCH_IDLE_DAYS` (90). The roots
-and the repo roster are `JANITOR_ROOT`, `JANITOR_LEGACY_ROOT`,
-`JANITOR_STALE_PATHS`, `JANITOR_REPO_PARENTS`, `JANITOR_REPO_SINGLES`,
+`JANITOR_BUILD_DIR_AGE_DAYS` (60), `JANITOR_BRANCH_IDLE_DAYS` (90),
+`JANITOR_SCRATCH_AGE_DAYS` (30). The repo roster, scratch and the declared roots
+come from `~/.config/janitor/layout.json` (`JANITOR_LAYOUT`), which the leaf
+writes from `fireproof.paths`. The roots and the roster are `JANITOR_ROOT`,
+`JANITOR_LEGACY_ROOT`, `JANITOR_STALE_PATHS`, `JANITOR_REPO_PARENTS`,
+`JANITOR_REPO_SINGLES`, `JANITOR_SCRATCH`, `JANITOR_HOME_ROOTS`,
 `JANITOR_STATE_DIR`; the fixture-only ones exist so a test can point the walk at
 a temp tree.
 

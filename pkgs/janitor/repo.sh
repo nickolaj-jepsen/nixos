@@ -97,6 +97,42 @@ scan_build_dirs() {
   done < <(repos)
 }
 
+# Scratch entries nothing has touched for the age. Offered unticked: a stale dump
+# may still be the only copy, so only a tick deletes one.
+scan_scratch() {
+  [ -n "$SCRATCH" ] && [ -d "$SCRATCH" ] || return 0
+  local entry idle
+  for entry in "$SCRATCH"/* "$SCRATCH"/.[!.]*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    idle=$(scratch_idle "$entry") || continue
+    printf 'scratch:%s\tscratch\t%s\t0\t%s\t%s\tidle %dd\n' \
+      "$entry" "$(size_of "$entry")" "$entry" "$(label_for "$entry")" "$((idle / 86400))"
+  done
+}
+
+# Visible top-level entries of ~ the layout does not declare, one per line:
+#   path, bytes, where it probably belongs
+# Never in the plan's items: moving one is a decision, not a deletion.
+scan_strays() {
+  [ -n "$HOME_ROOTS" ] || return 0
+  local entry name dest
+  for entry in "$HOME"/*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    name=${entry##*/}
+    grep -qxF -- "$name" <<<"$HOME_ROOTS" && continue
+    # shellcheck disable=SC2016 # $name is jq's, bound by --arg
+    dest=$(layout --arg name "$name" '.hints[$name] // empty')
+    if [ -z "$dest" ]; then
+      if is_repo "$entry"; then
+        dest=${REPO_PARENTS[0]}/$name
+      elif [ -n "$SCRATCH" ]; then
+        dest=$SCRATCH/$name
+      fi
+    fi
+    printf '%s\t%s\t%s\n' "$entry" "$(size_of "$entry")" "$dest"
+  done
+}
+
 # The dead temp dirs, in the plan like everything else: the widget shows one
 # number and hands back the ids it was shown.
 scan_tmp() {
@@ -118,6 +154,7 @@ plan_items() {
   scan_worktrees
   scan_build_dirs
   scan_branches
+  scan_scratch
 }
 
 # The walk every mode shares: one process-cwd snapshot, one item list.
@@ -129,11 +166,15 @@ build_plan() {
     live_session_cwds
   } 2>/dev/null | sort -u >"$CWD_CACHE"
   PLAN_TMP=$(mktemp)
-  export PLAN_TMP
+  STRAYS_TMP=$(mktemp)
+  export PLAN_TMP STRAYS_TMP
   plan_items >"$PLAN_TMP"
+  scan_strays >"$STRAYS_TMP"
 }
 
-plan_total() { awk -F'\t' '{s += $3} END {print s + 0}' "$PLAN_TMP"; }
+# What a pass frees: the rows that start ticked. Scratch and unmerged branches
+# only go when picked.
+plan_total() { awk -F'\t' '$4 == 1 {s += $3} END {print s + 0}' "$PLAN_TMP"; }
 
 write_plan_cache() {
   local avail total pct dead
@@ -149,19 +190,25 @@ write_plan_cache() {
     --argjson budget "$BUDGET_BYTES" \
     --argjson used "$(total_tmp_bytes)" \
     --argjson dead "$dead" \
-    '[inputs | split("\t") |
+    --rawfile strays "$STRAYS_TMP" \
+    --arg home "$HOME" \
+    'def tilde: if startswith($home + "/") then "~" + .[($home | length):] else . end;
+     [inputs | split("\t") |
       {id: .[0], category: .[1], bytes: (.[2] | tonumber), preset: (.[3] == "1"),
        title: .[4], label: .[5], detail: .[6]}] as $items |
      {generated: $generated,
       disk: {avail: $avail, total: $total, usedPct: $pct},
       tmp: {used: $used, budget: $budget, dead: $dead},
       reclaim: {
-        bytes: (($items | map(.bytes) | add) // 0),
+        bytes: (($items | map(select(.preset) | .bytes) | add) // 0),
         count: ($items | length),
         byCategory: ($items | group_by(.category) |
           map({key: .[0].category, value: (map(.bytes) | add)}) | from_entries)
       },
-      items: $items}' <"$PLAN_TMP" >"$PLAN_FILE.tmp"
+      items: $items,
+      strays: [$strays | split("\n")[] | select(length > 0) | split("\t") |
+        {path: .[0], bytes: (.[1] | tonumber), suggest: .[2],
+         label: (.[0] | tilde), suggestLabel: (.[2] | tilde)}]}' <"$PLAN_TMP" >"$PLAN_FILE.tmp"
   mv -f -- "$PLAN_FILE.tmp" "$PLAN_FILE"
 }
 
@@ -171,7 +218,7 @@ cmd_report() {
   local avail total bytes title detail count
   read -r avail total < <(free_space) || { avail=0; total=1; }
   printf 'janitor: %s free of %s on /\n' "$(gib "$avail")" "$(gib "$total")"
-  for category in tmp jobs transcripts build worktree branch; do
+  for category in tmp jobs transcripts build worktree branch scratch; do
     count=$(awk -F'\t' -v c="$category" '$2 == c {n++} END {print n + 0}' "$PLAN_TMP")
     [ "$count" -gt 0 ] || continue
     printf '\n%s (%d)\n' "$category" "$count"
@@ -184,17 +231,24 @@ cmd_report() {
       printf '  %8s  and %d more\n' "" "$((count - 15))"
     fi
   done
+  count=$(awk 'END {print NR + 0}' "$STRAYS_TMP")
+  if [ "$count" -gt 0 ]; then
+    printf '\nstrays (%d): not part of the home layout (docs/home-layout.md); move by hand\n' "$count"
+    while IFS=$'\t' read -r title bytes detail; do
+      printf '  %8s  %s%s\n' "$(gib "$bytes")" "$(tilde "$title")" "${detail:+  -> $(tilde "$detail")}"
+    done <"$STRAYS_TMP"
+  fi
   printf '\njanitor: a pass would free %s from %s item(s). Run "just janitor apply" to pick what goes.\n' \
     "$(gib "$(plan_total)")" "$(awk 'END {print NR + 0}' "$PLAN_TMP")"
   write_plan_cache
-  rm -f -- "$PLAN_TMP" "$CWD_CACHE"
+  rm -f -- "$PLAN_TMP" "$STRAYS_TMP" "$CWD_CACHE"
 }
 
 cmd_plan_json() {
   build_plan
   write_plan_cache
   jq . "$PLAN_FILE"
-  rm -f -- "$PLAN_TMP" "$CWD_CACHE"
+  rm -f -- "$PLAN_TMP" "$STRAYS_TMP" "$CWD_CACHE"
 }
 
 # A branch is bundled before it is deleted, so `git fetch <bundle>` brings it back.
@@ -300,6 +354,22 @@ apply_item() {
       echo "$size" >>"$freed_log"
     }
     ;;
+  scratch)
+    [ -n "$SCRATCH" ] && [ "$(dirname -- "$rest")" = "$SCRATCH" ] || {
+      printf '  refused %s (not a scratch entry)\n' "$rest"
+      return 0
+    }
+    [ -e "$rest" ] || [ -L "$rest" ] || return 0
+    scratch_idle "$rest" >/dev/null || {
+      printf '  refused %s (touched within %d days)\n' "$rest" "$SCRATCH_AGE_DAYS"
+      return 0
+    }
+    size=$(size_of "$rest")
+    rm -rf -- "$rest" && {
+      printf '  freed   %8s  %s\n' "$(gib "$size")" "$rest"
+      echo "$size" >>"$freed_log"
+    }
+    ;;
   worktree)
     repo=${rest%%|*}
     branch=${rest#*|}
@@ -353,7 +423,7 @@ cmd_apply() {
   if [ "$have_ids" = 0 ] && [ -z "$ids_file" ]; then
     if [ ! -t 0 ] || ! command -v whiptail >/dev/null 2>&1; then
       printf 'janitor: needs a terminal and whiptail to pick items; run it with an ids file instead.\n' >&2
-      rm -f -- "$PLAN_TMP" "$CWD_CACHE"
+      rm -f -- "$PLAN_TMP" "$STRAYS_TMP" "$CWD_CACHE"
       return 2
     fi
     # Whiptail tags are row numbers: a path with a space or a quote would
@@ -370,7 +440,7 @@ cmd_apply() {
         "$(gib "$(plan_total)")")" \
       26 110 16 "${args[@]}" 2>"$ids_file" >/dev/null; then
       printf 'janitor: nothing selected\n'
-      rm -f -- "$PLAN_TMP" "$CWD_CACHE" "$ids_file"
+      rm -f -- "$PLAN_TMP" "$STRAYS_TMP" "$CWD_CACHE" "$ids_file"
       return 0
     fi
     for tag in $(tr -d '"' <"$ids_file"); do
@@ -398,7 +468,7 @@ cmd_apply() {
   fi
   [ "$freed" -ge 1073741824 ] && toast "Freed $(gib "$freed") of agent and repo leftovers"
 
-  rm -f -- "$PLAN_TMP.freed" "$PLAN_TMP" "$CWD_CACHE"
+  rm -f -- "$PLAN_TMP.freed" "$PLAN_TMP" "$STRAYS_TMP" "$CWD_CACHE"
   [ -n "$APPLY_TMP_SET" ] && rm -f -- "$APPLY_TMP_SET"
   cmd_repo_plan_refresh
   cmd_state
@@ -408,7 +478,7 @@ cmd_apply() {
 cmd_repo_plan_refresh() {
   build_plan
   write_plan_cache
-  rm -f -- "$PLAN_TMP" "$CWD_CACHE"
+  rm -f -- "$PLAN_TMP" "$STRAYS_TMP" "$CWD_CACHE"
 }
 
 # The daily pass: merged branches, finished worktrees, transcripts, and the

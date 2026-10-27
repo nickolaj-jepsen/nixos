@@ -6,7 +6,8 @@ Repository-local instructions and existing conventions take precedence over thes
 
 - This machine is managed by the `~/nixos` flake (NixOS, or nix-darwin on macOS). Persistent system or user configuration belongs there; do not use `apt`, global npm/pip installs, or edit `/etc`.
 - For one-off tools, use `nix run nixpkgs#<tool>` or `nix shell nixpkgs#<tool>`.
-- Don't create files or folders directly in `~`, or in a repo you weren't asked to change. Throwaway files (benchmarks, experiments, test fixtures) go under `/tmp` — spell the path out literally, since `$TMPDIR`, `$(mktemp -d)` and any other computed path are opaque to permission rules and make each write through one ask. Anything meant to outlive the session (plans, notes, reports) goes in `~/.local/share/agents/<topic>/`.
+- Don't create files or folders directly in `~`, or in a repo you weren't asked to change. Throwaway files (benchmarks, experiments, test fixtures) go under `/tmp` — spell the path out literally, since `$TMPDIR`, `$(mktemp -d)` and any other computed path are opaque to permission rules and make each write through one ask. Anything meant to outlive the session (plans, notes, reports, dumps, repros, read-only clones) goes in `~/scratch/<topic>/`.
+- `~` has a fixed layout: repos flat in `~/dev/<repo>`, worktrees in `~/worktrees`, notes vaults in `~/notes/<vault>`, this machine's config in `~/nixos`, plus the XDG dirs (`~/Documents`, `~/Downloads`, …). Anything else at the top level is a stray.
 
 ## Tooling
 

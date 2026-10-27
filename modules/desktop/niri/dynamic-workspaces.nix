@@ -1,10 +1,18 @@
-{inputs, ...}: {
+{
+  inputs,
+  fpLib,
+  ...
+}: {
   flake.modules.homeManager.niri-dynamic-workspaces = {
     config,
     lib,
     pkgs,
     ...
   }: let
+    nixos = fpLib.homePath config "nixos";
+    dev = fpLib.homePath config "dev";
+    tilt = "${dev}/devenv-tilt";
+
     mkWorkspace = {
       name,
       path,
@@ -58,35 +66,35 @@
 
             n = mkWorkspace {
               name = "nix";
-              path = "/home/nickolaj/nixos";
+              path = nixos;
             };
             s = mkWorkspace {
               name = "shop";
-              path = "/home/nickolaj/dev/devenv-tilt/projects/vvsshop";
+              path = "${tilt}/projects/vvsshop";
             };
             f = mkWorkspace {
               name = "flex";
-              path = "/home/nickolaj/dev/devenv-tilt/projects/neoflex";
+              path = "${tilt}/projects/neoflex";
             };
             u = mkWorkspace {
               name = "imagine";
-              path = "/home/nickolaj/dev/devenv-tilt/projects/imagine";
+              path = "${tilt}/projects/imagine";
             };
             i = mkWorkspace {
               name = "insight";
-              path = "/home/nickolaj/dev/devenv-tilt/projects/insight";
+              path = "${tilt}/projects/insight";
             };
             p = mkWorkspace {
               name = "producthub";
-              path = "/home/nickolaj/dev/devenv-tilt/projects/producthub";
+              path = "${tilt}/projects/producthub";
             };
             l = mkWorkspace {
               name = "python-libs";
-              path = "/home/nickolaj/dev/devenv-tilt/projects/python-libs";
+              path = "${tilt}/projects/python-libs";
             };
             d = mkWorkspace {
               name = "devenv";
-              path = "/home/nickolaj/dev/devenv-tilt";
+              path = tilt;
             };
             y = mkRemoteWorkspace {
               name = "scw-tf";
@@ -105,7 +113,7 @@
                 path = {
                   name = "Path from dev folder";
                   type = "dir";
-                  dirs = ["/home/nickolaj/dev/" "/home/nickolaj/dev/devenv-tilt/projects/"];
+                  dirs = ["${dev}/" "${tilt}/projects/"];
                 };
               };
             };

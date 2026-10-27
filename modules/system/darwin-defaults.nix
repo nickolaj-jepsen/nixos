@@ -92,7 +92,7 @@
       };
 
       screencapture = {
-        location = "/Users/${config.fireproof.username}/Screenshots";
+        location = "/Users/${config.fireproof.username}/Pictures/Screenshots";
         type = "png";
         disable-shadow = true; # no drop-shadow border around window screenshots
       };
@@ -145,8 +145,8 @@
     # screencapture.location won't create its target; macOS silently falls back to
     # the Desktop when the dir is missing.
     system.activationScripts.postActivation.text = ''
-      mkdir -p /Users/${config.fireproof.username}/Screenshots
-      chown ${config.fireproof.username} /Users/${config.fireproof.username}/Screenshots
+      mkdir -p /Users/${config.fireproof.username}/Pictures/Screenshots
+      chown ${config.fireproof.username} /Users/${config.fireproof.username}/Pictures/Screenshots
 
       # Opt out of sending diagnostics + crash data to Apple. This is a root-owned
       # /Library plist, not a user default, and macOS re-touches it — so re-assert

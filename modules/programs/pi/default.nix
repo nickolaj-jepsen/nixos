@@ -551,9 +551,11 @@ in {
           # Bash path args are also matched absolute, so gate write locations here,
           # not in bash rules. The cwd root counts as inside; only `rm * ~*` catches it.
           external_directory_write = let
+            inherit (config.fireproof.paths) worktrees;
             roots =
               # /nix/store so `rm result` doesn't ask; ~/worktrees/* so a whole <repo> does.
-              ["/tmp" "~/.local/share/agents" "~/worktrees/*" "/nix/store"];
+              ["/tmp" "/nix/store" "~/${worktrees}/*"]
+              ++ map (root: "~/${root}") (lib.remove worktrees (fpLib.homeRoots config));
           in
             {"*" = "ask";}
             // lib.listToAttrs (lib.concatMap (root: [

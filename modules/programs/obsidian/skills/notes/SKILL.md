@@ -7,7 +7,7 @@ argument-hint: <question>
 
 # Look it up in my notes
 
-The vault is `~/obsidian/notes`: plain markdown with YAML frontmatter. Read its
+The vault is `~/notes/notes`: plain markdown with YAML frontmatter. Read its
 `AGENTS.md` first for the folder layout and frontmatter schema.
 
 - Read-only: never create, edit, move or delete anything in the vault from here, and

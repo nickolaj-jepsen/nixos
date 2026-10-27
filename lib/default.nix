@@ -52,6 +52,16 @@ in {
   mkHunspell = pkgs: pkgs.hunspell.withDicts (d: map (name: d.${name}) hunspellLanguages);
   hunspellPersonalDictionary = config: "${config.xdg.configHome}/hunspell/personal.dic";
 
+  # Absolute path of a fireproof.paths root, from a home-manager config.
+  homePath = config: name: "${config.home.homeDirectory}/${config.fireproof.paths.${name}}";
+
+  # Every visible top-level name of ~ the layout declares: the fireproof.paths
+  # roots plus the XDG user dirs (created or not). From a home-manager config.
+  homeRoots = config: let
+    xdgDirs = with config.xdg.userDirs; [desktop documents download music pictures projects publicShare templates videos];
+  in
+    lib.unique (lib.attrValues config.fireproof.paths ++ map baseNameOf (lib.remove null xdgDirs));
+
   # The `programs.<app>.package` an HM GUI leaf should install: null on darwin
   # (the binary comes from a homebrew cask, so HM manages config only — nixpkgs
   # .app bundles are second-class there), the nixpkgs build on Linux. Pairs with

@@ -56,16 +56,33 @@ else
   STALE_PATHS=(/tmp/pi-* /tmp/oc /tmp/opencode /tmp/jiti /tmp/node-compile-cache)
 fi
 
+# The home layout (docs/home-layout.md), written by the janitor leaf. Without it
+# the roster falls back to ~/dev and ~/nixos, and nothing counts as a stray.
+LAYOUT_FILE=${JANITOR_LAYOUT:-${XDG_CONFIG_HOME:-$HOME/.config}/janitor/layout.json}
+layout() {
+  [ -f "$LAYOUT_FILE" ] || return 0
+  jq -r "$@" "$LAYOUT_FILE" 2>/dev/null || true
+}
+
 if [ -n "${JANITOR_REPO_PARENTS:-}" ]; then
   IFS=: read -r -a REPO_PARENTS <<<"$JANITOR_REPO_PARENTS"
 else
-  REPO_PARENTS=("$HOME/dev")
+  mapfile -t REPO_PARENTS < <(layout '.repoParents[]?')
+  [ "${#REPO_PARENTS[@]}" -gt 0 ] || REPO_PARENTS=("$HOME/dev")
 fi
 if [ -n "${JANITOR_REPO_SINGLES:-}" ]; then
   IFS=: read -r -a REPO_SINGLES <<<"$JANITOR_REPO_SINGLES"
 else
-  REPO_SINGLES=("$HOME/nixos")
+  mapfile -t REPO_SINGLES < <(layout '.repoSingles[]?')
+  [ "${#REPO_SINGLES[@]}" -gt 0 ] || REPO_SINGLES=("$HOME/nixos")
 fi
+
+# Scratch is never swept: a stale entry is only offered, unticked.
+SCRATCH=${JANITOR_SCRATCH:-$(layout '.scratch // empty')}
+SCRATCH_AGE_DAYS=${JANITOR_SCRATCH_AGE_DAYS:-30}
+SCRATCH_AGE_SECONDS=$((SCRATCH_AGE_DAYS * 86400))
+# The visible top-level names ~ may hold, one per line.
+HOME_ROOTS=${JANITOR_HOME_ROOTS:-$(layout '.roots[]?')}
 
 CLAUDE_DIRS=("$HOME/.claude" "$HOME/.claude-work")
 STATE_DIR=${JANITOR_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/janitor}
@@ -170,8 +187,8 @@ anything_running_in() {
 
 is_repo() { [ -e "$1/.git" ]; }
 
-# Every repository the janitor looks at: the checkouts under ~/dev plus the ones
-# that are a checkout on their own, like ~/nixos.
+# Every repository the janitor looks at: the checkouts under each repo parent plus
+# the ones that are a checkout on their own, like ~/nixos.
 repos() {
   local parent repo
   for parent in ${REPO_PARENTS[@]+"${REPO_PARENTS[@]}"}; do
@@ -208,7 +225,7 @@ default_branch() {
 label_for() {
   local path=$1 tilde='~'
   case "$path" in
-    "$HOME"/dev/*) path=${path#"$HOME"/dev/} ;;
+    "${REPO_PARENTS[0]}"/*) path=${path#"${REPO_PARENTS[0]}"/} ;;
     "$HOME"/*) path="$tilde/${path#"$HOME"/}" ;;
     /tmp/*) path=${path#/tmp/} ;;
   esac
@@ -218,6 +235,24 @@ label_for() {
     s@^-home-[a-z0-9]+-(dev-)?@@
     s@([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@\1@g
   '
+}
+
+# A path as the user would type it.
+tilde() {
+  local tilde='~'
+  case "$1" in
+    "$HOME"/*) printf '%s\n' "$tilde/${1#"$HOME"/}" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+# Seconds since anything inside a scratch entry changed, or failure while that is
+# under the age: a topic dir's own mtime misses writes deeper in it.
+scratch_idle() {
+  local newest
+  [ -z "$(find "$1" -newermt "@$((now - SCRATCH_AGE_SECONDS))" -print -quit 2>/dev/null)" ] || return 1
+  newest=$(find "$1" -printf '%T@\n' 2>/dev/null | sort -n | tail -1)
+  echo $((now - ${newest%.*}))
 }
 
 # The repo that owns a path, for re-checking the build-dir rule at apply time,

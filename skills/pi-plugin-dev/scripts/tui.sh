@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-outroot="${PI_PLUGIN_DEV_DIR:-$HOME/.local/share/agents/pi-plugin-dev}"
+outroot="${PI_PLUGIN_DEV_DIR:-$HOME/scratch/pi-plugin-dev}"
 sess="plugdev-$(printf '%s' "$PWD" | sha1sum | cut -c1-8)"
 out="$outroot/$sess"
 

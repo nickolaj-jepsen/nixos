@@ -23,14 +23,15 @@ PluginComponent {
         })
     readonly property int scanIntervalMs: 3600000
 
-    readonly property var categoryOrder: ["build", "tmp", "jobs", "transcripts", "worktree", "branch"]
+    readonly property var categoryOrder: ["build", "tmp", "jobs", "transcripts", "worktree", "branch", "scratch"]
     readonly property var categoryTitles: ({
             "build": "Build dirs",
             "tmp": "Agent temp",
             "jobs": "Finished jobs",
             "transcripts": "Transcripts",
             "worktree": "Worktrees",
-            "branch": "Branches"
+            "branch": "Branches",
+            "scratch": "Stale scratch"
         })
     readonly property var categoryIcons: ({
             "build": "folder",
@@ -38,11 +39,14 @@ PluginComponent {
             "jobs": "work_history",
             "transcripts": "description",
             "worktree": "account_tree",
-            "branch": "alt_route"
+            "branch": "alt_route",
+            "scratch": "inventory_2"
         })
 
     property var snapshot: null
     property var items: []
+    // Top-level entries of ~ outside the home layout: shown, never applied.
+    property var strays: []
     property var rows: []
     property var checked: ({})
     property bool scanning: false
@@ -130,6 +134,7 @@ PluginComponent {
                         preset[item.id] = true;
                 });
                 root.items = plan.items;
+                root.strays = plan.strays ?? [];
                 root.rows = root.groupRows(plan.items);
                 root.checked = preset;
                 root.snapshot = Object.assign({}, root.snapshot, {
@@ -534,6 +539,49 @@ PluginComponent {
                         hoverEnabled: !row.isHeader
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.toggle(modelData.id)
+                    }
+                }
+            }
+
+            // Strays get no checkbox: moving one somewhere is the user's call.
+            Column {
+                width: parent.width
+                visible: root.strays.length > 0
+                spacing: 2
+
+                Row {
+                    leftPadding: Theme.spacingS
+                    spacing: Theme.spacingS
+
+                    DIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "drive_file_move"
+                        size: Theme.iconSizeSmall
+                        color: Theme.surfaceVariantText
+                    }
+
+                    StyledText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Strays in ~ · " + root.strays.length
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.weight: Font.DemiBold
+                        color: Theme.surfaceText
+                    }
+                }
+
+                Repeater {
+                    model: root.strays
+
+                    StyledText {
+                        required property var modelData
+                        width: parent.width
+                        leftPadding: Theme.spacingS
+                        rightPadding: Theme.spacingS
+                        text: root.gib(modelData.bytes) + "  " + modelData.label + (modelData.suggestLabel ? "  →  " + modelData.suggestLabel : "")
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.features: root.tabular
+                        color: Theme.surfaceVariantText
+                        elide: Text.ElideMiddle
                     }
                 }
             }

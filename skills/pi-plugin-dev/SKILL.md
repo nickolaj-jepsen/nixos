@@ -21,7 +21,7 @@ A pi extension runs inside the host process, so the thing under test is a runnin
 | `tui.sh digest [file]`                           | Digest the newest session file of this run                        |
 | `tui.sh stop`                                    | Kill the session                                                  |
 
-Run dir: `~/.local/share/agents/pi-plugin-dev/<dir-hash>/`. Sessions are per working directory, so `tui.sh` works from wherever the plugin lives without naming anything.
+Run dir: `~/scratch/pi-plugin-dev/<dir-hash>/`. Sessions are per working directory, so `tui.sh` works from wherever the plugin lives without naming anything.
 
 ## The loop
 
