@@ -14,7 +14,7 @@
   }: let
     cfg = config.fireproof.dev.llm;
     models = (import ./_llm-models.nix).${toString cfg.vramGiB};
-    modelDir = "${config.home.homeDirectory}/models";
+    modelDir = "${config.xdg.dataHome}/llm/models";
     filePath = f: "${modelDir}/${f.file}";
     # --parallel defaults to auto in b10612+ and multiplies the KV/recurrent-state
     # caches per slot — without pinning it to 1 the MTP config OOMs on load.

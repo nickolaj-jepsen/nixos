@@ -1,4 +1,4 @@
-{
+{fpLib, ...}: {
   flake.modules.homeManager.direnv = {config, ...}: {
     programs.direnv = {
       enable = true;
@@ -8,7 +8,7 @@
           hide_env_diff = true;
           warn_timeout = "1m";
         };
-        whitelist.prefix = ["${config.home.homeDirectory}/nixos"];
+        whitelist.prefix = [(fpLib.homePath config "nixos")];
       };
     };
     # Silence the per-load "direnv: loading…/export N vars" banner (complements

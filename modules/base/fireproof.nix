@@ -25,6 +25,22 @@ let
 
       work.enable = lib.mkEnableOption "work-related applications and tools";
 
+      # docs/home-layout.md. Read through fpLib.homePath/homeRoots, never spell ~/dev etc.
+      paths = let
+        root = default: description:
+          lib.mkOption {
+            type = lib.types.str;
+            inherit default;
+            description = "${description} A top-level name in the home directory.";
+          };
+      in {
+        dev = root "dev" "Flat checkouts, one per repo the user owns or actively patches.";
+        worktrees = root "worktrees" "Git worktrees as <repo>/<name>; wt's root.";
+        scratch = root "scratch" "Throwaway work as <topic>/, for the user and agents alike; never deleted automatically.";
+        notes = root "notes" "Notes vaults, one folder each.";
+        nixos = root "nixos" "This flake's checkout.";
+      };
+
       # Enabling a host needs `just secret-rekey` — the body is an agenix secret.
       scripts.tunnel-home.enable = lib.mkEnableOption "tunnel-home, an sshuttle wrapper for reaching a remote network over SSH";
 

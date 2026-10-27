@@ -9,7 +9,7 @@ import sys
 
 import yaml
 
-# KEY_ORDER is injected from _key-order.nix.
+# KEY_ORDER (from _key-order.nix) and DEFAULT_VAULT are injected by agents.nix.
 KNOWN_KEYS = set(KEY_ORDER) | {"aliases", "cssclasses"}
 AREAS = {"personal", "work"}
 # Folder -> (required keys, {key: allowed values})
@@ -86,7 +86,7 @@ def check_frontmatter(path, fm, problems):
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    vault = os.path.expanduser(args[0] if args else "~/obsidian/notes")
+    vault = os.path.expanduser(args[0]) if args else DEFAULT_VAULT
     files = sorted(walk(vault))
     notes = [f for f in files if f.endswith(".md")]
     names = {}

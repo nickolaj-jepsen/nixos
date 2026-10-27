@@ -158,7 +158,7 @@ outside SSO (the plugin only speaks CouchDB basic auth) so work PCs off the
 tailnet can sync. The `obsidian-couchdb` fail2ban jail bans on that vhost's
 401s (own access log); `/_up` is the only anonymous endpoint.
 
-- Vaults: `~/obsidian/<name>` on every desktop host, one CouchDB database
+- Vaults: `~/notes/<name>` on every desktop host, one CouchDB database
   each. The name lists live in both files; add a vault to both.
 - Devices: one CouchDB user per `secrets/obsidian/<device>.age` (every file
   but `passphrase.age`; `devices` in `obsidian-sync.nix` reads the directory),

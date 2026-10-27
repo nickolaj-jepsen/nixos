@@ -347,7 +347,8 @@
               "- **Primary use of Claude Code**: the user's own Nix system configuration (flakes, home-manager, agenix) and hobby projects"
               + lib.optionalString work "; on this host also software development for Digital-Udvikling"
             )
-            "- **Trusted repo**: ~/nixos (PUBLIC, see Repository visibility) and the user's own checkouts under ~/dev"
+            "- **Trusted repo**: ~/nixos (PUBLIC, see Repository visibility) and the user's own checkouts under ~/dev and ~/worktrees"
+            "- **Home layout**: ${lib.concatMapStringsSep ", " (r: "~/${r}") (fpLib.homeRoots config)} are the user's declared folders, all open to agents; throwaway and session-outliving output goes in ~/${config.fireproof.paths.scratch}/<topic>/. Writing a new top-level entry in ~ is littering, not routine"
             "- **Org-specific CLIs**: `just` (task runner in ~/nixos), agenix/age (secrets)"
           ]
           ++ onWork "- **Org-specific CLIs (work)**: `ds` (Digital-Udvikling repositories only), `kubectl` (work clusters)"
@@ -397,6 +398,8 @@
             "ao-skills@ao-agent-skills" = true;
           };
         permissions = {
+          # Every declared home folder, so a session outside it reaches them like its cwd.
+          additionalDirectories = map (root: "${homeDir}/${root}") (fpLib.homeRoots config) ++ ["/tmp"];
           # Only commands that are frequent AND slow to classify earn a rule: in
           # auto mode an allow rule buys determinism, not safety. Omitted on
           # purpose — the built-in read-only set (ls/cat/head/tail/grep/find/wc/
@@ -481,21 +484,28 @@
             "Bash(scw * poweroff *)"
             "Bash(scw * reboot *)"
           ];
-          # Read rules cover the file tools only — Bash can still cat these. agenix
-          # decrypts to /run, and the ~/.ssh keys are symlinks into it.
-          deny = [
-            "Read(//run/agenix/**)"
-            "Read(//run/user/*/agenix/**)"
-            "Read(~/.ssh/id_*)"
-            "Read(~/.claude/.credentials.json)"
-            "Read(~/.claude-work/.credentials.json)"
-            "Read(**/.env)"
-            # Holds both Scaleway key pairs; pi denies this path via age.secrets.
-            "Read(~/.config/scw/config.yaml)"
-            # Print the plaintext key into the transcript, sidestepping the Read deny.
-            "Bash(scw config get secret-key)"
-            "Bash(scw config dump)"
-          ];
+          # Credentials are denied both ways: the nixos repo's .claude/settings.json opens
+          # dotdir writes. These cover the file tools only — Bash can still cat them.
+          # agenix decrypts to /run, and the ~/.ssh keys are symlinks into it.
+          deny =
+            lib.concatMap (path: ["Read(${path})" "Edit(${path})"]) [
+              "//run/agenix/**"
+              "//run/user/*/agenix/**"
+              "~/.ssh/id_*"
+              "~/.claude/.credentials.json"
+              "~/.claude-work/.credentials.json"
+              "~/.pi/agent/auth.json"
+              "~/.pi/agent/mcp-auth.json"
+              # Holds both Scaleway key pairs; pi denies this path via age.secrets.
+              "~/.config/scw/config.yaml"
+            ]
+            ++ [
+              # Read only: agents write .env files for local dev.
+              "Read(**/.env)"
+              # Print the plaintext key into the transcript, sidestepping the Read deny.
+              "Bash(scw config get secret-key)"
+              "Bash(scw config dump)"
+            ];
         };
       };
     };

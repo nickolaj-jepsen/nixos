@@ -203,7 +203,7 @@
 
         vaults = {
           notes = {
-            target = "obsidian/notes";
+            target = "${config.fireproof.paths.notes}/notes";
             settings.app =
               app
               // {
@@ -238,7 +238,7 @@
             };
           };
           legacy = {
-            target = "obsidian/legacy";
+            target = "${config.fireproof.paths.notes}/legacy";
             settings.app =
               app
               // {

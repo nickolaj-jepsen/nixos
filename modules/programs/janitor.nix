@@ -1,15 +1,32 @@
-# The janitor (docs/janitor.md). The CLI itself is pkgs/janitor; this leaf only
-# schedules it and puts it on PATH, so the agent wrappers (claude-code,
-# claude-work, pi) can ask it where their TMPDIR goes.
-{
+# The janitor (docs/janitor.md). The CLI itself is pkgs/janitor; this leaf
+# schedules it, tells it the home layout and puts it on PATH, so the agent
+# wrappers (claude-code, claude-work, pi) can ask it where their TMPDIR goes.
+{fpLib, ...}: {
   flake.modules.homeManager.janitor = {
     config,
     lib,
     pkgs,
     ...
-  }: {
+  }: let
+    path = fpLib.homePath config;
+  in {
     config = lib.mkIf config.fireproof.janitor.enable {
       home.packages = [pkgs.janitor];
+
+      # The home layout as the CLI reads it, so every caller (timers, widget,
+      # wrappers, a terminal) agrees on the roster, scratch and the strays.
+      xdg.configFile."janitor/layout.json".text = builtins.toJSON {
+        repoParents = [(path "dev")];
+        repoSingles = [(path "nixos")];
+        scratch = path "scratch";
+        # macOS creates these itself and won't let them go.
+        roots = fpLib.homeRoots config ++ lib.optionals pkgs.stdenv.isDarwin ["Applications" "Library" "Movies"];
+        # Roots that moved, so a box still on the old layout is told where to.
+        hints = {
+          obsidian = path "notes";
+          models = "${config.xdg.dataHome}/llm/models";
+        };
+      };
 
       # Cheap and frequent: agent temp, finished jobs, other agents' strays. At
       # login it clears what a crash or a SIGKILL left behind, then every quarter

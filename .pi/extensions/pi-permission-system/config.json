@@ -1,0 +1,9 @@
+{
+  "permission": {
+    "external_directory_write": {
+      "~/.*": "allow",
+      "~/.*..*": "ask",
+      "~/..*": "ask"
+    }
+  }
+}
