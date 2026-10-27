@@ -22,7 +22,11 @@ in
 
     build-system = [python3Packages.setuptools];
     nativeBuildInputs = [makeWrapper];
-    nativeCheckInputs = [python3Packages.unittestCheckHook git coreutils];
+    # Occupancy is read from lsof where there is no /proc, so the check needs
+    # the same tool as the wrapper or the busy tests see no processes at all.
+    nativeCheckInputs =
+      [python3Packages.unittestCheckHook git coreutils]
+      ++ lib.optional stdenv.isDarwin lsof;
     unittestFlags = ["-s" "tests" "-p" "test_*.py"];
 
     postFixup = ''
