@@ -48,32 +48,76 @@ mapfile -t cwds < <(
     awk '!seen[$0]++'
 )
 
-path=""
-if [[ $arg == /* && -e $arg ]]; then
-  path=$arg
-elif [[ $arg != /* ]]; then
-  for cwd in "${cwds[@]}"; do
-    if [[ -e $cwd/$arg ]]; then
-      path=$cwd/$arg
-      break
+# Prints the absolute path $1 resolves to, or nothing.
+resolve() {
+  local arg=$1
+  local cwd files match suffix base
+  if [[ $arg == /* ]]; then
+    if [[ -e $arg ]]; then
+      echo "$arg"
+      return 0
     fi
-  done
-fi
+  else
+    for cwd in "${cwds[@]}"; do
+      if [[ -e $cwd/$arg ]]; then
+        echo "$cwd/$arg"
+        return 0
+      fi
+    done
+  fi
 
-# Trimmed (`…/foo/bar.nix`) or wrongly rooted path: match it as a suffix of a tracked file.
-if [[ -z $path ]]; then
+  # Shell globs (`views/*.sql`, `~/.pi/agent/*-api-key`): the first match, as sorted.
+  if [[ $arg == *[*?[]* ]]; then
+    local -a hits=()
+    local hit
+    if [[ $arg == /* ]]; then
+      mapfile -t hits < <(compgen -G "$arg")
+    else
+      for cwd in "${cwds[@]}"; do
+        mapfile -t hits < <(compgen -G "$cwd/$arg")
+        if ((${#hits[@]})); then break; fi
+      done
+    fi
+    for hit in "${hits[@]}"; do
+      if [[ -e $hit ]]; then
+        echo "$hit"
+        return 0
+      fi
+    done
+  fi
+
+  # Trimmed (`…/foo/bar.nix`) or wrongly rooted path: match it as a suffix of a tracked file.
   suffix=${arg#…}
   suffix=${suffix#...}
   suffix=${suffix#./}
   suffix=${suffix#/}
+  base=${suffix##*/}
   for cwd in "${cwds[@]}"; do
-    match=$(git -C "$cwd" ls-files 2>/dev/null |
-      awk -v s="/$suffix" '{ p = "/" $0; if (substr(p, length(p) - length(s) + 1) == s) { print; exit } }') || true
+    files=$(git -C "$cwd" ls-files 2>/dev/null) || true
+    match=$(awk -v s="/$suffix" '{ p = "/" $0; if (substr(p, length(p) - length(s) + 1) == s) { print; exit } }' <<<"$files")
     if [[ -n $match ]]; then
-      path=$cwd/$match
-      break
+      echo "$cwd/$match"
+      return 0
+    fi
+    # Claude gets the directory wrong more often than the file name: take a name
+    # that only one tracked file has.
+    match=$(awk -v b="$base" -F/ '$NF == b { n++; m = $0 } END { if (n == 1) print m }' <<<"$files")
+    if [[ -n $match ]]; then
+      echo "$cwd/$match"
+      return 0
     fi
   done
+  return 0
+}
+
+# Ghostty keeps prose punctuation inside the link too (`;`, `?`, `!`, `+`, `=`).
+while [[ $arg == *';' || $arg == *'?' || $arg == *'!' || $arg == *'+' || $arg == *'=' ]]; do
+  arg=${arg%?}
+done
+path=$(resolve "$arg")
+# A sentence period stays in the link (`…/foo.nix.`); a `...` is prose ellipsis, not part of the path.
+if [[ -z $path && $arg == *[!.]\. ]]; then
+  path=$(resolve "${arg%.}")
 fi
 
 if [[ -z $path ]]; then
