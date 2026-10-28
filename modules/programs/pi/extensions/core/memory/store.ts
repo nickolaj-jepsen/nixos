@@ -7,7 +7,6 @@
  * and the global store. A store whose worktree root has gone (after `wt clean`)
  * is an orphan: never injected, only offered for promotion or deletion.
  */
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -19,8 +18,9 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, join } from "node:path";
 import { getAgentDir, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
+import { gitRoots } from "../../shared/git.ts";
 import { parse, serialize, type FrontmatterValue } from "./frontmatter.ts";
 
 export const KINDS = ["rule", "preference", "environment", "gotcha", "reference"] as const;
@@ -97,35 +97,6 @@ const real = (path: string) => {
 
 const storeKey = (root: string) =>
   createHash("sha256").update(real(root)).digest("hex").slice(0, 16);
-
-const git = (cwd: string, args: string[]) => {
-  try {
-    return execFileSync("git", args, {
-      cwd,
-      encoding: "utf8",
-      timeout: 5_000,
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-  } catch {
-    return undefined;
-  }
-};
-
-/** Worktree root and main checkout of `cwd`, both unset outside git. */
-export function gitRoots(cwd: string): { root?: string; main?: string } {
-  const out = git(cwd, [
-    "rev-parse",
-    "--path-format=absolute",
-    "--show-toplevel",
-    "--git-common-dir",
-  ]);
-  if (!out) return {};
-  const [top, common] = out.split("\n");
-  if (!top) return {};
-  // A bare common dir has no main checkout; treat the worktree as its own main.
-  const main = common && basename(common) === ".git" ? dirname(common) : top;
-  return { root: real(top), main: real(main) };
-}
 
 const readMeta = (dir: string): StoreMeta | undefined => {
   try {

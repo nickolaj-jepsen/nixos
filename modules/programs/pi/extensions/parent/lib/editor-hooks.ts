@@ -10,6 +10,8 @@ export type PromptDraft = {
   getCursor(): { line: number; col: number };
   /** Replaces the whole draft, keeping the pastes its `[paste #n]` markers name. */
   replaceText(text: string): void;
+  /** Adds a prompt to the up-arrow history, as a submitted one would be. */
+  addToHistory(text: string): void;
   requestRender(): void;
 };
 
@@ -22,10 +24,16 @@ export type EditorDecorator = {
 
 export const createEditorHooks = () => {
   const decorators: EditorDecorator[] = [];
+  let current: PromptDraft | undefined;
   return {
     add: (decorator: EditorDecorator): void => {
       decorators.push(decorator);
     },
+    attach: (draft: PromptDraft): void => {
+      current = draft;
+    },
+    /** The editor on screen now; pi builds a fresh one for every session. */
+    current: (): PromptDraft | undefined => current,
     decorateLine: (line: string): string =>
       decorators.reduce((drawn, d) => d.decorateLine?.(drawn) ?? drawn, line),
     edited: (draft: PromptDraft): void => {

@@ -54,6 +54,7 @@ export class PromptEditor extends CustomEditor implements PromptDraft {
   ) {
     // pi embeds its working status in the top border only for an editor that asks.
     super(tui, theme, keybindings, { embedWorkingStatus: true });
+    hooks.attach(this);
   }
 
   override setWorkingStatusIndicator(indicator: BorderStatus | undefined): void {

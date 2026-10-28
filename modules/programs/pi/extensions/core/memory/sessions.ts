@@ -16,7 +16,7 @@ import { basename, join } from "node:path";
 import { homedir } from "node:os";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { IDENTITY_ENTRY, readIdentity } from "../../shared/identity.ts";
-import { gitRoots } from "./store.ts";
+import { gitRoots } from "../../shared/git.ts";
 
 export type SessionScope = "repo" | "all";
 export type SessionHit = {
