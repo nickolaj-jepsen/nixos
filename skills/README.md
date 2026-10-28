@@ -53,3 +53,11 @@ claude plugin install skills@nickolaj-jepsen
   few, run the repo's checks, stop at a review gate, then land with `wt land` or open a
   PR (draft, awaiting review, or merged on green). Needs `wt`, `gh` and `python3`; the PR
   half lives in a bundled `scripts/pr.py`.
+- **handoff** — turn a finished brainstorm into a self-contained plan for another agent:
+  pin the scope, verify assumptions with read-only subagents, grill only the open
+  decisions, agree the item graph, then write vertical-slice work items with owned paths
+  and acceptance commands.
+- **run-handoff** — build a handoff in one long-running session: every unblocked item
+  goes to a subagent in its own worktree, re-verified by the lead before it lands on an
+  integration branch, with reviews at gates and over the whole branch. Checks in at gates
+  by default; `--auto` runs unattended.
