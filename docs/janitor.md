@@ -35,13 +35,16 @@ All of it is behind `fireproof.janitor.enable`, which cascades from
 | Merged branches     | Every commit is reachable from the default branch, and no worktree has it checked out                                                                                                 |
 | Worktrees           | `wt clean` decides: clean tree, landed, not busy, not locked                                                                                                                          |
 | Build dirs          | `node_modules`, `.venv`, `target`, `dist`, `.pytest_cache`, `__pycache__` in a repo with no commit in 60 days, no process whose cwd is inside it, and a directory untouched that long |
+| Nix roots in `/tmp` | An out-link outside the agent temp roots, untouched for 3 days                                                                                                                        |
+| Nix roots in repos  | Only in `apply`: a `result*` link untouched for 7 days, or the `.direnv` links of a repo idle the way build dirs mean it                                                              |
 | Unmerged branches   | Only in `apply`, only when ticked, and bundled first                                                                                                                                  |
 
 A _live_ temp session is never touched: the budget cannot reach it, so the only
 lever there is the warning line, and the agent has to give the space back itself.
-Nothing outside the named build directories is ever deleted from a working tree —
-`reverse/engagements` is 22 GB of engagement data and `devenv-tilt/projects` is
-19 GB of VM state, and an "untouched repo" rule would have been aimed at both.
+Nothing outside the named build directories and those nix links is ever deleted
+from a working tree — `reverse/engagements` is 22 GB of engagement data and
+`devenv-tilt/projects` is 19 GB of VM state, and an "untouched repo" rule would
+have been aimed at both.
 
 ## The two timers
 
@@ -51,8 +54,10 @@ free floor by evicting dead sessions oldest-first.
 
 `janitor-repo` runs at 04:00 with `Persistent=true`, and five minutes after
 login. It deletes merged branches, runs `wt clean` in every repo that has
-something to clean, drops transcripts past their month, then recomputes the
-cached plan the widget reads.
+something to clean, drops transcripts past their month and stale `/tmp`
+out-links, then recomputes the cached plan the widget reads. The weekly nix GC
+collects what those links held; `apply` runs `nix-store --gc` itself once it
+has removed a root, so the checklist shows the space straight away.
 
 Under 10 % free the tmp pass still runs and still shouts — journal, toast, red
 pill. It does not reach into working trees for build directories; that is always
@@ -95,7 +100,8 @@ Constants in `modules/programs/janitor.nix`'s CLI, overridable by environment
 variable for tests: `JANITOR_TMP_BUDGET_GIB` (16), `JANITOR_TMP_MAX_AGE_DAYS`
 (3), `JANITOR_FREE_FLOOR_PCT` (10), `JANITOR_WARN_FREE_GIB` (10),
 `JANITOR_TRANSCRIPT_AGE_DAYS` (30), `JANITOR_JOB_TMP_AGE_DAYS` (7),
-`JANITOR_BUILD_DIR_AGE_DAYS` (60), `JANITOR_BRANCH_IDLE_DAYS` (90). The roots
+`JANITOR_BUILD_DIR_AGE_DAYS` (60), `JANITOR_BRANCH_IDLE_DAYS` (90),
+`JANITOR_RESULT_AGE_DAYS` (7). The roots
 and the repo roster are `JANITOR_ROOT`, `JANITOR_LEGACY_ROOT`,
 `JANITOR_STALE_PATHS`, `JANITOR_REPO_PARENTS`, `JANITOR_REPO_SINGLES`,
 `JANITOR_STATE_DIR`; the fixture-only ones exist so a test can point the walk at
@@ -120,5 +126,11 @@ a temp tree.
   `~/.local/state/pi-auto-sandbox/disks`, outside every root here: `pi-auto-gate`
   has its own `collectGarbage` and knows which disk is a template. What the stray
   rule does reach is `/tmp/pi-*`, which is temp space like any other.
+- **Nix roots are found through the daemon, not a walk.**
+  `nix-store --gc --print-roots` sees an out-link at any depth. A row's size
+  counts only store paths nothing else rooted reaches, so rows add up, but it
+  is NAR size and `nix.optimise`'s hard links can make the real gain smaller.
+  Roots outside `/tmp` and the repo roster, such as `~/.local/share/agents/*`
+  builds, are never touched.
 - **`wt clean` deletes what it deletes.** The janitor only decides _when_ to run
   it, never what a worktree is worth.

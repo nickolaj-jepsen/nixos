@@ -23,9 +23,10 @@ PluginComponent {
         })
     readonly property int scanIntervalMs: 3600000
 
-    readonly property var categoryOrder: ["build", "tmp", "jobs", "transcripts", "worktree", "branch"]
+    readonly property var categoryOrder: ["build", "gcroot", "tmp", "jobs", "transcripts", "worktree", "branch"]
     readonly property var categoryTitles: ({
             "build": "Build dirs",
+            "gcroot": "Nix roots",
             "tmp": "Agent temp",
             "jobs": "Finished jobs",
             "transcripts": "Transcripts",
@@ -34,6 +35,7 @@ PluginComponent {
         })
     readonly property var categoryIcons: ({
             "build": "folder",
+            "gcroot": "inventory_2",
             "tmp": "hourglass_empty",
             "jobs": "work_history",
             "transcripts": "description",

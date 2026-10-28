@@ -35,6 +35,8 @@ JOB_TMP_AGE_DAYS=${JANITOR_JOB_TMP_AGE_DAYS:-7}
 # Rebuildable in minutes with a lockfile and a fast network, so the age is short.
 BUILD_DIR_AGE_DAYS=${JANITOR_BUILD_DIR_AGE_DAYS:-60}
 BRANCH_IDLE_DAYS=${JANITOR_BRANCH_IDLE_DAYS:-90}
+# A repo's `result` link a week on is a build nobody is still looking at.
+RESULT_AGE_DAYS=${JANITOR_RESULT_AGE_DAYS:-7}
 # A legacy dir the session registry has never heard of is only idle-guessed; an
 # hour without a write is longer than a live session goes without touching it.
 LEGACY_IDLE_SECONDS=3600
@@ -46,6 +48,7 @@ TRANSCRIPT_AGE_SECONDS=$((TRANSCRIPT_AGE_DAYS * 86400))
 JOB_TMP_AGE_SECONDS=$((JOB_TMP_AGE_DAYS * 86400))
 BUILD_DIR_AGE_SECONDS=$((BUILD_DIR_AGE_DAYS * 86400))
 BRANCH_IDLE_SECONDS=$((BRANCH_IDLE_DAYS * 86400))
+RESULT_AGE_SECONDS=$((RESULT_AGE_DAYS * 86400))
 
 # Other agents' temp paths. None of them exposes a session this can recognise, so
 # they wait for the age rule. The env override takes a :-separated list, which is

@@ -117,6 +117,7 @@ plan_items() {
   scan_transcripts
   scan_worktrees
   scan_build_dirs
+  scan_gcroots
   scan_branches
 }
 
@@ -171,7 +172,7 @@ cmd_report() {
   local avail total bytes title detail count
   read -r avail total < <(free_space) || { avail=0; total=1; }
   printf 'janitor: %s free of %s on /\n' "$(gib "$avail")" "$(gib "$total")"
-  for category in tmp jobs transcripts build worktree branch; do
+  for category in tmp jobs transcripts build gcroot worktree branch; do
     count=$(awk -F'\t' -v c="$category" '$2 == c {n++} END {print n + 0}' "$PLAN_TMP")
     [ "$count" -gt 0 ] || continue
     printf '\n%s (%d)\n' "$category" "$count"
@@ -300,6 +301,17 @@ apply_item() {
       echo "$size" >>"$freed_log"
     }
     ;;
+  gcroot)
+    # gcroot_links only ever yields a /tmp/<dir> or a roster repo, so an id naming
+    # anything else matches no link.
+    size=$(gcroot_remove "$rest")
+    if [ "$size" -eq 0 ]; then
+      printf '  refused %s (no rule frees it any more)\n' "$rest"
+      return 0
+    fi
+    printf '  unroot  %s (%s link(s))\n' "$rest" "$size"
+    GCROOTS_REMOVED=1
+    ;;
   worktree)
     repo=${rest%%|*}
     branch=${rest#*|}
@@ -349,6 +361,7 @@ cmd_apply() {
   fi
   build_plan
   APPLY_TMP_SET=""
+  GCROOTS_REMOVED=0
 
   if [ "$have_ids" = 0 ] && [ -z "$ids_file" ]; then
     if [ ! -t 0 ] || ! command -v whiptail >/dev/null 2>&1; then
@@ -390,6 +403,13 @@ cmd_apply() {
     [ -n "$id" ] || continue
     apply_item "$id" || failures=$((failures + 1))
   done
+
+  if [ "${GCROOTS_REMOVED:-0}" = 1 ]; then
+    printf '  collecting the nix store...\n'
+    bytes=$(gcroot_collect)
+    printf '  freed   %8s  nix store\n' "$(gib "$bytes")"
+    echo "$bytes" >>"$PLAN_TMP.freed"
+  fi
 
   freed=$(awk '{s += $1} END {print s + 0}' "$PLAN_TMP.freed" 2>/dev/null || echo 0)
   printf 'janitor: freed %s\n' "$(gib "$freed")"
@@ -456,6 +476,13 @@ cmd_repo_pass() {
       printf 'janitor: removed job tmp %s (%s)\n' "$path" "$(gib "$size")"
     }
   done < <(scan_jobs)
+
+  # Only /tmp out-links here: the ones in working trees wait for `apply`, like
+  # build dirs. The weekly nix GC collects what they held.
+  while IFS=$'\t' read -r group path _; do
+    case "$group" in /tmp/*) ;; *) continue ;; esac
+    rm -f -- "$path" && printf 'janitor: removed nix root %s\n' "$path"
+  done < <(gcroot_links)
 
   # Sum of what was deleted, not the df delta: other processes write while this
   # runs, and a 1.4 GB deletion that df reports as 158 MB reads like a bug.

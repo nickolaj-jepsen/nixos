@@ -16,6 +16,7 @@
   text = lib.concatMapStrings (file: builtins.readFile file) [
     ./head.sh
     ./tmp.sh
+    ./gcroots.sh
     ./repo.sh
   ];
 in
