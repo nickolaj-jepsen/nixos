@@ -9,26 +9,26 @@ The argument names a target: a skill, a pi extension or tool, a CLI, or a Claude
 
 ## The reader
 
-`python3 <skill-dir>/scripts/sessions.py` (substitute this skill directory's absolute path) reads Claude Code, its work profile and pi transcripts, read-only. `--help` lists its subcommands and flags. It takes about half a minute per call, because it scans every session.
+`python3 <skill-dir>/scripts/sessions.py` (substitute this skill directory's absolute path) reads Claude Code, its work profile and pi transcripts, read-only. `--help` lists its subcommands and flags, run windows and answer classes. Each call scans every session, so it takes seconds to a minute.
 
-Transcripts are private. Never write condensed transcript text to disk, never quote a secret, and quote a phrase rather than a passage. Runs marked work profile are paraphrased, never quoted.
+Transcripts are private. Never write condensed transcript text to disk, never quote a secret, and quote a phrase rather than a passage. Runs marked work profile are paraphrased, never quoted. Every subagent brief repeats these rules.
 
 ## The target
 
 Turn the target into matchers for `runs`, using the recipe for its kind. Before judging a specific system, read the docs page the repo's agent instructions point to for it.
 
-- **Skill:** `--skill <name>`. A run spans from its invocation, typed or by the model, to the next typed invocation, so a skill that loads another (grill-me loading grilling) keeps its run. The `body` path shows which copy ran: the repo's deployed skill, an account-synced copy, or a plugin's. `ver` is the commit that introduced that body text in the repo given by `--repo` (default: the cwd's).
-- **Question-asking skill:** the header splits answers per question header into recommended, other option, and custom or multi.
+- **Skill:** `--skill <name>`. A run ends at the prompt that invokes another skill, so it often includes work done after the skill's own part. Its error and denial counts are therefore pointers, not verdicts. `via` says whether you asked for the skill or the model reached for it. The `body` path shows which copy ran: the repo's deployed skill, an account-synced copy, or a plugin's. `ver` is the commit that introduced that body text in the repo given by `--repo` (default: the cwd's); `~` marks a near match.
+- **Question-asking skill:** the header splits answers into recommended, other (another option beat the recommendation), no-rec, custom and multi. Read the overall rates first. Per question header, only when headers recur:
   - A header almost always answered with the recommendation is a decision the skill should state rather than ask.
   - One often answered custom is missing an option.
   - One where another option often wins has a wrong recommendation.
 - **pi extension or tool:** read the extension's source for the tool names it registers, and pass one `--tool` per name. Calls made from inside `codemode` count. The header reports how many pi sessions offered the tool and how many called it. Offered but never called is a description or existence problem.
 - **CLI:** `--cmd <binary>`, plus `--tool` for any harness tool that wraps it (find it in the repo). `--help` calls and an error followed by a retry are discoverability signals.
-- **Hook or setting:** `--text <regex>` on its distinctive output, such as its block message or script name. The header counts denials by kind. A blocked call followed by a rephrased retry of the same intent is likely a false positive. The same denial repeating suggests a missing allow rule.
+- **Hook or setting:** `--text <regex>` on its distinctive output, such as its block message or script name. The header counts denials by kind, for Claude Code only; in pi, read the matched calls' results. A blocked call followed by a rephrased retry of the same intent is likely a false positive. The same denial repeating suggests a missing allow rule.
 
 ## The file
 
-The topic is `<repo>-mine-<target>`. The file is `<dir>/FINDINGS.md`, where `<dir>` is `<topic>/` under wherever the user's instructions keep long-lived agent notes, otherwise `.agents/mine/<topic>/` in the repo. Never commit it.
+The topic is `<repo>-mine-<target>`. The file is `<dir>/FINDINGS.md`, where `<dir>` is `<topic>/` under wherever the user's instructions keep long-lived agent notes, otherwise `.agents/mine/<topic>/` in the repo. Never commit it: in the repo fallback, write a `.gitignore` containing `*` into `<dir>` before the file.
 
 If it exists, this is a rerun. Read it first, pass `--since <its date>` so only newer runs are read, and update the counts of the findings already there.
 
@@ -42,20 +42,23 @@ If it exists, this is a rerun. Read it first, pass `--since <its date>` so only 
 
 ## Read the runs
 
-With about 8 runs or fewer, read them inline with `runs <matchers> --show all`. With more, hand batches of about 8 to fresh subagents on a cheaper model than yours: `model: "sonnet"` in Claude Code, while pi's subagent roles already lock a cheap one.
+Read at most 40 runs: the most recent, keeping at least a few from each version seen. Say how many you left unread.
+
+With about 8 runs or fewer, read them inline with `runs <matchers> --show all`. With more, first print one line naming how many subagents you are about to start, then hand batches of about 8 to fresh subagents on a cheaper model than yours: `model: "sonnet"` in Claude Code, while pi's subagent roles already lock a cheap one.
 
 Give each subagent:
 
 - the target and a few lines on what it is meant to do;
 - its run ids;
-- the reader command to run itself (`runs <matchers> --show <id>,<id>`).
+- the reader command to run itself (`runs <matchers> --show <id>,<id>`). `--show` stops at 150 lines per run; `--max-lines` raises it when a run is cut before the target's part ends;
+- the privacy rules above.
 
 Never paste transcript text into a brief.
 
 For every run, the subagent returns:
 
-- **First failure:** the first point where the run went worse than it should have, in one line, with the turn it happened at; or "clean".
-- **Next:** what the user did once the target's part was done. This is the `[ended]` line's next prompt, or the turn after the work finished.
+- **First failure:** the first point where the run went worse than it should have, in one line, with its turn number (`#n`); or "clean".
+- **Next:** what the user did once the target's part was done, which is often well before the run's `[ended]` line.
 - **Not the target's fault:** harness or environment problems the run hit.
 
 In an interview skill, "yes", "no" and letters are answers, not corrections. A correction is the user redirecting, repeating themselves, rejecting the approach, or interrupting.
@@ -96,7 +99,7 @@ A failure seen in one run is an anecdote, not a finding. Rank findings by the ru
 With no target:
 
 1. The target is whatever this session used or worked on. Ask one question only if that's unclear.
-2. This session is the main evidence: read it from context, or with `session latest` once it has been compacted. Find its first failures and desire paths.
+2. This session is the main evidence: read it from context, or with `session latest --cwd <dir it ran in>` once it has been compacted. Find its first failures and desire paths.
 3. Check each finding against earlier runs of the target. Give subagents the specific findings to look for, not open coding. Report "also in k of N earlier runs" or "only here".
 
 Write to the target's usual `FINDINGS.md`, marking these findings `(retro)`. A later `/mine <target>` folds them in like any other.

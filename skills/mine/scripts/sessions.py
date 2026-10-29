@@ -3,30 +3,38 @@
 
 Sources: ~/.claude/projects and ~/.claude-work/projects (top-level sessions; subagent
 transcripts too with --subagents, .zst through the `zstd` CLI), and
-~/.pi/agent/sessions. Subagent and `claude -p` sessions are skipped, sidechains
-dropped, and a session stored twice (a resume, a fork, a worktree slug) counts once.
+~/.pi/agent/sessions. `claude -p` sessions and pi subagent sessions are skipped,
+sidechains dropped, and a session stored twice (a resume, a fork, a worktree slug)
+counts once. Sessions that ran /mine are never runs, so mining doesn't count itself.
 
-  runs MATCHER... [--since DATE] [--repo DIR] [--json] [--show IDS|all]
+  runs MATCHER... [--since DATE] [--repo DIR] [--json] [--show IDS|all] [--max-lines N]
       A signal header, then one line per run. --show prints the named runs condensed:
-      typed turns, question answers, each turn's last assistant text, tool calls with
-      their errors and denials. A skill run spans from its invocation to the next skill
-      invocation or the session's end; any other target's run is one session's matches.
+      numbered typed turns, question answers, each turn's last assistant text, tool
+      calls with their errors and denials. A skill run spans from its invocation, plus
+      the skills it loads before you speak again, to the prompt that invokes another
+      skill or the session's end, so it can include work done after the skill's part.
+      Any other target's run is one session's matches.
   work --path SUBSTR... [--mention REGEX] [--limit N]
       Sessions that edited a matching file or mention REGEX in a typed turn, newest
       first, as your typed turns only.
   session ID|latest [--cwd DIR]
-      One whole session condensed; `latest` is the newest one whose cwd is DIR.
+      One whole session condensed; `latest` is the newest one that ran in DIR.
   prompts [--since DATE] [--source S] [--cwd SUBSTR] [--grep REGEX] [--json]
       The first typed prompt of every session.
 
 MATCHER is any of --skill NAME, --tool NAME, --cmd PREFIX, --text REGEX, each
 repeatable; a run matches if any does. --skill counts typed and model invocations and
-plugin-prefixed copies (`skills:NAME`); the copy that ran is the `body` path.
+plugin-prefixed copies (`skills:NAME`); the copy that ran is the `body` path. A Claude
+Skill call counts as typed when the prompt before it names `/NAME`.
+
+Answer classes: recommended, other (another option when one was recommended), no-rec
+(an option when none was), custom (your own text), multi. Denials are Claude's only;
+pi records none.
 """
 
 import argparse
+import difflib
 import glob
-import hashlib
 import json
 import os
 import re
@@ -54,7 +62,11 @@ CLAUDE_NOISE = (
     "<artifact-",
 )
 # Harness commands that change settings or the view, never a request to the agent.
-LOCAL_COMMANDS = {"clear", "compact", "effort", "model", "exit", "resume", "context", "cost", "reload-skills", "reload-plugins", "rename", "login", "fast"}
+LOCAL_COMMANDS = {
+    "agents", "artifacts", "clear", "compact", "config", "context", "cost", "doctor", "effort", "exit", "fast",
+    "help", "hooks", "ide", "list-agents", "login", "logout", "mcp", "memory", "model", "open", "permissions",
+    "plugin", "reload-plugins", "reload-skills", "remote-control", "rename", "resume", "status", "usage",
+}  # fmt: skip
 # A pi session whose first user turn starts like this is a subagent's brief.
 PI_SUBAGENT = ("You are ", "CONTEXT for")
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "edit", "write"}
@@ -81,9 +93,11 @@ def lines_of(path):
 def records(path):
     for line in lines_of(path):
         try:
-            yield json.loads(line)
+            r = json.loads(line)
         except ValueError:
             continue
+        if isinstance(r, dict):
+            yield r
 
 
 def text_of(content):
@@ -101,12 +115,20 @@ def tilde(path):
     return (path or "?").replace(HOME, "~", 1)
 
 
-def answer_class(label, options, kind=None):
-    if kind == "multi":
+def option_labels(q):
+    return [o.get("label") if isinstance(o, dict) else str(o) for o in q.get("options") or ()]
+
+
+def answer_class(label, options, kind=None, multi=False):
+    if multi or kind == "multi":
         return "multi"
     if kind == "custom" or (options and label not in options):
         return "custom"
-    return "recommended" if "(Recommended)" in label else "other"
+    if "(Recommended)" in label:
+        return "recommended"
+    if options and not any("(Recommended)" in o for o in options):
+        return "no-rec"
+    return "other"
 
 
 # ---------------------------------------------------------------------------
@@ -119,9 +141,12 @@ class Session:
         self.path = path
         self.id = os.path.basename(path).split(".")[0]
         self.cwd = None
+        self.cwds = set()
         self.started = None
         self.events = []
+        self.ids = set()
         self.offered = set()
+        self.parent = None
         self.skip = False
 
     def add(self, kind, ts, **fields):
@@ -131,21 +156,25 @@ class Session:
             self.events.pop()
         self.events.append({"kind": kind, "ts": ts, **fields})
 
+    def last_prompt(self):
+        return next((e["text"] for e in reversed(self.events) if e["kind"] == "prompt"), "")
+
 
 def render_slash(text):
     name = re.search(r"<command-name>(.*?)</command-name>", text, re.S)
     args = re.search(r"<command-args>(.*?)</command-args>", text, re.S)
-    return name.group(1).strip(), (args.group(1).strip() if args else "")
+    return (name.group(1).strip() if name else ""), (args.group(1).strip() if args else "")
 
 
-def parse_claude(source, path):
+def parse_claude(source, path, sidechains=False):
     s = Session(source, path)
-    questions = {}  # tool_use id → [(header, question, option labels)]
     for r in records(path):
-        if r.get("isSidechain"):
+        if r.get("isSidechain") and not sidechains:
             continue
         ts, rid = r.get("timestamp"), r.get("uuid")
-        s.cwd = s.cwd or r.get("cwd")
+        if r.get("cwd"):
+            s.cwd = s.cwd or r["cwd"]
+            s.cwds.add(r["cwd"])
         s.started = s.started or ts
         if r.get("entrypoint") == "sdk-cli":
             s.skip = True
@@ -155,17 +184,14 @@ def parse_claude(source, path):
                 if not isinstance(b, dict):
                     continue
                 if b.get("type") == "text" and b.get("text", "").strip():
-                    s.add("say", ts, id=rid, text=b["text"], skill=r.get("attributionSkill"))
+                    s.add("say", ts, id=rid, text=b["text"])
                 elif b.get("type") == "tool_use":
                     inp = b.get("input") or {}
                     s.add("call", ts, id=rid, call_id=b.get("id"), name=b.get("name"), input=inp)
                     if b.get("name") == "Skill":
-                        s.add("skill", ts, id=rid, name=inp.get("skill", ""), args=inp.get("args", ""), via="model")
-                    if b.get("name") == "AskUserQuestion":
-                        questions[b.get("id")] = [
-                            (q.get("header"), q.get("question"), [o.get("label") for o in q.get("options") or ()])
-                            for q in inp.get("questions") or ()
-                        ]
+                        name = inp.get("skill", "")
+                        asked = re.search(rf"(^|\s)/{re.escape(name.split(':')[-1])}\b", s.last_prompt())
+                        s.add("skill", ts, id=rid, name=name, args=inp.get("args", ""), via="typed" if asked else "model")
             continue
         if r.get("type") != "user":
             continue
@@ -190,15 +216,18 @@ def parse_claude(source, path):
                     )
         tur = r.get("toolUseResult")
         if isinstance(tur, dict) and isinstance(tur.get("answers"), dict):
-            asked = [(q.get("header"), q.get("question"), [o.get("label") for o in q.get("options") or ()]) for q in tur.get("questions") or ()]
             notes = tur.get("annotations") or {}
             answers = []
-            for header, question, options in asked:
-                label = tur["answers"].get(question)
+            for q in tur.get("questions") or ():
+                label = tur["answers"].get(q.get("question"))
                 if label is None:
                     continue
-                note = (notes.get(question) or {}).get("notes")
-                answers.append({"header": header, "question": question, "answer": label, "class": answer_class(label, options), "note": note})
+                multi = bool(q.get("multiSelect")) or isinstance(label, list)
+                label = ", ".join(map(str, label)) if isinstance(label, list) else str(label)
+                note = (notes.get(q.get("question")) or {}).get("notes")
+                answers.append(
+                    {"header": q.get("header"), "question": q.get("question"), "answer": label, "class": answer_class(label, option_labels(q), multi=multi), "note": note}
+                )
             s.add("answer", ts, id=rid, answers=answers)
         text = re.sub(r"^(\s*<system-reminder>.*?</system-reminder>)+", "", text, flags=re.S).strip()
         if not text:
@@ -213,8 +242,10 @@ def parse_claude(source, path):
             s.add("prompt", ts, id=rid, text="!" + re.sub(r"</?bash-input>", "", text).strip())
         elif "<command-name>" in text[:200]:
             name, args = render_slash(text)
-            if name.lstrip("/") not in LOCAL_COMMANDS:
+            if name and name.lstrip("/") not in LOCAL_COMMANDS:
                 s.add("prompt", ts, id=rid, text=f"{name} {args}".strip(), slash=name.lstrip("/"))
+        elif re.fullmatch(r"/([\w-]+)\b.*", text) and text[1:].split()[0] in LOCAL_COMMANDS:
+            continue
         elif origin is not None or not text.startswith(CLAUDE_NOISE):
             s.add("prompt", ts, id=rid, text=text)
     # A typed /name is a skill run when the harness injected that skill's body next.
@@ -225,10 +256,12 @@ def parse_claude(source, path):
                     args = e["text"].split(" ", 1)[1] if " " in e["text"] else ""
                     s.events.insert(i + 1, {"kind": "skill", "ts": e["ts"], "id": e["id"], "name": e["slash"], "args": args, "via": "typed"})
                     break
+    s.ids = {e["id"] for e in s.events if e.get("id")}
     return s
 
 
 CODEMODE_CALL = re.compile(r"\btools\.(\w+)\s*\(")
+CODEMODE_COMMAND = re.compile(r"""^\s*\{[^}]*?\bcommand\s*:\s*(["'`])(.*?)(?<!\\)\1""", re.S)
 
 
 def parse_pi(path):
@@ -239,8 +272,11 @@ def parse_pi(path):
     for r in records(path):
         ts = r.get("timestamp")
         if r.get("type") == "session":
-            s.cwd, s.started, s.id = r.get("cwd"), ts, r.get("id") or s.id
+            s.cwd, s.started, s.id, s.parent = r.get("cwd"), ts, r.get("id") or s.id, r.get("parentSession")
+            s.cwds.add(s.cwd)
             continue
+        if r.get("id"):
+            s.ids.add(r["id"])
         if r.get("type") != "message":
             continue
         m = r.get("message") or {}
@@ -268,14 +304,20 @@ def parse_pi(path):
                 if not isinstance(b, dict):
                     continue
                 if b.get("type") == "text" and b.get("text", "").strip():
-                    s.add("say", ts, id=rid, text=b["text"], skill=None)
+                    s.add("say", ts, id=rid, text=b["text"])
                 elif b.get("type") == "toolCall":
                     args = b.get("arguments") or {}
                     calls[b.get("id")] = args
                     s.add("call", ts, id=rid, call_id=b.get("id"), name=b.get("name"), input=args)
                     if b.get("name") == "codemode":
-                        for inner in CODEMODE_CALL.findall(args.get("code", "")):
-                            s.add("call", ts, id=rid, call_id=None, name=inner, input={"via": "codemode"})
+                        # Inner calls share the codemode call's result, so its errors count for them.
+                        code = args.get("code", "")
+                        for m_ in CODEMODE_CALL.finditer(code):
+                            inner = {"via": "codemode"}
+                            cmd = CODEMODE_COMMAND.match(code, m_.end()) if m_.group(1) == "bash" else None
+                            if cmd:
+                                inner["command"] = cmd.group(2)
+                            s.add("call", ts, id=rid, call_id=b.get("id"), name=m_.group(1), input=inner)
                     # pi has no Skill tool: a model-invoked skill is a read of an installed
                     # SKILL.md. One inside the session's own tree is someone editing it.
                     target = str(args.get("path", ""))
@@ -295,40 +337,59 @@ def parse_pi(path):
                 answers = []
                 for a in details["answers"]:
                     idx = a.get("questionIndex", 0)
-                    q = asked[idx] if idx < len(asked) else {}
-                    options = [o.get("label") if isinstance(o, dict) else o for o in q.get("options") or ()]
-                    label = a.get("answer") or ", ".join(a.get("values") or ())
+                    q = asked[idx] if isinstance(idx, int) and idx < len(asked) else {}
+                    values = a.get("values") or []
+                    label = a.get("answer") or ", ".join(map(str, values))
+                    multi = a.get("kind") == "multi" or len(values) > 1
                     answers.append(
                         {
                             "header": q.get("header") or a.get("header"),
                             "question": a.get("question") or q.get("question"),
                             "answer": label,
-                            "class": answer_class(label, options, a.get("kind")),
-                            "note": None,
+                            "class": answer_class(label, option_labels(q), a.get("kind"), multi),
+                            "note": a.get("notes") or a.get("note"),
                         }
                     )
                 s.add("answer", ts, id=rid, answers=answers)
     return s
 
 
+_entry_ids = {}
+
+
+def entry_ids(path):
+    """The entry ids of a pi session file, cached; a fork copies its parent's, a subagent shares none."""
+    if path not in _entry_ids:
+        try:
+            _entry_ids[path] = {r["id"] for r in records(path) if r.get("id") and r.get("type") != "session"}
+        except OSError:
+            _entry_ids[path] = None
+    return _entry_ids[path]
+
+
 def all_sessions(prefilter=None, subagents=False):
     """Every session worth reading, deduplicated. `prefilter` is a regex the raw file must match."""
     paths = []
     for source, root in CLAUDE_ROOTS:
-        paths += [(source, p) for p in glob.glob(f"{root}/*/*.jsonl")]
+        paths += [(source, p, False) for p in glob.glob(f"{root}/*/*.jsonl")]
         if subagents:
-            paths += [(source, p) for p in glob.glob(f"{root}/*/*/subagents/**/*.jsonl*", recursive=True)]
-    paths += [("pi", p) for p in glob.glob(f"{PI_ROOT}/*/*.jsonl")]
+            paths += [(source, p, True) for p in glob.glob(f"{root}/*/*/subagents/**/*.jsonl*", recursive=True)]
+    paths += [("pi", p, False) for p in glob.glob(f"{PI_ROOT}/*/*.jsonl")]
     best = {}
-    for source, path in paths:
+    for source, path, sidechains in paths:
         if prefilter is not None:
             raw = "\n".join(lines_of(path)) if path.endswith(".zst") else open(path, errors="replace").read()
             if not prefilter.search(raw):
                 continue
-        s = parse_pi(path) if source == "pi" else parse_claude(source, path)
+        s = parse_pi(path) if source == "pi" else parse_claude(source, path, sidechains)
         if s.skip or not s.events:
             continue
-        key = (source, s.id)
+        if s.parent:
+            parent = entry_ids(s.parent)
+            if parent is not None and not (parent & s.ids):
+                continue  # a pi subagent: its brief is another agent's, not a typed prompt
+        # A resume or fork repeats its origin's records, so the first one names the session.
+        key = (source, s.events[0].get("id") or s.id)
         if key not in best or len(s.events) > len(best[key].events):
             best[key] = s
     return sorted(best.values(), key=lambda s: s.started or "")
@@ -379,22 +440,34 @@ class Matcher:
         return False
 
 
+def bare(name):
+    return name.split(":")[-1]
+
+
 def find_runs(sessions, matcher, since=None):
     runs = []
     for s in sessions:
         ev = s.events
-        # Only a typed invocation ends a run: a model-invoked skill (grill-me loading
-        # grilling) runs inside it, and a model re-reading the open skill continues it.
-        typed = [i for i, e in enumerate(ev) if e["kind"] == "skill" and e["via"] == "typed"]
+        skills = [i for i, e in enumerate(ev) if e["kind"] == "skill"]
+        if any(bare(ev[i]["name"]) == "mine" for i in skills):
+            continue
+        prompts = [i for i, e in enumerate(ev) if e["kind"] == "prompt"]
+        # A model re-reading the skill that is already open continues its run.
         starts, open_skill = [], None
-        for i, e in enumerate(ev):
-            if e["kind"] != "skill":
-                continue
-            if matcher.skill_hit(e) and not (e["via"] == "model" and e["name"] == open_skill):
+        for i in skills:
+            if matcher.skill_hit(ev[i]) and not (ev[i]["via"] == "model" and ev[i]["name"] == open_skill):
                 starts.append(i)
-            open_skill = e["name"]
+            open_skill = ev[i]["name"]
         for n, i in enumerate(starts):
-            end = next((j for j in sorted(set(typed) | set(starts)) if j > i), len(ev))
+            # Skills it loads before you speak again (grill-me loading grilling) are part
+            # of the run, even when reloaded later; any other skill ends it at the prompt
+            # that asked for it.
+            opening = next((p for p in prompts if p > i), len(ev))
+            family = {ev[j]["name"] for j in skills if i <= j < opening}
+            nxt = next((j for j in skills if j >= opening and (j in starts or ev[j]["name"] not in family)), None)
+            end = len(ev)
+            if nxt is not None:
+                end = max([p for p in prompts if opening <= p <= nxt], default=nxt)
             runs.append(make_run(s, n, ev[i:end], ev[end:], ev[i]))
         hits = [] if starts else [e for e in ev if matcher.other_hit(e)]
         if hits:
@@ -402,26 +475,21 @@ def find_runs(sessions, matcher, since=None):
     runs = [r for r in runs if not since or (r["ts"] or "") >= since]
     seen = {}
     for r in runs:  # a forked or resumed session repeats the invocation record
-        key = (r["source"].split("-")[0], r["start_id"])
+        key = (r["source"], r["start_id"], r["target"])
         if key not in seen or r["length"] > seen[key]["length"]:
             seen[key] = r
     return sorted(seen.values(), key=lambda r: r["ts"] or "")
 
 
 def make_run(s, n, window, rest, start, hits=None):
-    body = next((e for e in window if e["kind"] == "body"), None)
+    target = start.get("name") if start["kind"] == "skill" else None
+    bodies = [e for e in window if e["kind"] == "body"]
+    body = next((e for e in bodies if target and e["path"].rstrip("/").endswith("/" + bare(target))), bodies[0] if bodies else None)
     answers = [a for e in window if e["kind"] == "answer" for a in e["answers"]]
     results = [e for e in window if e["kind"] == "result"]
     if hits is not None:  # a tool or command: only its own calls' outcomes are signal
         ids = {h["call_id"] for h in hits if h["call_id"]}
         answers, results = [], [e for e in results if e["call_id"] in ids]
-    is_skill = start["kind"] == "skill"
-    last_attr = max((k for k, e in enumerate(window) if is_skill and e.get("skill") and start["name"].endswith(e["skill"])), default=None)
-    after = None
-    if last_attr is not None:
-        after = next((e["text"] for e in window[last_attr:] if e["kind"] == "prompt"), None)
-    if after is None and rest:
-        after = next((e["text"] for e in rest if e["kind"] == "prompt"), None)
     denials = {}
     for e in results:
         if e["denial"]:
@@ -435,7 +503,7 @@ def make_run(s, n, window, rest, start, hits=None):
         "cwd": s.cwd,
         "start_id": start.get("id"),
         "length": len(window),
-        "target": start.get("name") if start["kind"] == "skill" else None,
+        "target": target,
         "via": start.get("via"),
         "args": start.get("args"),
         "body": body,
@@ -446,59 +514,76 @@ def make_run(s, n, window, rest, start, hits=None):
         "errors": sum(e["error"] for e in results),
         "denials": denials,
         "ended": "next-skill" if rest else "session-end",
-        "after": after,
+        "after": next((e["text"] for e in rest if e["kind"] == "prompt"), None),
         "window": window,
         "hits": hits,
-        "offered": s.offered,
         "session_obj": s,
     }
 
 
 # ---------------------------------------------------------------------------
-# Versions: hash the injected body and match it against the repo's history of SKILL.md.
+# Versions: match the injected body against the repo's history of SKILL.md.
 
 
-def normalize_body(text):
+def body_text(text, args=""):
+    """The comparable part of a skill body: no harness header, frontmatter, arguments or read footer."""
     text = re.sub(r"^(Base directory for this skill|References are relative to)[^\n]*\n", "", text.strip())
     text = re.split(r"\n\s*ARGUMENTS:", text)[0]
     text = re.sub(r"^---\n.*?\n---\n", "", text, flags=re.S)
-    return hashlib.sha1(" ".join(text.split()).encode()).hexdigest()[:10]
+    text = re.sub(r"\n*\[\d+ more lines in file\..*$", "", text, flags=re.S)
+    # Claude substitutes $ARGUMENTS and named $args into the body; drop both sides' copy.
+    if len(args or "") >= 4:
+        text = text.replace(args, "")
+    text = re.sub(r"\$\w+", "", text)
+    return " ".join(text.split())
 
 
 def repo_versions(repo, names):
-    """body hash → 'sha date' for every committed SKILL.md of the named skills, plus the working tree."""
-    versions = {}
+    """[(label, body text)] oldest first, for every committed SKILL.md of the named skills."""
+    versions = []
     if not repo:
         return versions
     for name in names:
-        rel = f"skills/{name.split(':')[-1]}/SKILL.md"
-        # `--follow` ignores `--reverse`, so reverse here: oldest first, a body names
-        # the commit that introduced it.
+        rel = f"skills/{bare(name)}/SKILL.md"
+        # `--follow` ignores `--reverse`, so reverse here.
         log = subprocess.run(
             ["git", "-C", repo, "log", "--follow", "--name-only", "--format=@%h %cs", "--", rel],
             capture_output=True,
             text=True,
         ).stdout
-        pairs = re.findall(r"^@(.+)\n\n(.+)$", log, re.M)
-        for commit, path in reversed(pairs):
+        for commit, path in reversed(re.findall(r"^@(.+)\n\n(.+)$", log, re.M)):
             blob = subprocess.run(["git", "-C", repo, "show", f"{commit.split()[0]}:{path}"], capture_output=True, text=True)
             if blob.returncode == 0:
-                versions.setdefault(normalize_body(blob.stdout), commit)
+                versions.append((commit, body_text(blob.stdout)))
         if os.path.exists(os.path.join(repo, rel)):
             with open(os.path.join(repo, rel)) as f:
-                versions.setdefault(normalize_body(f.read()), "uncommitted")
+                versions.append(("uncommitted", body_text(f.read())))
     return versions
 
 
+_version_cache = {}
+
+
 def version_of(run, versions):
+    """The commit that introduced the body that ran; `~` marks a near match, e.g. a truncated read."""
     if not run["body"]:
         return "?"
-    h = normalize_body(run["body"]["text"])
-    return versions.get(h, f"unmatched {h}")
+    text = body_text(run["body"]["text"], run["args"])
+    if text not in _version_cache:
+        label = next((lab for lab, v in versions if v == text), None)
+        if label is None and len(text) > 200:
+            label = next((f"~{lab}" for lab, v in versions if v.startswith(text)), None)
+        if label is None and versions:
+            ratio, lab = max((difflib.SequenceMatcher(None, text, v, autojunk=False).ratio(), lab) for lab, v in versions)
+            label = f"~{lab}" if ratio >= 0.97 else "unmatched"
+        _version_cache[text] = label or "unmatched"
+    return _version_cache[text]
 
 
 # ---------------------------------------------------------------------------
 # Output.
+
+CLASSES = ("recommended", "other", "no-rec", "custom", "multi")
 
 
 def fmt_ts(ts):
@@ -510,7 +595,7 @@ def fmt_ts(ts):
         return ts[:16]
 
 
-def header(runs, matcher):
+def header(runs, matcher, sessions, since):
     print(f"# {len(runs)} runs across {len({r['session'] for r in runs})} sessions")
     by_source = {}
     for r in runs:
@@ -518,18 +603,14 @@ def header(runs, matcher):
     print("sources: " + ", ".join(f"{k} {v}" for k, v in sorted(by_source.items())))
     answers = [a for r in runs for a in r["answers"]]
     if answers:
-        counts = {}
-        for a in answers:
-            counts[a["class"]] = counts.get(a["class"], 0) + 1
-        print(f"answers: {len(answers)} — " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+        print(f"answers: {len(answers)} — " + ", ".join(f"{k} {sum(a['class'] == k for a in answers)}" for k in CLASSES))
         per = {}
         for a in answers:
             per.setdefault(a["header"] or clip(a["question"] or "?", 40), []).append(a["class"])
-        print("by question header (recommended/other/custom/multi, n≥3):")
-        for h, cls in sorted(per.items(), key=lambda kv: -len(kv[1])):
-            if len(cls) >= 3:
-                c = [cls.count(k) for k in ("recommended", "other", "custom", "multi")]
-                print(f"  {h}: {'/'.join(map(str, c))}")
+        recurring = {h: cls for h, cls in per.items() if len(cls) >= 3}
+        print(f"question headers seen 3+ times: {len(recurring)} of {len(per)} ({'/'.join(CLASSES)})")
+        for h, cls in sorted(recurring.items(), key=lambda kv: -len(kv[1])):
+            print(f"  {h}: {'/'.join(str(cls.count(k)) for k in CLASSES)}")
     notes = sum(1 for a in answers if a["note"])
     calls = sum(r["calls"] or 0 for r in runs)
     print(f"interrupts: {sum(r['interrupts'] for r in runs)}, matched calls: {calls}, their errors: {sum(r['errors'] for r in runs)}, notes on answers: {notes}")
@@ -540,29 +621,30 @@ def header(runs, matcher):
     if denials:
         print("denials: " + ", ".join(f"{k} {v}" for k, v in sorted(denials.items())))
     if matcher.tools:
-        offered = [s for s in all_sessions(re.compile("|".join(map(re.escape, matcher.tools)))) if s.source == "pi" and set(matcher.tools) & s.offered]
-        called = {r["session"] for r in runs if r["source"] == "pi"}
-        print(f"pi sessions offering it: {len(offered)}, calling it: {len(called)}")
+        pi = [s for s in sessions if s.source == "pi" and (not since or (s.started or "") >= since)]
+        offered = sum(bool(set(matcher.tools) & s.offered) for s in pi)
+        called = len({r["session"] for r in runs if r["source"] == "pi"})
+        print(f"pi sessions offering it: {offered}, calling it: {called}")
 
 
 def run_line(r, versions):
     a = r["answers"]
-    q = f"q {sum(x['class'] == 'recommended' for x in a)}/{sum(x['class'] == 'other' for x in a)}/{sum(x['class'] in ('custom', 'multi') for x in a)}" if a else "q -"
+    q = "q " + "/".join(str(sum(x["class"] == k for x in a)) for k in CLASSES) if a else "q -"
     if r["calls"] is not None:
         q = f"calls {r['calls']}"
     ver = version_of(r, versions) if r["target"] else "-"
     body = tilde(r["body"]["path"]) if r["body"] else "-"
     deny = sum(r["denials"].values())
     return (
-        f"{r['id']}  {fmt_ts(r['ts'])}  {r['source']:<11} {clip(tilde(r['cwd']), 38):<38}  "
-        f"turns {r['turns']:<3} {q:<10} intr {r['interrupts']} err {r['errors']} deny {deny}  "
+        f"{r['id']}  {fmt_ts(r['ts'])}  {r['source']:<11} {clip(tilde(r['cwd']), 38):<38}  {r['via'] or '-':<5} "
+        f"turns {r['turns']:<3} {q:<13} intr {r['interrupts']} err {r['errors']} deny {deny}  "
         f"{r['ended']}  ver {ver}  body {body}"
     )
 
 
 def condense(events, only=None):
-    """Typed turns, answers and interrupts in full; per turn, the last assistant text and a tool summary."""
-    out, tools, last_say = [], [], None
+    """Numbered typed turns, answers and interrupts; per turn, the last assistant text and a tool summary."""
+    out, tools, last_say, turn = [], [], None, 0
 
     def flush():
         nonlocal tools, last_say
@@ -579,10 +661,11 @@ def condense(events, only=None):
     for e in events:
         k = e["kind"]
         if k == "call":
-            names[e["call_id"]] = e
-            if only is None or any(e is h for h in only):
+            names.setdefault(e["call_id"], e)
+            hit = only is not None and any(e is h for h in only)
+            if only is None or hit:
                 tools.append(e["name"])
-            if only is not None and any(e is h for h in only):
+            if hit:
                 flush()
                 out.append(f"[call] {e['name']}: {clip(json.dumps(e['input']), WIDTH['result'])}")
         elif k == "say":
@@ -595,7 +678,8 @@ def condense(events, only=None):
             out.append(f"[result] {clip(e['text'], WIDTH['result'])}")
         elif k == "prompt":
             flush()
-            out.append("[you] " + clip(e["text"], WIDTH["prompt"]))
+            turn += 1
+            out.append(f"[you #{turn}] " + clip(e["text"], WIDTH["prompt"]))
         elif k == "answer":
             flush()
             for a in e["answers"]:
@@ -610,15 +694,18 @@ def condense(events, only=None):
     return out
 
 
-def show(r, versions):
+def show(r, versions, max_lines):
     ver = version_of(r, versions) if r["target"] else "-"
     print(f"\n## run {r['id']} · {r['source']} · {fmt_ts(r['ts'])} · {tilde(r['cwd'])} · session {r['session']} · version {ver}")
     if r["source"] == "claude-work":
         print("(work profile: paraphrase, never quote)")
     if r["target"]:
         print(f"invoked {r['via']}: /{r['target']} {clip(r['args'] or '', 400)}")
-    print("\n".join(condense(r["window"], only=r["hits"])))
-    print(f"[ended] {r['ended']}" + (f"; next typed prompt: {clip(r['after'], 600)}" if r["after"] else ""))
+    lines = condense(r["window"], only=r["hits"])
+    if max_lines and len(lines) > max_lines:
+        lines = lines[:max_lines] + [f"[… {len(lines) - max_lines} more lines; raise --max-lines to see them]"]
+    print("\n".join(lines))
+    print(f"[ended] {r['ended']}" + (f"; the prompt that ended it: {clip(r['after'], 600)}" if r["after"] else ""))
 
 
 # ---------------------------------------------------------------------------
@@ -634,19 +721,21 @@ def cmd_runs(args):
     matcher = Matcher(args)
     if not (matcher.skills or matcher.tools or matcher.cmds or matcher.texts):
         sys.exit("runs: give at least one of --skill, --tool, --cmd, --text")
-    runs = find_runs(all_sessions(matcher.prefilter(), args.subagents), matcher, args.since)
+    sessions = all_sessions(matcher.prefilter(), args.subagents)
+    runs = find_runs(sessions, matcher, args.since)
     versions = repo_versions(args.repo or git_root(os.getcwd()), matcher.skills)
     if args.show:
         wanted = None if args.show == "all" else set(args.show.split(","))
         for r in runs:
             if wanted is None or r["id"] in wanted:
-                show(r, versions)
+                show(r, versions, args.max_lines)
         return
     if args.json:
+        skip = ("window", "hits", "session_obj", "body")
         for r in runs:
-            print(json.dumps({k: v for k, v in r.items() if k not in ("window", "hits", "offered", "session_obj", "body")} | {"version": version_of(r, versions) if r["target"] else None}, default=str))
+            print(json.dumps({k: v for k, v in r.items() if k not in skip} | {"version": version_of(r, versions) if r["target"] else None}, default=str))
         return
-    header(runs, matcher)
+    header(runs, matcher, sessions, args.since)
     print()
     for r in runs:
         print(run_line(r, versions))
@@ -656,6 +745,8 @@ def cmd_work(args):
     mention = re.compile(args.mention, re.I) if args.mention else None
     found = []
     for s in all_sessions(re.compile("|".join([re.escape(p) for p in args.path] + ([args.mention] if args.mention else [])), re.I)):
+        if any(e["kind"] == "skill" and bare(e["name"]) == "mine" for e in s.events):
+            continue
         edited = any(
             e["kind"] == "call" and e["name"] in EDIT_TOOLS and any(p in str(e["input"].get("file_path") or e["input"].get("path") or "") for p in args.path)
             for e in s.events
@@ -676,9 +767,9 @@ def cmd_session(args):
     sessions = all_sessions()
     if args.id == "latest":
         cwd = os.path.realpath(args.cwd or os.getcwd())
-        mine = [s for s in sessions if s.cwd and os.path.realpath(s.cwd) == cwd]
+        mine = [s for s in sessions if any(c and os.path.realpath(c) == cwd for c in s.cwds)]
         if not mine:
-            sys.exit(f"session: no session with cwd {cwd}")
+            sys.exit(f"session: no session ran in {cwd}")
         s = max(mine, key=lambda s: os.path.getmtime(s.path))
     else:
         s = next((s for s in sessions if args.id in s.id), None) or sys.exit(f"session: no session {args.id}")
@@ -718,13 +809,14 @@ def main():
     r.add_argument("--repo", help="repo whose skills/<name>/SKILL.md history names versions (default: cwd's)")
     r.add_argument("--subagents", action="store_true", help="also read Claude subagent transcripts")
     r.add_argument("--show", help="comma-separated run ids, or all")
+    r.add_argument("--max-lines", type=int, default=150, help="per run in --show; 0 for no limit")
     r.add_argument("--json", action="store_true")
     w = sub.add_parser("work")
     w.add_argument("--path", action="append", required=True, help="substring of an edited file's path")
     w.add_argument("--mention", help="regex a typed turn must match")
     w.add_argument("--limit", type=int, default=10)
     s = sub.add_parser("session")
-    s.add_argument("id", help="a session id prefix, or latest")
+    s.add_argument("id", help="part of a session id, or latest")
     s.add_argument("--cwd")
     q = sub.add_parser("prompts")
     q.add_argument("--since")
