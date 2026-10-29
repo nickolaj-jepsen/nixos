@@ -1,4 +1,4 @@
-# phone-vm — NixOS on the Pixel 8 Pro, a lean headless dev env run by the
+# phone-vm — NixOS on the Pixel 8 Pro, a lean dev env run by the
 # pocketnix app (modules/system/pocketnix.nix). Bootstrap per docs/hosts.md.
 {
   class = "nixos";
