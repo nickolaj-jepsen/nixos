@@ -34,6 +34,8 @@ let
       # Enabling a host needs `just secret-rekey` — the body is an agenix secret.
       scripts.tunnel-home.enable = lib.mkEnableOption "tunnel-home, an sshuttle wrapper for reaching a remote network over SSH";
 
+      gui.enable = cascade config.fireproof.desktop.enable "graphical apps that need only a Wayland compositor (Firefox, Sublime Merge), with their theming and fonts; pocketnix's GUI runs them without a desktop session";
+
       desktop = {
         enable = lib.mkEnableOption "desktop environment with niri, greetd, and all desktop features";
         autologin.enable = lib.mkEnableOption "signing in without a greeter even when no LUKS passphrase was typed at boot. Only for hosts where every disk unlock needs a human (no TPM-only slot)";

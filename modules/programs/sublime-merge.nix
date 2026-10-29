@@ -5,7 +5,7 @@
     lib,
     ...
   }: {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+    config = lib.mkIf (config.fireproof.gui.enable && config.fireproof.dev.enable) {
       homebrew.casks = ["sublime-merge"];
     };
   };
@@ -271,25 +271,29 @@
       }
     ];
 
-    settings = {
-      # font_face and font_size only take effect from User preferences; the
-      # Default package overrides them per platform.
-      font_face = config.fireproof.theme.font.monoFamily;
-      font_size = 10;
-      diff_style = "auto";
-      # One window per repository, so two worktrees can be read side by side.
-      open_files_in_new_window = "always";
-      highlight_modified_tabs = true;
+    settings =
+      {
+        # font_face and font_size only take effect from User preferences; the
+        # Default package overrides them per platform.
+        font_face = config.fireproof.theme.font.monoFamily;
+        font_size = 10;
+        diff_style = "auto";
+        # One window per repository, so two worktrees can be read side by side.
+        open_files_in_new_window = "always";
+        highlight_modified_tabs = true;
+      }
       # Backs the built-in Open Repository in Terminal. On darwin the app comes
       # from the cask, so `package` is null there and the handoff goes through
-      # `open` like the other darwin launchers above.
-      terminal_command =
-        if pkgs.stdenv.isDarwin
-        then "open -na Ghostty --args --working-directory=$dir"
-        else "${lib.getExe config.programs.ghostty.package} --working-directory=$dir";
-    };
+      # `open` like the other darwin launchers above. Without ghostty (phone-vm)
+      # the app's own default stays, rather than pulling ghostty in.
+      // lib.optionalAttrs (pkgs.stdenv.isDarwin || config.programs.ghostty.enable) {
+        terminal_command =
+          if pkgs.stdenv.isDarwin
+          then "open -na Ghostty --args --working-directory=$dir"
+          else "${lib.getExe config.programs.ghostty.package} --working-directory=$dir";
+      };
   in {
-    config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+    config = lib.mkIf (config.fireproof.gui.enable && config.fireproof.dev.enable) {
       # darwin installs the cask (above); the nixpkgs build is Linux-only.
       home.packages = lib.optionals pkgs.stdenv.isLinux [
         pkgs.unstable.sublime-merge

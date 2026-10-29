@@ -8,7 +8,7 @@
     lib,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf config.fireproof.gui.enable {
       fonts.packages = [config.fireproof.theme.font.package];
     };
   };
@@ -19,8 +19,9 @@
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
-      fonts.enableDefaultPackages = true;
+    config = lib.mkIf config.fireproof.gui.enable {
+      # Its CJK, unifont and freefont cost the phone ~145 MiB of scarce disk.
+      fonts.enableDefaultPackages = config.fireproof.desktop.enable;
       fonts.packages = [
         config.fireproof.theme.font.package
         # DMS theme.nix requests "Inter Variable" as the shell UI font; without
