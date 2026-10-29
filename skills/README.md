@@ -37,6 +37,10 @@ claude plugin install skills@nickolaj-jepsen
 - **ideate** — ranked improvement ideas for a repo or one area of it: lens-driven
   subagents plus a web scout generate, a fresh verifier refutes, 5–7 survive into an
   `IDEAS.md`, each routed to brainstorm, grill-me or building it.
+- **mine** — improve a skill, tool, CLI or hook from how it actually went in past Claude
+  Code and pi sessions: a bundled reader finds every run and its signals (answers,
+  interrupts, denials), runs are read for first failures, you confirm the categories, and
+  routed findings land in a `FINDINGS.md`. With no target, a retro of the current session.
 - **brainstorm** — find an approach when there isn't one yet: a round or two of
   clarifying questions, then 2–3 genuinely different approaches to pick from. Stops
   once you pick.
