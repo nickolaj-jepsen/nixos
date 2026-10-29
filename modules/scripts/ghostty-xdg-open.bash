@@ -1,9 +1,13 @@
 set -euo pipefail
+# A glob stage below expands patterns directly; no match must mean no word, not the pattern.
+shopt -s nullglob
 
 # Shadows xdg-open on PATH. Ghostty hands clicked links to xdg-open with its own
 # cwd ($HOME), so relative, `path:line` and ellipsis-trimmed paths (as printed by
-# Claude Code etc.) never resolve. For Ghostty only: resolve them against the
-# cwds of the terminal's processes, send text files to VS Code, the rest on.
+# Claude Code etc.) never resolve. It also matches `api.slack.com/apps` as a path
+# (the dot makes it look file-like), so a bare host needs a scheme. For Ghostty
+# only: resolve paths against the cwds of the terminal's processes, send text
+# files to VS Code, the rest on.
 real=@xdgOpen@
 
 [[ $# -eq 1 ]] || exec "$real" "$@"
@@ -48,6 +52,15 @@ mapfile -t cwds < <(
     awk '!seen[$0]++'
 )
 
+# True for a link that is a host, not a path: `api.slack.com/apps`, `www.google.com`.
+# A single dot is a filename (`foo.nix`), so a host needs a second dot or a path
+# after it.
+is_bare_url() {
+  local host=${1%%/*}
+  [[ $host =~ ^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}(:[0-9]+)?$ ]] || return 1
+  [[ $1 == "$host"/* || $host == *.*.* ]]
+}
+
 # Prints the absolute path $1 resolves to, or nothing.
 resolve() {
   local arg=$1
@@ -70,11 +83,13 @@ resolve() {
   if [[ $arg == *[*?[]* ]]; then
     local -a hits=()
     local hit
+    local IFS= # no word splitting, so a pattern with spaces survives expansion
+    # shellcheck disable=SC2206  # the unquoted pattern is the glob being expanded
     if [[ $arg == /* ]]; then
-      mapfile -t hits < <(compgen -G "$arg")
+      hits=( $arg )
     else
       for cwd in "${cwds[@]}"; do
-        mapfile -t hits < <(compgen -G "$cwd/$arg")
+        hits=( $cwd/$arg )
         if ((${#hits[@]})); then break; fi
       done
     fi
@@ -85,6 +100,9 @@ resolve() {
       fi
     done
   fi
+
+  # A host is not a path: don't guess a tracked file named `apps` for `api.slack.com/apps`.
+  if is_bare_url "$arg"; then return 0; fi
 
   # Trimmed (`…/foo/bar.nix`) or wrongly rooted path: match it as a suffix of a tracked file.
   suffix=${arg#…}
@@ -117,7 +135,13 @@ done
 path=$(resolve "$arg")
 # A sentence period stays in the link (`…/foo.nix.`); a `...` is prose ellipsis, not part of the path.
 if [[ -z $path && $arg == *[!.]\. ]]; then
-  path=$(resolve "${arg%.}")
+  arg=${arg%.}
+  path=$(resolve "$arg")
+fi
+
+# Nothing on disk, but the link is a host: give it a scheme and let the browser have it.
+if [[ -z $path ]] && is_bare_url "$arg"; then
+  exec "$real" "https://$arg"
 fi
 
 if [[ -z $path ]]; then
