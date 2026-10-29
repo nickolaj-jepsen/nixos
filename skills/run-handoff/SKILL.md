@@ -79,7 +79,7 @@ Never edit `HANDOFF.md` to get unstuck. Propose the change in `PROGRESS.md` for 
 Each item subagent's prompt contains:
 
 - **Role:** builds one item. The lead owns `PROGRESS.md`, integration, contracts and gate reviews.
-- **Where:** its worktree path. Work and commit only there, in small commits matching the repo's style. Commit within the first few changes, so the worktree is never empty.
+- **Where:** its worktree path. Work and commit only there, in small commits matching the repo's style.
 - **What:** its item ID. Have it read `HANDOFF.md` itself (Context including its Skills line, Locked decisions, Contracts, Rules, Gotchas, its item and that item's research files) rather than paraphrasing them.
 - **Boundaries:**
   - change only its item's `Owns`; name the paths owned by items now in flight as not its own;
