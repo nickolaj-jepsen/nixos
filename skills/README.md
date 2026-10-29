@@ -28,8 +28,19 @@ claude plugin install skills@nickolaj-jepsen
 
 ## What's here
 
-- **grill-me** — interview yourself relentlessly about a plan or design until every
-  branch of the decision tree is resolved. Good before committing to an approach.
+- **grilling** — the interview primitive: questions a plan in rounds, each round every
+  decision whose prerequisites are settled, with a recommended answer per question.
+  Looks facts up itself and stops at a confirmation gate. Other skills invoke it.
+- **grill-me** — the user-only entry point to `grilling`. Good before committing to an
+  approach.
+- **grill-me-legacy** — the original grill-me, one question at a time.
+- **brainstorm** — find an approach when there isn't one yet: a round or two of
+  clarifying questions, then 2–3 genuinely different approaches side by side. Stops
+  once you pick.
+- **annotate-plan** — the agent writes a `PLAN.md`, you annotate it in your editor, and
+  it folds your notes in round after round until you approve; then it implements on
+  request, ticking progress off in the file. For changes too big to just start and too
+  small for a handoff.
 - **prune-comments** — strip redundant, over-long or coupled comments and docstrings
   (file/line references, caller lists, change narration) down to the load-bearing
   why. Run it after generating code.

@@ -24,7 +24,7 @@ The reader is a builder agent that never saw this conversation. It runs `/run-ha
 
    Findings too long to restate inline go to `research/<area>.md`, written by the subagent, which returns only the path.
 
-4. **Grill the gaps.** Invoke `grill-me` with only the decisions research couldn't settle and that are the user's to make, including where tests attach (the highest seam that proves the outcome). If there are none, say so and skip it.
+4. **Grill the gaps.** Invoke `grilling` with only the decisions research couldn't settle and that are the user's to make, including where tests attach (the highest seam that proves the outcome). If there are none, say so and skip it.
 5. **Decompose** by the rules below.
 6. **Confirm the graph.** Show every item as one line: ID, title, blocked by, `Owns`, outcome. Ask whether the granularity is right, whether each edge really blocks, and what to merge or split. Iterate until the user approves.
 7. **Write `HANDOFF.md`** from the template below.
