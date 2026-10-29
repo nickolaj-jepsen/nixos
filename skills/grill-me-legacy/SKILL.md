@@ -1,6 +1,6 @@
 ---
 name: grill-me-legacy
-description: The original one-question-at-a-time grill. Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan, get grilled on their design, or mentions "grill me".
+description: The original grill-me, one question at a time. Run by name only.
 disable-model-invocation: true
 ---
 

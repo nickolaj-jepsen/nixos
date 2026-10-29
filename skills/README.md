@@ -34,8 +34,11 @@ claude plugin install skills@nickolaj-jepsen
 - **grill-me** — the user-only entry point to `grilling`. Good before committing to an
   approach.
 - **grill-me-legacy** — the original grill-me, one question at a time.
+- **ideate** — ranked improvement ideas for a repo or one area of it: lens-driven
+  subagents plus a web scout generate, a fresh verifier refutes, 5–7 survive into an
+  `IDEAS.md`, each routed to brainstorm, grill-me or building it.
 - **brainstorm** — find an approach when there isn't one yet: a round or two of
-  clarifying questions, then 2–3 genuinely different approaches side by side. Stops
+  clarifying questions, then 2–3 genuinely different approaches to pick from. Stops
   once you pick.
 - **annotate-plan** — the agent writes a `PLAN.md`, you annotate it in your editor, and
   it folds your notes in round after round until you approve; then it implements on
