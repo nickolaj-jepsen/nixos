@@ -25,7 +25,7 @@ The bar:
 
 ## The file
 
-The topic is `<repo>-ideas-<focus slug>`, or `<repo>-ideas` with no focus. The file is `<dir>/IDEAS.md`, where `<dir>` is `<topic>/` under wherever the user's instructions keep long-lived agent notes, otherwise `.agents/ideas/<topic>/` in the repo. Never commit it. If it already exists, this is a rerun: read it first.
+The file is `ideas/<focus slug>.md` in the project's agent notes, or `ideas/<project>.md` with no focus. The user's instructions say where agent notes live and what a project is; without them, the notes are `.agents/notes/` in the repo (write a `.gitignore` containing `*` there first) and the project is the repo. Never commit it. If it already exists, this is a rerun: read it first.
 
 ## Ground
 
@@ -92,7 +92,7 @@ Rank by payoff per effort.
 
 ## Write
 
-Write `IDEAS.md`. On a rerun, edit it in place: re-check carried-over ideas against the current code and keep the rejections.
+Write the ideas file. On a rerun, edit it in place: re-check carried-over ideas against the current code and keep the rejections.
 
 ```markdown
 # Ideas: <focus>
@@ -135,5 +135,5 @@ Start with <n>: <why, and its first step, in a sentence>.
 The user replies by number or in free text:
 
 - **Merge, refine or question:** answer, and update the file when an idea's content changes.
-- **Build** ("do 1, 3", "fix 2"): if a picked idea's next step is `/brainstorm` or `/grill-me`, ask once whether to build it anyway or route it first. Then build them in this session one at a time, run the repo's checks, and mark each one done in `IDEAS.md`.
+- **Build** ("do 1, 3", "fix 2"): if a picked idea's next step is `/brainstorm` or `/grill-me`, ask once whether to build it anyway or route it first. Then build them in this session one at a time, run the repo's checks, and mark each one done in the ideas file.
 - **Any other pick:** restate the idea as a seed (what, basis, why) and name its next command. Mark it picked in the file.

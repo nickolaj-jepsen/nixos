@@ -14,7 +14,7 @@ The reader is a builder agent that never saw this conversation. It runs `/run-ha
 
 ## Spine
 
-1. **Pin the scope.** In one message: each selected item restated in full from the conversation, an explicit out-of-scope list, a kebab-case topic, and the directory. The directory is wherever the user's instructions keep long-lived agent notes, otherwise `.agents/handoffs/<topic>/` in the repo. If it already holds a `HANDOFF.md`, ask before overwriting. Wait for a go or a correction.
+1. **Pin the scope.** In one message: each selected item restated in full from the conversation, an explicit out-of-scope list, a kebab-case slug, and the directory: `plans/<slug>/` in the project's agent notes. The user's instructions say where agent notes live and what a project is; without them, the notes are `.agents/notes/` in the repo (write a `.gitignore` containing `*` there first) and the project is the repo. If it already holds a `HANDOFF.md`, ask before overwriting. Wait for a go or a correction.
 2. **Harvest decisions.** Every choice the conversation already made, with its why, becomes a locked decision. Don't reopen them.
 3. **Research.** Fan out read-only subagents, one per area rather than per item. Each gets an objective, an output format and explicit boundaries ("X is another subagent's"). Verify what the plan leans on:
    - the files, modules and APIs each item will touch;
@@ -22,7 +22,7 @@ The reader is a builder agent that never saw this conversation. It runs `/run-ha
    - the exact build, test and run commands, that they work today, and how long they take;
    - repo conventions, the constraints in its agent instructions, and the skills it expects agents to use.
 
-   Findings too long to restate inline go to `research/<area>.md`, written by the subagent, which returns only the path.
+   Findings too long to restate inline go to `notes/<area>.md`, written by the subagent, which returns only the path.
 
 4. **Grill the gaps.** Load the `grilling` skill (Claude Code: call the Skill tool with "grilling"; pi: read its SKILL.md) and name as open only the decisions research couldn't settle and that are the user's to make, including where tests attach (the highest seam that proves the outcome). If there are none, say so and skip it.
 5. **Decompose** by the rules below.
@@ -80,7 +80,7 @@ Do not re-litigate. If evidence shows one is wrong, raise it; don't deviate.
 
 Mechanism uncertain:
 
-- D2 <outcome>. Chosen: <mechanism>. Fallback: <mechanism>. Why: <reason>. Evidence: <research file or spike>.
+- D2 <outcome>. Chosen: <mechanism>. Fallback: <mechanism>. Why: <reason>. Evidence: <notes file or spike>.
 
 ## Contracts
 
@@ -101,7 +101,7 @@ Mechanism uncertain:
 - Outcome: <1–3 sentences of behaviour>
 - Acceptance: `cd <dir> && <cmd>` → <expected>
 - Constraints: D1, C1
-- Research: research/<area>.md (if needed)
+- Notes: notes/<area>.md (if needed)
 
 ### S1 <question> (spike, timebox <n>)
 

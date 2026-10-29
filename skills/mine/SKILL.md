@@ -28,7 +28,7 @@ Turn the target into matchers for `runs`, using the recipe for its kind. Before 
 
 ## The file
 
-The topic is `<repo>-mine-<target>`. The file is `<dir>/FINDINGS.md`, where `<dir>` is `<topic>/` under wherever the user's instructions keep long-lived agent notes, otherwise `.agents/mine/<topic>/` in the repo. Never commit it: in the repo fallback, write a `.gitignore` containing `*` into `<dir>` before the file.
+The file is `findings/<target>.md` in the agent notes of the project the target belongs to. The user's instructions say where agent notes live and what a project is; without them, the notes are `.agents/notes/` in the repo (write a `.gitignore` containing `*` there first) and the project is the repo. Never commit it.
 
 If it exists, this is a rerun. Read it first, pass `--since <its date>` so only newer runs are read, and update the counts of the findings already there.
 
@@ -102,11 +102,11 @@ With no target:
 2. This session is the main evidence: read it from context, or with `session latest --cwd <dir it ran in>` once it has been compacted. Find its first failures and desire paths.
 3. Check each finding against earlier runs of the target. Give subagents the specific findings to look for, not open coding. Report "also in k of N earlier runs" or "only here".
 
-Write to the target's usual `FINDINGS.md`, marking these findings `(retro)`. A later `/mine <target>` folds them in like any other.
+Write to the target's usual findings file, marking these findings `(retro)`. A later `/mine <target>` folds them in like any other.
 
 ## Write
 
-On a rerun, edit `FINDINGS.md` in place.
+On a rerun, edit the findings file in place.
 
 ```markdown
 # Findings: <target>
@@ -149,5 +149,5 @@ In chat, show only:
 The user replies by number or in free text:
 
 - **Merge, refine or question:** answer, and update the file when a finding's content changes.
-- **Build** ("do 1, 3"): if a picked finding's Next is `/brainstorm` or `/grill-me`, ask once whether to build it anyway or route it first. Then build them in this session one at a time, run the repo's checks, and mark each one done in `FINDINGS.md`.
+- **Build** ("do 1, 3"): if a picked finding's Next is `/brainstorm` or `/grill-me`, ask once whether to build it anyway or route it first. Then build them in this session one at a time, run the repo's checks, and mark each one done in the findings file.
 - **Any other pick:** restate the finding as a seed (what, evidence, fix) and name its next command. Mark it picked in the file.

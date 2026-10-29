@@ -6,7 +6,25 @@ Repository-local instructions and existing conventions take precedence over thes
 
 - This machine is managed by the `~/nixos` flake (NixOS, or nix-darwin on macOS). Persistent system or user configuration belongs there; do not use `apt`, global npm/pip installs, or edit `/etc`.
 - For one-off tools, use `nix run nixpkgs#<tool>` or `nix shell nixpkgs#<tool>`.
-- Don't create files or folders directly in `~`, or in a repo you weren't asked to change. Throwaway files (benchmarks, experiments, test fixtures) go under `/tmp` — spell the path out literally, since `$TMPDIR`, `$(mktemp -d)` and any other computed path are opaque to permission rules and make each write through one ask. Anything meant to outlive the session (plans, notes, reports) goes in `~/.local/share/agents/<topic>/`.
+- Don't create files or folders directly in `~`, or in a repo you weren't asked to change. Throwaway files (benchmarks, experiments, test fixtures) go under `/tmp` — spell the path out literally, since `$TMPDIR`, `$(mktemp -d)` and any other computed path are opaque to permission rules and make each write through one ask. Anything meant to outlive the session (plans, notes, reports) goes in the agent notes, laid out below.
+
+## Agent notes
+
+Long-lived notes live in `~/.local/share/agents/<project>/`, laid out so a person can find them by browsing. `<project>` is the repo's name, or in a repo holding several systems (like `~/nixos`) the system's (`pi`, `agent-hub`, `wt`, `skills`).
+
+```
+<project>/
+  ideas/<focus>.md     /ideate output; no focus: ideas/<project>.md
+  findings/<target>.md /mine output
+  plans/<slug>/        one piece of work being built or decided
+    PLAN.md SPEC.md DECISIONS.md REPORT.md HANDOFF.md PROGRESS.md   the files you open first
+    notes/             what backs them: subagent findings, spike results, dated logs
+    history/           superseded versions
+  research/<slug>/     a standalone evaluation with no plan; REPORT.md plus notes/
+  scripts/             code worth running again
+```
+
+Large or generated files (binaries, archives, datasets, build and spike trees, screenshots) go to the same path under `~/.local/state/agents/` instead, so the notes stay small. A tool's own run data goes in that tool's state directory.
 
 ## Tooling
 

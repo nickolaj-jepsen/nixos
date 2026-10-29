@@ -9,7 +9,7 @@ The arguments name the change to plan; none means what the conversation is about
 
 ## Setup
 
-Pick a kebab-case topic. The plan is `<dir>/PLAN.md`, where `<dir>` is `<topic>/` under wherever the user's instructions keep long-lived agent notes, otherwise `.agents/plans/<topic>/` in the repo. If a `PLAN.md` is already there, ask whether to resume it or start over. When resuming without a `PLAN.prev.md`, read the whole plan for notes instead of diffing.
+Pick a kebab-case slug. The plan is `plans/<slug>/PLAN.md` in the project's agent notes. The user's instructions say where agent notes live and what a project is; without them, the notes are `.agents/notes/` in the repo (write a `.gitignore` containing `*` there first) and the project is the repo. If a `PLAN.md` is already there, ask whether to resume it or start over. When resuming without a `PLAN.prev.md`, read the whole plan for notes instead of diffing.
 
 ## First draft
 

@@ -547,7 +547,7 @@ in {
           external_directory_write = let
             roots =
               # /nix/store so `rm result` doesn't ask; ~/worktrees/* so a whole <repo> does.
-              ["/tmp" "~/.local/share/agents" "~/worktrees/*" "/nix/store"];
+              ["/tmp" "~/.local/share/agents" "~/.local/state/agents" "~/.local/state/pi-plugin-dev" "~/worktrees/*" "/nix/store"];
           in
             {"*" = "ask";}
             // lib.listToAttrs (lib.concatMap (root: [

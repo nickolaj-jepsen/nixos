@@ -13,14 +13,14 @@ You are the lead and integrator. `HANDOFF.md` is the plan and is read-only to yo
 
 ## Start or resume
 
-1. **Resolve the directory.** If none is given, take the most recently modified directory holding a `HANDOFF.md` under the user's agent-notes location (or `.agents/handoffs/`), and confirm it before starting.
-2. **Read `HANDOFF.md` in full.** Amendments override everything above them. Read `research/` files only when an item needs them.
+1. **Resolve the directory.** If none is given, take the most recently modified `plans/<slug>/` holding a `HANDOFF.md` in the user's agent notes (or `.agents/notes/` in the repo), and confirm it before starting.
+2. **Read `HANDOFF.md` in full.** Amendments override everything above them. Read `notes/` files only when an item needs them.
 3. **Resume** if `PROGRESS.md` exists.
    - Check it against git: the integration branch, item worktrees and their commits. Where they disagree, git wins; fix `PROGRESS.md`.
    - Run the standard checks on the integration branch before dispatching anything. If a crashed session left it broken, fixing that comes first.
    - Continue from "Now".
 4. **First run.**
-   - Create the integration worktree, branch `<topic>`, off the base branch in Context. Use the user's worktree tooling, otherwise `git worktree add`. Never work in the primary checkout.
+   - Create the integration worktree, branch `<slug>`, off the base branch in Context. Use the user's worktree tooling, otherwise `git worktree add`. Never work in the primary checkout.
    - Create `PROGRESS.md` from the template below.
    - Run Context's build and test commands once, and record their durations.
    - Then do the bootstrap items and `G0` yourself.
@@ -29,7 +29,7 @@ You are the lead and integrator. `HANDOFF.md` is the plan and is read-only to yo
 
 1. **Frontier.** Every item whose blockers are done and whose `Owns` doesn't overlap an item in flight.
 2. **Dispatch** frontier items up to HANDOFF's concurrency cap (default 3). For each one:
-   - create a worktree `<topic>-<id>` off the integration branch's current head;
+   - create a worktree `<slug>-<id>` off the integration branch's current head;
    - start a background subagent with the item brief below.
 
    Do contracts and gates yourself. Claude Code: the Agent tool runs subagents in the background and notifies you. pi: `subagent` with `run_in_background: true`, joined with `get_subagent_result`.
@@ -38,7 +38,7 @@ You are the lead and integrator. `HANDOFF.md` is the plan and is read-only to yo
 4. **Route** each report by its status line:
    - `DONE`: integrate.
    - `DONE_WITH_CONCERNS`: read the concerns, then integrate or send back; log the call in the decision log.
-   - `NEEDS_CONTEXT`: answer from HANDOFF or research and continue the subagent. If the answer is the user's to give, treat it as blocked.
+   - `NEEDS_CONTEXT`: answer from HANDOFF or its notes and continue the subagent. If the answer is the user's to give, treat it as blocked.
    - `BLOCKED`: mark the item blocked with the reason.
 5. **Integrate.**
    - Confirm the branch sits on the integration branch's current tip. If the tip moved since, have the subagent rebase again, or rebase it yourself if trivial.
@@ -80,7 +80,7 @@ Each item subagent's prompt contains:
 
 - **Role:** builds one item. The lead owns `PROGRESS.md`, integration, contracts and gate reviews.
 - **Where:** its worktree path. Work and commit only there, in small commits matching the repo's style.
-- **What:** its item ID. Have it read `HANDOFF.md` itself (Context including its Skills line, Locked decisions, Contracts, Rules, Gotchas, its item and that item's research files) rather than paraphrasing them.
+- **What:** its item ID. Have it read `HANDOFF.md` itself (Context including its Skills line, Locked decisions, Contracts, Rules, Gotchas, its item and that item's notes files) rather than paraphrasing them.
 - **Boundaries:**
   - change only its item's `Owns`; name the paths owned by items now in flight as not its own;
   - never edit contracts, `HANDOFF.md` or `PROGRESS.md`;
@@ -94,7 +94,7 @@ Each item subagent's prompt contains:
 ## PROGRESS.md
 
 ```markdown
-# Progress: <topic>
+# Progress: <slug>
 
 ## Now
 
