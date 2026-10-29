@@ -33,7 +33,7 @@ All of it is behind `fireproof.janitor.enable`, which cascades from
 | `/tmp` strays       | `pi-*`, `oc`, `opencode`, `jiti`, `node-compile-cache` past 3 days                                                                                                                    |
 | Transcripts         | A `.jsonl` older than 30 days. `memory/` and `MEMORY.md` are siblings and never match                                                                                                 |
 | Merged branches     | Every commit is reachable from the default branch, and no worktree has it checked out                                                                                                 |
-| Worktrees           | `wt clean` decides: clean tree, landed, not busy, not locked                                                                                                                          |
+| Worktrees           | `wt clean` decides: clean tree, landed, not busy, not locked, not new                                                                                                                 |
 | Build dirs          | `node_modules`, `.venv`, `target`, `dist`, `.pytest_cache`, `__pycache__` in a repo with no commit in 60 days, no process whose cwd is inside it, and a directory untouched that long |
 | Nix roots in `/tmp` | An out-link outside the agent temp roots, untouched for 3 days                                                                                                                        |
 | Nix roots in repos  | Only in `apply`: a `result*` link untouched for 7 days, or the `.direnv` links of a repo idle the way build dirs mean it                                                              |
@@ -134,3 +134,9 @@ a temp tree.
   builds, are never touched.
 - **`wt clean` deletes what it deletes.** The janitor only decides _when_ to run
   it, never what a worktree is worth.
+- **Busy means a process's cwd is inside.** Subagents and editors that reach a
+  worktree by path don't count, so `wt` keeps a branch nothing has committed to
+  for a day instead.
+- **A swept worktree takes its gitignored files with it.** Untracked files keep
+  a worktree; ignored ones (`.env`, local databases, output under an ignored
+  path) don't, so anything worth keeping there needs a home outside the tree.
