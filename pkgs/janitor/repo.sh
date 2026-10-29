@@ -20,8 +20,9 @@ scan_jobs() {
   done
 }
 
-# pi-auto-gate's extract rebuilds the judge dataset from these, so they get a
-# month. memory/ and MEMORY.md are siblings, not transcripts, and never match.
+# Subagent transcripts past their month, compressed rather than deleted since
+# /mine still reads them. Top-level sessions and memory/ never match. The bytes
+# are an estimate: zstd leaves about a fifth behind.
 scan_transcripts() {
   local root file age size
   for root in "${CLAUDE_DIRS[@]}"; do
@@ -30,10 +31,19 @@ scan_transcripts() {
       age=$(age_of "$file")
       [ "$age" -ge "$TRANSCRIPT_AGE_SECONDS" ] || continue
       size=$(file_bytes "$file")
-      printf 'transcript:%s\ttranscripts\t%s\t1\t%s\t%s\t%dd old\n' \
-        "$file" "$size" "$file" "$(label_for "$file")" "$((age / 86400))"
-    done < <(find "$root/projects" -mindepth 2 -maxdepth 3 -name '*.jsonl' -type f -print0 2>/dev/null)
+      printf 'transcript:%s\ttranscripts\t%s\t1\t%s\t%s\t%dd old, compress\n' \
+        "$file" "$((size * 4 / 5))" "$file" "$(label_for "$file")" "$((age / 86400))"
+    done < <(find "$root/projects" -mindepth 4 -path '*/subagents/*' -name '*.jsonl' -type f -print0 2>/dev/null)
   done
+}
+
+# Compress one transcript in place to <file>.zst and print the bytes it freed.
+compress_transcript() {
+  local before after
+  before=$(file_bytes "$1")
+  zstd -q --rm -- "$1" 2>/dev/null || return 1
+  after=$(file_bytes "$1.zst")
+  echo "$((before - after))"
 }
 
 # A merged branch has every commit reachable from the default branch, so deleting
@@ -260,12 +270,11 @@ apply_item() {
     ;;
   transcript)
     in_projects "$rest" || {
-      printf '  refused %s (not a session transcript)\n' "$rest"
+      printf '  refused %s (not a subagent transcript)\n' "$rest"
       return 0
     }
     [ -f "$rest" ] && [ "$(age_of "$rest")" -ge "$TRANSCRIPT_AGE_SECONDS" ] || return 0
-    size=$(file_bytes "$rest")
-    rm -f -- "$rest" && {
+    size=$(compress_transcript "$rest") && {
       printf '  freed   %8s  %s\n' "$(gib "$size")" "$rest"
       echo "$size" >>"$freed_log"
     }
@@ -460,10 +469,9 @@ cmd_repo_pass() {
   while IFS=$'\t' read -r _ _ _ _ path _ _; do
     [ -f "$path" ] || continue
     [ "$(age_of "$path")" -ge "$TRANSCRIPT_AGE_SECONDS" ] || continue
-    size=$(file_bytes "$path")
-    rm -f -- "$path" && {
+    size=$(compress_transcript "$path") && {
       freed=$((freed + size))
-      printf 'janitor: removed transcript %s\n' "$path"
+      printf 'janitor: compressed transcript %s\n' "$path"
     }
   done < <(scan_transcripts)
 

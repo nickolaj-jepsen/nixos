@@ -2,8 +2,8 @@
 #
 # Agents write temp files wherever TMPDIR points and nothing removes them, so the
 # wrappers point TMPDIR at /tmp/agent/<pid> and this owns that root. Around it sit
-# the leftovers with no owner: Claude Code's finished jobs, transcripts nothing
-# reads any more, branches merged months ago, worktrees nothing landed in, and
+# the leftovers with no owner: Claude Code's finished jobs, subagent transcripts
+# left at full size, branches merged months ago, worktrees nothing landed in, and
 # build dirs in repos nobody has opened since spring.
 #
 #   (no args)|report  what is here, what a pass would free; deletes nothing
@@ -27,8 +27,8 @@ FREE_FLOOR_PCT=${JANITOR_FREE_FLOOR_PCT:-10}
 WARN_FREE_GIB=${JANITOR_WARN_FREE_GIB:-10}
 # One line per ten minutes is enough to be heard without becoming wallpaper.
 WARN_EVERY_SECONDS=${JANITOR_WARN_EVERY_SECONDS:-600}
-# Transcripts feed pi-auto-gate's `extract`, which rebuilds the judge dataset from
-# them, so the age is a month rather than a week.
+# Subagent transcripts are compressed past this age; top-level sessions are kept.
+# pi-auto-gate's `extract` reads only plain .jsonl, so it sees a month of subagents.
 TRANSCRIPT_AGE_DAYS=${JANITOR_TRANSCRIPT_AGE_DAYS:-30}
 # A Claude Code job's private tmp is garbage once the job has been done this long.
 JOB_TMP_AGE_DAYS=${JANITOR_JOB_TMP_AGE_DAYS:-7}
@@ -246,10 +246,11 @@ is_known_repo() {
   return 1
 }
 
-# A transcript is a session .jsonl under a projects directory, never a memory file.
+# A sweepable transcript is a subagent's .jsonl under a projects directory, never
+# a top-level session or a memory file.
 in_projects() {
   local dir
-  case "$1" in *.jsonl) ;; *) return 1 ;; esac
+  case "$1" in */subagents/*.jsonl) ;; *) return 1 ;; esac
   for dir in "${CLAUDE_DIRS[@]}"; do
     case "$1" in "$dir"/projects/*) return 0 ;; esac
   done

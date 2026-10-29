@@ -4,7 +4,7 @@ Agents and dev tools leave things behind, and none of them owns the cleanup.
 Claude Code gives every session a scratch directory under `TMPDIR` and removes
 none of them; `/tmp` on this machine reached 44 GB of 47 GB that way, most of it
 one afternoon's downloads. Around that sit the leftovers with no owner at all:
-finished job directories, transcripts nothing reads any more, branches merged
+finished job directories, subagent transcripts left at full size, branches merged
 months ago, worktrees nothing landed in, and build directories in repos nobody
 has opened since spring.
 
@@ -31,7 +31,7 @@ All of it is behind `fireproof.janitor.enable`, which cascades from
 | Agent temp          | The dir is named after its wrapper's pid and `/proc/<pid>` is gone; or, for legacy `/tmp/claude-1000` paths, the session registry no longer knows it and it has been idle an hour     |
 | Claude Code job tmp | The job directory has been untouched for 7 days                                                                                                                                       |
 | `/tmp` strays       | `pi-*`, `oc`, `opencode`, `jiti`, `node-compile-cache` past 3 days                                                                                                                    |
-| Transcripts         | A `.jsonl` older than 30 days. `memory/` and `MEMORY.md` are siblings and never match                                                                                                 |
+| Transcripts         | Compressed to `.jsonl.zst`, never deleted: a subagent's `.jsonl` older than 30 days. Top-level sessions, `memory/` and `MEMORY.md` never match                                        |
 | Merged branches     | Every commit is reachable from the default branch, and no worktree has it checked out                                                                                                 |
 | Worktrees           | `wt clean` decides: clean tree, landed, not busy, not locked, not new                                                                                                                 |
 | Build dirs          | `node_modules`, `.venv`, `target`, `dist`, `.pytest_cache`, `__pycache__` in a repo with no commit in 60 days, no process whose cwd is inside it, and a directory untouched that long |
@@ -54,7 +54,7 @@ free floor by evicting dead sessions oldest-first.
 
 `janitor-repo` runs at 04:00 with `Persistent=true`, and five minutes after
 login. It deletes merged branches, runs `wt clean` in every repo that has
-something to clean, drops transcripts past their month and stale `/tmp`
+something to clean, compresses subagent transcripts past their month, drops stale `/tmp`
 out-links, then recomputes the cached plan the widget reads. The weekly nix GC
 collects what those links held; `apply` runs `nix-store --gc` itself once it
 has removed a root, so the checklist shows the space straight away.
@@ -80,8 +80,8 @@ deleted. Restore one with `git fetch <bundle> <branch>:<branch>`.
 
 An id is not a licence: every row is re-checked when it is applied, against the
 rules as they stand at that moment, because the checklist can be an hour old and
-`apply --ids` accepts ids from anyone. A transcript must still be a `.jsonl`
-under a `projects` directory, a build directory must still be one of the named
+`apply --ids` accepts ids from anyone. A transcript must still be a subagent's
+`.jsonl` under a `projects` directory, a build directory must still be one of the named
 ones inside a repo in the roster with nothing running in it, and a temp path must
 still fail the liveness test right then.
 
@@ -118,10 +118,12 @@ a temp tree.
 - **There is no filesystem cap.** btrfs quotas are off, and turning them on for
   one 20 GB limit costs a filesystem-wide rescan on five hosts; the budget plus
   the warning line is what exists instead.
-- **Transcripts feed pi-auto-gate's `extract`,** which rebuilds the judge dataset
-  from every `.jsonl` under `~/.claude/projects` and `~/.claude-work/projects`.
-  Their 30-day age is the window in which a re-run of `extract` can still see
-  them.
+- **Transcripts are kept on purpose.** pi-auto-gate's `extract` rebuilds its
+  judge dataset from every plain `.jsonl` under `~/.claude/projects` and
+  `~/.claude-work/projects`, and `/mine` reads whole history to improve skills
+  and tools. Top-level sessions (~0.5 GB a month) are never touched; subagent
+  transcripts, about nine tenths of the bytes, are compressed with zstd after 30
+  days, which is when `extract` stops seeing them.
 - **The sandbox's qcow2 images are not touched.** That is
   `~/.local/state/pi-auto-sandbox/disks`, outside every root here: `pi-auto-gate`
   has its own `collectGarbage` and knows which disk is a template. What the stray
