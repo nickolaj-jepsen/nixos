@@ -78,6 +78,9 @@
 
       [input]
       xkb_layout = @layout@
+      # Half the travel (and twice the time) per gesture: at 1.0 a sideways
+      # swipe needs over half of the Compact window's width.
+      gesture_sensitivity = 2.0
 
       # Every window full screen, as on a phone; the overview switches between them.
       [place]
@@ -98,7 +101,8 @@
       duration = 150ms
 
       # Three-finger swipes: up for the windows, down for the workspaces,
-      # sideways to the next workspace.
+      # sideways to the next workspace, as is a swipe in from a side edge (the
+      # phone uses button navigation, so Android doesn't claim the edges).
       [scale]
       toggle = <super> KEY_P | swipe up 3
       duration = 300ms
@@ -112,8 +116,8 @@
       background = \#${c.black}FF
 
       [vswitch]
-      binding_left = <super> <alt> KEY_LEFT | swipe right 3
-      binding_right = <super> <alt> KEY_RIGHT | swipe left 3
+      binding_left = <super> <alt> KEY_LEFT | swipe right 3 | edge-swipe right 1
+      binding_right = <super> <alt> KEY_RIGHT | swipe left 3 | edge-swipe left 1
       duration = 200ms
 
       [wm-actions]
