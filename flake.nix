@@ -59,7 +59,7 @@
     nixos-wsl.url = "github:nix-community/NixOS-WSL/main";
     nixos-wsl.inputs.nixpkgs.follows = "nixpkgs";
 
-    # phone-vm's guest contract (kernel, image, agent); m0-m1 until it lands on main.
+    # phone-vm's guest contract (kernel, image, agent, GUI); gui-apps until it lands on main.
     pocketnix.url = "github:nickolaj-jepsen/pocketnix/gui-apps";
     pocketnix.inputs.nixpkgs.follows = "nixpkgs";
 
