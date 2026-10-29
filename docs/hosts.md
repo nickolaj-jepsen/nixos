@@ -75,14 +75,16 @@ Run ON the Mac:
 
 ## The phone (pocketnix)
 
-`phone-vm` is NixOS on the Pixel 8 Pro (GrapheneOS), a headless aarch64 dev
+`phone-vm` is NixOS on the Pixel 8 Pro (GrapheneOS), an aarch64 dev
 env run by the [pocketnix](https://github.com/nickolaj-jepsen/pocketnix) app
 (input `pocketnix`) under Android's AVF: u-boot finds the image's ESP and runs
 systemd-boot, so generations and rollback work as on any EFI host. pocketnix's
 `nixosModules.default` owns the guest contract (Google's prebuilt guest
 kernel, the disk image, first boot, the vsock agent and hvc0 console);
 `modules/system/pocketnix.nix` (`fireproof.pocketnix.enable`) wires in the
-user, the ssh forward and the terminal's theme and tab profiles. Its
+user, the ssh forward, the terminal's theme and tab profiles, and with
+`fireproof.gui.enable` pocketnix's GUI (Wayland apps as Android windows,
+software-rendered: there's no GPU, so OpenGL-only apps don't start). Its
 docs/design.md and AGENTS.md hold the platform's decisions and traps. CI
 builds it on an arm runner into attic; never evaluate or build on the phone,
 it freezes.
@@ -114,7 +116,9 @@ app relaunch the VM; `poweroff` leaves it stopped.
 ## Cross-platform apps
 
 Everyday GUI apps have no toggle of their own: they gate on `desktop.enable`
-(plus `dev`/`work` where relevant). The darwin host opts into the whole GUI roster with `desktop.enable = true`,
+(plus `dev`/`work` where relevant). The few worth having without a desktop
+session (Firefox, Sublime Merge, the GTK theme and fonts) gate on `gui.enable`
+instead, which `desktop.enable` turns on and phone-vm sets alone. The darwin host opts into the whole GUI roster with `desktop.enable = true`,
 same as Linux. A cross-platform app leaf carries a `flake.modules.darwin.<app>`
 half adding a `homebrew.casks` entry, and its homeManager half must keep the
 nixpkgs binary off the Mac: `fpLib.mkDarwinGuiPackage` for
