@@ -582,8 +582,6 @@ in {
             # the profile name and the destructive verbs are the only local gate.
             # SCW_PROFILE= is stripped as an assignment prefix, so an exported
             # profile is not caught here; -p/--profile is.
-            "*ao-prod*" = "ask";
-            "*b2c-production*" = "ask";
             "scw * delete*" = "ask";
             "scw * terminate*" = "ask";
             "scw * poweroff*" = "ask";
