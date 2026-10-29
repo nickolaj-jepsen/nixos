@@ -17,6 +17,9 @@ from .ui import _landed_cell, _state_cell, _table, _vs_cell, format_age
 
 STATUS_VERSION = 1
 SQUASH_HISTORY_LIMIT = 500
+# An agent's subagents work in a worktree by path, never by cwd, so occupancy can't see them;
+# a branch nothing has moved yet is kept this long instead of passing for landed.
+FRESH_GRACE_SECONDS = 24 * 3600
 
 
 def _ancestors() -> set[int]:
@@ -124,6 +127,22 @@ def branch_landed(repo: Repo, path: str) -> bool:
     if lines and all(line.startswith("-") for line in lines):
         return True
     return squash_landed(repo, path)
+
+
+def fresh_age(path: str, branch: str) -> Optional[int]:
+    """Seconds since `branch` was created, while that is under FRESH_GRACE_SECONDS and its reflog
+    holds nothing after the creation; None otherwise, including for a detached HEAD or no reflog."""
+    if not branch:
+        return None
+    log = git(path, "reflog", "show", "--date=unix", "--format=%gd", f"refs/heads/{branch}", check=False)
+    entries = log.split()
+    if len(entries) != 1 or "@{" not in entries[0]:
+        return None
+    stamp = entries[0].rsplit("@{", 1)[1].rstrip("}")
+    if not stamp.isdigit():
+        return None
+    age = max(0, int(time.time()) - int(stamp))
+    return age if age < FRESH_GRACE_SECONDS else None
 
 
 def held_elsewhere(path: str, branch: str) -> bool:
@@ -370,6 +389,7 @@ def gather(repo: Repo, *, deep: bool = True) -> list[Worktree]:
             and state == "clean"
             and (landed or held_elsewhere(path, branch))
             and not busy
+            and fresh_age(path, branch) is None
         )
         if is_main:
             landed = True

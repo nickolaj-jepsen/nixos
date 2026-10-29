@@ -12,9 +12,9 @@ from typing import Optional
 
 from .git import die, git, git_ok, info, is_within, run
 from .repo import Repo, RepoLock, current_repo, registered_worktrees
-from .status import Worktree, busy_pid, describe_pid, gather, held_elsewhere, resolve_row
+from .status import Worktree, busy_pid, describe_pid, fresh_age, gather, held_elsewhere, resolve_row
 from .trash import archive_orphan, archive_worktree
-from .ui import pick
+from .ui import format_age, pick
 
 
 def copy_worktreeinclude(repo: Repo, dest: str) -> None:
@@ -176,6 +176,9 @@ def _keep_reasons(repo: Repo, row: Worktree) -> list[str]:
         reasons.append(f"commits not in {repo.default}; run 'wt land {row.name}'")
     if row.locked:
         reasons.append("locked")
+    fresh = fresh_age(row.path, row.branch)
+    if fresh is not None:
+        reasons.append(f"created {format_age(fresh)} ago, nothing committed yet; 'wt remove {row.name}' drops it")
     busy = busy_pid(row.path)
     if busy:
         reasons.append(f"in use by {describe_pid(busy)}")

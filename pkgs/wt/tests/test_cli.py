@@ -259,6 +259,19 @@ class Fixture(unittest.TestCase):
         self.assertEqual(first.exists() + second.exists(), 1)
         self.assertNotEqual(self.git("branch", "--contains", commit).strip(), "")
 
+    def test_clean_keeps_a_new_worktree_nothing_has_committed_to_yet(self) -> None:
+        base = self.create("integration")
+        Path(base, "b.txt").write_text("work\n")
+        self.commit("work", cwd=str(base))
+        stale = Path(self.wt("create", "stale-item", "integration").stdout.strip())
+        del self.env["GIT_COMMITTER_DATE"]
+        fresh = Path(self.wt("create", "fresh-item", "integration").stdout.strip())
+        stderr = self.wt("clean").stderr
+        self.assertIn("keeping fresh-item: created", stderr)
+        self.assertTrue(fresh.exists())
+        self.assertFalse(stale.exists())
+        self.assertFalse(self.entry("fresh-item")["safeToRemove"])
+
     def test_clean_skips_the_worktree_it_is_run_from(self) -> None:
         path = self.create("self")
         Path(path, "note.txt").write_text("landed\n")
