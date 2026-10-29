@@ -30,6 +30,11 @@
           guestPort = 22;
           hostPort = 2222;
         };
+        gui = {
+          inherit (config.fireproof.gui) enable;
+          # Desktop layouts; phone density leaves them a column wide.
+          appDefaults = lib.genAttrs ["firefox" "sublime_merge"] (_: {size = "compact";});
+        };
         terminal = {
           profiles = {
             shell = {};

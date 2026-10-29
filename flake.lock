@@ -783,16 +783,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1792983559,
-        "narHash": "sha256-uaKaRY6Q8tJ5Mwv936WuxYXcVdzQfqsL+zTs/lseZ/A=",
+        "lastModified": 1793226957,
+        "narHash": "sha256-j+ptaGDEGkdZj1iNwOzQKij6WTEKDhbICo0ksc39dcM=",
         "owner": "nickolaj-jepsen",
         "repo": "pocketnix",
-        "rev": "551193728090481360140892b2fc075f6582712f",
+        "rev": "4ccbaa4babc31418f791136f530b8501fd4b0af7",
         "type": "github"
       },
       "original": {
         "owner": "nickolaj-jepsen",
-        "ref": "m0-m1",
+        "ref": "gui-apps",
         "repo": "pocketnix",
         "type": "github"
       }
