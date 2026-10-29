@@ -272,6 +272,30 @@ class Fixture(unittest.TestCase):
         self.assertFalse(stale.exists())
         self.assertFalse(self.entry("fresh-item")["safeToRemove"])
 
+    def test_clean_keeps_the_base_of_a_stack(self) -> None:
+        base = self.create("base")
+        Path(base, "b.txt").write_text("work\n")
+        self.commit("work", cwd=str(base))
+        stacked = Path(self.wt("create", "stacked", "base").stdout.strip())
+        Path(stacked, "c.txt").write_text("more\n")
+        self.commit("more", cwd=str(stacked))
+        self.wt("clean")
+        self.assertTrue(base.exists())
+        self.assertTrue(stacked.exists())
+
+    def test_clean_drops_the_newer_of_two_branches_on_one_commit(self) -> None:
+        integration = self.create("integration")
+        Path(integration, "b.txt").write_text("work\n")
+        self.commit("work", cwd=str(integration))
+        self.env["GIT_COMMITTER_DATE"] = "2026-01-02T00:00:00Z"
+        item = Path(self.wt("create", "item", "integration").stdout.strip())
+        Path(item, "c.txt").write_text("more\n")
+        self.commit("more", cwd=str(item))
+        self.git("merge", "-q", "--ff-only", "item", cwd=str(integration))
+        self.wt("clean")
+        self.assertTrue(integration.exists())
+        self.assertFalse(item.exists())
+
     def test_clean_skips_the_worktree_it_is_run_from(self) -> None:
         path = self.create("self")
         Path(path, "note.txt").write_text("landed\n")

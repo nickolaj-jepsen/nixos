@@ -129,32 +129,57 @@ def branch_landed(repo: Repo, path: str) -> bool:
     return squash_landed(repo, path)
 
 
+def _reflog(path: str, branch: str) -> list[tuple[int, str]]:
+    """`branch`'s reflog as (unix time, subject), newest first; empty for no branch or no reflog."""
+    if not branch:
+        return []
+    log = git(path, "reflog", "show", "--date=unix", "--format=%gd %gs", f"refs/heads/{branch}", check=False)
+    entries = []
+    for line in log.splitlines():
+        selector, _, subject = line.partition(" ")
+        stamp = selector.rsplit("@{", 1)[-1].rstrip("}")
+        if stamp.isdigit():
+            entries.append((int(stamp), subject))
+    return entries
+
+
+def _is_child(path: str, child: str, parent: str) -> bool:
+    """Whether `child` was made after `parent`: created from it by name, else created later."""
+    mine, theirs = _reflog(path, child), _reflog(path, parent)
+    if not mine or not theirs:
+        return False
+    if mine[-1][1] == f"branch: Created from {parent}":
+        return True
+    if theirs[-1][1] == f"branch: Created from {child}":
+        return False
+    return mine[-1][0] > theirs[-1][0]
+
+
 def fresh_age(path: str, branch: str) -> Optional[int]:
     """Seconds since `branch` was created, while that is under FRESH_GRACE_SECONDS and its reflog
     holds nothing after the creation; None otherwise, including for a detached HEAD or no reflog."""
-    if not branch:
+    entries = _reflog(path, branch)
+    if len(entries) != 1:
         return None
-    log = git(path, "reflog", "show", "--date=unix", "--format=%gd", f"refs/heads/{branch}", check=False)
-    entries = log.split()
-    if len(entries) != 1 or "@{" not in entries[0]:
-        return None
-    stamp = entries[0].rsplit("@{", 1)[1].rstrip("}")
-    if not stamp.isdigit():
-        return None
-    age = max(0, int(time.time()) - int(stamp))
+    age = max(0, int(time.time()) - entries[0][0])
     return age if age < FRESH_GRACE_SECONDS else None
 
 
 def held_elsewhere(path: str, branch: str) -> bool:
-    """Whether a branch other than `branch`, local or remote, contains HEAD, so dropping `branch` loses no commit.
+    """Whether another branch, local or remote, points at HEAD, so dropping `branch` loses neither a
+    commit nor a layer of a stack.
 
-    A remote branch of the same name doesn't count: a pushed feature branch is still unlanded work.
+    A branch merely containing HEAD doesn't count: that is a stack built on `branch`. A remote branch
+    of the same name doesn't count either: a pushed feature branch is still unlanded work. Of two
+    local branches on one commit, only the child is held, so its parent stays.
     """
-    refs = git(path, "for-each-ref", "--contains", "HEAD", "--format=%(refname)", "refs/heads", "refs/remotes", check=False)
+    refs = git(path, "for-each-ref", "--points-at", "HEAD", "--format=%(refname)", "refs/heads", "refs/remotes", check=False)
     for ref in refs.splitlines():
         if ref.endswith("/HEAD") or ref == f"refs/heads/{branch}":
             continue
         if branch and ref.startswith("refs/remotes/") and ref.split("/", 3)[-1] == branch:
+            continue
+        if ref.startswith("refs/heads/") and _is_child(path, ref[len("refs/heads/") :], branch):
             continue
         return True
     return False
