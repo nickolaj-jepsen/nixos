@@ -2,7 +2,7 @@
 name: ideate
 description: Generate grounded, ranked ideas for improving a repo or one area of it (features, refactors, performance, tooling), each routed to /brainstorm, /grill-me or building it.
 disable-model-invocation: true
-argument-hint: "[focus] [--quick] [--no-web]"
+argument-hint: "[focus] [--big|--quick] [--no-web]"
 ---
 
 The arguments are a focus (an area, a kind of improvement, or both) plus optional flags. This skill finds ideas worth doing. It designs none of them and writes no code unless the user picks ideas to build at the end.
@@ -17,8 +17,9 @@ Classify the ask from the focus: general, features, performance, refactor, tooli
 
 The bar:
 
-- **Default, big swings:** rewrites, removals and new subsystems are fair game. An idea clears the bar if it's worth reorganising a week around.
-- **`--quick`:** small changes and deletions. An idea clears the bar if it's worth doing at all.
+- **Default:** any size, from a one-line deletion to a rewrite. An idea clears the bar if it's worth doing at all.
+- **`--big`:** big swings only: rewrites, removals and new subsystems. An idea clears the bar if it's worth reorganising a week around.
+- **`--quick`:** S-sized changes and deletions only.
 
 `--no-web` skips the web generator.
 
@@ -70,7 +71,7 @@ Axes the user names ("for humans and agents", "sorted by tradeoff") replace the 
 
 Every generator's brief says:
 
-- Aim for 8–10 ideas (4–5 with `--quick`). The first few are the obvious ones; keep them only if they still earn their place once the less obvious ones exist.
+- Aim for 5–6 ideas of any size the bar allows (3–4 with `--quick`). The first few are the obvious ones; keep them only if they still earn their place once the less obvious ones exist.
 - Ideas are free-form, but each has a title and a basis: a `path:line` you read yourself in this run, a source URL, or an argument written out in full. No basis, no idea.
 - A performance idea needs a number you measured with something cheap and read-only (time a command, size a closure, profile one run), or else the command that would measure it, marked unmeasured.
 - Don't propose anything the summary lists as rejected unless its reason no longer holds.
@@ -79,7 +80,7 @@ Every generator's brief says:
 
 Merge and dedupe. Then give a fresh subagent only the grounding summary, the bar and the merged list, and ask it to refute each idea: is the cited line there and does it say that, does the source exist and say that, does the argument hold, does it clear the bar. It returns sound, weak or refuted, with a reason. You make the final cut, overruling a verdict only with evidence, and say so.
 
-Keep 5–7. If fewer than 5 survive, run one more pass with up to three unused lenses, verify it, and cut again. If still short, report the shortfall rather than lower the bar. When performance is the focus and nothing could be measured, "build the measurement" (a benchmark harness, a timing script) ranks first and the rest are marked unmeasured.
+Keep 5–7. If fewer than 5 survive, report the shortfall rather than lower the bar. When performance is the focus and nothing could be measured, "build the measurement" (a benchmark harness, a timing script) ranks first and the rest are marked unmeasured.
 
 For each survivor decide:
 
@@ -114,7 +115,21 @@ Write `IDEAS.md`. On a rerun, edit it in place: re-check carried-over ideas agai
 - <title>: <one-line reason>
 ```
 
-In chat, show only the path, the counts ("7 ideas from 34 candidates"), one line per idea (`1. <title> · <size> · <next>`) and the top pick in a sentence.
+In chat, show only this:
+
+```
+<n> ideas, saved to <path>
+
+1. <title>
+   <the payoff, one line>
+   <Small|Medium|Large>, <build it|grill first|brainstorm first>.
+
+…
+
+- <at most 3 notes the user should hear now, such as a verifier you overruled or a surprise found while checking; the rest goes in the file>
+
+Start with <n>: <why, and its first step, in a sentence>.
+```
 
 ## Pick
 
