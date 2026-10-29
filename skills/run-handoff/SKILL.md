@@ -42,8 +42,8 @@ You are the lead and integrator. `HANDOFF.md` is the plan and is read-only to yo
    - `BLOCKED`: mark the item blocked with the reason.
 5. **Integrate.**
    - Confirm the branch sits on the integration branch's current tip. If the tip moved since, have the subagent rebase again, or rebase it yourself if trivial.
-   - On that tree, re-run the item's acceptance command yourself, plus the repo's standard checks. Never take the subagent's "it passes" as the result.
-   - If it passes: fast-forward the integration branch, record the command, its result and the commit, and remove the item's worktree.
+   - On that tree, re-run the item's acceptance command yourself, plus the repo's standard checks and the walking skeleton if HANDOFF has one. Never take the subagent's "it passes" as the result.
+   - If it passes: fast-forward the integration branch, record the command, its result and the commit, then read and delete the worktree's `.handoff-report.md` and remove the worktree.
    - If it fails: send the failing output back to the same subagent, continuing it if the harness allows. After two send-backs, mark the item blocked with the last failing output.
 6. **Re-check the frontier** after every integration and dispatch what opened up.
 7. **Update `PROGRESS.md`** after every item and before any long operation. It is how you resume after a context reset, so keep it accurate, not optimistic.
@@ -54,7 +54,10 @@ Long commands go to the background with a deadline, and their output goes to fil
 
 A gate passes when its items pass acceptance on the integration branch and a reviewer signs off. After the last item, a final gate reviews the whole integration branch against its base; fix its confirmed findings in one pass.
 
-**The reviewer** is a fresh, read-only subagent (a reviewer agent type if one exists). It gets the gate's diff since the previous gate (the final gate: since the base), the `HANDOFF.md` path, and the gate's item IDs. It does not get the subagents' reports. Ask it for defects, contract violations, scope drift, uncovered review-focus risks, and acceptance checks that pass without proving the outcome. Fix confirmed findings before the gate passes, and record the gate's commit and verdict.
+**The reviewer** is a fresh, read-only subagent (a reviewer agent type if one exists). It gets the gate's diff since the previous gate (the final gate: since the base), the `HANDOFF.md` path, and the gate's item IDs. It does not get the subagents' reports. Ask it for defects, contract violations, scope drift, uncovered review-focus risks, acceptance checks that pass without proving the outcome, and decisions or user actions in HANDOFF that have no reachable path yet. Fix confirmed findings before the gate passes, and record the gate's commit and verdict.
+
+- Above about 3k changed lines, split the review by area (e.g. backend, UI, deployment), one reviewer each.
+- If HANDOFF has Trust boundaries, the first gate after an item that touches one and the final gate add a security reviewer. It gets only the boundaries and the diff, and is asked for a path by which untrusted input reaches a secret or crosses a boundary.
 
 **Default mode:** after each gate, post the gate, each item's acceptance result, the reviewer's verdict, surprises, and what the frontier opens next. Ask go or adjust, using the harness's question tool if there is one. When blocked, ask right away; items already running keep going.
 
@@ -76,7 +79,7 @@ Never edit `HANDOFF.md` to get unstuck. Propose the change in `PROGRESS.md` for 
 Each item subagent's prompt contains:
 
 - **Role:** builds one item. The lead owns `PROGRESS.md`, integration, contracts and gate reviews.
-- **Where:** its worktree path. Work and commit only there, in small commits matching the repo's style.
+- **Where:** its worktree path. Work and commit only there, in small commits matching the repo's style. Commit within the first few changes, so the worktree is never empty.
 - **What:** its item ID. Have it read `HANDOFF.md` itself (Context including its Skills line, Locked decisions, Contracts, Rules, Gotchas, its item and that item's research files) rather than paraphrasing them.
 - **Boundaries:**
   - change only its item's `Owns`; name the paths owned by items now in flight as not its own;
@@ -86,7 +89,7 @@ Each item subagent's prompt contains:
   If a contract or decision blocks it, it finishes what it can and reports the proposed change rather than working around it.
 
 - **Done:** rebased onto the integration branch's current tip, then its acceptance command passes there, run by it, with the output reported.
-- **Report:** first line exactly one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`. Then: branch and worktree; commits; the acceptance command and result; decisions made and why; anything contradicting HANDOFF; measured timings. Failures and skips stated plainly. Logs stay in files and the report gives their paths.
+- **Report:** written to an untracked `.handoff-report.md` in its worktree. First line exactly one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`. Then: branch and worktree; commits; the acceptance command and result; decisions made and why; anything contradicting HANDOFF; measured timings. Failures and skips stated plainly. Logs stay in files and the report gives their paths. Its final message is only the status line and the report's path, since long replies get truncated.
 
 ## PROGRESS.md
 

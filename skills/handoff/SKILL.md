@@ -30,7 +30,8 @@ The reader is a builder agent that never saw this conversation. It runs `/run-ha
 7. **Write `HANDOFF.md`** from the template below.
 8. **Cold read.** Spawn a fresh subagent given only the directory path, with no conversation context. Ask it to:
    - list everything it couldn't act on without asking: undefined terms, references to the discussion, items without runnable acceptance, missing run commands;
-   - map every in-scope line to the items that deliver it, and every review-focus risk to the item whose acceptance covers it, and report what maps to nothing;
+   - map every in-scope line, locked decision and contract to the items that deliver it end to end, and every review-focus risk and trust boundary to the item whose acceptance covers it, and report what maps to nothing;
+   - list the user actions the decisions imply (a decision that discards work implies a control to discard) and the item that builds each one;
    - flag items that could be in flight together but share `Owns`.
 
    Fix what it finds. Reopen the grill only for a real decision gap.
@@ -41,9 +42,11 @@ The reader is a builder agent that never saw this conversation. It runs `/run-ha
 
 - **Vertical slices.** Each item cuts a narrow but complete path through every layer it needs (schema, logic, interface, tests) and is verifiable on its own. Items split by layer only meet at the end, which is where parallel builders' hidden assumptions collide.
 - **Wide refactors go expand–contract.** A mechanical change whose blast radius crosses the codebase can't keep `Owns` disjoint or land green as one slice. Expand (add the new form beside the old), migrate callers in batches each blocked by the expand, then contract (delete the old form) blocked by every batch.
-- **Freeze contracts first.** Any interface two concurrently running items code against (schema, types, CLI flags, file format, API shape) is a contract, frozen at gate `G0` before work fans out. Items never change a contract; they propose changes.
+- **Freeze contracts first.** Any interface two concurrently running items code against (schema, types, CLI flags, file format, API shape) is a contract, frozen at gate `G0` before work fans out. Items never change a contract; they propose changes. Wiring that spans modules (startup and shutdown order, cross-module listeners) is a contract too, with one owning item.
+- **Walking skeleton at `G0`.** When there is a user-facing flow, `G0` adds a test that drives the main path end to end through the real entry point, with pending steps where modules don't exist yet. Each item's acceptance includes making its steps real with the skeleton still passing. If the flow has a UI, driving it is a test tier, not a manual gate step.
 - **Concurrency comes from the graph.** Items whose blockers are done and whose `Owns` are disjoint run at once; there are no lanes or phases to declare. Shared hotspots (lockfiles, registries, central config) belong to one item or to `G0`. A mostly linear graph is a fine answer; don't cut edges to look parallel.
 - **Unknowns become spikes** (`S1`…): a question, a timebox, and the criteria for keeping or discarding the result. They block the items that depend on them.
+- **Tool behaviour needs evidence.** A locked decision that rests on how a third-party tool behaves cites a command run on the pinned version and its output, or a spike; without either it becomes a spike. Where the mechanism is uncertain, lock the outcome and list pre-approved fallback mechanisms the builder may switch between without stopping.
 - **No implementation steps.** A "how" that matters is a locked decision; an unknown "how" is a spike.
 - **Size:** one subagent can finish and verify an item in one fresh context.
 - **Acceptance is observable:** a command, its working directory and the expected result. For a behaviour change, a test that fails before and passes after. "Tests pass" alone is not acceptance. If no reliable check exists, the first item builds one: builders optimise for whatever the check rewards.
@@ -75,9 +78,19 @@ Do not re-litigate. If evidence shows one is wrong, raise it; don't deviate.
 
 - D1 <decision>. Why: <reason>.
 
+Mechanism uncertain:
+
+- D2 <outcome>. Chosen: <mechanism>. Fallback: <mechanism>. Why: <reason>. Evidence: <research file or spike>.
+
 ## Contracts
 
 - C1 <interface>: <shape, where it lives>. Frozen at G0.
+
+## Trust boundaries
+
+<Only when untrusted input reaches the system. What is trusted and what isn't; each secret and where it lives (not its value).>
+
+- B1 <untrusted input> must not reach <secret or resource> → attacked by <item ID>'s acceptance.
 
 ## Work items
 
