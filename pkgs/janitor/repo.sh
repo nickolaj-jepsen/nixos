@@ -20,32 +20,6 @@ scan_jobs() {
   done
 }
 
-# Subagent transcripts past their month, compressed rather than deleted since
-# /mine still reads them. Top-level sessions and memory/ never match. The bytes
-# are an estimate: zstd leaves about a fifth behind.
-scan_transcripts() {
-  local root file age size
-  for root in "${CLAUDE_DIRS[@]}"; do
-    [ -d "$root/projects" ] || continue
-    while IFS= read -r -d '' file; do
-      age=$(age_of "$file")
-      [ "$age" -ge "$TRANSCRIPT_AGE_SECONDS" ] || continue
-      size=$(file_bytes "$file")
-      printf 'transcript:%s\ttranscripts\t%s\t1\t%s\t%s\t%dd old, compress\n' \
-        "$file" "$((size * 4 / 5))" "$file" "$(label_for "$file")" "$((age / 86400))"
-    done < <(find "$root/projects" -mindepth 4 -path '*/subagents/*' -name '*.jsonl' -type f -print0 2>/dev/null)
-  done
-}
-
-# Compress one transcript in place to <file>.zst and print the bytes it freed.
-compress_transcript() {
-  local before after
-  before=$(file_bytes "$1")
-  zstd -q --rm -- "$1" 2>/dev/null || return 1
-  after=$(file_bytes "$1.zst")
-  echo "$((before - after))"
-}
-
 # A merged branch has every commit reachable from the default branch, so deleting
 # it loses nothing. An unmerged one is offered only in `apply`, bundled first.
 scan_branches() {
@@ -124,7 +98,6 @@ scan_tmp() {
 plan_items() {
   scan_tmp
   scan_jobs
-  scan_transcripts
   scan_worktrees
   scan_build_dirs
   scan_gcroots
@@ -182,12 +155,12 @@ cmd_report() {
   local avail total bytes title detail count
   read -r avail total < <(free_space) || { avail=0; total=1; }
   printf 'janitor: %s free of %s on /\n' "$(gib "$avail")" "$(gib "$total")"
-  for category in tmp jobs transcripts build gcroot worktree branch; do
+  for category in tmp jobs build gcroot worktree branch; do
     count=$(awk -F'\t' -v c="$category" '$2 == c {n++} END {print n + 0}' "$PLAN_TMP")
     [ "$count" -gt 0 ] || continue
     printf '\n%s (%d)\n' "$category" "$count"
     awk -F'\t' -v c="$category" '$2 == c {printf "%s\t%s\t%s\n", $3, $5, $7}' "$PLAN_TMP" |
-      sort -t$'\t' -k1,1nr | head -15 |
+      sort -t$'\t' -k1,1nr | awk 'NR <= 15' |
       while IFS=$'\t' read -r bytes title detail; do
         printf '  %8s  %s  %s\n' "$(gib "$bytes")" "$title" "$detail"
       done
@@ -264,17 +237,6 @@ apply_item() {
     [ -d "$rest" ] && [ "$(age_of "$rest")" -ge "$JOB_TMP_AGE_SECONDS" ] || return 0
     size=$(size_of "$rest")
     rm -rf -- "$rest" && {
-      printf '  freed   %8s  %s\n' "$(gib "$size")" "$rest"
-      echo "$size" >>"$freed_log"
-    }
-    ;;
-  transcript)
-    in_projects "$rest" || {
-      printf '  refused %s (not a subagent transcript)\n' "$rest"
-      return 0
-    }
-    [ -f "$rest" ] && [ "$(age_of "$rest")" -ge "$TRANSCRIPT_AGE_SECONDS" ] || return 0
-    size=$(compress_transcript "$rest") && {
       printf '  freed   %8s  %s\n' "$(gib "$size")" "$rest"
       echo "$size" >>"$freed_log"
     }
@@ -440,7 +402,7 @@ cmd_repo_plan_refresh() {
   rm -f -- "$PLAN_TMP" "$CWD_CACHE"
 }
 
-# The daily pass: merged branches, finished worktrees, transcripts, and the
+# The daily pass: merged branches, finished worktrees, finished jobs, and the
 # cached numbers the widget reads.
 cmd_repo_pass() {
   local freed=0 repo branch def checked path size removed=0
@@ -465,15 +427,6 @@ cmd_repo_pass() {
     done < <(wt list --all --json 2>/dev/null |
       jq -r '.repos[] | select(.worktrees | map(select(.safeToRemove == true)) | length > 0) | .main' 2>/dev/null)
   fi
-
-  while IFS=$'\t' read -r _ _ _ _ path _ _; do
-    [ -f "$path" ] || continue
-    [ "$(age_of "$path")" -ge "$TRANSCRIPT_AGE_SECONDS" ] || continue
-    size=$(compress_transcript "$path") && {
-      freed=$((freed + size))
-      printf 'janitor: compressed transcript %s\n' "$path"
-    }
-  done < <(scan_transcripts)
 
   while IFS=$'\t' read -r _ _ _ _ path _ _; do
     [ -d "$path" ] || continue

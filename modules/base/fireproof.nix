@@ -88,7 +88,7 @@ let
         description = "Language servers by name, configured for every coding agent that speaks LSP.";
       };
 
-      # docs/janitor.md: temp roots, finished jobs, old transcripts, merged
+      # docs/janitor.md: temp roots, finished jobs, merged
       # branches, finished worktrees and the rebuildable build dirs nobody opened.
       janitor.enable = cascade config.fireproof.dev.enable "Reclaim what agents and dev tools leave behind";
 

@@ -23,13 +23,12 @@ PluginComponent {
         })
     readonly property int scanIntervalMs: 3600000
 
-    readonly property var categoryOrder: ["build", "gcroot", "tmp", "jobs", "transcripts", "worktree", "branch"]
+    readonly property var categoryOrder: ["build", "gcroot", "tmp", "jobs", "worktree", "branch"]
     readonly property var categoryTitles: ({
             "build": "Build dirs",
             "gcroot": "Nix roots",
             "tmp": "Agent temp",
             "jobs": "Finished jobs",
-            "transcripts": "Transcripts",
             "worktree": "Worktrees",
             "branch": "Branches"
         })
@@ -38,7 +37,6 @@ PluginComponent {
             "gcroot": "inventory_2",
             "tmp": "hourglass_empty",
             "jobs": "work_history",
-            "transcripts": "description",
             "worktree": "account_tree",
             "branch": "alt_route"
         })

@@ -37,9 +37,9 @@
       };
 
       # Once a day, and after a laptop wakes: merged branches, finished
-      # worktrees, transcripts past their month, and the cached plan.
+      # worktrees, finished jobs, and the cached plan.
       systemd.user.services.janitor-repo = lib.mkIf pkgs.stdenv.isLinux {
-        Unit.Description = "Reclaim merged branches, finished worktrees and old transcripts";
+        Unit.Description = "Reclaim merged branches and finished worktrees";
         Service = {
           Type = "oneshot";
           ExecStart = "${lib.getExe pkgs.janitor} run repo";
@@ -50,7 +50,7 @@
       };
 
       systemd.user.timers.janitor-repo = lib.mkIf pkgs.stdenv.isLinux {
-        Unit.Description = "Reclaim merged branches, finished worktrees and old transcripts";
+        Unit.Description = "Reclaim merged branches and finished worktrees";
         Timer = {
           OnCalendar = "04:00";
           Persistent = true;

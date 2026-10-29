@@ -2,9 +2,9 @@
 #
 # Agents write temp files wherever TMPDIR points and nothing removes them, so the
 # wrappers point TMPDIR at /tmp/agent/<pid> and this owns that root. Around it sit
-# the leftovers with no owner: Claude Code's finished jobs, subagent transcripts
-# left at full size, branches merged months ago, worktrees nothing landed in, and
-# build dirs in repos nobody has opened since spring.
+# the leftovers with no owner: Claude Code's finished jobs, branches merged months
+# ago, worktrees nothing landed in, and build dirs in repos nobody has opened since
+# spring. Transcripts are kept: they are eval and mining data.
 #
 #   (no args)|report  what is here, what a pass would free; deletes nothing
 #   plan [--json]     the same as data, one item per line of output
@@ -27,9 +27,6 @@ FREE_FLOOR_PCT=${JANITOR_FREE_FLOOR_PCT:-10}
 WARN_FREE_GIB=${JANITOR_WARN_FREE_GIB:-10}
 # One line per ten minutes is enough to be heard without becoming wallpaper.
 WARN_EVERY_SECONDS=${JANITOR_WARN_EVERY_SECONDS:-600}
-# Subagent transcripts are compressed past this age; top-level sessions are kept.
-# pi-auto-gate's `extract` reads only plain .jsonl, so it sees a month of subagents.
-TRANSCRIPT_AGE_DAYS=${JANITOR_TRANSCRIPT_AGE_DAYS:-30}
 # A Claude Code job's private tmp is garbage once the job has been done this long.
 JOB_TMP_AGE_DAYS=${JANITOR_JOB_TMP_AGE_DAYS:-7}
 # Rebuildable in minutes with a lockfile and a fast network, so the age is short.
@@ -44,7 +41,6 @@ LEGACY_IDLE_SECONDS=3600
 BUDGET_BYTES=$((BUDGET_GIB * 1024 * 1024 * 1024))
 TMP_MAX_AGE_SECONDS=$((TMP_MAX_AGE_DAYS * 86400))
 WARN_FREE_BYTES=$((WARN_FREE_GIB * 1024 * 1024 * 1024))
-TRANSCRIPT_AGE_SECONDS=$((TRANSCRIPT_AGE_DAYS * 86400))
 JOB_TMP_AGE_SECONDS=$((JOB_TMP_AGE_DAYS * 86400))
 BUILD_DIR_AGE_SECONDS=$((BUILD_DIR_AGE_DAYS * 86400))
 BRANCH_IDLE_SECONDS=$((BRANCH_IDLE_DAYS * 86400))
@@ -243,17 +239,6 @@ is_known_repo() {
   while IFS= read -r repo; do
     [ "$repo" = "$1" ] && return 0
   done < <(repos)
-  return 1
-}
-
-# A sweepable transcript is a subagent's .jsonl under a projects directory, never
-# a top-level session or a memory file.
-in_projects() {
-  local dir
-  case "$1" in */subagents/*.jsonl) ;; *) return 1 ;; esac
-  for dir in "${CLAUDE_DIRS[@]}"; do
-    case "$1" in "$dir"/projects/*) return 0 ;; esac
-  done
   return 1
 }
 
