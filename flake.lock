@@ -647,7 +647,23 @@
         "type": "github"
       }
     },
-    "nixpkgs-cuda_held1": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1793015021,
+        "narHash": "sha256-Ee5BWo8sh3pGt70QUdRajnaginqFmWvrtdBc4gJzhks=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "718f670e845328e9c2cecdd832835712b2cbd065",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-26.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs-cuda": {
       "locked": {
         "lastModified": 1791179034,
         "narHash": "sha256-Ni0LBydzaCi8oek12r4mVreuFHqYlM1eTD6SfiENKfw=",
@@ -675,22 +691,6 @@
       "original": {
         "owner": "nixos",
         "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_held1": {
-      "locked": {
-        "lastModified": 1793015021,
-        "narHash": "sha256-Ee5BWo8sh3pGt70QUdRajnaginqFmWvrtdBc4gJzhks=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "718f670e845328e9c2cecdd832835712b2cbd065",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-26.05",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -783,16 +783,15 @@
         ]
       },
       "locked": {
-        "lastModified": 1793226957,
-        "narHash": "sha256-j+ptaGDEGkdZj1iNwOzQKij6WTEKDhbICo0ksc39dcM=",
+        "lastModified": 1793311688,
+        "narHash": "sha256-S7xuUAlzTwXXchNJxgLQgaqF2jwD5VFkTwSlQf8D/lc=",
         "owner": "nickolaj-jepsen",
         "repo": "pocketnix",
-        "rev": "4ccbaa4babc31418f791136f530b8501fd4b0af7",
+        "rev": "a1edf4915c2856bd807a2a1fbb4288210291bd7d",
         "type": "github"
       },
       "original": {
         "owner": "nickolaj-jepsen",
-        "ref": "gui-apps",
         "repo": "pocketnix",
         "type": "github"
       }
@@ -891,8 +890,8 @@
         "nix-index-database": "nix-index-database",
         "nix-vscode-extensions": "nix-vscode-extensions",
         "nixos-wsl": "nixos-wsl",
-        "nixpkgs": "nixpkgs_held1",
-        "nixpkgs-cuda": "nixpkgs-cuda_held1",
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-cuda": "nixpkgs-cuda",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nvf": "nvf",
         "obsidian-extensions": "obsidian-extensions",
