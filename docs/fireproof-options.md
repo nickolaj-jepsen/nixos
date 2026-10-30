@@ -145,7 +145,7 @@ true
 
 
 MCP servers only the claude-work wrapper loads\. Work-owned services
-stay out of programs\.mcp\.servers, which every agent (pi, opencode,
+stay out of programs\.mcp\.servers, which every agent (pi,
 copilot, vscode and the personal claude) reads\.
 
 
@@ -804,30 +804,6 @@ true
 
 
 Enable the homelab Grafana MCP server and its token secret
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.dev\.opencode\.enable
-
-
-
-Enable the opencode 2\.x coding agent
 
 
 
@@ -2788,6 +2764,8 @@ pkgs.nerd-fonts.hack
 
 ## fireproof\.theme\.font\.family
 
+
+
 Font family for terminals and editors
 
 
@@ -2809,8 +2787,6 @@ string
 
 
 ## fireproof\.theme\.font\.monoFamily
-
-
 
 Strictly monospaced variant of ` family `, for UIs that need fixed-width glyphs
 
