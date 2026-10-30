@@ -151,7 +151,7 @@ git_full=""
 git_glyph=""
 git_segment() {
   local dir=$1
-  local status line head oid ab ahead behind staged unstaged untracked conflicts upstream
+  local status line head oid ab ahead behind staged unstaged untracked conflicts upstream default
   local paths gitdir top op color dirty glyph name tail arrows xy pr
 
   if [ -z "$dir" ]; then return 0; fi
@@ -224,6 +224,15 @@ git_segment() {
     if [ -n "$pr" ]; then tail+=" ${pr}"; fi
   fi
   if [ -n "$op" ]; then tail+=" ${cyan}${op}${reset}"; fi
+  # `wt promote` put a branch in the primary checkout, where builds and `just switch` run from.
+  if [ "$head" != "(detached)" ] && [ -n "$top" ] && [ "$gitdir" = "$top/.git" ]; then
+    default=$(git --no-optional-locks -C "$dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null) || default=""
+    default=${default#origin/}
+    case "$head" in
+      "${default:-main}" | master) ;;
+      *) tail+=" ${warn}↥promoted${reset}" ;;
+    esac
+  fi
   if [ "$untracked" -gt 0 ]; then tail+=" ${warn}?${reset}"; fi
   if [ "$conflicts" -gt 0 ]; then tail+=" ${red}~${conflicts}${reset}"; fi
   if [ "$ahead" -gt 0 ] || [ "$behind" -gt 0 ]; then
