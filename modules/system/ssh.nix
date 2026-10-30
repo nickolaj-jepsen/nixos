@@ -68,10 +68,13 @@ in {
   }: let
     inherit (config.fireproof) hostname;
     workEnabled = config.fireproof.work.enable;
+    aoKeyEnabled = config.fireproof.work.sshKey.enable;
     identityFile = "${config.home.homeDirectory}/.ssh/id_ed25519";
+    # Without the AO key, *.ao hosts fall through to the "*" IdentityFile.
+    aoIdentity = lib.optionalAttrs aoKeyEnabled {IdentityFile = config.age.secrets.ssh-key-ao.path;};
   in {
     # Explicit absolute path: ~/.ssh/config and the systemd ExecStart below don't reliably expand ${XDG_RUNTIME_DIR}.
-    age.secrets.ssh-key-ao = lib.mkIf workEnabled {
+    age.secrets.ssh-key-ao = lib.mkIf aoKeyEnabled {
       rekeyFile = ../../secrets/ssh-key-ao.age;
       path = "${config.home.homeDirectory}/.ssh/id_ed25519_ao";
       mode = "0600";
@@ -107,6 +110,8 @@ in {
             ControlPath = "~/.ssh/control-%C";
             ControlPersist = "10m";
           };
+        }
+        // lib.optionalAttrs (!config.fireproof.sharedHost.enable) {
           homelab = {
             HostName = "x.nickolaj.com";
             User = "nickolaj";
@@ -127,40 +132,46 @@ in {
           };
         }
         // lib.optionalAttrs workEnabled {
-          "bastion.ao" = {
-            User = "nij";
-            HostName = lib.mkDefault "62.199.221.53";
-            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
-          };
-          "clickhouse.ao" = {
-            User = "ubuntu";
-            HostName = "51.158.205.48";
-            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
-          };
-          "flex.ao" = {
-            User = "nij";
-            HostName = "192.168.2.5";
-            ProxyJump = "bastion.ao";
-            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
-          };
-          "scw.ao" = {
-            User = "nij";
-            HostName = "51.15.81.1";
-            ProxyJump = lib.mkDefault "dev.ao";
-            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
-          };
-          "dev.ao" = {
-            User = "nij";
-            HostName = "192.168.2.28";
-            ProxyJump = lib.mkDefault "bastion.ao";
-            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
-          };
-          "staging.ao" = {
-            User = "staging";
-            HostName = "172.16.2.102";
-            ProxyJump = lib.mkDefault "bastion.ao";
-            IdentityFile = "${config.age.secrets.ssh-key-ao.path}";
-          };
+          "bastion.ao" =
+            {
+              User = "nij";
+              HostName = lib.mkDefault "62.199.221.53";
+            }
+            // aoIdentity;
+          "clickhouse.ao" =
+            {
+              User = "ubuntu";
+              HostName = "51.158.205.48";
+            }
+            // aoIdentity;
+          "flex.ao" =
+            {
+              User = "nij";
+              HostName = "192.168.2.5";
+              ProxyJump = "bastion.ao";
+            }
+            // aoIdentity;
+          "scw.ao" =
+            {
+              User = "nij";
+              HostName = "51.15.81.1";
+              ProxyJump = lib.mkDefault "dev.ao";
+            }
+            // aoIdentity;
+          "dev.ao" =
+            {
+              User = "nij";
+              HostName = "192.168.2.28";
+              ProxyJump = lib.mkDefault "bastion.ao";
+            }
+            // aoIdentity;
+          "staging.ao" =
+            {
+              User = "staging";
+              HostName = "172.16.2.102";
+              ProxyJump = lib.mkDefault "bastion.ao";
+            }
+            // aoIdentity;
           "mac.ao" = {
             User = "it";
             HostName = "b2c-mac-mini";
@@ -180,7 +191,7 @@ in {
     };
 
     # Linux-only: darwin has no systemd, and AddKeysToAgent (above) covers it there.
-    systemd.user.services."add-ssh-keys" = lib.mkIf (workEnabled && pkgs.stdenv.isLinux) {
+    systemd.user.services."add-ssh-keys" = lib.mkIf (aoKeyEnabled && pkgs.stdenv.isLinux) {
       Unit = {
         Description = "Add SSH keys to ssh-agent";
         # agenix.service decrypts the key this unit loads.
