@@ -61,6 +61,9 @@ claude plugin install skills@nickolaj-jepsen
   [ossama.is](https://ossama.is); credited in the skill file.
 - **pricerunner** — search, filter and compare Danish prices on PriceRunner.dk via its
   unofficial frontend API: facet filters, categories, offers, price history, deals.
+- **windows-vm** — operate a libvirt Windows guest from the host: find it and its disks,
+  start and stop it without corrupting NTFS, screenshots, keys and clicks, and PowerShell
+  through the QEMU guest agent.
 - **pi-plugin-dev** — build and debug pi extensions by observation: tmux-driven TUI
   sessions, color screenshots, session digests that replay the prompt and tool
   loadout, and a replay provider so tool and error paths run without a model.
