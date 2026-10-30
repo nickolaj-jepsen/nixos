@@ -38,6 +38,7 @@
       # dev-01 sits on the AO network: flex and scw are reachable without a jump (staging is not).
       "flex.ao".ProxyJump = lib.mkForce "none";
       "scw.ao".ProxyJump = "none";
+      "bastion.ao".HostName = "192.168.2.6";
     };
     # secrets/hosts/dev-ao/id_ed25519.pub is the box's RSA key; don't plant it under an ed25519 name.
     home.file.".ssh/id_ed25519.pub".enable = false;
@@ -51,5 +52,18 @@
     home.file."${config.home.homeDirectory}/.claude/skills/pricerunner".enable = false;
 
     home.packages = [pkgs.terraform pkgs.tftui];
+
+    # Closure trims: only the locales dev-01 uses, and the nixpkgs pin by revision
+    # instead of copying its source into the store.
+    i18n.glibcLocales = pkgs.glibcLocales.override {
+      allLocales = false;
+      locales = ["en_US.UTF-8/UTF-8" "da_DK.UTF-8/UTF-8" "C.UTF-8/UTF-8"];
+    };
+    nix.registry.nixpkgs.to = lib.mkForce {
+      type = "github";
+      owner = "NixOS";
+      repo = "nixpkgs";
+      inherit (config.nix.registry.nixpkgs.flake) rev;
+    };
   };
 }
