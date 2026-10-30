@@ -1,6 +1,6 @@
 /**
  * Keeps worktrees inside ~/worktrees/<repo>/, each on its own branch. The layout and the guard check
- * live in `wt`, shared with the Claude Code hook and the opencode plugin. The
+ * live in `wt`, shared with the Claude Code hook. The
  * guard blocks instead of rewriting the command, so the model gets the real
  * path back in the reason.
  */

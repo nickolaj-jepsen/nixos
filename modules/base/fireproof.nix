@@ -57,7 +57,7 @@ let
           default = {};
           description = ''
             MCP servers only the claude-work wrapper loads. Work-owned services
-            stay out of programs.mcp.servers, which every agent (pi, opencode,
+            stay out of programs.mcp.servers, which every agent (pi,
             copilot, vscode and the personal claude) reads.
           '';
         };
@@ -111,7 +111,6 @@ let
           homelab.enable = cascade (config.fireproof.dev.mcp.enable && !config.fireproof.sharedHost.enable) "Enable the homelab Grafana MCP server and its token secret";
         };
         pi.enable = cascade (config.fireproof.dev.enable && !config.fireproof.sharedHost.enable) "Enable the pi coding agent with the lazypi extension roster";
-        opencode.enable = cascade (config.fireproof.dev.enable && !config.fireproof.sharedHost.enable) "Enable the opencode 2.x coding agent";
         copilot.enable = cascade config.fireproof.dev.enable "Enable the GitHub Copilot CLI";
         ai-usage.enable = cascade config.fireproof.dev.enable "Enable ai-usage, the agent subscription quota CLI (and its DMS bar widget on desktops)";
         agent-hub.enable = cascade (config.fireproof.dev.enable && config.fireproof.desktop.enable) "Enable agent-hub, the DMS bar hub for live coding-agent sessions and their permission asks";

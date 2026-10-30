@@ -30,7 +30,7 @@ All of it is behind `fireproof.janitor.enable`, which cascades from
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Agent temp          | The dir is named after its wrapper's pid and `/proc/<pid>` is gone; or, for legacy `/tmp/claude-1000` paths, the session registry no longer knows it and it has been idle an hour     |
 | Claude Code job tmp | The job directory has been untouched for 7 days                                                                                                                                       |
-| `/tmp` strays       | `pi-*`, `oc`, `opencode`, `jiti`, `node-compile-cache` past 3 days                                                                                                                    |
+| `/tmp` strays       | `pi-*`, `jiti`, `node-compile-cache` past 3 days                                                                                                                                      |
 | Merged branches     | Every commit is reachable from the default branch, and no worktree has it checked out                                                                                                 |
 | Worktrees           | `wt clean` decides: clean tree, landed, not busy, not locked, not new                                                                                                                 |
 | Build dirs          | `node_modules`, `.venv`, `target`, `dist`, `.pytest_cache`, `__pycache__` in a repo with no commit in 60 days, no process whose cwd is inside it, and a directory untouched that long |

@@ -1,11 +1,11 @@
-# Synthetic's always-on models, from /openai/v1/models with the key. pi and
-# opencode each map this to their own schema, so neither has to maintain its own
-# copy. The ids are pinned rather than using the `syn:` routing aliases, so a
+# Synthetic's always-on models, from /openai/v1/models with the key; pi maps
+# this to its own schema.
+# The ids are pinned rather than using the `syn:` routing aliases, so a
 # model Synthetic rotates out has to be replaced here.
 #
 # `efforts` is the endpoint's own reasoning_parameters.efforts for the model:
-# pi turns it into thinkingLevelMap (a level it lacks is null = not offered) and
-# opencode into variants. "none" means thinking can be turned off.
+# pi turns it into thinkingLevelMap (a level it lacks is null = not offered).
+# "none" means thinking can be turned off.
 #
 # `cost` is Synthetic's subscription discounted rate (synthetic.new/pricing/models),
 # not the usage-based price /models reports: that is the rate the weekly credit

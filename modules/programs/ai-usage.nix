@@ -8,7 +8,7 @@
     fp = config.fireproof;
     home = config.home.homeDirectory;
     # Same condition agents.nix deploys the agent API keys under.
-    hasAgentKeys = fp.dev.pi.enable || fp.dev.opencode.enable;
+    hasAgentKeys = fp.dev.pi.enable;
 
     providers =
       [

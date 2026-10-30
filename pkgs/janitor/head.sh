@@ -52,7 +52,7 @@ RESULT_AGE_SECONDS=$((RESULT_AGE_DAYS * 86400))
 if [ -n "${JANITOR_STALE_PATHS:-}" ]; then
   IFS=: read -r -a STALE_PATHS <<<"$JANITOR_STALE_PATHS"
 else
-  STALE_PATHS=(/tmp/pi-* /tmp/oc /tmp/opencode /tmp/jiti /tmp/node-compile-cache)
+  STALE_PATHS=(/tmp/pi-* /tmp/jiti /tmp/node-compile-cache)
 fi
 
 if [ -n "${JANITOR_REPO_PARENTS:-}" ]; then

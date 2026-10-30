@@ -55,7 +55,7 @@
 
     # A PreToolUse hook that refuses `git worktree add` outside ~/worktrees/<repo>/,
     # and branch switches inside a worktree there.
-    # The layout and the check live in `wt guard`, so pi and opencode enforce the
+    # The layout and the check live in `wt guard`, so pi enforces the
     # same rule; this only adds Claude's hook contract around it.
     worktreeGuard = pkgs.writeShellApplication {
       name = "claude-worktree-guard";

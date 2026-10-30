@@ -647,7 +647,23 @@
         "type": "github"
       }
     },
-    "nixpkgs-cuda_held1": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1793015021,
+        "narHash": "sha256-Ee5BWo8sh3pGt70QUdRajnaginqFmWvrtdBc4gJzhks=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "718f670e845328e9c2cecdd832835712b2cbd065",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-26.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs-cuda": {
       "locked": {
         "lastModified": 1791179034,
         "narHash": "sha256-Ni0LBydzaCi8oek12r4mVreuFHqYlM1eTD6SfiENKfw=",
@@ -675,22 +691,6 @@
       "original": {
         "owner": "nixos",
         "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_held1": {
-      "locked": {
-        "lastModified": 1793015021,
-        "narHash": "sha256-Ee5BWo8sh3pGt70QUdRajnaginqFmWvrtdBc4gJzhks=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "718f670e845328e9c2cecdd832835712b2cbd065",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-26.05",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -753,26 +753,6 @@
       "original": {
         "owner": "kepano",
         "repo": "obsidian-skills",
-        "type": "github"
-      }
-    },
-    "opencode": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs-unstable"
-        ]
-      },
-      "locked": {
-        "lastModified": 1793251009,
-        "narHash": "sha256-gTzHrOreTA/viLLkxW/7NTFHkMQ36Q7AvUcmCNgUm2E=",
-        "owner": "anomalyco",
-        "repo": "opencode",
-        "rev": "28a3974efc7a764e0317f205e21bfffca8b08e10",
-        "type": "github"
-      },
-      "original": {
-        "owner": "anomalyco",
-        "repo": "opencode",
         "type": "github"
       }
     },
@@ -870,13 +850,12 @@
         "nix-index-database": "nix-index-database",
         "nix-vscode-extensions": "nix-vscode-extensions",
         "nixos-wsl": "nixos-wsl",
-        "nixpkgs": "nixpkgs_held1",
-        "nixpkgs-cuda": "nixpkgs-cuda_held1",
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-cuda": "nixpkgs-cuda",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nvf": "nvf",
         "obsidian-extensions": "obsidian-extensions",
         "obsidian-skills": "obsidian-skills",
-        "opencode": "opencode",
         "treefmt-nix": "treefmt-nix",
         "walldye": "walldye",
         "zero-x-cb-media": "zero-x-cb-media",

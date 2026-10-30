@@ -317,7 +317,7 @@ def build_parser() -> argparse.ArgumentParser:
             "and a `git switch` or branch `git checkout` inside a worktree under it."
         ),
         epilog=(
-            "The agent hooks (pi, Claude Code, opencode) run this on each shell command that\n"
+            "The agent hooks (pi, Claude Code) run this on each shell command that\n"
             "mentions worktree, switch or checkout. It prints why it refused and exits 1, or prints\n"
             "nothing and exits 0."
         ),

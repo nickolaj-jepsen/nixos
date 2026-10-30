@@ -22,7 +22,7 @@ way they do.
   moves to the $40 plan.
 - TensorX (EU, zero retention) and local models are for data-sensitive work,
   picked by hand and never routed to. `_tensorx-models.nix` holds only the
-  models sessions actually pick; it is not kept in sync with opencode's list.
+  models sessions actually pick; it is not kept in sync with TensorX's catalog.
 
 ## The virtual models
 

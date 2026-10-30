@@ -6,7 +6,6 @@
     # headless: skip the heavy editor layer and the second agent
     fireproof.neovim.full.enable = false;
     fireproof.dev.pi.enable = true;
-    fireproof.dev.opencode.enable = false;
     fireproof.homelab.enable = true;
     fireproof.networkd.enable = true;
   };
