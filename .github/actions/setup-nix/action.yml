@@ -34,14 +34,16 @@ runs:
         token: ${{ inputs.attic-token }}
 
     # After attic: `attic use` writes a plain `substituters =` to the user nix.conf, which drops any extras set before it.
+    # `extra-substituters` there doesn't take on the runner's (Determinate) Nix, so restate the whole list.
     # cuda at priority 40 (it advertises 50): else attic (41) serves its nvidia/CUDA paths over the homelab's uplink.
     - name: Add public substituters
       shell: bash
       run: |
         conf="${XDG_CONFIG_HOME:-$HOME/.config}/nix/nix.conf"
         mkdir -p "$(dirname "$conf")"
-        cat >> "$conf" <<'EOF'
-        extra-substituters = https://nix-community.cachix.org https://cache.nixos-cuda.org?priority=40
+        current=$(nix config show substituters)
+        cat >> "$conf" <<EOF
+        substituters = $current https://nix-community.cachix.org https://cache.nixos-cuda.org?priority=40
         extra-trusted-public-keys = nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs= cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=
         EOF
         nix config show | grep -E '^(substituters|trusted-public-keys) '
