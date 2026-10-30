@@ -181,9 +181,6 @@
               nil.formatting.command = ["nix" "fmt" "--" "--"];
             };
 
-            # Python — pyrefly is the type-checker/LSP; keep ms-python's own server off.
-            "python.languageServer" = "None";
-
             # Spell checking
             "cSpell.language" = "en,da";
             "cSpell.diagnosticLevel" = "Hint";

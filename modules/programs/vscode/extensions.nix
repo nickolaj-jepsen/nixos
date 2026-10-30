@@ -30,7 +30,6 @@
 
           # Python
           marketplaceReleases.meta.pyrefly
-          ms-python.python
           charliermarsh.ruff
 
           # JavaScript
