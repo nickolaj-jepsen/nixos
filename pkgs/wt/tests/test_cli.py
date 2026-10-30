@@ -497,6 +497,164 @@ class Fixture(unittest.TestCase):
         self.assertIn(f"pid {process.pid}", result.stderr)
         self.assertTrue(Path(self.main, "b.txt").exists())
 
+    # promote and evict -------------------------------------------------------
+
+    def branch_of(self, cwd: str | None = None) -> str:
+        return self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=cwd).strip()
+
+    def feature(self, name: str, filename: str = "b.txt") -> Path:
+        path = self.create(name)
+        self.write(filename, f"{name}\n", cwd=str(path))
+        self.commit(name, cwd=str(path))
+        return path
+
+    def test_promote_moves_the_branch_and_its_uncommitted_work(self) -> None:
+        path = self.feature("feature")
+        # Another session's entry on the shared stash stack must survive untouched.
+        self.write("a.txt", "someone else's\n")
+        self.git("stash", "push", "-m", "theirs")
+        self.write("b.txt", "edited\n", cwd=str(path))
+        self.write("new.txt", "untracked\n", cwd=str(path))
+        self.wt("promote", "feature")
+        self.assertEqual(self.branch_of(), "feature")
+        self.assertFalse(path.exists())
+        self.assertEqual(Path(self.main, "b.txt").read_text(), "edited\n")
+        self.assertEqual(Path(self.main, "new.txt").read_text(), "untracked\n")
+        self.assertEqual(self.git("stash", "list", "--format=%gs").strip(), "On main: theirs")
+        row = self.entry("repo")
+        self.assertTrue(row["promoted"])
+        self.assertIn("promoted", self.wt("list").stdout)
+
+    def test_promote_sends_the_previous_branch_back_to_its_worktree(self) -> None:
+        self.feature("first")
+        self.wt("promote", "first")
+        self.write("b.txt", "first, uncommitted\n")
+        self.feature("second", "c.txt")
+        self.wt("promote", "second")
+        home = Path(self.env["WT_WORKTREE_ROOT"], "repo", "first")
+        self.assertEqual(self.branch_of(), "second")
+        self.assertEqual(self.branch_of(str(home)), "first")
+        self.assertEqual(Path(home, "b.txt").read_text(), "first, uncommitted\n")
+        self.assertEqual(self.git("config", "wt.evicted").strip(), "first")
+
+    def test_promote_refuses_uncommitted_default_changes_without_a_choice(self) -> None:
+        path = self.feature("feature")
+        self.write("a.txt", "stray\n")
+        result = self.wt("promote", "feature", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--dirty", result.stderr)
+        self.assertTrue(path.exists())
+        self.assertEqual(self.branch_of(), "main")
+        self.assertEqual(Path(self.main, "a.txt").read_text(), "stray\n")
+
+    def test_promote_carries_stray_changes_unless_the_branch_touches_them(self) -> None:
+        self.feature("feature")
+        self.write("a.txt", "stray\n")
+        self.wt("promote", "--dirty", "carry", "feature")
+        self.assertEqual(self.branch_of(), "feature")
+        self.assertEqual(Path(self.main, "a.txt").read_text(), "stray\n")
+
+    def test_promote_refuses_to_carry_over_paths_the_branch_changes(self) -> None:
+        path = self.feature("feature", "a.txt")
+        self.write("a.txt", "stray\n")
+        result = self.wt("promote", "--dirty", "carry", "feature", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(path.exists())
+        self.assertEqual(self.branch_of(str(path)), "feature")
+        self.assertEqual(Path(self.main, "a.txt").read_text(), "stray\n")
+
+    def test_promote_moves_stray_changes_to_a_new_branch_and_worktree(self) -> None:
+        self.feature("feature")
+        self.write("a.txt", "stray\n")
+        self.wt("promote", "--dirty", "move", "--name", "stray", "feature")
+        home = Path(self.env["WT_WORKTREE_ROOT"], "repo", "stray")
+        self.assertEqual(self.branch_of(), "feature")
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertEqual(Path(home, "a.txt").read_text(), "stray\n")
+        self.assertEqual(self.git("rev-parse", "main").strip(), self.git("rev-parse", "stray~1").strip())
+
+    def test_promote_stashes_stray_changes_when_asked(self) -> None:
+        self.feature("feature")
+        self.write("a.txt", "stray\n")
+        result = self.wt("promote", "--dirty", "stash", "feature")
+        self.assertEqual(self.branch_of(), "feature")
+        self.assertEqual(len(self.git("stash", "list").splitlines()), 1)
+        sha = self.git("rev-parse", "stash@{0}").strip()
+        self.assertIn(sha, result.stderr)
+
+    def test_promote_rebases_first_and_a_conflict_moves_nothing(self) -> None:
+        path = self.feature("feature", "a.txt")
+        self.write("a.txt", "ours\n")
+        self.commit("ours")
+        self.write("z.txt", "uncommitted\n", cwd=str(path))
+        result = self.wt("promote", "--onto", "local", "feature", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("conflicts", result.stderr)
+        self.assertEqual(self.branch_of(), "main")
+        self.assertEqual(self.branch_of(str(path)), "feature")
+        self.assertEqual(Path(path, "z.txt").read_text(), "uncommitted\n")
+        self.assertEqual(self.git("stash", "list"), "")
+
+    def test_promote_rebases_onto_the_moved_default(self) -> None:
+        self.feature("feature")
+        self.write("c.txt", "later\n")
+        self.commit("later")
+        plan = json.loads(self.wt("promote", "--dry-run", "--json", "feature").stdout)
+        self.assertEqual(plan["bases"]["local"]["behind"], 1)
+        self.wt("promote", "--onto", "local", "feature")
+        self.assertEqual(self.branch_of(), "feature")
+        self.assertTrue(Path(self.main, "c.txt").exists())
+
+    def test_promote_leaves_a_busy_worktree_detached(self) -> None:
+        path = self.feature("feature")
+        process = subprocess.Popen(["sleep", "30"], cwd=str(path))
+        self.addCleanup(lambda: (process.kill(), process.wait()))
+        time.sleep(0.2)
+        self.wt("promote", "feature")
+        self.assertEqual(self.branch_of(), "feature")
+        self.assertTrue(path.exists())
+        self.assertEqual(self.branch_of(str(path)), "HEAD")
+
+    def test_promote_refuses_a_primary_mid_operation(self) -> None:
+        self.feature("feature")
+        Path(self.main, ".git", "BISECT_LOG").write_text("")
+        result = self.wt("promote", "feature", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("git bisect reset", result.stderr)
+        self.assertEqual(self.branch_of(), "main")
+
+    def test_evict_returns_the_primary_and_names_the_branch_it_displaced(self) -> None:
+        self.feature("first")
+        self.wt("promote", "first")
+        self.feature("second", "c.txt")
+        self.wt("promote", "second")
+        self.write("c.txt", "second, uncommitted\n")
+        result = json.loads(self.wt("evict", "--json").stdout)
+        home = Path(self.env["WT_WORKTREE_ROOT"], "repo", "second")
+        self.assertEqual(result["previouslyEvicted"], "first")
+        self.assertEqual(result["evictedTo"], str(home))
+        self.assertEqual(self.branch_of(), "main")
+        self.assertEqual(Path(home, "c.txt").read_text(), "second, uncommitted\n")
+        self.assertEqual(self.git("config", "wt.evicted", check=False), "")
+
+    def test_evict_reuses_the_detached_worktree_left_behind(self) -> None:
+        path = self.feature("feature")
+        process = subprocess.Popen(["sleep", "30"], cwd=str(path))
+        self.addCleanup(lambda: (process.kill(), process.wait()))
+        time.sleep(0.2)
+        self.wt("promote", "feature")
+        self.wt("evict")
+        self.assertEqual(self.branch_of(str(path)), "feature")
+        self.assertEqual(self.branch_of(), "main")
+
+    def test_land_from_the_primary_puts_it_back_on_default(self) -> None:
+        self.feature("feature")
+        self.wt("promote", "feature")
+        self.wt("land", ".")
+        self.assertEqual(self.branch_of(), "main")
+        self.assertEqual(self.git("log", "--oneline", "-1").strip().split(" ", 1)[1], "feature")
+        self.assertEqual(self.git("branch", "--list", "feature"), "")
+
     # occupancy and locking ---------------------------------------------------
 
     def test_busy_worktree_is_skipped_and_remove_needs_the_override(self) -> None:

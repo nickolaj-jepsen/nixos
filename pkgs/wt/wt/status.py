@@ -76,12 +76,14 @@ def _proc_cwds() -> Optional[list[tuple[int, str]]]:
     return None
 
 
-def busy_pid(path: str) -> Optional[int]:
+def busy_pids(path: str) -> list[int]:
+    """Every live process other than this one and its ancestors with its cwd inside `path`."""
     root = os.path.realpath(path)
     ours = _ancestors()
     rows = _proc_cwds()
     if rows is None:
-        return None
+        return []
+    found: list[int] = []
     for pid, cwd in rows:
         if pid in ours or pid == os.getpid():
             continue
@@ -90,8 +92,13 @@ def busy_pid(path: str) -> Optional[int]:
         except OSError:
             continue
         if is_within(real, root):
-            return pid
-    return None
+            found.append(pid)
+    return found
+
+
+def busy_pid(path: str) -> Optional[int]:
+    pids = busy_pids(path)
+    return pids[0] if pids else None
 
 
 def describe_pid(pid: int) -> str:
@@ -280,6 +287,8 @@ class Worktree:
     safe_to_remove: bool
     is_main: bool
     idle_seconds: int
+    # The primary checkout holding a branch other than the default one.
+    promoted: bool = False
 
     def to_json(self) -> dict:
         return {
@@ -297,6 +306,7 @@ class Worktree:
             "safeToRemove": self.safe_to_remove,
             "isMain": self.is_main,
             "idleSeconds": self.idle_seconds,
+            "promoted": self.promoted,
         }
 
 
@@ -416,7 +426,8 @@ def gather(repo: Repo, *, deep: bool = True) -> list[Worktree]:
             and not busy
             and fresh_age(path, branch) is None
         )
-        if is_main:
+        promoted = is_main and bool(branch) and branch != repo.default
+        if is_main and not promoted:
             landed = True
         rows.append(
             Worktree(
@@ -434,6 +445,7 @@ def gather(repo: Repo, *, deep: bool = True) -> list[Worktree]:
                 safe_to_remove=safe,
                 is_main=is_main,
                 idle_seconds=idle_seconds(path),
+                promoted=promoted,
             )
         )
     return rows

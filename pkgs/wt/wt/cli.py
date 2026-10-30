@@ -17,6 +17,7 @@ from .commands import (
     cmd_smerge,
 )
 from .guard import cmd_guard
+from .promote import cmd_evict, cmd_promote
 from .status import cmd_list
 from .trash import cmd_restore, cmd_trash
 
@@ -68,7 +69,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Show every worktree of this repository with the state that decides what can be removed.",
         epilog=(
             "Columns:\n"
-            "  STATE     the working tree (clean, dirty, untracked, orphan) plus locked and busy\n"
+            "  STATE     the working tree (clean, dirty, untracked, orphan) plus locked and busy, and\n"
+            "            promoted on a primary checkout holding a branch other than <default>\n"
             "  vs main   commits ahead (+) and behind (-) the default branch\n"
             "  LANDED    whether the branch's changes are already in the default branch, also\n"
             "            when they landed as a squashed or cherry-picked copy\n"
@@ -78,7 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
             "--json prints {version, root, repos[]}, each repository {name, root, main,\n"
             "defaultBranch, worktrees[]}, with these fields per worktree: name, path, registered,\n"
             "branch, detached, state, ahead, behind, locked, busy, landed, safeToRemove, isMain,\n"
-            "idleSeconds."
+            "idleSeconds, promoted."
         ),
     )
     listing.add_argument("--all", action="store_true", help="every repository under the root")
@@ -136,7 +138,10 @@ def build_parser() -> argparse.ArgumentParser:
             "session there can be told. When no checkout has the default branch, only the ref moves.\n"
             "\n"
             "A conflict pauses the rebase inside the worktree: resolve it there, then\n"
-            "`wt land --continue <name>`, or `wt land --abort <name>` to put the branch back."
+            "`wt land --continue <name>`, or `wt land --abort <name>` to put the branch back.\n"
+            "\n"
+            "A branch `wt promote` moved into the primary checkout lands from there: the default ref\n"
+            "moves, the checkout switches back to <default>, and the landed branch is deleted."
         ),
     )
     land.add_argument("--dry-run", action="store_true", help="show what would be done")
@@ -147,6 +152,62 @@ def build_parser() -> argparse.ArgumentParser:
     land.add_argument("--abort", action="store_true", help="abort a paused rebase")
     land.add_argument("target", nargs="?", help="worktree name, path, or . for the current one")
     land.set_defaults(func=cmd_land)
+
+    promote = _verb(
+        sub,
+        "promote",
+        help="Move a worktree's branch into the primary checkout",
+        description="Move a worktree's branch, uncommitted changes included, into the primary checkout.",
+        epilog=(
+            "For work that has to run from the primary checkout's path. The branch leaves its worktree,\n"
+            "which is removed (the branch is kept), or left detached while a process still works in it\n"
+            "or it holds the caller's cwd; `wt clean` sweeps it later.\n"
+            "\n"
+            "Whatever the primary checkout held moves out first. A branch other than the default one\n"
+            "goes back to <root>/<repo>/<branch>, uncommitted changes with it, and is recorded in git\n"
+            "config wt.evicted. Uncommitted changes on the default branch belong to no branch, so\n"
+            "--dirty says where they go:\n"
+            "  carry   ride along into the promoted branch (refused when it changes the same paths)\n"
+            "  stash   one named stash entry, reported by sha\n"
+            "  wip     a wip commit on new branch --name, with no worktree\n"
+            "  move    a wip commit on new branch --name, given its own worktree\n"
+            "\n"
+            "--onto local|origin rebases the branch first, inside its worktree, so a conflict aborts with\n"
+            "nothing moved. Refuses while the primary checkout is mid-rebase, merge, cherry-pick, revert\n"
+            "or bisect, or a build (nixos-rebuild, nix, nh, …) runs there.\n"
+            "\n"
+            "--dry-run prints the plan without changing anything: what the primary checkout holds, who\n"
+            "is in it, and how far each base is ahead. It fetches origin/<default> first.\n"
+            "`wt land` from the primary checkout lands the branch and puts the checkout back on <default>."
+        ),
+    )
+    promote.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
+    promote.add_argument("--json", action="store_true", help="machine-readable plan or result on stdout")
+    promote.add_argument("--onto", choices=["local", "origin"], help="rebase onto <default> or origin/<default> first")
+    promote.add_argument("--dirty", choices=["carry", "stash", "wip", "move"], help="where uncommitted changes on <default> go")
+    promote.add_argument("--name", help="the new branch for --dirty wip|move")
+    promote.add_argument("target", nargs="?", help="worktree name, path, or . for the current one")
+    promote.set_defaults(func=cmd_promote)
+
+    evict = _verb(
+        sub,
+        "evict",
+        help="Move the primary checkout's branch back out",
+        description="Move the primary checkout's branch to its own worktree and return the checkout to <default>.",
+        epilog=(
+            "The branch goes to <root>/<repo>/<branch>, uncommitted changes with it; a detached worktree\n"
+            "already at that path is reused. Uncommitted changes on <default> itself need --dirty\n"
+            "stash|wip|move, as in `wt promote`.\n"
+            "\n"
+            "--json adds previouslyEvicted: the branch the last `wt promote` pushed out (git config\n"
+            "wt.evicted), so whoever works on it can be told the primary checkout is free. Evict clears it."
+        ),
+    )
+    evict.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
+    evict.add_argument("--json", action="store_true", help="machine-readable plan or result on stdout")
+    evict.add_argument("--dirty", choices=["stash", "wip", "move"], help="where uncommitted changes on <default> go")
+    evict.add_argument("--name", help="the new branch for --dirty wip|move")
+    evict.set_defaults(func=cmd_evict)
 
     clean = _verb(
         sub,

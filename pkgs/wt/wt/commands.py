@@ -16,6 +16,9 @@ from .status import Worktree, busy_pid, describe_pid, fresh_age, gather, held_el
 from .trash import archive_orphan, archive_worktree
 from .ui import format_age, pick
 
+# Where `wt promote` records the branch it pushed out of the primary checkout.
+EVICTED_KEY = "wt.evicted"
+
 
 def copy_worktreeinclude(repo: Repo, dest: str) -> None:
     include = os.path.join(repo.main, ".worktreeinclude")
@@ -360,7 +363,23 @@ def _rebase(repo: Repo, row: Worktree, *, abort_on_conflict: bool) -> None:
     raise SystemExit(1)
 
 
+def _release_primary(repo: Repo, row: Worktree) -> None:
+    """Put a primary checkout that held a branch back on the default branch, which now contains it."""
+    if run(["git", "-C", row.path, "switch", "--quiet", repo.default], check=False).returncode != 0:
+        info(f"{row.path} stays on {row.branch}: {repo.default} is checked out elsewhere")
+        return
+    run(["git", "-C", row.path, "branch", "--quiet", "-d", row.branch], check=False)
+    run(["git", "-C", row.path, "config", "--local", "--unset", EVICTED_KEY], check=False)
+    info(f"{row.path} is back on {repo.default}; branch {row.branch} deleted, its commits are in {repo.default}")
+
+
 def _finish_land(repo: Repo, row: Worktree) -> None:
+    _fast_forward_default(repo, row)
+    if row.is_main:
+        _release_primary(repo, row)
+
+
+def _fast_forward_default(repo: Repo, row: Worktree) -> None:
     count = int(git(repo.main, "rev-list", "--count", f"{repo.default}..{row.branch}", check=False).strip() or 0)
     checkout = _default_checkout(repo)
     if checkout is None:
@@ -410,7 +429,7 @@ def cmd_land(args: argparse.Namespace) -> None:
             return
 
         row = resolve_row(repo, args.target or ".", rows) if args.target else _pick_target(repo, rows, "land", landable=True)
-        if row.is_main:
+        if row.is_main and not row.promoted:
             die(f"'{row.name}' is the main checkout — nothing to land")
         if not row.registered:
             die(f"'{row.name}' is an orphan — nothing to land, run 'wt remove' instead")

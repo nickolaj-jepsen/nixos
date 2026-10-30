@@ -74,6 +74,8 @@ def pick(repo: Repo, prompt: str, rows: list[Worktree]) -> Worktree:
 
 def _state_cell(row: Worktree) -> str:
     parts = [row.state]
+    if row.promoted:
+        parts.append("promoted")
     if row.locked:
         parts.append("locked")
     if row.busy:
@@ -82,7 +84,7 @@ def _state_cell(row: Worktree) -> str:
 
 
 def _vs_cell(row: Worktree) -> str:
-    if row.is_main:
+    if row.is_main and not row.promoted:
         return "(main)"
     if not row.registered:
         return "-"
@@ -92,7 +94,7 @@ def _vs_cell(row: Worktree) -> str:
 
 
 def _landed_cell(row: Worktree) -> str:
-    if row.is_main:
+    if row.is_main and not row.promoted:
         return "-"
     if not row.registered:
         return "-"
