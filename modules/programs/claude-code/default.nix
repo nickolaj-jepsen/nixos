@@ -63,6 +63,13 @@
       text = builtins.readFile ./worktree-guard.sh;
     };
 
+    skillGuard = pkgs.writeShellApplication {
+      name = "claude-skill-guard";
+      runtimeInputs = [pkgs.jq pkgs.gnugrep];
+      runtimeEnv.LOCAL_SKILLS = pkgs.writeText "claude-local-skills" (lib.concatLines (lib.attrNames ccfg.skills));
+      text = builtins.readFile ./skill-guard.sh;
+    };
+
     # Claude Code's own worktrees (EnterWorktree, `claude -w`, agent isolation)
     # are created by `wt create` and removed by `wt remove`. Without the remove
     # half Claude falls back to `git worktree remove --force` and keeps the branch.
@@ -282,6 +289,15 @@
                     command = "${lib.getExe pkgs.janitor} warn";
                   };
               }
+              {
+                matcher = "Skill";
+                hooks = [
+                  {
+                    type = "command";
+                    command = lib.getExe skillGuard;
+                  }
+                ];
+              }
             ];
           }
           # PermissionRequest labels the dialog the registry already marks `waiting`;
@@ -393,9 +409,15 @@
             repo = "Digital-Udvikling/skills";
           };
         };
+        # Local skills win over claude.ai's copies: skills uploaded to the account
+        # sync in as anthropic-skills:<name>, so a same-named one is switched off.
+        skillOverrides = lib.genAttrs (map (name: "anthropic-skills:${name}") (lib.attrNames ccfg.skills)) (_: "off");
         enabledPlugins =
           {
             "cc-plugin-you-should-know@builtin" = true;
+            # This repo's own marketplace, synced back from the claude.ai account;
+            # every skill in it is already installed locally.
+            "skills@synced" = false;
           }
           // lib.optionalAttrs cfg.work.enable {
             "ao-skills@ao-agent-skills" = true;

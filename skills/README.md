@@ -31,7 +31,7 @@ claude plugin install skills@nickolaj-jepsen
 - **grilling** — the interview primitive: questions a plan in rounds, each round every
   decision whose prerequisites are settled, with a recommended answer per question.
   Looks facts up itself and stops at a confirmation gate. Other skills invoke it.
-- **grill-me** — the user-only entry point to `grilling`. Good before committing to an
+- **grill-me** — the `/grill-me` entry point to `grilling`. Good before committing to an
   approach.
 - **grill-me-legacy** — the original grill-me, one question at a time.
 - **ideate** — ranked improvement ideas for a repo or one area of it: lens-driven
