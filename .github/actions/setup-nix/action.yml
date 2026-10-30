@@ -18,12 +18,17 @@ inputs:
 runs:
   using: composite
   steps:
+    # All substituters live in the system nix.conf: `attic use` would rewrite the user one with a plain
+    # `substituters =` that the runner's Nix then prefers, dropping these. attic is public to read, so it only needs the token to push.
+    # cuda at priority 40 (it advertises 50): else attic (41) serves its nvidia/CUDA paths over the homelab's uplink.
     - name: Install Nix
       uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
       with:
         # IFD breaks cross-platform eval (darwin from Linux).
         extra-conf: |
           allow-import-from-derivation = false
+          extra-substituters = ${{ inputs.attic-token != '' && format('{0}{1}', inputs.attic-endpoint, inputs.attic-cache) || '' }} https://nix-community.cachix.org https://cache.nixos-cuda.org?priority=40
+          extra-trusted-public-keys = nixos:yGPW0JSJw+piW/f/7XwmwMdnzz2mUEA8b4Zcco80wkI= nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs= cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=
 
     - name: Configure attic
       if: inputs.attic-token != ''
@@ -32,18 +37,8 @@ runs:
         endpoint: ${{ inputs.attic-endpoint }}
         cache: ${{ inputs.attic-cache }}
         token: ${{ inputs.attic-token }}
+        skip-use: "true"
 
-    # After attic: `attic use` writes a plain `substituters =` to the user nix.conf, which drops any extras set before it.
-    # `extra-substituters` there doesn't take on the runner's (Determinate) Nix, so restate the whole list.
-    # cuda at priority 40 (it advertises 50): else attic (41) serves its nvidia/CUDA paths over the homelab's uplink.
-    - name: Add public substituters
+    - name: Show substituters
       shell: bash
-      run: |
-        conf="${XDG_CONFIG_HOME:-$HOME/.config}/nix/nix.conf"
-        mkdir -p "$(dirname "$conf")"
-        current=$(nix config show substituters)
-        cat >> "$conf" <<EOF
-        substituters = $current https://nix-community.cachix.org https://cache.nixos-cuda.org?priority=40
-        extra-trusted-public-keys = nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs= cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=
-        EOF
-        nix config show | grep -E '^(substituters|trusted-public-keys) '
+      run: nix config show | grep -E '^(substituters|trusted-public-keys) '
