@@ -643,6 +643,30 @@ true
 
 
 
+## fireproof\.dev\.copilot\.enable
+
+
+
+Enable the GitHub Copilot CLI
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.dev\.intellij\.enable
 
 
@@ -1761,6 +1785,38 @@ true
 
 
 
+## fireproof\.sharedHost\.enable
+
+
+
+Whether to enable a host other people can be root on, so personal secrets stay off it\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.tailscale\.enable
 
 
@@ -2708,6 +2764,8 @@ string
 
 ## fireproof\.theme\.font\.package
 
+
+
 Font package providing ` family ` and ` monoFamily `
 
 
@@ -2729,8 +2787,6 @@ pkgs.nerd-fonts.hack
 
 
 ## fireproof\.theme\.font\.family
-
-
 
 Font family for terminals and editors
 
@@ -2822,6 +2878,30 @@ false
 
 
 *Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.work\.sshKey\.enable
+
+
+
+Decrypt the shared AO SSH key and load it into ssh-agent
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
 
 ```nix
 true
