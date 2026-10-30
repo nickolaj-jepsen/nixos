@@ -1,5 +1,12 @@
 import { atom, read, update } from "claude-code";
-import type { EngineInterface, PluginOptions, PromptBox, Register, Timer } from "claude-code";
+import type {
+  EngineInterface,
+  PluginOptions,
+  PromptBox,
+  Register,
+  RenderElement,
+  Timer,
+} from "claude-code";
 
 import type { Extra, Miss, Picker, Report } from "../types";
 import {
@@ -511,6 +518,8 @@ export const register: Register = (on, options) => {
 
   on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e);
+    // Another plugin's row (the answer mod's hint) stays drawn above this one.
+    const below = await next(e);
     const p = await read($, picker);
     const done = await read($, report);
     const words = await read($, added);
@@ -518,9 +527,15 @@ export const register: Register = (on, options) => {
     const n = await read($, count);
     const draft = await read($, hasDraft);
     const isQuiet = !p && !done && !busy && n === 0 && words.length === 0;
-    if (isQuiet && !draft) return next(e);
+    if (isQuiet && !draft) return below;
 
     const { Box, Button, Text } = $.ui.resolve(e);
+    const stacked = (tree: RenderElement) => (
+      <Box flexDirection="column">
+        {below}
+        {tree}
+      </Box>
+    );
     // Kept mounted whenever there's a draft: the key bound to ACTION reaches only a mounted Button.
     const toggle = (
       <Button key="spellfix" plain action={ACTION} onPress={() => togglePicker($)}>
@@ -534,14 +549,14 @@ export const register: Register = (on, options) => {
         {toggle}
       </Box>
     );
-    if (isQuiet) return hidden;
+    if (isQuiet) return stacked(hidden);
 
     if (p) {
       const slot = p.isAiDone ? (p.ai ?? "no idea") : p.wantsAi ? "waiting…" : "…";
       // Ideally these would be marked inline in the prompt itself; mods can't decorate the
       // composer's text yet, so the band lists them instead.
       const summary = [...p.summary, ...(words.length ? [`added: ${words.join(", ")}`] : [])];
-      return (
+      return stacked(
         <Box flexDirection="column">
           <Text wrap="truncate-end">
             <Text dimColor>…{p.before}</Text>
@@ -600,7 +615,7 @@ export const register: Register = (on, options) => {
               )}
             </Box>
           )}
-        </Box>
+        </Box>,
       );
     }
 
@@ -608,7 +623,7 @@ export const register: Register = (on, options) => {
       ...(done ? [["fixed: ", done.changes.join(", ")] as [string, string]] : []),
       ...(words.length ? [["added: ", words.join(", ")] as [string, string]] : []),
     ];
-    return (
+    return stacked(
       <Box columnGap={2}>
         {notes.length > 0 && (
           <>
@@ -638,7 +653,7 @@ export const register: Register = (on, options) => {
           </>
         )}
         {busy || n > 0 ? toggle : hidden}
-      </Box>
+      </Box>,
     );
   });
 };
