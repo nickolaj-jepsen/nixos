@@ -75,43 +75,27 @@ Run ON the Mac:
 
 ## The phone (pocketnix)
 
-`phone-vm` is NixOS on the Pixel 8 Pro (GrapheneOS), an aarch64 dev
-env run by the [pocketnix](https://github.com/nickolaj-jepsen/pocketnix) app
-(input `pocketnix`) under Android's AVF: u-boot finds the image's ESP and runs
-systemd-boot, so generations and rollback work as on any EFI host. pocketnix's
-`nixosModules.default` owns the guest contract (Google's prebuilt guest
-kernel, the disk image, first boot, the vsock agent and hvc0 console);
+`phone-vm` is NixOS on the Pixel 8 Pro (GrapheneOS), an aarch64 dev env run
+by the [pocketnix](https://github.com/nickolaj-jepsen/pocketnix) app (input
+`pocketnix`) under Android's AVF. pocketnix's `nixosModules.default` owns the
+guest: kernel, image, boot, agent and GUI, all in its
+[docs](https://github.com/nickolaj-jepsen/pocketnix/tree/main/docs).
 `modules/system/pocketnix.nix` (`fireproof.pocketnix.enable`) wires in the
 user, the ssh forward, the terminal's theme and tab profiles, and with
-`fireproof.gui.enable` pocketnix's GUI (Wayland apps as Android windows,
-software-rendered: there's no GPU, so OpenGL-only apps don't start). Its
-docs/design.md and AGENTS.md hold the platform's decisions and traps. CI
-builds it on an arm runner into attic; never evaluate or build on the phone,
-it freezes.
-
-- **Image**: `nix build .#nixosConfigurations.phone-vm.config.system.build.pocketnixImage.x86_64-linux`
-  (the `x86_64-linux` key assembles it with this machine's tools; the closure
-  builds through the desktop's aarch64 binfmt).
+`fireproof.gui.enable` the GUI. CI builds it into attic; never evaluate or
+build on the phone, it freezes.
 
 One-time bootstrap, over USB with adb:
 
-1. `just provision phone-vm` builds the image, injects the committed SSH host
-   key (so agenix decrypts on the first boot), installs the app, grants its
-   AVF permissions, pushes the image and starts the VM. Until pocketnix
-   publishes releases, pass the APK: `just provision phone-vm --debug --apk
-<app-debug.apk>`. `--replace` overwrites an existing guest disk.
-2. RAM, vCPUs and disk size live in the app's Settings; the disk grows on the
-   next start.
-3. The app forwards sshd to the phone's `127.0.0.1:2222`: `adb forward
+1. `just provision phone-vm` injects the committed SSH host key into the image
+   (so agenix decrypts on the first boot) and hands the rest to pocketnix's
+   `provision`; extra args pass through to it (`--help`).
+2. The app forwards sshd to the phone's `127.0.0.1:2222`: `adb forward
 tcp:2222 tcp:2222`, then `NIX_SSHOPTS="-p 2222" just switch phone-vm
 nickolaj@localhost`. Drop any old `[localhost]:2222` known_hosts entry
-   first. tailscaled enrols it as `phone-vm`; point the `phone-vm` alias in
-   `modules/system/ssh.nix` at its tailnet IP (MagicDNS is off), then
-   `just switch phone-vm phone-vm` from then on.
-
-The app's console tab is hvc0 with an autologin, the recovery path; other tabs
-run a profile (shell, zellij) through the agent. A guest `reboot` makes the
-app relaunch the VM; `poweroff` leaves it stopped.
+   first. tailscaled enrols it as `phone-vm` (delete an older `phone-vm` node
+   in the admin console first, or it becomes `phone-vm-1`); the ssh alias
+   reaches it by that name, so `just switch phone-vm phone-vm` from then on.
 
 ## Cross-platform apps
 
