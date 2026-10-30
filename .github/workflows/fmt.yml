@@ -57,15 +57,17 @@ jobs:
   # `if` on the outputs, not on `needs.plan.result`: a plan that fails leaves the
   # outputs empty, and an empty matrix errors instead of skipping.
   # --single: one toplevel per job, so nix-fast-build's parallel eval buys nothing.
+  # The name is pinned: update_bot.py maps `build (<host>)` back to the host.
   build:
+    name: build (${{ matrix.host }})
     needs: [plan]
     if: needs.plan.outputs.linux != '' && needs.plan.outputs.linux != '[]'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        host: ${{ fromJson(needs.plan.outputs.linux) }}
+        include: ${{ fromJson(needs.plan.outputs.linux) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: ./.github/actions/setup-nix
@@ -93,26 +95,12 @@ jobs:
       - name: Build macbook
         run: .github/scripts/ci-build.sh --single ".#darwinConfigurations.macbook.system"
 
-  # Same for the aarch64-linux phone-vm: a native arm runner fills attic so the phone only substitutes.
-  phone-vm:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: ./.github/actions/setup-nix
-        with:
-          attic-endpoint: https://attic.${{ secrets.HOMELAB_DOMAIN }}/
-          attic-cache: nixos
-          attic-token: ${{ secrets.ATTIC_TOKEN }}
-      - name: Build phone-vm
-        run: .github/scripts/ci-build.sh --single ".#nixosConfigurations.phone-vm.config.system.build.toplevel"
-
   # The required check on `main`: a stable name, unlike the matrix jobs. A job the
   # plan skipped is fine; a job that failed, was cancelled, or never ran is not.
   gate:
     name: CI gate
     if: always()
-    needs: [fmt, plan, build, darwin, phone-vm]
+    needs: [fmt, plan, build, darwin]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -122,9 +110,8 @@ jobs:
           PLAN: ${{ needs.plan.result }}
           BUILD: ${{ needs.build.result }}
           DARWIN: ${{ needs.darwin.result }}
-          PHONE_VM: ${{ needs.phone-vm.result }}
         run: |
-          echo "fmt=$FMT plan=$PLAN build=$BUILD darwin=$DARWIN phone-vm=$PHONE_VM"
+          echo "fmt=$FMT plan=$PLAN build=$BUILD darwin=$DARWIN"
           failed=0
           require() {
             [ "$2" = success ] && return
@@ -138,7 +125,6 @@ jobs:
           }
           require fmt "$FMT"
           require plan "$PLAN"
-          require phone-vm "$PHONE_VM"
           # The plan only carries hosts it can prove changed, so both may be skipped.
           skipped_ok build "$BUILD"
           skipped_ok darwin "$DARWIN"

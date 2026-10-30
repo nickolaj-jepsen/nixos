@@ -577,8 +577,6 @@ def job_attrs(job: str) -> list[str] | None:
         return [f"nixosConfigurations.{m[1]}.config.system.build.toplevel"]
     if job == "darwin":
         return ["darwinConfigurations.macbook.system"]
-    if job == "phone-vm":
-        return ["nixosConfigurations.phone-vm.config.system.build.toplevel"]
     if job == "check":
         names = json.loads(
             run("nix", "eval", "--json", ".#checks.x86_64-linux", "--apply", "builtins.attrNames")
