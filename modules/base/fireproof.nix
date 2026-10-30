@@ -28,6 +28,8 @@ let
       # Enabling a host needs `just secret-rekey` — the body is an agenix secret.
       scripts.tunnel-home.enable = lib.mkEnableOption "tunnel-home, an sshuttle wrapper for reaching a remote network over SSH";
 
+      gui.enable = cascade config.fireproof.desktop.enable "graphical apps that need only a Wayland compositor (Firefox, Sublime Merge), with their theming and fonts; pocketnix's GUI runs them without a desktop session";
+
       desktop = {
         enable = lib.mkEnableOption "desktop environment with niri, greetd, and all desktop features";
         chromium = {
@@ -106,6 +108,8 @@ let
         };
         pi.enable = cascade config.fireproof.dev.enable "Enable the pi coding agent with the lazypi extension roster";
         opencode.enable = cascade config.fireproof.dev.enable "Enable the opencode 2.x coding agent";
+        copilot.enable = cascade config.fireproof.dev.enable "Enable the GitHub Copilot CLI";
+        tilt.enable = cascade config.fireproof.dev.enable "Enable tilt";
         ai-usage.enable = cascade config.fireproof.dev.enable "Enable ai-usage, the agent subscription quota CLI (and its DMS bar widget on desktops)";
         agent-hub.enable = cascade (config.fireproof.dev.enable && config.fireproof.desktop.enable) "Enable agent-hub, the DMS bar hub for live coding-agent sessions and their permission asks";
         llm = {
@@ -133,6 +137,12 @@ let
 
       networkd.enable = lib.mkEnableOption "systemd-networkd wired networking";
       wsl.enable = lib.mkEnableOption "WSL configuration";
+      docker.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Docker engine and CLI (Colima on darwin, which also needs dev.enable); homelab's oci-containers run on it";
+      };
+      pocketnix.enable = lib.mkEnableOption "a pocketnix guest: NixOS run by the pocketnix app under Android's AVF";
 
       tailscale = {
         enable = lib.mkOption {
@@ -194,7 +204,7 @@ let
       };
 
       hardware = {
-        physical = cascade (!config.fireproof.wsl.enable) "Whether this is a physical machine (not WSL/VM). Gates baseline hardware hygiene for physical machines.";
+        physical = cascade (!config.fireproof.wsl.enable && !config.fireproof.pocketnix.enable) "Whether this is a physical machine (not WSL/VM). Gates baseline hardware hygiene for physical machines.";
         zram = cascade config.fireproof.hardware.physical "Enable compressed RAM swap (zram) for memory-pressure headroom without writing to disk.";
         nvidia.enable = lib.mkEnableOption "NVIDIA GPU support (open kernel module + VA-API video offload)";
         laptop = lib.mkEnableOption "laptop-specific configurations and tools";

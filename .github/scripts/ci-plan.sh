@@ -6,7 +6,7 @@
 # is left. Fails open — anything that can't be evaluated or checked gets built.
 #
 # ATTIC is the cache URL (e.g. https://attic.example.com/nixos). Outputs:
-# `linux` (JSON array of host names) and `darwin` (true/false).
+# `linux` (JSON array of {host, runner}) and `darwin` (true/false).
 set -uo pipefail
 
 : "${ATTIC:?ATTIC must be the cache URL, e.g. https://attic.example.com/nixos}"
@@ -24,9 +24,18 @@ fi
 # One process per host, no eval cache: parallel evals otherwise stall on its SQLite lock.
 # shellcheck disable=SC2016 # the substitutions belong to the subshell xargs fills in
 printf '%s\n' "${hosts[@]}" | xargs -P 4 -I{} bash -c '
+  nix eval --no-eval-cache --raw ".#nixosConfigurations.$1.config.nixpkgs.hostPlatform.system" >"$2/$1.system" 2>/dev/null
   out=$(nix eval --no-eval-cache --raw ".#nixosConfigurations.$1.config.system.build.toplevel.outPath" 2>/dev/null) || exit 0
   printf "%s\n" "$out" >"$2/$1"
 ' _ {} "$dir"
+
+# A host builds natively: the runners don't emulate other architectures.
+runner() {
+  case $(cat "$dir/$1.system" 2>/dev/null) in
+  aarch64-linux) echo ubuntu-24.04-arm ;;
+  *) echo ubuntu-latest ;;
+  esac
+}
 
 build=()
 rows=()
@@ -41,7 +50,7 @@ for host in "${hosts[@]}"; do
   if [ "$reason" = "already in the cache" ]; then
     rows+=("| $host | no | $reason |")
   else
-    build+=("$host")
+    build+=("$(jq -nc --arg host "$host" --arg runner "$(runner "$host")" '{$host, $runner}')")
     rows+=("| $host | yes | $reason |")
   fi
 done
@@ -58,7 +67,7 @@ fi
 if [ "${#build[@]}" -eq 0 ]; then
   linux='[]'
 else
-  linux=$(printf '%s\n' "${build[@]}" | jq -R . | jq -sc .)
+  linux=$(printf '%s\n' "${build[@]}" | jq -sc .)
 fi
 
 {

@@ -125,6 +125,10 @@ in {
             HostName = "10.0.2.101";
             User = "nickolaj";
           };
+          # tailscaled resolves the tailnet name though MagicDNS is off; the Mac's CLI isn't on PATH.
+          phone-vm =
+            {User = "nickolaj";}
+            // lib.optionalAttrs pkgs.stdenv.isLinux {ProxyCommand = "tailscale nc %h %p";};
         }
         // lib.optionalAttrs workEnabled {
           "bastion.ao" = {

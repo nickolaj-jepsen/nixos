@@ -163,6 +163,20 @@ deploy-remote hostname target:
 factor hostname=`hostname -s` target='':
     scripts/factor.sh {{ hostname }} '{{ target }}'
 
+# A pipe would hand provision an empty key if the decrypt failed, so check it first.
+[arg('hostname', pattern='[a-zA-Z0-9._-]+')]
+[doc('Provision a pocketnix host onto the adb-attached phone: the app, its AVF grants, and the image with the committed SSH host key injected (YubiKey)')]
+[group('install')]
+[script]
+provision hostname *ARGS="":
+    key=$(just decrypt secrets/hosts/{{ hostname }}/id_ed25519.age)
+    case $key in *"PRIVATE KEY"*) ;; *) echo "Decrypting the host key failed; the phone is untouched." >&2; exit 1 ;; esac
+    printf '%s\n' "$key" | {{ nixcmd }} run --inputs-from . pocketnix#provision -- \
+        --image ".#nixosConfigurations.{{ hostname }}.config.system.build.pocketnixImage.{{ system }}" \
+        --inject /etc/ssh/ssh_host_ed25519_key=- --mode 0600 \
+        --inject /etc/ssh/ssh_host_ed25519_key.pub=secrets/hosts/{{ hostname }}/id_ed25519.pub --mode 0644 \
+        {{ ARGS }}
+
 [doc('Runs (r)age with yubikey identity')]
 [group('secret')]
 age *ARGS="--help":

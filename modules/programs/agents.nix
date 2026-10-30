@@ -6,7 +6,7 @@
     ...
   }: {
     config = lib.mkIf config.fireproof.dev.enable (lib.mkMerge [
-      {
+      (lib.mkIf config.fireproof.dev.copilot.enable {
         programs.github-copilot-cli = {
           enable = true;
           # Stable node: unstable's would be a second ~130 MB nodejs + icu in the closure.
@@ -24,7 +24,7 @@
             })
             config.fireproof.agents.lspServers;
         };
-      }
+      })
 
       (lib.mkIf (config.fireproof.dev.pi.enable || config.fireproof.dev.opencode.enable) {
         # Literal path in pi's agent dir: pi's models.json reads it there, and opencode's {file:} expands only `~/`.

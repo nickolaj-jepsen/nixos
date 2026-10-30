@@ -35,11 +35,12 @@ the whole host:
 - `nixos` → `nixosConfigurations.<h>` via `nixosSystem`. The host builder
   defines `home-manager.users.<fireproof.username>` and routes all homeManager
   leaves + the card's `shared`/`homeManager` buckets into `sharedModules`.
+  It defaults to x86_64-linux; another platform sets
+  `nixos.nixpkgs.hostPlatform` in the card (`phone-vm`).
 - `home` → `homeConfigurations.<h>` via `mkHome` in `hosts/default.nix` (standalone HM, no
-  NixOS eval; `osConfig = null`). Example: `dev-ao`. Activate with
-  `just switch <h> [user@target]`; the target needs the user in
-  `trusted-users`. HM services that assume system bits (e.g. an ssh-agent)
-  must self-provide them in HM or the host card.
+  NixOS eval; `osConfig = null`). Example: `dev-ao`. Activate on the host
+  itself with `just switch <h>`. HM services that assume system bits (e.g. an
+  ssh-agent) must self-provide them in HM or the host card.
 - `darwin` → `darwinConfigurations.<h>` via nix-darwin + embedded HM. Example:
   `macbook`. nix-darwin system config (homebrew, …) goes in the `darwin`
   bucket. Activate ON the Mac with `just switch`; the first switch on a fresh
@@ -72,10 +73,36 @@ Run ON the Mac:
    Confirm Settings > General > Sharing > Remote Login access is "All users"
    (or includes the user). Key-only auth; reach it over Tailscale/LAN.
 
+## The phone (pocketnix)
+
+`phone-vm` is NixOS on the Pixel 8 Pro (GrapheneOS), an aarch64 dev env run
+by the [pocketnix](https://github.com/nickolaj-jepsen/pocketnix) app (input
+`pocketnix`) under Android's AVF. pocketnix's `nixosModules.default` owns the
+guest: kernel, image, boot, agent and GUI, all in its
+[docs](https://github.com/nickolaj-jepsen/pocketnix/tree/main/docs).
+`modules/system/pocketnix.nix` (`fireproof.pocketnix.enable`) wires in the
+user, the ssh forward, the terminal's theme and tab profiles, and with
+`fireproof.gui.enable` the GUI. CI builds it into attic; never evaluate or
+build on the phone, it freezes.
+
+One-time bootstrap, over USB with adb:
+
+1. `just provision phone-vm` injects the committed SSH host key into the image
+   (so agenix decrypts on the first boot) and hands the rest to pocketnix's
+   `provision`; extra args pass through to it (`--help`).
+2. The app forwards sshd to the phone's `127.0.0.1:2222`: `adb forward
+tcp:2222 tcp:2222`, then `NIX_SSHOPTS="-p 2222" just switch phone-vm
+nickolaj@localhost`. Drop any old `[localhost]:2222` known_hosts entry
+   first. tailscaled enrols it as `phone-vm` (delete an older `phone-vm` node
+   in the admin console first, or it becomes `phone-vm-1`); the ssh alias
+   reaches it by that name, so `just switch phone-vm phone-vm` from then on.
+
 ## Cross-platform apps
 
 Everyday GUI apps have no toggle of their own: they gate on `desktop.enable`
-(plus `dev`/`work` where relevant). The darwin host opts into the whole GUI roster with `desktop.enable = true`,
+(plus `dev`/`work` where relevant). The few worth having without a desktop
+session (Firefox, Sublime Merge, the GTK theme and fonts) gate on `gui.enable`
+instead, which `desktop.enable` turns on and phone-vm sets alone. The darwin host opts into the whole GUI roster with `desktop.enable = true`,
 same as Linux. A cross-platform app leaf carries a `flake.modules.darwin.<app>`
 half adding a `homebrew.casks` entry, and its homeManager half must keep the
 nixpkgs binary off the Mac: `fpLib.mkDarwinGuiPackage` for
