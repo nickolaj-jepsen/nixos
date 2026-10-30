@@ -1,23 +1,14 @@
 # A pocketnix guest: the pocketnix module owns the AVF contract (Google's guest
 # kernel, the disk image, first boot, the agent); this leaf wires the user,
 # forwards and the terminal's look to the rest of the config.
-# `nix build .#nixosConfigurations.<h>.config.system.build.pocketnixImage.<build-system>`.
 {inputs, ...}: {
   flake.modules.nixos.pocketnix = {
     config,
     lib,
-    pkgs,
     ...
   }: let
     c = config.fireproof.theme.colors;
     inherit (config.fireproof.theme) font;
-    # The app takes one font file; find monoFamily's regular face in the theme's package.
-    monoFontFile = pkgs.runCommand "pocketnix-terminal-font" {nativeBuildInputs = [pkgs.fontconfig];} ''
-      export FONTCONFIG_FILE=${pkgs.makeFontsConf {fontDirectories = [font.package];}} HOME=$TMPDIR
-      file=$(fc-match -f '%{file}' '${font.monoFamily}:style=Regular')
-      case $file in ${font.package}/*) ;; *) echo "no '${font.monoFamily}' in ${font.package}" >&2; exit 1 ;; esac
-      cp "$file" $out
-    '';
   in {
     imports = [inputs.pocketnix.nixosModules.default];
 
@@ -63,7 +54,10 @@
             color14 = c.cyan;
             color15 = c.whiteAlt;
           };
-          theme.font = monoFontFile;
+          theme.fontFamily = {
+            inherit (font) package;
+            family = font.monoFamily;
+          };
         };
       };
     };
