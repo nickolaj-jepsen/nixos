@@ -91,19 +91,20 @@ Merging is `gh pr merge --rebase`. Post-merge, report `origin/<default>`'s new s
 
 Never re-implement a refusal `wt` already makes: `wt land` is the authority on landing, and its line is reported verbatim.
 
-| state                                                                       | behaviour                                                                                                |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| in the primary checkout on the default branch                               | refuse; `/wt-land <name>` targets a worktree. Never commit on the default branch.                        |
-| already landed, nothing dirty (`wt list --json` → `ahead 0`, `landed true`) | stop: "already on `<default>` as `<sha>`; `cd <primary> && wt clean` removes it once this session exits" |
-| mid-rebase/merge/bisect, or detached HEAD                                   | stop with the exact finish-or-abort command                                                              |
-| remote ahead of the branch                                                  | stop: "`origin/<branch>` has N commits you don't have"                                                   |
-| history rewritten after a push                                              | ask explicitly about `--force-with-lease`; never silently force                                          |
-| PR already open                                                             | resume: requested changes first, then checks, then merge                                                 |
-| PR merged                                                                   | report the merge commit and the pull line; don't merge twice                                             |
-| PR closed unmerged                                                          | stop and ask whether to reopen or drop the branch                                                        |
-| dirty tree with none of it ours                                             | stop: "nothing of yours to commit; N unrelated paths left behind"                                        |
-| `gh` unauthenticated or no remote                                           | offer only `local`, with one line saying why                                                             |
-| nothing new since the last gate                                             | legitimate: re-gate with `no new commits since the last gate`                                            |
+| state                                                                          | behaviour                                                                                                                        |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| in the primary checkout on the default branch                                  | refuse; `/wt-land <name>` targets a worktree. Never commit on the default branch.                                                |
+| in the primary checkout on a promoted branch (`wt list --json .` → `promoted`) | land as usual: `local` is `wt land .`, which also switches the checkout back to the default branch and deletes the landed branch |
+| already landed, nothing dirty (`wt list --json` → `ahead 0`, `landed true`)    | stop: "already on `<default>` as `<sha>`; `cd <primary> && wt clean` removes it once this session exits"                         |
+| mid-rebase/merge/bisect, or detached HEAD                                      | stop with the exact finish-or-abort command                                                                                      |
+| remote ahead of the branch                                                     | stop: "`origin/<branch>` has N commits you don't have"                                                                           |
+| history rewritten after a push                                                 | ask explicitly about `--force-with-lease`; never silently force                                                                  |
+| PR already open                                                                | resume: requested changes first, then checks, then merge                                                                         |
+| PR merged                                                                      | report the merge commit and the pull line; don't merge twice                                                                     |
+| PR closed unmerged                                                             | stop and ask whether to reopen or drop the branch                                                                                |
+| dirty tree with none of it ours                                                | stop: "nothing of yours to commit; N unrelated paths left behind"                                                                |
+| `gh` unauthenticated or no remote                                              | offer only `local`, with one line saying why                                                                                     |
+| nothing new since the last gate                                                | legitimate: re-gate with `no new commits since the last gate`                                                                    |
 
 ## PR body
 
@@ -131,4 +132,4 @@ Title: the single commit's subject, or for several a `type(scope): summary` line
 
 ## Non-goals
 
-Don't touch the primary checkout's HEAD, don't push the default branch, don't delete the worktree (that's `wt clean`, once the session has left it), and don't commit work you can't explain.
+Don't touch the primary checkout's HEAD (beyond what `wt land` does for a promoted branch), don't push the default branch, don't delete the worktree (that's `wt clean`, once the session has left it), and don't commit work you can't explain.

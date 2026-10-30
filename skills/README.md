@@ -71,6 +71,10 @@ claude plugin install skills@nickolaj-jepsen
   few, run the repo's checks, stop at a review gate, then land with `wt land` or open a
   PR (draft, awaiting review, or merged on green). Needs `wt`, `gh` and `python3`; the PR
   half lives in a bundled `scripts/pr.py`.
+- **wt-promote** — move a worktree's branch into the repo's primary checkout for work that
+  has to run from that path. Whatever sits there goes to its own worktree: the agent working
+  there is asked to move it, or the skill moves it. It offers a rebase onto local or origin
+  main first; `--back` hands the path back. Needs `wt`'s `promote`/`evict` verbs.
 - **handoff** — turn a finished brainstorm into a self-contained plan for another agent:
   pin the scope, verify assumptions with read-only subagents, grill only the open
   decisions, agree the item graph, then write vertical-slice work items with owned paths
