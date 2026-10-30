@@ -60,8 +60,10 @@
         (makeScript {
           path = ./reboot-windows.bash;
           runtimeInputs = with pkgs; [
-            jq
-            systemd # for bootctl and systemctl
+            efibootmgr
+            gnused
+            coreutils
+            systemd # for systemctl
           ];
         })
         (makeScript {

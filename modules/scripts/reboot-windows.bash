@@ -1,28 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Find windows entry id using bootctl
-WINDOWS_ID=$(bootctl list --json=short | jq -r '.[] | select(.title != null) | select(.title | ascii_downcase | contains("windows")) | .id' | head -n 1)
+# BootNext on the firmware's own Windows Boot Manager entry skips systemd-boot entirely,
+# so this works even when Windows' ESP is on a disk systemd-boot can't chainload.
+WINDOWS_NUM=$(efibootmgr | sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*\{0,1\} Windows Boot Manager.*/\1/p' | head -n 1)
 
-if [ -z "$WINDOWS_ID" ]; then
-    # Fallback to checking the ID itself
-    WINDOWS_ID=$(bootctl list --json=short | jq -r '.[] | select(.id | ascii_downcase | contains("windows")) | .id' | head -n 1)
-fi
-
-if [ -z "$WINDOWS_ID" ]; then
-    echo "Error: No Windows boot entry found in systemd-boot."
+if [ -z "$WINDOWS_NUM" ]; then
+    echo "Error: No Windows Boot Manager entry in the firmware boot list (efibootmgr)."
     exit 1
 fi
 
-echo "Setting next boot to: $WINDOWS_ID"
+echo "Setting next boot to: Boot$WINDOWS_NUM (Windows Boot Manager)"
 
-# Check if we have root, if not, try to use sudo
 if [ "$EUID" -ne 0 ]; then
-    sudo bootctl set-oneshot "$WINDOWS_ID"
+    sudo efibootmgr --quiet --bootnext "$WINDOWS_NUM"
     echo "Rebooting..."
     sudo systemctl reboot
 else
-    bootctl set-oneshot "$WINDOWS_ID"
+    efibootmgr --quiet --bootnext "$WINDOWS_NUM"
     echo "Rebooting..."
     systemctl reboot
 fi
