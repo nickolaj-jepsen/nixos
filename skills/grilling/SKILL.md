@@ -39,4 +39,4 @@ Decisions are the user's. Put each one to them and wait; never answer your own.
 
 ## Ending
 
-The session is done when the frontier is empty: every branch visited, nothing silently assumed. Ask whether you've reached a shared understanding, and don't act on any of it until the user confirms.
+The session is done when the frontier is empty: every branch visited, nothing silently assumed. Ask whether you've reached a shared understanding, and don't act on any of it until the user confirms. The agreed plan stays in the chat; write it to a file only when the user asks for one or runs `/handoff`.
