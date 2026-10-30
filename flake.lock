@@ -695,6 +695,26 @@
         "type": "github"
       }
     },
+    "nixvirt": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791744226,
+        "narHash": "sha256-zQk2GSBO4hkq75PbtpgJHwupFHD0qaQDJiP15GTmstQ=",
+        "owner": "AshleyYakeley",
+        "repo": "NixVirt",
+        "rev": "11e2b2c0492aeff3fe3dea9000832d7694c47dfe",
+        "type": "github"
+      },
+      "original": {
+        "owner": "AshleyYakeley",
+        "repo": "NixVirt",
+        "type": "github"
+      }
+    },
     "nvf": {
       "inputs": {
         "flake-compat": "flake-compat_5",
@@ -853,6 +873,7 @@
         "nixpkgs": "nixpkgs",
         "nixpkgs-cuda": "nixpkgs-cuda",
         "nixpkgs-unstable": "nixpkgs-unstable",
+        "nixvirt": "nixvirt",
         "nvf": "nvf",
         "obsidian-extensions": "obsidian-extensions",
         "obsidian-skills": "obsidian-skills",

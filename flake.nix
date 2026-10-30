@@ -118,6 +118,10 @@
     zero-x-cb-media.url = "github:nickolaj-jepsen/0xCB-media";
     zero-x-cb-media.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Declarative libvirt domains (the windows-vm leaf).
+    nixvirt.url = "github:AshleyYakeley/NixVirt";
+    nixvirt.inputs.nixpkgs.follows = "nixpkgs";
+
     # Python library for the Zwift Home Assistant integration, tracked at HEAD.
     zwift-client.url = "github:nickolaj-jepsen/zwift-client";
     zwift-client.flake = false;

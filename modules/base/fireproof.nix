@@ -47,6 +47,18 @@ let
         snapcast.enable = lib.mkEnableOption "Snapcast audio streaming server";
         oxcbMedia.enable = lib.mkEnableOption "0xCB-media host daemon (bridges MPRIS + PipeWire to the 0xCB-1337 macropad over USB CDC ACM)";
         lan-mouse.enable = lib.mkEnableOption "Lan Mouse — LAN keyboard/mouse sharing (edge-crossing KVM). On niri it uses the layer-shell capture backend (no input-capture portal needed)";
+        windows-vm = {
+          enable = lib.mkEnableOption "the physical dual-boot Windows install as an on-demand libvirt VM (start-windows)";
+          disk = lib.mkOption {
+            type = lib.types.str;
+            description = "/dev/disk/by-id path of the disk Windows boots from; its EFI system partition is copied with Hyper-V switched off.";
+          };
+          extraDisks = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+            description = "Further whole disks (/dev/disk/by-id paths) attached to the VM, such as a games drive.";
+          };
+        };
       };
 
       claude-code = {
