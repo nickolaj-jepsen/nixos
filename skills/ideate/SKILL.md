@@ -120,9 +120,8 @@ In chat, show only this:
 ```
 <n> ideas, saved to <path>
 
-1. <title>
+1. <title> · <S|M|L> · <build|/grill-me|/brainstorm>
    <the payoff, one line>
-   <Small|Medium|Large>, <build it|grill first|brainstorm first>.
 
 …
 

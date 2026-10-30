@@ -9,14 +9,17 @@ Interview the user relentlessly until you reach a shared understanding. Map the 
 
 The frontier is every decision whose prerequisites are settled: the questions you can ask now without guessing at answers you haven't heard. Ask the whole frontier in one round, wait for the answers, then recompute the frontier from scratch.
 
-Phrase each question as your recommendation ("Store it in SQLite?") so "yes" accepts it. At a real fork, list the alternatives under it as lettered options, the recommended one as A. A bare "yes" accepts every recommendation in the round; a question the reply skips stays on the frontier.
+Phrase each question as your recommendation ("Store it in SQLite?") so "yes" accepts it. At a real fork, list the alternatives under it as lettered options, one `- **A.** <option>` line each, the recommended one as A. A bare "yes" accepts every recommendation in the round; a question the reply skips stays on the frontier.
 
 Format a round like so, with `---` between questions:
 
 ```
 **Q1. <question>**
 
-<optional body: context, lettered options>
+<optional body: context>
+
+- **A.** <option>
+- **B.** <option>
 
 > **Recommended:** <answer>, and the short reason.
 

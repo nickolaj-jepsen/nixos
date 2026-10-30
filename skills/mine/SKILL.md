@@ -141,7 +141,7 @@ In chat, show only:
 
 - the path;
 - the counts ("5 findings from 34 runs");
-- one line per finding (`1. <category> · <k/N> · <size> · <next>`);
+- one line per finding (`1. <category> · <k/N> · <S|M|L> · <build|/grill-me|/brainstorm>`), with the route last;
 - the top pick, in a sentence.
 
 ## Pick
