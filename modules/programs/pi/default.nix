@@ -11,11 +11,13 @@
       npmDeps = pkgs.importNpmLock {npmRoot = ./extensions;};
       inherit (pkgs.importNpmLock) npmConfigHook;
       nativeBuildInputs = [pkgs.typescript];
-      # parent/lib/spellfix is a symlink to the Claude Code mod; it dangles in the store.
+      # parent/lib/{spellfix,answer} are symlinks to the Claude Code mods; they dangle in the store.
       postPatch = ''
-        rm parent/lib/spellfix
+        rm parent/lib/spellfix parent/lib/answer
         install -Dm644 ${../claude-code/mods/spellfix/hooks/core.ts} parent/lib/spellfix/hooks/core.ts
         install -Dm644 ${../claude-code/mods/spellfix/types/index.d.ts} parent/lib/spellfix/types/index.d.ts
+        install -Dm644 ${../claude-code/mods/answer/hooks/core.ts} parent/lib/answer/hooks/core.ts
+        install -Dm644 ${../claude-code/mods/answer/types/index.d.ts} parent/lib/answer/types/index.d.ts
       '';
       buildPhase = ''
         runHook preBuild

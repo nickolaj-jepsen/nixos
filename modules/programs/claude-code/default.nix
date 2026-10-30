@@ -117,15 +117,19 @@
     # card redesign only hides it, with a toast (mods/linear-issue).
     linearIssue = mkMod "linear-issue";
     gitMenu = mkMod "git-menu";
+    answer = mkMod "answer";
 
-    # ctrl+q presses spellfix's band button, which borrows this action; a
-    # single modified key reaches a plugin Button only from the Global context.
+    # ctrl+q presses spellfix's band button and alt+a answer's, each borrowing an
+    # action; a single modified key reaches a plugin Button only from the Global context.
     keybindings = {
       "$schema" = "https://www.schemastore.org/claude-code-keybindings.json";
       bindings = [
         {
           context = "Global";
-          bindings."ctrl+q" = "app:toggleDiffNoiseFilter";
+          bindings = {
+            "ctrl+q" = "app:toggleDiffNoiseFilter";
+            "alt+a" = "app:cycleDiffBase";
+          };
         }
       ];
     };
@@ -377,7 +381,7 @@
         env = {
           CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
           # Not programs.claude-code.plugins: the env block also reaches desktop-app sessions.
-          CLAUDE_CODE_PLUGIN_DIRS = "${spellfix}:${linearIssue}:${gitMenu}";
+          CLAUDE_CODE_PLUGIN_DIRS = "${spellfix}:${linearIssue}:${gitMenu}:${answer}";
           # hunspell's personal dictionary for the underline's checker too.
           WORDLIST = personalDictionary;
         };

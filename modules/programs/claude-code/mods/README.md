@@ -10,6 +10,7 @@ claude plugin marketplace add nickolaj-jepsen/nixos
 claude plugin install spellfix@nickolaj-jepsen
 claude plugin install linear-issue@nickolaj-jepsen
 claude plugin install git-menu@nickolaj-jepsen
+claude plugin install answer@nickolaj-jepsen
 ```
 
 My nix build validates and tests each mod against the Claude Code version it
@@ -34,3 +35,14 @@ Code update can break one.
   request, and copies the branch, SHA or PR URL; `/open` hands the checkout to
   VS Code, Sublime Merge, the file manager or Ghostty. Rows that can't run say
   why. Needs `git`, and `gh` for the pull request.
+- **answer**: when a turn ends on a round of questions or a numbered pick
+  list, a band row offers a form for it in a pane: one question per screen,
+  its options plus "Write your own answer" as numbered entries. A number,
+  Enter or a click picks one and opens a note field; Enter there, empty or
+  not, goes on. `b`, `f`, `s` and `r` go back, forward, skip and to the
+  review, which writes the reply you would have typed (`Q1: yes`, `Q2: B`,
+  `do 1, 3`) into the prompt, above any draft, for you to send. Open it with
+  `/answer` or the band's button; for a key, bind `app:cycleDiffBase` in the
+  `Global` context of `~/.claude/keybindings.json` (I use `alt+a`). Its
+  parser also backs the pi half in
+  `modules/programs/pi/extensions/parent/answer.ts`.

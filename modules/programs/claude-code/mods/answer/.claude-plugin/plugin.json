@@ -1,0 +1,9 @@
+{
+  "name": "answer",
+  "version": "0.1.0",
+  "description": "Answer the question round or pick list a turn ended on from a form: number keys or clicks, then the reply is written into the prompt",
+  "author": {
+    "name": "Nickolaj Jepsen"
+  },
+  "types": "./types/index.d.ts"
+}
