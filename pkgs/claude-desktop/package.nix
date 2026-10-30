@@ -36,11 +36,11 @@
 }:
 stdenv.mkDerivation (finalAttrs: {
   pname = "claude-desktop";
-  version = "4.29.0";
+  version = "4.4212.0";
 
   src = fetchurl {
     url = "https://downloads.claude.ai/claude-desktop/apt/stable/pool/main/c/claude-desktop/claude-desktop_${finalAttrs.version}_amd64.deb";
-    hash = "sha256-SqD3Y9bAWseVAjkt1Q9df1xFWy8KQF1b3xVUrNg0Kok=";
+    hash = "sha256-T89ljg/IlTkKuCWTKHKB37ziYbDsPqkAYOgti/v9eoQ=";
   };
 
   nativeBuildInputs = [
