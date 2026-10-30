@@ -17,28 +17,36 @@
     ...
   }: let
     bw = lib.getExe pkgs.bitwarden-cli;
-    # On Linux the session key is cached in the kernel user keyring: RAM-only,
-    # gone on reboot, and expired after 8h, so one unlock serves every terminal.
+    # On Linux `unlock` caches the session key in the kernel user keyring:
+    # RAM-only, gone on reboot, and expired after 8h, so one unlock serves
+    # every terminal. Other commands only pick up a cached key.
     keyring = profile: ''
       key=bw:${profile}
       stored() { keyctl search @u user "$key" 2>/dev/null; }
+      raw=false check=false
+      for arg in "$@"; do
+        case "$arg" in
+          --raw) raw=true ;;
+          --check) check=true ;;
+        esac
+      done
+      if [ "''${1:-}" = unlock ] && ! $check; then
+        # padd replaces the cached key, which this unlock just invalidated.
+        if $raw; then BW_SESSION=$(${bw} "$@"); else BW_SESSION=$(${bw} "$@" --raw); fi
+        # Without a tty the prompt yields nothing yet still exits 0.
+        [ -n "$BW_SESSION" ] || exit 1
+        id=$(printf %s "$BW_SESSION" | keyctl padd user "$key" @u)
+        keyctl timeout "$id" 28800
+        if $raw; then printf %s "$BW_SESSION"; else echo "Vault unlocked for 8 hours." >&2; fi
+        exit 0
+      fi
       case "''${1:-}" in
-        # unlock mints a new session key, which invalidates the stored one.
-        lock | logout | unlock)
+        lock | logout)
           if id=$(stored); then keyctl unlink "$id" @u >/dev/null; fi
           ;;
-        "" | login | config | status | update | completion | generate | encode | help | -h | --help | -v | --version) ;;
         *)
-          if [ -z "''${BW_SESSION:-}" ]; then
-            if id=$(stored); then
-              BW_SESSION=$(keyctl pipe "$id")
-            else
-              BW_SESSION=$(${bw} unlock --raw)
-              # Without a tty the prompt yields nothing yet still exits 0.
-              [ -n "$BW_SESSION" ] || exit 1
-              id=$(printf %s "$BW_SESSION" | keyctl padd user "$key" @u)
-              keyctl timeout "$id" 28800
-            fi
+          if [ -z "''${BW_SESSION:-}" ] && id=$(stored); then
+            BW_SESSION=$(keyctl pipe "$id")
             export BW_SESSION
           fi
           ;;
