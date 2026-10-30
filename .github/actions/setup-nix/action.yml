@@ -22,11 +22,8 @@ runs:
       uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
       with:
         # IFD breaks cross-platform eval (darwin from Linux).
-        # cuda at priority 40 (it advertises 50): else attic (41) serves its nvidia/CUDA paths over the homelab's uplink.
         extra-conf: |
           allow-import-from-derivation = false
-          extra-substituters = https://nix-community.cachix.org https://cache.nixos-cuda.org?priority=40
-          extra-trusted-public-keys = nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs= cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=
 
     - name: Configure attic
       if: inputs.attic-token != ''
@@ -35,3 +32,16 @@ runs:
         endpoint: ${{ inputs.attic-endpoint }}
         cache: ${{ inputs.attic-cache }}
         token: ${{ inputs.attic-token }}
+
+    # After attic: `attic use` writes a plain `substituters =` to the user nix.conf, which drops any extras set before it.
+    # cuda at priority 40 (it advertises 50): else attic (41) serves its nvidia/CUDA paths over the homelab's uplink.
+    - name: Add public substituters
+      shell: bash
+      run: |
+        conf="${XDG_CONFIG_HOME:-$HOME/.config}/nix/nix.conf"
+        mkdir -p "$(dirname "$conf")"
+        cat >> "$conf" <<'EOF'
+        extra-substituters = https://nix-community.cachix.org https://cache.nixos-cuda.org?priority=40
+        extra-trusted-public-keys = nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs= cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=
+        EOF
+        nix config show | grep -E '^(substituters|trusted-public-keys) '
