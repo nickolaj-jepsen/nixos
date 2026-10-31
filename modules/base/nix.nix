@@ -29,8 +29,10 @@
     download-buffer-size = 524288000;
     max-substitution-jobs = 32;
 
-    # Global only (Nix has no per-substituter retry); default 5 spams warnings when attic is down.
+    # Global, so Determinate on darwin reads it too; default 5 spams warnings when attic is down.
     download-attempts = 3;
+    # The default 15 s per connection is what every build waits out while attic is down.
+    connect-timeout = 5;
   };
 
   mkSettings = config:
@@ -54,7 +56,11 @@
       warn-dirty = false;
     };
 in {
-  flake.modules.nixos.nix = {config, ...}: let
+  flake.modules.nixos.nix = {
+    config,
+    pkgs,
+    ...
+  }: let
     report = config.hardware.facter.report;
     threads = lib.foldl' (n: cpu: n + cpu.siblings) 0 (report.hardware.cpu or []);
     ramBytes = lib.pipe (report.hardware.memory or []) [
@@ -65,6 +71,8 @@ in {
     cores = lib.min 4 threads;
   in {
     nixpkgs.config.allowUnfree = true;
+    # 2.35 links mimalloc: the desktop evaluated in 17 s against 2.34's 19–21 s. Drops out once 26.05's default catches up.
+    nix.package = lib.mkIf (lib.versionOlder pkgs.nix.version "2.35") pkgs.nixVersions.nix_2_35;
     # Defaults run threads² compilers; keep max-jobs × cores ≈ threads.
     nix.settings =
       mkSettings config
