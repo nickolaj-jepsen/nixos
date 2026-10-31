@@ -23,9 +23,11 @@ edit=false
 if ! $edit && [[ -n ${WAYLAND_DISPLAY:-} ]] && command -v ghostty >/dev/null; then
   # `-e` runs no shell and must come last; store paths keep it independent of the caller's PATH.
   # Without confirm-close-surface=false, closing the window asks first because less is still running.
+  # glow's first run writes `width: 80` to its config, so pass the window's own width.
+  # shellcheck disable=SC2016
   PAGER="$(command -v less) -R" setsid -f ghostty --class=dev.fireproof.notes \
     --title="${dir##*/}/${path##*/}" --confirm-close-surface=false \
-    -e "$(command -v glow)" -p "$path" \
+    -e "$BASH" -c 'read -r _ cols < <(stty size); exec "$1" -p -w "$cols" "$2"' _ "$(command -v glow)" "$path" \
     </dev/null >/dev/null 2>&1
   exit 0
 fi
