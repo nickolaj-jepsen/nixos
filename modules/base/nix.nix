@@ -90,15 +90,17 @@ in {
     nix.daemonIOSchedPriority = 7;
 
     # Weights only compete between siblings; a top-level slice is what makes builds yield to user.slice.
-    systemd.slices.nix-build.sliceConfig = {
+    # A dash in a slice name nests it (nix-build.slice sat inside nix.slice), so the weights go on nix.slice.
+    systemd.slices.nix.sliceConfig = {
       CPUWeight = 20;
       IOWeight = 20;
       MemoryHigh = "75%";
     };
     systemd.services.nix-daemon.serviceConfig = {
-      Slice = "nix-build.slice";
+      Slice = "nix.slice";
       # scx schedulers ignore CPUWeight but honour nice; under EEVDF this only competes inside the slice.
-      Nice = 19;
+      # Not 19: bpfland gives that weight 1, and a builder starved past the 5 s sched_ext watchdog.
+      Nice = 10;
     };
 
     # Nix ≥2.30 builds here, not /tmp; zram absorbs overflow.

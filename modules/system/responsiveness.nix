@@ -16,7 +16,7 @@
       programs.bcc.enable = true;
       environment.systemPackages = [pkgs.bpftrace pkgs.perf];
 
-      # mq-deadline ignores cgroup IOWeight; BFQ makes the nix-build slice's weight real.
+      # mq-deadline ignores cgroup IOWeight; BFQ makes nix.slice's weight real.
       boot.kernelModules = ["bfq"];
       services.udev.extraRules = ''
         ACTION=="add|change", KERNEL=="sd[a-z]|mmcblk[0-9]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="bfq"
