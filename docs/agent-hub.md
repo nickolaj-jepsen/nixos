@@ -1,65 +1,80 @@
 # agent-hub
 
 A desktop overview of every live pi and Claude Code session, and a quick way
-to the ones that want you. The DMS bar shows a dot per session that isn't idle.
+to the ones that want you.
 
-- `Mod+B` opens the popout with the longest-waiting session selected; `Enter`
-  (or a click) focuses its window, `x` dismisses a finished one, `j`/`k` move
-  and `g`/`G` jump to the ends. Idle sessions are listed too, dimmed, last.
-- `Mod+Shift+B` (`agent-hub focus-next`) jumps straight to the next session that
-  wants you, cycling on repeat.
+- The DMS bar shows a dot per session that isn't idle.
+- The bar never answers anything: you answer in the agent's own terminal.
+
+## Keys
+
+- `Mod+B` opens the popout with the longest-waiting session selected.
+  - `Enter` (or a click) focuses its window.
+  - `x` dismisses a finished one.
+  - `j`/`k` move, and `g`/`G` jump to the ends.
+  - Idle sessions are listed too, dimmed, last.
+- `Mod+Shift+B` (`agent-hub focus-next`) jumps straight to the next session
+  that wants you, cycling on repeat.
 - `Mod+Ctrl+B` (`agent-hub toggle`) dismisses the finished turn of the session
   you're looking at, or brings back the one you dismissed.
-- A toast fires when a session you aren't looking at comes to want you;
-  clicking it focuses the session.
-
-The bar never answers anything: you answer in the agent's own terminal.
+- A toast fires when a session you aren't looking at comes to want you.
+  Clicking it focuses the session.
 
 ## States
 
-In the order the popout lists them. The first four want you. Focusing the
-window of a `done` one reads it, as `x` does. `needs-reply` and `failed` stay
-until you answer, dismiss them, or their next turn starts.
+In the order the popout lists them. The first four want you.
 
-- **asking**: a dialog is open that wants an answer. Its entry in the session
-  registry (`~/.claude/sessions`) says `status: "waiting"`. Claude Code writes
-  that itself, with a `waitingFor` naming the dialog (`permission prompt`,
-  `input needed`), and its `PermissionRequest` hook (`agent-hub hook`, set in
-  `modules/programs/claude-code/default.nix`) sends the daemon a one-line label
-  of the call. pi's `claude-peers` extension writes it, with the label, while
-  pi-permission-system has a dialog open. Claude also says `waiting` for modals
-  that only show something (the history view, `/config`): those carry
-  `waitingFor: "dialog open"` and leave the session in the state it was in, so
-  closing one neither re-announces its last turn nor forgets a dismissal.
-- **needs reply**, **failed**, **done**: how the last turn ended. pi's sidecar
-  already judges every turn, and `claude-peers` writes its verdict into the
-  registry (`turnState`, `ask`). Claude Code's `Stop` hook hands the daemon the
-  transcript instead: a question in the turn's last words is an ask, and a long
-  turn that looks done, or one that left background jobs running, goes to
-  `claude -p --model haiku` as the session's own profile (`CLAUDE_CONFIG_DIR`),
-  so a `claude-work` transcript stays on the work account.
+- **asking**: a dialog is open that wants an answer.
+  - Its entry in the session registry (`~/.claude/sessions`) says
+    `status: "waiting"`.
+  - Claude Code writes that itself, with a `waitingFor` naming the dialog
+    (`permission prompt`, `input needed`).
+  - Claude Code's `PermissionRequest` hook (`agent-hub hook`, set in
+    `modules/programs/claude-code/default.nix`) sends the daemon a one-line
+    label of the call.
+  - pi's `claude-peers` extension writes it, with the label, while
+    pi-permission-system has a dialog open.
+  - Claude also says `waiting` for modals that only show something (the
+    history view, `/config`). Those carry `waitingFor: "dialog open"` and leave
+    the session in the state it was in, so closing one neither re-announces its
+    last turn nor forgets a dismissal.
+- **needs reply**, **failed**, **done**: how the last turn ended.
+  - pi's sidecar already judges every turn, and `claude-peers` writes its
+    verdict into the registry (`turnState`, `ask`).
+  - Claude Code's `Stop` hook hands the daemon the transcript instead:
+    - a question in the turn's last words is an ask;
+    - a long turn that looks done, or one that left background jobs running,
+      goes to `claude -p --model haiku` as the session's own profile
+      (`CLAUDE_CONFIG_DIR`), so a `claude-work` transcript stays on the work
+      account.
 - **working**: busy, a Claude Code turn that ended only to wait for its own
   background jobs, or a finished turn the hub is still reading (it asks
-  `claude -p` before it shows the ending). A dev server it left running for you
-  doesn't count.
+  `claude -p` before it shows the ending).
+  - A dev server it left running for you doesn't count.
 - **idle**: fresh, or dismissed.
 
-Finished turns and dismissals live in `~/.local/state/agent-hub/state.json`, so
-a daemon restart keeps them.
+### How long a state lasts
 
-## Pieces
+- Focusing the window of a `done` session reads it, as `x` does.
+- `needs-reply` and `failed` stay until you answer, dismiss them, or their next
+  turn starts.
+- Finished turns and dismissals live in `~/.local/state/agent-hub/state.json`,
+  so a daemon restart keeps them.
 
-- `pkgs/agent-hub/agent_hub.py`, the daemon (`agent-hub daemon`, a user
-  service). Its module docstring is the protocol. Window focus comes from
-  niri's event stream; the order of its `state` message is the one the popout
-  lists and `focus-next` walks.
-- `modules/desktop/dms/agent-hub/`, the bar plugin. One socket subscription
+## How it works
+
+- The daemon is `agent-hub daemon` (`pkgs/agent-hub/agent_hub.py`), a user
+  service. Its module docstring is the protocol.
+- The daemon takes window focus from niri's event stream.
+- The order of the daemon's `state` message is the one the popout lists and
+  `focus-next` walks.
+- The bar plugin is `modules/desktop/dms/agent-hub/`. One socket subscription
   lives in its daemon component, which every bar's widget shares.
-- `modules/programs/pi/extensions/parent/claude-peers.ts`, pi's registry entry.
-
-Claude Code can park a conversation in a background job under its daemon (the
-front's entry gets `parkedJobId`); the daemon shows the job's entry in the
-front's place, under the front's window.
+- pi's registry entry is written by
+  `modules/programs/pi/extensions/parent/claude-peers.ts`.
+- Claude Code can park a conversation in a background job under its daemon; the
+  front's entry gets `parkedJobId`. agent-hub's daemon then shows the job's
+  entry in the front's place, under the front's window.
 
 ## Limits
 
