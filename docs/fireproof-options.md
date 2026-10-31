@@ -198,6 +198,38 @@ true
 
 
 
+## fireproof\.desktop\.autologin\.enable
+
+
+
+Whether to enable signing in without a greeter even when no LUKS passphrase was typed at boot\. Only for hosts where every disk unlock needs a human (no TPM-only slot)\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.desktop\.bambu-studio\.enable
 
 
@@ -536,6 +568,118 @@ string
 
 *Declared by:*
  - [modules/desktop/snapcast\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/desktop/snapcast.nix)
+
+
+
+## fireproof\.desktop\.windows-vm\.enable
+
+
+
+Whether to enable the physical dual-boot Windows install as an on-demand libvirt VM (start-windows)\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.desktop\.windows-vm\.disk
+
+
+
+/dev/disk/by-id path of the disk Windows boots from\. The guest never sees it whole: it gets a same-size copy holding only ` partitions ` and ` esp `\.
+
+
+
+*Type:*
+string
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.desktop\.windows-vm\.esp
+
+
+
+PARTUUID (lowercase) of the mounted EFI system partition; the guest gets a copy of its EFI/Microsoft with Hyper-V switched off\.
+
+
+
+*Type:*
+string
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.desktop\.windows-vm\.extraDisks
+
+
+
+Further whole disks (/dev/disk/by-id paths) attached to the VM, such as a games drive\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.desktop\.windows-vm\.partitions
+
+
+
+PARTUUIDs (lowercase) of the Windows data and recovery partitions on ` disk ` mapped into the guest at their real offsets; anything else reads as zeros\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
@@ -2580,8 +2724,6 @@ string
 
 ## fireproof\.theme\.colors\.uiAlt
 
-
-
 Alternative UI element background
 
 
@@ -2787,6 +2929,8 @@ string
 
 
 ## fireproof\.theme\.font\.monoFamily
+
+
 
 Strictly monospaced variant of ` family `, for UIs that need fixed-width glyphs
 
