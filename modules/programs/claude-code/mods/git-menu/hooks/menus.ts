@@ -301,6 +301,7 @@ export const folderMenu = (
         : { id: app, label: appLabel(app, isMac), unavailable: "not installed" };
     }),
     { id: "copy", label: "Copy path", action: { kind: "copy", text: cwd, what: "path" } },
+    { id: "notes", label: "Notes", action: { kind: "menu", menu: "notes" } },
   ],
   preferred: launchers.code ? "code" : undefined,
 });

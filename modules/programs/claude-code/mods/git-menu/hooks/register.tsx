@@ -11,9 +11,10 @@ import {
   type PrAnswer,
   type Status,
 } from "./menus";
+import { fallbackNote, notesMenu, noteSegments, OPENER, sessionNotes, type Note } from "./notes";
 
 const PANE = "git-menu";
-const TITLES: Record<MenuKind, string> = { git: "Git", folder: "Open folder" };
+const TITLES: Record<MenuKind, string> = { git: "Git", folder: "Open folder", notes: "Notes" };
 const HINTS = "1-9 or Enter picks · Esc closes";
 const GIT_TIMEOUT_MS = 3000;
 const GH_TIMEOUT_MS = 5000;
@@ -142,6 +143,75 @@ async function buildFolder($: EngineInterface, cwd: string): Promise<Menu> {
   return folderMenu(cwd, launchers, mac);
 }
 
+/** Every note under `dir`; links are not followed. */
+async function walkNotes($: EngineInterface, root: string, dir: string): Promise<Note[]> {
+  const entries = await $.fs.list(dir).catch(() => []);
+  const found = await Promise.all(
+    entries.map(async (entry): Promise<Note[]> => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.kind === "dir")
+        return entry.name === "history" || entry.name.startsWith(".")
+          ? []
+          : walkNotes($, root, path);
+      return entry.kind === "file" && noteSegments(root, path)
+        ? [{ path, mtimeMs: entry.mtimeMs }]
+        : [];
+    }),
+  );
+  return found.flat();
+}
+
+/**
+ * The note opener by absolute path: on PATH, then the profiles a trimmed PATH
+ * may miss, then VS Code; undefined when none is installed.
+ */
+async function noteOpener($: EngineInterface, home: string): Promise<string[] | undefined> {
+  const user = await $.env.get("USER");
+  const probe = await run($, [
+    "sh",
+    "-c",
+    'for c; do command -v "$c" && exit 0; done; exit 1',
+    "sh",
+    OPENER,
+    ...(user ? [`/etc/profiles/per-user/${user}/bin/${OPENER}`] : []),
+    `${home}/.nix-profile/bin/${OPENER}`,
+    "code",
+  ]);
+  const found = probe?.exitCode === 0 ? probe.stdout.trim().split("\n")[0] : undefined;
+  if (!found) return undefined;
+  return found.endsWith(`/${OPENER}`) ? [found] : [found, "--reuse-window"];
+}
+
+async function buildNotes($: EngineInterface, cwd: string): Promise<Menu> {
+  const home = (await $.env.get("HOME")) ?? "";
+  const root = `${home}/.local/share/agents`;
+  const [messages, repo, opener, now] = await Promise.all([
+    $.session.messages(),
+    $.session.repo().catch(() => null),
+    noteOpener($, home),
+    $.clock.now(),
+  ]);
+  const written = await Promise.all(
+    sessionNotes(
+      messages.flatMap((m) => m.toolUses),
+      root,
+    ).map((path) =>
+      $.fs
+        .stat(path)
+        .then((s): Note => ({ path, mtimeMs: s.mtimeMs }))
+        .catch(() => undefined),
+    ),
+  );
+  let notes = written.filter((n) => n !== undefined);
+  const isFallback = notes.length === 0;
+  if (isFallback) {
+    const project = (repo?.root ?? cwd).split("/").pop() ?? "";
+    const newest = fallbackNote(await walkNotes($, root, root), root, project);
+    notes = newest ? [newest] : [];
+  }
+  return notesMenu({ root, notes, isFallback, opener, now });
+}
+
 const isOpen = async ($: EngineInterface) => (await $.ui.panes()).some((p) => p.id === PANE);
 
 async function close($: EngineInterface) {
@@ -161,7 +231,12 @@ async function show($: EngineInterface, kind: MenuKind) {
   await update($, menu, () => ({ kind, title, rows: null }));
   const opened = await $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true, rows: 10 });
   if (!opened.isPlaced) $.ui.toast(`The ${title} menu can't show yet: ${opened.reason}`);
-  const built = kind === "git" ? await buildGit($, cwd) : await buildFolder($, cwd);
+  const built =
+    kind === "git"
+      ? await buildGit($, cwd)
+      : kind === "folder"
+        ? await buildFolder($, cwd)
+        : await buildNotes($, cwd);
   // A close or another menu while git answered wins over this one.
   await update($, menu, (m) => (m?.kind === kind && m.rows === null ? built : m));
   const shown = await read($, menu);
@@ -176,6 +251,7 @@ async function press($: EngineInterface, row: Row, surface: RenderSurface) {
     return;
   }
   const action = row.action;
+  if (action.kind === "menu") return show($, action.menu);
   if (action.kind === "copy") {
     const r = await $.ui.copy({ text: action.text, surface });
     $.ui.toast(r.isCopied ? `Copied the ${action.what}` : `Couldn't copy: ${r.reason}`);
@@ -190,12 +266,16 @@ async function press($: EngineInterface, row: Row, surface: RenderSurface) {
 
 export const register: Register = (on) => {
   on("session.start", async ($, e, next) => {
-    for (const [name, description] of [
-      ["git", "Open the git menu: the repository, branch and pull request on the forge"],
-      ["open", "Open the folder menu: this checkout in an editor, file manager or terminal"],
+    for (const [name, description, argumentHint] of [
+      ["git", "Open the git menu: the repository, branch and pull request on the forge", undefined],
+      [
+        "open",
+        "Open the folder menu: this checkout in an editor, file manager or terminal; `plan` lists this session's notes",
+        "[plan]",
+      ],
     ] as const) {
       await $.command
-        .register({ name, description, immediate: true })
+        .register({ name, description, argumentHint, immediate: true })
         .catch((error) =>
           $.ui.log(`git-menu: /${name} not registered: ${String(error)}`, { to: "debug" }),
         );
@@ -208,7 +288,11 @@ export const register: Register = (on) => {
     return { text: "Opened the git menu." };
   });
 
-  on("command.run", { command: "open" }, async ($) => {
+  on("command.run", { command: "open" }, async ($, e) => {
+    if (e.args.trim() === "plan") {
+      await show($, "notes");
+      return { text: "Opened this session's notes." };
+    }
     await show($, "folder");
     return { text: "Opened the folder menu." };
   });
@@ -234,7 +318,7 @@ export const register: Register = (on) => {
         {m.error ? (
           <Text dimColor>{m.error}</Text>
         ) : m.rows === null ? (
-          <Text dimColor>Asking git…</Text>
+          <Text dimColor>{m.kind === "notes" ? "Looking for notes…" : "Asking git…"}</Text>
         ) : (
           rows.map((row, i) => {
             const note = row.unavailable ?? row.description;

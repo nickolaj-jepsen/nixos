@@ -1,4 +1,4 @@
-export type MenuKind = "git" | "folder";
+export type MenuKind = "git" | "folder" | "notes";
 
 export type FolderApp = "code" | "smerge" | "files" | "ghostty";
 
@@ -6,7 +6,9 @@ export type FolderApp = "code" | "smerge" | "files" | "ghostty";
 export type Action =
   | { kind: "url"; url: string }
   | { kind: "copy"; text: string; what: string }
-  | { kind: "launch"; argv: string[] };
+  | { kind: "launch"; argv: string[] }
+  /** Switches the pane to another menu. */
+  | { kind: "menu"; menu: MenuKind };
 
 export type Row = {
   id: string;
