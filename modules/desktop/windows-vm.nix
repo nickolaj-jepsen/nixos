@@ -221,8 +221,8 @@
         <cpu mode="host-passthrough" check="none" migratable="off">
           <topology sockets="1" dies="1" cores="4" threads="2"/>
         </cpu>
-        <!-- Windows keeps the RTC in local time on this dual-boot machine. -->
-        <clock offset="localtime">
+        <!-- Windows keeps the RTC in UTC (RealTimeIsUniversal), like Linux. -->
+        <clock offset="utc">
           <timer name="rtc" tickpolicy="catchup"/>
           <timer name="pit" tickpolicy="delay"/>
           <timer name="hpet" present="no"/>
