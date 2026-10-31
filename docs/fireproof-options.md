@@ -262,6 +262,38 @@ true
 
 
 
+## fireproof\.desktop\.boot-splash\.enable
+
+
+
+Whether to enable the themed boot chain: a styled Limine, the Plymouth donut and a handoff into niri with no text console in between\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.desktop\.chromium\.enable
 
 
@@ -2692,8 +2724,6 @@ string
 
 ## fireproof\.theme\.colors\.ui
 
-
-
 UI element background
 
 
@@ -2723,6 +2753,8 @@ string
 
 
 ## fireproof\.theme\.colors\.uiAlt
+
+
 
 Alternative UI element background
 
