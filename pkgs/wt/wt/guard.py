@@ -192,9 +192,12 @@ def branch_switch_reason(verb: str, args: list[str], cwd: Optional[str]) -> str:
     return (
         f"Blocked: switching branches inside the worktree {top}, which holds '{branch}'.\n"
         f"A worktree's branch is its name, and wt finds worktrees by name, so the folder\n"
-        f"would keep naming '{branch}' while holding another. A new branch gets its own worktree:\n"
-        f"  wt create <name> {branch}   # stacked on this branch; leave it off for the default branch\n"
-        f"then move the session into it. Restoring files (`git checkout -- <path>`, `git restore`) is fine."
+        f"would keep naming '{branch}' while holding another. A new branch gets its own worktree,\n"
+        f"stacked on this branch (leave the base off for the default branch), and the session moves there:\n"
+        f"  Claude Code: `wt create <name> {branch}`, then ExitWorktree with keep (if EnterWorktree\n"
+        f"               brought you here) and EnterWorktree with its path\n"
+        f"  pi:          enter_worktree with name <name> and base {branch}\n"
+        f"Restoring files (`git checkout -- <path>`, `git restore`) is fine."
     )
 
 
@@ -202,20 +205,26 @@ def guard_reason(path: str, branch: str, *, dynamic: bool = False) -> str:
     name = os.path.basename(path) if path else ""
     name = name or "<name>"
     branch = branch or "<branch>"
+    root = worktree_root()
     why = (
         "The path, or the directory it is relative to, uses a variable or command substitution,\n"
-        "so wt cannot tell where it lands."
+        "so wt cannot tell where it lands.\n"
         if dynamic
-        else "Worktrees live in the shared root, never inside a checkout."
+        else ""
     )
     return (
         f"Blocked: git worktree add/move outside the shared worktree root.\n"
-        f"{why}\n"
-        f"Worktrees live in {worktree_root()}/<repo>/, never inside a checkout.\n"
-        f"Use one of:\n"
+        f"{why}"
+        f"Worktrees live in {root}/<repo>/, never inside a checkout.\n"
+        f"Creating one in the shell leaves this session where it is; to work there, move the session:\n"
+        f"  Claude Code: EnterWorktree, with name for a new one off the default branch or path for an existing one;\n"
+        f"               for another base, run `wt create {name} <base>` first, then EnterWorktree with its path.\n"
+        f"               From inside a worktree, ExitWorktree with keep first.\n"
+        f"  pi:          enter_worktree, with base for another base\n"
+        f"Without moving the session:\n"
         f"  wt create {name} <base>                 # new branch off <base> (default: the default branch)\n"
         f"  wt remove {name}                        # remove a worktree (archives forced work)\n"
-        f"  git worktree add {worktree_root()}/<repo>/{name} {branch}  # keeps the branch you asked for"
+        f"  git worktree add {root}/<repo>/{name} {branch}  # keeps the branch you asked for"
     )
 
 

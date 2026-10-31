@@ -202,10 +202,10 @@ export default function (pi: ExtensionAPI) {
       "Create a git worktree (or pick an existing one) and move this session into it, keeping the conversation. " +
       "A new worktree starts from `base`, by default the default branch, so uncommitted changes in the current checkout don't come along. " +
       "Calling it ends your turn; the session then continues in the worktree on its own.",
-    promptSnippet: "Move this session into its own git worktree before editing",
+    promptSnippet: "Move this session into a git worktree of its own",
     promptGuidelines: [
-      "Use enter_worktree before your first edit when a peer session listed as active works in this checkout and your task is more than a quick edit; make a quick edit in place and tell that peer instead. Skip it for read-only work.",
-      "To work in a worktree use enter_worktree (`wt list` shows existing ones), not `wt create`/`wt cd` in bash: those leave this session in the current checkout.",
+      "Use enter_worktree when the user asks for a worktree, or for more than a quick edit while a peer session works in this checkout (make a quick one in place and tell that peer). Otherwise edit the checkout you are in.",
+      "Move with enter_worktree (`wt list` shows existing worktrees), not `wt create`/`wt cd` in bash, which leave this session where it is.",
     ],
     parameters: Type.Object({
       name: Type.String({

@@ -8,7 +8,8 @@ import { execFile } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { shellCommand } from "../shared/tools.ts";
 
-const fallback = "Blocked: git worktree add outside ~/worktrees/<repo>/. Use `wt create <name>`.";
+const fallback =
+  "Blocked: git worktree add/move outside ~/worktrees/<repo>/. Move this session with enter_worktree, or run `wt create <name> <base>`.";
 
 /** `wt guard`'s exit status (undefined when it didn't run) and stdout; async so subagents sharing the loop don't freeze. */
 const guard = (command: string, cwd: string) =>
