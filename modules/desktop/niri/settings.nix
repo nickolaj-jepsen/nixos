@@ -57,6 +57,8 @@
         # ~/Pictures/Screenshots folder of captures you never asked to keep.
         screenshot-path = null;
         layout = {
+          # Shown until DMS maps the wallpaper; niri's default is a mid grey.
+          background-color = "#${c.bg}";
           gaps = 10;
           focus-ring.enable = false;
           insert-hint.display.color = "#${c.accent}";

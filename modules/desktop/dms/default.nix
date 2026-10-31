@@ -42,12 +42,19 @@
         enable = true;
 
         # Lock-screen wallpaper blur is a hardcoded Theme constant with no setting.
+        # The wallpaper maps in one frame once loaded; fade it in over niri's matching background
+        # instead, keeping the render loop awake (renderActive) while it runs.
         package = inputs.dank-material-shell.packages.${pkgs.stdenv.hostPlatform.system}.dms-shell.overrideAttrs (old: {
           postInstall =
             (old.postInstall or "")
             + ''
               substituteInPlace $out/share/quickshell/dms/Common/Theme.qml \
                 --replace-fail "lockScreenBlur: 0.8" "lockScreenBlur: 0"
+              substituteInPlace $out/share/quickshell/dms/Modules/WallpaperBackground.qml \
+                --replace-fail "id: root" "id: root
+                          opacity: contentReady ? 1 : 0
+                          Behavior on opacity { NumberAnimation { id: fadeIn; duration: 400; easing.type: Easing.OutCubic } }" \
+                --replace-fail "renderActive: backdropBusy ||" "renderActive: fadeIn.running || backdropBusy ||"
             '';
         });
 
