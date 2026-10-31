@@ -30,6 +30,8 @@
       package = pkgs.unstable.limine;
       # Kernels and initrds are shared between generations on the 2 GiB ESP.
       maxGenerations = 10;
+      # Keys in /var/lib/sbctl, enrolled with Microsoft's (the GPU's option ROM and Windows).
+      secureBoot.enable = true;
       # The ESP is shared with Windows, so its boot manager is a plain chainload; the
       # firmware verifies it under Secure Boot.
       extraEntries = ''

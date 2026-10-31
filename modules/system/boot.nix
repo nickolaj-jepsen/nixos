@@ -30,6 +30,7 @@
           else "limine"
         }/BOOTX64.EFI
       '';
+      environment.systemPackages = lib.optional limine.secureBoot.enable limine.secureBoot.sbctl;
     };
   };
 }
