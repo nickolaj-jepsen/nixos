@@ -1,0 +1,100 @@
+# The glyph donut spinning on the Flexoki background, centred on every display, with the LUKS
+# passphrase as a line of glyphs underneath. `plymouth update --status=handoff` fades the donut
+# out so the last frame is the bare background niri starts from.
+
+Window.SetBackgroundTopColor(@bgR@, @bgG@, @bgB@);
+Window.SetBackgroundBottomColor(@bgR@, @bgG@, @bgB@);
+
+FRAMES = @frames@;
+TICKS_PER_FRAME = 2; # plymouth refreshes at 50 Hz
+FADE_STEP = 0.05;    # 20 ticks, 0.4 s
+
+for (i = 0; i < FRAMES; i++)
+  frame[i] = Image("frame-" + i + ".png");
+
+donut.sprite = Sprite(frame[0]);
+donut.opacity = 0;
+donut.target = 1;
+tick = 0;
+
+prompt.sprite = Sprite();
+prompt.sprite.SetOpacity(0);
+message.sprite = Sprite();
+
+fun text(str, r, g, b)
+{
+  return Image.Text(str, r, g, b, 1, "@font@");
+}
+
+fun layout()
+{
+  cx = Window.GetX() + Window.GetWidth() / 2;
+  cy = Window.GetY() + Window.GetHeight() / 2;
+  donut.sprite.SetPosition(cx - frame[0].GetWidth() / 2, cy - frame[0].GetHeight() / 2, 1);
+  if (prompt.image)
+    prompt.sprite.SetPosition(cx - prompt.image.GetWidth() / 2, cy + frame[0].GetHeight() / 2, 2);
+  if (message.image)
+    message.sprite.SetPosition(cx - message.image.GetWidth() / 2, Window.GetY() + Window.GetHeight() * 0.9, 2);
+  laid_out_width = Window.GetWidth();
+  laid_out_height = Window.GetHeight();
+}
+
+layout();
+
+fun refresh()
+{
+  # Displays can appear after the first frame; re-centre when the canvas changes.
+  if (Window.GetWidth() != laid_out_width || Window.GetHeight() != laid_out_height)
+    layout();
+
+  tick++;
+  donut.sprite.SetImage(frame[Math.Int(tick / TICKS_PER_FRAME) % FRAMES]);
+  if (donut.opacity < donut.target)
+    donut.opacity = Math.Min(donut.opacity + FADE_STEP, donut.target);
+  if (donut.opacity > donut.target)
+    donut.opacity = Math.Max(donut.opacity - FADE_STEP, donut.target);
+  donut.sprite.SetOpacity(donut.opacity);
+}
+
+Plymouth.SetRefreshFunction(refresh);
+
+fun display_password(prompt_text, bullets)
+{
+  line = "> ";
+  for (i = 0; i < bullets; i++)
+    line += "*";
+  prompt.image = text(line + "_", @fgR@, @fgG@, @fgB@);
+  prompt.sprite.SetImage(prompt.image);
+  prompt.sprite.SetOpacity(1);
+  layout();
+}
+
+fun display_normal()
+{
+  prompt.sprite.SetOpacity(0);
+}
+
+fun display_message(str)
+{
+  message.image = text(str, @mutedR@, @mutedG@, @mutedB@);
+  message.sprite.SetImage(message.image);
+  message.sprite.SetOpacity(1);
+  layout();
+}
+
+fun hide_message(str)
+{
+  message.sprite.SetOpacity(0);
+}
+
+fun update_status(status)
+{
+  if (status == "handoff")
+    donut.target = 0;
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password);
+Plymouth.SetDisplayNormalFunction(display_normal);
+Plymouth.SetDisplayMessageFunction(display_message);
+Plymouth.SetHideMessageFunction(hide_message);
+Plymouth.SetUpdateStatusFunction(update_status);

@@ -28,8 +28,9 @@
       enable = true;
       # 12.9 checks hashes before decompressing and hides the shell hotkey under Secure Boot.
       package = pkgs.unstable.limine;
-      # Kernels and initrds are shared between generations on the 2 GiB ESP.
-      maxGenerations = 10;
+      # Kernels and initrds are shared between generations on the 2 GiB ESP; an initrd with
+      # NVIDIA's early KMS is ~150 MB.
+      maxGenerations = 5;
       # Keys in /var/lib/sbctl, enrolled with Microsoft's (the GPU's option ROM and Windows).
       secureBoot.enable = true;
       # The ESP is shared with Windows, so its boot manager is a plain chainload; the
@@ -40,10 +41,5 @@
           path: boot():/EFI/Microsoft/Boot/bootmgfw.efi
       '';
     };
-
-    # The LUKS passphrase prompt. No NVIDIA early KMS: it adds ~90 MB to every initrd
-    # (see the nvidia leaf), so the splash runs on the firmware framebuffer.
-    boot.plymouth.enable = true;
-    boot.kernelParams = ["quiet"];
   };
 }

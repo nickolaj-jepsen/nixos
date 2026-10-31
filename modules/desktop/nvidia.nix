@@ -5,7 +5,9 @@
     lib,
     options,
     ...
-  }: {
+  }: let
+    splash = config.fireproof.desktop.boot-splash.enable;
+  in {
     config = lib.mkIf config.fireproof.hardware.nvidia.enable {
       hardware.graphics.enable = true;
 
@@ -13,9 +15,13 @@
 
       boot.kernelModules = ["nvidia_modeset" "nvidia_drm"];
 
-      # facter would put nvidia in the initrd: ~90 MB of ESP per generation (mostly GSP firmware) for no early KMS.
-      hardware.facter.detected.boot.graphics.kernelModules =
-        lib.remove "nvidia" options.hardware.facter.detected.boot.graphics.kernelModules.default;
+      # The splash needs the native driver from the start: drawn on simpledrm it goes black when
+      # nvidia-drm takes over after the unlock. Costs ~100 MB of initrd (mostly GSP firmware).
+      boot.initrd.kernelModules = lib.mkIf splash ["nvidia" "nvidia_modeset" "nvidia_drm"];
+      boot.kernelParams = lib.optional splash "plymouth.use-simpledrm=0";
+      hardware.facter.detected.boot.graphics.kernelModules = lib.mkIf (!splash) (
+        lib.remove "nvidia" options.hardware.facter.detected.boot.graphics.kernelModules.default
+      );
 
       hardware.nvidia = {
         open = true;
