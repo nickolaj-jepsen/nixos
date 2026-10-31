@@ -200,6 +200,16 @@
     home.file = lib.mkMerge [
       {
         ".local/bin/claude".source = claudeEntry;
+        # Claude Code watches settings.json's real parent dir. At the store root (upstream's
+        # jsonFormat.generate) every new store path made each session rescan all of /nix/store.
+        # Upstream's entry can't be disabled (HM's conflict check ignores enable), so park it aside.
+        "${ccfg.configDir}/settings.json".target = lib.mkForce "${ccfg.configDir}/.settings.upstream.json";
+        claude-settings-nested = {
+          target = "${ccfg.configDir}/settings.json";
+          source = let
+            upstream = config.home.file."${ccfg.configDir}/settings.json".source;
+          in "${pkgs.runCommand "claude-code-settings" {} "mkdir $out && cp ${upstream} $out/settings.json"}/settings.json";
+        };
         # Replaces any hand-made file: bindings live in `keybindings` above.
         ".claude/keybindings.json" = {
           text = builtins.toJSON keybindings;
