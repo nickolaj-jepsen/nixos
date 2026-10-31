@@ -11,6 +11,13 @@
         enable = true;
         scheduler = "scx_bpfland";
       };
+      # A stalled task makes the kernel eject the scheduler; nixpkgs allows 2 restarts per 30 s, after
+      # which the machine silently stays on EEVDF, where none of the nice-based tiering applies.
+      systemd.services.scx = lib.mkIf config.fireproof.desktop.enable {
+        startLimitIntervalSec = lib.mkForce 600;
+        startLimitBurst = lib.mkForce 10;
+        serviceConfig.RestartSec = 2;
+      };
 
       # Gauges for the tuning here: runqlat/runqslower (bcc), bpftrace, perf; scxtop ships with scx.
       programs.bcc.enable = true;
