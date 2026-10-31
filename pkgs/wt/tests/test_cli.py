@@ -31,6 +31,7 @@ class Fixture(unittest.TestCase):
         self.env = os.environ.copy()
         self.env.update(
             {
+                "HOME": self.root,
                 "WT_WORKTREE_ROOT": os.path.join(self.root, "trees"),
                 "XDG_DATA_HOME": os.path.join(self.root, "data"),
                 "GIT_CONFIG_GLOBAL": os.path.join(self.root, "gitconfig"),
@@ -711,6 +712,17 @@ class Fixture(unittest.TestCase):
         for command in allowed:
             with self.subTest(command=command):
                 self.assertEqual(self.wt("guard", command, check=False).returncode, 0)
+
+    def test_guard_expands_the_home_tilde(self) -> None:
+        self.assertEqual(self.wt("guard", "git worktree add ~/trees/repo/ok -b ok", check=False).returncode, 0)
+        self.assertEqual(self.wt("guard", "git worktree add ~/oops", check=False).returncode, 1)
+
+    def test_guard_lets_repos_outside_home_add_worktrees_anywhere(self) -> None:
+        scratch = tempfile.mkdtemp(prefix="wt-scratch-")
+        self.addCleanup(shutil.rmtree, scratch, True)
+        subprocess.run(["git", "init", "-q", scratch], env=self.env, check=True)
+        result = self.wt("guard", "git worktree add ../elsewhere", cwd=scratch, check=False)
+        self.assertEqual(result.returncode, 0)
 
     def test_guard_resolves_relative_paths_against_git_c(self) -> None:
         inside_main = f"git -C {self.main} worktree add inside"

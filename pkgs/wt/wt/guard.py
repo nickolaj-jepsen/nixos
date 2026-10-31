@@ -67,9 +67,18 @@ def _resolve(token: str, base: Optional[str]) -> Optional[str]:
     """`token` as an absolute path against `base`, or None when either is unknowable."""
     if not token or DYNAMIC.search(token):
         return None
+    token = os.path.expanduser(token)
     if base is None and not os.path.isabs(token):
         return None
     return normpath(token, base)
+
+
+def _scratch_repo(cwd: Optional[str]) -> bool:
+    """Whether `cwd` is inside a repo outside $HOME (a /tmp fixture), whose worktrees may go anywhere."""
+    if cwd is None:
+        return False
+    top = git(cwd, "rev-parse", "--show-toplevel", check=False).strip()
+    return bool(top) and not is_within(os.path.realpath(top), os.path.realpath(os.path.expanduser("~")))
 
 
 def guard_command(command: str) -> tuple[bool, str]:
@@ -143,6 +152,8 @@ def guard_command(command: str) -> tuple[bool, str]:
                             paths.append(value)
                             cursor += 1
                         checked = paths[-1:] if sub == "move" else paths[:1]
+                        if _scratch_repo(invocation_cwd):
+                            checked = []
                         for path in checked:
                             resolved = _resolve(path, invocation_cwd)
                             if resolved is None:
