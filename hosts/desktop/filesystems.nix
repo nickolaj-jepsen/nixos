@@ -64,6 +64,9 @@
     services.btrbk.instances.home = {
       onCalendar = "hourly";
       settings = {
+        # sudo is wheel-only (security leaf), so the btrbk user's sudo backend can't run; local
+        # snapshots need no privilege separation.
+        backend = "btrfs-progs";
         # btrbk deletes nothing unless retention is set.
         snapshot_preserve_min = "6h";
         snapshot_preserve = "24h 7d 4w";
@@ -73,5 +76,6 @@
         };
       };
     };
+    systemd.services.btrbk-home.serviceConfig.User = lib.mkForce "root";
   };
 }
