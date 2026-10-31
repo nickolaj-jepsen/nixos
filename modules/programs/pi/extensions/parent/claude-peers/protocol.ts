@@ -313,12 +313,14 @@ export function peerSection(o: {
       "Working in it now:",
       ...busy.map(row),
       ...(o.dirty ? ["You share uncommitted changes with them."] : []),
-      "Before you commit, switch branches, rebase, merge, or run git checkout/restore/reset/stash/clean, tell them with send_message.",
-      ...(o.worktreeTool
-        ? ["For more than a quick edit, enter_worktree gives you a checkout of your own."]
-        : []),
     );
   if (open.length) lines.push("Open but not working now:", ...open.map(row));
+  // An open peer still reasons about this branch, so only the worktree push waits for a busy one.
+  lines.push(
+    "Before you commit, switch branches, rebase, merge, or run git checkout/restore/reset/stash/clean, tell them with send_message.",
+  );
+  if (busy.length && o.worktreeTool)
+    lines.push("For more than a quick edit, enter_worktree gives you a checkout of your own.");
   if (o.dirty || busy.length)
     lines.push(
       "Changes in git status that you did not make are probably theirs: never revert, stash or commit them; ask your user instead.",

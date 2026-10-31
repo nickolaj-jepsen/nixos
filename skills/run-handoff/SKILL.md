@@ -19,7 +19,7 @@ argument-hint: "[handoff-dir] [--auto]"
 
 ## Decisions
 
-- HANDOFF's **Yours** decisions lock. One that proves wrong is a stop condition.
+- HANDOFF's **Yours** decisions lock. One that proves wrong and blocks the critical path is a stop condition.
 - Its **Defaults** may change when evidence shows one is wrong. Whoever changes it states the evidence: an item in its report, you in the decision log.
 - In a HANDOFF without these tiers, every locked decision counts as yours.
 
@@ -175,4 +175,4 @@ Each item subagent's prompt contains:
 3. End with what the user acts on:
    - landing, which is the user's call;
    - anything still blocked on them;
-   - an offer to delete the plan dir, since git history is the record. Delete it only on a yes.
+   - once the branch has landed and no owner gate is left in HANDOFF, an offer to delete the plan dir, since git history is the record. The retro in `PROGRESS.md` goes with it. Delete it only on a yes.

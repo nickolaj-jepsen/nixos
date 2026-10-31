@@ -25,6 +25,13 @@ This skill finds ideas worth doing and ranks them.
 - With `--quick`, only S-sized changes and deletions count.
 - `--no-web` skips the web generator.
 
+## Privacy
+
+- Transcripts, pi sessions and shell history are private. Never write their text to the ideas file; paraphrase the friction.
+- Never quote a secret, and quote a phrase rather than a passage.
+- Search queries never carry text from transcripts or shell history.
+- Every subagent brief repeats these rules.
+
 ## The file
 
 - The ideas file is `ideas/<focus slug>.md` in the project's agent notes, or `ideas/<project>.md` with no focus.

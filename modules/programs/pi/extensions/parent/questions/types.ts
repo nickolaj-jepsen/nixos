@@ -6,7 +6,7 @@
 
 export const TOOL_NAME = "ask_user_question";
 
-/** Limits, also stated to the model in the tool description. */
+/** Limits, also stated to the model in the tool schema. */
 export const MAX_QUESTIONS = 4;
 export const MAX_OPTIONS = 4;
 export const MIN_OPTIONS = 2;

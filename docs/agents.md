@@ -117,9 +117,10 @@ Paths in the table that don't start with `skills/` or `pkgs/` are under
   `~/.pi/agent/settings.json` and `mcp.json` at every launch, so a key or
   server dropped from the leaf stays in the file until removed by hand. Only
   arrays are replaced.
-- `just dev-setup` links `modules/programs/pi/extensions/result`. Once a
-  garbage collect removes its target, in-repo `tsc` fails with `TS2688` for
-  `node` and `pi -e` dev runs fail too; re-run `just dev-setup`.
+- `just dev-setup` links `modules/programs/pi/extensions/result`, and
+  `node_modules` through it. The link is a GC root, but janitor `apply`
+  removes a `result` link idle past 7 days; then in-repo `tsc` fails with
+  `TS2688` for `node` and `pi -e` dev runs fail too. Re-run `just dev-setup`.
 - A mod's build can't run `tsc`: the API types exist only once an
   interactive session loads the folder. `just dev-setup` runs one to lay them
   into each mod's gitignored `.claude-plugin/types/`, for the editor and

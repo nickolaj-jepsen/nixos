@@ -22,7 +22,7 @@ This skill finds what to change in a target and why, from how it went in past se
 
 - Transcripts are private. Never write condensed transcript text to disk.
 - Never quote a secret, and quote a phrase rather than a passage.
-- Runs marked work profile are paraphrased, never quoted.
+- Runs marked work profile, and memories under `~/.claude-work/`, are paraphrased, never quoted.
 - Every subagent brief repeats these rules.
 
 ## The target

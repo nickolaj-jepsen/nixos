@@ -25,7 +25,7 @@ Default priorities, starting points rather than fixed columns:
 
 - **Software tool or library:** fit for the purpose, critical mass (stars, contributors, downloads, dependents), maintenance (release cadence, recent commits, bus factor), licence and forkability, platforms and packaging, cost in context or resources where agents use it.
 - **Hosted service or subscription:** what the limits really are in use, price at the user's volume, ToS (custom clients, agents), data retention and jurisdiction, lock-in and export.
-- **Physical product:** local availability and price with shipping, compatibility with what they own, reviews from long-term owners. If the user is in Denmark and the `pricerunner` skill is installed, get prices by reading its SKILL.md and running its script; it's user-invoked only, so it can't be invoked as a skill.
+- **Physical product:** local availability and price with shipping, compatibility with what they own, reviews from long-term owners. If the user is in Denmark and `../pricerunner/SKILL.md` exists beside this skill's directory, get prices by reading it and running its script; it's user-invoked only, so it can't be invoked as a skill.
 
 ## Sweep
 

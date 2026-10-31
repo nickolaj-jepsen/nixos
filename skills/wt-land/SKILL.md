@@ -1,6 +1,6 @@
 ---
 name: wt-land
-description: Take finished work in a git worktree to landed commits — shape the dirty tree into a few commits, run the repo's checks, stop at a gate for review, then land locally with `wt land` or open a PR (draft, awaiting your review, or merged on green). Use when the user asks to land, ship, finish, merge, or open a PR for the current branch or worktree.
+description: Take finished work in a git worktree to landed commits — shape the dirty tree into a few commits, run the repo's checks, stop at a gate for review, then land locally with `wt land` or open a PR (draft, awaiting your review, or merged on green). Use when the user asks to land, ship, finish, merge, or open a PR for a worktree or a promoted branch.
 disable-model-invocation: true
 argument-hint: "[worktree-or-branch]"
 ---

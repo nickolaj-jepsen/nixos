@@ -44,7 +44,11 @@ export default function (pi: ExtensionAPI, { identity, userWait, editorHooks }: 
   pi.on("tool_result", (event, ctx) => {
     const path = writtenNote(event, ctx.cwd);
     if (!path || recordedNotes(ctx.sessionManager.getBranch()).has(path)) return;
-    pi.appendEntry<NoteEntry>(NOTE_ENTRY, { path });
+    try {
+      pi.appendEntry<NoteEntry>(NOTE_ENTRY, { path });
+    } catch {
+      // No session to write to (shutting down); the note goes unrecorded.
+    }
   });
   pi.registerCommand("git", {
     description: "Open this branch, repository or pull request in the browser",
