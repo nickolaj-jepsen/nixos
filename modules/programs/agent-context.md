@@ -2,6 +2,10 @@
 
 Repository-local instructions and existing conventions take precedence over these defaults.
 
+## Carried-over decisions
+
+- When a memory, note or earlier decision narrows your options, name it in your reply so the user can overrule it.
+
 ## Environment
 
 - This machine is managed by the `~/nixos` flake (NixOS, or nix-darwin on macOS). Persistent system or user configuration belongs there; do not use `apt`, global npm/pip installs, or edit `/etc`.
@@ -10,23 +14,9 @@ Repository-local instructions and existing conventions take precedence over thes
 
 ## Agent notes
 
-A plan, analysis or report is your reply; don't also file it. Write a note only when the user asks for a file, a skill says to write one, or another session or agent will pick the work up (a handoff, a decisions log for work spanning days). Don't append status to a note once its work has landed: the commits and your reply carry that.
-
-Long-lived notes live in `~/.local/share/agents/<project>/`, laid out so a person can find them by browsing. `<project>` is the repo's name, or in a repo holding several systems (like `~/nixos`) the system's (`pi`, `agent-hub`, `wt`, `skills`).
-
-```
-<project>/
-  ideas/<focus>.md     /ideate output; no focus: ideas/<project>.md
-  findings/<target>.md /mine output
-  plans/<slug>/        one piece of work being built or decided
-    PLAN.md SPEC.md DECISIONS.md REPORT.md HANDOFF.md PROGRESS.md   the files you open first
-    notes/             what backs them: subagent findings, spike results, dated logs
-    history/           superseded versions
-  research/<slug>/     a standalone evaluation with no plan; REPORT.md plus notes/
-  scripts/             code worth running again
-```
-
-A large file a later session needs (a binary to install, a dataset, a screenshot a note shows) goes to the same path under `~/.local/state/agents/` instead, so the notes stay small. A tool's own run data goes in that tool's state directory.
+- A plan, analysis or report is your reply; don't also file it.
+- Write a note only when the user asks for a file, a skill says to write one, or another session will pick the work up. Don't append status to a note once its work has landed.
+- Notes live in `~/.local/share/agents/<project>/`, where `<project>` is the main checkout's directory name; skills name their own files there.
 
 ## Tooling
 
@@ -34,10 +24,8 @@ A large file a later session needs (a binary to install, a dataset, a screenshot
 - Prefer rebase over merge — even when asked to "merge" — unless a merge over rebase is explicitly requested.
 - Never discard uncommitted work or force-push without approval.
 - Prefer `gh` for GitHub operations (PRs, issues, API).
-- Git worktrees live in `~/worktrees/<repo>/<name>`, and `git worktree add` elsewhere is
-  blocked; `wt --help` states each verb's preconditions. Land (`wt land`) or open a PR
-  only when the current message asks for it, and ask before `wt remove --force` or
-  `--ignore-in-use`.
+- Work in the checkout you are in, on its current branch (main included). Use a worktree or a new branch only when this session started in or was moved into one, or the user asks for it. Commit, land (`wt land`) or open a PR only when the current message asks for it.
+- Worktrees live in `~/worktrees/<repo>/<name>` and go through `wt`; ask before `wt remove --force` or `--ignore-in-use`.
 - In Digital-Udvikling repositories, use `ds` when it supports the operation; check `ds --help` when uncertain.
 - A wrapper (`env CMD`, `xargs`, `nohup`, `sh -c`, `eval`, `sudo`, `find -exec`) hides the command it runs, so it asks for approval even when that command is harmless. Set variables as `VAR=x cmd`, not `env VAR=x cmd`. `timeout` and `time` pass through only when the command after them is spelled literally (`timeout 180 ./result/bin/pi`, not `timeout 180 $builtpi`).
 

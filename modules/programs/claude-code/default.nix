@@ -234,21 +234,14 @@
 
     home.packages = [spellChecker] ++ lib.optional cfg.work.enable claudeWorkWrapper;
 
-    # Shared by every agent; keep it agent-agnostic.
+    # agent-context.md is shared with pi and Copilot; the section after it is Claude's alone.
     programs.claude-code.context = ''
       ${builtins.readFile ../agent-context.md}
-      ## Worktrees in Claude Code
+      ## Claude Code
 
-      - Make or enter a worktree with `EnterWorktree` (`name` for a new one, which
-        becomes its branch; `path` for an existing one) and leave with `ExitWorktree`.
-        They create through `wt create`, which in Bash would not move the session; for
-        another base, run `wt create <name> <base>`, then `EnterWorktree` with its path.
-      - From inside a worktree, `EnterWorktree` takes neither `name` nor a `wt` path:
-        `ExitWorktree` with `keep` first, then enter the other one.
-      - A worktree's branch is its name: never `git switch` or `git checkout -b` inside
-        one. A new branch gets a new worktree.
-      - Removing goes through `wt remove`, so `ExitWorktree` with `discard_changes: true`
-        still refuses dirty or unlanded work and keeps the worktree; tell the user then.
+      - The Bash tool's "If on the default branch, branch first" doesn't apply here: commit to the current branch, main included, when asked.
+      - Enter or leave a worktree with `EnterWorktree` / `ExitWorktree`; `wt`'s refusals explain the rest.
+      - Memories hold gotchas, environment facts and lasting preferences, never decisions, plans or status. A project memory says when it stops applying.
     '';
 
     programs.claude-code = {

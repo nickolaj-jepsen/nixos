@@ -113,16 +113,7 @@ in {
       ++ [parentPath];
     # agent-context.md is shared by every agent; keep it agent-agnostic. Children
     # read these rules too and hold no agent tools, so no delegation how-to here.
-    rules = ''
-      ${builtins.readFile ../agent-context.md}
-      ## Worktrees in pi
-
-      - `/wt <name> [base]` moves the session into a worktree (creating it if new); `/back`
-        moves it to the primary checkout. Neither touches the worktree's contents.
-      - Pi never commits, lands or removes a worktree by itself, including on exit:
-        `/wt-land` is the commit-and-land path and it stops at a gate for review.
-      - `/new` inside a worktree starts a fresh session in that worktree.
-    '';
+    rules = builtins.readFile ../agent-context.md;
     env =
       {
         PI_SKIP_VERSION_CHECK = "1";
@@ -442,7 +433,6 @@ in {
         guidance.promptGuidelines = [
           "Use `todo` for work with 3+ steps or when the user hands you a list; skip it for a single trivial or conversational task."
           "Keep exactly one task in_progress: mark it before you start and completed as soon as it is done, never while tests fail or the work is partial."
-          ''Every call needs `action`, e.g. {"action":"update","id":3,"status":"completed"}.''
         ];
       };
 
@@ -547,7 +537,7 @@ in {
           external_directory_write = let
             roots =
               # /nix/store so `rm result` doesn't ask; ~/worktrees/* so a whole <repo> does.
-              ["/tmp" "~/.local/share/agents" "~/.local/state/agents" "~/.local/state/pi-plugin-dev" "~/worktrees/*" "/nix/store"];
+              ["/tmp" "~/.local/share/agents" "~/.local/state/pi-plugin-dev" "~/worktrees/*" "/nix/store"];
           in
             {"*" = "ask";}
             // lib.listToAttrs (lib.concatMap (root: [
