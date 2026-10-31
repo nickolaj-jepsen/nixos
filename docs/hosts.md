@@ -115,6 +115,8 @@ nixos halves never evaluate on darwin — no guard needed.
   With Secure Boot disabled, a stolen powered-off machine then boots straight
   in (a stolen drive stays protected); add `--tpm2-with-pin=yes` for a short
   PIN instead, or roll back with `systemd-cryptenroll --wipe-slot=tpm2 <device>`.
+  Never enroll a TPM-only slot on a host with `fireproof.desktop.autologin`: it
+  would boot to a signed-in desktop with no secret asked at all.
 - `just factor <h> [user@target]` rewrites `hosts/<h>/facter.json` by running
   nixos-facter locally or over ssh; it never reinstalls. `modules/base/nix.nix`
   sizes Nix `max-jobs`/`cores` and the tmpfs build dir from it, so a host

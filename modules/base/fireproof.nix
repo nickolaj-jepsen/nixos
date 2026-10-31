@@ -36,6 +36,7 @@ let
 
       desktop = {
         enable = lib.mkEnableOption "desktop environment with niri, greetd, and all desktop features";
+        autologin.enable = lib.mkEnableOption "signing in without a greeter even when no LUKS passphrase was typed at boot. Only for hosts where every disk unlock needs a human (no TPM-only slot)";
         chromium = {
           enable = cascade config.fireproof.desktop.enable "Enable the Chromium browser";
           work.enable = cascade (config.fireproof.desktop.chromium.enable && config.fireproof.work.enable) "Enable a separate chromium-work instance (own profile, runs alongside the personal one)";

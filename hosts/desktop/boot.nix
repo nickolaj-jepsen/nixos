@@ -41,7 +41,7 @@
       '';
     };
 
-    # The TPM PIN and passphrase prompts. No NVIDIA early KMS: it adds ~90 MB to every initrd
+    # The LUKS passphrase prompt. No NVIDIA early KMS: it adds ~90 MB to every initrd
     # (see the nvidia leaf), so the splash runs on the firmware framebuffer.
     boot.plymouth.enable = true;
     boot.kernelParams = ["quiet"];
