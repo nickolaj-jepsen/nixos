@@ -8,53 +8,97 @@ arguments: scope
 
 # handoff
 
-The reader is a builder agent that never saw this conversation. It runs `/run-handoff <dir>`, which owns the operating loop: progress tracking, subagent briefs, worktrees, merging, gates and stopping. This skill writes only what is specific to the project. Don't restate that loop in the handoff.
-
-`scope` is free text naming what to hand off (`1-4`, `options 2 and 3`, `all but the migration`). Empty means what the conversation just settled on.
+- The reader is a builder agent that never saw this conversation.
+- It runs `/run-handoff <dir>`, which owns the operating loop: progress tracking, subagent briefs, worktrees, merging, gates and stopping. Don't restate that loop in the handoff; write only what is specific to the project.
+- `scope` is free text naming what to hand off (`1-4`, `options 2 and 3`, `all but the migration`). Empty means what the conversation just settled on.
 
 ## Spine
 
-1. **Pin the scope.** In one message: each selected item restated in full from the conversation, an explicit out-of-scope list, a kebab-case slug, and the directory: `plans/<slug>/` in the project's agent notes. The user's instructions say where agent notes live and what a project is; without them, the notes are `.agents/notes/` in the repo (write a `.gitignore` containing `*` there first) and the project is the repo. If it already holds a `HANDOFF.md`, ask before overwriting. Wait for a go or a correction.
-2. **Harvest decisions.** Every choice the conversation already made, with its why, becomes a locked decision. Don't reopen them.
-3. **Research.** Fan out read-only subagents, one per area rather than per item. Each gets an objective, an output format and explicit boundaries ("X is another subagent's"). Verify what the plan leans on:
-   - the files, modules and APIs each item will touch;
-   - real interfaces and versions, from installed source or type definitions rather than READMEs;
-   - the exact build, test and run commands, that they work today, and how long they take;
-   - repo conventions, the constraints in its agent instructions, and the skills it expects agents to use.
+1. **Pin the scope.** Send one message with:
+   - each selected item, restated in full from the conversation;
+   - an explicit out-of-scope list;
+   - a kebab-case slug;
+   - the directory: `plans/<slug>/` in the project's agent notes.
 
-   Findings too long to restate inline go to `notes/<area>.md`, written by the subagent, which returns only the path.
+   Then:
+   - The user's instructions say where agent notes live and what a project is. Without them, the notes are `.agents/notes/` in the repo (write a `.gitignore` containing `*` there first) and the project is the repo.
+   - If the directory already holds a `HANDOFF.md`, ask before overwriting.
+   - Wait for a go or a correction.
 
-4. **Grill the gaps.** Load the `grilling` skill (Claude Code: call the Skill tool with "grilling"; pi: read its SKILL.md) and name as open only the decisions research couldn't settle and that are the user's to make, including where tests attach (the highest seam that proves the outcome). If there are none, say so and skip it.
+2. **Harvest decisions.** List every choice the conversation made, with its why, and tag each one:
+   - **Yours:** the user stated it, typed their own answer, or picked an option you didn't recommend. These lock.
+   - **Defaults:** a bare "yes" to your recommendation, or an implementation call. The builder may change one when evidence shows it's wrong, and says so in its report.
+   - When the tag is unclear, it's a default.
+
+3. **Research.** Fan out read-only subagents, one per area rather than per item.
+   - Each gets an objective, an output format and explicit boundaries ("X is another subagent's").
+   - They verify what the plan leans on:
+     - the files, modules and APIs each item will touch;
+     - real interfaces and versions, from installed source or type definitions rather than READMEs;
+     - the exact build, test and run commands, that they work today, and how long they take;
+     - repo conventions, the constraints in its agent instructions, and the skills it expects agents to use.
+   - Findings too long to restate inline go to `notes/<area>.md`, written by the subagent, which returns only the path.
+
+4. **Grill the gaps.** Load the `grilling` skill (Claude Code: call the Skill tool with "grilling"; pi: read its SKILL.md).
+   - Name as open only the decisions research couldn't settle and that are the user's to make, including where tests attach (the highest seam that proves the outcome).
+   - If there are none, say so and skip this step.
+   - Tag each answer as in step 2.
+
 5. **Decompose** by the rules below.
-6. **Confirm the graph.** Show every item as one line: ID, title, blocked by, `Owns`, outcome. Ask whether the granularity is right, whether each edge really blocks, and what to merge or split. Iterate until the user approves.
+6. **Confirm the graph.**
+   - Show every item as one line: ID, title, blocked by, `Owns`, outcome.
+   - Ask whether the granularity is right, whether each edge really blocks, and what to merge or split.
+   - Iterate until the user approves.
 7. **Write `HANDOFF.md`** from the template below.
 8. **Cold read.** Spawn a fresh subagent given only the directory path, with no conversation context. Ask it to:
    - list everything it couldn't act on without asking: undefined terms, references to the discussion, items without runnable acceptance, missing run commands;
-   - map every in-scope line, locked decision and contract to the items that deliver it end to end, and every review-focus risk and trust boundary to the item whose acceptance covers it, and report what maps to nothing;
+   - map every in-scope line, decision (both tiers) and contract to the items that deliver it end to end, and every review-focus risk and trust boundary to the item whose acceptance covers it, and report what maps to nothing;
    - list the user actions the decisions imply (a decision that discards work implies a control to discard) and the item that builds each one;
    - flag items that could be in flight together but share `Owns`.
 
    Fix what it finds. Reopen the grill only for a real decision gap.
 
-9. **Report** the path, the open questions, and the kickoff line: `/run-handoff <dir>`, plus `--auto` to run it unattended.
+9. **Report** in chat, ending with what the user acts on: the `HANDOFF.md` path, the open questions, and the kickoff line `/run-handoff <dir>`, plus `--auto` to run it unattended.
 
 ## Decomposition
 
 - **Vertical slices.** Each item cuts a narrow but complete path through every layer it needs (schema, logic, interface, tests) and is verifiable on its own. Items split by layer only meet at the end, which is where parallel builders' hidden assumptions collide.
-- **Wide refactors go expand–contract.** A mechanical change whose blast radius crosses the codebase can't keep `Owns` disjoint or land green as one slice. Expand (add the new form beside the old), migrate callers in batches each blocked by the expand, then contract (delete the old form) blocked by every batch.
-- **Freeze contracts first.** Any interface two concurrently running items code against (schema, types, CLI flags, file format, API shape) is a contract, frozen at gate `G0` before work fans out. Items never change a contract; they propose changes. Wiring that spans modules (startup and shutdown order, cross-module listeners) is a contract too, with one owning item.
-- **Walking skeleton at `G0`.** When there is a user-facing flow, `G0` adds a test that drives the main path end to end through the real entry point, with pending steps where modules don't exist yet. Each item's acceptance includes making its steps real with the skeleton still passing. If the flow has a UI, driving it is a test tier, not a manual gate step.
-- **Concurrency comes from the graph.** Items whose blockers are done and whose `Owns` are disjoint run at once; there are no lanes or phases to declare. Shared hotspots (lockfiles, registries, central config) belong to one item or to `G0`. A mostly linear graph is a fine answer; don't cut edges to look parallel.
+- **Wide refactors go expand–contract.** A mechanical change whose blast radius crosses the codebase can't keep `Owns` disjoint or land green as one slice.
+  - Expand: add the new form beside the old.
+  - Migrate callers in batches, each blocked by the expand.
+  - Contract: delete the old form, blocked by every batch.
+- **Freeze contracts first.**
+  - Any interface two concurrently running items code against (schema, types, CLI flags, file format, API shape) is a contract, frozen at gate `G0` before work fans out.
+  - Items never change a contract; they propose changes.
+  - Wiring that spans modules (startup and shutdown order, cross-module listeners) is a contract too, with one owning item.
+- **Walking skeleton at `G0`.** When there is a user-facing flow:
+  - `G0` adds a test that drives the main path end to end through the real entry point, with pending steps where modules don't exist yet.
+  - Each item's acceptance includes making its steps real with the skeleton still passing.
+  - If the flow has a UI, driving it is a test tier, not a manual gate step.
+- **Concurrency comes from the graph.**
+  - Items whose blockers are done and whose `Owns` are disjoint run at once; there are no lanes or phases to declare.
+  - Shared hotspots (lockfiles, registries, central config) belong to one item or to `G0`.
+  - A mostly linear graph is a fine answer; don't cut edges to look parallel.
 - **Unknowns become spikes** (`S1`…): a question, a timebox, and the criteria for keeping or discarding the result. They block the items that depend on them.
-- **Tool behaviour needs evidence.** A locked decision that rests on how a third-party tool behaves cites a command run on the pinned version and its output, or a spike; without either it becomes a spike. Where the mechanism is uncertain, lock the outcome and list pre-approved fallback mechanisms the builder may switch between without stopping.
-- **No implementation steps.** A "how" that matters is a locked decision; an unknown "how" is a spike.
+- **Tool behaviour needs evidence.**
+  - A decision that rests on how a third-party tool behaves cites a command run on the pinned version and its output, or a spike. Without either it becomes a spike.
+  - Where the mechanism is uncertain, lock the outcome and list pre-approved fallback mechanisms the builder may switch between without stopping.
+- **No implementation steps.** A "how" that matters is a decision; an unknown "how" is a spike.
 - **Size:** one subagent can finish and verify an item in one fresh context.
-- **Acceptance is observable:** a command, its working directory and the expected result. For a behaviour change, a test that fails before and passes after. "Tests pass" alone is not acceptance. If no reliable check exists, the first item builds one: builders optimise for whatever the check rewards.
+- **Acceptance is observable.**
+  - A command, its working directory and the expected result.
+  - For a behaviour change, a test that fails before and passes after.
+  - "Tests pass" alone is not acceptance.
+  - If no reliable check exists, the first item builds one: builders optimise for whatever the check rewards.
 - **Review focus:** the three to five failure classes most likely to slip past happy-path acceptance (bad input, partial failure, concurrency, upgrade paths), each assigned to the item whose acceptance must cover it.
 
 ## HANDOFF.md
 
-Self-contained: define each term where it first appears, restate findings instead of linking to them, never write "as discussed". Use repo-relative paths and exact commands with their working directory. Redact secrets, tokens and personal data; name where to find them instead. IDs are stable and never renumbered, because `/run-handoff` tracks status by ID. Status never goes in this file.
+- Self-contained: define each term where it first appears, restate findings instead of linking to them, and never write "as discussed".
+- Repo-relative paths, and exact commands with their working directory.
+- Redact secrets, tokens and personal data; name where to find them instead.
+- IDs are stable and never renumbered, because `/run-handoff` tracks status by ID.
+- Status never goes in this file.
 
 ```markdown
 # <Title>: handoff
@@ -74,11 +118,21 @@ Skills: <skills the builder and its subagents should invoke, e.g. tdd, and when.
 
 ## Locked decisions
 
-Do not re-litigate. If evidence shows one is wrong, raise it; don't deviate.
+### Yours
+
+Stated by the owner. Do not re-litigate. If evidence shows one is wrong, raise it; don't deviate.
+
+- U1 <decision>. Why: <reason>.
+
+### Defaults
+
+Accepted recommendations and implementation calls. Change one only if evidence shows it's wrong, and say so in the item's report.
 
 - D1 <decision>. Why: <reason>.
 
-Mechanism uncertain:
+### Mechanism uncertain
+
+The builder may switch to the fallback without stopping, and says so in its report.
 
 - D2 <outcome>. Chosen: <mechanism>. Fallback: <mechanism>. Why: <reason>. Evidence: <notes file or spike>.
 
@@ -100,7 +154,7 @@ Mechanism uncertain:
 - Owns: <paths only this item changes>
 - Outcome: <1–3 sentences of behaviour>
 - Acceptance: `cd <dir> && <cmd>` → <expected>
-- Constraints: D1, C1
+- Constraints: U1, D1, C1
 - Notes: notes/<area>.md (if needed)
 
 ### S1 <question> (spike, timebox <n>)

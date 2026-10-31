@@ -7,9 +7,21 @@ argument-hint: "[handoff-dir] [--auto]"
 
 # run-handoff
 
-You are the lead and integrator. `HANDOFF.md` is the plan and is read-only to you; `PROGRESS.md` is yours. Execute the plan, don't redesign it.
+- You are the lead and integrator. Execute the plan; don't redesign it.
+- `HANDOFF.md` is the plan and is read-only to you. `PROGRESS.md` is yours.
+- Running a handoff is the user asking for worktrees: parallel items need isolated checkouts, so this run uses an integration worktree and one per item. Never work in the primary checkout.
 
-**Mode.** By default, stop at every gate for the user. With `--auto`, gates are self-checked and only the stop conditions halt you. The mode is per invocation and never stored, so a gated start can resume with `--auto`.
+## Mode
+
+- By default, stop at every gate for the user.
+- With `--auto`, gates are self-checked and only the stop conditions halt you.
+- The mode is per invocation and never stored, so a gated start can resume with `--auto`.
+
+## Decisions
+
+- HANDOFF's **Yours** decisions lock. One that proves wrong is a stop condition.
+- Its **Defaults** may change when evidence shows one is wrong. Whoever changes it states the evidence: an item in its report, you in the decision log.
+- In a HANDOFF without these tiers, every locked decision counts as yours.
 
 ## Start or resume
 
@@ -20,7 +32,7 @@ You are the lead and integrator. `HANDOFF.md` is the plan and is read-only to yo
    - Run the standard checks on the integration branch before dispatching anything. If a crashed session left it broken, fixing that comes first.
    - Continue from "Now".
 4. **First run.**
-   - Create the integration worktree, branch `<slug>`, off the base branch in Context. Use the user's worktree tooling, otherwise `git worktree add`. Never work in the primary checkout.
+   - Create the integration worktree, branch `<slug>`, off the base branch in Context. Use the user's worktree tooling, otherwise `git worktree add`.
    - Create `PROGRESS.md` from the template below.
    - Run Context's build and test commands once, and record their durations.
    - Then do the bootstrap items and `G0` yourself.
@@ -40,6 +52,9 @@ You are the lead and integrator. `HANDOFF.md` is the plan and is read-only to yo
    - `DONE_WITH_CONCERNS`: read the concerns, then integrate or send back; log the call in the decision log.
    - `NEEDS_CONTEXT`: answer from HANDOFF or its notes and continue the subagent. If the answer is the user's to give, treat it as blocked.
    - `BLOCKED`: mark the item blocked with the reason.
+
+   A report that changed a default: check its evidence before integrating, and log the change in the decision log.
+
 5. **Integrate.**
    - Confirm the branch sits on the integration branch's current tip. If the tip moved since, have the subagent rebase again, or rebase it yourself if trivial.
    - On that tree, re-run the item's acceptance command yourself, plus the repo's standard checks and the walking skeleton if HANDOFF has one. Never take the subagent's "it passes" as the result.
@@ -48,27 +63,43 @@ You are the lead and integrator. `HANDOFF.md` is the plan and is read-only to yo
 6. **Re-check the frontier** after every integration and dispatch what opened up.
 7. **Update `PROGRESS.md`** after every item and before any long operation. It is how you resume after a context reset, so keep it accurate, not optimistic.
 
-Long commands go to the background with a deadline, and their output goes to files. Grep files for failures instead of reading whole logs. You can't feel time passing, so follow HANDOFF's budgets.
+Long operations:
+
+- Run long commands in the background with a deadline, and send their output to files.
+- Grep those files for failures instead of reading whole logs.
+- You can't feel time passing, so follow HANDOFF's budgets.
 
 ## Gates
 
-A gate passes when its items pass acceptance on the integration branch and a reviewer signs off. After the last item, a final gate reviews the whole integration branch against its base; fix its confirmed findings in one pass.
+- A gate passes when its items pass acceptance on the integration branch and a reviewer signs off.
+- After the last item, a final gate reviews the whole integration branch against its base. Fix its confirmed findings in one pass.
+- Fix confirmed findings before any gate passes, and record the gate's commit and verdict.
 
-**The reviewer** is a fresh, read-only subagent (a reviewer agent type if one exists). It gets the gate's diff since the previous gate (the final gate: since the base), the `HANDOFF.md` path, and the gate's item IDs. It does not get the subagents' reports. Ask it for defects, contract violations, scope drift, uncovered review-focus risks, acceptance checks that pass without proving the outcome, and decisions or user actions in HANDOFF that have no reachable path yet. Fix confirmed findings before the gate passes, and record the gate's commit and verdict.
+### Reviewer
 
+- A fresh, read-only subagent (a reviewer agent type if one exists).
+- It gets the gate's diff since the previous gate (the final gate: since the base), the `HANDOFF.md` path, and the gate's item IDs. It does not get the subagents' reports.
+- Ask it for:
+  - defects;
+  - contract violations;
+  - scope drift;
+  - uncovered review-focus risks;
+  - acceptance checks that pass without proving the outcome;
+  - decisions or user actions in HANDOFF that have no reachable path yet.
 - Above about 3k changed lines, split the review by area (e.g. backend, UI, deployment), one reviewer each.
 - If HANDOFF has Trust boundaries, the first gate after an item that touches one and the final gate add a security reviewer. It gets only the boundaries and the diff, and is asked for a path by which untrusted input reaches a secret or crosses a boundary.
 
-**Default mode:** after each gate, post the gate, each item's acceptance result, the reviewer's verdict, surprises, and what the frontier opens next. Ask go or adjust, using the harness's question tool if there is one. When blocked, ask right away; items already running keep going.
+### After a gate
 
-**`--auto`:** continue past gates. When blocked, add the request to "Blocked on you", send a notification if the harness has a tool for it, and move on to other unblocked work.
+- **Default mode:** post the gate, each item's acceptance result, the reviewer's verdict, surprises, and what the frontier opens next. Ask go or adjust, using the harness's question tool if there is one. When blocked, ask right away; items already running keep going.
+- **`--auto`:** continue past gates. When blocked, add the request to "Blocked on you", send a notification if the harness has a tool for it, and move on to other unblocked work.
 
 ## Stop conditions
 
 Both modes stop when:
 
 - no unblocked item remains;
-- a locked decision proves wrong and blocks the critical path (put the evidence and a proposed alternative in `PROGRESS.md`);
+- a decision under Yours proves wrong and blocks the critical path (put the evidence and a proposed alternative in `PROGRESS.md`);
 - the next step would push, land, open a PR, call a real external service HANDOFF doesn't allow, or delete work you didn't create;
 - a stop condition in HANDOFF fires.
 
@@ -84,12 +115,18 @@ Each item subagent's prompt contains:
 - **Boundaries:**
   - change only its item's `Owns`; name the paths owned by items now in flight as not its own;
   - never edit contracts, `HANDOFF.md` or `PROGRESS.md`;
-  - no push, and no external services beyond what HANDOFF allows.
+  - no push, and no external services beyond what HANDOFF allows;
+  - it may change a default only with evidence, stated in its report.
 
-  If a contract or decision blocks it, it finishes what it can and reports the proposed change rather than working around it.
+  If a contract or a Yours decision blocks it, it finishes what it can and reports the proposed change rather than working around it.
 
 - **Done:** rebased onto the integration branch's current tip, then its acceptance command passes there, run by it, with the output reported.
-- **Report:** written to an untracked `.handoff-report.md` in its worktree. First line exactly one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`. Then: branch and worktree; commits; the acceptance command and result; decisions made and why; anything contradicting HANDOFF; measured timings. Failures and skips stated plainly. Logs stay in files and the report gives their paths. Its final message is only the status line and the report's path, since long replies get truncated.
+- **Report:** written to an untracked `.handoff-report.md` in its worktree.
+  - First line exactly one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`.
+  - Then: branch and worktree; commits; the acceptance command and result; decisions made and why; anything contradicting HANDOFF; measured timings.
+  - Failures and skips stated plainly.
+  - Logs stay in files and the report gives their paths.
+  - Its final message is only the status line and the report's path, since long replies get truncated.
 
 ## PROGRESS.md
 
@@ -127,4 +164,15 @@ Each item subagent's prompt contains:
 
 ## Final report
 
-Write the handoff retro, then report: what is done and verified, with acceptance results; what is blocked and on what; failures and skips stated plainly; measured timings; the retro; the integration branch and any worktrees left. Landing is the user's call.
+1. Write the handoff retro.
+2. Report in chat:
+   - what is done and verified, with acceptance results;
+   - what is blocked and on what;
+   - failures and skips, stated plainly;
+   - measured timings;
+   - the retro;
+   - the integration branch and any worktrees left.
+3. End with what the user acts on:
+   - landing, which is the user's call;
+   - anything still blocked on them;
+   - an offer to delete the plan dir, since git history is the record. Delete it only on a yes.
