@@ -20,8 +20,9 @@ virsh dumpxml <dom>                       # full definition
 virsh qemu-agent-command <dom> '{"execute":"guest-ping"}'   # {"return":{}} = guest agent is up
 ```
 
-A domain whose disk has Type `block` and points at `/dev/disk/by-id/...` boots a real
-disk, often the same Windows install the machine also boots natively. Treat its disks as
+A domain whose disk has Type `block` and points at `/dev/disk/by-id/...`, or at a
+`/dev/mapper/...` device built from a real disk's partitions, boots a real disk, often the
+same Windows install the machine also boots natively. Treat its disks as
 Windows' own: never mount, `dd`, `ntfsfix` or partition them while `virsh domstate <dom>`
 says anything other than `shut off`. Two writers on one NTFS volume corrupt it.
 
@@ -33,8 +34,9 @@ virt-manager --connect qemu:///system --show-domain-console <dom>   # window for
 ```
 
 A start can be refused by a libvirt `prepare` hook (`virsh start` prints its message):
-a Windows partition mounted on the host, a hibernated or unclean volume, or another
-process holding the disk. Report the message; don't work around the check. A hibernated
+a Windows partition mounted on the host, a hibernated or unclean volume, another
+process holding the disk, or a partition table the guest changed (partition changes belong
+in native Windows). Report the message; don't work around the check. A hibernated
 or unclean volume clears only after Windows boots natively and shuts down.
 
 To stop, ask Windows to shut down and wait for it:
