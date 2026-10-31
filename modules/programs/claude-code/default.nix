@@ -241,6 +241,7 @@
 
       - The Bash tool's "If on the default branch, branch first" doesn't apply here: commit to the current branch, main included, when asked.
       - Enter or leave a worktree with `EnterWorktree` / `ExitWorktree`; `wt`'s refusals explain the rest.
+      - Inside one, Claude Code itself refuses Bash it can't prove stays there ("This session is isolated…"): the words `eval` or `source`, `$var` arguments, a computed `cd`, complex pipes. Split into plain commands, or write a script under `/tmp/<topic>/` and run `bash <script>`.
       - Memories hold gotchas, environment facts and lasting preferences, never decisions, plans or status. A project memory says when it stops applying.
     '';
 
