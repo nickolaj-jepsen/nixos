@@ -2,6 +2,7 @@
   flake.modules.nixos.responsiveness = {
     config,
     lib,
+    pkgs,
     ...
   }: {
     config = lib.mkIf config.fireproof.hardware.physical {
@@ -10,6 +11,10 @@
         enable = true;
         scheduler = "scx_bpfland";
       };
+
+      # Gauges for the tuning here: runqlat/runqslower (bcc), bpftrace, perf; scxtop ships with scx.
+      programs.bcc.enable = true;
+      environment.systemPackages = [pkgs.bpftrace pkgs.perf];
 
       # mq-deadline ignores cgroup IOWeight; BFQ makes the nix-build slice's weight real.
       boot.kernelModules = ["bfq"];
