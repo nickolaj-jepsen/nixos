@@ -108,8 +108,18 @@
           # rather than tracing the rounded corners, so ghostty's translucent
           # background reads as accent-tinted instead of showing what's behind it.
           {
-            matches = [{app-id = "^com\\.mitchellh\\.ghostty$";}];
+            matches = [
+              {app-id = "^com\\.mitchellh\\.ghostty$";}
+              {app-id = "^dev\\.fireproof\\.notes$";}
+            ];
             draw-border-with-background = false;
+          }
+          # agent-note-open's glow viewer floats over the session that opened it.
+          {
+            matches = [{app-id = "^dev\\.fireproof\\.notes$";}];
+            open-floating = true;
+            default-column-width.proportion = 0.5;
+            default-window-height.proportion = 0.8;
           }
           # On-demand VRR opt-ins. Keep desktop apps out: every flip allocates a
           # buffer, and that fails in a retry storm when llama-server has VRAM full.

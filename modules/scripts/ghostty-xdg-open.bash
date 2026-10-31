@@ -6,8 +6,8 @@ shopt -s nullglob
 # cwd ($HOME), so relative, `path:line` and ellipsis-trimmed paths (as printed by
 # Claude Code etc.) never resolve. It also matches `api.slack.com/apps` as a path
 # (the dot makes it look file-like), so a bare host needs a scheme. For Ghostty
-# only: resolve paths against the cwds of the terminal's processes, send text
-# files to VS Code, the rest on.
+# only: resolve paths against the cwds of the terminal's processes, send agent
+# notes to agent-note-open, other text files to VS Code, the rest on.
 real=@xdgOpen@
 
 [[ $# -eq 1 ]] || exec "$real" "$@"
@@ -147,6 +147,11 @@ fi
 if [[ -z $path ]]; then
   notify-send --app-name=Ghostty "Can't find path" "$1" || true
   exit 1
+fi
+
+# glow can't jump to a line, so a note link with `:line` still goes to VS Code.
+if [[ -f $path && $path == "$HOME"/.local/share/agents/*.md && -z $line ]]; then
+  exec @agentNoteOpen@ "$path"
 fi
 
 if [[ -f $path && (! -s $path || $(file -b --mime-encoding "$path") != binary) ]]; then

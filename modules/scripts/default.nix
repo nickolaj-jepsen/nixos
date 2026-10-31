@@ -14,6 +14,16 @@
         inherit name runtimeInputs;
         text = builtins.readFile path;
       };
+    agent-note-open = makeScript {
+      path = ./agent-note-open.bash;
+      runtimeInputs = with pkgs;
+        [
+          glow
+          less
+          coreutils
+        ]
+        ++ lib.optional stdenv.isLinux util-linux; # for setsid
+    };
   in {
     age.secrets = lib.optionalAttrs (config.fireproof.scripts.tunnel-home.enable && pkgs.stdenv.isLinux) {
       tunnel-home = {
@@ -55,6 +65,7 @@
         })
         pkgs.wt
       ]
+      ++ lib.optional config.fireproof.dev.enable agent-note-open
       # systemd-only scripts (the systemd package isn't built on darwin).
       ++ lib.optionals pkgs.stdenv.isLinux [
         (makeScript {
@@ -137,7 +148,7 @@
             libnotify
           ];
           text =
-            builtins.replaceStrings ["@xdgOpen@"] ["${pkgs.xdg-utils}/bin/xdg-open"]
+            builtins.replaceStrings ["@xdgOpen@" "@agentNoteOpen@"] ["${pkgs.xdg-utils}/bin/xdg-open" (lib.getExe agent-note-open)]
             (builtins.readFile ./ghostty-xdg-open.bash);
         }))
       ];
