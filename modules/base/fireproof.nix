@@ -51,7 +51,15 @@ let
           enable = lib.mkEnableOption "the physical dual-boot Windows install as an on-demand libvirt VM (start-windows)";
           disk = lib.mkOption {
             type = lib.types.str;
-            description = "/dev/disk/by-id path of the disk Windows boots from; its EFI system partition is copied with Hyper-V switched off.";
+            description = "/dev/disk/by-id path of the disk Windows boots from. The guest never sees it whole: it gets a same-size copy holding only `partitions` and `esp`.";
+          };
+          partitions = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            description = "PARTUUIDs (lowercase) of the Windows data and recovery partitions on `disk` mapped into the guest at their real offsets; anything else reads as zeros.";
+          };
+          esp = lib.mkOption {
+            type = lib.types.str;
+            description = "PARTUUID (lowercase) of the mounted EFI system partition; the guest gets a copy of its EFI/Microsoft with Hyper-V switched off.";
           };
           extraDisks = lib.mkOption {
             type = lib.types.listOf lib.types.str;
