@@ -32,8 +32,9 @@ must be `git add`ed or flake eval ignores them.
 
 ## Read before touching
 
-- `docs/modules.md` — creating/editing anything under `modules/`, `pkgs/` or
-  `skills/`.
+- `docs/modules.md` — creating/editing anything under `modules/` or `pkgs/`.
+- `docs/agents.md` — `skills/`, `modules/programs/{pi,claude-code}`,
+  `pkgs/pi-*`, and the agent-skills and agent-lsp leaves.
 - `docs/hosts.md` — anything under `hosts/`, adding a host, or making an app
   leaf work on darwin.
 - `docs/secrets.md` — anything under `secrets/`.
