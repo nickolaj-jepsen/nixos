@@ -197,6 +197,8 @@ in {
       mkdir -p "$dir"
       ${merge "settings.json" settings}
       ${merge "mcp.json" mcp}
+      # Same nice as claude-code's wrapper: the agent and its tools yield to the desktop.
+      ${lib.optionalString pkgs.stdenv.isLinux ''${lib.getExe' pkgs.util-linux "renice"} --priority 10 -p $$ >/dev/null 2>&1 || true''}
       exec ${lib.getExe pi} "$@"
     '';
   in {

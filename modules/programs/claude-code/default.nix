@@ -141,9 +141,16 @@
       ];
     };
 
+    # scx_bpfland ranks by nice, not cgroup, so the agent and every tool it spawns yield to the
+    # desktop. Absolute, so a nested session stays at 10 rather than sinking to 19.
+    agentNice = lib.optionalString pkgs.stdenv.isLinux ''
+      ${lib.getExe' pkgs.util-linux "renice"} --priority 10 -p $$ >/dev/null 2>&1 || true
+    '';
+
     # `claude plugin test` refuses any option before `plugin`, and the
     # home-manager wrapper always prepends --plugin-dir.
     claudeEntry = pkgs.writeShellScript "claude" ''
+      ${agentNice}
       ${lib.optionalString janitor tmpDir}
       if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
       exec -a "$0" ${ccfg.finalPackage}/bin/claude "$@"
@@ -170,6 +177,7 @@
       name = "claude-work";
       runtimeInputs = [config.programs.claude-code.finalPackage];
       text = ''
+        ${agentNice}
         ${lib.optionalString janitor tmpDir}
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
