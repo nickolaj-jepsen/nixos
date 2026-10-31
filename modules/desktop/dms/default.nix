@@ -103,6 +103,9 @@
         };
       };
 
+      # The shell belongs beside niri: app.slice is oomd's kill pool.
+      systemd.user.services.dms.Service.Slice = "session.slice";
+
       # niri's default xray blur only shows the near-black wallpaper; blur the windows behind DMS instead.
       # niri-flake can't express background-effect, and its niri-stable validator predates it.
       xdg.configFile.niri-config.source = lib.mkForce (
