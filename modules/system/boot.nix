@@ -31,6 +31,13 @@
         }/BOOTX64.EFI
       '';
       environment.systemPackages = lib.optional limine.secureBoot.enable limine.secureBoot.sbctl;
+
+      # Unstable's limine signs fwupd's EFI app into /run/fwupd-efi; 26.05's fwupd neither creates
+      # that dir nor looks there (its app path is compiled in), so take both halves from unstable.
+      services.fwupd.package = lib.mkIf (limine.enable && limine.secureBoot.enable) pkgs.unstable.fwupd;
+      systemd.tmpfiles.rules = lib.mkIf (limine.enable && limine.secureBoot.enable && config.services.fwupd.enable) [
+        "C+ /run/fwupd-efi - - - - ${config.services.fwupd.package.fwupd-efi}/libexec/fwupd/efi"
+      ];
     };
   };
 }
