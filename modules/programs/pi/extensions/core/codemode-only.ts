@@ -35,14 +35,14 @@ const HIDDEN_NAMES = [SUBAGENT, "get_subagent_result", "steer_subagent"];
 
 // Lean models get this too: it is how `/delegate` and `/workflow` run their children.
 const JOIN =
-  "Pass `subagent` `run_in_background: true` and join with `get_subagent_result({ agent_id, wait: true })`. A background launch resolves to text, not the id: take it from its `Agent ID:` line, as `/Agent ID: (\\S+)/.exec(launched)[1]`. Without the flag each call blocks until its agent finishes, so several in one script run one after another. A few run at once and the rest queue.";
+  "Pass `subagent` `run_in_background: true` and join with `get_subagent_result({ agent_id, wait: true })`; without the flag each call blocks until its agent finishes. A background launch resolves to text: take the id from its `Agent ID:` line, as `/Agent ID: (\\S+)/.exec(launched)[1]`. A few run at once and the rest queue.";
 const DELEGATING = [
-  "Reach for a subagent when the work can't be scoped in one guess: a sweep over many files, a search you would otherwise read the whole tree to answer, a second opinion on a change. Not for a path you already know. Hand over the question, not a step list, and say what you want back.",
+  "Use a subagent when the work can't be scoped in one guess (a sweep over many files, a search that would mean reading the whole tree, a second opinion on a change), not for a path you already know. Hand over the question, not a step list, and say what you want back.",
   "A subagent's result is not shown to the user: summarise it, and check an agent's claimed edits before reporting them done.",
-  "Fanning out over many items is scripted orchestration and needs an explicit ask, such as `/delegate` or `/workflow`; a task that would merely benefit from parallelism is not one.",
+  "Fanning out over many items needs an explicit ask, such as `/delegate` or `/workflow`; a task that would merely benefit from parallelism is not one.",
 ];
 const LEAN =
-  "Don't delegate on this model: it serves one request at a time, so a subagent would only queue behind you. Do the work yourself; call `subagent` only when the user explicitly asks for it, as `/delegate` and `/workflow` do.";
+  "Don't delegate on this model: it serves one request at a time, so a subagent would only queue behind you. Call `subagent` only when the user explicitly asks, as `/delegate` and `/workflow` do.";
 // Every file read here is paid for again on each later turn, so volume work
 // belongs on a cheap child and judgment stays put.
 const EXPENSIVE =
@@ -73,7 +73,7 @@ const guidelines = (
   if (reachable.length > 0) {
     const calls = reachable.map((name) => signature(tools.get(name)));
     lines.push(
-      `${list(calls)} ${reachable.length === 1 ? "is" : "are"} left out of your tool list but stay callable from codemode, with the required arguments shown; \`await describeTool("<name>")\` for the optional ones.`,
+      `${list(calls)} ${reachable.length === 1 ? "is" : "are"} callable only from codemode, with the required arguments shown; \`await describeTool("<name>")\` lists the optional ones.`,
     );
   }
   if (!active.has(SUBAGENT)) return lines;
