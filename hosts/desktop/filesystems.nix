@@ -14,6 +14,10 @@
       options = ["subvol=${subvol}" "compress=zstd:1" "noatime"] ++ extra;
     };
   in {
+    # The 970 EVO Plus takes ~8 ms to wake from PS4 (entered after 100 ms idle), a stall on every
+    # cold read; 5000 µs still allows PS3 (1.2 ms exit).
+    boot.kernelParams = ["nvme_core.default_ps_max_latency_us=5000"];
+
     boot.initrd.luks.devices.crypted = {
       device = "/dev/disk/by-partuuid/3f97b831-56f0-4fd0-a83e-2df7b5e285a5";
       allowDiscards = true;
