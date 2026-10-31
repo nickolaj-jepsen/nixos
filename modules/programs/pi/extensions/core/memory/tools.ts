@@ -20,15 +20,11 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
     name: "memory_save",
     label: "Memory save",
     description:
-      'Save one durable fact this repo cannot tell an agent to this project\'s memory (or the global store with scope: "global"). ' +
-      "Only a rule, preference, environment quirk, gotcha or external reference that is still true next month. " +
-      "Rejected for status/plans, for anything AGENTS.md or the repo already says, for citations that do not resolve, and for duplicates of an existing entry.",
-    promptGuidelines: [
-      "Save a memory yourself when you hit something the repo cannot explain: a failed attempt whose retry worked for an environment reason (direnv, nix, a missing or oddly-spelled tool), a correction from the user to a choice you made from principle, or something you had to leave the repo to learn. Cite the moment (the command, file or correction); no citation, no save.",
-    ],
+      "Save one fact this repo cannot tell an agent: a rule, preference, environment quirk, gotcha or external reference that still holds next month. " +
+      'It goes to this project\'s memory, or to the global store with scope: "global".',
     parameters: Type.Object({
       statement: Type.String({
-        description: `The fact, one line, under ${STATEMENT_MAX} chars. Imperative for a rule; present tense otherwise.`,
+        description: `One line under ${STATEMENT_MAX} chars; imperative for a rule, present tense otherwise.`,
       }),
       kind: StringEnum(KINDS),
       priority: Type.Number({
@@ -37,7 +33,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
       }),
       why_not_derivable: Type.String({
         description:
-          "What an agent with this repo checked out would get wrong without this note, and why reading the code does not answer it. With scope=global, also why it holds in every project.",
+          "What an agent with this repo checked out would get wrong without this note, and why the code does not answer it. With scope=global, also why it holds in every project.",
       }),
       citations: Type.Array(
         Type.Object({
@@ -52,11 +48,11 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
         {
           minItems: 1,
           maxItems: 4,
-          description: "Evidence that must resolve now: a path, symbol, snippet, command or quote.",
+          description: "Evidence that resolves now.",
         },
       ),
       detail: Type.Optional(
-        Type.String({ description: "Optional longer explanation or the command to run." }),
+        Type.String({ description: "Longer explanation, or the command to run." }),
       ),
       scope: Type.Optional(StringEnum(["project", "global"] as const)),
       replaces: Type.Optional(Type.String({ description: "Id of the entry this corrects." })),
@@ -125,7 +121,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
     label: "Session search",
     exposure: "codemode",
     description:
-      "Search past pi session transcripts, and each session's label and summary, from this repo and its worktrees by default. For recovering why something was decided or what was tried before; results are quotes, not facts.",
+      'Search past pi sessions\' messages, labels and summaries in this repo and its worktrees (scope: "all" for every repo). Use it to recover why something was decided or what was tried; hits are quotes, not facts.',
     parameters: Type.Object({
       query: Type.String({
         description: "Words or phrase to look for in user and assistant messages.",
