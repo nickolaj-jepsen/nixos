@@ -44,6 +44,10 @@ claude plugin install skills@nickolaj-jepsen
 - **brainstorm** — find an approach when there isn't one yet: a round or two of
   clarifying questions, then 2–3 genuinely different approaches to pick from. Stops
   once you pick.
+- **compare** — recommend one of a field of candidates: a one-round brief settles
+  purpose and must-haves, must-haves gate the field, one isolated researcher per
+  finalist, and a verifier refutes every cell before a compact verdict in chat.
+  `--quick` answers inline.
 - **annotate-plan** — the agent writes a `PLAN.md`, you annotate it in your editor, and
   it folds your notes in round after round until you approve; then it implements on
   request, ticking progress off in the file. For changes too big to just start and too
