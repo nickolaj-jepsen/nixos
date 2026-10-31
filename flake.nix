@@ -105,6 +105,9 @@
     walldye.url = "github:nickolaj-jepsen/walldye";
     walldye.inputs.nixpkgs.follows = "nixpkgs";
 
+    dux-greeter.url = "github:duxlabs-dev/dux-greeter";
+    dux-greeter.inputs.nixpkgs.follows = "nixpkgs";
+
     niri-dynamic-workspaces.url = "github:nickolaj-jepsen/niri-dynamic-workspaces";
     niri-dynamic-workspaces.inputs.nixpkgs.follows = "nixpkgs";
     niri-dynamic-workspaces.inputs.flake-parts.follows = "flake-parts";
