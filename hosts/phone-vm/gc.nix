@@ -9,7 +9,12 @@
   }: {
     boot.loader.systemd-boot.configurationLimit = 2;
 
-    # The switch sets the profile before activating, so the new generation is one of the two.
+    # The agent prunes after each boot (and its own switches) and collects; its default of 0
+    # would leave no rollback once the new generation has booted.
+    pocketnix.guest.updates.keepGenerations = 1;
+
+    # `just switch` bypasses the agent, so prune here too. The switch sets the profile
+    # before activating, so the new generation is one of the two.
     system.activationScripts.prune-generations = ''
       ${config.nix.package}/bin/nix-env -p /nix/var/nix/profiles/system --delete-generations +2
     '';
