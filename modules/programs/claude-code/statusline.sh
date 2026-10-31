@@ -6,16 +6,17 @@ case "${CLAUDE_CONFIG_DIR:-}" in
 esac
 
 input=$(cat)
-transcript=$(jq -r '.transcript_path // empty' <<<"$input")
-cwd=$(jq -r '.workspace.current_dir // .cwd // empty' <<<"$input")
-model=$(jq -r '.model.id // empty' <<<"$input")
+# Runs every couple of seconds per session, so forks count. US, not tab: read would merge empty fields.
+IFS=$'\x1f' read -r transcript cwd model < <(
+  jq -r '[.transcript_path // "", .workspace.current_dir // .cwd // "", .model.id // ""] | join("\u001f")' <<<"$input"
+) || true
 
-dim=$(printf '\033[2m')
-warn=$(printf '\033[33m')
-reset=$(printf '\033[0m')
-green=$(printf '\033[32m')
-red=$(printf '\033[31m')
-cyan=$(printf '\033[36m')
+dim=$'\033[2m'
+warn=$'\033[33m'
+reset=$'\033[0m'
+green=$'\033[32m'
+red=$'\033[31m'
+cyan=$'\033[36m'
 branch_glyph=$'\uf418'
 detached_glyph=$'\uf417'
 
@@ -24,8 +25,9 @@ detached_glyph=$'\uf417'
 # it marks the start; duplicate assistant blocks share that start.
 min_output=100
 speed=""
-if [ -n "$transcript" ] && [ -f "$transcript" ] && [ -n "$model" ]; then
-  speed=$(tail -n 400 "$transcript" 2>/dev/null | jq -s -r --arg model "$model" --argjson min "$min_output" '
+speed_cache=${XDG_CACHE_HOME:-$HOME/.cache}/claude-statusline/speed
+compute_speed() {
+  tail -n 400 "$transcript" 2>/dev/null | jq -s -r --arg model "$model" --argjson min "$min_output" '
     def epoch:
       . as $t
       | (($t | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601)
@@ -49,11 +51,23 @@ if [ -n "$transcript" ] && [ -f "$transcript" ] && [ -n "$model" ]; then
             | ($rows[$i].message.usage.output_tokens) as $o
             | if ($d >= 0.5 and $d <= 600) then (($o / $d) | floor) else empty end
           end
-      end' 2>/dev/null) || speed=""
-  case "$speed" in
-    ''|*[!0-9]*) speed="" ;;
-  esac
-  if [ -n "$speed" ] && [ "$speed" -le 0 ]; then speed=""; fi
+      end' 2>/dev/null
+}
+if [ -n "$transcript" ] && [ -f "$transcript" ] && [ -n "$model" ]; then
+  # The transcript grows per message, not per refresh: recompute only when its size or mtime moved.
+  stamp="$(stat -c '%s %Y' "$transcript" 2>/dev/null) $model"
+  cached="$speed_cache/${transcript##*/}"
+  cached_stamp=""
+  if [ -f "$cached" ]; then { read -r cached_stamp && read -r speed; } <"$cached" || cached_stamp=""; fi
+  if [ "$cached_stamp" != "$stamp" ]; then
+    speed=$(compute_speed) || speed=""
+    case "$speed" in
+      ''|*[!0-9]*) speed="" ;;
+    esac
+    if [ -n "$speed" ] && [ "$speed" -le 0 ]; then speed=""; fi
+    mkdir -p "$speed_cache"
+    printf '%s\n%s\n' "$stamp" "$speed" >"$cached.$$" && mv "$cached.$$" "$cached" || true
+  fi
 fi
 
 read_step() {
@@ -101,7 +115,7 @@ pr_retry=20
 file_age() {
   local mtime
   mtime=$(stat -c %Y "$1" 2>/dev/null) || { echo 999999; return; }
-  echo $(($(date +%s) - mtime))
+  echo $((EPOCHSECONDS - mtime))
 }
 
 refresh_pr() {
@@ -128,7 +142,8 @@ refresh_pr() {
 
 pr_glyph() {
   local top=$1 branch=$2 tag=$3 file line cached state
-  file="$pr_cache/$(printf '%s\n%s' "$top" "$branch" | md5sum | cut -c1-32)"
+  file=$(printf '%s\n%s' "$top" "$branch" | md5sum)
+  file="$pr_cache/${file:0:32}"
   line=""
   if [ -f "$file" ]; then read -r line <"$file" || line=""; fi
   cached=${line%% *}
