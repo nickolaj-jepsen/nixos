@@ -11,6 +11,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { copyToClipboard } from "@earendil-works/pi-coding-agent";
+import { noteOpener } from "./notes.ts";
 
 const MAC = process.platform === "darwin";
 
@@ -101,6 +102,14 @@ export const launch = async (app: FolderApp, cwd: string): Promise<void> => {
   const target = launcher(app, cwd);
   if (!target) throw new Error(`${appLabel(app)} is not installed`);
   await start(target.command, target.args);
+};
+
+/** Shows a note in the notes viewer, else VS Code; false when neither is installed. */
+export const openNote = async (path: string): Promise<boolean> => {
+  const target = noteOpener(path);
+  if (!target) return false;
+  await start(target.command, target.args);
+  return true;
 };
 
 /** Opens a URL in the desktop browser. */

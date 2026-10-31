@@ -7,7 +7,8 @@ import type { Git } from "./git.ts";
 import type { Menu } from "./menu.ts";
 import { createMenuPopper } from "./menu.ts";
 import { gitMenu } from "./links.ts";
-import { folderMenu } from "./places.ts";
+import { findNotes } from "./notes.ts";
+import { folderMenu, openNotes } from "./places.ts";
 import type { Action, ChromeState, ClickAt } from "./state.ts";
 
 /** Runs one of pi's own keybinding actions, or names the key when the editor has none. */
@@ -44,6 +45,8 @@ const dismissOverlay =
     (focus as { handleInput?(data: string): void }).handleInput?.("\x1b");
   };
 
+const sessionNotes = (ctx: ExtensionContext) => findNotes(ctx.sessionManager.getBranch(), ctx.cwd);
+
 export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git) => {
   const openModels = command(state, pi, "/models");
   const closeOverlay = dismissOverlay(state);
@@ -77,7 +80,8 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git) =>
    * the work continues rather than acting on the first click: the footer sits one
    * row under the shell prompt, and a stray click there used to start an editor.
    */
-  const folder = ((ctx, at) => show(ctx, () => folderMenu(ctx.cwd), at)) as Action;
+  const folder = ((ctx, at) =>
+    show(ctx, async () => folderMenu(ctx.cwd, await sessionNotes(ctx)), at)) as Action;
 
   const gitLinks = ((ctx, at) => {
     const snapshot = git.snapshot();
@@ -96,6 +100,7 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git) =>
 
   return {
     folder,
+    notes: (async (ctx) => openNotes(ctx, await sessionNotes(ctx))) as Action,
     git: gitLinks,
     // The picker is this repo's own (/models: labels, cost, context). A click while
     // it or any other dialog holds focus closes that instead of stacking the
