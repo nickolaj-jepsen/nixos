@@ -60,7 +60,7 @@
     nixos-wsl.inputs.nixpkgs.follows = "nixpkgs";
 
     # phone-vm's guest contract (kernel, image, agent, GUI).
-    pocketnix.url = "github:nickolaj-jepsen/pocketnix";
+    pocketnix.url = "github:nickolaj-jepsen/pocketnix/next";
     pocketnix.inputs.nixpkgs.follows = "nixpkgs";
 
     disko.url = "github:nix-community/disko";
