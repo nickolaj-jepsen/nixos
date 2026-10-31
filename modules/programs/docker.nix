@@ -15,8 +15,8 @@
     virtualisation.docker = {
       enable = true;
       enableOnBoot = lib.mkDefault false;
-      # Hosts whose / isn't btrfs (e.g. WSL) keep the default driver.
-      storageDriver = lib.mkIf ((config.fileSystems."/".fsType or null) == "btrfs") "btrfs";
+      # No storageDriver: Docker's btrfs driver is slower and hits early ENOSPC; it picks
+      # overlayfs on a fresh /var/lib/docker and keeps an existing driver's data.
     };
     virtualisation.oci-containers = {
       backend = "docker";
