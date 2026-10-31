@@ -488,7 +488,7 @@ def make_run(s, n, window, rest, start, hits=None):
     answers = [a for e in window if e["kind"] == "answer" for a in e["answers"]]
     results = [e for e in window if e["kind"] == "result"]
     if hits is not None:  # a tool or command: only its own calls' outcomes are signal
-        ids = {h["call_id"] for h in hits if h["call_id"]}
+        ids = {h["call_id"] for h in hits if h.get("call_id")}
         answers, results = [], [e for e in results if e["call_id"] in ids]
     denials = {}
     for e in results:
