@@ -4,7 +4,7 @@
  * as data rather than a conversation.
  *
  * The dialog lives in ./questions/. This file owns the contract: the schema the
- * model fills in, the limits stated in the description, and the non-TUI path.
+ * model fills in, with its limits, and the non-TUI path.
  *
  * Sequential on purpose. Two questionnaires in the editor slot would replace
  * each other, and pi resolves that by running this tool's calls one at a time.
@@ -26,19 +26,14 @@ import {
   validateQuestions,
 } from "./questions/types.ts";
 
-const DESCRIPTION = `Ask the user 1-4 structured questions, 2-4 options each, and wait for the answers. Never author "Other" or "Type something." options: a "Type something." row and Esc are added to every question. Put a recommended option first and end its label with "(Recommended)". An option's \`preview\` (markdown, single-select only) compares concrete artifacts: mockups, code, diagrams, configs; skip it for plain preferences. The user can select several options when \`multiSelect\` is set.`;
-
-const GUIDELINES = [
-  "Use ask_user_question when the request is underspecified and you cannot proceed without a decision; put every question in one call instead of several in a row.",
-  `Option labels are 1-5 words and at most ${LABEL_MAX} characters, headers at most ${HEADER_MAX}; longer ones are rejected.`,
-];
+const DESCRIPTION = `Ask the user multiple-choice questions and wait for the answers. Use it when you can't proceed without the user's decision, with every question in one call. Each question already gets a "Type something." row and Esc, so don't write "Other" or "Type something." options. Put a recommended option first, its label ending in "(Recommended)". Give options a \`preview\` only to compare concrete artifacts such as mockups, code, diagrams or configs.`;
 
 const OptionSchema = Type.Object({
   label: Type.String({ maxLength: LABEL_MAX, description: "1-5 words; the row the user picks." }),
   description: Type.Optional(Type.String({ description: "One line of context under the label." })),
   preview: Type.Optional(
     Type.String({
-      description: "Markdown shown beside the options while this one is highlighted.",
+      description: "Markdown shown while this option is highlighted.",
     }),
   ),
 });
@@ -47,7 +42,7 @@ const QuestionSchema = Type.Object({
   question: Type.String({ description: "The complete question, ending in a question mark." }),
   header: Type.String({
     maxLength: HEADER_MAX,
-    description: 'Very short chip naming the question, e.g. "Storage".',
+    description: 'Short chip naming the question, e.g. "Storage".',
   }),
   options: Type.Array(OptionSchema, { minItems: MIN_OPTIONS, maxItems: MAX_OPTIONS }),
   multiSelect: Type.Optional(
@@ -152,8 +147,7 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NAME,
     label: "Ask",
     description: DESCRIPTION,
-    promptSnippet: "Ask the user one or more multiple-choice questions.",
-    promptGuidelines: GUIDELINES,
+    promptSnippet: "Ask the user multiple-choice questions.",
     parameters: Type.Object({
       questions: Type.Array(QuestionSchema, { minItems: 1, maxItems: MAX_QUESTIONS }),
     }),

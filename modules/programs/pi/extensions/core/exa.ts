@@ -153,32 +153,28 @@ export default function (pi: ExtensionAPI) {
     name: "exa_search",
     label: "Exa search",
     description:
-      "Search the web through Exa and get back the passages that answer the query. Use it for anything outside the repo: current docs, APIs, releases, error messages, news.",
-    promptSnippet:
-      "Web search returning query-relevant excerpts per result; exa_fetch reads URLs you already have.",
+      "Search the web through Exa for passages that answer the query. Use it for anything outside the repo: current docs, APIs, releases, error messages, news.",
+    promptSnippet: "Search the web for passages that answer a query.",
     parameters: Type.Object({
       query: Type.String({
-        description: "Natural-language query. Describe the page you want, not keywords.",
+        description: "Describe the page you want in plain language, not keywords.",
       }),
       objective: Type.String({
         description:
-          "Goal for this search turn; say which documents should rank first, which should be excluded, and what specific facts or figures to pull from them.",
+          "Which pages should rank first or be left out, and which facts to pull from them.",
       }),
       mode: modeParam(
         "highlights",
-        'Per result: "highlights" (excerpts chosen for the query), "text" (page body), "summary" (LLM digest).',
+        'Per result: "highlights" (excerpts for the query), "text" (page body) or "summary" (LLM digest).',
       ),
       numResults: Type.Optional(
         Type.Number({
           minimum: 1,
           maximum: 100,
-          description:
-            "Defaults to 3/5/8/10 by context window. More results means shorter excerpts under the call budget.",
+          description: "Defaults to 3-10 by context window; more results means shorter excerpts.",
         }),
       ),
-      maxChars: capParam(
-        "Per-result character budget. Defaults to a share of the call budget; lower numResults for longer excerpts.",
-      ),
+      maxChars: capParam("Per-result character cap. Defaults to an even share of the call budget."),
       includeDomains: Type.Optional(
         Type.Array(Type.String(), { description: "Only search these domains." }),
       ),
@@ -234,28 +230,27 @@ export default function (pi: ExtensionAPI) {
     name: "exa_fetch",
     label: "Exa fetch",
     description:
-      "Read pages you already have URLs for: Exa extracts the body, so it works on docs, READMEs and articles that curl turns into script tags.",
-    promptSnippet:
-      "Extract page content for known URLs; prefer it over curl for rendered or JS-heavy pages.",
+      "Read the body of pages you have URLs for. Use it over curl for docs, READMEs and JS-heavy pages, which curl returns as markup.",
+    promptSnippet: "Read the body of known URLs.",
     parameters: Type.Object({
       urls: Type.Array(Type.String(), {
         minItems: 1,
         maxItems: 100,
-        description: "Pages to read; the context budget may skip some.",
+        description: "Pages to read.",
       }),
       mode: modeParam(
         "text",
-        'Per page: "text" (page body), "highlights" (short excerpts), "summary" (LLM digest).',
+        'Per page: "text" (page body), "highlights" (excerpts) or "summary" (LLM digest).',
       ),
       maxChars: capParam(
-        "Per-page character budget. Defaults to a share of the call budget; summary ignores it.",
+        "Per-page character cap; summary ignores it. Defaults to a share of the call budget.",
       ),
       maxAgeHours: Type.Optional(
         Type.Integer({
           minimum: -1,
           maximum: 720,
           description:
-            "Maximum age of cached content in hours: 0 always fetches fresh, -1 always uses cache, 1-720 tolerates cache that old. Defaults to 24.",
+            "Oldest cached copy to accept, in hours: 0 always fetches fresh, -1 always uses the cache. Defaults to 24.",
         }),
       ),
     }),
