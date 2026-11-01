@@ -70,27 +70,56 @@
           exec ${bw} "$@"
         '';
       };
-    # A second account needs its own data dir; BW_SESSION_WORK keeps its
+    # Each extra account needs its own data dir; BW_SESSION_<PROFILE> keeps its
     # session key apart from the personal vault's BW_SESSION.
-    bwWork = mkBw {
-      name = "bw-work";
-      profile = "work";
+    mkExtraBw = profile: server:
+      mkBw {
+        name = "bw-${profile}";
+        inherit profile server;
+        env = let
+          var = "BW_SESSION_${lib.toUpper profile}";
+        in ''
+          export BITWARDENCLI_APPDATA_DIR="${config.xdg.configHome}/bitwarden-cli-${profile}"
+          unset BW_SESSION
+          if [ -n "''${${var}:-}" ]; then export BW_SESSION="''$${var}"; fi
+        '';
+      };
+    bwWork = mkExtraBw "work" "https://vault.bitwarden.com";
+    bwPersonal = mkBw {
+      name = "bw";
+      profile = "personal";
       server = "https://vault.bitwarden.com";
-      env = ''
-        export BITWARDENCLI_APPDATA_DIR="${config.xdg.configHome}/bitwarden-cli-work"
-        unset BW_SESSION
-        if [ -n "''${BW_SESSION_WORK:-}" ]; then export BW_SESSION="$BW_SESSION_WORK"; fi
+    };
+    # New saves always land unfiled (Bitwarden has no default folder), so
+    # "No folder" is the inbox. Prints item names only, never secrets.
+    bwTidy = pkgs.writeShellApplication {
+      name = "bw-tidy";
+      runtimeInputs = [pkgs.jq];
+      text = ''
+        ${lib.getExe bwPersonal} sync >/dev/null
+        ${lib.getExe bwPersonal} list items | jq -r '
+          def host: sub("^[a-z]+://"; "") | (split("/")[0] // "") | sub("^www\\."; "") | ascii_downcase;
+          def section($title; $names):
+            if ($names | length) > 0 then "\($title) (\($names | length))", ($names[] | "  \(.)"), "" else empty end;
+          [.[] | select(.type == 1)] as $logins
+          | section("Unfiled"; [.[] | select(.folderId == null) | .name]),
+            section("Named after a domain"; [.[] | select(.name | test("^(https?://)?[a-z0-9-]+(\\.[a-z0-9-]+)+(/.*)?$")) | .name]),
+            section("Logins without a URI"; [$logins[] | select((.login.uris // []) == []) | .name]),
+            section("Logins holding a key (make it an SSH key or note)"; [$logins[] | select(.notes // "" | test("PRIVATE KEY")) | .name]),
+            section("Probable duplicates"; [$logins[] | select(.login.username // "" | length > 0)
+                | {k: "\(.login.uris // [] | .[0].uri // "" | host)|\(.login.username | ascii_downcase)", name}]
+                | map(select(.k | startswith("|") | not)) | group_by(.k) | map(select(length > 1) | map(.name) | join(" = ")))
+        '
       '';
     };
   in {
     config = lib.mkIf config.fireproof.desktop.enable (lib.mkMerge [
       {
         home.packages = [
-          (mkBw {
-            name = "bw";
-            profile = "personal";
-            server = "https://bitwarden.${config.fireproof.homelab.domain}";
-          })
+          bwPersonal
+          bwTidy
+          # Old self-hosted vault, kept while migrating to the cloud.
+          (mkExtraBw "self" "https://bitwarden.${config.fireproof.homelab.domain}")
         ];
       }
       (lib.mkIf config.fireproof.work.enable {
