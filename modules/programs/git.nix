@@ -40,8 +40,19 @@
         pull.rebase = "true";
         rebase.autosquash = "true";
         rebase.autoStash = "true";
+        # gh-stack passes rebase.updateRefs=false to its own rebases, so this only moves stacks in a manual rebase.
+        rebase.updateRefs = true;
         rerere.enabled = true;
         init.defaultBranch = "main";
+        merge.conflictStyle = "zdiff3";
+        diff.algorithm = "histogram";
+        diff.colorMoved = "default";
+        # Not pruneTags: it would delete local tags that were never pushed.
+        fetch.prune = true;
+        push.followTags = true;
+        branch.sort = "-committerdate";
+        tag.sort = "version:refname";
+        column.ui = "auto";
         # The fish prompt's `git status` runs with --no-optional-locks, so other git commands keep this cache fresh.
         core.untrackedCache = true;
         # Linux git has no builtin fsmonitor daemon.
