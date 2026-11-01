@@ -14,8 +14,18 @@ set -euo pipefail
 # Only terminals are asked for a cwd: every other app has helper processes
 # that chdir somewhere arbitrary, and VS Code runs every window from one
 # process, so its tree cannot say which folder a window has open.
+#
+# --stack (first argument) puts the new window at the bottom of the focused
+# column instead of in a new column beside it.
 
 DIRS=${XDG_CONFIG_HOME:-$HOME/.config}/ghostty-here/dirs
+APP_ID=com.mitchellh.ghostty
+
+stack=""
+if [[ ${1-} == --stack ]]; then
+  stack=1
+  shift
+fi
 
 niri_json() {
   niri msg --json "$1" 2>/dev/null || echo '{}'
@@ -59,7 +69,7 @@ workspace_name() {
 # PIDs of the Ghostty windows on workspace $1, newest process first.
 workspace_terminals() {
   niri msg --json windows 2>/dev/null |
-    jq -r --argjson ws "$1" --arg app com.mitchellh.ghostty \
+    jq -r --argjson ws "$1" --arg app "$APP_ID" \
       '.[] | select(.workspace_id == $ws and .app_id == $app) | .pid' |
     while read -r pid; do printf '%s %s\n' "$(ps -o etimes= -p "$pid")" "$pid"; done |
     sort -n | awk '{ print $2 }' || true
@@ -71,7 +81,7 @@ window_pid=$(jq -r '.pid // empty' <<<"$focused")
 workspace_id=$(jq -r '.workspace_id // 0' <<<"$focused")
 
 dir=""
-if [[ $app_id == com.mitchellh.ghostty && -n $window_pid ]]; then
+if [[ $app_id == "$APP_ID" && -n $window_pid ]]; then
   dir=$(window_cwd "$window_pid")
 fi
 
@@ -99,4 +109,22 @@ if [[ -z $dir && $workspace_id != 0 ]]; then
 fi
 
 [[ -d $dir ]] || dir=$HOME
+
+# niri opens a window as a new column right of the focused one, so consuming
+# it left stacks it there. Window ids only grow, so the first Ghostty above the
+# current max is ours, whether it shows up in the stream's initial window list
+# or as a later open event.
+if [[ -n $stack && -n $window_pid && $(jq -r '.is_floating' <<<"$focused") == false ]]; then
+  max_id=$(niri msg --json windows | jq 'map(.id) | max // 0')
+  (
+    new_id=$(timeout 10 niri msg --json event-stream |
+      jq --unbuffered -n --argjson max "$max_id" --arg app "$APP_ID" '
+        inputs
+        | (.WindowOpenedOrChanged.window // empty, .WindowsChanged.windows[]?)
+        | select(.id > $max and .app_id == $app) | .id' |
+      head -n1) || true
+    [[ -n $new_id ]] && niri msg action consume-or-expel-window-left --id "$new_id"
+  ) &
+fi
+
 exec ghostty --working-directory="$dir" "$@"
