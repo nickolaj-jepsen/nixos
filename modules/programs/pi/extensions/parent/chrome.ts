@@ -4,6 +4,7 @@
  */
 import type { ExtensionAPI, ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import { createActions } from "./chrome/actions.ts";
+import { openReview } from "./chrome/apps.ts";
 import { createBorder } from "./chrome/border.ts";
 import { PromptEditor, type Painters } from "./chrome/editor.ts";
 import { createFooter } from "./chrome/footer.ts";
@@ -27,16 +28,41 @@ export default function (pi: ExtensionAPI, { identity, userWait, editorHooks }: 
     state.live = ctx.mode === "tui" && ctx.hasUI;
   });
   const actions = createActions(pi, state, git);
+  const openArgs = [
+    { value: "plan", label: "plan", description: "this session's notes" },
+    { value: "diff", label: "diff", description: "review the changes in tuicr" },
+  ];
   // The footer's two menus, reachable without a mouse: the same popovers, so the
   // keys and a click cannot drift apart.
   pi.registerCommand("open", {
     description:
-      "Open this folder in an editor, file manager or terminal, or copy its path; /open plan opens this session's notes",
-    getArgumentCompletions: (prefix) =>
-      "plan".startsWith(prefix)
-        ? [{ value: "plan", label: "plan", description: "this session's notes" }]
-        : null,
+      "Open this folder in an editor, file manager or terminal, or copy its path; /open plan opens this session's notes, /open diff reviews the changes in tuicr",
+    getArgumentCompletions: (prefix) => {
+      const hits = openArgs.filter((a) => a.value.startsWith(prefix));
+      return hits.length ? hits : null;
+    },
     handler: async (args, ctx) => {
+      if (args.trim() === "diff") {
+        try {
+          await openReview(ctx.cwd);
+        } catch (error) {
+          ctx.ui.notify(
+            `chrome: ${error instanceof Error ? error.message : String(error)}`,
+            "error",
+          );
+          return;
+        }
+        // The review happens outside pi, so the model learns where to read it back.
+        pi.sendMessage(
+          {
+            customType: "tuicr-review",
+            content: `I opened tuicr in a separate window to review the changes in ${ctx.cwd}. When I say the review is done, find that session with \`tuicr review list --repo ${ctx.cwd}\`, read my comments with \`tuicr review comments\` (the tuicr skill) and address them.`,
+            display: false,
+          },
+          { deliverAs: "nextTurn" },
+        );
+        return;
+      }
       await (args.trim() === "plan" ? actions.notes(ctx) : actions.folder(ctx));
     },
   });

@@ -7,7 +7,7 @@
  * launch is detached: the editor or file manager outlives the click, and pi is
  * never waiting on it.
  */
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { copyToClipboard } from "@earendil-works/pi-coding-agent";
@@ -15,10 +15,15 @@ import { noteOpener } from "./notes.ts";
 
 const MAC = process.platform === "darwin";
 
-const onPath = (command: string) => {
-  const paths = (process.env.PATH ?? "").split(delimiter).filter(Boolean);
-  return paths.some((dir) => existsSync(join(dir, command)));
-};
+/** A command's absolute path on PATH, or undefined. */
+const which = (command: string) =>
+  (process.env.PATH ?? "")
+    .split(delimiter)
+    .filter(Boolean)
+    .map((dir) => join(dir, command))
+    .find((path) => existsSync(path));
+
+const onPath = (command: string) => which(command) !== undefined;
 
 /** A mac app bundle in the usual place, for a GUI that ships no CLI on PATH. */
 const appBundle = (name: string) => MAC && existsSync(`/Applications/${name}.app`);
@@ -101,6 +106,30 @@ export const canLaunch = (app: FolderApp, cwd: string) => launcher(app, cwd) !==
 export const launch = async (app: FolderApp, cwd: string): Promise<void> => {
   const target = launcher(app, cwd);
   if (!target) throw new Error(`${appLabel(app)} is not installed`);
+  await start(target.command, target.args);
+};
+
+// `tuicr -w` exits on a clean tree, so that opens its commit picker instead. $0 is tuicr.
+const REVIEW = 'if [ -n "$(git status --porcelain)" ]; then exec "$0" -w; fi; exec "$0"';
+
+const isRepo = (cwd: string) =>
+  new Promise<boolean>((resolve) =>
+    execFile("git", ["-C", cwd, "rev-parse", "--git-dir"], (error) => resolve(!error)),
+  );
+
+/** Starts tuicr on a checkout in a new Ghostty window; throws when it can't. */
+export const openReview = async (cwd: string): Promise<void> => {
+  if (!(await isRepo(cwd))) throw new Error("not a git repository");
+  // An absolute path: a mac app started through `open` does not get this PATH.
+  const tuicr = which("tuicr");
+  if (!tuicr) throw new Error("tuicr is not installed");
+  const args = [`--working-directory=${cwd}`, "-e", "sh", "-c", REVIEW, tuicr];
+  const target = MAC
+    ? openNewBundle("Ghostty", args)
+    : onPath("ghostty")
+      ? { command: "ghostty", args }
+      : undefined;
+  if (!target) throw new Error("Ghostty is not installed");
   await start(target.command, target.args);
 };
 

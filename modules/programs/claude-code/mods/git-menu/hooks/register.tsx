@@ -1,5 +1,11 @@
 import { atom, read, update } from "claude-code";
-import type { EngineInterface, ProcessRunResult, Register, RenderSurface } from "claude-code";
+import type {
+  CommandRunResult,
+  EngineInterface,
+  ProcessRunResult,
+  Register,
+  RenderSurface,
+} from "claude-code";
 
 import type { FolderApp, Menu, MenuKind, Row } from "../types";
 import {
@@ -25,6 +31,9 @@ const DETACH = [
   'exec >/dev/null 2>&1 </dev/null; if command -v setsid >/dev/null; then exec setsid -f "$@"; fi; "$@" &',
   "sh",
 ];
+
+// `tuicr -w` exits on a clean tree, so that opens its commit picker instead. $0 is tuicr.
+const REVIEW = 'if [ -n "$(git status --porcelain)" ]; then exec "$0" -w; fi; exec "$0"';
 
 const menu = atom({ plugin: "git-menu", key: "menu" } as const, null);
 
@@ -141,6 +150,44 @@ async function buildFolder($: EngineInterface, cwd: string): Promise<Menu> {
     if (found.has("ghostty")) launchers.ghostty = ["ghostty", `--working-directory=${cwd}`];
   }
   return folderMenu(cwd, launchers, mac);
+}
+
+/**
+ * Starts tuicr on the checkout in a new Ghostty window and tells the model how
+ * to read the comments back, since the review happens outside this session.
+ */
+async function openDiff($: EngineInterface, cwd: string): Promise<CommandRunResult> {
+  if (!(await git($, cwd, ["rev-parse", "--git-dir"]))) return { text: "Not a git repository." };
+  const mac = await isMac($);
+  const probe = await run($, [
+    "sh",
+    "-c",
+    'for c; do command -v "$c"; done; exit 0',
+    "sh",
+    "tuicr",
+    "ghostty",
+  ]);
+  const found = (probe?.stdout ?? "").split("\n").filter(Boolean);
+  // An absolute path: a mac app started through `open` does not get this PATH.
+  const tuicr = found.find((p) => p.endsWith("/tuicr"));
+  if (!tuicr) return { text: "tuicr is not installed." };
+  const review = [`--working-directory=${cwd}`, "-e", "sh", "-c", REVIEW, tuicr];
+  const argv = mac
+    ? (await $.fs.exists("/Applications/Ghostty.app"))
+      ? ["open", "-na", "Ghostty.app", "--args", ...review]
+      : undefined
+    : found.some((p) => p.endsWith("/ghostty"))
+      ? ["ghostty", ...review]
+      : undefined;
+  if (!argv) return { text: "Ghostty is not installed." };
+  const r = await run($, [...DETACH, ...argv]);
+  if (r?.exitCode !== 0) return { text: "Couldn't start Ghostty." };
+  return {
+    text: "Opened tuicr in a new Ghostty window.",
+    context: [
+      `I opened tuicr in a separate window to review the changes in ${cwd}. When I say the review is done, find that session with \`tuicr review list --repo ${cwd}\`, read my comments with \`tuicr review comments\` (the tuicr skill) and address them.`,
+    ],
+  };
 }
 
 /** Every note under `dir`; links are not followed. */
@@ -270,8 +317,8 @@ export const register: Register = (on) => {
       ["git", "Open the git menu: the repository, branch and pull request on the forge", undefined],
       [
         "open",
-        "Open the folder menu: this checkout in an editor, file manager or terminal; `plan` lists this session's notes",
-        "[plan]",
+        "Open the folder menu: this checkout in an editor, file manager or terminal; `plan` lists this session's notes, `diff` reviews the changes in tuicr",
+        "[plan|diff]",
       ],
     ] as const) {
       await $.command
@@ -289,6 +336,7 @@ export const register: Register = (on) => {
   });
 
   on("command.run", { command: "open" }, async ($, e) => {
+    if (e.args.trim() === "diff") return openDiff($, await $.session.cwd());
     if (e.args.trim() === "plan") {
       await show($, "notes");
       return { text: "Opened this session's notes." };

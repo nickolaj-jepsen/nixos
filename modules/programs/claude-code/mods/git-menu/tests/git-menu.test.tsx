@@ -54,7 +54,16 @@ const ok = (stdout: string, exitCode = 0, stderr = "") => ({
   value: { exitCode, stdout, stderr, isStdoutTruncated: false, isStderrTruncated: false },
 });
 
-function world(on: On, { pr = PR as string | null, mac = false, notes = {} as Notes } = {}): World {
+function world(
+  on: On,
+  {
+    pr = PR as string | null,
+    mac = false,
+    notes = {} as Notes,
+    /** The CLIs on PATH that /open diff looks for. */
+    tools = ["tuicr", "ghostty"],
+  } = {},
+): World {
   const w: World = { launched: [], copied: [] };
   const files = new Map(
     Object.entries(notes.files ?? {}).map(([path, hours]) => [path, NOW - hours * HOUR]),
@@ -123,6 +132,7 @@ function world(on: On, { pr = PR as string | null, mac = false, notes = {} as No
         return ok("remote.origin.url git@github.com:me/repo.git\n");
       if (line.endsWith("branch.feat/x.remote")) return ok("origin\n");
       if (line.includes("symbolic-ref")) return ok("origin/main\n");
+      if (line.endsWith("rev-parse --git-dir")) return ok(".git\n");
       return ok("", 1);
     }
     // `command -v` over the note opener's candidates.
@@ -130,6 +140,10 @@ function world(on: On, { pr = PR as string | null, mac = false, notes = {} as No
       const hit = argv.slice(4).find((c) => installed.includes(c));
       if (!hit) return ok("", 1);
       return ok(`${hit.includes("/") ? hit : `/run/current-system/sw/bin/${hit}`}\n`);
+    }
+    if (argv[0] === "sh" && argv.includes("tuicr")) {
+      const hits = argv.slice(4).filter((c) => tools.includes(c));
+      return ok(hits.map((c) => `/run/current-system/sw/bin/${c}\n`).join(""));
     }
     // The probe for installed apps.
     if (argv[0] === "sh" && argv.includes("xdg-open") && argv.includes("nautilus")) {
@@ -345,4 +359,25 @@ test("bare /open still shows the folder menu", async ($, on) => {
   const keys = (await pane.findAll({ type: "Button" })).map((b) => b.key);
   await pane.unmount();
   expect(keys).toEqual(["code", "smerge", "files", "ghostty", "copy", "notes"]);
+});
+
+const openDiff = ($: Engine) => $.command.run({ ...RUN, command: "open", args: "diff" });
+
+test("/open diff starts tuicr on the checkout in Ghostty and tells the model", async ($, on) => {
+  const w = world(on);
+  await start($, on);
+  const result = await openDiff($);
+  expect(w.launched).toHaveLength(1);
+  const [argv = []] = w.launched;
+  expect(argv.slice(0, 3)).toEqual(["ghostty", "--working-directory=/repo", "-e"]);
+  expect(argv.at(-1)).toBe("/run/current-system/sw/bin/tuicr");
+  expect(result.context).toHaveLength(1);
+});
+
+test("/open diff without tuicr starts nothing", async ($, on) => {
+  const w = world(on, { tools: ["ghostty"] });
+  await start($, on);
+  const result = await openDiff($);
+  expect(w.launched).toEqual([]);
+  expect(result.context).toBeUndefined();
 });
