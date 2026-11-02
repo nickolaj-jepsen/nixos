@@ -11,11 +11,22 @@ Item {
     property var pluginService
 
     property var sessions: []
+    // Sessions that ended, newest first, each with the command that resumes it.
+    property var recent: []
     readonly property bool linkUp: socket.linkUp
+    // Set when the hub speaks another protocol version; the socket then stays closed.
+    property string refused: ""
 
     function focusSession(sessionId) {
         socket.send({
             "op": "focus",
+            "session": sessionId
+        });
+    }
+
+    function resume(sessionId) {
+        socket.send({
+            "op": "resume",
             "session": sessionId
         });
     }
@@ -35,8 +46,15 @@ Item {
             console.warn("agentHub: unreadable line from the hub");
             return;
         }
-        if (message.type === "state")
+        if (message.type === "state") {
             root.sessions = message.sessions;
+            root.recent = message.recent ?? [];
+        } else if (message.type === "refused") {
+            console.warn("agentHub: " + message.text);
+            root.refused = message.text;
+            // Not from inside the parser's own callback: this destroys the socket.
+            Qt.callLater(() => socket.connected = false);
+        }
     }
 
     DCommon.DSocket {
@@ -46,10 +64,13 @@ Item {
         onConnectionStateChanged: {
             if (linkUp)
                 send({
-                    "op": "subscribe"
+                    "op": "subscribe",
+                    "version": 3
                 });
-            else
+            else {
                 root.sessions = [];
+                root.recent = [];
+            }
         }
         parser: SplitParser {
             onRead: line => root.handle(line)

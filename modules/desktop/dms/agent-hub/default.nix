@@ -16,7 +16,7 @@
       sed 's/<svg /<svg fill="#fff" /' ${claudeIcon} > $out/icons/claude.svg
     '';
   in {
-    config = lib.mkIf (config.fireproof.dev.agent-hub.enable && pkgs.stdenv.isLinux) {
+    config = lib.mkIf (config.fireproof.dev.agent-hub.enable && config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.dank-material-shell.plugins.agentHub.src = plugin;
     };
   };

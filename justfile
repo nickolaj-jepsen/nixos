@@ -309,13 +309,14 @@ dev-setup: _dev-setup-direnv _dev-setup-pi _dev-setup-claude
 _dev-setup-direnv:
     if command -v direnv >/dev/null 2>&1; then direnv allow .; fi
 
-# Links the built pi extensions' node_modules into the repo, for editor types and `pi -e`.
+# Links the built pi extensions' node_modules and generated hub types into the repo, for editor types and `pi -e`.
 [private]
 [script]
 [working-directory('modules/programs/pi/extensions')]
 _dev-setup-pi:
     {{ nixcmd }} build {{ justfile_directory() }}#pi-extensions --out-link result
     ln -sfn result/node_modules node_modules
+    ln -sfn ../../result/parent/lib/protocol.gen.ts parent/lib/protocol.gen.ts
 
 [private]
 _dev-setup-claude:

@@ -14,10 +14,12 @@ import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
 import { agentParts } from "./agents.ts";
 import { layoutFooter } from "./footer-line.ts";
+import { hubParts } from "./hub.ts";
 import { memoryParts } from "./memory.ts";
 import { formatCost, splitPath } from "../lib/format.ts";
 import type { Git } from "./git.ts";
 import { PR_COMMAND } from "./git.ts";
+import type { Hub } from "../lib/hub.ts";
 import { click, hoverAt, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";
 import { modelAlias, providerName, providerShortName } from "../lib/model-names.ts";
@@ -52,6 +54,7 @@ export const createFooter = (
   state: ChromeState,
   actions: ReturnType<typeof createActions>,
   git: Git,
+  hub: Hub,
 ) => {
   const usage = createUsage(state);
   const stats = createStats();
@@ -151,14 +154,18 @@ export const createFooter = (
     // The package's status is still the repaint signal; the tallies come from its service.
     const badges = agentParts(actions.agents);
     const memory = memoryParts(actions.memory);
-    const statuses = statusEntries.flatMap(([key, text], index) => {
-      if (key === "subagents" && badges) return badges;
-      // Memory publishes tallies of its own, so the segment carries its alarm colour
-      // and a click target; the status text it also sets stays as the repaint signal.
-      if (key === "memory" && memory) return memory;
-      const plain = sanitize(text);
-      return plain ? [{ id: `status-${index}`, text: plain, color: "dim" as const }] : [];
-    });
+    const statuses = [
+      // What the hub makes of this session, ahead of the statuses the packages set.
+      ...hubParts(hub),
+      ...statusEntries.flatMap(([key, text], index) => {
+        if (key === "subagents" && badges) return badges;
+        // Memory publishes tallies of its own, so the segment carries its alarm colour
+        // and a click target; the status text it also sets stays as the repaint signal.
+        if (key === "memory" && memory) return memory;
+        const plain = sanitize(text);
+        return plain ? [{ id: `status-${index}`, text: plain, color: "dim" as const }] : [];
+      }),
+    ];
 
     const path = splitPath(ctx.cwd);
 
@@ -248,6 +255,8 @@ export const createFooter = (
         git.schedule(0);
         tui.requestRender();
       });
+      // The hub publishes on its own schedule: a finished turn, a dialog, its own restart.
+      const unsubscribeHub = hub.onChange(() => tui.requestRender());
       git.schedule(0);
       git.startPolling();
       return {
@@ -262,6 +271,7 @@ export const createFooter = (
         },
         dispose: () => {
           unsubscribe();
+          unsubscribeHub();
           git.dispose();
         },
       };

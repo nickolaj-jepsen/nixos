@@ -12,12 +12,14 @@
       inherit (pkgs.importNpmLock) npmConfigHook;
       nativeBuildInputs = [pkgs.typescript];
       # parent/lib/{spellfix,answer} are symlinks to the Claude Code mods; they dangle in the store.
+      # The hub's protocol types come from its Python definition, the one the hub validates against.
       postPatch = ''
         rm parent/lib/spellfix parent/lib/answer
         install -Dm644 ${../claude-code/mods/spellfix/hooks/core.ts} parent/lib/spellfix/hooks/core.ts
         install -Dm644 ${../claude-code/mods/spellfix/types/index.d.ts} parent/lib/spellfix/types/index.d.ts
         install -Dm644 ${../claude-code/mods/answer/hooks/core.ts} parent/lib/answer/hooks/core.ts
         install -Dm644 ${../claude-code/mods/answer/types/index.d.ts} parent/lib/answer/types/index.d.ts
+        ${pkgs.python3.interpreter} ${../../../pkgs/agent-hub/agent_hub/protocol.py} --typescript > parent/lib/protocol.gen.ts
       '';
       buildPhase = ''
         runHook preBuild

@@ -11,9 +11,9 @@
  * a busy one, and `notify_when_idle` works in both directions. Pi advertises
  * itself as the "prompting" permission class.
  *
- * Unlike Claude Code, which leaves noticing a shared checkout to the model,
- * each run's system prompt names the peers working in the same git working
- * tree and asks the model to coordinate destructive git operations with them.
+ * Each run's system prompt names the peers working in the same git working
+ * tree and asks the model to coordinate destructive git operations with them;
+ * agent-hub writes that note, for Claude Code sessions too.
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { contentText, Type } from "@earendil-works/pi-ai";
@@ -24,13 +24,6 @@ import {
   type SessionShutdownEvent,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Text } from "@earendil-works/pi-tui";
-import {
-  PERMISSIONS_DECISION_CHANNEL,
-  PERMISSIONS_UI_PROMPT_CHANNEL,
-  type PermissionDecisionEvent,
-  type PermissionUiPromptEvent,
-} from "@gotgenes/pi-permission-system";
-import { execFile } from "node:child_process";
 import { unlinkSync } from "node:fs";
 import type { Server } from "node:net";
 import path from "node:path";
@@ -48,7 +41,6 @@ import {
   listPeers,
   parseEnvelope,
   PEER_PROTOCOL,
-  peerSection,
   activityLabel,
   lastActive,
   type Peer,
@@ -64,8 +56,7 @@ import {
   userFrame,
   writeRegistryEntry,
 } from "./claude-peers/protocol.ts";
-import { SIDECAR_CHANNEL, type SidecarUpdate } from "../shared/identity.ts";
-import { oneLine } from "../shared/naming.ts";
+import { clip, oneLine } from "../shared/naming.ts";
 import type { Services } from "./services.ts";
 
 const MESSAGE_TYPE = "claude-peer-message";
@@ -98,7 +89,7 @@ interface Subscription {
   expires: number;
 }
 
-export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
+export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }: Services) {
   let ctx: ExtensionContext | undefined;
   /** Inbound frames arrive on socket callbacks, where a used-up ctx is an uncaught throw. */
   let live = false;
@@ -112,15 +103,7 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   const ourSubscriptions = new Map<string, Subscription>();
   const sentMessages = new Map<string, string>();
   const recentBySender = new Map<string, { at: number; body: string }[]>();
-  let unsubscribeSidecar: (() => void) | undefined;
-  // Open permission dialogs, request id → one-line label; the entry says `waiting` while any is.
-  const dialogs = new Map<string, string>();
-  let unsubscribeDialogs: (() => void)[] = [];
   let warnedProtocol = false;
-  // Turns started, and the one whose settle the sidecar is reading: its verdict decides
-  // the registry's turn state, so a late one is not read as the turn after it.
-  let turns = 0;
-  let judging = 0;
 
   const ownName = () => entry?.name ?? displayName();
   const ownLabel = () => `${ownName()} [${shortId({ messagingSocketPath: socketPath })}]`;
@@ -137,8 +120,8 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   }
 
   /** listPeers, warning once about peers on a newer protocol; they stay listed, since a bump may still take v1 frames. */
-  async function listPeersWarned(narrow?: Parameters<typeof listPeers>[0]): Promise<Peer[]> {
-    const list = await listPeers(narrow);
+  async function listPeersWarned(): Promise<Peer[]> {
+    const list = await listPeers();
     const newer = list.filter((p) => (p.peerProtocol ?? 0) > PEER_PROTOCOL);
     if (newer.length && !warnedProtocol) {
       warnedProtocol = true;
@@ -427,84 +410,49 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   }
 
   /** Keeps the registry's summary and step current, so peers can tell what this session is on. */
-  function onSidecar(data: unknown) {
-    const update = data as SidecarUpdate;
-    if (!entry || update.sessionId !== entry.sessionId) return;
-    // The sidecar reads a settled turn a moment later, and the registry says `busy` until
-    // then: a `done` guessed here would make the bar announce one turn end twice.
-    // A verdict that lands after the next prompt describes a turn that is over.
-    if (update.moment === "settle" && judging && judging === turns) {
-      judging = 0;
-      void publish({ status: "idle", turnState: update.state ?? "done", ask: update.ask });
-    }
+  function onIdentity() {
+    if (!entry) return;
     // The step is a plan for the turn in flight; a settled turn has none.
-    const doing = update.moment === "start" ? update.doing : undefined;
-    const summary = update.summary ?? entry.summary;
+    const doing = identity.working() ? identity.detail() : undefined;
+    const summary = identity.summary() ?? entry.summary;
     if (summary === entry.summary && doing === entry.doing) return;
     void publish({ summary, doing });
   }
 
-  function onPrompt(data: unknown) {
-    const event = data as PermissionUiPromptEvent;
-    const what = `${event.request?.toolName ?? event.surface ?? "permission"}: ${event.value ?? ""}`;
-    const requester = event.forwarding?.requesterAgentName;
-    const first = dialogs.size === 0;
-    dialogs.set(event.requestId, clip(oneLine(requester ? `${requester} · ${what}` : what), 200));
-    const waitingFor = dialogs.values().next().value;
+  /** The entry says `waiting` while a permission dialog is open, with its label. */
+  function onDialogs() {
+    if (!entry) return;
+    const waitingFor = dialogs.current();
     // Re-stating the status would restart how long the session has been waiting.
-    void publish(first ? { status: "waiting", waitingFor } : { waitingFor });
+    if (waitingFor === undefined) {
+      if (entry.status === "waiting") void publish({ status: "busy", waitingFor });
+    } else
+      void publish(entry.status === "waiting" ? { waitingFor } : { status: "waiting", waitingFor });
   }
 
-  function onDecision(data: unknown) {
-    if (!dialogs.delete((data as PermissionDecisionEvent).requestId)) return;
-    const waitingFor = dialogs.values().next().value;
-    void publish(waitingFor === undefined ? { status: "busy", waitingFor } : { waitingFor });
-  }
-
-  function unsubscribe() {
-    unsubscribeSidecar?.();
-    unsubscribeSidecar = undefined;
-    for (const off of unsubscribeDialogs) off();
-    unsubscribeDialogs = [];
-    dialogs.clear();
-  }
+  // identity repaints on every hub change, so this hears those too.
+  identity.onChange(onIdentity);
+  dialogs.onChange(onDialogs);
 
   pi.on("session_start", async (_event, c) => {
     live = true;
-    unsubscribe();
-    unsubscribeSidecar = pi.events.on(SIDECAR_CHANNEL, onSidecar);
-    unsubscribeDialogs = [
-      pi.events.on(PERMISSIONS_UI_PROMPT_CHANNEL, onPrompt),
-      pi.events.on(PERMISSIONS_DECISION_CHANNEL, onDecision),
-    ];
     await start(c);
   });
   pi.on("session_shutdown", async (event) => {
-    unsubscribe();
     await stop(event.reason);
   });
 
-  pi.on("before_agent_start", async (event, c) => {
+  // The hub knows every session and its working tree, so it writes the note; identity's
+  // handler asked for it on this same event.
+  pi.on("before_agent_start", async (event) => {
     const sections = event.systemPromptOptions.sections;
-    const root = await treeRoot(c.cwd);
-    const peers = await listPeersWarned((all) => inTree(root, all)).catch(() => []);
-    const section =
-      peers.length > 0
-        ? peerSection({
-            root,
-            peers,
-            dirty: await isDirty(root),
-            worktreeTool: pi.getActiveTools().includes("enter_worktree"),
-          })
-        : undefined;
-    if (section) sections.peer_sessions = section;
+    const note = await identity.peers();
+    if (note) sections.peer_sessions = note;
     else delete sections.peer_sessions;
   });
   pi.on("agent_start", async (_event, c) => {
     ctx = c;
-    turns += 1;
-    judging = 0;
-    await publish({ status: "busy", turnState: undefined, ask: undefined });
+    await publish({ status: "busy" });
   });
   pi.on("session_info_changed", async (event) => {
     await publish({
@@ -519,14 +467,7 @@ export default function (pi: ExtensionAPI, { identity, userWait }: Services) {
   pi.on("agent_settled", async (_event, c) => {
     ctx = c;
     if (!entry) return;
-    dialogs.clear();
-    // Busy until the sidecar's reading of the turn arrives; it carries how the turn ended.
-    judging = turns;
-    await publish({
-      ...(entry.status === "busy" ? {} : { status: "busy" }),
-      doing: undefined,
-      waitingFor: undefined,
-    });
+    await publish({ status: "idle", doing: undefined, waitingFor: undefined });
     const now = Date.now();
     const due = [...idleSubscribers.values()];
     idleSubscribers.clear();
@@ -711,41 +652,6 @@ function isStale(peer: Peer, now = Date.now()): boolean {
   return now - lastActive(peer, now) > STALE_AFTER_MS;
 }
 
-const treeRoots = new Map<string, Promise<string>>();
-
-/** Git working-tree root of `dir`, or `dir` itself outside git. Cached: a directory's root doesn't move. */
-function treeRoot(dir: string): Promise<string> {
-  let root = treeRoots.get(dir);
-  if (!root) {
-    root = new Promise((resolve) =>
-      execFile("git", ["-C", dir, "rev-parse", "--show-toplevel"], { timeout: 2000 }, (err, out) =>
-        resolve(err ? path.resolve(dir) : out.trim()),
-      ),
-    );
-    treeRoots.set(dir, root);
-  }
-  return root;
-}
-
-/** Whether the checkout at `root` has uncommitted changes; false when git can't tell. */
-function isDirty(root: string): Promise<boolean> {
-  return new Promise((resolve) =>
-    // --no-optional-locks: don't take the index lock under a peer mid-edit.
-    execFile(
-      "git",
-      ["--no-optional-locks", "-C", root, "status", "--porcelain"],
-      { timeout: 2000 },
-      (err, out) => resolve(!err && out.trim() !== ""),
-    ),
-  );
-}
-
-/** The `peers` whose cwd is in the working tree at `root`. */
-async function inTree(root: string, peers: Peer[]) {
-  const roots = await Promise.all(peers.map((p) => treeRoot(p.cwd)));
-  return peers.filter((_, i) => roots[i] === root);
-}
-
 function lastAssistantText(messages: AgentMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
@@ -754,8 +660,4 @@ function lastAssistantText(messages: AgentMessage[]): string {
     if (text) return text;
   }
   return "";
-}
-
-function clip(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }

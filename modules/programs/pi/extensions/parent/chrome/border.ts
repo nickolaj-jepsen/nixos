@@ -160,7 +160,7 @@ export const createBorder = (state: ChromeState, label: Identity) => {
               {
                 ...sides.label,
                 id: LABEL_ID,
-                action: (ctx: ExtensionContext) => label.refresh(ctx, true),
+                action: (ctx: ExtensionContext) => label.refresh(ctx),
               },
             ]
           : []),

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import time
 from pathlib import Path
 from dataclasses import dataclass
@@ -101,8 +102,21 @@ def busy_pid(path: str) -> Optional[int]:
     return pids[0] if pids else None
 
 
+def _hub_session(pid: int) -> Optional[str]:
+    """The name agent-hub has for the agent session `pid` runs under, when it is installed and knows one."""
+    hub = shutil.which("agent-hub")
+    if not hub:
+        return None
+    try:
+        out = subprocess.run([hub, "status", "--pid", str(pid), "--json"], capture_output=True, text=True, timeout=2)
+        return json.loads(out.stdout).get("name") or None if out.stdout.strip() else None
+    except (OSError, ValueError, AttributeError, subprocess.TimeoutExpired):
+        return None
+
+
 def describe_pid(pid: int) -> str:
-    """`<command> (pid N)`, or `pid N` when the process name cannot be read."""
+    """`<command> (pid N)`, with the agent session it runs under when agent-hub knows it,
+    or `pid N` when the process name cannot be read."""
     try:
         name = Path(f"/proc/{pid}/comm").read_text().strip()
     except OSError:
@@ -111,7 +125,9 @@ def describe_pid(pid: int) -> str:
             name = run(["ps", "-o", "comm=", "-p", str(pid)], check=False).stdout.strip()
         except OSError:
             name = ""
-    return f"{os.path.basename(name)} (pid {pid})" if name else f"pid {pid}"
+    session = _hub_session(pid)
+    detail = f"pid {pid}" + (f', session "{session}"' if session else "")
+    return f"{os.path.basename(name)} ({detail})" if name else detail
 
 
 def _binary_change(path: str, merge_base: str) -> bool:

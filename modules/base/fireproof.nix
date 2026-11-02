@@ -139,7 +139,7 @@ let
         pi.enable = cascade (config.fireproof.dev.enable && config.fireproof.trusted) "Enable the pi coding agent with the lazypi extension roster";
         copilot.enable = cascade config.fireproof.dev.enable "Enable the GitHub Copilot CLI";
         ai-usage.enable = cascade config.fireproof.dev.enable "Enable ai-usage, the agent subscription quota CLI (and its DMS bar widget on desktops)";
-        agent-hub.enable = cascade (config.fireproof.dev.enable && config.fireproof.desktop.enable) "Enable agent-hub, the DMS bar hub for live coding-agent sessions and their permission asks";
+        agent-hub.enable = cascade config.fireproof.dev.enable "Enable agent-hub, the daemon that names and judges every live coding-agent session, with its DMS bar on desktops";
         llm = {
           enable = lib.mkEnableOption ''
             local LLM serving (llama-swap + CUDA llama.cpp).

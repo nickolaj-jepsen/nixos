@@ -1,12 +1,10 @@
 /**
- * What the naming calls read: the prompts you actually sent, and the files the
- * agent touched. A session label and a worktree branch name the same work, so
- * both are prompted with this and both answer in a handful of words.
+ * What the naming calls read: the prompts you actually sent. A session label and
+ * a worktree branch name the same work, so both are prompted with this and both
+ * answer in a handful of words.
  */
-import { relative } from "node:path";
 import { contentText } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { writtenPath } from "./tools.ts";
 
 // deepseek spends 60-70 tokens thinking before it answers, and a smaller cap
 // comes back as `length` with no text at all.
@@ -23,12 +21,16 @@ const ACK = new Set(
 );
 
 /** True when `text` only agrees, continues or thanks: nothing to re-read the work for. */
-export const isAcknowledgement = (text: string) => {
+const isAcknowledgement = (text: string) => {
   const words = text.toLowerCase().match(/[a-z']+/g) ?? [];
   return words.length > 0 && words.length <= 3 && words.every((word) => ACK.has(word));
 };
 
 export const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
+
+/** `text` cut to `max` characters, the last one an ellipsis. */
+export const clip = (text: string, max: number) =>
+  text.length > max ? `${text.slice(0, max - 1)}…` : text;
 
 const sessionPrompts = (ctx: ExtensionContext) => {
   const prompts: string[] = [];
@@ -67,17 +69,4 @@ export const stripRequest = (text: string) => {
     stripped = next;
   }
   return stripped;
-};
-
-/** The files the agent edited or wrote, relative to `cwd`, the last `limit` of them. */
-export const touchedFiles = (ctx: ExtensionContext, cwd: string, limit: number) => {
-  const files: string[] = [];
-  for (const entry of ctx.sessionManager.getBranch()) {
-    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
-    for (const block of entry.message.content) {
-      const path = block.type === "toolCall" ? writtenPath(block.name, block.arguments) : undefined;
-      if (path !== undefined) files.push(path);
-    }
-  }
-  return [...new Set(files.map((path) => relative(cwd, path) || path))].slice(-limit);
 };

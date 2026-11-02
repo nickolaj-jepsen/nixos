@@ -56,14 +56,11 @@ export interface RegistryEntry {
   updatedAt?: number;
   status?: string;
   statusUpdatedAt?: number;
-  /** pi-only, ignored by Claude Code: the sidecar's sentence about the session, and the step in flight while busy. */
+  /** pi-only, ignored by Claude Code: agent-hub's sentence about the session, and the step in flight while busy. */
   summary?: string;
   doing?: string;
   /** What a `waiting` session waits on; Claude Code writes its own, pi the open permission dialog. */
   waitingFor?: string;
-  /** pi-only: how the last turn ended (`done`, `blocked`, `failed`) and what it asks of the person; gone while busy. */
-  turnState?: string;
-  ask?: string;
   [key: string]: unknown;
 }
 
@@ -213,11 +210,9 @@ async function readEntry(file: string): Promise<RegistryEntry | undefined> {
 
 /**
  * Live, messageable sessions of other processes from every Claude registry,
- * newest first. `narrow` drops peers before the socket probe, the slow part.
+ * newest first.
  */
-export async function listPeers(
-  narrow: (peers: Peer[]) => Peer[] | Promise<Peer[]> = (peers) => peers,
-): Promise<Peer[]> {
+export async function listPeers(): Promise<Peer[]> {
   const domain = pidDomain();
   const files = (
     await Promise.all(
@@ -249,7 +244,7 @@ export async function listPeers(
       name: entry.name || `pid ${entry.pid}`,
     });
   }
-  const peers = await narrow([...candidates.values()]);
+  const peers = [...candidates.values()];
   const reachable = await Promise.all(peers.map((p) => socketReachable(p.messagingSocketPath)));
   return peers.filter((_, i) => reachable[i]).sort((a, b) => b.startedAt - a.startedAt);
 }
@@ -278,55 +273,7 @@ export function lastActive(peer: Peer, now = Date.now()): number {
   return peer.statusUpdatedAt ?? peer.updatedAt ?? peer.startedAt;
 }
 
-// A peer idle this briefly over uncommitted changes is likely between prompts of one task.
-const RECENT_IDLE_MS = 10 * 60 * 1000;
-
-/** Whether `peer` is working in a checkout it shares: mid-turn, or idle ≤10 min while `dirty`. */
-export function isBusy(peer: Peer, dirty: boolean, now = Date.now()): boolean {
-  if (peer.status === "busy" || peer.status === "waiting") return true;
-  return dirty && now - lastActive(peer, now) <= RECENT_IDLE_MS;
-}
-
 export const harness = (peer: Peer) => (peer.entrypoint === "pi" ? "pi" : "claude-code");
-
-/**
- * The system-prompt section naming the peers in the working tree at `root`, split
- * into busy and open by `isBusy`; undefined when there are none. `dirty` is whether
- * `git status --porcelain` there is non-empty, `worktreeTool` whether enter_worktree is active.
- */
-export function peerSection(o: {
-  root: string;
-  peers: Peer[];
-  dirty: boolean;
-  worktreeTool: boolean;
-  now?: number;
-}): string | undefined {
-  if (!o.peers.length) return undefined;
-  const now = o.now ?? Date.now();
-  // No summaries or idle times: they change every turn and would re-key the cached prompt.
-  const row = (p: Peer) => `- ${p.name} [${shortId(p)}] (${harness(p)})`;
-  const busy = o.peers.filter((p) => isBusy(p, o.dirty, now));
-  const open = o.peers.filter((p) => !isBusy(p, o.dirty, now));
-  const lines = [`Other agent sessions are open in this working tree (${o.root}).`];
-  if (busy.length)
-    lines.push(
-      "Working in it now:",
-      ...busy.map(row),
-      ...(o.dirty ? ["You share uncommitted changes with them."] : []),
-    );
-  if (open.length) lines.push("Open but not working now:", ...open.map(row));
-  // An open peer still reasons about this branch, so only the worktree push waits for a busy one.
-  lines.push(
-    "Before you commit, switch branches, rebase, merge, or run git checkout/restore/reset/stash/clean, tell them with send_message.",
-  );
-  if (busy.length && o.worktreeTool)
-    lines.push("For more than a quick edit, enter_worktree gives you a checkout of your own.");
-  if (o.dirty || busy.length)
-    lines.push(
-      "Changes in git status that you did not make are probably theirs: never revert, stash or commit them; ask your user instead.",
-    );
-  return lines.join("\n");
-}
 
 /** "busy", or how long ago the session went idle, coarsely ("idle 3h"). */
 export function activityLabel(peer: Peer, now = Date.now()): string {

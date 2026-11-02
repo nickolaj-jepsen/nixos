@@ -1,8 +1,9 @@
 // Bar pill: a dot per session that wants attention or is working. Popout: a switcher
 // over every live agent session in the hub's order, the selected row expanded to its
-// full reason. Keys: Enter focuses the selection, x dismisses a finished one, j/k move,
-// g/G jump to the ends; the selection starts on the first row, so Mod+B then Enter goes
-// to the longest-waiting one.
+// full reason and last few turns, then the few that ended last. Keys: Enter focuses the
+// selection (or resumes an ended one in a new terminal), x dismisses a finished one, j/k
+// move, g/G jump to the ends; the selection starts on the first row, so Mod+B then Enter
+// goes to the longest-waiting one.
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Window
@@ -18,23 +19,35 @@ PluginComponent {
     readonly property bool linkUp: hub?.linkUp ?? false
     readonly property var sessions: hub?.sessions ?? []
     readonly property var active: sessions.filter(s => s.state !== "idle")
+    readonly property int maxRecent: 5
+    // The popout's rows: the live sessions, then the latest that ended, as rows of their own.
+    readonly property var rows: sessions.concat((hub?.recent ?? []).slice(0, maxRecent).map(r => ({
+                    "id": r.id,
+                    "agent": r.agent,
+                    "name": r.label,
+                    "cwd": r.cwd,
+                    "reason": r.summary,
+                    "state": "ended",
+                    "since": r.endedAt,
+                    "history": r.history
+                })))
     readonly property int maxDots: 6
     // A session left asking or waiting on a reply this long has its age turn red.
     readonly property int staleSeconds: 900
-    readonly property var pillStates: ["asking", "needs-reply", "failed", "done", "working"]
+    readonly property var pillStates: ["asking", "needs-reply", "failed", "stalled", "done", "working"]
     readonly property string iconDir: Qt.resolvedUrl("icons/")
 
     property string selectedId: ""
     property real nowMs: Date.now()
 
-    readonly property int selectedIndex: Math.max(0, sessions.findIndex(s => s.id === selectedId))
-    readonly property var selected: sessions[selectedIndex] ?? null
+    readonly property int selectedIndex: Math.max(0, rows.findIndex(s => s.id === selectedId))
+    readonly property var selected: rows[selectedIndex] ?? null
 
     _visibilityOverride: true
     _visibilityOverrideValue: active.length > 0 || !linkUp
 
     function wantsYou(session) {
-        return ["asking", "needs-reply", "failed", "done"].includes(session.state);
+        return ["asking", "needs-reply", "failed", "stalled", "done"].includes(session.state);
     }
 
     function finished(session) {
@@ -50,18 +63,26 @@ PluginComponent {
             "asking": Theme.error,
             "needs-reply": Theme.warning,
             "failed": Theme.error,
+            "stalled": Theme.warning,
             "done": Theme.primary
         }[session.state] ?? Theme.surfaceVariantText;
     }
 
-    function reason(session) {
+    // A row's or a past turn's glyph; working and idle draw a spinner and a dot instead.
+    function icon(item) {
         return {
-            "asking": session.waitingFor,
-            "needs-reply": session.ask,
-            "failed": session.summary,
-            "done": session.summary,
-            "working": session.doing
-        }[session.state] || "";
+            "asking": "front_hand",
+            "needs-reply": "chat_bubble",
+            "failed": "error",
+            "stalled": "hourglass_top",
+            "done": "check_circle",
+            "ended": "history"
+        }[item.state] ?? "";
+    }
+
+    // Outlined, failed and stalled read quieter than asking and needs-reply in the same colours.
+    function filled(item) {
+        return !["failed", "stalled", "ended"].includes(item.state);
     }
 
     function stateWords(session) {
@@ -70,20 +91,22 @@ PluginComponent {
             "asking": "asking since ",
             "needs-reply": "waiting on you since ",
             "failed": "failed at ",
+            "stalled": "stalled since ",
             "done": "finished at ",
             "working": "working since ",
-            "idle": "idle since "
+            "idle": "idle since ",
+            "ended": "ended at "
         }[session.state] + at;
     }
 
     function ago(ms) {
         const m = Math.floor((nowMs - ms) / 60000);
-        return m < 1 ? "now" : m < 60 ? m + "m" : Math.floor(m / 60) + "h";
+        return m < 1 ? "now" : m < 60 ? m + "m" : m < 2880 ? Math.floor(m / 60) + "h" : Math.floor(m / 1440) + "d";
     }
 
     function select(index) {
-        if (sessions.length)
-            selectedId = sessions[Math.max(0, Math.min(sessions.length - 1, index))].id;
+        if (rows.length)
+            selectedId = rows[Math.max(0, Math.min(rows.length - 1, index))].id;
     }
 
     function dismiss(session) {
@@ -94,7 +117,10 @@ PluginComponent {
     function focusSession(session) {
         if (!session)
             return;
-        hub.focusSession(session.id);
+        if (session.state === "ended")
+            hub.resume(session.id);
+        else
+            hub.focusSession(session.id);
         closePopout();
     }
 
@@ -242,11 +268,15 @@ PluginComponent {
         readonly property var session: modelData
         readonly property bool isSelected: index === root.selectedIndex
         readonly property bool idle: session.state === "idle"
-        readonly property string reason: root.reason(session)
+        readonly property bool ended: session.state === "ended"
+        readonly property string reason: session.reason || ""
         readonly property string cwd: Paths.shortenHome(session.cwd)
         readonly property color tone: root.tone(session)
-        // A rule between the sessions that want you and the rest.
-        readonly property bool divided: index > 0 && !root.wantsYou(session) && root.wantsYou(root.sessions[index - 1])
+        // The last finished turns, newest last, as the hub sends them.
+        readonly property var history: (session.history ?? []).slice(-3)
+        readonly property var previous: index > 0 ? root.rows[index - 1] : null
+        // A rule between the sessions that want you and the rest, and before the ended ones.
+        readonly property bool divided: previous !== null && ((!root.wantsYou(session) && root.wantsYou(previous)) || (ended && previous.state !== "ended"))
         readonly property real gap: divided ? Theme.spacingM : 0
         readonly property real iconBox: 20
 
@@ -318,14 +348,8 @@ PluginComponent {
                 DIcon {
                     anchors.centerIn: parent
                     visible: !row.idle && row.session.state !== "working"
-                    name: ({
-                            "asking": "front_hand",
-                            "needs-reply": "chat_bubble",
-                            "failed": "error",
-                            "done": "check_circle"
-                        })[row.session.state] ?? ""
-                    // Outlined, failed reads quieter than asking in the same red.
-                    filled: row.session.state !== "failed"
+                    name: root.icon(row.session)
+                    filled: root.filled(row.session)
                     size: 18
                     color: row.tone
                 }
@@ -350,7 +374,7 @@ PluginComponent {
                         elide: Text.ElideRight
                         font.pixelSize: Theme.fontSizeMedium
                         font.weight: Font.Medium
-                        color: row.idle ? Theme.surfaceVariantText : Theme.surfaceText
+                        color: row.idle || row.ended ? Theme.surfaceVariantText : Theme.surfaceText
                     }
 
                     Row {
@@ -382,7 +406,47 @@ PluginComponent {
                     maximumLineCount: row.isSelected ? 4 : 1
                     elide: Text.ElideRight
                     font.pixelSize: Theme.fontSizeSmall
-                    color: row.session.state === "asking" || row.session.state === "needs-reply" ? Theme.surfaceText : Theme.surfaceVariantText
+                    color: ["asking", "needs-reply", "stalled"].includes(row.session.state) ? Theme.surfaceText : Theme.surfaceVariantText
+                }
+
+                Repeater {
+                    model: row.isSelected ? row.history : []
+
+                    Item {
+                        id: turn
+
+                        required property var modelData
+
+                        width: body.width
+                        height: did.implicitHeight
+
+                        DIcon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: root.icon(turn.modelData) || "circle"
+                            filled: root.filled(turn.modelData)
+                            size: Theme.fontSizeSmall
+                            color: root.tone(turn.modelData)
+                        }
+
+                        StyledText {
+                            id: did
+                            x: Theme.fontSizeSmall + Theme.spacingXS
+                            width: parent.width - x - turnAge.width - Theme.spacingS
+                            text: turn.modelData.did
+                            maximumLineCount: 1
+                            elide: Text.ElideRight
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceVariantText
+                        }
+
+                        StyledText {
+                            id: turnAge
+                            anchors.right: parent.right
+                            text: root.ago(turn.modelData.at)
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.withAlpha(Theme.surfaceVariantText, 0.8)
+                        }
+                    }
                 }
 
                 StyledText {
@@ -406,7 +470,7 @@ PluginComponent {
             property var parentPopout: null
             property var closePopout: null
 
-            implicitHeight: root.sessions.length ? list.height : empty.implicitHeight
+            implicitHeight: root.rows.length ? list.height : empty.implicitHeight
             focus: true
 
             function grab() {
@@ -452,7 +516,7 @@ PluginComponent {
                 else if (event.key === Qt.Key_Home || event.text === "g")
                     root.select(0);
                 else if (event.key === Qt.Key_End || event.text === "G")
-                    root.select(root.sessions.length - 1);
+                    root.select(root.rows.length - 1);
                 else
                     return;
                 event.accepted = true;
@@ -461,11 +525,11 @@ PluginComponent {
             StyledText {
                 id: empty
                 width: parent.width
-                visible: !root.sessions.length
+                visible: !root.rows.length
                 topPadding: Theme.spacingM
                 bottomPadding: Theme.spacingM
                 horizontalAlignment: Text.AlignHCenter
-                text: root.linkUp ? "No agent sessions." : "The agent-hub service is not running."
+                text: root.linkUp ? "No agent sessions." : root.hub?.refused || "The agent-hub service is not running."
                 font.pixelSize: Theme.fontSizeMedium
                 color: Theme.surfaceVariantText
             }
@@ -474,10 +538,10 @@ PluginComponent {
                 id: list
                 width: parent.width
                 height: Math.min(contentHeight, Screen.height * 0.6)
-                visible: root.sessions.length > 0
+                visible: root.rows.length > 0
                 interactive: contentHeight > height
                 spacing: 2
-                model: root.sessions
+                model: root.rows
                 delegate: SessionRow {}
             }
         }

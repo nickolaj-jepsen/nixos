@@ -9,7 +9,7 @@ description = "Desktop hub for live coding-agent sessions"
 requires-python = ">=3.11"
 
 [project.scripts]
-agent-hub = "agent_hub:main"
+agent-hub = "agent_hub.cli:main"
 
 [tool.setuptools]
-py-modules = ["agent_hub"]
+packages = ["agent_hub"]

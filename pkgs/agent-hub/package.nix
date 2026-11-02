@@ -1,7 +1,8 @@
-# `agent-hub daemon`: the desktop hub for live coding-agent sessions. Config is
+# `agent-hub daemon`: the hub for live coding-agent sessions. Config is
 # ~/.config/agent-hub/config.json (written by modules/programs/agent-hub.nix).
 # The build runs its protocol tests against a real daemon.
 {
+  git,
   lib,
   python3Packages,
 }: let
@@ -14,13 +15,12 @@ in
     src = ./.;
 
     build-system = [python3Packages.setuptools];
-    nativeCheckInputs = [python3Packages.unittestCheckHook];
+    nativeCheckInputs = [python3Packages.unittestCheckHook git];
     unittestFlags = ["-s" "tests" "-p" "test_*.py"];
 
     meta = {
       inherit (project) description;
       mainProgram = "agent-hub";
-      # Watches the session registry with inotify.
-      platforms = lib.platforms.linux;
+      platforms = lib.platforms.linux ++ lib.platforms.darwin;
     };
   }

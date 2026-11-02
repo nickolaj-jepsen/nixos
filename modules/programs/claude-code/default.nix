@@ -24,9 +24,13 @@
     # throughput, plus which profile is running — claude-work shares this
     # file and CLAUDE.md by symlink, so nothing else distinguishes the two.
     # ANSI codes only, so the ghostty Flexoki palette stays authoritative.
+    # agent-hub joins its PATH only where the hub's daemon runs: its segment is
+    # this session's own row on the bar, and a host without a hub shows none.
     statusLine = pkgs.writeShellApplication {
       name = "claude-statusline";
-      runtimeInputs = [pkgs.jq pkgs.git pkgs.gh pkgs.coreutils];
+      runtimeInputs =
+        [pkgs.jq pkgs.git pkgs.gh pkgs.coreutils]
+        ++ lib.optional config.fireproof.dev.agent-hub.enable pkgs.agent-hub;
       text = builtins.readFile ./statusline.sh;
     };
 
@@ -288,9 +292,25 @@
           fable.effortLevel = "xhigh";
           sonnet.effortLevel = "medium";
         };
-        hooks =
+        hooks = let
+          hub = config.fireproof.dev.agent-hub.enable;
+          hubHook = extra: [
+            {
+              hooks = [
+                ({
+                    type = "command";
+                    command = "${lib.getExe pkgs.agent-hub} hook";
+                  }
+                  // extra)
+              ];
+            }
+          ];
+          # Fire and forget: the hub reads the session on its own time.
+          hubAsync = hubHook {async = true;};
+        in
           {
-            SessionStart = direnvHooks;
+            # SessionStart names the profile the hub's readings of this session run as.
+            SessionStart = direnvHooks ++ lib.optionals hub hubAsync;
             CwdChanged = direnvHooks;
             WorktreeCreate = worktreeLifecycle;
             WorktreeRemove = worktreeLifecycle;
@@ -323,20 +343,17 @@
             ];
           }
           # PermissionRequest labels the dialog the registry already marks `waiting`;
-          # Stop hands the hub the transcript, so it can tell how the turn ended.
-          // lib.optionalAttrs (config.fireproof.dev.agent-hub.enable && pkgs.stdenv.isLinux) (
-            lib.genAttrs ["PermissionRequest" "Stop"] (_: [
-              {
-                hooks = [
-                  {
-                    type = "command";
-                    command = "${lib.getExe pkgs.agent-hub} hook";
-                    async = true;
-                  }
-                ];
-              }
-            ])
-          );
+          # Stop hands the hub the transcript, so it can tell how the turn ended;
+          # SessionEnd ends the session without waiting for its pid to die.
+          // lib.optionalAttrs hub {
+            PermissionRequest = hubAsync;
+            Stop = hubAsync;
+            # Claude is exiting: an async hook can die before it reaches the hub.
+            SessionEnd = hubHook {timeout = 2;};
+            # Waited on: the hub's note on the other sessions in this working tree
+            # joins the prompt. The hook itself gives up on the hub after a second.
+            UserPromptSubmit = hubHook {timeout = 5;};
+          };
         # Context for the auto-mode classifier, adapted from /auto-mode-setup
         # (run per-project) to every project and host. Replaces the built-in
         # environment wholesale, like the setup's own output: no "$defaults".

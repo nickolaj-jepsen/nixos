@@ -670,6 +670,20 @@ class Fixture(unittest.TestCase):
         self.wt("remove", "--force", "--ignore-in-use", "busy")
         self.assertFalse(path.exists())
 
+    def test_busy_worktree_names_the_agent_session_agent_hub_knows(self) -> None:
+        path = self.create("busy")
+        process = subprocess.Popen(["sleep", "30"], cwd=str(path))
+        self.addCleanup(lambda: (process.kill(), process.wait()))
+        bin_dir = Path(self.root, "bin")
+        bin_dir.mkdir()
+        hub = bin_dir / "agent-hub"
+        hub.write_text('#!/bin/sh\necho \'{"name": "rebase onto main", "state": "working"}\'\n')
+        hub.chmod(0o755)
+        self.env["PATH"] = f"{bin_dir}{os.pathsep}{self.env['PATH']}"
+        time.sleep(0.2)
+        result = self.wt("remove", "--force", "busy", check=False)
+        self.assertIn(f'pid {process.pid}, session "rebase onto main"', result.stderr)
+
     def test_a_held_lock_makes_mutation_fail_without_changes(self) -> None:
         path = self.create("locked-out")
         holder = subprocess.Popen(

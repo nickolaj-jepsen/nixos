@@ -1,328 +1,208 @@
 /**
- * The session's label and what the last turn wants from you, kept by the
- * sidecar (`identity/sidecar.ts`) and persisted on the branch as the
- * `shared/identity.ts` record; chrome's border and title paint them.
+ * The session's label and what the last turn wants from you, as agent-hub reads
+ * them (`lib/hub.ts`); chrome's border and title paint them, and the record is
+ * persisted on the branch (`shared/identity.ts`) so a resumed session paints at
+ * once and `/resume` and memory have something to go on.
  *
- * The label is model-written, not cut from the first prompt: a sidecar call
- * runs at each substantive turn, beside the run, and is asked to repeat the
- * current label when the work has not moved on. So the name follows the work
- * instead of freezing on one sentence, and the directory is never a name, since
- * the footer already carries it. The deterministic cut of the first prompt
- * survives only as the fallback for a session the model could not name.
+ * The hub makes one reading at each substantive turn start, beside the run, and
+ * one when the turn settles; pi runs both with its own side model when the hub
+ * asks. The hub reads the session file itself; this side tells it where each turn
+ * starts and ends, and keeps what is pi's alone: the session name, which follows
+ * the label until you run `/name`, and the drafted reply on the input line, which
+ * backs off when you keep passing it over.
  *
- * A second call reads the turn once it settles, for the one thing a wall of
- * prose hides: what it wants from you. That ask becomes the border's detail
- * when the agent is idle, and its draft answer a suggestion on the input line.
- * The same call says whether the turn finished, waits on you or gave up. It runs
- * for every settled turn, however short: the hub and the draft answer have only
- * that call to learn a turn ended on a question.
- *
- * Every reading is broadcast on `SIDECAR_CHANNEL`, so other extensions can use
- * it without paying for a call of their own. Until you run `/name`, the session
- * name follows the label, so `/resume` lists something useful.
+ * Without the hub the label is the first request cut to a name.
  */
+import { contentText } from "@earendil-works/pi-ai";
 import {
   copyToClipboard,
   type ExtensionAPI,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import {
-  IDENTITY_ENTRY,
-  type IdentityRecord,
-  readIdentity,
-  SIDECAR_CHANNEL,
-  type SidecarUpdate,
-  type TurnState,
-} from "../shared/identity.ts";
-import { firstRequest, isAcknowledgement, oneLine, stripRequest } from "../shared/naming.ts";
-import {
-  ask as askSidecar,
-  buildPrompt,
-  type Fields,
-  MAX_DOING,
-  parseFields,
-} from "./identity/sidecar.ts";
+import { IDENTITY_ENTRY, type IdentityRecord, readIdentity } from "../shared/identity.ts";
+import { firstRequest, NAME_TIMEOUT_MS, oneLine, stripRequest } from "../shared/naming.ts";
+import { sideCall } from "../shared/side-call.ts";
+import type { Hub } from "./lib/hub.ts";
 import type { UserWait } from "./lib/user-wait.ts";
 
-type Phase = "working" | "idle" | "failed";
 type Source = "name" | "model" | "prompt";
-/** Which moment the call is reading: a request that just arrived, or a turn that just ended. */
-type Moment = SidecarUpdate["moment"];
 
 export type Label = {
   text: string;
   source: Source;
-  /** The session name this extension last wrote; any other name is the user's `/name`. */
-  autoName?: string;
 };
 
-/** What the sidecar says beside the label; it outlives a rename and survives `/name`. */
-type Meta = { summary?: string; tags?: readonly string[] };
-
 const SHORTCUT = "alt+r";
-// A runaway guard rather than a budget: a call costs ~$0.0002 and a turn buys one.
-const CALL_CAP = 200;
-// A paste and the follow-up that corrects it are one turn's naming, not two.
-const MIN_CALL_GAP_MS = 10_000;
-// A dead gateway should stop being asked, not be asked again every turn.
-const MAX_FAILURES = 3;
 const MAX_LABEL_CHARS = 40;
+// The peers note is part of the system prompt, so the run waits for it; a hub slower than this goes without.
+const PEERS_TIMEOUT_MS = 500;
 // Drafts passed over this many turns running are noise; from then on only every
 // few turns gets one, until one is taken.
 const REPLY_BACKOFF_AFTER = 4;
 const REPLY_BACKOFF_EVERY = 3;
 
-const cleanLabel = (raw: string) => {
-  const first = oneLine(raw).replace(/^(label|session|task)\s*:\s*/i, "");
-  const unquoted = first
-    .replace(/^["'`]+|["'`.,;:]+$/g, "")
-    // A name is letters, digits, spaces and the odd hyphen: an emoji or a stray
-    // bracket from a small model costs two columns and reads as decoration.
-    .replace(/[^\p{L}\p{N} '\-/]/gu, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (unquoted.length <= MAX_LABEL_CHARS) return unquoted;
-  const cut = unquoted.slice(0, MAX_LABEL_CHARS);
-  const lastSpace = cut.lastIndexOf(" ");
-  return `${(lastSpace > 20 ? cut.slice(0, lastSpace) : cut).trim()}…`;
+const cut = (text: string) => {
+  const line = oneLine(text);
+  if (line.length <= MAX_LABEL_CHARS) return line;
+  const head = line.slice(0, MAX_LABEL_CHARS);
+  const lastSpace = head.lastIndexOf(" ");
+  return `${(lastSpace > 20 ? head.slice(0, lastSpace) : head).trim()}…`;
 };
+
+/** The background jobs bg_run has running, which a turn that ends to wait on them counts on. */
+export type Jobs = { running: () => number };
 
 /**
  * Registers the identity's handlers, `/header` and its shortcut. Create it
  * before any feature whose handlers read it on the same event.
  */
-export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
+export const createIdentity = (pi: ExtensionAPI, userWait: UserWait, hub: Hub, jobs: Jobs) => {
   let session: ExtensionContext | undefined;
-  /** Whether the session draws pi's TUI; a headless one (`pi -p`, RPC) makes no call. */
-  let live = false;
-  let phase: Phase = "idle";
-  // The call out now; aborted at session_shutdown, after which every ctx and pi call throws.
-  let inflight: AbortController | undefined;
-  let label: Label | undefined;
-  let meta: Meta = {};
-  let calls = 0;
-  let failures = 0;
-  let lastCallAt = 0;
+  /** The record last persisted on the branch. */
+  let record: IdentityRecord = {};
+  let working = false;
+  /** Whether the run ended on an error, for a hub that cannot say so itself. */
+  let errored = false;
   const listeners = new Set<() => void>();
-  /** A settle call that arrived while the turn-start call was still out. */
-  let pending: Moment | undefined;
-  /** The step the last call named; shown while the turn runs, dropped when it settles. */
-  let doing: string | undefined;
-  /** What the finished turn asked for, and the draft that answers it. Both die with the next turn. */
-  let ask: string | undefined;
+  let peers: Promise<string | undefined> = Promise.resolve(undefined);
+  /** The draft on offer, and the ask it answers, so one row pushed twice offers it once. */
   let reply: string | undefined;
-  /** How the finished turn ended, by the settle call's reading; dies with the next turn. */
-  let turnState: TurnState | undefined;
-  /** Whether a draft was on offer for the last turn, and how many turns running one went untaken. */
+  let replyFor: string | undefined;
   let offered = false;
   let unusedReplies = 0;
   let backedOff = 0;
-
-  const sessionId = () => session?.sessionManager.getSessionId() ?? "";
 
   const paint = () => {
     for (const listener of listeners) listener();
   };
 
-  const persist = () => {
-    const data: IdentityRecord = {
-      text: label?.text,
-      calls,
-      summary: meta.summary,
-      tags: meta.tags ? [...meta.tags] : undefined,
-      autoName: label?.autoName,
-    };
-    pi.appendEntry<IdentityRecord>(IDENTITY_ENTRY, data);
-  };
-
-  /**
-   * A session name we did not write is the user's choice through `/name`, and
-   * it outranks anything this extension would generate.
-   */
+  /** A session name we did not write is the person's choice through `/name`, and it outranks the label. */
   const explicitName = () => {
     const name = pi.getSessionName();
-    return name && name !== label?.autoName ? name : undefined;
+    return name && name !== record.autoName ? name : undefined;
   };
 
-  /**
-   * Stores a model label and, unless the user named the session, renames it to
-   * match: `/resume` lists sessions by name, the one place the label helps
-   * before the window is even open.
-   */
-  const adopt = (text: string) => {
-    label = { text, source: "model", autoName: text };
-    if (pi.getSessionName() !== text) pi.setSessionName(text);
-  };
-
-  /** The first request cut to a name: only for a session the model could not reach. */
-  const fallback = (ctx: ExtensionContext) =>
-    failures > 0 ? cleanLabel(stripRequest(firstRequest(ctx) ?? "")) : "";
+  /** The first request cut to a name, by leaf: every repaint asks while the hub is away. */
+  let fallback: { leaf: string | null; text: string } | undefined;
 
   const current = (ctx: ExtensionContext): Label | undefined => {
     const name = explicitName();
     if (name) return { text: name, source: "name" };
-    if (label) return label;
-    const text = fallback(ctx);
-    return text ? { text, source: "prompt" } : undefined;
+    // `adopt` copies each hub reading into the record before anything repaints.
+    if (record.text) return { text: record.text, source: "model" };
+    if (hub.connected()) return undefined;
+    const leaf = ctx.sessionManager.getLeafId();
+    if (fallback?.leaf !== leaf)
+      fallback = { leaf, text: cut(stripRequest(firstRequest(ctx) ?? "")) };
+    return fallback.text ? { text: fallback.text, source: "prompt" } : undefined;
   };
+
+  /**
+   * Persists what the hub says the session is called and, unless you named it,
+   * renames it to match: `/resume` lists sessions by name, the one place the label
+   * helps before the window is even open.
+   */
+  const adopt = () => {
+    const identity = hub.identity();
+    if (!identity || !session) return;
+    const next: IdentityRecord = {
+      text: identity.label ?? record.text,
+      calls: identity.calls ?? record.calls,
+      summary: identity.summary ?? record.summary,
+      tags: identity.tags ?? record.tags,
+      autoName: record.autoName,
+    };
+    const rename = !!next.text && !explicitName() && pi.getSessionName() !== next.text;
+    if (rename) next.autoName = next.text;
+    // The count moves before each reading lands; it rides along with the next real change.
+    const changed =
+      JSON.stringify({ ...next, calls: 0 }) !== JSON.stringify({ ...record, calls: 0 });
+    // Recorded before the rename, whose session_info_changed reads it to tell our name from yours.
+    record = next;
+    if (!changed) return;
+    pi.appendEntry<IdentityRecord>(IDENTITY_ENTRY, record);
+    if (rename && next.text) pi.setSessionName(next.text);
+  };
+
+  /**
+   * The draft to offer for a new ask, if any. After enough untaken drafts in a
+   * row, only every few turns gets one: a row you keep reading past is clutter.
+   */
+  const offer = () => {
+    const row = hub.read();
+    const ask = row?.state === "needs-reply" ? row.ask : undefined;
+    if (ask === replyFor) return;
+    replyFor = ask;
+    reply = undefined;
+    if (!ask || !row?.reply) return;
+    if (unusedReplies >= REPLY_BACKOFF_AFTER && ++backedOff % REPLY_BACKOFF_EVERY !== 0) return;
+    offered = true;
+    reply = row.reply;
+  };
+
+  hub.onChange(() => {
+    adopt();
+    offer();
+    paint();
+  });
+  hub.attachWith(() => ({
+    record: { label: record.text, summary: record.summary, tags: record.tags, calls: record.calls },
+    name: explicitName(),
+  }));
+  hub.judgeWith(async (request) => {
+    const ctx = session;
+    if (!ctx) return undefined;
+    const result = await sideCall(pi, ctx, {
+      source: request.source,
+      system: request.system,
+      prompt: request.prompt,
+      maxTokens: request.maxTokens,
+      // A few short lines, and nothing worth thinking about: a model that reasons
+      // here spends the whole budget on it and returns no text at all.
+      reasoning: "minimal",
+      timeoutMs: NAME_TIMEOUT_MS,
+      signal: request.signal,
+    });
+    return "error" in result ? undefined : result.text;
+  });
 
   // Sub-agent widgets already own `●`, `○`, `⟳` and `▸`, so states that need you
   // are words and "working" is either pi's spinner or a frozen frame of one.
-  const stateWord = (ctx: ExtensionContext) =>
-    userWait.waitingOnUser(ctx)
-      ? "waiting"
-      : phase === "failed" || (phase === "idle" && turnState === "failed")
-        ? "failed"
-        : phase === "idle" && turnState === "blocked"
-          ? "needs you"
-          : "";
-
-  /** Tells other extensions what the sidecar knows now; `asked` is false when no call was made. */
-  const announce = (moment: Moment, asked: boolean) => {
-    const update: SidecarUpdate = {
-      sessionId: sessionId(),
-      moment,
-      asked,
-      label: session ? current(session)?.text : label?.text,
-      summary: meta.summary,
-      doing: phase === "working" ? doing : undefined,
-      state: moment === "settle" ? turnState : undefined,
-      ask: moment === "settle" ? ask : undefined,
-    };
-    pi.events.emit(SIDECAR_CHANNEL, update);
-  };
-
-  /**
-   * The draft to offer, if any. After enough untaken drafts in a row, only every
-   * few turns gets one: a row you keep reading past is clutter.
-   */
-  const offer = (draft: string | undefined) => {
-    if (!draft) return undefined;
-    if (unusedReplies >= REPLY_BACKOFF_AFTER && ++backedOff % REPLY_BACKOFF_EVERY !== 0) {
-      return undefined;
-    }
-    offered = true;
-    return draft;
-  };
-
-  /** Takes what the sidecar said, keeping whatever it left out. */
-  const apply = (fields: Fields, moment: Moment) => {
-    if (fields.summary) meta = { ...meta, summary: fields.summary };
-    if (fields.tags) meta = { ...meta, tags: fields.tags };
-    // An omitted key keeps the step; an empty one clears it.
-    if (phase === "working" && fields.doing !== undefined) {
-      doing = fields.doing ? oneLine(fields.doing).slice(0, MAX_DOING) : undefined;
-    }
-    // Only a turn that ended has anything to ask for; at turn start the keys are
-    // guesses about work that has not happened.
-    if (moment === "settle") {
-      ask = fields.ask ? oneLine(fields.ask) : undefined;
-      reply = ask ? offer(oneLine(fields.reply ?? "") || undefined) : undefined;
-      // An open question is the person's turn whatever the model called it.
-      turnState = ask ? "blocked" : fields.state;
-    }
-    const next = fields.label ? cleanLabel(fields.label) : "";
-    if (next && next !== label?.text && explicitName() === undefined) adopt(next);
-    persist();
-    announce(moment, true);
-  };
-
-  /**
-   * Asks the sidecar for the session's identity. `manual` is a click or the
-   * shortcut, which skips the debounce and reports failures instead of hiding them.
-   */
-  const refresh = async (ctx: ExtensionContext, manual = false, moment: Moment = "start") => {
-    // A settled turn is announced whether or not it gets a call, so nobody waits on one.
-    const skip = () => {
-      if (moment === "settle") announce(moment, false);
-    };
-    if (!live) return skip();
-    if (inflight) {
-      // A turn that settles while the turn-start call is still out keeps its ask:
-      // it runs as soon as that call is done.
-      if (moment === "settle") pending = "settle";
-      return;
-    }
-    const muted = failures >= MAX_FAILURES;
-    const capped = calls >= CALL_CAP;
-    if (muted || capped) {
-      if (manual) {
-        ctx.ui.notify(
-          muted
-            ? "identity: the label model keeps failing, staying quiet until the next session"
-            : `identity: label call cap (${CALL_CAP}) reached`,
-          "warning",
-        );
-      }
-      return skip();
-    }
-    // A settled turn is one call no matter how quickly it followed the last one;
-    // the debounce exists for prompts typed in bursts.
-    if (!manual && moment === "start" && Date.now() - lastCallAt < MIN_CALL_GAP_MS) return;
-
-    const controller = new AbortController();
-    inflight = controller;
-    lastCallAt = Date.now();
-    try {
-      const shown = current(ctx);
-      // A fallback is a cut of the user's sentence, not a name: do not ask the
-      // model to repeat it, or the first guess becomes sticky.
-      const prompt = await buildPrompt(ctx, {
-        label: shown?.source === "prompt" ? undefined : shown?.text,
-        summary: meta.summary,
-        tags: meta.tags,
-        settle: moment === "settle",
-      });
-      if (controller.signal.aborted) return;
-      const reply = await askSidecar(pi, ctx, prompt, moment, controller.signal);
-      if (controller.signal.aborted) return;
-      // Counted on any outcome, so a model that keeps failing still meets CALL_CAP.
-      calls += 1;
-      if ("error" in reply) throw new Error(reply.error);
-      const fields = parseFields(reply.text);
-      if (Object.keys(fields).length === 0) throw new Error("no fields in reply");
-      failures = 0;
-      apply(fields, moment);
-    } catch (error) {
-      failures += 1;
-      if (!controller.signal.aborted) skip();
-      if (manual && !controller.signal.aborted) {
-        const reason = error instanceof Error ? error.message : String(error);
-        ctx.ui.notify(`identity: relabel failed: ${reason}`, "error");
-      }
-    } finally {
-      // A call aborted at shutdown may finish after the next session started its own.
-      if (inflight === controller) inflight = undefined;
-      if (!controller.signal.aborted) {
-        paint();
-        const next = pending;
-        pending = undefined;
-        if (next && session) void refresh(session, false, next).catch(() => {});
-      }
-    }
+  const stateWord = (ctx: ExtensionContext) => {
+    if (userWait.waitingOnUser(ctx)) return "waiting";
+    if (working) return "";
+    const state = hub.read()?.state;
+    if (state === "failed" || (state === undefined && errored)) return "failed";
+    return state === "needs-reply" ? "needs you" : "";
   };
 
   const quote = (path: string) =>
     /^[a-zA-Z0-9_\-./~:@]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`;
-
+  const sessionId = (ctx: ExtensionContext) => ctx.sessionManager.getSessionId();
   const resumeCommand = (ctx: ExtensionContext) =>
-    `cd ${quote(ctx.cwd)} && pi --session ${sessionId().slice(0, 8)}`;
+    `cd ${quote(ctx.cwd)} && pi --session ${sessionId(ctx).slice(0, 8)}`;
+
+  const relabel = async (ctx: ExtensionContext) => {
+    if (!hub.relabel()) ctx.ui.notify("identity: agent-hub is not running", "warning");
+  };
+
   const summary = (ctx: ExtensionContext) => {
     const shown = current(ctx);
+    const row = hub.read();
     const persisted = ctx.sessionManager.getSessionFile();
     return [
       `${shown?.text ?? "(unnamed)"}  (${shown?.source ?? "none"})`,
-      meta.summary,
-      meta.tags?.length ? `tags: ${meta.tags.join(", ")}` : undefined,
-      phase === "working" && doing ? `doing: ${doing}` : undefined,
-      ask ? `needs: ${ask}` : undefined,
+      record.summary,
+      record.tags?.length ? `tags: ${record.tags.join(", ")}` : undefined,
+      row?.doing ? `doing: ${row.doing}` : undefined,
+      row?.ask ? `needs: ${row.ask}` : undefined,
       reply ? `reply: ${reply}` : undefined,
-      turnState ? `last turn: ${turnState}` : undefined,
+      row ? `hub: ${row.state}` : "hub: not connected",
       `path: ${ctx.cwd}`,
       persisted
-        ? `session: ${sessionId()}`
+        ? `session: ${sessionId(ctx)}`
         : "session: ephemeral (--no-session), nothing to resume",
-      `label calls: ${calls}`,
+      `label calls: ${record.calls ?? 0}`,
       persisted ? `resume: ${resumeCommand(ctx)}` : undefined,
     ]
       .filter(Boolean)
@@ -338,7 +218,7 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
         "Refresh label now",
         "Copy resume command",
       ]);
-      if (choice === "Refresh label now") await refresh(ctx, true);
+      if (choice === "Refresh label now") await relabel(ctx);
       else if (choice === "Copy resume command") {
         if (!ctx.sessionManager.getSessionFile()) {
           ctx.ui.notify("identity: this session is ephemeral (--no-session)", "warning");
@@ -352,26 +232,34 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
 
   pi.registerShortcut(SHORTCUT, {
     description: "Relabel this session now",
-    handler: (ctx) => refresh(ctx, true),
+    handler: (ctx) => relabel(ctx),
   });
 
   pi.on("session_start", (_event, ctx) => {
     session = ctx;
-    live = ctx.mode === "tui" && ctx.hasUI;
+    record = {};
+    working = false;
+    errored = false;
+    reply = undefined;
+    replyFor = undefined;
+    fallback = undefined;
     // The last persisted record on this branch wins, so a resumed session paints
-    // instantly and without a model call.
+    // instantly and the hub starts from it.
     for (const entry of ctx.sessionManager.getBranch()) {
       const data = readIdentity(entry);
-      if (!data) continue;
-      if (data.calls !== undefined) calls = data.calls;
-      if (data.summary !== undefined) meta = { ...meta, summary: data.summary };
-      if (data.tags !== undefined) meta = { ...meta, tags: data.tags };
-      if (data.text !== undefined)
-        label = { text: data.text, source: "model", autoName: data.autoName };
+      if (data)
+        record = {
+          ...record,
+          ...Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined)),
+        };
     }
   });
 
-  // The turn's request is new information, and the call runs beside the run
+  pi.on("session_info_changed", () => {
+    hub.named(explicitName());
+  });
+
+  // The turn's request is new information, and the reading runs beside the run
   // rather than after it, so the name is ready by the time anyone looks up.
   pi.on("before_agent_start", (event, ctx) => {
     // Only your own prompt passes a draft over; a peer's message or a steer does not.
@@ -385,58 +273,52 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
       }
     }
     offered = false;
-    // A new turn retires the last one's ask, its draft, its state and its step.
-    ask = undefined;
     reply = undefined;
-    turnState = undefined;
-    doing = undefined;
-    if (event.messageType !== "user") return;
-    if (isAcknowledgement(event.prompt)) return;
-    void refresh(ctx).catch(() => {});
+    errored = false;
+    peers = hub.turnStart(
+      event.messageType === "user" ? event.prompt : contentText(event.message.content, "\n"),
+      event.messageType === "user",
+      pi.getActiveTools().includes("enter_worktree"),
+      PEERS_TIMEOUT_MS,
+    );
   });
 
   pi.on("agent_start", () => {
-    phase = "working";
-  });
-
-  pi.on("agent_settled", (_event, ctx) => {
-    // Failure is sticky until the next run starts.
-    if (phase !== "failed") phase = "idle";
-    // The step described a turn that is over.
-    doing = undefined;
-    // Every turn is judged: a short one can still end on a question, and the bar and
-    // the reply draft have only this call to learn it from.
-    void refresh(ctx, false, "settle").catch(() => {});
+    working = true;
+    paint();
   });
 
   pi.on("message_end", (event) => {
-    if (event.message.role !== "assistant") return;
-    if (event.message.stopReason === "error") phase = "failed";
+    if (event.message.role === "assistant" && event.message.stopReason === "error") errored = true;
   });
 
-  pi.on("session_compact", (_event, ctx) => {
-    // Compaction already paid for a summary, so the marginal call is cheap and
-    // the work has usually moved on by the time one happens.
-    void refresh(ctx).catch(() => {});
+  pi.on("agent_settled", () => {
+    working = false;
+    paint();
+    // Every turn is read, however short: a short one can still end on a question.
+    hub.turnEnd(jobs.running(), errored);
   });
 
   pi.on("session_shutdown", () => {
-    inflight?.abort();
-    inflight = undefined;
-    pending = undefined;
-    live = false;
     session = undefined;
   });
 
   return {
     current,
     stateWord,
-    refresh,
-    working: () => phase === "working",
+    refresh: relabel,
+    working: () => working,
     /** A step is a plan made at turn start, shown only while that turn runs; an ask outlives its turn. */
-    detail: () => (phase === "working" ? doing : ask),
+    detail: () => {
+      const row = hub.read();
+      return working
+        ? row?.doing || undefined
+        : row?.state === "needs-reply"
+          ? row.ask || undefined
+          : undefined;
+    },
     /** Whether the detail is the finished turn's ask rather than the running step. */
-    asking: () => phase !== "working" && ask !== undefined,
+    asking: () => !working && hub.read()?.state === "needs-reply" && !!hub.read()?.ask,
     reply: () => reply,
     /** Drops the draft once you type: it only answers an empty editor. */
     dropReply: () => {
@@ -454,11 +336,13 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
       }
       return draft;
     },
-    /** The sidecar's sentence about the session, persisted across reloads. */
-    summary: () => meta.summary,
+    /** The note on the other sessions in this working tree, for the turn starting now. */
+    peers: () => peers,
+    /** The hub's sentence about the session, persisted across reloads. */
+    summary: () => record.summary,
     /** Whether `name` is the session name identity wrote, not one the user chose with `/name`. */
-    isAutoName: (name: string | undefined) => name !== undefined && name === label?.autoName,
-    /** Calls `listener` whenever an async reading changes what the label shows. */
+    isAutoName: (name: string | undefined) => name !== undefined && name === record.autoName,
+    /** Calls `listener` whenever the hub's reading changes what the label shows. */
     onChange: (listener: () => void) => {
       listeners.add(listener);
     },

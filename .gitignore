@@ -8,3 +8,4 @@ result
 .aider*
 __pycache__/
 modules/programs/pi/extensions/node_modules
+modules/programs/pi/extensions/parent/lib/protocol.gen.ts
