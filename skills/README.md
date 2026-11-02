@@ -35,6 +35,7 @@ claude plugin install skills@nickolaj-jepsen
 - [ideate](ideate/): ranked improvement ideas for a repo or one area of it, refuted by a fresh verifier, each routed to `/brainstorm`, `/grill-me` or building it.
 - [mine](mine/): improves a skill, tool, CLI or hook from how its runs went in past Claude Code and pi sessions; with no target, a retro of the current session.
 - [compare](compare/): recommends one of a field of candidates after a one-round brief, gated per-candidate research and a refuting verifier, with the verdict in chat; `--quick` answers inline.
+- [onboard](onboard/): teaches you an unfamiliar project by running it in a throwaway clone and tracing one real action, then saves an overview with its core features, architecture and evidence-labelled design choices, plus a trace guide, a quiz and offered dives into subsystems; `--quick` answers from static analysis in chat.
 - [annotate-plan](annotate-plan/): the agent writes a `PLAN.md`, you annotate it in your editor round after round until you approve, then it implements on request.
 - [handoff](handoff/): turns a finished brainstorm into a self-contained plan for another agent, with vertical-slice work items that carry owned paths and acceptance commands.
 - [run-handoff](run-handoff/): builds a handoff in one long-running session, one subagent and worktree per item, each re-verified before it lands on an integration branch; checks in at gates unless run with `--auto`.
