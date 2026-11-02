@@ -1,14 +1,14 @@
 ---
 name: mine
-description: Improve a skill, tool, CLI or hook from how it actually went in your past Claude Code and pi sessions; with no target, a retro of this session. Findings are routed to /brainstorm, /grill-me or building them.
+description: Improve a skill, tool, CLI or hook from how it actually went in your past Claude Code and pi sessions. Findings are routed to /brainstorm, /grill-me or building them.
 disable-model-invocation: true
-argument-hint: "[target]"
+argument-hint: "<target>"
 ---
 
 This skill finds what to change in a target and why, from how it went in past sessions.
 
 - The argument names a target: a skill, a pi extension or tool, a CLI, or a Claude Code hook or setting.
-- With no argument, this is a retro of the current session (see Retro).
+- With no argument, ask for a target. To review one session across everything it touched, use `/retro`.
 - It writes no code unless the user picks findings to build at the end.
 - It writes exactly one file, the findings file (see The file), and ends with a chat summary.
 
@@ -112,16 +112,6 @@ Two more kinds of finding come from the data, not from failures:
 - Signal findings: what the header's numbers say on their own, such as the readings under Question-asking skill or a tool that is offered but never called.
 
 A failure seen in one run is an anecdote, not a finding. Rank findings by the runs affected and what each failure cost: corrections, interrupts, abandoned runs.
-
-## Retro
-
-With no target:
-
-1. The target is whatever this session used or worked on. Ask one question only if that's unclear.
-2. This session is the main evidence: read it from context, or with `session latest --cwd <dir it ran in>` once it has been compacted. Find its first failures and desire paths.
-3. Check each finding against earlier runs of the target. Give subagents the specific findings to look for, not open coding. Report "also in k of N earlier runs" or "only here".
-
-Write to the target's usual findings file, marking these findings `(retro)`. A later `/mine <target>` folds them in like any other.
 
 ## Write
 

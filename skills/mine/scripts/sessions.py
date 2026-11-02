@@ -6,6 +6,8 @@ transcripts too with --subagents, .zst through the `zstd` CLI), and
 ~/.pi/agent/sessions. `claude -p` sessions and pi subagent sessions are skipped,
 sidechains dropped, and a session stored twice (a resume, a fork, a worktree slug)
 counts once. Sessions that ran /mine are never runs, so mining doesn't count itself.
+A session counts only up to its first /retro, which quotes the session's failures and
+builds their fixes, unless the target is retro itself.
 
   runs MATCHER... [--since DATE] [--repo DIR] [--json] [--show IDS|all] [--max-lines N]
       A signal header, then one line per run. --show prints the named runs condensed:
@@ -444,10 +446,15 @@ def bare(name):
     return name.split(":")[-1]
 
 
+def before_retro(events):
+    cut = next((i for i, e in enumerate(events) if e["kind"] == "skill" and bare(e["name"]) == "retro"), len(events))
+    return events[:cut]
+
+
 def find_runs(sessions, matcher, since=None):
     runs = []
     for s in sessions:
-        ev = s.events
+        ev = s.events if "retro" in map(bare, matcher.skills) else before_retro(s.events)
         skills = [i for i, e in enumerate(ev) if e["kind"] == "skill"]
         if any(bare(ev[i]["name"]) == "mine" for i in skills):
             continue
