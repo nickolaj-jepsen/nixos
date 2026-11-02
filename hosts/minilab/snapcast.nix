@@ -1,8 +1,8 @@
 # minilab co-locates the snapcast toggle with its host-specific capture config:
 # the USB turntable line-in, forwarded into the stream and mirrored to the local
-# speakers.
+# speakers. Off while minilab is a headless agent machine.
 {
-  shared.fireproof.desktop.snapcast.enable = true;
+  shared.fireproof.desktop.snapcast.enable = false;
 
   nixos.fireproof.desktop.snapcast.captures.turntable = {
     source = "alsa_input.usb-Burr-Brown_from_TI_USB_Audio_CODEC-00.analog-stereo-input";
