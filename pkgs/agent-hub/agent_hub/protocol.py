@@ -91,6 +91,10 @@ OPS = {
     "focus": {"session": "str"},
     "focus-next": {},
     "dismiss": {"session": "str", "turn?": "int"},
+    # Brings back the last thing dismissed at this bar.
+    "undo": {},
+    # Brings back one session's, as another hub's `undo` asks.
+    "undismiss": {"session": "str", "turn?": "int"},
     "wrong": {"session": "str"},
     # The popout opened: you have seen what pulses.
     "seen": {},

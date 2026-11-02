@@ -559,6 +559,48 @@ class TurnTest(HubTest):
         eventually(lambda: "wrong needs-reply" in self.hub.command("log", "--since", "1h").stdout)
         self.assertEqual(self.hub.command("status", "--session-id", self.sid).stdout.split("\t")[0], "needs-reply")
 
+    def test_a_needs_reply_dismissed_unopened_is_logged_as_a_weak_sign(self):
+        self.finish("state: blocked\nask: keep the fixture?")
+        self.bar.send(op="dismiss", session=self.sid)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        self.assertIn("unopened needs-reply", self.hub.command("log", "--since", "1h").stdout)
+
+    def test_a_needs_reply_you_went_to_is_not_logged_when_dismissed(self):
+        self.finish("state: blocked\nask: keep the fixture?")
+        self.focused_row(self.window)
+        self.bar.send(op="dismiss", session=self.sid)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        self.assertNotIn("unopened", self.hub.command("log", "--since", "1h").stdout)
+
+    def test_undo_brings_back_the_last_dismissal_without_a_pulse(self):
+        self.finish("state: blocked\nask: keep the fixture?")
+        self.bar.send(op="dismiss", session=self.sid)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        self.bar.send(op="undo")
+        row = session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply")), self.sid)
+        self.assertFalse(row["pulse"])
+
+    def test_undo_brings_back_a_prompt_that_had_hidden_a_finished_turn(self):
+        self.finish("state: blocked\nask: keep the fixture?")
+        self.hub.connect().send(op="dialog", session=self.sid, text="Bash: rm -rf build")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "asking"))
+        self.bar.send(op="dismiss", session=self.sid)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        self.bar.send(op="undo")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "asking"))
+
+    def test_undo_drops_a_dismissal_once_the_session_started_a_new_turn(self):
+        self.finish("state: blocked\nask: keep the fixture?")
+        self.bar.send(op="dismiss", session=self.sid)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        self.pi.start()
+        self.finish("state: done")
+        self.hub.niri({"WindowFocusChanged": {"id": self.window}})
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        self.bar.send(op="undo")
+        self.bar.send(op="subscribe")
+        self.assertEqual(session(self.bar.wait(lambda m: m["type"] == "state"), self.sid)["state"], "idle")
+
     def test_focus_goes_to_the_sessions_window(self):
         self.bar.send(op="focus", session=self.sid)
         eventually(lambda: self.hub.focused() == [str(self.window)])
@@ -955,6 +997,22 @@ class LinkTest(unittest.TestCase):
         self.bar.send(op="dismiss", session=self.rid, turn=row["turn"])
         self.bar.wait(has_session(self.rid, lambda s: s["state"] == "idle"))
 
+    def test_undo_brings_back_what_a_viewer_dismissed_there(self):
+        self.asks()
+        self.bar.send(op="dismiss", session=self.rid)
+        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "idle"))
+        self.far_bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        self.bar.send(op="undo")
+        row = session(self.bar.wait(has_session(self.rid, lambda s: s["state"] == "needs-reply")), self.rid)
+        self.assertFalse(row["pulse"])
+
+    def test_a_dismissal_is_logged_by_the_viewer_not_the_host_it_runs_on(self):
+        self.asks()
+        self.bar.send(op="dismiss", session=self.rid)
+        self.far_bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
+        self.assertIn("unopened needs-reply", self.near.command("log", "--since", "1h").stdout)
+        self.assertNotIn("unopened", self.far.command("log", "--since", "1h").stdout)
+
     def test_a_hub_that_lists_this_one_does_not_get_its_own_rows_back(self):
         self.asks()
         client = self.near.connect()
@@ -1016,12 +1074,14 @@ class AttachFilterTest(unittest.TestCase):
     def test_only_subscribe_passes_without_control(self):
         self.assertEqual(links.attach_filter(b'{"op":"subscribe","version":3,"extra":1}', False),
                          {"op": "subscribe", "local": True, "version": 3})
-        for op in ("dismiss", "turn-start", "focus", "resume", "attach", "demo", "seen"):
+        for op in ("dismiss", "undismiss", "undo", "turn-start", "focus", "resume", "attach", "demo", "seen"):
             self.assertIsNone(links.attach_filter(json.dumps({"op": op, "session": "s", "configDir": "/evil"}).encode(), False))
 
-    def test_control_adds_only_dismiss_rebuilt_from_its_fields(self):
-        self.assertEqual(links.attach_filter(b'{"op":"dismiss","session":"s","turn":3,"configDir":"/evil"}', True),
-                         {"op": "dismiss", "session": "s", "turn": 3})
+    def test_control_adds_only_dismissing_and_its_undo_rebuilt_from_their_fields(self):
+        for op in ("dismiss", "undismiss"):
+            self.assertEqual(links.attach_filter(json.dumps({"op": op, "session": "s", "turn": 3, "configDir": "/evil"}).encode(), True),
+                             {"op": op, "session": "s", "turn": 3})
+        self.assertIsNone(links.attach_filter(b'{"op":"undo"}', True))
         self.assertIsNone(links.attach_filter(b'{"op":"turn-start","session":"s","configDir":"/evil"}', True))
 
     def test_junk_is_dropped(self):
@@ -1209,6 +1269,26 @@ class WaitingTest(HubTest):
     def test_waiting_session_is_asking_with_the_agents_own_reason(self):
         self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="permission prompt")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "asking" and s["waitingFor"] == "permission prompt"))
+
+    def asking(self, label="permission prompt"):
+        self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor=label)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "asking" and s["waitingFor"] == label))
+
+    def test_a_dismissed_prompt_stays_away_until_there_is_a_new_one(self):
+        self.asking()
+        self.bar.send(op="dismiss", session=self.sid)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+        self.hub.write_session(self.proc.pid, self.sid, status="busy")
+        self.asking()
+
+    def test_undo_brings_back_a_prompt_still_open_and_it_is_not_logged(self):
+        self.asking()
+        self.bar.send(op="dismiss", session=self.sid)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+        self.bar.send(op="undo")
+        row = session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "asking")), self.sid)
+        self.assertFalse(row["pulse"])
+        self.assertEqual(self.hub.command("log", "--since", "1h").stdout, "")
 
     def test_hook_label_stands_in_for_the_reason_until_the_session_moves_on(self):
         self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="permission prompt")

@@ -220,7 +220,7 @@ def attach_filter(line, control):
     if op == "subscribe":
         version = message.get("version")
         return {"op": op, "local": True, **({"version": version} if isinstance(version, int) else {})}
-    if op == "dismiss" and control and isinstance(message.get("session"), str):
+    if op in ("dismiss", "undismiss") and control and isinstance(message.get("session"), str):
         turn = message.get("turn")
         return {"op": op, "session": message["session"], **({"turn": turn} if isinstance(turn, int) else {})}
     return None
@@ -228,7 +228,7 @@ def attach_filter(line, control):
 
 def attach(control=False):
     """Bridges stdin and stdout to this host's hub until either side goes. Only `subscribe` passes
-    by default; `control` adds dismissing, for a key that may."""
+    by default; `control` adds dismissing and undoing it, for a key that may."""
     path = attach_socket()
     if path is None:
         sys.exit("agent-hub: no hub here")

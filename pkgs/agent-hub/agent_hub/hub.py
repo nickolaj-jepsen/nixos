@@ -25,6 +25,7 @@ from .registry import RegistrySource
 RECENT_MAX = 100
 # A session no longer listed anywhere is kept this long, for a registry that has yet to catch up.
 UNSEEN_MS = 60_000
+UNDO_MAX = 50
 
 
 def agent_of(entry):
@@ -78,6 +79,8 @@ class Hub:
         # The window focus last read the `done` turns under it.
         self._read_focus = None
         self._tasks = set()
+        # What was dismissed at this hub's bar, oldest first, for `undo`. Memory only.
+        self.dismissals = []
 
     # Persistence.
 
@@ -357,10 +360,16 @@ class Hub:
             return
         if row["window"] is not None:
             await self.niri.focus(row["window"])
-        elif row.get("host") and row.get("tmux"):
+            return
+        if not row.get("host"):
+            return
+        if row.get("tmux"):
             await self._terminal(None, ["ssh", "-t", row["host"], "tmux", "attach", "-t", row["tmux"]])
-        elif row.get("host") and row.get("bridge"):
+        elif row.get("bridge"):
             await self.niri.spawn(["xdg-open", f"https://claude.ai/code/{row['bridge']}"])
+        else:
+            return
+        self._alerts_of(sid).opened.add(sid)
 
     async def _terminal(self, cwd, argv):
         """Opens `argv` in the configured terminal, through niri so it gets the desktop's environment."""
@@ -394,29 +403,68 @@ class Hub:
             self.publish()
             return
 
-    def _dismiss(self, sid, turn):
-        """Puts a finished turn away: here, or on the host it belongs to. Naming a turn, only that one."""
+    def _alerts_of(self, sid):
+        """The `Alerts` that row `sid` is announced by."""
+        return self.link_alerts.get(links.split_id(sid)[0], self.alerts)
+
+    def _dismiss(self, sid, turn, viewer=True):
+        """Puts away a finished turn or an open prompt: here, or on the host it belongs to. Naming
+        a turn, only that one. `viewer` is you at this hub's bar, not another hub passing it on:
+        only yours can be undone here, and says anything about the verdict."""
+        row, session = self._row(sid), self.sessions.get(sid)
+        if not (row and row["state"] in protocol.ATTENTION) or (turn is not None and row.get("turn") != turn):
+            return
         host, own = links.split_id(sid)
         if host in self.links:
-            self.links[host].send({"op": "dismiss", "session": own, "turn": turn})
+            self.links[host].send({"op": "dismiss", "session": own, "turn": turn or None})
+        elif not (session and session.dismiss()):
             return
-        row, session = self._row(sid), self.sessions.get(sid)
-        if not (row and session and row["state"] in model.DISMISSABLE):
-            return
-        if turn is not None and row.get("turn") != turn:
-            return
-        if session.dismiss():
+        if viewer:
+            self.dismissals = [*self.dismissals, {"session": sid, "turn": row.get("turn"), "key": model.alert_key(row)}][-UNDO_MAX:]
+            if row["state"] == "needs-reply" and sid not in self._alerts_of(sid).opened:
+                self._log_verdict(row, session, unopened=True)
+        if host not in self.links:
             self.publish()
 
+    def _undo(self):
+        """Brings back the last dismissal at this bar that still stands. One whose session has
+        started a new turn, or that is back already, is dropped along the way."""
+        while self.dismissals:
+            entry = self.dismissals.pop()
+            sid, turn = entry["session"], entry["turn"]
+            row = self._row(sid)
+            if not row or row.get("turn") != turn or model.alert_key(row) == entry["key"]:
+                continue
+            host, own = links.split_id(sid)
+            if host in self.links:
+                self.link_alerts[host].expect(sid, entry["key"])
+                self.links[host].send({"op": "undismiss", "session": own, "turn": turn or None})
+                return
+            if self._undismiss(sid, turn):
+                return
+
+    def _undismiss(self, sid, turn):
+        """Brings back what was dismissed on this host's own session; false when it has moved on."""
+        session = self.sessions.get(sid)
+        if not (session and session.undismiss(turn)):
+            return False
+        self.alerts.expect(sid, model.alert_key(session.row(now_ms())))
+        self.publish()
+        return True
+
+    def _log_verdict(self, row, session, **flag):
+        """A line in the work log about a verdict, for tuning the gate; `flag` says what you did."""
+        worklog.append(self.log_file, {
+            "at": now_ms(), "session": row["id"], "agent": row["agent"], "cwd": row["cwd"],
+            "configDir": session.config_dir if session else None,
+            "label": row["label"], "state": row["state"], "turn": row.get("turn"), **flag,
+        })
+
     def _wrong(self, sid):
-        """You flagged this verdict as wrong: a line in the work log, for tuning the gate."""
-        row, session = self._row(sid), self.sessions.get(sid)
+        """You flagged this verdict as wrong."""
+        row = self._row(sid)
         if row:
-            worklog.append(self.log_file, {
-                "at": now_ms(), "session": sid, "agent": row["agent"], "cwd": row["cwd"],
-                "configDir": session.config_dir if session else None,
-                "label": row["label"], "state": row["state"], "did": row["summary"], "ask": row["ask"], "wrong": True,
-            })
+            self._log_verdict(row, self.sessions.get(sid), did=row["summary"], ask=row["ask"], wrong=True)
 
     async def _resume(self, sid):
         """Resumes an ended session in a new terminal, over ssh when it ended on another host."""
@@ -630,7 +678,11 @@ class Hub:
         elif op == "focus-next":
             await self._focus_next()
         elif op == "dismiss":
-            self._dismiss(message["session"], message.get("turn"))
+            self._dismiss(message["session"], message.get("turn"), viewer=not conn.local)
+        elif op == "undo":
+            self._undo()
+        elif op == "undismiss":
+            self._undismiss(message["session"], message.get("turn"))
         elif op == "wrong":
             self._wrong(message["session"])
         elif op == "seen":

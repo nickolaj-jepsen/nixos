@@ -4,8 +4,8 @@ A daemon that knows every live pi and Claude Code session on its host: what each
 one is called, the step it is on, and how its last turn ended.
 
 - Each agent's TUI shows the hub's row for its own session.
-- On a niri desktop the DMS bar shows a dot per session that isn't idle, and is
-  a quick way to the ones that want you. A dot pulses when one comes to want you.
+- On a niri desktop the DMS bar shows a dot per session that wants you and a ring
+  per working one, and is a quick way to them.
 - The bar never answers anything: you answer in the agent's own terminal.
 - Elsewhere (a server, the Mac) the hub runs headless: no windows, and it polls
   the registry instead of watching it.
@@ -14,13 +14,18 @@ one is called, the step it is on, and how its last turn ended.
 
 ## Keys
 
-- `Mod+B` opens the popout with the longest-waiting session selected.
+- `Mod+B` opens the popout with the first row selected. The first session waiting
+  on you is a card with its ask in full, and the rest go under Also waiting,
+  Finished and Working.
   - `Enter` (or a click) focuses its window.
-  - `x` dismisses a finished one.
+  - `x` dismisses a finished one, or hides an open prompt until the next prompt.
+  - `u` brings back the last dismissal, until that session starts a new turn. The
+    stack lives in the hub the bar talks to, in memory.
   - `w` logs its verdict as wrong, for tuning the gate.
-  - `j`/`k` move, and `g`/`G` jump to the ends.
-  - Idle sessions are listed too, dimmed, then the last few that ended: `Enter`
-    on one resumes it in a new terminal.
+  - `j`/`k` move, and `g`/`G` jump to the ends. The card stays where it is, and
+    the selected row opens to its full reason and last turns.
+  - Idle sessions and the last few that ended are folded to a line each, which
+    unfolds when selected. `Enter` on an ended one resumes it in a new terminal.
 - `Mod+Shift+B` (`agent-hub focus-next`) jumps straight to the next session
   that wants you, cycling on repeat.
 - `Mod+Ctrl+B` (`agent-hub toggle`) dismisses the finished turn of the session
@@ -30,12 +35,15 @@ one is called, the step it is on, and how its last turn ended.
 
 The bar shows no popups. Terminal bells stay, as they are the agent's own.
 
-- A session's dot pulses when it comes to want you, until the popout opens or you
-  focus its window. A `done` pulses once.
+- A session's dot bursts when it comes to want you, then breathes until the popout
+  opens or you focus its window. A `done` bursts once.
+- An ask also peeks out of the pill for 4 s, saying who. A vertical bar has no room
+  for the peek.
 - Nothing pulses when you are looking at that window, for a dialog answered within
   a second, or on a restart for turns the hub already knew.
 - The hub computes the pulse (`Alerts` in `agent_hub/model.py`) and keeps what it has
   announced in its state file. A turn that ended while the daemon was down is news.
+- What `u` brings back doesn't pulse.
 
 ## Other hosts
 
@@ -53,15 +61,15 @@ end, with no TCP port of its own.
   over a full login.
 - On the far end that key is `restrict` with a forced `agent-hub attach`, so it can do
   nothing else. A jump host also opens the hops in `linkJumps`.
-- `attach` passes `subscribe`, and with `--control` also `dismiss`, each rebuilt from
-  its allowed fields (`attach_filter` in `agent_hub/links.py`).
+- `attach` passes `subscribe`, and with `--control` also `dismiss` and `undismiss`,
+  each rebuilt from its allowed fields (`attach_filter` in `agent_hub/links.py`).
 - A subscribe through `attach` gets that host's own sessions only, so hubs listing
   each other never echo rows around.
 - Remote rows are untrusted (`clean_row`). The viewer stamps the host, ids must be
   UUIDs, control characters go, and every command or URL is built locally.
 - `attach` beats every 20 s, and a link silent for a minute reconnects. The popout
   says why a link is down: auth failed, timeout, no hub, host down or needs a switch.
-- `x` on a remote row names the turn, so a late one can't put away a newer ending.
+- `x` and `u` on a remote row name the turn, so a late one can't touch a newer ending.
 - `Enter` on a remote row opens its tmux pane over ssh in a new terminal, or its
   Remote Control page. With neither, the row says there is no way from here.
 - An ended session on another host resumes over ssh.
@@ -157,7 +165,8 @@ In the order the popout lists them. The first four want you.
 - **done**: the turn finished.
 - **working**: busy, a turn that ended only to wait for its own background work,
   or a finished turn the hub is still reading.
-- **idle**: fresh, or dismissed.
+- **idle**: fresh, or dismissed. A dismissed prompt shows as what the session would
+  otherwise be, `working` mid-turn.
 
 ### How long a state lasts
 
@@ -228,7 +237,9 @@ daemon starts.
   lines themselves.
 - `agent-hub find WORDS…` lists the sessions whose labels, did-lines or asks hold
   every word, with their resume commands.
-- A verdict you flagged with `w` shows there as `wrong <state>`.
+- A verdict you flagged with `w` shows there as `wrong <state>`. A `needs-reply` you
+  dismissed without going to it shows as `unopened needs-reply`, a weaker sign, since
+  you may only not care. Both name the session and turn.
 - Each row carries its last three endings (`history`), which the popout shows
   under the selected session, ended ones included.
 - Both commands read the file directly, so they work without the daemon.

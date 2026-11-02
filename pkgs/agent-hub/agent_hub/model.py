@@ -17,7 +17,7 @@ from .protocol import ATTENTION, STATES
 SHOWING_DIALOGS = ("dialog open",)
 # How a turn ended → the state it leaves the session in.
 FINISHED = {"blocked": "needs-reply", "failed": "failed", "done": "done"}
-# The endings a focus or `x` can put away; `asking` wants more than a look.
+# The endings a focus can put away; `asking` wants more than a look, so only `x` hides it.
 DISMISSABLE = tuple(FINISHED.values())
 HISTORY = 3
 # A dialog answered within this long never pulses, and Claude's hook has time to label it.
@@ -75,6 +75,8 @@ class Session:
     turn: Turn | None = None
     # The turn number whose ending you put away.
     dismissed: int | None = None
+    # The open prompt you put away, which stays away for as long as it is that prompt.
+    dismissed_prompt: tuple | None = None
     # The latest finished turns, newest last: `{at, state, did}`.
     history: list = field(default_factory=list)
     # When it was last known live, so one the registry hasn't caught up with is kept a while.
@@ -164,6 +166,9 @@ class Session:
         if registry:
             if (status, waiting_for, now) == self.registry_seen:
                 return None
+            # Still waiting, under a new stamp: one prompt closed and another opened between looks.
+            if status == "waiting" and self.registry_seen and self.registry_seen[0] == "waiting":
+                self.dismissed_prompt = None
             self.registry_seen = (status, waiting_for, now)
         if status == "waiting" and not self.dialog and waiting_for in SHOWING_DIALOGS:
             # A modal that only shows something leaves the session as it was.
@@ -195,7 +200,7 @@ class Session:
 
     def state(self, now):
         turn = self.turn
-        if self.status == "waiting":
+        if self.status == "waiting" and self.open_prompt() != self.dismissed_prompt:
             return "asking"
         if turn is not None and (turn.open or turn.reading or (turn.outcome or {}).get("jobs")):
             return "working"
@@ -251,12 +256,36 @@ class Session:
             row["bridge"] = self.bridge
         return row
 
+    def open_prompt(self):
+        """What tells this prompt from the next one, or None when none is open."""
+        return (self.status_at, self.dialog) if self.status == "waiting" else None
+
     def dismiss(self):
-        """Puts the finished turn away; false when there is none to put away."""
+        """Puts the open prompt away, or else the finished turn; false when there is neither."""
+        prompt = self.open_prompt()
+        if prompt is not None and prompt != self.dismissed_prompt:
+            self.dismissed_prompt = prompt
+            return True
         if self.turn is None or self.turn.outcome is None or self.dismissed == self.turn.n:
             return False
         self.dismissed = self.turn.n
         return True
+
+    def undismiss(self, turn):
+        """Brings back what `dismiss` put away, last in first out; false when it has moved on.
+        `turn` is the one the dismissal named, so a newer ending stays as it is."""
+        if self.dismissed_prompt is not None and self.dismissed_prompt == self.open_prompt():
+            self.dismissed_prompt = None
+            return True
+        if self.turn is None or self.turn.n != turn or self.dismissed != turn:
+            return False
+        self.dismissed = None
+        return True
+
+
+def alert_key(row):
+    """What a row has to announce, or None when it doesn't want you."""
+    return f"{row['state']}:{row['since']}" if row["state"] in ATTENTION else None
 
 
 class Alerts:
@@ -270,6 +299,14 @@ class Alerts:
         self.known = dict(known or {})
         # Row id → when its pulse stops; None for when you have looked.
         self.pulsing = {}
+        # Rows you have been to since they came to want you.
+        self.opened = set()
+        # Row id → the key it is coming back with: you brought it back, so it is no news.
+        self.returning = {}
+
+    def expect(self, rid, key):
+        """`rid` will come back as `key`, which you asked for: it doesn't pulse."""
+        self.returning[rid] = key
 
     def update(self, rows, now, focused=None, keep=()):
         """Sets each row's `pulse`; returns the ms until a pulse moves by itself, or None.
@@ -277,10 +314,11 @@ class Alerts:
         due = []
         for row in rows:
             rid, since = row["id"], row["since"]
-            key = f"{row['state']}:{since}" if row["state"] in ATTENTION else None
+            key = alert_key(row)
             if key is None:
                 self.known.pop(rid, None)
                 self.pulsing.pop(rid, None)
+                self.opened.discard(rid)
             elif key != self.known.get(rid):
                 if row["state"] == "asking" and not self.baseline and now - since < ASK_GRACE_MS:
                     due.append(since + ASK_GRACE_MS - now)
@@ -289,11 +327,16 @@ class Alerts:
                     continue
                 self.known[rid] = key
                 self.pulsing.pop(rid, None)
-                if not self.baseline:
+                self.opened.discard(rid)
+                if self.returning.pop(rid, None) == key:
+                    self.opened.add(rid)
+                elif not self.baseline:
                     self.pulsing[rid] = now + ONCE_MS if row["state"] == "done" else None
             # You are looking at it.
             if focused is not None and row["window"] == focused:
                 self.pulsing.pop(rid, None)
+                if key is not None:
+                    self.opened.add(rid)
             until = self.pulsing.get(rid)
             if until is not None:
                 if now >= until:
@@ -304,6 +347,8 @@ class Alerts:
         shown = {row["id"] for row in rows} | set(keep)
         self.known = {rid: key for rid, key in self.known.items() if rid in shown}
         self.pulsing = {rid: until for rid, until in self.pulsing.items() if rid in shown}
+        self.opened &= shown
+        self.returning = {rid: key for rid, key in self.returning.items() if rid in shown}
         self.baseline = False
         return min(due) if due else None
 

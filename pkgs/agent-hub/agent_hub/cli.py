@@ -166,7 +166,8 @@ def print_group(group):
         text = line.get("did") or ""
         if line.get("ask"):
             text = f"{text} [asks: {line['ask']}]".strip()
-        word = f"wrong {line.get('state')}" if line.get("wrong") else line.get("state") or "done"
+        flag = "wrong " if line.get("wrong") else "unopened " if line.get("unopened") else ""
+        word = flag + (line.get("state") or "done")
         print(f"  {stamp}  {word:<11} {folded(text)}")
 
 

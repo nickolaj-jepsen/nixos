@@ -41,6 +41,12 @@ Item {
         });
     }
 
+    function undo() {
+        socket.send({
+            "op": "undo"
+        });
+    }
+
     function wrong(sessionId) {
         socket.send({
             "op": "wrong",
