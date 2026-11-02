@@ -20,7 +20,10 @@
     # On Linux `unlock` caches the session key in the kernel user keyring:
     # RAM-only, gone on reboot, and expired after 8h, so one unlock serves
     # every terminal. Other commands only pick up a cached key.
-    keyring = profile: ''
+    keyring = {
+      profile,
+      afterUnlock,
+    }: ''
       key=bw:${profile}
       stored() { keyctl search @u user "$key" 2>/dev/null; }
       raw=false check=false
@@ -37,6 +40,7 @@
         [ -n "$BW_SESSION" ] || exit 1
         id=$(printf %s "$BW_SESSION" | keyctl padd user "$key" @u)
         keyctl timeout "$id" 28800
+        ${afterUnlock}
         if $raw; then printf %s "$BW_SESSION"; else echo "Vault unlocked for 8 hours." >&2; fi
         exit 0
       fi
@@ -59,6 +63,7 @@
       profile,
       server,
       env ? "",
+      afterUnlock ? "",
     }:
       pkgs.writeShellApplication {
         inherit name;
@@ -66,7 +71,7 @@
         text = ''
           ${env}
           if [ "''${1:-}" = login ]; then ${bw} config server ${server} >/dev/null; fi
-          ${lib.optionalString pkgs.stdenv.isLinux (keyring profile)}
+          ${lib.optionalString pkgs.stdenv.isLinux (keyring {inherit profile afterUnlock;})}
           exec ${bw} "$@"
         '';
       };
@@ -89,6 +94,13 @@
       name = "bw";
       profile = "personal";
       server = "https://vault.bitwarden.com";
+      # Best effort: a work vault that stays locked must not fail this unlock.
+      afterUnlock = lib.optionalString config.fireproof.work.enable ''
+        if ! work_password=$(BW_SESSION="$BW_SESSION" ${bw} get password "Bitwarden (AO)") ||
+          ! BW_WORK_PASSWORD="$work_password" ${lib.getExe bwWork} unlock --raw --passwordenv BW_WORK_PASSWORD >/dev/null; then
+          echo "bw-work stays locked." >&2
+        fi
+      '';
     };
     # New saves always land unfiled (Bitwarden has no default folder), so
     # "No folder" is the inbox. Prints item names only, never secrets.
