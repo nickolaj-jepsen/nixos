@@ -22,8 +22,7 @@
       device = "/dev/disk/by-partuuid/3f97b831-56f0-4fd0-a83e-2df7b5e285a5";
       allowDiscards = true;
       bypassWorkqueues = true;
-      # The YubiKey is optional: without it the passphrase prompt follows after the token timeout.
-      crypttabExtraOpts = ["fido2-device=auto" "token-timeout=10"];
+      # No YubiKey slot: the typed passphrase is what autologin reuses to unlock the keyring.
     };
 
     fileSystems = {
