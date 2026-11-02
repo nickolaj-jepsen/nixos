@@ -60,8 +60,8 @@
     nixos-wsl.inputs.nixpkgs.follows = "nixpkgs";
 
     # phone-vm's guest contract (kernel, image, agent, GUI).
+    # No nixpkgs follows: its own nixpkgs builds the agent and compositor, so they come from its cache.
     pocketnix.url = "github:nickolaj-jepsen/pocketnix";
-    pocketnix.inputs.nixpkgs.follows = "nixpkgs";
 
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
