@@ -20,7 +20,7 @@ and without its word the candidate stands. `failed` comes only from the agent's 
 
 import re
 
-from .common import folded
+from .common import BLOCK_MAX, folded, shown_block
 
 FIELDS = ("label", "doing", "summary", "tags", "state", "did", "ask", "reply")
 TURN_STATES = ("done", "blocked", "waiting")
@@ -204,6 +204,7 @@ def with_ending(found, ending):
         "agents": len(agents),
         "pending": max(shells, int(ending.get("pending") or 0)),
         "doing": doing,
+        "tasks": [d[:MAX_TASK_LINE] for d in described],
         "error": bool(ending.get("error")),
     }
 
@@ -241,6 +242,9 @@ def outcome(fields, guess, digest):
         "summary": fields.get("did") or guess["summary"],
         "jobs": jobs,
         "doing": digest.get("doing") or "" if jobs else "",
+        "tasks": digest.get("tasks") or [] if jobs else [],
+        # What the popout shows of a turn that needs you, in the agent's own words.
+        "said": shown_block((digest.get("said") or "")[-BLOCK_MAX:])[0] if state == "blocked" else "",
         # For the journal: what settled it and how much it read, never the words themselves.
         "source": "error" if digest.get("error") else "model" if word else "words",
         "chars": len(digest.get("said") or ""),

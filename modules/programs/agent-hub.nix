@@ -77,6 +77,10 @@
             niri = lib.getExe pkgs.niri-unstable;
             # What resumes an ended session from the popout, spawned through niri as Mod+Return is.
             terminal = ["ghostty" "--working-directory={cwd}" "-e"];
+            # Looks up a branch's pull request for the popout's git menu.
+            gh = lib.getExe pkgs.gh;
+            # Where the folder menu's apps can be, which this unit's own PATH doesn't reach.
+            appPath = ["/etc/profiles/per-user/${fp.username}/bin" "/run/current-system/sw/bin"];
           }
           // lib.optionalAttrs linked {
             remotes = remoteHosts;

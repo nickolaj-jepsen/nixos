@@ -342,12 +342,13 @@
               }
             ];
           }
-          # PermissionRequest labels the dialog the registry already marks `waiting`;
+          # PermissionRequest shows the hub the prompt and waits for an answer from the bar, racing
+          # the terminal's dialog, for as long as a prompt can stay open;
           # Stop hands the hub the turn's closing words and the tasks still out, and
           # StopFailure the API error that ended it, so it can tell how the turn ended;
           # SessionEnd ends the session without waiting for its pid to die.
           // lib.optionalAttrs hub {
-            PermissionRequest = hubAsync;
+            PermissionRequest = hubHook {timeout = 86400;};
             Stop = hubAsync;
             StopFailure = hubAsync;
             # Claude is exiting: an async hook can die before it reaches the hub.

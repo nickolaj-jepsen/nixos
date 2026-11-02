@@ -2,8 +2,9 @@
 the state dir so `agent-hub log` and `find` read it without the daemon.
 
 A line: `{at, session, agent, cwd, configDir, label, state, did, ask}`, `at` in ms. A line
-with `wrong` is you flagging the verdict it names from the popout, and one with `unopened`
-a `needs-reply` you dismissed without going to it, a weaker sign: neither is a turn's ending.
+with `wrong` is you flagging the verdict it names from the popout, one with `unopened` a
+`needs-reply` you dismissed without going to it, a weaker sign, and one with `answered` a
+permission prompt you settled at the bar, never saying what it asked: none is a turn's ending.
 """
 
 import json

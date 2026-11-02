@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 from . import protocol
-from .common import LINE_MAX, folded, resume_command, state_dir
+from .common import BLOCK_MAX, LINE_MAX, folded, resume_command, shown_block, state_dir
 
 # `attach` beats this often, so a dead link shows long before ssh's own keepalives say so.
 BEAT = 20
@@ -27,6 +27,10 @@ RETRY_MAX = 60
 RETRY_REFUSED = 300
 TEXT_MAX = 500
 HISTORY_MAX = 3
+PEERS_MAX = 5
+JOBS_MAX = 5
+# Long enough for the git and gh of the other host, short enough that a menu isn't left open on it.
+CALL_TIMEOUT = 5
 UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 PANE = re.compile(r"%\d{1,6}")
 BRIDGE = re.compile(r"[A-Za-z0-9_-]{1,128}")
@@ -65,9 +69,28 @@ def clean_history(entries):
             for e in entries[-HISTORY_MAX:] if isinstance(e, dict)]
 
 
+def clean_list(values, limit):
+    return [text(value, 120) for value in values[:limit] if isinstance(value, str)] if isinstance(values, list) else []
+
+
+def clean_permission(value):
+    """A held prompt from another host: text only, and whatever had to be cut can't be allowed."""
+    if not isinstance(value, dict) or not whole(value.get("id")):
+        return None
+    body, fits = shown_block(value.get("body"), BLOCK_MAX)
+    return {
+        "id": value["id"],
+        "tool": text(value.get("tool"), 120),
+        "about": text(value.get("about"), 200),
+        "kind": value["kind"] if value.get("kind") in ("command", "diff") else "text",
+        "body": body,
+        "complete": value.get("complete") is True and fits,
+    }
+
+
 def clean_row(host, row):
     """A row from `host`, as this hub shows it, or None when it can't be. Only what is named here
-    survives: pid, window and `reply` stay on the host they mean something on."""
+    survives: pid and window stay on the host they mean something on."""
     if not isinstance(row, dict) or not UUID.fullmatch(str(row.get("id"))) or row.get("state") not in protocol.STATES:
         return None
     tmux, bridge = str(row.get("tmux") or ""), str(row.get("bridge") or "")
@@ -86,7 +109,7 @@ def clean_row(host, row):
         "summary": text(row.get("summary")),
         "waitingFor": text(row.get("waitingFor")),
         "ask": text(row.get("ask")),
-        "reply": "",
+        "reply": text(row.get("reply")),
         "window": None,
         "history": clean_history(row.get("history")),
         "turn": whole(row.get("turn")),
@@ -95,6 +118,17 @@ def clean_row(host, row):
         cleaned["tmux"] = tmux
     if BRIDGE.fullmatch(bridge):
         cleaned["bridge"] = bridge
+    details = {
+        "prompt": text(row.get("prompt")),
+        "said": shown_block(row.get("said"), BLOCK_MAX)[0],
+        "permission": clean_permission(row.get("permission")),
+        "branch": text(row.get("branch"), 200),
+        "changed": whole(row.get("changed")),
+        "peers": clean_list(row.get("peers"), PEERS_MAX),
+        "activity": whole(row.get("activity")),
+        "jobs": clean_list(row.get("jobs"), JOBS_MAX),
+    }
+    cleaned.update({key: value for key, value in details.items() if value})
     return cleaned
 
 
@@ -129,6 +163,9 @@ class Link:
         self.recent = []
         self.status = "connecting"
         self.proc = None
+        # Requests out to the other hub, request → the future its reply lands on.
+        self.calls = {}
+        self.next_call = 0
 
     def view(self):
         return {"host": self.host, "status": self.status}
@@ -137,6 +174,20 @@ class Link:
         """Sends an op to the other hub; `attach` drops what its key doesn't allow."""
         if self.proc is not None and self.proc.stdin is not None and self.status == "up":
             self.proc.stdin.write((json.dumps(message) + "\n").encode())
+
+    async def call(self, message):
+        """Sends an op that is answered, and returns the `reply`, or None when none comes in time."""
+        self.next_call += 1
+        request = self.next_call
+        future = asyncio.get_running_loop().create_future()
+        self.calls[request] = future
+        self.send({**message, "request": request})
+        try:
+            return await asyncio.wait_for(future, CALL_TIMEOUT)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            self.calls.pop(request, None)
 
     def _set(self, status, rows=None, recent=None):
         changed = status != self.status or rows != self.rows or recent != self.recent
@@ -159,6 +210,10 @@ class Link:
             rows = [clean_row(self.host, r) for r in message.get("sessions") or [] if isinstance(message.get("sessions"), list)]
             recent = [clean_recent(self.host, r) for r in message.get("recent") or [] if isinstance(message.get("recent"), list)]
             self._set("up", [r for r in rows if r], [r for r in recent if r])
+        elif kind == "reply":
+            future = self.calls.get(message.get("request"))
+            if future is not None and not future.done():
+                future.set_result(message)
         return None
 
     async def _session(self):
@@ -223,12 +278,18 @@ def attach_filter(line, control):
     if op in ("dismiss", "undismiss") and control and isinstance(message.get("session"), str):
         turn = message.get("turn")
         return {"op": op, "session": message["session"], **({"turn": turn} if isinstance(turn, int) else {})}
+    if op == "answer" and control and isinstance(message.get("session"), str) and whole(message.get("ask")) \
+            and isinstance(message.get("allow"), bool):
+        return {"op": op, "session": message["session"], "ask": message["ask"], "allow": message["allow"]}
+    if op == "git-facts" and control and isinstance(message.get("session"), str) and isinstance(message.get("request"), int):
+        return {"op": op, "session": message["session"], "request": message["request"]}
     return None
 
 
 def attach(control=False):
     """Bridges stdin and stdout to this host's hub until either side goes. Only `subscribe` passes
-    by default; `control` adds dismissing and undoing it, for a key that may."""
+    by default; `control` adds dismissing and undoing it, answering a prompt an agent there has
+    already put, and asking what git says of a session, for a key that may."""
     path = attach_socket()
     if path is None:
         sys.exit("agent-hub: no hub here")

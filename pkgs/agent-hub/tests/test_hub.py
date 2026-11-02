@@ -15,7 +15,7 @@ import unittest
 import uuid
 from pathlib import Path
 
-from agent_hub import links, protocol
+from agent_hub import claude, links, menus, protocol
 
 PACKAGE = Path(__file__).resolve().parent.parent
 TIMEOUT = 5
@@ -176,6 +176,18 @@ class Hub:
     def command(self, *args, stdin="", **env):
         return subprocess.run([sys.executable, "-m", "agent_hub", *args], env=dict(self.env, **env), cwd=PACKAGE, input=stdin, text=True,
                               check=True, capture_output=True, timeout=TIMEOUT)
+
+    def held_hook(self, test, session_id, tool_input, tool="Bash"):
+        """A PermissionRequest hook, running and waiting on the hub as Claude's would."""
+        hook = subprocess.Popen([sys.executable, "-m", "agent_hub", "hook"], env=self.env, cwd=PACKAGE, text=True,
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        test.addCleanup(hook.communicate)
+        test.addCleanup(hook.kill)
+        hook.stdin.write(json.dumps({"hook_event_name": "PermissionRequest", "session_id": session_id, "cwd": "/repo",
+                                     "tool_name": tool, "tool_input": tool_input}))
+        hook.stdin.close()
+        hook.stdin = None
+        return hook
 
     def write_transcript(self, name, entries):
         path = self.tmp / f"{name}.jsonl"
@@ -954,6 +966,298 @@ os.execv(sys.executable, [sys.executable, "-m", "agent_hub", "attach", "--contro
 """
 
 
+def git_repo(path, remote=None, branch="main"):
+    """A git repo with one commit and one uncommitted file; returns its path."""
+    path.mkdir(parents=True)
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(path), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True, capture_output=True)
+
+    git("init", "-b", branch)
+    (path / "a").write_text("a")
+    git("add", "a")
+    git("commit", "-m", "one")
+    (path / "b").write_text("b")
+    if remote:
+        git("remote", "add", "origin", remote)
+    return path
+
+
+class PermissionTest(HubTest):
+    """A prompt held open by Claude's hook, which the bar or the terminal settles first."""
+
+    COMMAND = "rm -rf build\n  && make"
+
+    def setUp(self):
+        super().setUp()
+        self.proc = self.hub.process()
+        self.bar = self.hub.subscribe()
+        self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="permission prompt")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "asking"))
+
+    def asks(self, command=COMMAND, **fields):
+        hook = self.hub.held_hook(self, self.sid, {"command": command, **fields})
+        row = session(self.bar.wait(has_session(self.sid, lambda s: command[:9] in s.get("permission", {}).get("body", ""))), self.sid)
+        return hook, row["permission"]
+
+    def released(self, hook):
+        """What the hook printed once the hub let it go."""
+        return hook.communicate(timeout=TIMEOUT)[0]
+
+    def test_the_bar_sees_all_of_the_call(self):
+        _, permission = self.asks(description="Clean and build")
+        self.assertEqual({k: permission[k] for k in ("tool", "about", "kind", "body", "complete")},
+                         {"tool": "Bash", "about": "Clean and build", "kind": "command", "body": self.COMMAND, "complete": True})
+
+    def test_allowing_tells_claude_and_logs_the_answer_but_never_the_call(self):
+        hook, permission = self.asks()
+        self.bar.send(op="answer", session=self.sid, ask=permission["id"], allow=True)
+        self.assertEqual(json.loads(self.released(hook))["hookSpecificOutput"], {"hookEventName": "PermissionRequest", "decision": {"behavior": "allow"}})
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] != "asking"))
+        log = self.hub.command("log", "--since", "1h").stdout
+        self.assertIn("allowed asking", log)
+        self.assertNotIn("rm -rf", log.replace(self.sid, ""))
+
+    def test_denying_tells_claude_it_came_from_here(self):
+        hook, permission = self.asks()
+        self.bar.send(op="answer", session=self.sid, ask=permission["id"], allow=False)
+        decision = json.loads(self.released(hook))["hookSpecificOutput"]["decision"]
+        self.assertEqual((decision["behavior"], decision["message"]), ("deny", "Denied from the agent hub."))
+        self.assertIn("denied asking", self.hub.command("log", "--since", "1h").stdout)
+
+    def test_an_answer_to_another_prompt_does_nothing(self):
+        hook, permission = self.asks()
+        self.bar.send(op="answer", session=self.sid, ask=permission["id"] + 1, allow=True)
+        self.bar.send(op="answer", session=self.sid, ask=permission["id"], allow=False)
+        self.assertEqual(json.loads(self.released(hook))["hookSpecificOutput"]["decision"]["behavior"], "deny")
+
+    def test_a_call_too_long_to_show_can_be_denied_but_not_allowed(self):
+        hook, permission = self.asks("x" * 5000)
+        self.assertFalse(permission["complete"])
+        self.bar.send(op="answer", session=self.sid, ask=permission["id"], allow=True)
+        self.bar.send(op="answer", session=self.sid, ask=permission["id"], allow=False)
+        self.assertEqual(json.loads(self.released(hook))["hookSpecificOutput"]["decision"]["behavior"], "deny")
+
+    def test_answering_in_the_terminal_lets_the_hook_go_saying_nothing(self):
+        hook, _ = self.asks()
+        self.hub.write_session(self.proc.pid, self.sid, status="busy")
+        self.assertEqual(self.released(hook), "")
+        self.bar.wait(has_session(self.sid, lambda s: "permission" not in s))
+
+    def test_a_status_older_than_the_prompt_does_not_close_it(self):
+        self.hub.write_session(self.proc.pid, self.sid, status="busy")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+        hook, _ = self.asks()
+        self.hub.write_session(self.proc.pid, self.sid, status="busy", since=int(time.time() * 1000) - 60_000)
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+        self.assertIsNone(hook.poll())
+        self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="permission prompt")
+        self.bar.wait(has_session(self.sid, lambda s: "permission" in s))
+
+    def test_the_next_prompt_shows_once_the_first_closes(self):
+        first, permission = self.asks()
+        self.hub.held_hook(self, self.sid, {"command": "second"})
+        self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="permission prompt", since=int(time.time() * 1000) + 1000)
+        self.assertEqual(self.released(first), "")
+        row = session(self.bar.wait(has_session(self.sid, lambda s: s.get("permission", {}).get("body") == "second")), self.sid)
+        self.assertNotEqual(row["permission"]["id"], permission["id"])
+        self.assertEqual(row["waitingFor"], "Bash: second")
+
+    def test_a_turn_ending_lets_the_hook_go(self):
+        hook, _ = self.asks()
+        self.hub.command("hook", stdin=json.dumps({"hook_event_name": "Stop", "session_id": self.sid}))
+        self.assertEqual(self.released(hook), "")
+
+    def test_a_hook_that_died_can_no_longer_be_answered(self):
+        hook, _ = self.asks()
+        hook.kill()
+        self.bar.wait(has_session(self.sid, lambda s: "permission" not in s))
+
+    def test_a_hub_going_away_lets_the_hook_go(self):
+        hook, _ = self.asks()
+        self.hub.kill()
+        self.assertEqual(self.released(hook), "")
+        self.hub.socket.unlink()
+        self.hub.start()
+
+
+class PermissionAskTest(unittest.TestCase):
+    def test_an_edit_shows_as_the_lines_it_changes(self):
+        ask = claude.permission_ask("Edit", {"file_path": "/repo/a.nix", "old_string": "x = 1;\ny = 2;", "new_string": "x = 3;"}, "/repo")
+        self.assertEqual((ask["kind"], ask["about"], ask["body"]), ("diff", "a.nix", "- x = 1;\n- y = 2;\n+ x = 3;"))
+
+    def test_a_write_shows_all_it_writes(self):
+        self.assertEqual(claude.permission_ask("Write", {"file_path": "/a", "content": "one\ntwo"}, "/")["body"], "+ one\n+ two")
+
+    def test_a_tool_it_knows_nothing_of_shows_its_input(self):
+        ask = claude.permission_ask("mcp__home__turn_on", {"light": "desk"}, "/")
+        self.assertEqual((ask["kind"], ask["about"], json.loads(ask["body"])), ("text", "home · turn_on", {"light": "desk"}))
+
+    def test_what_could_disguise_a_command_is_marked_not_hidden(self):
+        self.assertEqual(claude.permission_ask("Bash", {"command": "ls‮ -l\x1b[2K\r\nrm"}, "/")["body"], "ls� -l�[2K\nrm")
+
+
+class RowDetailTest(HubTest):
+    """What a row says beyond its state, for the popout's pane."""
+
+    def hook(self, name, **event):
+        self.hub.command("hook", stdin=json.dumps({"hook_event_name": name, "session_id": self.sid, **event}))
+
+    def setUp(self):
+        super().setUp()
+        self.proc = self.hub.process()
+        self.bar = self.hub.subscribe()
+        self.hub.write_session(self.proc.pid, self.sid, status="idle")
+        self.bar.wait(has_session(self.sid))
+
+    def test_a_turn_that_needs_a_reply_keeps_the_agents_own_closing_words(self):
+        words = "Rebased onto main.\n\nWant me to push?"
+        transcript = self.hub.write_transcript(self.sid, [prompt("rebase it"), said(words)])
+        self.hook("Stop", transcript_path=str(transcript), last_assistant_message=words)
+        row = session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply")), self.sid)
+        self.assertEqual(row["said"], words)
+
+    def test_your_last_prompt_shows_but_is_never_saved(self):
+        self.hook("UserPromptSubmit", prompt="rebase\nit please")
+        self.bar.wait(has_session(self.sid, lambda s: s.get("prompt") == "rebase it please"))
+        eventually(lambda: (self.hub.tmp / "state.json").exists())
+        self.assertNotIn("rebase it please", (self.hub.tmp / "state.json").read_text())
+
+    def test_a_slash_commands_markup_is_not_your_prompt(self):
+        self.hook("UserPromptSubmit", prompt="<command-name>/x</command-name>")
+        state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+        self.assertNotIn("prompt", session(state, self.sid))
+
+    def test_a_row_says_its_branch_and_changes_and_who_shares_its_tree(self):
+        repo = git_repo(self.hub.tmp / "repo", branch="topic")
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", cwd=str(repo), name="one")
+        other = str(uuid.uuid4())
+        self.hub.write_session(self.hub.process().pid, other, status="idle", cwd=str(repo / ""), name="two")
+        state = self.bar.wait(has_session(self.sid, lambda s: s.get("branch") == "topic" and s.get("peers") == ["two"]))
+        self.assertEqual(session(state, self.sid)["changed"], 1)
+        self.assertEqual(session(state, other)["peers"], ["one"])
+
+    def test_outside_git_there_is_no_branch_to_show(self):
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", cwd=str(self.hub.tmp))
+        state = self.bar.wait(has_session(self.sid, lambda s: s["cwd"] == str(self.hub.tmp)))
+        self.assertNotIn("branch", session(state, self.sid))
+
+    def test_a_working_session_says_when_its_transcript_last_moved(self):
+        transcript = self.hub.write_transcript(self.sid, [prompt("go")])
+        self.hook("UserPromptSubmit", prompt="go", transcript_path=str(transcript))
+        state = self.bar.wait(has_session(self.sid, lambda s: "activity" in s))
+        self.assertEqual(session(state, self.sid)["activity"], int(transcript.stat().st_mtime * 1000))
+
+    def test_background_work_is_named(self):
+        transcript = self.hub.write_transcript(self.sid, [prompt("go"), said("Started it.")])
+        self.hook("Stop", transcript_path=str(transcript), background_tasks=[{"type": "subagent", "description": "just build"}])
+        self.bar.wait(has_session(self.sid, lambda s: s.get("jobs") == ["just build"]))
+
+
+class MenuTest(unittest.TestCase):
+    """A row's folder and git menus, and what their rows do."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="agent-hub-menu-"))
+        (self.tmp / "bin").mkdir()
+        (self.tmp / "bin" / "code").write_text("")
+        (self.tmp / "bin" / "code").chmod(0o755)
+        self.gh_answer = self.tmp / "gh.answer"
+        gh = self.tmp / "gh"
+        gh.write_text(f"#!/bin/sh\nexec cat {self.gh_answer}\n")
+        gh.chmod(0o755)
+        self.gh_answer.write_text("[]")
+        self.hub = Hub(extra={"appPath": [str(self.tmp / "bin")], "gh": str(gh)})
+        self.addCleanup(self.hub.stop)
+        self.bar = self.hub.subscribe()
+        self.sid = str(uuid.uuid4())
+        self.repo = git_repo(self.tmp / "repo", "https://github.com/me/thing.git")
+        self.hub.write_session(self.hub.process().pid, self.sid, status="idle", cwd=str(self.repo))
+        self.bar.wait(has_session(self.sid))
+        self.spawned = Path(str(self.hub.focus_log) + ".spawn")
+
+    def menu(self, which, request=1):
+        self.bar.send(op="menu", request=request, session=self.sid, which=which)
+        return self.bar.wait(lambda m: m["type"] == "menu" and m["request"] == request)["menu"]
+
+    def test_the_folder_menu_lists_every_app_and_says_which_it_cant_run(self):
+        menu = self.menu("folder")
+        rows = {r["id"]: r for r in menu["rows"]}
+        self.assertEqual(list(rows), ["code", "smerge", "files", "ghostty", "copy"])
+        self.assertEqual(rows["smerge"]["unavailable"], "not installed")
+        self.assertEqual((rows["copy"]["run"], menu["preferred"]), ({"kind": "copy", "value": str(self.repo)}, "code"))
+
+    def test_an_app_opens_the_rows_folder(self):
+        self.bar.send(op="run", session=self.sid, kind="app", value="code")
+        self.assertEqual(logged(self.spawned)[0], ["code", str(self.repo)])
+
+    def test_an_app_it_cant_run_or_doesnt_know_does_nothing(self):
+        self.bar.send(op="run", session=self.sid, kind="app", value="smerge")
+        self.bar.send(op="run", session=self.sid, kind="app", value="rm")
+        self.bar.send(op="run", session=self.sid, kind="url", value="https://example.com/")
+        self.assertEqual(logged(self.spawned), [["xdg-open", "https://example.com/"]])
+
+    def test_only_a_web_link_is_opened(self):
+        self.bar.send(op="run", session=self.sid, kind="url", value="file:///etc/passwd")
+        self.bar.send(op="run", session=self.sid, kind="copy", value="-x")
+        self.assertEqual(logged(self.spawned), [["wl-copy", "--", "-x"]])
+
+    def test_the_git_menu_answers_at_once_and_again_with_the_pull_request(self):
+        self.gh_answer.write_text(json.dumps([{"number": 7, "url": "https://github.com/me/thing/pull/7", "state": "OPEN", "isDraft": True}]))
+        first = self.menu("git")
+        self.assertEqual({r["id"]: r for r in first["rows"]}["repo"]["run"]["value"], "https://github.com/me/thing")
+        self.assertEqual(first["preferred"], "branch")
+        second = self.bar.wait(lambda m: m["type"] == "menu")["menu"]
+        rows = {r["id"]: r for r in second["rows"]}
+        self.assertEqual((second["preferred"], rows["pr"]["description"]), ("pr", "draft"))
+        self.assertEqual(rows["create"]["unavailable"], "PR #7 is open")
+
+    def test_a_row_that_doesnt_exist_has_no_menu(self):
+        self.bar.send(op="menu", request=2, session="nope", which="git")
+        self.assertIsNone(self.bar.wait(lambda m: m["type"] == "menu")["menu"])
+
+
+class ForgeTest(unittest.TestCase):
+    def test_each_form_of_remote_is_read(self):
+        for raw in ("git@github.com:me/thing.git", "https://github.com/me/thing.git", "ssh://git@github.com/me/thing", "https://github.com/me/thing/"):
+            self.assertEqual(menus.parse_remote(raw)["web"], "https://github.com/me/thing", raw)
+        self.assertEqual(menus.parse_remote("git@gitlab.com:a/b/c.git")["owner"], "a/b")
+
+    def test_a_forge_or_path_it_doesnt_know_has_no_links(self):
+        for raw in ("git@git.example.com:me/thing.git", "https://github.com/me", "", "https://github.com/me/th ing"):
+            self.assertIsNone(menus.parse_remote(raw), raw)
+
+    def test_a_branch_links_as_each_forge_lays_it_out(self):
+        for raw, leaf in (("git@github.com:a/b", "/tree/x%23y"), ("git@gitlab.com:a/b", "/-/tree/x%23y"), ("git@codeberg.org:a/b", "/src/branch/x%23y")):
+            remote = menus.parse_remote(raw)
+            self.assertEqual(menus.branch_url(remote, "x#y"), remote["web"] + leaf)
+
+    def test_without_a_supported_remote_only_copying_works(self):
+        menu = menus.git_menu({"branch": "main", "oid": "abc", "remote": "", "base": "main", "upstream": True})
+        self.assertEqual([r["id"] for r in menu["rows"] if "run" in r], ["copy"])
+        self.assertEqual(menu["preferred"], "repo")
+
+    def test_a_detached_head_links_its_commit(self):
+        menu = menus.git_menu({"branch": "", "oid": "abcdef0123", "remote": "git@github.com:a/b", "base": "main", "upstream": False})
+        rows = {r["id"]: r for r in menu["rows"]}
+        self.assertEqual((rows["commit"]["label"], rows["commit"]["run"]["value"]), ("Open commit abcdef0", "https://github.com/a/b/commit/abcdef0123"))
+        self.assertEqual((rows["create"]["unavailable"], rows["copy"]["label"]), ("detached HEAD", "Copy commit SHA"))
+
+    def test_a_branch_not_pushed_cant_get_a_pull_request_yet(self):
+        menu = menus.git_menu({"branch": "x", "oid": "a", "remote": "git@github.com:a/b", "base": "main", "upstream": False}, None, True)
+        self.assertEqual({r["id"]: r for r in menu["rows"]}["create"]["unavailable"], "push the branch first")
+
+    def test_a_merged_pull_request_offers_a_new_one(self):
+        pr = {"number": 1, "url": "https://github.com/a/b/pull/1", "state": "merged"}
+        menu = menus.git_menu({"branch": "x", "oid": "a", "remote": "git@github.com:a/b", "base": "dev", "upstream": True}, pr, True)
+        create = {r["id"]: r for r in menu["rows"]}["create"]
+        self.assertEqual((create["label"], create["run"]["value"]), ("Create new pull request", "https://github.com/a/b/compare/dev...x?expand=1"))
+
+    def test_from_another_host_the_menu_says_where_the_folder_is(self):
+        rows = {r["id"]: r for r in menus.folder_menu("/x", "far", lambda app: True)["rows"]}
+        self.assertEqual((rows["files"]["unavailable"], rows["code"]["run"]["value"]), ("on far", "code"))
+
+
 class LinkTest(unittest.TestCase):
     """A viewer hub with another host's hub piped in, through the real `attach`."""
 
@@ -1012,6 +1316,43 @@ class LinkTest(unittest.TestCase):
         self.far_bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
         self.assertIn("unopened needs-reply", self.near.command("log", "--since", "1h").stdout)
         self.assertNotIn("unopened", self.far.command("log", "--since", "1h").stdout)
+
+    def far_prompt(self):
+        """A Claude session on the far host with a prompt open; (its hook, its row at the viewer)."""
+        sid, proc = str(uuid.uuid4()), self.far.process()
+        self.far.write_session(proc.pid, sid, status="waiting", waitingFor="permission prompt", cwd="/far/repo")
+        hook = self.far.held_hook(self, sid, {"command": "make", "description": "Build it"})
+        rid = f"far:{sid}"
+        return hook, rid, session(self.bar.wait(has_session(rid, lambda s: "permission" in s)), rid)
+
+    def test_a_viewer_answers_a_prompt_on_the_other_host_and_logs_it_there_only(self):
+        hook, rid, row = self.far_prompt()
+        self.assertEqual(row["permission"]["body"], "make")
+        self.bar.send(op="answer", session=rid, ask=row["permission"]["id"], allow=True)
+        out, _ = hook.communicate(timeout=TIMEOUT)
+        self.assertEqual(json.loads(out)["hookSpecificOutput"]["decision"], {"behavior": "allow"})
+        self.assertIn("allowed asking", self.near.command("log", "--since", "1h").stdout)
+        self.assertNotIn("allowed", self.far.command("log", "--since", "1h").stdout)
+
+    def test_the_folder_menu_opens_what_can_go_over_ssh_and_says_where_the_rest_is(self):
+        self.asks()
+        self.bar.send(op="menu", request=7, session=self.rid, which="folder")
+        rows = {r["id"]: r for r in self.bar.wait(lambda m: m["type"] == "menu")["menu"]["rows"]}
+        self.assertEqual(rows["smerge"]["unavailable"], "not installed" if not shutil.which("smerge") else "on far")
+        self.assertEqual(rows["copy"]["run"], {"kind": "copy", "value": "/far/repo"})
+        self.bar.send(op="run", session=self.rid, kind="app", value="ghostty")
+        spawned = logged(Path(str(self.near.focus_log) + ".spawn"))
+        self.assertEqual(spawned[0][-4:], ["ssh", "-t", "far", "cd /far/repo && exec \"$SHELL\" -l"])
+
+    def test_the_git_menu_builds_its_links_here_from_what_git_says_there(self):
+        repo = git_repo(self.far.tmp / "repo", "git@github.com:me/thing.git")
+        rid = f"far:{(sid := str(uuid.uuid4()))}"
+        self.far.write_session(self.far.process().pid, sid, status="idle", cwd=str(repo))
+        self.bar.wait(has_session(rid))
+        self.bar.send(op="menu", request=8, session=rid, which="git")
+        menu = self.bar.wait(lambda m: m["type"] == "menu")["menu"]
+        rows = {r["id"]: r for r in menu["rows"]}
+        self.assertEqual((menu["context"], rows["branch"]["run"]["value"]), ("me/thing", "https://github.com/me/thing/tree/main"))
 
     def test_a_hub_that_lists_this_one_does_not_get_its_own_rows_back(self):
         self.asks()
@@ -1074,8 +1415,18 @@ class AttachFilterTest(unittest.TestCase):
     def test_only_subscribe_passes_without_control(self):
         self.assertEqual(links.attach_filter(b'{"op":"subscribe","version":3,"extra":1}', False),
                          {"op": "subscribe", "local": True, "version": 3})
-        for op in ("dismiss", "undismiss", "undo", "turn-start", "focus", "resume", "attach", "demo", "seen"):
+        for op in ("dismiss", "undismiss", "undo", "turn-start", "focus", "resume", "attach", "demo", "seen", "run", "menu"):
             self.assertIsNone(links.attach_filter(json.dumps({"op": op, "session": "s", "configDir": "/evil"}).encode(), False))
+        self.assertIsNone(links.attach_filter(b'{"op":"answer","session":"s","ask":1,"allow":true}', False))
+        self.assertIsNone(links.attach_filter(b'{"op":"git-facts","session":"s","request":1}', False))
+
+    def test_control_adds_answering_a_prompt_and_asking_git_rebuilt_from_their_fields(self):
+        self.assertEqual(links.attach_filter(b'{"op":"answer","session":"s","ask":2,"allow":true,"evil":1}', True),
+                         {"op": "answer", "session": "s", "ask": 2, "allow": True})
+        self.assertIsNone(links.attach_filter(b'{"op":"answer","session":"s","ask":2,"allow":"yes"}', True))
+        self.assertEqual(links.attach_filter(b'{"op":"git-facts","session":"s","request":4,"evil":1}', True),
+                         {"op": "git-facts", "session": "s", "request": 4})
+        self.assertIsNone(links.attach_filter(b'{"op":"run","session":"s","kind":"app","value":"code"}', True))
 
     def test_control_adds_only_dismissing_and_its_undo_rebuilt_from_their_fields(self):
         for op in ("dismiss", "undismiss"):
@@ -1107,8 +1458,24 @@ class CleanRowTest(unittest.TestCase):
         self.assertEqual(len(row["summary"]), links.TEXT_MAX)
 
     def test_what_the_host_says_of_pid_window_and_host_is_ignored(self):
-        row = links.clean_row("far", self.row(pid=1, window=7, host="near", reply="sudo rm"))
-        self.assertEqual((row["pid"], row["window"], row["host"], row["reply"]), (None, None, "far", ""))
+        row = links.clean_row("far", self.row(pid=1, window=7, host="near"))
+        self.assertEqual((row["pid"], row["window"], row["host"]), (None, None, "far"))
+
+    def test_a_held_prompt_keeps_its_lines_and_loses_what_could_disguise_them(self):
+        permission = {"id": 3, "tool": "Bash", "about": "a\x1bb", "kind": "evil", "body": "ls\n‮cat\x1b[0m", "complete": True}
+        row = links.clean_row("far", self.row(permission=permission))
+        self.assertEqual(row["permission"], {"id": 3, "tool": "Bash", "about": "a b", "kind": "text", "body": "ls\n�cat�[0m", "complete": True})
+
+    def test_a_held_prompt_cut_short_on_the_way_cannot_be_allowed(self):
+        permission = {"id": 3, "tool": "Bash", "about": "", "kind": "command", "body": "x" * 9000, "complete": True}
+        self.assertFalse(links.clean_row("far", self.row(permission=permission))["permission"]["complete"])
+        self.assertNotIn("permission", links.clean_row("far", self.row(permission={"id": True})))
+
+    def test_what_a_pane_shows_survives_and_junk_does_not(self):
+        row = links.clean_row("far", self.row(said="one\n\ntwo", prompt="a\nb", branch="main", changed=2, peers=["x", 1], activity=9, jobs="nope"))
+        self.assertEqual((row["said"], row["prompt"], row["branch"], row["changed"], row["peers"], row["activity"]),
+                         ("one\n\ntwo", "a b", "main", 2, ["x"], 9))
+        self.assertNotIn("jobs", row)
 
     def test_a_tmux_pane_or_bridge_that_is_not_one_is_dropped(self):
         row = links.clean_row("far", self.row(tmux="%1; rm -rf ~", bridge="a/../b"))
@@ -1306,9 +1673,7 @@ class WaitingTest(HubTest):
 
     def test_hook_reports_the_call_as_one_line(self):
         self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="permission prompt")
-        event = {"hook_event_name": "PermissionRequest", "session_id": self.sid, "cwd": "/repo",
-                 "tool_name": "Bash", "tool_input": {"command": "rm -rf build\n  && make"}}
-        self.hub.command("hook", stdin=json.dumps(event))
+        self.hub.held_hook(self, self.sid, {"command": "rm -rf build\n  && make"})
         self.bar.wait(has_session(self.sid, lambda s: s["waitingFor"] == "Bash: rm -rf build && make"))
 
     def test_dialog_that_only_shows_something_is_not_asking(self):

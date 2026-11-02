@@ -96,6 +96,11 @@ switch hostname=`just _this-host` target='' *ARGS="":
         nixos-rebuild switch --flake .#{{ hostname }} --use-substitutes --target-host '{{ target }}' --sudo {{ ARGS }}
         exit 0
     fi
+    this=$(just _this-host)
+    if [ '{{ hostname }}' != "$this" ]; then
+        echo "'just switch {{ hostname }}' would apply {{ hostname }} to this machine ($this). To deploy it: just switch {{ hostname }} <ssh target>." >&2
+        exit 1
+    fi
     if [ "$root" = 1 ]; then sudo="sudo"; else sudo=""; fi
     $sudo $tool switch --flake .#{{ hostname }} {{ ARGS }}
     if [ "$class" = nixos ]; then just _failed-units; fi

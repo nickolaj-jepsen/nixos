@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shlex
 import socket
 import struct
@@ -11,6 +12,10 @@ from pathlib import Path
 
 LINE_MAX = 1 << 22
 LABEL_MAX = 200
+# As much of a request or a closing message as a popout pane shows.
+BLOCK_MAX = 4000
+# Control, bidi and zero-width characters, which could make a command read as something else.
+UNSHOWABLE = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f​-‏ -‮⁠-⁯﻿]")
 
 
 def state_dir():
@@ -122,6 +127,13 @@ def label_line(text):
     return folded(text)[:LABEL_MAX]
 
 
+def shown_block(value, limit=BLOCK_MAX):
+    """(text, whether all of it fit) for many lines of someone else's text: what can't be shown
+    honestly is marked rather than dropped, and line breaks and tabs stay."""
+    text = UNSHOWABLE.sub("�", value.replace("\r\n", "\n")) if isinstance(value, str) else ""
+    return text[:limit], len(text) <= limit
+
+
 def json_lines(path):
     """Each JSON object in a JSON-lines file, skipping lines that aren't one; OSError propagates."""
     with open(path, encoding="utf-8", errors="replace") as lines:
@@ -167,7 +179,8 @@ def hub_message(message):
 
 def hub_request(message, timeout=1.0):
     """Sends one message that carries a `request` number and returns the hub's reply to
-    it, or None when the hub is down or slow: callers sit in an agent's prompt path."""
+    it, or None when the hub is down or slow: callers sit in an agent's prompt path.
+    A `timeout` of None waits for as long as the hub keeps the connection."""
     try:
         with socket.socket(socket.AF_UNIX) as sock:
             sock.settimeout(timeout)

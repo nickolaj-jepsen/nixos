@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import worklog
-from .claude import SAID_MAX, claude_label
+from .claude import SAID_MAX, claude_label, permission_ask
 from .common import (
     folded, hub_message, hub_request, hub_state, label_line, load_config, log_path, nearest, now_ms, resume_command, socket_path,
 )
@@ -93,12 +93,13 @@ def stop_tasks(event):
 
 
 def cmd_hook(_args):
-    """Claude Code's hook into the hub. It prints nothing but UserPromptSubmit's note on
-    the other sessions in the working tree, so Claude's own handling is unchanged:
+    """Claude Code's hook into the hub. It prints only UserPromptSubmit's note on the other
+    sessions in the working tree and the answer to a prompt given at the bar:
     SessionStart names the profile, UserPromptSubmit starts a turn, Stop ends it with
     the closing words and the tasks still out, StopFailure ends it on an API error,
-    PermissionRequest labels the dialog, SessionEnd lets the session go. `AGENT_HUB=off`
-    turns it all off for a session, as if there were no hub."""
+    PermissionRequest shows the prompt and waits on the hub, which Claude's own dialog
+    races, SessionEnd lets the session go. `AGENT_HUB=off` turns it all off for a session,
+    as if there were no hub."""
     if os.environ.get("AGENT_HUB") == "off":
         return
     try:
@@ -128,8 +129,13 @@ def cmd_hook(_args):
         reason = event.get("last_assistant_message") or event.get("error_details") or event.get("error") or "API error"
         hub_message({"op": "turn-end", "transcript": transcript, "failure": label_line(reason), **who})
     elif name == "PermissionRequest":
-        hub_message({"op": "dialog", "session": session,
-                     "text": claude_label(event.get("tool_name"), event.get("tool_input"), event.get("cwd"))})
+        tool, args, cwd = event.get("tool_name"), event.get("tool_input"), event.get("cwd")
+        reply = hub_request({"op": "permission", "request": 1, "text": claude_label(tool, args, cwd),
+                             "ask": permission_ask(tool, args, cwd), **who}, timeout=None)
+        decision = (reply or {}).get("decision")
+        if decision in ("allow", "deny"):
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": {
+                "behavior": decision, **({"message": "Denied from the agent hub."} if decision == "deny" else {})}}}))
     elif name == "SessionEnd":
         # The event's own id is the one ending; after /clear the registry already lists its successor.
         ended = {str(event.get("session_id") or "")} | ({session} if event.get("reason") != "clear" else set())
@@ -166,7 +172,8 @@ def print_group(group):
         text = line.get("did") or ""
         if line.get("ask"):
             text = f"{text} [asks: {line['ask']}]".strip()
-        flag = "wrong " if line.get("wrong") else "unopened " if line.get("unopened") else ""
+        answered = {"allow": "allowed ", "deny": "denied "}.get(line.get("answered"), "")
+        flag = "wrong " if line.get("wrong") else "unopened " if line.get("unopened") else answered
         word = flag + (line.get("state") or "done")
         print(f"  {stamp}  {word:<11} {folded(text)}")
 

@@ -75,6 +75,20 @@ class Git:
             return False
         return out.returncode == 0 and bool(out.stdout.strip())
 
+    async def summary(self, cwd):
+        """(branch, how many files have uncommitted changes) for a directory; ("", 0) outside
+        git. A branch not yet committed to counts, and a detached HEAD has no name to show."""
+        try:
+            out = await asyncio.to_thread(subprocess.run, [self.exe, "--no-optional-locks", "-C", cwd, "status", "--porcelain=v1", "--branch"],
+                                          capture_output=True, text=True, timeout=GIT_TIMEOUT)
+        except (OSError, subprocess.TimeoutExpired):
+            return "", 0
+        lines = out.stdout.splitlines() if out.returncode == 0 else []
+        if not lines:
+            return "", 0
+        head = lines[0].removeprefix("## ").removeprefix("No commits yet on ").split("...")[0]
+        return "" if head.startswith("HEAD ") else head, len(lines) - 1
+
     async def root(self, cwd):
         """The working tree a directory is in, or the directory itself outside git."""
         if not cwd:

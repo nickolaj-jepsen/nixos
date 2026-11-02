@@ -32,6 +32,10 @@ IDENTITY = {"label?": "str|null", "summary?": "str|null", "tags?": ["str"], "cal
 
 TURN = {"at": "int", "state": "str", "did": "str"}
 
+# What a permission prompt asks, in full. `complete` is false when `body` had to be cut,
+# and then nothing may allow it from the bar: you can't approve what you can't read.
+ASK = {"tool": "str", "about": "str", "kind": "command|diff|text", "body": "str", "complete": "bool"}
+
 ROW = {
     "id": "str",
     "agent": "str",
@@ -61,6 +65,21 @@ ROW = {
     # How to reach it from elsewhere: its tmux pane, and its Remote Control session.
     "tmux?": "str",
     "bridge?": "str",
+    # What you last asked it, kept only while the hub runs.
+    "prompt?": "str",
+    # The closing words of a turn that needs a reply, as the agent wrote them.
+    "said?": "str",
+    # The prompt a hook is holding open, which `answer` can settle by this `id`.
+    "permission?": {"id": "int", **ASK},
+    "branch?": "str",
+    # How many files have uncommitted changes.
+    "changed?": "int",
+    # The other sessions in the same working tree, by name.
+    "peers?": ["str"],
+    # While working, when its transcript last moved.
+    "activity?": "int",
+    # The background work a finished turn still waits on.
+    "jobs?": ["str"],
 }
 
 RECENT = {
@@ -100,6 +119,14 @@ OPS = {
     "seen": {},
     "toggle": {},
     "resume": {"session": "str"},
+    # Settles the prompt `ask` names, and only that one.
+    "answer": {"session": "str", "ask": "int", "allow": "bool"},
+    # Asks for a row's folder or git menu, answered with `menu`, twice when a lookup follows.
+    "menu": {"request": "int", "session": "str", "which": "folder|git"},
+    # Does what a menu row says.
+    "run": {"session": "str", "kind": "url|copy|app", "value": "str"},
+    # What this host's git says of a session, for a viewer's git menu; answered in `reply.facts`.
+    "git-facts": {"request": "int", "session": "str"},
     "demo": {"sessions": ["any"]},
     # pi, for the life of its connection; ops after `attach` name no session.
     "attach": {
@@ -118,6 +145,9 @@ OPS = {
     },
     # pi's own, or a Claude hook's for the session it names.
     "dialog": {"session?": "str", "text": "str|null"},
+    # Claude's PermissionRequest hook, held open until `reply` says what became of the prompt.
+    "permission": {"request": "int", "session": "str", "text": "str", "ask": ASK, "pid?": "int|null", "cwd?": "str|null",
+                   "configDir?": "str|null", "hidden?": "bool", "tmux?": "str|null"},
     "named": {"name": "str|null"},
     # No text: the call failed.
     "judged": {"request": "int", "text?": "str"},
@@ -144,7 +174,9 @@ TYPES = {
     "row": {"row": Nullable(ROW), "identity": IDENTITY},
     "judge": {"request": "int", "system": "str", "prompt": "str", "maxTokens": "int", "source": "str"},
     "cancel": {"request": "int"},
-    "reply": {"request": "int", "peers?": "str"},
+    # `decision` answers a held `permission`; without one the prompt closed some other way.
+    "reply": {"request": "int", "peers?": "str", "decision?": "allow|deny", "facts?": "any"},
+    "menu": {"request": "int", "menu": "any"},
     "notice": {"text": "str"},
     "refused": {"text": "str"},
     "error": {"error": "str"},

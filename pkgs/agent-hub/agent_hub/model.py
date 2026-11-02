@@ -26,6 +26,8 @@ ASK_GRACE_MS = 1000
 ONCE_MS = 1000
 # Which field of a row says why it is in its state.
 REASON_FIELD = {"asking": "waitingFor", "needs-reply": "ask", "failed": "summary", "done": "summary", "working": "doing"}
+# What a row says of a held prompt.
+PERMISSION = ("id", "tool", "about", "kind", "body", "complete")
 
 
 @dataclass
@@ -90,6 +92,16 @@ class Session:
     # Its tmux pane, and its Remote Control session: how another host can reach it.
     tmux: str = ""
     bridge: str = ""
+    # What the person last asked it. Never saved: it stays in the transcript's care.
+    prompt: str = ""
+    # The prompts its hook holds open, oldest first, which is the one its dialog shows.
+    holds: list = field(default_factory=list)
+    # Its working tree, as git last said: the tree's root, branch, and files changed.
+    root: str = ""
+    branch: str = ""
+    changed: int = 0
+    # Whether git has been asked since this hub met it.
+    git_asked: bool = False
 
     # Persistence.
 
@@ -196,6 +208,41 @@ class Session:
         if self.status != "waiting":
             self.status, self.status_at = "waiting", now
 
+    # Prompts a hook holds open.
+
+    def hold(self, hold_id, ask, text, now):
+        """A hook holds a prompt open. The registry stamp it opened under, when it got there
+        first, tells it from the next prompt under a new stamp."""
+        seen = self.registry_seen
+        stamp = seen[2] if seen and seen[0] == "waiting" and not self.holds else None
+        self.holds.append({**ask, "id": hold_id, "text": text, "opened": now, "stamp": stamp})
+        self.wait(self.holds[0]["text"], now)
+
+    def unhold(self, hold):
+        """A held prompt is settled: the next one is what its dialog shows now."""
+        self.holds.remove(hold)
+        if self.holds:
+            self.dialog = self.holds[0]["text"]
+
+    def closed_holds(self):
+        """The holds the registry says are over. Claude leaves a hook running when you answer
+        its dialog in the terminal, so this is how the hub hears of it. A status older than the
+        prompt says nothing about it, and a new `waiting` stamp means the prompt shown closed."""
+        seen = self.registry_seen
+        if not (self.holds and seen):
+            return []
+        status, _, stamp = seen
+        if status != "waiting":
+            return [hold for hold in self.holds if stamp >= hold["opened"]]
+        first = self.holds[0]
+        if first["stamp"] is None:
+            first["stamp"] = stamp
+        if first["stamp"] == stamp:
+            return []
+        if len(self.holds) > 1:
+            self.holds[1]["stamp"] = stamp
+        return [first]
+
     # What the bar shows.
 
     def state(self, now):
@@ -254,6 +301,12 @@ class Session:
             row["tmux"] = self.tmux
         if self.bridge:
             row["bridge"] = self.bridge
+        details = {"prompt": self.prompt, "branch": self.branch, "changed": self.changed,
+                   "said": outcome.get("said") if state == "needs-reply" else "",
+                   "jobs": outcome.get("tasks") if state == "working" and not turn.open else None}
+        row.update({key: value for key, value in details.items() if value})
+        if state == "asking" and self.holds:
+            row["permission"] = {key: self.holds[0][key] for key in PERMISSION}
         return row
 
     def open_prompt(self):

@@ -6,26 +6,62 @@ one is called, the step it is on, and how its last turn ended.
 - Each agent's TUI shows the hub's row for its own session.
 - On a niri desktop the DMS bar shows a dot per session that wants you and a ring
   per working one, and is a quick way to them.
-- The bar never answers anything: you answer in the agent's own terminal.
+- The popout can allow or deny a Claude Code permission prompt. Anything else you
+  answer in the agent's own terminal.
 - Elsewhere (a server, the Mac) the hub runs headless: no windows, and it polls
   the registry instead of watching it.
 - Its socket is `$XDG_RUNTIME_DIR/agent-hub/hub.sock`, or
   `~/.local/state/agent-hub/hub.sock` where there is no runtime dir.
 
+## The popout
+
+Two panes, so nothing moves under the pointer. The left lists every session, by what
+it is: Waiting on you, Finished, Working, then Idle on slim lines, with the last few
+that ended behind a fold. The right shows the selected one: your last prompt, all of
+what it wants permission for or its closing words as written, the answer you'd likely
+give, its last turns, and one row of icons for where it is.
+
+- A row is selected by hovering it (after 120 ms, and only when the pointer itself
+  moved) or with the keys, which share the one selection. The pane stops following
+  once the pointer is inside it.
+- Hovering a row swaps its age for buttons: dismiss and flag as wrong.
+- Clicking a row opens it. A click on the Ended heading opens that until the popout
+  closes.
+- The folder and branch icons open menus: VS Code, Sublime Merge, Files, Ghostty and
+  the path; the pull request, branch and repository on the web, and their names. Every
+  row is a link, a copy or an app opening a folder (`agent_hub/menus.py`). From another
+  host, VS Code goes over Remote SSH, Ghostty over ssh, and the rest say where it is.
+- The key legend shows only when you opened it from the keyboard, or once you press a key.
+
+### Answering a prompt
+
+Claude Code's `PermissionRequest` hook shows the hub all of the call and stays on the
+line. Allow or Deny in the pane answer through it; the terminal's dialog stays open and
+whichever comes first wins. Each answer settles only the call its hook holds, so it can
+never approve something other than what the pane showed.
+
+- Allow and Deny stay off for half a second after the pane changes session or prompt,
+  so a click can't land on one that just appeared.
+- There is no "always allow", only this one call.
+- A call too long to show in full (`BLOCK_MAX`) can be denied but not allowed.
+- Text that could disguise a command (control, bidi and zero-width characters) shows
+  as a mark, and nothing in the pane is read as markup.
+- Claude leaves the hook running when you answer in the terminal, so the hub lets it go
+  when the registry says the prompt closed. A status stamped before the prompt opened
+  doesn't count, and a new `waiting` stamp closes the prompt showing.
+- pi's permission package has no way to answer a prompt from outside, so pi sessions
+  keep Open and Dismiss.
+
 ## Keys
 
-- `Mod+B` opens the popout with the first row selected. The first session waiting
-  on you is a card with its ask in full, and the rest go under Also waiting,
-  Finished and Working.
-  - `Enter` (or a click) focuses its window.
+- `Mod+B` opens the popout with the first row selected.
+  - `Enter` opens its window, or resumes an ended one in a new terminal.
+  - `a` and `d` allow or deny the prompt it holds.
   - `x` dismisses a finished one, or hides an open prompt until the next prompt.
   - `u` brings back the last dismissal, until that session starts a new turn. The
     stack lives in the hub the bar talks to, in memory.
   - `w` logs its verdict as wrong, for tuning the gate.
-  - `j`/`k` move, and `g`/`G` jump to the ends. The card stays where it is, and
-    the selected row opens to its full reason and last turns.
-  - Idle sessions and the last few that ended are folded to a line each, which
-    unfolds when selected. `Enter` on an ended one resumes it in a new terminal.
+  - `j`/`k` move, and `g`/`G` jump to the ends.
 - `Mod+Shift+B` (`agent-hub focus-next`) jumps straight to the next session
   that wants you, cycling on repeat.
 - `Mod+Ctrl+B` (`agent-hub toggle`) dismisses the finished turn of the session
@@ -37,8 +73,8 @@ The bar shows no popups. Terminal bells stay, as they are the agent's own.
 
 - A session's dot bursts when it comes to want you, then breathes until the popout
   opens or you focus its window. A `done` bursts once.
-- An ask also peeks out of the pill for 4 s, saying who. A vertical bar has no room
-  for the peek.
+- An ask also peeks out of the pill for 4 s, saying who, and a click on it goes to
+  that session. A vertical bar has no room for the peek.
 - Nothing pulses when you are looking at that window, for a dialog answered within
   a second, or on a restart for turns the hub already knew.
 - The hub computes the pulse (`Alerts` in `agent_hub/model.py`) and keeps what it has
@@ -61,8 +97,12 @@ end, with no TCP port of its own.
   over a full login.
 - On the far end that key is `restrict` with a forced `agent-hub attach`, so it can do
   nothing else. A jump host also opens the hops in `linkJumps`.
-- `attach` passes `subscribe`, and with `--control` also `dismiss` and `undismiss`,
-  each rebuilt from its allowed fields (`attach_filter` in `agent_hub/links.py`).
+- `attach` passes `subscribe`, and with `--control` also `dismiss`, `undismiss`,
+  `answer` and `git-facts`, each rebuilt from its allowed fields (`attach_filter` in
+  `agent_hub/links.py`). So a link key can approve a call an agent there has already
+  asked to make, but can't start anything.
+- A git menu takes only what git says from the far host. Its URLs are built at the
+  viewer, whose own `gh` looks up the pull request, so the far host needs no login.
 - A subscribe through `attach` gets that host's own sessions only, so hubs listing
   each other never echo rows around.
 - Remote rows are untrusted (`clean_row`). The viewer stamps the host, ids must be
@@ -155,7 +195,7 @@ In the order the popout lists them. The first four want you.
     `status: "waiting"`.
   - Claude Code writes that itself, with a `waitingFor` naming the dialog
     (`permission prompt`, `input needed`), and its `PermissionRequest` hook sends
-    the daemon a one-line label of the call.
+    the daemon a one-line label of the call and all of it.
   - pi reports its own while pi-permission-system has a dialog open.
   - Claude also says `waiting` for modals that only show something (the history
     view, `/config`). Those carry `waitingFor: "dialog open"` and leave the
@@ -239,7 +279,9 @@ daemon starts.
   every word, with their resume commands.
 - A verdict you flagged with `w` shows there as `wrong <state>`. A `needs-reply` you
   dismissed without going to it shows as `unopened needs-reply`, a weaker sign, since
-  you may only not care. Both name the session and turn.
+  you may only not care. A prompt you answered in the popout shows as `allowed asking`
+  or `denied asking`, on the host you answered from, and never says what it asked. All
+  of these name the session and turn.
 - Each row carries its last three endings (`history`), which the popout shows
   under the selected session, ended ones included.
 - Both commands read the file directly, so they work without the daemon.
@@ -257,6 +299,10 @@ daemon starts.
   walks.
 - Each row carries `reason`: why it is in its state, which the popout, the TUIs and
   `agent-hub status` all read.
+- Your last prompt stays in the daemon's memory, off its state file and the work log.
+  Branch and changed files are asked of git when a session is first seen, when a prompt
+  opens, when a turn ends and when the popout opens. A working row's last activity is
+  when its transcript last moved, so a long silent command looks the same as a stuck one.
 - The protocol has a version. pi's build generates its TypeScript types from
   `protocol.py`, and a pi built against another version is refused with a notice to
   restart it.

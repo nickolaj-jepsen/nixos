@@ -11,12 +11,14 @@ can name one before the registry has it, and it is kept while its pid lives.
 import asyncio
 import json
 import os
+import shlex
+import shutil
 import sys
 from pathlib import Path
 
-from . import links, model, peers, pi, protocol, worklog
+from . import links, menus, model, peers, pi, protocol, worklog
 from .common import (
-    LINE_MAX, alive, label_line, log_path, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
+    LINE_MAX, alive, folded, label_line, log_path, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
 )
 from .desktop import Niri
 from .readings import Readings
@@ -26,6 +28,11 @@ RECENT_MAX = 100
 # A session no longer listed anywhere is kept this long, for a registry that has yet to catch up.
 UNSEEN_MS = 60_000
 UNDO_MAX = 50
+PROMPT_MAX = 500
+# How often a working session's last activity is looked at.
+ACTIVITY_S = 15
+# The command behind a folder menu's app, the first one found.
+APP_COMMANDS = {"code": ("code",), "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
 
 
 def agent_of(entry):
@@ -58,6 +65,9 @@ class Hub:
         self.niri = Niri(cfg.get("niri"), self.changed)
         self.git = peers.Git(cfg.get("git"))
         self.terminal = cfg.get("terminal")
+        self.gh = cfg.get("gh") or shutil.which("gh")
+        # Where a desktop's apps are, which a user unit's own PATH doesn't reach.
+        self.app_path = os.pathsep.join(cfg["appPath"]) if cfg.get("appPath") else None
         self.state_file = Path(cfg["state"]).expanduser()
         self.log_file = log_path(cfg)
         self.readings = Readings(self, cfg.get("claude"))
@@ -81,6 +91,9 @@ class Hub:
         self._tasks = set()
         # What was dismissed at this hub's bar, oldest first, for `undo`. Memory only.
         self.dismissals = []
+        # Hold id → the hook's connection and request, which its answer goes back on.
+        self.held = {}
+        self.next_hold = 0
 
     # Persistence.
 
@@ -124,9 +137,16 @@ class Hub:
         server = await asyncio.start_unix_server(self._serve, path=str(path), limit=LINE_MAX)
         path.chmod(0o600)
         self.source.start()
-        tasks = [server.serve_forever(), self.niri.run(), *(link.run() for link in self.links.values())]
+        tasks = [server.serve_forever(), self.niri.run(), self._watch_activity(), *(link.run() for link in self.links.values())]
         async with server:
             await asyncio.gather(*tasks)
+
+    async def _watch_activity(self):
+        """Nothing else says a working session is still moving, so its row is looked at again."""
+        while True:
+            await asyncio.sleep(ACTIVITY_S)
+            if any(session.turn is not None and session.turn.open for session in self.visible().values()):
+                self.publish()
 
     # Sessions.
 
@@ -156,7 +176,8 @@ class Hub:
             session = self._session(sid, agent_of(entry))
             session.agent = agent_of(entry)
             session.pid = entry.get("pid") or session.pid
-            session.cwd = entry.get("cwd") or session.cwd
+            if entry.get("cwd") and entry["cwd"] != session.cwd:
+                session.cwd, session.git_asked = entry["cwd"], False
             if entry.get("nameSource") == "user" and entry.get("name"):
                 session.name = entry["name"]
             elif sid not in self.attached:
@@ -172,6 +193,10 @@ class Hub:
                 # pi's ending is read once it attaches: its own model does the reading.
                 if session.agent != "pi":
                     self._recover(session)
+                self._settle_holds(session)
+        for session in self.visible().values():
+            if not session.git_asked and session.cwd:
+                self._spawn(self._ask_git(session))
         listed = set(self.source.sessions) | set(self.attached)
         listed_pids = {self.sessions[sid].pid for sid in listed if sid in self.sessions}
         for sid, session in list(self.sessions.items()):
@@ -214,6 +239,7 @@ class Hub:
 
     def _retire(self, session):
         """A session that ended goes to the recent list, when it was ever named."""
+        self._release_all(session)
         del self.sessions[session.id]
         self.readings.forget(session.id)
         if not session.label:
@@ -256,14 +282,187 @@ class Hub:
     def _hidden(self, sid):
         return sid in self.sessions and self.sessions[sid].hidden
 
+    async def _ask_git(self, session):
+        """What git says of a session's checkout, for its row; publishes when that moved."""
+        session.git_asked = True
+        if not session.cwd:
+            return
+        root = await self.git.root(session.cwd)
+        branch, changed = await self.git.summary(session.cwd)
+        if (root, branch, changed) != (session.root, session.branch, session.changed):
+            session.root, session.branch, session.changed = root or "", branch, changed
+            self.publish()
+
+    # Prompts a hook holds open.
+
+    def _permission(self, conn, message):
+        """Claude's hook shows a prompt and stays on the line: the bar can answer it, while
+        Claude's own dialog stays open in the terminal, and whichever comes first wins."""
+        session = self._own(conn, message)
+        self.next_hold += 1
+        self.held[self.next_hold] = (conn, message["request"])
+        session.hold(self.next_hold, message["ask"], label_line(message["text"]), now_ms())
+        self._spawn(self._ask_git(session))
+        self.publish()
+
+    def _release(self, session, hold, decision=None):
+        """Lets a hook go, with what to tell Claude; without a decision it says nothing."""
+        session.unhold(hold)
+        conn, request = self.held.pop(hold["id"], (None, None))
+        if conn is not None:
+            conn.send({"type": "reply", "request": request, **({"decision": decision} if decision else {})})
+
+    def _release_all(self, session):
+        for hold in list(session.holds):
+            self._release(session, hold)
+
+    def _settle_holds(self, session):
+        for hold in session.closed_holds():
+            self._release(session, hold)
+
+    def _forget_holds(self, conn):
+        """A hook hung up, so what it held can no longer be answered."""
+        for session in self.sessions.values():
+            for hold in [h for h in session.holds if self.held.get(h["id"], (None,))[0] is conn]:
+                self.held.pop(hold["id"], None)
+                session.unhold(hold)
+
+    def _answer(self, sid, ask, allow, viewer=True):
+        """Settles the prompt `ask` names, here or on the host it belongs to, as long as it is the
+        one showing. Only all of what you could read can be allowed."""
+        row = self._row(sid)
+        permission = (row or {}).get("permission")
+        if not permission or permission["id"] != ask or (allow and not permission["complete"]):
+            return
+        decision = "allow" if allow else "deny"
+        if viewer:
+            self._log_verdict(row, self.sessions.get(sid), answered=decision)
+        host, own = links.split_id(sid)
+        if host in self.links:
+            self.links[host].send({"op": "answer", "session": own, "ask": ask, "allow": allow})
+            return
+        session = self.sessions[sid]
+        self._release(session, session.holds[0], decision)
+        # Claude moves on as soon as it has the answer; its registry entry says so a moment later.
+        if not session.holds:
+            session.observe("busy", None, now_ms())
+        self.publish()
+
+    # Menus.
+
+    def _place(self, sid):
+        """(host, cwd) of a row or an ended session, the host None when it is this one, or None."""
+        last = self._last or {}
+        item = next((r for r in [*last.get("sessions", []), *last.get("recent", [])] if r["id"] == sid), None)
+        cwd = (item or {}).get("cwd") or ""
+        if not cwd.startswith("/"):
+            return None
+        host = links.split_id(sid)[0]
+        return (host if host in self.links else None), cwd
+
+    def _can_run(self, app):
+        if app == "ghostty":
+            return bool(self.terminal)
+        return any(shutil.which(command, path=self.app_path) for command in APP_COMMANDS[app])
+
+    async def _git_facts(self, sid):
+        """What git says of a row's checkout, from its own host, or None. Another host's word
+        comes back as plain text, and every URL is built here from it."""
+        place = self._place(sid)
+        if place is None:
+            return None
+        host, cwd = place
+        if host is None:
+            return await asyncio.to_thread(menus.facts, self.git.exe, cwd)
+        reply = await self.links[host].call({"op": "git-facts", "session": links.split_id(sid)[1]})
+        said = (reply or {}).get("facts")
+        if not isinstance(said, dict):
+            return None
+        keys = ("branch", "oid", "remote", "base")
+        return {**{key: links.text(said.get(key)) for key in keys}, "upstream": said.get("upstream") is True}
+
+    async def _menu(self, conn, message):
+        """Answers with a row's menu, and again once GitHub has said what pull request it has."""
+        request, sid = message["request"], message["session"]
+        place = self._place(sid)
+        if place is None:
+            conn.send({"type": "menu", "request": request, "menu": None})
+            return
+        if message["which"] == "folder":
+            conn.send({"type": "menu", "request": request, "menu": menus.folder_menu(place[1], place[0], self._can_run)})
+            return
+        found = await self._git_facts(sid)
+        if found is None:
+            conn.send({"type": "menu", "request": request, "menu": None})
+            return
+        conn.send({"type": "menu", "request": request, "menu": menus.git_menu(found)})
+        remote = menus.parse_remote(found["remote"])
+        if remote and remote["forge"] == "github" and found["branch"]:
+            pr, known, missing = await menus.pull_request(self.gh, remote, found["branch"])
+            conn.send({"type": "menu", "request": request, "menu": menus.git_menu(found, pr, known, missing)})
+
+    async def _reply_facts(self, conn, message):
+        found = await self._git_facts(message["session"])
+        conn.send({"type": "reply", "request": message["request"], "facts": found})
+
+    async def _run(self, message):
+        """Does what a menu row says, through niri as Mod+Return is, for the desktop's environment."""
+        kind, value = message["kind"], message["value"]
+        if kind == "url" and value.startswith("https://"):
+            await self.niri.spawn(["xdg-open", value])
+        elif kind == "copy":
+            await self.niri.spawn(["wl-copy", "--", value])
+        elif kind == "app" and value in APP_COMMANDS:
+            await self._open_app(message["session"], value)
+
+    async def _open_app(self, sid, app):
+        place = self._place(sid)
+        if place is None or not self._can_run(app):
+            return
+        host, cwd = place
+        if app == "ghostty":
+            if host:
+                await self._terminal(None, ["ssh", "-t", host, f'cd {shlex.quote(cwd)} && exec "$SHELL" -l'])
+            else:
+                await self.niri.spawn(["ghostty", f"--working-directory={cwd}"])
+        elif host:
+            if app == "code":
+                await self.niri.spawn(["code", "--remote", f"ssh-remote+{host}", cwd])
+        else:
+            command = next(c for c in APP_COMMANDS[app] if shutil.which(c, path=self.app_path))
+            await self.niri.spawn([command, cwd])
+
     # Publishing.
 
     def rows(self, now):
-        rows = [session.row(now, self.niri.window_of(session.pid)) for session in self.visible().values()]
+        rows = [self._row_of(session, now) for session in self.visible().values()]
+        self._name_peers(rows)
         for conn in self.conns:
             for sid, entry in conn.demo.items():
                 rows.append(demo_row(sid, entry))
         return model.ordered(rows)
+
+    def _row_of(self, session, now):
+        row = session.row(now, self.niri.window_of(session.pid))
+        if row["state"] == "working" and session.transcript:
+            try:
+                row["activity"] = int(os.stat(session.transcript).st_mtime * 1000)
+            except OSError:
+                pass
+        return row
+
+    def _name_peers(self, rows):
+        """Tells each row which other sessions share its working tree."""
+        by_root = {}
+        for row in rows:
+            session = self.sessions.get(row["id"])
+            if session and session.root and not row.get("hidden"):
+                by_root.setdefault(session.root, []).append(row)
+        for members in by_root.values():
+            for row in members:
+                others = [other["name"] for other in members if other is not row]
+                if others:
+                    row["peers"] = others
 
     def state(self, rows):
         """The `state` message: the rows the bar shows, what ended, and how many are hidden."""
@@ -507,6 +706,7 @@ class Hub:
             for future in conn.calls.values():
                 if not future.done():
                     future.set_result(None)
+            self._forget_holds(conn)
             if conn.session is not None:
                 self._detach(conn)
             elif conn.demo:
@@ -593,6 +793,8 @@ class Hub:
             self.readings.cancel(session.id)
         session.observe("busy", None, now)
         prompt = message.get("prompt") or ""
+        if message.get("fromPerson", True) and prompt.strip() and not prompt.lstrip().startswith("<"):
+            session.prompt = folded(prompt)[:PROMPT_MAX]
         if message.get("fromPerson", True) and prompt.strip() and not pi.is_acknowledgement(prompt):
             self._spawn(self.readings.label(session, prompt))
         self.publish()
@@ -618,6 +820,8 @@ class Hub:
             session.start_turn(now)
         n = session.end_turn(now)
         session.observe("idle", None, now)
+        self._release_all(session)
+        self._spawn(self._ask_git(session))
         if n is not None:
             # Read before idle: the bar shows the reading, never a gap before it.
             self.readings.settle(session, n, message)
@@ -652,6 +856,17 @@ class Hub:
                 else:
                     session.observe("busy", None, now_ms())
                 self.publish()
+        elif op == "permission":
+            self._permission(conn, message)
+        elif op == "answer":
+            self._answer(message["session"], message["ask"], message["allow"], viewer=not conn.local)
+        elif op == "menu":
+            # Not waited on: gh can take seconds, and this connection is the bar's.
+            self._spawn(self._menu(conn, message))
+        elif op == "run":
+            await self._run(message)
+        elif op == "git-facts":
+            self._spawn(self._reply_facts(conn, message))
         elif op == "named":
             session = self._own(conn, message)
             if session is not None:
@@ -689,6 +904,9 @@ class Hub:
             self.alerts.seen()
             for alerts in self.link_alerts.values():
                 alerts.seen()
+            # You are about to read their rows, and a checkout moves between turns too.
+            for session in self.visible().values():
+                self._spawn(self._ask_git(session))
             self.publish()
         elif op == "toggle":
             self._toggle()

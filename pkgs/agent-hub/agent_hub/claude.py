@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from .common import folded, label_line
+from .common import folded, label_line, shown_block
 
 SAID_MAX = 20_000
 RECENT_PROMPTS = 4
@@ -133,3 +133,44 @@ def claude_label(tool, args, cwd):
     else:
         value = None
     return label_line(f"{tool}: {value}") if value else tool
+
+
+def diff_lines(old, new):
+    """`old` and `new` as lines of a diff, without working out what they share."""
+    removed = [f"- {line}" for line in str(old or "").splitlines()]
+    added = [f"+ {line}" for line in str(new or "").splitlines()]
+    return removed + added
+
+
+def edit_diff(tool, args):
+    if tool == "MultiEdit":
+        edits = args.get("edits") if isinstance(args.get("edits"), list) else []
+        return "\n\n".join("\n".join(diff_lines(e.get("old_string"), e.get("new_string"))) for e in edits if isinstance(e, dict))
+    if tool == "Write":
+        return "\n".join(diff_lines("", args.get("content")))
+    if tool == "NotebookEdit":
+        return "\n".join(diff_lines("", args.get("new_source")))
+    return "\n".join(diff_lines(args.get("old_string"), args.get("new_string")))
+
+
+def permission_ask(tool, args, cwd):
+    """All of what a permission prompt asks (`protocol.ASK`), for reading before answering it."""
+    tool = str(tool or "")
+    args = args if isinstance(args, dict) else {}
+    about, kind = "", "text"
+    if tool.startswith("mcp__"):
+        server, _, name = tool[len("mcp__"):].partition("__")
+        about, body = f"{server} · {name}", json.dumps(args, indent=2)
+    elif tool == "Bash":
+        about, kind, body = folded(args.get("description") or ""), "command", str(args.get("command") or "")
+    elif tool in EDITS:
+        target = edit_target(args)
+        about, kind, body = shown_path(target, cwd) if target else "", "diff", edit_diff(tool, args)
+    elif tool == "WebFetch":
+        about, body = folded(args.get("prompt") or ""), str(args.get("url") or "")
+    elif tool == "WebSearch":
+        body = str(args.get("query") or "")
+    else:
+        body = json.dumps(args, indent=2)
+    text, complete = shown_block(body)
+    return {"tool": tool, "about": label_line(about), "kind": kind, "body": text, "complete": complete}
