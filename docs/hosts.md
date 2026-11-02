@@ -8,7 +8,7 @@ cross-platform.
 - A host is any `hosts/<name>/` directory containing a `host.nix`. Discovery is
   automatic (`hosts/default.nix`); there is no registry.
 - **Every** `.nix` file in a host dir is a card of the shape
-  `{ class?; shared?; nixos?; homeManager?; darwin?; }`. The collector throws
+  `{ class?; aliases?; shared?; nixos?; homeManager?; darwin?; }`. The collector throws
   on a bare NixOS module and points you at the `nixos` bucket.
 - Buckets merge across all cards in the dir, so config can live in `host.nix`
   or in siblings (`system.nix`, `monitors.nix`, or a feature co-located with
@@ -51,6 +51,11 @@ throws. The class routes the whole host:
   - Activate on the Mac itself with `just switch`. The first switch on a fresh
     Mac is below.
 - `home`/`darwin` hosts assert their `nixos` bucket is empty.
+
+`aliases` lists machine hostnames (`hostname -s`) that mean this host when
+they differ from its dir name, e.g. dev-ao's `["dev-01"]`. A verb run without
+a host resolves through `config.flake.hostAliases`; an alias that shadows a
+host or is claimed twice throws.
 
 Verbs per class:
 

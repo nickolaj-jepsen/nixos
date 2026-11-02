@@ -6,7 +6,7 @@
   inherit (inputs.nixpkgs) lib;
 
   validClasses = ["nixos" "home" "darwin"];
-  cardKeys = ["class" "shared" "nixos" "homeManager" "darwin"];
+  cardKeys = ["class" "aliases" "shared" "nixos" "homeManager" "darwin"];
 
   collect = dir: let
     names =
@@ -37,6 +37,7 @@
       else lib.head vals;
   in {
     inherit class;
+    aliases = lib.concatLists (lib.catAttrs "aliases" cards);
     shared = lib.catAttrs "shared" cards;
     nixos = lib.catAttrs "nixos" cards;
     homeManager = lib.catAttrs "homeManager" cards;
@@ -167,6 +168,18 @@
   homeHosts = lib.filter (n: hostClassOf n == "home") discovered;
   darwinHosts = lib.filter (n: hostClassOf n == "darwin") discovered;
 
+  # Machine hostnames (`hostname -s`) that name a host other than its dir, so a bare `just build` finds it.
+  hostAliases = let
+    pairs = lib.concatMap (name: map (alias: {inherit alias name;}) (collect (hostDir name)).aliases) discovered;
+    check = acc: p:
+      if lib.elem p.alias discovered
+      then throw "hosts/${p.name}: alias \"${p.alias}\" is already a host name"
+      else if acc ? ${p.alias}
+      then throw "hosts/${p.name}: alias \"${p.alias}\" is already claimed by hosts/${acc.${p.alias}}"
+      else acc // {${p.alias} = p.name;};
+  in
+    lib.foldl' check {} pairs;
+
   # Everything `just` needs to build/switch/diff a host, so the class names live
   # here only: a new class lands in this table and the justfile needs no edit.
   hostMeta = name: let
@@ -206,6 +219,7 @@
   };
 in {
   config.flake.hostMeta = lib.genAttrs discovered hostMeta;
+  config.flake.hostAliases = hostAliases;
   # Exported so checks.disko-templates can hold the templates to the same card shape.
   config.flake.hostCardKeys = cardKeys;
 

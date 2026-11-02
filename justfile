@@ -13,6 +13,13 @@ system := `nix --experimental-features 'nix-command flakes' eval --impure --raw 
 list:
     just --list
 
+# This machine's host: its short hostname, unless a host card lists that under `aliases`.
+[private]
+[script]
+_this-host:
+    h=$(hostname -s)
+    {{ nixcmd }} eval --raw .#hostAliases --apply "a: a.\"$h\" or \"$h\""
+
 # A host's routing facts from the flake, space separated: class, needs-root, activation attrpath, rebuild tool.
 # The tool goes last: it may contain spaces (`nix run .#home-manager --`), so a final `read` var takes the rest.
 [private]
@@ -44,7 +51,7 @@ _require-nixos hostname verb:
 [exit-message]
 [group('host')]
 [script]
-build hostname=`hostname -s` *ARGS="":
+build hostname=`just _this-host` *ARGS="":
     meta=$(just _meta {{ hostname }})
     read -r _ _ activation _ <<<"$meta"
     $(command -v nom || echo nix) build ".#$activation" {{ ARGS }}
@@ -52,7 +59,7 @@ build hostname=`hostname -s` *ARGS="":
 [doc('Print one config value of a host as JSON without building it; an hm. prefix reads its home-manager config')]
 [group('host')]
 [script]
-eval attr hostname=`hostname -s` *ARGS="":
+eval attr hostname=`just _this-host` *ARGS="":
     attr='{{ attr }}'
     valid='^[a-zA-Z0-9._/+"-]+$'
     if ! [[ "$attr" =~ $valid ]]; then
@@ -73,7 +80,7 @@ eval attr hostname=`hostname -s` *ARGS="":
 [doc('Build + activate a host (this machine by default); a nixos host can also be pushed to target=user@host')]
 [group('host')]
 [script]
-switch hostname=`hostname -s` target='' *ARGS="":
+switch hostname=`just _this-host` target='' *ARGS="":
     meta=$(just _meta {{ hostname }})
     read -r class root _ tool <<<"$meta"
     if [ -n '{{ target }}' ]; then
@@ -91,14 +98,14 @@ switch hostname=`hostname -s` target='' *ARGS="":
 [doc('Build + activate a host at next boot (nixos hosts only)')]
 [group('host')]
 [script]
-boot hostname=`hostname -s` *ARGS="":
+boot hostname=`just _this-host` *ARGS="":
     just _require-nixos {{ hostname }} boot
     sudo nixos-rebuild boot --flake .#{{ hostname }} {{ ARGS }}
 
 [doc('Build + activate a host until reboot (nixos hosts only)')]
 [group('host')]
 [script]
-test hostname=`hostname -s` *ARGS="":
+test hostname=`just _this-host` *ARGS="":
     just _require-nixos {{ hostname }} test
     sudo nixos-rebuild test --flake .#{{ hostname }} {{ ARGS }}
     just _failed-units
@@ -119,7 +126,7 @@ _failed-units:
 [doc('Diff a host build against the running system (nvd)')]
 [group('host')]
 [script]
-diff hostname=`hostname -s`: (build hostname)
+diff hostname=`just _this-host`: (build hostname)
     meta=$(just _meta {{ hostname }})
     read -r class _ _ _ <<<"$meta"
     current=/run/current-system
@@ -135,7 +142,7 @@ diff hostname=`hostname -s`: (build hostname)
 [doc('Run nix-tree on a host (this machine by default)')]
 [group('host')]
 [script]
-tree hostname=`hostname -s` *ARGS="":
+tree hostname=`just _this-host` *ARGS="":
     meta=$(just _meta {{ hostname }})
     read -r _ _ activation _ <<<"$meta"
     nix-tree --derivation ".#$activation" {{ ARGS }}
@@ -144,7 +151,7 @@ tree hostname=`hostname -s` *ARGS="":
 [doc('Show why a package is in a nixos host closure (this machine by default)')]
 [group('host')]
 [script]
-why-depends package hostname=`hostname -s`:
+why-depends package hostname=`just _this-host`:
     just _require-nixos {{ hostname }} why-depends
     meta=$(just _meta {{ hostname }})
     read -r _ _ activation _ <<<"$meta"
@@ -166,7 +173,7 @@ deploy-remote hostname target:
 [arg('target', pattern='[a-zA-Z0-9._@:+-]*')]
 [doc('Write hosts/<host>/facter.json from nixos-facter, run here or over ssh on a running target (never reinstalls)')]
 [group('install')]
-factor hostname=`hostname -s` target='':
+factor hostname=`just _this-host` target='':
     scripts/factor.sh {{ hostname }} '{{ target }}'
 
 [doc('Runs (r)age with yubikey identity')]

@@ -5,6 +5,7 @@
 # dev-ao nij@dev.ao`), never built on. age.identityPaths is the box's own key.
 {
   class = "home";
+  aliases = ["dev-01"];
 
   # Headless: CLI tooling only — no desktop/gui-* toggles, so nothing pulls a GUI.
   shared = {
