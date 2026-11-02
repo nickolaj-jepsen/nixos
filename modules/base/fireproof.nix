@@ -139,7 +139,24 @@ let
         pi.enable = cascade (config.fireproof.dev.enable && config.fireproof.trusted) "Enable the pi coding agent with the lazypi extension roster";
         copilot.enable = cascade config.fireproof.dev.enable "Enable the GitHub Copilot CLI";
         ai-usage.enable = cascade config.fireproof.dev.enable "Enable ai-usage, the agent subscription quota CLI (and its DMS bar widget on desktops)";
-        agent-hub.enable = cascade config.fireproof.dev.enable "Enable agent-hub, the daemon that names and judges every live coding-agent session, with its DMS bar on desktops";
+        agent-hub = {
+          enable = cascade config.fireproof.dev.enable "Enable agent-hub, the daemon that names and judges every live coding-agent session, with its DMS bar on desktops";
+          remotes = lib.mkOption {
+            type = lib.types.attrsOf (lib.types.attrsOf lib.types.str);
+            default = {};
+            description = "Hosts whose hubs this one shows, by their ssh name, each with ssh options that differ from the login config's (ProxyJump = \"none\"). Needs secrets/hosts/<this host>/agent-hub-link.age.";
+          };
+          viewers = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+            description = "Hosts whose link key may attach here. Only ever `agent-hub attach`, no login.";
+          };
+          linkJumps = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+            description = "host:port hops a viewer's link key may open through this host, for a viewer's ProxyJump.";
+          };
+        };
         llm = {
           enable = lib.mkEnableOption ''
             local LLM serving (llama-swap + CUDA llama.cpp).

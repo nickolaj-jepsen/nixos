@@ -9,9 +9,9 @@ from datetime import datetime
 from pathlib import Path
 
 from . import worklog
-from .claude import claude_label
+from .claude import SAID_MAX, claude_label
 from .common import (
-    folded, hub_message, hub_request, hub_state, load_config, log_path, nearest, now_ms, resume_command, socket_path,
+    folded, hub_message, hub_request, hub_state, label_line, load_config, log_path, nearest, now_ms, resume_command, socket_path,
 )
 
 
@@ -33,8 +33,12 @@ def status_row(rows, session_id=None, pid=None):
 def cmd_status(args):
     """Prints this session's row as `state<TAB>reason<TAB>label` (`--json` for the row
     itself), and nothing at all when the hub is down or does not know the session:
-    this feeds status lines, which must never fail or print an error of their own."""
+    this feeds status lines, which must never fail or print an error of their own.
+    Naming no session, prints every row and how many are hidden (`--json` for the state)."""
     state = hub_state()
+    if args.session_id is None and args.pid is None:
+        print_state(state, args.json)
+        return
     row = status_row((state or {}).get("sessions") or [], args.session_id, args.pid)
     if row is None:
         return
@@ -42,6 +46,18 @@ def cmd_status(args):
         print(json.dumps(row))
     else:
         print("\t".join(folded(row.get(key) or "") for key in ("state", "reason", "label")))
+
+
+def print_state(state, as_json):
+    if state is None:
+        return
+    if as_json:
+        print(json.dumps(state))
+        return
+    for row in state.get("sessions") or []:
+        print("\t".join(folded(str(row.get(key) or "")) for key in ("state", "name", "cwd", "reason")))
+    if state.get("hidden"):
+        print(f"hidden\t{state['hidden']}")
 
 
 def cmd_recent(args):
@@ -69,11 +85,22 @@ def hook_pid():
         return None
 
 
+def stop_tasks(event):
+    """What a Stop event says is still in flight, as the hub takes it."""
+    tasks = event.get("background_tasks")
+    return [{"type": str(t.get("type") or ""), "description": label_line(t.get("description") or "")}
+            for t in tasks if isinstance(t, dict)] if isinstance(tasks, list) else []
+
+
 def cmd_hook(_args):
     """Claude Code's hook into the hub. It prints nothing but UserPromptSubmit's note on
     the other sessions in the working tree, so Claude's own handling is unchanged:
-    SessionStart names the profile, UserPromptSubmit starts a turn, Stop ends it,
-    PermissionRequest labels the dialog, SessionEnd lets the session go."""
+    SessionStart names the profile, UserPromptSubmit starts a turn, Stop ends it with
+    the closing words and the tasks still out, StopFailure ends it on an API error,
+    PermissionRequest labels the dialog, SessionEnd lets the session go. `AGENT_HUB=off`
+    turns it all off for a session, as if there were no hub."""
+    if os.environ.get("AGENT_HUB") == "off":
+        return
     try:
         event = json.load(sys.stdin)
     except ValueError:
@@ -83,7 +110,8 @@ def cmd_hook(_args):
     if not session:
         return
     who = {"session": session, "pid": hook_pid(), "configDir": os.environ.get("CLAUDE_CONFIG_DIR"),
-           "cwd": event.get("cwd")}
+           "cwd": event.get("cwd"), "tmux": os.environ.get("TMUX_PANE"),
+           **({"hidden": True} if os.environ.get("AGENT_HUB_HIDDEN") == "1" else {})}
     transcript = event.get("transcript_path")
     if name == "SessionStart":
         hub_message({"op": "session-start", **who})
@@ -94,7 +122,11 @@ def cmd_hook(_args):
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                                      "additionalContext": reply["peers"]}}))
     elif name == "Stop":
-        hub_message({"op": "turn-end", "transcript": transcript, **who})
+        hub_message({"op": "turn-end", "transcript": transcript, "said": str(event.get("last_assistant_message") or "")[-SAID_MAX:],
+                     "tasks": stop_tasks(event), **who})
+    elif name == "StopFailure":
+        reason = event.get("last_assistant_message") or event.get("error_details") or event.get("error") or "API error"
+        hub_message({"op": "turn-end", "transcript": transcript, "failure": label_line(reason), **who})
     elif name == "PermissionRequest":
         hub_message({"op": "dialog", "session": session,
                      "text": claude_label(event.get("tool_name"), event.get("tool_input"), event.get("cwd"))})
@@ -134,7 +166,8 @@ def print_group(group):
         text = line.get("did") or ""
         if line.get("ask"):
             text = f"{text} [asks: {line['ask']}]".strip()
-        print(f"  {stamp}  {line.get('state') or 'done':<11} {folded(text)}")
+        word = f"wrong {line.get('state')}" if line.get("wrong") else line.get("state") or "done"
+        print(f"  {stamp}  {word:<11} {folded(text)}")
 
 
 def cmd_focus_next(_args):
@@ -166,6 +199,12 @@ def demo_sessions():
     ]
 
 
+def cmd_attach(args):
+    from .links import attach
+
+    attach(args.control)
+
+
 def cmd_demo(_args):
     sock = socket.socket(socket.AF_UNIX)
     sock.connect(str(socket_path()))
@@ -190,8 +229,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="agent-hub", description="The hub for live coding-agent sessions")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("daemon", help="serve the hub socket").set_defaults(func=cmd_daemon)
+    attach = commands.add_parser("attach", help="bridge stdin and stdout to this host's hub, for a viewer over ssh")
+    attach.add_argument("--control", action="store_true", help="also let the viewer dismiss a finished turn")
+    attach.set_defaults(func=cmd_attach)
     commands.add_parser("demo", help="show fake sessions in every state on the bar").set_defaults(func=cmd_demo)
-    commands.add_parser("hook", help="Claude Code's hook: SessionStart, UserPromptSubmit, Stop, PermissionRequest, SessionEnd").set_defaults(func=cmd_hook)
+    commands.add_parser("hook", help="Claude Code's hook: SessionStart, UserPromptSubmit, Stop, StopFailure, PermissionRequest, SessionEnd").set_defaults(func=cmd_hook)
     log = commands.add_parser("log", help="print what every session did, turn by turn")
     log.add_argument("--since", default="1d", help="1d, 3h, 2w, today, yesterday or a date (default 1d)")
     log.add_argument("--json", action="store_true", help="print the log's own JSON lines")
@@ -203,15 +245,13 @@ def main(argv=None):
     recent.add_argument("--json", action="store_true", help="print each session as a JSON line")
     recent.set_defaults(func=cmd_recent)
     commands.add_parser("focus-next", help="focus the next session that wants you").set_defaults(func=cmd_focus_next)
-    status = commands.add_parser("status", help="print one session's state, as its own agent TUI shows it")
+    status = commands.add_parser("status", help="print one session's state, as its own agent TUI shows it, or every session's")
     status.add_argument("--session-id", help="the session's registry id")
     status.add_argument("--pid", type=int, help="the agent's pid, or a pid under it")
     status.add_argument("--json", action="store_true", help="print the hub's row instead of state, reason and label")
     status.set_defaults(func=cmd_status)
     commands.add_parser("toggle", help="dismiss or bring back the focused session's finished turn").set_defaults(func=cmd_toggle)
     args = parser.parse_args(argv)
-    if args.command == "status" and args.session_id is None and args.pid is None:
-        parser.error("status needs --session-id or --pid")
     args.func(args)
 
 

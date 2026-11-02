@@ -21,6 +21,9 @@
       extraDisks = ["/dev/disk/by-id/ata-ST2000DM001-1CH164_Z1E26NPV"];
     };
     fireproof.dev.enable = true;
+    # Same LAN, so no jump through homelab.
+    fireproof.dev.agent-hub.remotes.minilab.ProxyJump = "none";
+    fireproof.dev.agent-hub.viewers = ["laptop"];
     fireproof.dev.clickhouse.enable = false; # query ao's ClickHouse over SSH; no local client needed on desktop
     fireproof.dev.llm.enable = true; # RTX 5070 Ti (16 GiB): relies on the vramGiB default
     fireproof.work.enable = true;

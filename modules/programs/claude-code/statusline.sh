@@ -307,14 +307,13 @@ if [ -n "$session" ] && command -v agent-hub >/dev/null 2>&1; then
     asking) hub="${red}"$'\uf024'" asking${reset}" ;;
     needs-reply) hub="${warn}"$'\uf024'" needs reply${reset}" ;;
     failed) hub="${red}"$'\uf00d'" failed${reset}" ;;
-    stalled) hub="${warn}"$'\uf252'" stalled${reset}" ;;
     done) hub="${green}"$'\uf00c'" done${reset}" ;;
     working) hub="${dim}"$'\uf017'" working${reset}" ;;
   esac
-  # The ask, the failure or what hangs is the part worth reading; a done turn's summary is not.
+  # The ask or the failure is the part worth reading; a done turn's summary is not.
   if [ -n "$hub" ] && [ -n "$why" ]; then
     case "$state" in
-      needs-reply|failed|stalled)
+      needs-reply|failed)
         shown=${why:0:40}
         if [ "$shown" != "$why" ]; then shown+="…"; fi
         hub+="${dim}: ${shown}${reset}"

@@ -9,9 +9,13 @@ model to lose its way in.
 
 Digest fields, all optional: `requests` (the person's latest prompts), `files`
 (touched), `commands` (each with `(ok)` or `(failed)`), `said` (the turn's closing
-words, settle only), `pending` (background jobs not reported back), `repo`,
-`branch`, `worth` (whether the turn is worth a model's reading) and `error` (the
-turn ended on an error).
+words, settle only), `pending` (jobs in flight that may be a server left running),
+`agents` (agent work in flight, which will report back), `doing` (what that work is),
+`repo`, `branch` and `error` (the turn ended on an error).
+
+The gate: only a turn whose closing words hold a question or a request can need a reply.
+The model reads every turn and may demote such a candidate to done; it can't raise one,
+and without its word the candidate stands. `failed` comes only from the agent's own error.
 """
 
 import re
@@ -19,7 +23,7 @@ import re
 from .common import folded
 
 FIELDS = ("label", "doing", "summary", "tags", "state", "did", "ask", "reply")
-TURN_STATES = ("done", "blocked", "failed", "waiting")
+TURN_STATES = ("done", "blocked", "waiting")
 TAGS = ("bugfix", "feature", "refactor", "test", "docs", "deps", "ci", "perf", "chore")
 MAX_LABEL = 40
 MAX_DOING = 32
@@ -31,6 +35,9 @@ MAX_TAGS = 3
 # a cap below that thinking returns no text at all.
 MAX_TOKENS = 1024
 SAID_CHARS = 1500
+# Background task types that always report back; a shell task can be a server left running.
+AGENT_TASKS = ("subagent", "workflow", "teammate", "monitor", "cloud session")
+MAX_TASK_LINE = 80
 
 SYSTEM = f"""You keep a coding session's identity current for the person working in it.
 Answer with exactly these eight lines, in this order, and nothing else:
@@ -38,7 +45,7 @@ label: 2-6 lowercase words naming what the work is about
 doing: at most 8 words for the step in flight, or empty
 summary: one sentence of at most 20 words about the session so far
 tags: up to three of {" ".join(TAGS)}
-state: done, blocked, failed or waiting for the assistant turn, or empty
+state: done, blocked or waiting for the assistant turn, or empty
 did: one sentence of at most 20 words about what the assistant turn did, or empty
 ask: what the assistant turn needs from the person, or empty
 reply: what the person would most likely type to answer ask, or empty
@@ -49,12 +56,17 @@ reply: what the person would most likely type to answer ask, or empty
 - The branch is a hint about the work, never the label on its own.
 - Fill state, did, ask and reply only from the assistant turn below. Leave all four
   empty when there is no such turn.
-- state: done when the turn finished what was asked, blocked when it waits on a
-  decision or answer from the person, failed when it gave up or says the work does
-  not work yet, waiting when it ended only to wait for its own background jobs and
-  carries on by itself when they report back. A turn with an ask is blocked.
+- state: blocked only when the closing words put a real question or request to the
+  person and the turn waits on their answer. An offer to commit or push is blocked, and
+  so is asking them to do something and report back ("after the reboot, tell me").
+- state: done when the turn finished, including when it reports a problem. An offer
+  to deploy or to run a switch or rebuild, optional extras ("I could also..."), a pointer
+  at the person's next step ("next: run the tests"), an offer that only applies if they
+  want it ("if you'd rather X, tell me") and a rhetorical question are done.
+- state: waiting when it ended only to wait for its own background jobs and carries on
+  by itself when they report back.
 - ask is a request, not a summary: "keep the old fixture?" not "asked about the fixture".
-  Leave it empty when the turn asks for nothing.
+  Leave it empty unless state is blocked.
 - reply predicts what the person would type, not what you think they should say:
   their words, their length and their tone, as in the requests above. Leave it
   empty when you cannot tell which way they would answer.
@@ -68,6 +80,13 @@ CODE_BLOCK = re.compile(r"```.*?```", re.S)
 MARKDOWN = re.compile(r"[*`#>]+")
 # Words of a turn that ended to wait for its own jobs; a server it left running for you says none of them.
 WAITS = re.compile(r"\b(wait(ing)? (for|on|until)|(i'll|i will) (be notified|check back)|once (it|they)|when (it|they) (finish|complete|report))", re.I)
+# Words of a turn that asks without a question mark.
+REQUEST = re.compile(
+    r"\b(let me know|tell me|your call|please (confirm|review|approve|decide|check|try)|confirm (that|whether|the)"
+    r"|say (if|whether|go)|up to you|waiting (for|on) your|needs? your|i need you|you['’]ll need to|once you['’]ve)\b",
+    re.I,
+)
+CLOSERS = ")]\"'”’*_"
 
 
 def render(digest, identity, settle):
@@ -146,13 +165,14 @@ def clean_label(raw):
 
 
 def heuristic(digest):
-    """How the turn ended by its closing words alone: a question in its last paragraphs
-    is an ask, and words of waiting with jobs still out keep it working."""
+    """How the turn ended by its closing words alone: a question or a request in its last
+    paragraphs is an ask (the gate's candidate), and words of waiting with jobs still out
+    keep it working."""
     final = CODE_BLOCK.sub("", digest.get("said") or "").strip()
     paragraphs = [folded(MARKDOWN.sub("", p)) for p in re.split(r"\n\s*\n", final)]
     paragraphs = [p for p in paragraphs if p]
     sentences = re.split(r"(?<=[.?!])\s+", " ".join(paragraphs[-2:]))
-    asks = [s for s in sentences if s.endswith("?")]
+    asks = [s for s in sentences if s.rstrip(CLOSERS).endswith("?")] or [s for s in sentences if REQUEST.search(s)]
     first = re.split(r"(?<=[.?!])\s+", paragraphs[0])[0] if paragraphs else ""
     pending = int(digest.get("pending") or 0)
     if digest.get("error"):
@@ -161,32 +181,67 @@ def heuristic(digest):
         state = "blocked" if asks else "done"
     return {
         "state": state,
-        "ask": asks[-1][:MAX_ASK] if asks and state == "blocked" else "",
+        "ask": asks[-1][:MAX_ASK] if asks else "",
         "summary": first[:MAX_SUMMARY],
         "jobs": pending if WAITS.search(final) else 0,
     }
 
 
+def with_ending(found, ending):
+    """The digest with what the agent itself said of the turn's end (`turn-end`), which beats
+    its transcript: a transcript can lag behind the turn, and only the agent knows its jobs."""
+    tasks = ending.get("tasks") or []
+    agents = [t for t in tasks if t["type"] in AGENT_TASKS]
+    shells = len(tasks) - len(agents)
+    described = [folded(t.get("description") or "") for t in (agents or tasks)]
+    described = [d for d in described if d]
+    doing = described[0][:MAX_TASK_LINE] if described else ""
+    if doing and len(tasks) > 1:
+        doing += f" +{len(tasks) - 1}"
+    return {
+        **found,
+        "said": ending.get("said") or found.get("said") or "",
+        "agents": len(agents),
+        "pending": max(shells, int(ending.get("pending") or 0)),
+        "doing": doing,
+        "error": bool(ending.get("error")),
+    }
+
+
+def died(reason):
+    """A turn the agent says died, as an API error ends one."""
+    return {"state": "failed", "ask": "", "reply": "", "summary": reason[:MAX_SUMMARY], "jobs": 0, "doing": "",
+            "source": "error", "chars": 0}
+
+
 def outcome(fields, guess, digest):
-    """How the turn ended, by the model's reading where it gave one and the guess elsewhere."""
-    pending = int(digest.get("pending") or 0)
-    state = fields.get("state") or guess["state"]
-    ask = fields["ask"] if "ask" in fields else guess["ask"]
+    """How the turn ended: the gate over the candidate in `guess`, by the model's word in
+    `fields` when it gave one. The model's `waiting` only counts with jobs to wait on."""
+    word = fields.get("state")
+    agents, pending = int(digest.get("agents") or 0), int(digest.get("pending") or 0)
     if digest.get("error"):
         state = "failed"
-    # An open question is the person's turn whatever the model called it.
-    elif ask:
+    elif guess["ask"] and word not in ("done", "waiting"):
         state = "blocked"
-    waiting = state == "waiting"
-    if waiting:
-        jobs = max(pending, 1)
+    else:
+        state = "done"
+    if state != "done":
+        jobs = 0
+    elif agents:
+        jobs = agents + pending
+    elif word:
+        jobs = pending if word == "waiting" else 0
     else:
         # Without the model's word, the closing words say whether it waits on its jobs.
-        jobs = 0 if "state" in fields else guess["jobs"]
+        jobs = guess["jobs"]
     return {
-        "state": "done" if waiting else state,
-        "ask": ask if state == "blocked" else "",
+        "state": state,
+        "ask": (fields.get("ask") or guess["ask"])[:MAX_ASK] if state == "blocked" else "",
         "reply": fields.get("reply", "") if state == "blocked" else "",
         "summary": fields.get("did") or guess["summary"],
         "jobs": jobs,
+        "doing": digest.get("doing") or "" if jobs else "",
+        # For the journal: what settled it and how much it read, never the words themselves.
+        "source": "error" if digest.get("error") else "model" if word else "words",
+        "chars": len(digest.get("said") or ""),
     }

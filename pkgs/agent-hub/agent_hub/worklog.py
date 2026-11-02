@@ -1,7 +1,8 @@
 """The work log: one JSON line per turn that got an ending, across every session, kept in
 the state dir so `agent-hub log` and `find` read it without the daemon.
 
-A line: `{at, session, agent, cwd, configDir, label, state, did, ask}`, `at` in ms.
+A line: `{at, session, agent, cwd, configDir, label, state, did, ask}`, `at` in ms. A line
+with `wrong` is you flagging the verdict it names from the popout, not a turn's ending.
 """
 
 import json

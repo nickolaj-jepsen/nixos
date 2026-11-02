@@ -18,8 +18,8 @@ def state_dir():
 
 
 def load_config():
-    """The daemon's config. Only a desktop names `niri`, `notifySend` and `busctl`;
-    without them the hub runs headless, for the agents' own TUIs."""
+    """The daemon's config. Only a desktop names `niri`; without it the hub runs
+    headless, for the agents' own TUIs."""
     default = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "agent-hub" / "config.json"
     path = Path(os.environ.get("AGENT_HUB_CONFIG") or default)
     cfg = {"registry": "~/.claude/sessions", "state": str(state_dir() / "state.json")}

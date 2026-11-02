@@ -14,19 +14,17 @@ import os
 import sys
 from pathlib import Path
 
-from . import model, peers, pi, protocol, worklog
+from . import links, model, peers, pi, protocol, worklog
 from .common import (
     LINE_MAX, alive, label_line, log_path, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
 )
-from .desktop import Niri, Toasts, TOAST_GRACE_MS
-from .readings import Readings, digest
+from .desktop import Niri
+from .readings import Readings
 from .registry import RegistrySource
 
 RECENT_MAX = 100
 # A session no longer listed anywhere is kept this long, for a registry that has yet to catch up.
 UNSEEN_MS = 60_000
-# How often a running turn's transcript is checked for progress.
-TICK = 30
 
 
 def agent_of(entry):
@@ -38,6 +36,8 @@ class Conn:
         self.writer = writer
         self.uid = peer_uid(writer.get_extra_info("socket"))
         self.subscriber = False
+        # Subscribed to this host's own sessions only: a viewer on another host.
+        self.local = False
         self.demo = {}
         # The session this connection is attached for.
         self.session = None
@@ -55,7 +55,6 @@ class Hub:
     def __init__(self, cfg):
         self.source = RegistrySource(Path(cfg["registry"]).expanduser(), self.changed, poll=bool(cfg.get("poll")))
         self.niri = Niri(cfg.get("niri"), self.changed)
-        self.toasts = Toasts(cfg, self._focus)
         self.git = peers.Git(cfg.get("git"))
         self.terminal = cfg.get("terminal")
         self.state_file = Path(cfg["state"]).expanduser()
@@ -64,12 +63,20 @@ class Hub:
         self.conns = set()
         # Session id → the connection it is attached on.
         self.attached = {}
-        self.sessions, self.recent = self._load()
+        self.sessions, self.recent, known, linked = self._load()
+        self.alerts = model.Alerts(known)
+        # The other hosts piped in, and what each has announced here.
+        self.links = {host: links.Link(host, cfg.get("ssh") or "ssh", cfg.get("sshConfig") or "none", self.publish)
+                      for host in cfg.get("remotes") or []}
+        self.link_alerts = {host: model.Alerts(linked.get(host)) for host in self.links}
+        self._last_local = None
+        self._alert_timer = None
+        # Session id → the state the journal last said it was in.
+        self._logged = {}
         self._saved = None
         self._last = None
         # The window focus last read the `done` turns under it.
         self._read_focus = None
-        self._toast_timer = None
         self._tasks = set()
 
     # Persistence.
@@ -89,11 +96,15 @@ class Hub:
             except (TypeError, KeyError):
                 continue
             sessions[session.id] = session
-        return sessions, [r for r in saved.get("recent") or [] if isinstance(r, dict) and r.get("id")]
+        known = saved.get("alerts") if isinstance(saved.get("alerts"), dict) else None
+        linked = saved.get("linkAlerts") if isinstance(saved.get("linkAlerts"), dict) else {}
+        return sessions, [r for r in saved.get("recent") or [] if isinstance(r, dict) and r.get("id")], known, linked
 
     def _save(self):
         """Writes the state file when what it holds changed since the last write."""
-        text = json.dumps({"sessions": [s.saved() for s in self.sessions.values()], "recent": self.recent})
+        text = json.dumps({"sessions": [s.saved() for s in self.sessions.values()], "recent": self.recent,
+                           "alerts": self.alerts.known,
+                           "linkAlerts": {host: alerts.known for host, alerts in self.link_alerts.items()}})
         if text == self._saved:
             return
         try:
@@ -110,7 +121,7 @@ class Hub:
         server = await asyncio.start_unix_server(self._serve, path=str(path), limit=LINE_MAX)
         path.chmod(0o600)
         self.source.start()
-        tasks = [server.serve_forever(), self.niri.run(), self._tick()]
+        tasks = [server.serve_forever(), self.niri.run(), *(link.run() for link in self.links.values())]
         async with server:
             await asyncio.gather(*tasks)
 
@@ -148,27 +159,46 @@ class Hub:
             elif sid not in self.attached:
                 session.name = ""
             session.derived = "" if entry.get("nameSource") == "user" else entry.get("name") or ""
+            session.bridge = entry.get("bridgeSessionId") or ""
             # pi speaks for itself once attached; its entry is claude-peers' echo.
             if sid not in self.attached:
                 # The entry's own stamp dates the move, so a dialog open since before a restart keeps its age.
                 at = entry.get("statusUpdatedAt") or now
                 if session.observe(entry.get("status"), entry.get("waitingFor"), at, registry=True) == "started":
                     self.readings.cancel(sid)
+                # pi's ending is read once it attaches: its own model does the reading.
+                if session.agent != "pi":
+                    self._recover(session)
         listed = set(self.source.sessions) | set(self.attached)
         listed_pids = {self.sessions[sid].pid for sid in listed if sid in self.sessions}
         for sid, session in list(self.sessions.items()):
             if sid in listed:
                 session.seen = now
+            elif session.ending:
+                self._retire(session)
             # A hook can name a session before the registry has it; its pid says whether it still runs.
             # One whose pid another session now speaks for was cleared.
-            elif not session.ending and session.pid and session.pid not in listed_pids and alive({"pid": session.pid}):
-                session.seen = now
-            elif session.ending or session.pid or now - session.seen > UNSEEN_MS:
+            elif session.pid:
+                if session.pid in listed_pids or not alive({"pid": session.pid}):
+                    self._retire(session)
+            elif now - session.seen > UNSEEN_MS:
                 self._retire(session)
         if self.niri.focused != self._read_focus:
             self._read_focus = self.niri.focused
             self._read_focused(self.visible().values())
         self.publish()
+
+    def _recover(self, session):
+        """A turn the last daemon left open or unread: one its agent has since finished
+        gets read, since its ending went unheard. The first word after a restart settles it."""
+        turn = session.turn
+        if turn is None or not turn.restored:
+            return
+        turn.restored = False
+        if session.status == "idle":
+            n = session.end_turn(now_ms())
+            if n is not None:
+                self.readings.settle(session, n, {})
 
     def _read_focused(self, sessions):
         """A `done` turn whose window has focus has been read; one that asks or failed still wants you."""
@@ -214,10 +244,14 @@ class Hub:
         if root is None:
             return ""
         others = [entry for sid, entry in self.source.sessions.items()
-                  if sid != session.id and entry.get("messagingSocketPath") and await self.git.root(entry.get("cwd")) == root]
+                  if sid != session.id and entry.get("messagingSocketPath") and not self._hidden(sid)
+                  and await self.git.root(entry.get("cwd")) == root]
         if not others:
             return ""
         return peers.note(session.agent, root, others, await self.git.dirty(root), worktree_tool, now_ms())
+
+    def _hidden(self, sid):
+        return sid in self.sessions and self.sessions[sid].hidden
 
     # Publishing.
 
@@ -228,28 +262,52 @@ class Hub:
                 rows.append(demo_row(sid, entry))
         return model.ordered(rows)
 
-    def state(self):
+    def state(self, rows):
+        """The `state` message: the rows the bar shows, what ended, and how many are hidden."""
         recent = [{"id": r["id"], "agent": r.get("agent") or "claude", "label": r.get("label") or "",
                    "summary": r.get("summary") or "", "cwd": r.get("cwd") or "", "endedAt": r.get("endedAt") or 0,
                    "resume": resume_command(r.get("agent"), r["id"], r.get("cwd"), r.get("config_dir")),
                    "history": r.get("history") or []} for r in self.recent]
-        return {"type": "state", "sessions": self.rows(now_ms()), "recent": recent}
+        shown = [row for row in rows if not row.get("hidden")]
+        return {"type": "state", "sessions": shown, "recent": recent, "hidden": len(rows) - len(shown)}
+
+    def _with_links(self, local, now):
+        """The state with what the other hubs say: this host's order holds across them all, and
+        each host's turns are announced by what this hub knew of that host."""
+        rows, recent = list(local["sessions"]), list(local["recent"])
+        due = []
+        for host, link in self.links.items():
+            # Copies: `pulse` must show as a change against the state last sent.
+            copies = [dict(row) for row in link.rows]
+            # A link that's down has no rows, and says nothing about what is known of that host.
+            if link.status == "up":
+                due.append(self.link_alerts[host].update(copies, now))
+            rows += copies
+            recent += link.recent
+        recent.sort(key=lambda item: -item["endedAt"])
+        return {**local, "sessions": model.ordered(rows), "recent": recent,
+                "links": [link.view() for link in self.links.values()]}, [d for d in due if d is not None]
 
     def publish(self, force_to=None):
+        now = now_ms()
+        rows = self.rows(now)
+        shown = [row for row in rows if not row.get("hidden")]
+        due = self.alerts.update(shown, now, self.niri.focused, keep=self.sessions)
+        self._journal(rows)
+        local = self.state(rows)
+        state, link_due = self._with_links(local, now)
+        self._schedule_alerts(min([d for d in (due, *link_due) if d is not None], default=None))
         # Saved before anyone hears of it: a client that saw a state can count on it surviving a restart.
         self._save()
-        state = self.state()
-        now = now_ms()
-        self.toasts.sync(state["sessions"], self.niri.focused, now)
-        self._schedule_toasts(state["sessions"], now)
-        if state != self._last:
-            self._last = state
-            for conn in self.conns:
-                if conn.subscriber and conn is not force_to:
-                    conn.send(state)
+        for conn in self.conns:
+            if conn.subscriber and conn is not force_to and not conn.local and state != self._last:
+                conn.send(state)
+            elif conn.subscriber and conn is not force_to and conn.local and local != self._last_local:
+                conn.send(local)
+        self._last, self._last_local = state, local
         if force_to is not None:
-            force_to.send(state)
-        rows = {row["id"]: row for row in state["sessions"]}
+            force_to.send(local if force_to.local else state)
+        rows = {row["id"]: row for row in rows}
         for sid, conn in self.attached.items():
             session = self.sessions.get(sid)
             push = {"type": "row", "row": rows.get(sid), "identity": session.identity() if session else {}}
@@ -257,33 +315,29 @@ class Hub:
                 conn.pushed = push
                 conn.send(push)
 
-    def _schedule_toasts(self, sessions, now):
-        """Publishes again when the next dialog still in its grace period comes out of it."""
-        due = [r["since"] + TOAST_GRACE_MS - now for r in sessions if r["state"] == "asking" and now - r["since"] < TOAST_GRACE_MS]
-        if self._toast_timer is not None:
-            self._toast_timer.cancel()
-            self._toast_timer = None
-        if due:
-            self._toast_timer = asyncio.get_running_loop().call_later(min(due) / 1000, self.publish)
+    def _schedule_alerts(self, due):
+        """Publishes again when a pulse is due to start or stop by itself."""
+        if self._alert_timer is not None:
+            self._alert_timer.cancel()
+            self._alert_timer = None
+        if due is not None:
+            self._alert_timer = asyncio.get_running_loop().call_later(due / 1000, self.publish)
 
-    async def _tick(self):
-        """A running turn whose transcript moved made progress; one that stalls is told
-        apart by what its transcript says is still running."""
-        while True:
-            await asyncio.sleep(TICK)
-            now = now_ms()
-            for session in list(self.visible().values()):
-                if session.turn is None or not session.turn.open or not session.transcript:
-                    continue
-                try:
-                    moved = int(os.stat(session.transcript).st_mtime * 1000)
-                except OSError:
-                    continue
-                session.progress = max(session.progress, moved)
-                if session.state(now) == "stalled" and session.running_checked != moved:
-                    session.running_checked = moved
-                    session.running = await asyncio.to_thread(digest_running, session) or ""
-            self.publish()
+    def _journal(self, rows):
+        """One line per state change: session, states, what settled it and how much it read.
+        Never the words: a homelab journal ships to Grafana Cloud. Asks stay in the work log."""
+        states = {row["id"]: row["state"] for row in rows}
+        for sid, state in states.items():
+            old = self._logged.get(sid)
+            if state == old or (old is None and state not in protocol.ATTENTION):
+                continue
+            session = self.sessions.get(sid)
+            outcome = (session.turn.outcome if session and session.turn else None) or {}
+            finished = state in model.DISMISSABLE
+            source = outcome.get("source", "?") if finished else "status"
+            print(f"agent-hub: {sid[:8]} {old or 'new'} -> {state} ({source}, {outcome.get('chars', 0) if finished else 0} chars)",
+                  file=sys.stderr, flush=True)
+        self._logged = states
 
     def _spawn(self, coro):
         task = asyncio.create_task(coro)
@@ -296,9 +350,23 @@ class Hub:
         return next((r for r in self._last["sessions"] if r["id"] == sid), None) if self._last else None
 
     async def _focus(self, sid):
+        """Goes to a session: its window here, or, for one on another host, its tmux pane in a new
+        terminal or its Remote Control page. With neither, the popout says there is no way."""
         row = self._row(sid)
-        if row and row["window"] is not None:
+        if not row:
+            return
+        if row["window"] is not None:
             await self.niri.focus(row["window"])
+        elif row.get("host") and row.get("tmux"):
+            await self._terminal(None, ["ssh", "-t", row["host"], "tmux", "attach", "-t", row["tmux"]])
+        elif row.get("host") and row.get("bridge"):
+            await self.niri.spawn(["xdg-open", f"https://claude.ai/code/{row['bridge']}"])
+
+    async def _terminal(self, cwd, argv):
+        """Opens `argv` in the configured terminal, through niri so it gets the desktop's environment."""
+        if self.terminal:
+            cwd = cwd or str(Path.home())
+            await self.niri.spawn([arg.replace("{cwd}", cwd) for arg in self.terminal] + argv)
 
     async def _focus_next(self):
         if not self._last:
@@ -325,6 +393,42 @@ class Hub:
                 continue
             self.publish()
             return
+
+    def _dismiss(self, sid, turn):
+        """Puts a finished turn away: here, or on the host it belongs to. Naming a turn, only that one."""
+        host, own = links.split_id(sid)
+        if host in self.links:
+            self.links[host].send({"op": "dismiss", "session": own, "turn": turn})
+            return
+        row, session = self._row(sid), self.sessions.get(sid)
+        if not (row and session and row["state"] in model.DISMISSABLE):
+            return
+        if turn is not None and row.get("turn") != turn:
+            return
+        if session.dismiss():
+            self.publish()
+
+    def _wrong(self, sid):
+        """You flagged this verdict as wrong: a line in the work log, for tuning the gate."""
+        row, session = self._row(sid), self.sessions.get(sid)
+        if row:
+            worklog.append(self.log_file, {
+                "at": now_ms(), "session": sid, "agent": row["agent"], "cwd": row["cwd"],
+                "configDir": session.config_dir if session else None,
+                "label": row["label"], "state": row["state"], "did": row["summary"], "ask": row["ask"], "wrong": True,
+            })
+
+    async def _resume(self, sid):
+        """Resumes an ended session in a new terminal, over ssh when it ended on another host."""
+        host, own = links.split_id(sid)
+        if host in self.links:
+            item = next((r for r in self.links[host].recent if r["id"] == sid), None)
+            if item is not None:
+                await self._terminal(None, ["ssh", "-t", host, resume_command(item["agent"], own, item["cwd"])])
+            return
+        item = next((r for r in self.recent if r["id"] == sid), None)
+        if item is not None:
+            await self._terminal(item.get("cwd"), resume_argv(item.get("agent"), item["id"], item.get("config_dir")))
 
     # The socket.
 
@@ -379,6 +483,8 @@ class Hub:
         session.agent, session.pid, session.cwd = "pi", message["pid"], message["cwd"]
         session.transcript, session.leaf = message.get("transcript"), message.get("leaf")
         session.ending = False
+        session.hidden = bool(message.get("hidden"))
+        session.tmux = message.get("tmux") or ""
         name = message["name"]
         session.name = name.strip() if isinstance(name, str) else ""
         # pi's branch is the authority on its own record.
@@ -394,6 +500,7 @@ class Hub:
             session.observe(status, None, now)
         if status != "idle" and (session.turn is None or not session.turn.open):
             session.start_turn(now)
+        self._recover(session)
         self.changed()
 
     def _detach(self, conn, publish=True):
@@ -421,6 +528,10 @@ class Hub:
             session.cwd = message["cwd"]
         if message.get("configDir"):
             session.config_dir = message["configDir"]
+        if message.get("hidden"):
+            session.hidden = True
+        if message.get("tmux"):
+            session.tmux = message["tmux"]
         return session
 
     async def _turn_start(self, conn, message):
@@ -461,7 +572,7 @@ class Hub:
         session.observe("idle", None, now)
         if n is not None:
             # Read before idle: the bar shows the reading, never a gap before it.
-            self.readings.settle(session, n, message.get("pending") or 0, bool(message.get("error")))
+            self.readings.settle(session, n, message)
         self.publish()
 
     async def _dispatch(self, conn, message):
@@ -471,11 +582,12 @@ class Hub:
                 self._refuse(conn, message["version"])
                 return
             conn.subscriber = True
+            conn.local = bool(message.get("local"))
             # The last state sent is current: anything that changes it publishes.
             if self._last is None:
                 self.publish(force_to=conn)
             else:
-                conn.send(self._last)
+                conn.send(self._last_local if conn.local else self._last)
         elif op == "attach":
             self._attach(conn, message)
         elif op == "turn-start":
@@ -518,34 +630,28 @@ class Hub:
         elif op == "focus-next":
             await self._focus_next()
         elif op == "dismiss":
-            row, session = self._row(message["session"]), self.sessions.get(message["session"])
-            if row and session and row["state"] in model.DISMISSABLE and session.dismiss():
-                self.publish()
+            self._dismiss(message["session"], message.get("turn"))
+        elif op == "wrong":
+            self._wrong(message["session"])
+        elif op == "seen":
+            self.alerts.seen()
+            for alerts in self.link_alerts.values():
+                alerts.seen()
+            self.publish()
         elif op == "toggle":
             self._toggle()
         elif op == "resume":
-            item = next((r for r in self.recent if r["id"] == message["session"]), None)
-            if item is not None and self.terminal:
-                cwd = item.get("cwd") or str(Path.home())
-                await self.niri.spawn([arg.replace("{cwd}", cwd) for arg in self.terminal]
-                                      + resume_argv(item.get("agent"), item["id"], item.get("config_dir")))
+            await self._resume(message["session"])
         elif op == "demo":
             conn.demo = {str(e["sessionId"]): e for e in message["sessions"] if isinstance(e, dict) and e.get("sessionId")}
             self.publish()
-
-
-def digest_running(session):
-    """The command a turn's transcript shows still running, or None."""
-    found = digest(session) or {}
-    last = (found.get("commands") or [""])[-1]
-    return last if last and not last.endswith(("(ok)", "(failed)")) else None
 
 
 def demo_row(sid, entry):
     """A fake session for `agent-hub demo`, from a registry-shaped entry."""
     t = entry.get("statusUpdatedAt") or 0
     session = model.Session(id=sid, agent=agent_of(entry), cwd=entry.get("cwd") or "", derived=entry.get("name") or "",
-                            label=entry.get("label") or "", status_at=t, progress=now_ms())
+                            label=entry.get("label") or "", status_at=t)
     status = entry.get("status")
     if status == "waiting":
         session.wait(entry.get("waitingFor") or "", t)

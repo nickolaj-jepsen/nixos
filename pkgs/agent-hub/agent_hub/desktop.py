@@ -1,4 +1,4 @@
-"""The desktop layer: niri's windows and focus, and the toasts."""
+"""The desktop layer: niri's windows and focus."""
 
 import asyncio
 import json
@@ -9,8 +9,6 @@ from pathlib import Path
 from .common import LINE_MAX, nearest
 
 RETRY = 2.0
-# A dialog answered within this long never toasts, and Claude's hook has time to label it.
-TOAST_GRACE_MS = 1000
 
 
 def niri_socket():
@@ -125,83 +123,3 @@ class Niri:
 
     async def focus(self, window):
         await self._action("focus-window", "--id", str(window))
-
-
-class Toasts:
-    """Desktop notifications for a session that wants you in a window you are not
-    looking at; each closes once the session no longer wants you or you look at it.
-
-    Every toast is shown once: looking away again does not bring it back.
-    """
-
-    SHOWN_MAX = 512
-
-    def __init__(self, cfg, on_click):
-        self.notify_send = cfg.get("notifySend")
-        self.busctl = cfg.get("busctl")
-        self.on_click = on_click
-        self.open = {}
-        self.shown = {}
-
-    def sync(self, sessions, focused, now):
-        if not self.notify_send:
-            return
-        wanted = {}
-        for row in sessions:
-            name = row["name"]
-            if focused is not None and row["window"] == focused:
-                continue
-            state = row["state"]
-            if state == "asking" and now - row["since"] < TOAST_GRACE_MS:
-                continue
-            title = {"asking": f"{name} needs you", "needs-reply": f"{name} asks", "failed": f"Failed: {name}",
-                     "stalled": f"Stalled: {name}", "done": f"Done: {name}"}.get(state)
-            if title:
-                body = row["reason"] or row["cwd"]
-                wanted[row["id"]] = (f"{state}:{row['since']}", title, body)
-        for sid, toast in list(self.open.items()):
-            if wanted.get(sid, (None,))[0] != toast["key"]:
-                self._close(self.open.pop(sid))
-        for sid, (key, summary, body) in wanted.items():
-            if sid in self.open or key in self.shown:
-                continue
-            self.shown[key] = True
-            while len(self.shown) > self.SHOWN_MAX:
-                del self.shown[next(iter(self.shown))]
-            toast = {"key": key, "id": None, "closed": False}
-            self.open[sid] = toast
-            toast["task"] = asyncio.create_task(self._show(sid, toast, summary, body))
-
-    async def _show(self, sid, toast, summary, body):
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                self.notify_send, "--app-name=agent-hub", "--print-id", "--wait", "--action=default=Open", summary, body,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-            )
-            toast["id"] = int((await proc.stdout.readline()).strip() or 0) or None
-            if toast["closed"]:
-                await self._dismiss(toast)
-            async for line in proc.stdout:
-                if line.strip() == b"default" and not toast["closed"]:
-                    await self.on_click(sid)
-            await proc.wait()
-        except (OSError, ValueError):
-            pass
-        finally:
-            if self.open.get(sid) is toast:
-                del self.open[sid]
-
-    def _close(self, toast):
-        toast["closed"] = True
-        if toast["id"] is not None:
-            asyncio.create_task(self._dismiss(toast))
-
-    async def _dismiss(self, toast):
-        if not self.busctl or toast["id"] is None:
-            return
-        proc = await asyncio.create_subprocess_exec(
-            self.busctl, "--user", "call", "org.freedesktop.Notifications", "/org/freedesktop/Notifications",
-            "org.freedesktop.Notifications", "CloseNotification", "u", str(toast["id"]),
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        )
-        await proc.wait()

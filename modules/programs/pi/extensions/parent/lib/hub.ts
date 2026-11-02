@@ -129,7 +129,7 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
   });
 
   const open = () => {
-    if (!live || !ctx) return;
+    if (!live || !ctx || process.env.AGENT_HUB === "off") return;
     const current = connect(socketPath());
     socket = current;
     let buffered = "";
@@ -166,6 +166,8 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
         waitingFor: waitingFor ?? null,
         name: name ?? null,
         record,
+        ...(process.env.AGENT_HUB_HIDDEN === "1" ? { hidden: true } : {}),
+        tmux: process.env.TMUX_PANE ?? null,
         ...transcript(ctx),
       });
     });

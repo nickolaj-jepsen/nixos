@@ -13,7 +13,7 @@ from . import claude, judge, pi
 from .common import now_ms, socket_path
 
 # A runaway guard rather than a budget: a reading costs a fraction of a cent.
-CALL_CAP = 200
+CALL_CAP = 500
 # A paste and the follow-up that corrects it are one turn's naming, not two.
 MIN_CALL_GAP_MS = 10_000
 # A Claude Code reading is a `claude -p` process: once named, a session is renamed this seldom.
@@ -48,7 +48,10 @@ class Readings:
         self.cancel(sid)
 
     def backend(self, session):
-        """("agent", conn) for an attached pi, ("claude", config dir) for Claude, else None."""
+        """("agent", conn) for an attached pi, ("claude", config dir) for Claude, else None.
+        A hidden session is never read."""
+        if session.hidden:
+            return None
         conn = self.hub.attached.get(session.id)
         if conn is not None:
             return ("agent", conn)
@@ -88,11 +91,12 @@ class Readings:
 
     # The turn-end reading.
 
-    def settle(self, session, n, pending=0, error=False):
-        """Reads how turn `n` ended; a newer turn's start cancels it."""
+    def settle(self, session, n, ending):
+        """Reads how turn `n` ended; a newer turn's start cancels it. `ending` is what the
+        agent said of it (`turn-end`'s `said`, `tasks`, `pending`, `error`, `failure`)."""
         self.cancel(session.id)
         session.reading(n, True)
-        task = asyncio.create_task(self._settle(session, n, pending, error))
+        task = asyncio.create_task(self._settle(session, n, ending))
         self.settling[session.id] = task
         task.add_done_callback(lambda done: self.settling.pop(session.id, None) if self.settling.get(session.id) is done else None)
 
@@ -101,26 +105,21 @@ class Readings:
         if task is not None:
             task.cancel()
 
-    async def _settle(self, session, n, pending, error):
+    async def _settle(self, session, n, ending):
         try:
-            found = await asyncio.to_thread(digest, session)
-            if found is None:
-                # Nothing to read but how the run ended.
-                ending = {"error": error, "pending": pending}
-                self.hub.turn_read(session, n, judge.outcome({}, judge.heuristic(ending), ending) if error else None)
+            if ending.get("failure"):
+                self.hub.turn_read(session, n, judge.died(ending["failure"]))
                 return
-            found["pending"] = max(found.get("pending") or 0, pending)
-            found["error"] = error
+            found = await asyncio.to_thread(digest, session)
+            if found is None and not ending.get("said") and not ending.get("error"):
+                self.hub.turn_read(session, n, None)
+                return
+            found = judge.with_ending(found or {}, ending)
             await self.hub.git.context(session.cwd, found)
             guess = judge.heuristic(found)
-            backend = self.backend(session)
-            # Pending jobs always go to the model: only it can tell a turn waiting on them from a
-            # server left running. So does a done-looking one, which can still put a question its
-            # last words don't mark. pi's own model reads every turn: its drafts need the call.
-            wanted = backend and (backend[0] == "agent" or found.get("pending")
-                                  or (found.get("worth") and guess["state"] == "done"))
             fields = None
-            if wanted:
+            # Agent work in flight settles it unread, unless the closing words ask something.
+            if self.backend(session) and (guess["ask"] or not found["agents"]):
                 async with self._lock(session.id):
                     fields = await self._call(session, "settle", found)
             self.hub.turn_read(session, n, judge.outcome(fields or {}, guess, found))

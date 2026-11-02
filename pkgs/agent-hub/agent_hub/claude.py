@@ -1,13 +1,10 @@
 """Reading Claude Code: a turn's digest from its transcript, and what a tool call does."""
 
 import json
-import re
 from pathlib import Path
 
 from .common import folded, label_line
 
-# A turn this short that ran no tools is read at a glance, so the model is not asked about it.
-WORTH_ASKING_CHARS = 800
 SAID_MAX = 20_000
 RECENT_PROMPTS = 4
 PROMPT_CHARS = 300
@@ -15,7 +12,6 @@ MAX_FILES = 6
 MAX_COMMANDS = 5
 COMMAND_CHARS = 48
 EDITS = ("Edit", "MultiEdit", "Write", "NotebookEdit")
-TASK_ID = re.compile(r"<task-id>([^<]+)</task-id>")
 # `claude -p` as a judge: no session file, no tools, no MCP, no hooks of its own.
 JUDGE_ARGS = [
     "-p", "--model", "haiku", "--no-session-persistence", "--strict-mcp-config", "--tools", "",
@@ -51,18 +47,15 @@ def touched(files, path):
     return [f for f in files if f != path] + [path]
 
 
-def assemble(requests, files, commands, failed, said, tools, pending):
+def assemble(requests, files, commands, failed, said):
     """A digest from what a transcript reader collected: `commands` as (call id, line)
-    pairs, `failed` as call id → whether its result was an error, `tools` the calls
-    since the last prompt."""
+    pairs, `failed` as call id → whether its result was an error."""
     outcomes = {True: " (failed)", False: " (ok)"}
     return {
         "requests": requests,
         "files": files[-MAX_FILES:],
         "commands": [line + outcomes.get(failed.get(call), "") for call, line in commands[-MAX_COMMANDS:]],
         "said": said[-SAID_MAX:],
-        "pending": pending,
-        "worth": tools > 0 or len(said) >= WORTH_ASKING_CHARS,
     }
 
 
@@ -72,31 +65,21 @@ def edit_target(args):
 
 def digest(path, cwd=None, prompt=None):
     """The digest of a Claude Code transcript (see `judge`), or None when it can't be
-    read. `prompt` is one the transcript doesn't have yet, as at UserPromptSubmit.
-    `pending` counts background jobs that never reported back: a dev server it left
-    running is pending too, which only the closing words tell apart."""
-    started, finished = set(), set()
+    read. `prompt` is one the transcript doesn't have yet, as at UserPromptSubmit."""
     requests, files, commands, failed = [], [], [], {}
-    tools, text = 0, []
+    text = []
     try:
         with open(path, encoding="utf-8", errors="replace") as lines:
             for line in lines:
-                if "<task-notification>" in line:
-                    finished.update(TASK_ID.findall(line))
                 try:
                     entry = json.loads(line)
                 except ValueError:
                     continue
                 if not isinstance(entry, dict) or entry.get("isSidechain"):
                     continue
-                result = entry.get("toolUseResult")
-                if isinstance(result, dict):
-                    job = result.get("backgroundTaskId") or (result.get("agentId") if result.get("isAsync") else None)
-                    if job:
-                        started.add(str(job))
                 said = prompt_text(entry)
                 if said is not None:
-                    tools, text = 0, []
+                    text = []
                     # A slash command's own lines are not the person's words.
                     if not said.lstrip().startswith("<"):
                         requests.append(folded(said)[:PROMPT_CHARS])
@@ -108,7 +91,7 @@ def digest(path, cwd=None, prompt=None):
                     elif entry.get("type") != "assistant":
                         continue
                     elif kind == "tool_use":
-                        tools, text = tools + 1, []
+                        text = []
                         name, args = block.get("name"), block.get("input") or {}
                         if name in EDITS and edit_target(args):
                             files = touched(files, shown_path(edit_target(args), cwd))
@@ -120,8 +103,7 @@ def digest(path, cwd=None, prompt=None):
         return None
     if prompt and not prompt.lstrip().startswith("<"):
         requests.append(folded(prompt)[:PROMPT_CHARS])
-    return assemble(requests[-RECENT_PROMPTS:], files, commands, failed, "\n".join(text).strip(), tools,
-                    len(started - finished))
+    return assemble(requests[-RECENT_PROMPTS:], files, commands, failed, "\n".join(text).strip())
 
 
 def shown_path(path, cwd):

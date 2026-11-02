@@ -57,7 +57,7 @@ def digest(path, leaf=None, cwd=None, prompt=None):
     `leaf`, or None when the file can't be read. `cwd` defaults to the session's own.
     `prompt` is one the file doesn't have yet, as at `before_agent_start`; a session pi
     hasn't written yet is read as empty when there is one, since pi creates the file only
-    with its first message. `pending` is 0: pi reports its running jobs itself."""
+    with its first message. pi reports its running jobs itself."""
     entries, header = [], {}
     try:
         for entry in json_lines(path):
@@ -72,14 +72,14 @@ def digest(path, leaf=None, cwd=None, prompt=None):
         return None
     cwd = cwd or header.get("cwd")
     prompts, files, commands, failed = [], [], [], {}
-    tools, said = 0, ""
+    said = ""
     for entry in branch(entries, leaf):
         message = entry.get("message")
         if entry.get("type") != "message" or not isinstance(message, dict):
             continue
         role = message.get("role")
         if role == "user":
-            tools, said = 0, ""
+            said = ""
             text = text_of(message)
             if not is_acknowledgement(text):
                 prompts.append(text)
@@ -91,7 +91,6 @@ def digest(path, leaf=None, cwd=None, prompt=None):
             for block in content if isinstance(content, list) else []:
                 if not isinstance(block, dict) or block.get("type") != "toolCall":
                     continue
-                tools += 1
                 name, args = block.get("name"), block.get("arguments")
                 args = args if isinstance(args, dict) else {}
                 target = args.get("path") or args.get("file_path")
@@ -105,4 +104,4 @@ def digest(path, leaf=None, cwd=None, prompt=None):
     picked = prompts[-RECENT_PROMPTS:]
     if prompts and prompts[0] not in picked:
         picked = [prompts[0], *picked]
-    return assemble([folded(text)[:PROMPT_CHARS] for text in picked], files, commands, failed, said, tools, 0)
+    return assemble([folded(text)[:PROMPT_CHARS] for text in picked], files, commands, failed, said)

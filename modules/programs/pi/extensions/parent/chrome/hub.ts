@@ -1,7 +1,7 @@
 /**
  * The hub's row for this session, painted as an alarm: the state the bar shows
  * the session in, which can outlast the turn in this TUI — an ask it is waiting
- * on, a turn that failed. `needs-reply`, `failed` and `stalled` carry the reason
+ * on, a turn that failed. `needs-reply` and `failed` carry the reason
  * behind them, since that is what there is to read; the words of the others say it all.
  *
  * Nothing is drawn while the hub has no row or the row is idle: those are the
@@ -15,12 +15,11 @@ import type { Part } from "./layout.ts";
 
 type Look = { glyph: string; text: string; color: ThemeColor; reason: boolean };
 
-// Font Awesome: a flag for what wants you, a cross for a failure, an hourglass, a check and a clock.
+// Font Awesome: a flag for what wants you, a cross for a failure, a check and a clock.
 const LOOKS: Partial<Record<HubState, Look>> = {
   asking: { glyph: "\uf024", text: "asking", color: "error", reason: false },
   "needs-reply": { glyph: "\uf024", text: "needs reply", color: "warning", reason: true },
   failed: { glyph: "\uf00d", text: "failed", color: "error", reason: true },
-  stalled: { glyph: "\uf252", text: "stalled", color: "warning", reason: true },
   done: { glyph: "\uf00c", text: "done", color: "success", reason: false },
   working: { glyph: "\uf017", text: "working", color: "dim", reason: false },
 };

@@ -1,9 +1,9 @@
 // Bar pill: a dot per session that wants attention or is working. Popout: a switcher
 // over every live agent session in the hub's order, the selected row expanded to its
 // full reason and last few turns, then the few that ended last. Keys: Enter focuses the
-// selection (or resumes an ended one in a new terminal), x dismisses a finished one, j/k
-// move, g/G jump to the ends; the selection starts on the first row, so Mod+B then Enter
-// goes to the longest-waiting one.
+// selection (or resumes an ended one in a new terminal), x dismisses a finished one, w logs
+// its verdict as wrong, j/k move, g/G jump to the ends; the selection starts on the first
+// row, so Mod+B then Enter goes to the longest-waiting one.
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Window
@@ -28,16 +28,19 @@ PluginComponent {
                     "cwd": r.cwd,
                     "reason": r.summary,
                     "state": "ended",
+                    "host": r.host,
                     "since": r.endedAt,
                     "history": r.history
                 })))
     readonly property int maxDots: 6
     // A session left asking or waiting on a reply this long has its age turn red.
     readonly property int staleSeconds: 900
-    readonly property var pillStates: ["asking", "needs-reply", "failed", "stalled", "done", "working"]
+    readonly property var pillStates: ["asking", "needs-reply", "failed", "done", "working"]
     readonly property string iconDir: Qt.resolvedUrl("icons/")
 
     property string selectedId: ""
+    // The row `w` flagged last, until the popout next opens: the only sign the key worked.
+    property string flaggedId: ""
     property real nowMs: Date.now()
 
     readonly property int selectedIndex: Math.max(0, rows.findIndex(s => s.id === selectedId))
@@ -47,7 +50,7 @@ PluginComponent {
     _visibilityOverrideValue: active.length > 0 || !linkUp
 
     function wantsYou(session) {
-        return ["asking", "needs-reply", "failed", "stalled", "done"].includes(session.state);
+        return ["asking", "needs-reply", "failed", "done"].includes(session.state);
     }
 
     function finished(session) {
@@ -63,7 +66,6 @@ PluginComponent {
             "asking": Theme.error,
             "needs-reply": Theme.warning,
             "failed": Theme.error,
-            "stalled": Theme.warning,
             "done": Theme.primary
         }[session.state] ?? Theme.surfaceVariantText;
     }
@@ -74,15 +76,14 @@ PluginComponent {
             "asking": "front_hand",
             "needs-reply": "chat_bubble",
             "failed": "error",
-            "stalled": "hourglass_top",
             "done": "check_circle",
             "ended": "history"
         }[item.state] ?? "";
     }
 
-    // Outlined, failed and stalled read quieter than asking and needs-reply in the same colours.
+    // Outlined, failed reads quieter than asking and needs-reply in the same colours.
     function filled(item) {
-        return !["failed", "stalled", "ended"].includes(item.state);
+        return !["failed", "ended"].includes(item.state);
     }
 
     function stateWords(session) {
@@ -91,7 +92,6 @@ PluginComponent {
             "asking": "asking since ",
             "needs-reply": "waiting on you since ",
             "failed": "failed at ",
-            "stalled": "stalled since ",
             "done": "finished at ",
             "working": "working since ",
             "idle": "idle since ",
@@ -111,7 +111,19 @@ PluginComponent {
 
     function dismiss(session) {
         if (session && finished(session))
-            hub.dismiss(session.id);
+            hub.dismiss(session.id, session.turn);
+    }
+
+    // A row on another host that Enter can't reach, and why it says so.
+    function unreachable(session) {
+        return !!session.host && session.state !== "ended" && !session.tmux && !session.bridge;
+    }
+
+    function flagWrong(session) {
+        if (session && finished(session)) {
+            hub.wrong(session.id);
+            flaggedId = session.id;
+        }
     }
 
     function focusSession(session) {
@@ -134,6 +146,26 @@ PluginComponent {
     component Dot: Rectangle {
         required property color tone
         property real size: 8
+        // The hub says when: until you look, or one breath for a `done`.
+        property bool pulse: false
+
+        SequentialAnimation on opacity {
+            running: pulse
+            loops: Animation.Infinite
+            alwaysRunToEnd: true
+
+            NumberAnimation {
+                to: 0.25
+                duration: 500
+                easing.type: Easing.InOutSine
+            }
+
+            NumberAnimation {
+                to: 1
+                duration: 500
+                easing.type: Easing.InOutSine
+            }
+        }
 
         width: size
         height: size
@@ -146,13 +178,15 @@ PluginComponent {
         if (active.length <= maxDots)
             return active.map(s => ({
                         "tone": tone(s),
-                        "count": 0
+                        "count": 0,
+                        "pulse": s.pulse === true
                     }));
         return pillStates.map(state => {
             const rows = active.filter(s => s.state === state);
             return {
                 "tone": rows.length ? tone(rows[0]) : "transparent",
-                "count": rows.length
+                "count": rows.length,
+                "pulse": rows.some(s => s.pulse === true)
             };
         }).filter(item => item.count > 0);
     }
@@ -165,6 +199,7 @@ PluginComponent {
         Dot {
             anchors.verticalCenter: parent.verticalCenter
             tone: parent.modelData.tone
+            pulse: parent.modelData.pulse
         }
 
         StyledText {
@@ -390,6 +425,14 @@ PluginComponent {
 
                         StyledText {
                             anchors.verticalCenter: parent.verticalCenter
+                            visible: !!row.session.host
+                            text: row.session.host ?? ""
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceVariantText
+                        }
+
+                        StyledText {
+                            anchors.verticalCenter: parent.verticalCenter
                             visible: !row.idle
                             text: root.ago(row.session.since)
                             font.pixelSize: Theme.fontSizeSmall
@@ -406,7 +449,7 @@ PluginComponent {
                     maximumLineCount: row.isSelected ? 4 : 1
                     elide: Text.ElideRight
                     font.pixelSize: Theme.fontSizeSmall
-                    color: ["asking", "needs-reply", "stalled"].includes(row.session.state) ? Theme.surfaceText : Theme.surfaceVariantText
+                    color: ["asking", "needs-reply"].includes(row.session.state) ? Theme.surfaceText : Theme.surfaceVariantText
                 }
 
                 Repeater {
@@ -452,7 +495,7 @@ PluginComponent {
                 StyledText {
                     width: parent.width
                     visible: row.isSelected
-                    text: [row.cwd, root.stateWords(row.session)].filter(t => t).join(" · ")
+                    text: [row.session.host, row.cwd, root.stateWords(row.session), root.unreachable(row.session) ? "no way to open it from here" : "", root.flaggedId === row.session.id ? "logged as wrong" : ""].filter(t => t).join(" · ")
                     elide: Text.ElideMiddle
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.withAlpha(Theme.surfaceVariantText, 0.8)
@@ -470,7 +513,7 @@ PluginComponent {
             property var parentPopout: null
             property var closePopout: null
 
-            implicitHeight: root.rows.length ? list.height : empty.implicitHeight
+            implicitHeight: (root.rows.length ? list.height : empty.implicitHeight) + (linkNote.visible ? linkNote.implicitHeight : 0)
             focus: true
 
             function grab() {
@@ -489,7 +532,9 @@ PluginComponent {
                 target: pop.parentPopout
                 function onOpened() {
                     root.nowMs = Date.now();
+                    root.hub?.seen();
                     root.selectedId = "";
+                    root.flaggedId = "";
                     list.positionViewAtBeginning();
                     pop.grab();
                 }
@@ -509,6 +554,8 @@ PluginComponent {
                     root.focusSession(root.selected);
                 else if (event.key === Qt.Key_X)
                     root.dismiss(root.selected);
+                else if (event.key === Qt.Key_W)
+                    root.flagWrong(root.selected);
                 else if (event.key === Qt.Key_J || event.key === Qt.Key_Down)
                     root.select(root.selectedIndex + 1);
                 else if (event.key === Qt.Key_K || event.key === Qt.Key_Up)
@@ -531,6 +578,18 @@ PluginComponent {
                 horizontalAlignment: Text.AlignHCenter
                 text: root.linkUp ? "No agent sessions." : root.hub?.refused || "The agent-hub service is not running."
                 font.pixelSize: Theme.fontSizeMedium
+                color: Theme.surfaceVariantText
+            }
+
+            StyledText {
+                id: linkNote
+                y: root.rows.length ? list.height : empty.implicitHeight
+                width: parent.width
+                visible: text !== ""
+                topPadding: Theme.spacingS
+                horizontalAlignment: Text.AlignHCenter
+                text: (root.hub?.links ?? []).filter(l => l.status !== "up").map(l => l.host + ": " + l.status).join(" · ")
+                font.pixelSize: Theme.fontSizeSmall
                 color: Theme.surfaceVariantText
             }
 

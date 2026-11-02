@@ -142,24 +142,6 @@ class DigestTest(unittest.TestCase):
         s.assistant("")
         d = self.digest()
         self.assertEqual(d["said"], "All done, shall I commit?")
-        self.assertTrue(d["worth"])
-        self.assertEqual(d["pending"], 0)
-
-    def test_a_short_turn_without_tools_is_not_worth_asking(self):
-        s = self.session
-        s.user("first")
-        s.assistant(calls=[("c", "bash", {"command": "ls"})])
-        s.user("what is 2+2?")
-        s.assistant("4")
-        d = self.digest()
-        self.assertEqual(d["said"], "4")
-        self.assertFalse(d["worth"])
-
-    def test_long_closing_words_are_worth_asking(self):
-        s = self.session
-        s.user("explain")
-        s.assistant("word " * 200)
-        self.assertTrue(self.digest()["worth"])
 
     def test_appends_a_prompt_not_yet_on_the_file(self):
         self.session.user("fix the login form")

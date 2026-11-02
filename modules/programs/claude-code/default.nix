@@ -278,7 +278,7 @@
         # Transcripts are training/eval data for the pi auto-gate judge; the
         # default prunes them after 30 days.
         cleanupPeriodDays = 3650;
-        # Drives niri's urgency hint; desktop toasts come from agent-hub.
+        # Drives niri's urgency hint; the bar's dots come from agent-hub.
         preferredNotifChannel = "terminal_bell";
         # /effort saves per model under modelSettings, but settings.json is a
         # read-only store symlink, so those picks only last the session. Keys are
@@ -343,11 +343,13 @@
             ];
           }
           # PermissionRequest labels the dialog the registry already marks `waiting`;
-          # Stop hands the hub the transcript, so it can tell how the turn ended;
+          # Stop hands the hub the turn's closing words and the tasks still out, and
+          # StopFailure the API error that ended it, so it can tell how the turn ended;
           # SessionEnd ends the session without waiting for its pid to die.
           // lib.optionalAttrs hub {
             PermissionRequest = hubAsync;
             Stop = hubAsync;
+            StopFailure = hubAsync;
             # Claude is exiting: an async hook can die before it reaches the hub.
             SessionEnd = hubHook {timeout = 2;};
             # Waited on: the hub's note on the other sessions in this working tree

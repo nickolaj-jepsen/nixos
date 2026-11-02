@@ -24,9 +24,9 @@ class Nullable:
         self.spec = spec
 
 
-# The order the bar lists states in; the first five want you.
-STATES = ("asking", "needs-reply", "failed", "stalled", "done", "working", "idle")
-ATTENTION = STATES[:5]
+# The order the bar lists states in; the first four want you.
+STATES = ("asking", "needs-reply", "failed", "done", "working", "idle")
+ATTENTION = STATES[:4]
 
 IDENTITY = {"label?": "str|null", "summary?": "str|null", "tags?": ["str"], "calls?": "int|null"}
 
@@ -50,6 +50,17 @@ ROW = {
     "window": "int|null",
     # The latest finished turns, newest last.
     "history": [TURN],
+    # The bar's dot pulses: this came to want you and you haven't looked yet.
+    "pulse?": "bool",
+    # An agent-spawned session: its own TUI still gets its row, the bar never does.
+    "hidden?": "bool",
+    # The turn its ending belongs to, so a late dismissal can't put away a newer one.
+    "turn?": "int",
+    # Set by the viewer on a row from another host, where its id is `host:session`.
+    "host?": "str",
+    # How to reach it from elsewhere: its tmux pane, and its Remote Control session.
+    "tmux?": "str",
+    "bridge?": "str",
 }
 
 RECENT = {
@@ -61,17 +72,28 @@ RECENT = {
     "endedAt": "int",
     "resume": "str",
     "history": [TURN],
+    "host?": "str",
 }
+
+# A link to another host's hub: `up`, or why it isn't.
+LINK = {"host": "str", "status": "str"}
 
 # Who reads a turn: pi's session file and leaf entry, or Claude's transcript.
 TRANSCRIPT = {"transcript?": "str|null", "leaf?": "str|null"}
 
+# A background task still in flight when a Claude turn stopped.
+TASK = {"type": "str", "description?": "str|null"}
+
 OPS = {
     # The bar and the CLI.
-    "subscribe": {"version?": "int"},
+    # `local`: this host's own sessions, leaving out what it links in.
+    "subscribe": {"version?": "int", "local?": "bool"},
     "focus": {"session": "str"},
     "focus-next": {},
-    "dismiss": {"session": "str"},
+    "dismiss": {"session": "str", "turn?": "int"},
+    "wrong": {"session": "str"},
+    # The popout opened: you have seen what pulses.
+    "seen": {},
     "toggle": {},
     "resume": {"session": "str"},
     "demo": {"sessions": ["any"]},
@@ -86,6 +108,8 @@ OPS = {
         "waitingFor": "str|null",
         "name": "str|null",
         "record": IDENTITY,
+        "hidden?": "bool",
+        "tmux?": "str|null",
         **TRANSCRIPT,
     },
     # pi's own, or a Claude hook's for the session it names.
@@ -94,18 +118,25 @@ OPS = {
     # No text: the call failed.
     "judged": {"request": "int", "text?": "str"},
     # Both agents; Claude's hooks name their session and say who runs it.
-    "session-start": {"session": "str", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null"},
+    "session-start": {"session": "str", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null", "hidden?": "bool",
+                      "tmux?": "str|null"},
     "session-end": {"session": "str"},
     "turn-start": {"request?": "int", "session?": "str", "prompt?": "str|null", "fromPerson?": "bool",
                    "worktreeTool?": "bool", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null",
-                   **TRANSCRIPT},
-    "turn-end": {"session?": "str", "pending?": "int", "error?": "bool", "pid?": "int|null", "cwd?": "str|null",
-                 "configDir?": "str|null", **TRANSCRIPT},
+                   "hidden?": "bool", "tmux?": "str|null", **TRANSCRIPT},
+    # `said` and `tasks` are the agent's own word, which a transcript can lag behind.
+    # `failure` is why the turn died, which needs no reading.
+    "turn-end": {"session?": "str", "pending?": "int", "error?": "bool", "said?": "str|null", "tasks?": [TASK],
+                 "failure?": "str", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null", "hidden?": "bool",
+                 "tmux?": "str|null", **TRANSCRIPT},
     "relabel": {},
 }
 
 TYPES = {
-    "state": {"sessions": [ROW], "recent": [RECENT]},
+    # `hidden` counts the agent-spawned sessions left out of `sessions`.
+    "state": {"sessions": [ROW], "recent": [RECENT], "hidden?": "int", "links?": [LINK]},
+    # `attach` says it is alive between states.
+    "beat": {},
     "row": {"row": Nullable(ROW), "identity": IDENTITY},
     "judge": {"request": "int", "system": "str", "prompt": "str", "maxTokens": "int", "source": "str"},
     "cancel": {"request": "int"},

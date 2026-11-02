@@ -5,7 +5,8 @@ A turn opens on the agent's own word (pi's `turn-start`, Claude's UserPromptSubm
 closes on it (`turn-end`, Stop). The registry only stands in where that word never
 comes: `busy` with no turn open starts one, `idle` with one open ends it as interrupted
 (Esc fires no Stop). An ending that lands on a turn already closed that way still gets
-read, unless a newer turn started meanwhile.
+read, unless a newer turn started meanwhile. A turn a restart caught open or unread comes
+back `restored`, for the hub to read if its ending went unheard.
 """
 
 from dataclasses import asdict, dataclass, field
@@ -16,14 +17,15 @@ from .protocol import ATTENTION, STATES
 SHOWING_DIALOGS = ("dialog open",)
 # How a turn ended → the state it leaves the session in.
 FINISHED = {"blocked": "needs-reply", "failed": "failed", "done": "done"}
-# The endings a focus or `x` can put away; `asking` and `stalled` want more than a look.
+# The endings a focus or `x` can put away; `asking` wants more than a look.
 DISMISSABLE = tuple(FINISHED.values())
-# A turn whose transcript has not moved this long is stalled.
-STALL_MS = 15 * 60_000
 HISTORY = 3
+# A dialog answered within this long never pulses, and Claude's hook has time to label it.
+ASK_GRACE_MS = 1000
+# A `done` pulses once: one breath of the bar's dot.
+ONCE_MS = 1000
 # Which field of a row says why it is in its state.
-REASON_FIELD = {"asking": "waitingFor", "needs-reply": "ask", "failed": "summary", "done": "summary",
-                "working": "doing", "stalled": "doing"}
+REASON_FIELD = {"asking": "waitingFor", "needs-reply": "ask", "failed": "summary", "done": "summary", "working": "doing"}
 
 
 @dataclass
@@ -33,11 +35,13 @@ class Turn:
     # "agent" for the agent's own word, "registry" for a turn the registry stood in for.
     by: str = "agent"
     ended: int | None = None
-    # `judge.outcome`: state, ask, reply, summary, jobs. None while unread, or interrupted.
+    # `judge.outcome`: state, ask, reply, summary, jobs, doing. None while unread, or interrupted.
     outcome: dict | None = None
     # The step the turn-start reading named.
     doing: str = ""
     reading: bool = False
+    # Loaded open or mid-reading: a restart may have missed how it ended.
+    restored: bool = False
 
     @property
     def open(self):
@@ -73,35 +77,36 @@ class Session:
     dismissed: int | None = None
     # The latest finished turns, newest last: `{at, state, did}`.
     history: list = field(default_factory=list)
-    # The last sign of progress: an event, or the transcript moving.
-    progress: int = 0
-    # The command a stalled turn is still running, when its transcript shows one, and the
-    # transcript's mtime when that was looked for: a stalled transcript doesn't move.
-    running: str = ""
-    running_checked: int = 0
     # When it was last known live, so one the registry hasn't caught up with is kept a while.
     seen: int = 0
     # The hook said the session ended: it lives only as long as the registry still lists it.
     ending: bool = False
     # The peers note a Claude session got last, which it is not told twice.
     told: str = ""
+    # Spawned by an agent (`AGENT_HUB_HIDDEN=1`): tracked, but off the bar and never read.
+    hidden: bool = False
+    # Its tmux pane, and its Remote Control session: how another host can reach it.
+    tmux: str = ""
+    bridge: str = ""
 
     # Persistence.
 
     KEPT = ("id", "agent", "pid", "cwd", "config_dir", "transcript", "leaf", "label", "summary", "tags", "calls",
-            "dismissed", "history")
+            "dismissed", "history", "hidden", "tmux")
 
     def saved(self):
         data = {key: getattr(self, key) for key in self.KEPT}
-        if self.turn is not None and not self.turn.open:
-            data["turn"] = {k: v for k, v in asdict(self.turn).items() if k not in ("reading", "doing")}
+        if self.turn is not None:
+            data["turn"] = {k: v for k, v in asdict(self.turn).items() if k not in ("doing", "restored")}
         return data
 
     @classmethod
     def load(cls, data, now):
         session = cls(**{key: data[key] for key in cls.KEPT if key in data}, seen=now)
         if isinstance(data.get("turn"), dict):
-            session.turn = Turn(**data["turn"])
+            turn = Turn(**data["turn"])
+            turn.restored, turn.reading = turn.open or turn.reading, False
+            session.turn = turn
         return session
 
     def identity(self):
@@ -117,8 +122,6 @@ class Session:
             return None
         n = self.turn.n + 1 if self.turn else 1
         self.turn = Turn(n=n, started=now, by=by)
-        self.progress = now
-        self.running = ""
         return n
 
     def end_turn(self, now, interrupted=False):
@@ -128,7 +131,6 @@ class Session:
             return None
         if turn.open:
             turn.ended, turn.doing = now, ""
-            self.running = ""
             return None if interrupted else turn.n
         # An ending for a turn the registry closed as interrupted is still that turn's.
         return None if interrupted or turn.outcome is not None else turn.n
@@ -188,7 +190,6 @@ class Session:
         self.dialog = text
         if self.status != "waiting":
             self.status, self.status_at = "waiting", now
-        self.progress = now
 
     # What the bar shows.
 
@@ -196,9 +197,7 @@ class Session:
         turn = self.turn
         if self.status == "waiting":
             return "asking"
-        if turn is not None and turn.open:
-            return "stalled" if now - self.progress >= STALL_MS else "working"
-        if turn is not None and (turn.reading or (turn.outcome or {}).get("jobs")):
+        if turn is not None and (turn.open or turn.reading or (turn.outcome or {}).get("jobs")):
             return "working"
         if turn is not None and turn.outcome and self.dismissed != turn.n:
             return FINISHED.get(turn.outcome["state"], "done")
@@ -210,8 +209,6 @@ class Session:
         outcome = (turn.outcome if turn else None) or {}
         if state == "asking":
             since = self.status_at
-        elif state == "stalled":
-            since = self.progress
         elif turn is not None:
             since = turn.started if turn.open else turn.ended
         else:
@@ -224,10 +221,7 @@ class Session:
                 doing = "reading the turn"
             else:
                 jobs = outcome["jobs"]
-                doing = f"waiting on {jobs} background job" + ("s" if jobs > 1 else "")
-        elif state == "stalled":
-            minutes = (now - self.progress) // 60_000
-            doing = f"no progress for {minutes} min" + (f" (running {self.running})" if self.running else "")
+                doing = outcome.get("doing") or f"waiting on {jobs} background job" + ("s" if jobs > 1 else "")
         row = {
             "id": self.id,
             "agent": self.agent,
@@ -247,6 +241,14 @@ class Session:
         }
         field_ = REASON_FIELD.get(state)
         row["reason"] = (row[field_] or "").strip() if field_ else ""
+        if self.hidden:
+            row["hidden"] = True
+        if turn is not None:
+            row["turn"] = turn.n
+        if self.tmux:
+            row["tmux"] = self.tmux
+        if self.bridge:
+            row["bridge"] = self.bridge
         return row
 
     def dismiss(self):
@@ -255,6 +257,59 @@ class Session:
             return False
         self.dismissed = self.turn.n
         return True
+
+
+class Alerts:
+    """Which of a host's rows pulse. A row pulses when it comes to want you with an ending
+    not yet known: `known` (row id → `state:since`) outlives a restart or a dropped link, so
+    a turn already known stays quiet and one that ended meanwhile pulses. Without a `known`,
+    at first sight of a host, whatever is there counts as known."""
+
+    def __init__(self, known=None):
+        self.baseline = known is None
+        self.known = dict(known or {})
+        # Row id → when its pulse stops; None for when you have looked.
+        self.pulsing = {}
+
+    def update(self, rows, now, focused=None, keep=()):
+        """Sets each row's `pulse`; returns the ms until a pulse moves by itself, or None.
+        A row gone is forgotten, unless its id is in `keep`: a session not listed just yet."""
+        due = []
+        for row in rows:
+            rid, since = row["id"], row["since"]
+            key = f"{row['state']}:{since}" if row["state"] in ATTENTION else None
+            if key is None:
+                self.known.pop(rid, None)
+                self.pulsing.pop(rid, None)
+            elif key != self.known.get(rid):
+                if row["state"] == "asking" and not self.baseline and now - since < ASK_GRACE_MS:
+                    due.append(since + ASK_GRACE_MS - now)
+                    self.pulsing.pop(rid, None)
+                    row["pulse"] = False
+                    continue
+                self.known[rid] = key
+                self.pulsing.pop(rid, None)
+                if not self.baseline:
+                    self.pulsing[rid] = now + ONCE_MS if row["state"] == "done" else None
+            # You are looking at it.
+            if focused is not None and row["window"] == focused:
+                self.pulsing.pop(rid, None)
+            until = self.pulsing.get(rid)
+            if until is not None:
+                if now >= until:
+                    del self.pulsing[rid]
+                else:
+                    due.append(until - now)
+            row["pulse"] = rid in self.pulsing
+        shown = {row["id"] for row in rows} | set(keep)
+        self.known = {rid: key for rid, key in self.known.items() if rid in shown}
+        self.pulsing = {rid: until for rid, until in self.pulsing.items() if rid in shown}
+        self.baseline = False
+        return min(due) if due else None
+
+    def seen(self):
+        """The popout opened: nothing pulses until something new wants you."""
+        self.pulsing.clear()
 
 
 def ordered(rows):

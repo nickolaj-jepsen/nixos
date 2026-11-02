@@ -13,6 +13,8 @@ Item {
     property var sessions: []
     // Sessions that ended, newest first, each with the command that resumes it.
     property var recent: []
+    // Other hosts piped in, each `up` or saying why it isn't.
+    property var links: []
     readonly property bool linkUp: socket.linkUp
     // Set when the hub speaks another protocol version; the socket then stays closed.
     property string refused: ""
@@ -31,10 +33,24 @@ Item {
         });
     }
 
-    function dismiss(sessionId) {
+    function dismiss(sessionId, turn) {
         socket.send({
             "op": "dismiss",
+            "session": sessionId,
+            "turn": turn
+        });
+    }
+
+    function wrong(sessionId) {
+        socket.send({
+            "op": "wrong",
             "session": sessionId
+        });
+    }
+
+    function seen() {
+        socket.send({
+            "op": "seen"
         });
     }
 
@@ -49,6 +65,7 @@ Item {
         if (message.type === "state") {
             root.sessions = message.sessions;
             root.recent = message.recent ?? [];
+            root.links = message.links ?? [];
         } else if (message.type === "refused") {
             console.warn("agentHub: " + message.text);
             root.refused = message.text;
@@ -70,6 +87,7 @@ Item {
             else {
                 root.sessions = [];
                 root.recent = [];
+                root.links = [];
             }
         }
         parser: SplitParser {

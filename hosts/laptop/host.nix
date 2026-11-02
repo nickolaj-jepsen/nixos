@@ -5,6 +5,10 @@
 
     fireproof.desktop.enable = true;
     fireproof.dev.enable = true;
+    fireproof.dev.agent-hub.remotes = {
+      desktop = {};
+      minilab = {};
+    };
     fireproof.work.enable = true;
     fireproof.hardware.laptop = true;
   };
