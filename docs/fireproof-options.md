@@ -1937,38 +1937,6 @@ true
 
 
 
-## fireproof\.sharedHost\.enable
-
-
-
-Whether to enable a host other people can be root on, so personal secrets stay off it\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.tailscale\.enable
 
 
@@ -2724,6 +2692,8 @@ string
 
 ## fireproof\.theme\.colors\.ui
 
+
+
 UI element background
 
 
@@ -2753,8 +2723,6 @@ string
 
 
 ## fireproof\.theme\.colors\.uiAlt
-
-
 
 Alternative UI element background
 
@@ -2981,6 +2949,30 @@ string
 
 *Declared by:*
  - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
+
+
+
+## fireproof\.trusted
+
+
+
+Whether this host’s SSH key logs in across the fleet and personal secrets may live here\. Leave off where someone or something else could be root\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
