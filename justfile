@@ -33,7 +33,8 @@ _meta hostname:
 [private]
 [script]
 _require-nixos hostname verb:
-    read -r class _ <<<"$(just _meta {{ hostname }})"
+    meta=$(just _meta {{ hostname }})
+    read -r class _ <<<"$meta"
     if [ "$class" != nixos ]; then
         echo "{{ hostname }} is a $class-class host: '{{ verb }}' is nixos-only — use 'just switch'." >&2
         exit 1
@@ -44,7 +45,8 @@ _require-nixos hostname verb:
 [group('host')]
 [script]
 build hostname=`hostname -s` *ARGS="":
-    read -r _ _ activation _ <<<"$(just _meta {{ hostname }})"
+    meta=$(just _meta {{ hostname }})
+    read -r _ _ activation _ <<<"$meta"
     $(command -v nom || echo nix) build ".#$activation" {{ ARGS }}
 
 [doc('Print one config value of a host as JSON without building it; an hm. prefix reads its home-manager config')]
@@ -72,7 +74,8 @@ eval attr hostname=`hostname -s` *ARGS="":
 [group('host')]
 [script]
 switch hostname=`hostname -s` target='' *ARGS="":
-    read -r class root _ tool <<<"$(just _meta {{ hostname }})"
+    meta=$(just _meta {{ hostname }})
+    read -r class root _ tool <<<"$meta"
     if [ -n '{{ target }}' ]; then
         if [ "$class" != nixos ]; then
             echo "Only a nixos host switches remotely: run 'just switch {{ hostname }}' on {{ target }} itself." >&2
@@ -117,7 +120,8 @@ _failed-units:
 [group('host')]
 [script]
 diff hostname=`hostname -s`: (build hostname)
-    read -r class _ _ _ <<<"$(just _meta {{ hostname }})"
+    meta=$(just _meta {{ hostname }})
+    read -r class _ _ _ <<<"$meta"
     current=/run/current-system
     if [ "$class" = home ]; then
         current="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager"
@@ -132,7 +136,8 @@ diff hostname=`hostname -s`: (build hostname)
 [group('host')]
 [script]
 tree hostname=`hostname -s` *ARGS="":
-    read -r _ _ activation _ <<<"$(just _meta {{ hostname }})"
+    meta=$(just _meta {{ hostname }})
+    read -r _ _ activation _ <<<"$meta"
     nix-tree --derivation ".#$activation" {{ ARGS }}
 
 [arg('package', pattern='[a-zA-Z0-9._+-]+')]
@@ -141,7 +146,8 @@ tree hostname=`hostname -s` *ARGS="":
 [script]
 why-depends package hostname=`hostname -s`:
     just _require-nixos {{ hostname }} why-depends
-    read -r _ _ activation _ <<<"$(just _meta {{ hostname }})"
+    meta=$(just _meta {{ hostname }})
+    read -r _ _ activation _ <<<"$meta"
     {{ nixcmd }} why-depends --all ".#$activation" ".#nixosConfigurations.{{ hostname }}.pkgs.{{ package }}"
 
 [arg('username', pattern='[a-z_][a-z0-9_-]*')]
