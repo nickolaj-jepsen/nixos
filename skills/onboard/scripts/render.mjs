@@ -2,7 +2,7 @@
 // Usage: render.mjs <report.md>. Renders each fenced mermaid block to assets/<report>-<n>.svg
 // beside the report and links it above the block. Reruns replace links and SVGs in place.
 // Pele 1.13.0 is vendored from npm (dist/pele.js, MIT, see vendor/LICENSE).
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { render } from "./vendor/pele.js";
 
@@ -13,35 +13,63 @@ if (!report) {
 }
 
 const stem = basename(report, ".md");
+const stemPattern = stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const assets = join(dirname(report), "assets");
-const link = (n) => `![Diagram ${n}](assets/${stem}-${n}.svg)`;
-const isOurLink = (line) => line?.startsWith("![Diagram ") && line.includes(`(assets/${stem}-`);
+const generatedLink = new RegExp(
+  `^\\s*!\\[Diagram \\d+\\]\\(assets/${stemPattern}-\\d+\\.svg\\)\\s*$`,
+);
+const generatedSvg = new RegExp(`^${stemPattern}-\\d+\\.svg$`);
+// Any indent counts as a fence: a diagram nested in a list must not be skipped silently.
+const fenceOpen = /^(\s*)(`{3,}|~{3,})\s*(.*)$/;
 
-const lines = readFileSync(report, "utf8").split("\n");
+const lines = readFileSync(report, "utf8").split(/\r?\n/);
 const out = [];
 const svgs = [];
 const errors = [];
 
 for (let i = 0; i < lines.length; i++) {
-  const open = lines[i].match(/^\s*(`{3,}|~{3,})mermaid\s*$/);
-  if (!open) {
-    out.push(lines[i]);
+  const line = lines[i];
+  if (generatedLink.test(line)) {
+    if (lines[i + 1] === "") i++;
     continue;
   }
+  const open = line.match(fenceOpen);
+  // A backtick fence's info string can't hold backticks; such a line is inline code.
+  if (!open || (open[2][0] === "`" && open[3].includes("`"))) {
+    out.push(line);
+    continue;
+  }
+
+  const [, indent, marker, info] = open;
+  const closes = (candidate) => {
+    const text = candidate.trim();
+    return text.length >= marker.length && [...text].every((c) => c === marker[0]);
+  };
   let end = i + 1;
-  while (end < lines.length && !lines[end].trim().startsWith(open[1])) end++;
-  const n = svgs.length + 1;
+  while (end < lines.length && !closes(lines[end])) end++;
+
+  if (info.split(/\s+/)[0] !== "mermaid") {
+    out.push(...lines.slice(i, end + 1));
+    i = end;
+    continue;
+  }
+  if (end === lines.length) {
+    errors.push(`${report}:${i + 1}: unclosed mermaid block`);
+    break;
+  }
+
+  const body = lines
+    .slice(i + 1, end)
+    .map((l) => (l.startsWith(indent) ? l.slice(indent.length) : l.trimStart()))
+    .join("\n");
   try {
-    svgs.push(render(lines.slice(i + 1, end).join("\n")).svg);
+    svgs.push(render(body).svg);
   } catch (e) {
-    svgs.push(null);
     errors.push(`${report}:${i + 1}: ${String(e.message).slice(0, 300)}`);
   }
-  while (out.at(-1) === "") out.pop();
-  if (isOurLink(out.at(-1))) out.pop();
-  while (out.at(-1) === "") out.pop();
-  if (out.length) out.push("");
-  out.push(link(n), "", ...lines.slice(i, end + 1));
+  if (out.length && out.at(-1) !== "") out.push("");
+  out.push(`${indent}![Diagram ${svgs.length}](assets/${stem}-${svgs.length}.svg)`, "");
+  out.push(...lines.slice(i, end + 1));
   i = end;
 }
 
@@ -50,11 +78,12 @@ if (errors.length) {
   process.exit(1);
 }
 
-mkdirSync(assets, { recursive: true });
-const ours = new RegExp(`^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-\\d+\\.svg$`);
-for (const file of readdirSync(assets)) {
-  if (ours.test(file)) rmSync(join(assets, file));
+if (existsSync(assets)) {
+  for (const file of readdirSync(assets)) {
+    if (generatedSvg.test(file)) rmSync(join(assets, file));
+  }
 }
+if (svgs.length) mkdirSync(assets, { recursive: true });
 svgs.forEach((svg, i) => {
   const path = join(assets, `${stem}-${i + 1}.svg`);
   writeFileSync(path, svg);

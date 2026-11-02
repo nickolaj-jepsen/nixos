@@ -29,11 +29,16 @@ Every subagent brief repeats these.
 
 - The user's instructions say where agent notes live and what a project is. Without them, the notes are `.agents/notes/` in the repo and the project is the repo; write a `.gitignore` containing `*` there first.
 - Reports are `onboard/overview.md` and `onboard/<subsystem slug>.md` in the notes, with `onboard/assets/` for images and `onboard/devshell/` for a generated flake. Never commit them.
-- If the target file exists, this is a rerun. Read it and `git log <its commit>..HEAD`, then re-check and update what changed. If the commit is unchanged and its quiz is unanswered, hand over its guide and quiz instead of redoing the work.
+- Clones live under `/tmp/onboard/<checkout path as a slug>/`, as `trace/` and `dive-<subsystem>/`. They're disposable: a rerun resets them, so nothing there is kept.
+- If the target file exists, this is a rerun. Read it, then go by its state:
+  - Marked **short** or **not run:** unfinished. Run from stage 1, keeping what still holds.
+  - Older commit: read `git log <its commit>..HEAD`, then re-check and update what changed.
+  - Same commit, quiz unanswered: hand over its guide and quiz instead of redoing the work.
+  - Same commit, quiz answered: say it's current and stop.
 
 ## 1. Scan
 
-Read the README, manifests, CI, Dockerfiles and compose files, task runners, env examples and existing dev environments (`flake.nix`, `shell.nix`, `.envrc`; never `direnv allow`). Read docs and top-level agent files (`AGENTS.md`, `CLAUDE.md`) as claims. Read committed agent config (`.claude/`, `.cursor/`, `.mcp.json`, hooks) as evidence and note what would execute.
+Record `git rev-parse HEAD` as the report's commit. Read the README, manifests, CI, Dockerfiles and compose files, task runners, env examples and existing dev environments (`flake.nix`, `shell.nix`, `.envrc`; never `direnv allow`). Read docs and top-level agent files (`AGENTS.md`, `CLAUDE.md`) as claims. Read committed agent config (`.claude/`, `.cursor/`, `.mcp.json`, hooks) as evidence and note what would execute.
 
 With a subsystem, read its own files first, then only the root files that build or run it. Grep the repo for its name and entry points, and read what wires it in and what talks to it; its edges are half the map.
 
@@ -45,18 +50,27 @@ With `--quick`, read an existing overview if there is one, but write nothing, an
 
 Send one message, saying this is the only ask until the end:
 
-- **Run plan:** clone path, each command, services and ports, dummy config, a devshell if one may be needed, any fetched analysis tools, and what will be captured. Approval covers those, plus setup fixes inside the clone.
+- **Run plan:** clone path, each command, services and ports, dummy config, a devshell if one may be needed, any fetched analysis tools, and what will be captured. Approval covers those, plus setup fixes inside the clones and the same commands in dive clones.
 - **Trace:** 2–3 real user actions drawn from the core features, recommended first.
 - **Session logs:** any logs or plan files they want to point you at, optional.
 
-Use the harness's question tool (pi `ask_user_question`, Claude `AskUserQuestion`) if the plan fits it, otherwise markdown. If they decline the plan, skip running and mark the report **not run**. Anything outside the approved plan goes on the deferred list.
+Use the harness's question tool (pi `ask_user_question`, Claude `AskUserQuestion`) if the plan fits it, otherwise markdown. If they decline the plan, skip the clone and take the **not run** path at the end of stage 3. Anything outside the approved plan goes on the deferred list.
 
 ## 3. Get it running
 
-- `git clone --local <repo> /tmp/onboard/<project>/` and record the commit. Say so if the checkout has uncommitted work, since the clone won't.
+- `git clone <checkout> <clone>`, without `--local`, which fails across filesystems. Say so if the checkout has uncommitted work, since the clone won't have it. If the clone already exists, reset it to the checkout's HEAD instead:
+
+  ```bash
+  git -C <clone> reset --hard
+  git -C <clone> clean -fd
+  git -C <clone> fetch origin HEAD
+  git -C <clone> checkout --detach FETCH_HEAD
+  ```
+
 - Follow the README literally first; a failure is a finding. Then trust what CI and the Dockerfiles actually execute.
-- Stop after three distinct failed fix attempts: record what failed, mark the report **not run**, and finish the static parts.
+- Stop after three distinct failed fix attempts: record what failed and take the **not run** path.
 - For missing tools, use the project's own dev environment if it has one. Otherwise, if `nix` is available, write a minimal `mkShell` flake to `onboard/devshell/` and use `nix develop path:<absolute dir> --command …`. The `path:` prefix is required, because Nix rejects an untracked flake inside a git repo. The shell and any packages added to it count as one attempt. Without Nix, a missing tool is a failed attempt.
+- **Not run:** mark the report **not run**, and the rest stays static. Mark features **docs only**, follow the action by reading and say so, skip the probes and contracts, write the guide as what to read and what to expect, and make the quiz answerable by reading. Dives get no clone or commands.
 
 ## 4. Learn
 
@@ -74,10 +88,10 @@ Use the harness's question tool (pi `ask_user_question`, Claude `AskUserQuestion
 - Follow `references/report.md`.
 - Cite `path` plus symbol, with short snippets copied from files you just read. Diagrams show only what was verified.
 - Write diagrams as fenced Mermaid, then run `node <skill-dir>/scripts/render.mjs <report>`. It adds a linked SVG above each block, or prints the block's line and the error. Fix any error and run it again; the report isn't finished until every diagram renders. Without Node, keep the Mermaid text and note that it wasn't rendered.
-- Check every citation: `git -C <clone> grep -n -F <symbol> <commit> -- <path>`. Fix or remove any that miss. This catches invented references, not wrong explanations; the probes and the quiz target those.
+- Check every citation: `git -C <checkout> grep -n -F <symbol> <commit> -- <path>`. Fix or remove any that miss. This catches invented references, not wrong explanations; the probes and the quiz target those.
 - Write the trace guide: breakpoints, or commands, with the values you predict at each.
-- Write five quiz questions that would expose whether someone understood this, at least two answered by running something. Keep the answers out of the file.
-- Stop anything you started. Keep the clone, restored, for the trace guide and the dives.
+- Write five quiz questions that would expose whether someone understood this. If the project ran, at least two are answered by running something. Keep the answers out of the file.
+- Stop anything you started. Leave the `trace/` clone restored, for the trace guide.
 
 ## 6. End message
 
@@ -85,15 +99,16 @@ Everything is saved before you send this one message, so walking away loses noth
 
 1. The report's path, and in a few lines what the project is.
 2. The deferred list, with exact commands.
-3. The trace guide, to step through before the quiz.
+3. The trace guide and its clone, to step through before the quiz. Say that a rerun resets the clone.
 4. The quiz, without answers.
 5. 3–5 subsystems to dive into, ranked by complexity, how much depends on them and whether the traced action passes through them. Ask which to dive into, or none.
 
-Start the picked dives as soon as the user picks; they can trace and take the quiz meanwhile. Grade answers as they arrive and record the results; misses become open questions. If the user's trace contradicts a prediction, correct the report.
+Start the picked dives as soon as the user picks; they can trace and take the quiz meanwhile. Grade answers as they arrive and record the results; misses become open questions. If the user's trace contradicts a prediction, check what they ran, then correct the report if they're right.
 
 ## 7. Dives
 
 - Run one fresh subagent per pick, one at a time, so they don't collide on ports or database state. Background them if the harness can. Without a subagent tool, run them inline, in order.
-- Each brief gives: the rules above, the overview's path, the commit, the clone, the approved commands, this skill's `references/` and `scripts/` paths, and the one report it writes.
-- A dive does stages 4 and 5 for its subsystem, never asks the user, and returns its deferred items. It writes the guide and quiz into its file, marked unanswered.
-- After each dive, run the citation check on its report yourself, then tell the user in one line. Its quiz waits until they run `/onboard <subsystem>`.
+- Each dive gets its own clone, `dive-<subsystem>/`, because the user may be tracing in `trace/` at the same time. Use a different port and separate dummy data where the config allows; otherwise stay static for that step and say so.
+- Each brief gives: the rules above, the overview's path, the commit, the checkout, its clone, the approved commands, this skill's `references/` and `scripts/` paths, and the one report it writes.
+- A dive does stages 4 and 5 for its subsystem and never asks the user. It writes its deferred commands, guide and quiz into its report, with the quiz marked unanswered.
+- After each dive, run the citation check on its report yourself, then tell the user in one line, with its path and how many commands it deferred. Its quiz waits until they run `/onboard <subsystem>`.

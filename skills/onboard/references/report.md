@@ -1,13 +1,13 @@
 # Report structure
 
-Keep the section order. Write "none" rather than dropping a section. Mark the header **not run** when the project never ran.
+Keep the section order. Write "none" rather than dropping a section. Mark the header **not run** when the project never ran, and **short** on a short overview: a rerun treats both as unfinished.
 
 ## `overview.md`
 
 ```markdown
 # <project>: overview
 
-<commit> · <date> · <ran | not run> · Looked at: <areas, history usable or not>
+<commit> · <date> · <ran | not run> · <full | short> · Looked at: <areas, history usable or not>
 
 ## What it does
 
@@ -70,6 +70,12 @@ Then the trace guide.
 What must stay true, and what happens when a dependency fails. Say which you tested.
 
 ## Design choices
+
+## Claims that failed
+
+## Deferred
+
+Exact commands for what needed the user, each with what it needs.
 
 ## Open questions
 
