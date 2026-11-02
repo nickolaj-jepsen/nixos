@@ -1,6 +1,7 @@
 {
   shared = {
     fireproof.hostname = "desktop";
+    fireproof.trusted = true;
 
     fireproof.desktop.enable = true;
     # Passphrase-only LUKS (no TPM slot), so the boot prompt already needs a human.

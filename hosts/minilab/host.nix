@@ -1,6 +1,7 @@
 {
   shared = {
     fireproof.hostname = "minilab";
+    fireproof.trusted = true;
 
     fireproof.desktop.enable = true;
     fireproof.desktop.chromium.enable = false;

@@ -64,8 +64,8 @@ doesn't own, so the nixos and HM nodes of one host must not share a dir.
   `id_ed25519.pub`, so the flake still evaluates.
 - The first bootstrap replaces it: `sudo ssh-keygen -A` creates the real
   `/etc/ssh/ssh_host_ed25519_key.pub`, then run `just secret-rekey`.
-- Only then add the host to `trustedHosts` in `modules/system/ssh.nix`. That
-  list is what authorizes a host's key for SSH logins fleet-wide.
+- Only then set `fireproof.trusted` on the host. That is what authorizes its key
+  for SSH logins fleet-wide (see "Trust" in `docs/hosts.md`).
 
 ## Rekeying from WSL
 

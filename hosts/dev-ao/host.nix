@@ -12,7 +12,6 @@
     fireproof.hostname = "dev-ao";
     fireproof.username = "nij";
 
-    fireproof.sharedHost.enable = true;
     fireproof.dev.enable = true;
     fireproof.dev.clickhouse.enable = false; # headless server: no need for the clickhouse client
     fireproof.dev.copilot.enable = false;

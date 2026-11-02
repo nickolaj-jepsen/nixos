@@ -220,6 +220,8 @@
 in {
   config.flake.hostMeta = lib.genAttrs discovered hostMeta;
   config.flake.hostAliases = hostAliases;
+  # From the raw cards: every host's authorized_keys needs this list, so no single host's eval can supply it.
+  config.flake.trustedHosts = lib.filter (name: lib.any (shared: shared.fireproof.trusted or false) (collect (hostDir name)).shared) discovered;
   # Exported so checks.disko-templates can hold the templates to the same card shape.
   config.flake.hostCardKeys = cardKeys;
 

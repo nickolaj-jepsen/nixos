@@ -1,17 +1,23 @@
 # ssh-key (nixos-side) IS ~/.ssh/id_ed25519, the runtime identity HM agenix uses to decrypt every other user secret, so it must stay root-placed (can't decrypt itself).
-let
+{config, ...}: let
+  inherit (config.flake) trustedHosts;
   # Break-glass key; private half lives only in Bitwarden, not in this repo.
   backupKey = builtins.readFile ../../secrets/backup-key.pub;
-  # Hosts whose identity may log in everywhere; dev-ao is left out because its key lives on a work-owned server.
-  trustedHosts = ["desktop" "desktop-wsl" "homelab" "laptop" "macbook" "minilab" "work"];
   # builtins-only so the list is shared across all three module halves without lib at this scope.
   publicKeys = [backupKey] ++ map (h: builtins.readFile (../../secrets/hosts + ("/" + h) + "/id_ed25519.pub")) trustedHosts;
   # Each .pub already ends in "\n"; strip it so the joined file is one key per line, no blanks.
   authorizedKeysText = builtins.concatStringsSep "\n" (map (k: builtins.replaceStrings ["\n"] [""] k) publicKeys) + "\n";
+  # flake.trustedHosts only sees a literal in the card's `shared`, so catch a flag set any other way.
+  trustedHostsAgree = fireproof: {
+    assertion = fireproof.trusted == builtins.elem fireproof.hostname trustedHosts;
+    message = "fireproof.trusted on ${fireproof.hostname} must be set as a literal in its host card's `shared`.";
+  };
 in {
   flake.modules.nixos.ssh = {config, ...}: let
     inherit (config.fireproof) username hostname;
   in {
+    assertions = [(trustedHostsAgree config.fireproof)];
+
     age.secrets.ssh-key = {
       rekeyFile = ../../secrets/hosts + ("/" + hostname) + /id_ed25519.age;
       path = "/home/" + username + "/.ssh/id_ed25519";
@@ -44,6 +50,8 @@ in {
   flake.modules.darwin.ssh = {config, ...}: let
     inherit (config.fireproof) username hostname;
   in {
+    assertions = [(trustedHostsAgree config.fireproof)];
+
     age.secrets.ssh-key = {
       rekeyFile = ../../secrets/hosts + ("/" + hostname) + /id_ed25519.age;
       path = "/Users/" + username + "/.ssh/id_ed25519";
@@ -111,7 +119,7 @@ in {
             ControlPersist = "10m";
           };
         }
-        // lib.optionalAttrs (!config.fireproof.sharedHost.enable) {
+        // lib.optionalAttrs config.fireproof.trusted {
           homelab = {
             HostName = "x.nickolaj.com";
             User = "nickolaj";

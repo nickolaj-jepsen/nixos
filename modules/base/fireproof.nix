@@ -23,12 +23,16 @@ let
         description = "The primary username for the machine";
       };
 
-      # Personal secrets and identity default off here; work-owned ones still ship.
-      sharedHost.enable = lib.mkEnableOption "a host other people can be root on, so personal secrets stay off it";
+      # Must be a literal in the host card's `shared`: flake.trustedHosts reads it before any eval.
+      trusted = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Whether this host's SSH key logs in across the fleet and personal secrets may live here. Leave off where someone or something else could be root.";
+      };
 
       work = {
         enable = lib.mkEnableOption "work-related applications and tools";
-        sshKey.enable = cascade (config.fireproof.work.enable && !config.fireproof.sharedHost.enable) "Decrypt the shared AO SSH key and load it into ssh-agent";
+        sshKey.enable = cascade (config.fireproof.work.enable && config.fireproof.trusted) "Decrypt the shared AO SSH key and load it into ssh-agent";
       };
 
       # Enabling a host needs `just secret-rekey` — the body is an agenix secret.
@@ -130,9 +134,9 @@ let
         scaleway.enable = cascade (config.fireproof.dev.enable && config.fireproof.work.enable) "Enable the Scaleway CLI (scw) and its b2c-devenv/b2c-production profiles";
         mcp = {
           enable = cascade config.fireproof.dev.enable "Enable MCP servers";
-          homelab.enable = cascade (config.fireproof.dev.mcp.enable && !config.fireproof.sharedHost.enable) "Enable the homelab Grafana MCP server and its token secret";
+          homelab.enable = cascade (config.fireproof.dev.mcp.enable && config.fireproof.trusted) "Enable the homelab Grafana MCP server and its token secret";
         };
-        pi.enable = cascade (config.fireproof.dev.enable && !config.fireproof.sharedHost.enable) "Enable the pi coding agent with the lazypi extension roster";
+        pi.enable = cascade (config.fireproof.dev.enable && config.fireproof.trusted) "Enable the pi coding agent with the lazypi extension roster";
         copilot.enable = cascade config.fireproof.dev.enable "Enable the GitHub Copilot CLI";
         ai-usage.enable = cascade config.fireproof.dev.enable "Enable ai-usage, the agent subscription quota CLI (and its DMS bar widget on desktops)";
         agent-hub.enable = cascade (config.fireproof.dev.enable && config.fireproof.desktop.enable) "Enable agent-hub, the DMS bar hub for live coding-agent sessions and their permission asks";

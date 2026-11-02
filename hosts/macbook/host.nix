@@ -4,6 +4,7 @@
 
   shared = {
     fireproof.hostname = "macbook";
+    fireproof.trusted = true;
 
     # One toggle, like a Linux desktop: pulls in the full GUI roster plus the
     # Mac-only casks; the Linux-only DE is isLinux-gated out. Tailscale rides the

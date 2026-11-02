@@ -61,4 +61,4 @@ just secret-rekey
 
 echo "Host '$host' created and staged; it is discovered automatically."
 echo "Edit hosts/$host/host.nix to enable features via fireproof.*.enable — see modules/base/fireproof.nix."
-echo "Add \"$host\" to trustedHosts in modules/system/ssh.nix so the other hosts accept its SSH key."
+echo "Set shared.fireproof.trusted = true there, then switch the other hosts, if its SSH key should log in across the fleet."

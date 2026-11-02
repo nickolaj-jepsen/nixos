@@ -1,6 +1,7 @@
 {
   shared = {
     fireproof.hostname = "work";
+    fireproof.trusted = true;
 
     fireproof.desktop.enable = true;
     fireproof.dev.enable = true;

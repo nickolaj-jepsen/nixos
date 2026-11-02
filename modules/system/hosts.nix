@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: {
-    config = lib.mkIf (!config.fireproof.sharedHost.enable) {
+    config = lib.mkIf config.fireproof.trusted {
       age.secrets.hosts-private = {
         # Contains IP addresses that i have no business sharing
         rekeyFile = ../../secrets/hosts-private.age;

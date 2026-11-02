@@ -1,6 +1,7 @@
 {
   shared = {
     fireproof.hostname = "desktop-wsl";
+    fireproof.trusted = true;
 
     fireproof.dev.enable = true;
     fireproof.work.enable = true;

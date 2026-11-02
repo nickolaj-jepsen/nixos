@@ -73,9 +73,8 @@ Run these on the Mac:
 2. `sudo ssh-keygen -A` creates `/etc/ssh/ssh_host_ed25519_key`.
 3. Replace `secrets/hosts/<h>/id_ed25519.{pub,age}` with this Mac's real host
    key (the committed pub is a placeholder), then run `just secret-rekey`
-   (YubiKey). If `<h>` isn't in `trustedHosts` (`modules/system/ssh.nix`) yet,
-   add it now that the real key is committed, and switch the other hosts so
-   they accept it.
+   (YubiKey). If `<h>` isn't `fireproof.trusted` yet, set it now that the real
+   key is committed, and switch the other hosts so they accept it.
 4. Before the Mac has `darwin-rebuild` on `PATH`, run
    `nix run nix-darwin/nix-darwin-26.05#darwin-rebuild -- switch --flake .#<h>`.
    nix-homebrew installs Homebrew itself on that first switch, which is slow.
@@ -110,8 +109,7 @@ Run these on the Mac:
 - `just new-host <hostname> <username>` drops the card, generates and encrypts
   the host SSH key, `git add`s `hosts/<h>` and `secrets/hosts/<h>` (untracked
   files are invisible to agenix-rekey) and rekeys.
-  - Then add `<h>` to `trustedHosts` in `modules/system/ssh.nix` so the other
-    hosts accept its SSH key.
+  - It starts untrusted. See "Trust" below.
 - Disks: copy a `hosts/_templates/disko/<name>.nix` template into
   `hosts/<h>/` and replace the `@@DISK@@` sentinel with the device.
   - The templates are only scaffolding for a card that defines
@@ -146,6 +144,22 @@ Run these on the Mac:
   - `modules/base/nix.nix` sizes Nix `max-jobs`/`cores` and the tmpfs build
     dir from that report, so a host without one falls back to Nix's
     (oversubscribing) defaults.
+
+## Trust
+
+`shared.fireproof.trusted = true` says nobody and nothing else could be root on
+a host. It defaults to off.
+
+- A trusted host's SSH key is in every host's `authorized_keys`, so changing the
+  flag only takes effect on the others once they switch. An untrusted host can
+  still be logged in to; its own key just opens nothing.
+- It also decides whether personal secrets land there by default: pi and its API
+  keys, the homelab Grafana MCP token, `hosts-private`. Options that cascade from
+  it can be overridden, as `dev-ao` does for its work SSH key.
+- Which secret decrypts where isn't part of it: agenix encrypts each secret to
+  the key of every host that declares it.
+- Set it as a literal in the card's `shared`, where `flake.trustedHosts` reads it
+  without an eval. Set anywhere else, the build fails on an assertion.
 
 ## Tailscale
 

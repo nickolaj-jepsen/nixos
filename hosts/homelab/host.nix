@@ -1,6 +1,7 @@
 {
   shared = {
     fireproof.hostname = "homelab";
+    fireproof.trusted = true;
 
     fireproof.dev.enable = true;
     # headless: skip the heavy editor layer and the second agent
