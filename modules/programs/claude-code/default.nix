@@ -138,6 +138,16 @@
             "alt+a" = "app:cycleDiffBase";
           };
         }
+        {
+          # Unbound, ←/→ fall through a focused pane to the prompt and open the agents view.
+          # A plain key never presses a plugin Button, so answer reads these as the scroll
+          # they raise (mods/answer, `ui.scroll`) and turns them into back and forward.
+          context = "Pane";
+          bindings = {
+            "left" = "pane:top";
+            "right" = "pane:bottom";
+          };
+        }
       ];
     };
 

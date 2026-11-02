@@ -4,6 +4,7 @@ import type { EngineInterface, Register } from "claude-code";
 import type { Current } from "../types";
 import {
   type Answer,
+  arrowStep,
   type Entry,
   entries,
   type Form,
@@ -34,6 +35,12 @@ const FIELD = "field";
 
 // Change the tag when Current changes shape: a reload keeps what the old code stored.
 const current = atom({ plugin: "answer", key: "current" } as const, null, { shape: "current-3" });
+
+/** Origins that are the person speaking; a task's notification or a peer's message isn't. */
+const PERSON = new Set<string>(["composer", "bridge", "sdk", "slack-ping"]);
+
+/** A turn that re-asks the same round keeps what was answered so far. */
+const sameForm = (a: Form, b: Form) => JSON.stringify(a) === JSON.stringify(b);
 
 const edit = ($: EngineInterface, fn: (c: Current) => Current) =>
   update($, current, (c) => (c ? fn(c) : c));
@@ -143,25 +150,34 @@ export const register: Register = (on) => {
     return next(e);
   });
 
+  // Only a new round replaces the form; the person's send is what drops it. A turn a
+  // background task woke ends on that task's news while the round still waits.
   on("turn.complete", async ($, e, next) => {
-    if (e.agentId === undefined && e.reason === "answer") {
-      const form = parse(e.answer);
-      await update($, current, () =>
-        form ? { form, draft: newDraft(form), editing: null } : null,
+    const form = e.agentId === undefined && e.reason === "answer" ? parse(e.answer) : null;
+    if (form)
+      await update($, current, (c) =>
+        c && sameForm(c.form, form) ? c : { form, draft: newDraft(form), editing: null },
       );
-      if (!form && (await isOpen($))) await $.ui.close({ id: PANE });
-    }
     return next(e);
   });
 
-  // Anything sent answers the round, or moves past it.
+  // The person's own message answers the round, or moves past it.
   on("prompt.submit", async ($, e, next) => {
-    if (await read($, current)) {
+    if (PERSON.has(e.origin.kind) && (await read($, current))) {
       await update($, current, () => null);
       if (await isOpen($)) await $.ui.close({ id: PANE });
     }
     return next(e);
   }).catch((_$, e, next) => (next.called ? undefined : next(e)));
+
+  on("ui.scroll", { component: "Pane", requestId: PANE }, async ($, e, next) => {
+    const c = e.origin.kind === "person" ? await read($, current) : null;
+    const scroll = { by: e.by, contentRows: e.contentRows, hasPointer: e.pointer !== undefined };
+    const step = c ? arrowStep(c.form, c.draft, scroll) : null;
+    if (!c || step === null) return next(e);
+    if (step !== c.draft.step) await move($, (f, cur) => go(f, cur.draft, step));
+    return {};
+  });
 
   on("command.run", { command: "answer" }, async ($) => {
     await toggle($);
@@ -262,7 +278,7 @@ export const register: Register = (on) => {
             ["n", "note", () => startEditing($, "note")],
             ["b", "back", back],
           ])}
-          <Text dimColor>1-9 revisits · Esc closes, answers kept</Text>
+          <Text dimColor>1-9 revisits · ← back · Esc closes, answers kept</Text>
         </Box>
       );
     }
@@ -332,7 +348,9 @@ export const register: Register = (on) => {
           ["s", "skip", () => move($, (f, cur) => skip(f, cur.draft))],
           ["r", "review", () => move($, (f, cur) => go(f, cur.draft, f.items.length))],
         ])}
-        <Text dimColor>1-9 or Enter answers · ↑↓ or Tab moves · Esc closes, answers kept</Text>
+        <Text dimColor>
+          1-9 or Enter answers · ←→ questions · ↑↓ or Tab moves · Esc closes, answers kept
+        </Text>
       </Box>
     );
   });

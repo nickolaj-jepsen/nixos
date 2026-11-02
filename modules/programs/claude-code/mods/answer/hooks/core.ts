@@ -239,6 +239,22 @@ export const go = (form: Form, draft: Draft, step: number): Draft => ({
   step: Math.max(0, Math.min(form.items.length, step)),
 });
 
+/**
+ * The item a person's scroll of the pane moves to, or null to let it scroll.
+ *
+ * Home and End (and ←/→, bound to them) scroll by the whole tree with no pointer;
+ * those move back and forward. Inline, a page key on a tree that fits reads the same.
+ */
+export function arrowStep(
+  form: Form,
+  draft: Draft,
+  scroll: { by: number; contentRows: number; hasPointer: boolean },
+): number | null {
+  if (scroll.hasPointer || scroll.by === 0 || Math.abs(scroll.by) !== scroll.contentRows)
+    return null;
+  return go(form, draft, draft.step + Math.sign(scroll.by)).step;
+}
+
 /** A row the form offers for one item: an option, its recommendation when that names no option, or a write-in. */
 export type Entry = { kind: "option"; index: number } | { kind: "accept" } | { kind: "write" };
 

@@ -84,12 +84,36 @@ const hint = async ($: Engine) => {
   return found?.text;
 };
 
-test("a turn that ends on questions offers the form; one that doesn't, nothing", async ($, on) => {
+test("a turn that ends on questions offers the form; the person's next send drops it", async ($, on) => {
   world(on);
   await ends($, grillingRound);
   expect(await hint($)).toContain("Answer 3 questions");
+  await $.prompt.submit({ text: "never mind", wait: false, origin: { kind: "composer" } });
   await ends($, plainList);
   expect(await hint($)).toBeUndefined();
+});
+
+test("a background task's turn leaves the round and its answers alone", async ($, on) => {
+  world(on);
+  await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
+  await ends($, grillingRound);
+  await $.command.run(RUN);
+  const pane = await $.ui.mount({ ...PANE, surface: "terminal" });
+  await pane.press({ key: "e1" });
+  await pane.input({ key: "field", text: "" });
+  await pane.unmount();
+
+  await $.prompt.submit({
+    text: "<task-notification>build finished</task-notification>",
+    wait: false,
+    isMeta: true,
+    origin: { kind: "task-notification" },
+  });
+  await ends($, plainList);
+  expect(await hint($)).toContain("1 answered");
+  // The same round asked again keeps its answers too.
+  await ends($, grillingRound);
+  expect(await hint($)).toContain("1 answered");
 });
 
 test("the band keeps what is drawn beneath it", async ($, on) => {

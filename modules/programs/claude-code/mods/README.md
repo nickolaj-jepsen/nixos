@@ -44,7 +44,10 @@ Code update can break one.
   Enter or a click picks one and opens a note field; Enter there, empty or
   not, goes on. `b`, `f`, `s` and `r` go back, forward, skip and to the
   review, which writes the reply you would have typed (`Q1: yes`, `Q2: B`,
-  `do 1, 3`) into the prompt, above any draft, for you to send. Open it with
+  `do 1, 3`) into the prompt, above any draft, for you to send. A turn a
+  background task wakes leaves the form and its answers alone; only your own
+  send drops them. ←/→ go back and forward too, once bound to `pane:top` and
+  `pane:bottom` in the `Pane` context (Home and End then do the same). Open it with
   `/answer` or the band's button; for a key, bind `app:cycleDiffBase` in the
   `Global` context of `~/.claude/keybindings.json` (I use `alt+a`). Its
   parser also backs the pi half in

@@ -2,6 +2,7 @@ import { expect, test } from "claude-code/testing";
 
 import {
   answer,
+  arrowStep,
   type Form,
   go,
   isReview,
@@ -156,4 +157,16 @@ test("picks group the builds and route the rest", () => {
 test("the reply goes above a draft, never over it", () => {
   expect(placeReply("", "yes")).toBe("yes");
   expect(placeReply("and one more thing", "yes")).toBe("yes\n\nand one more thing");
+});
+
+test("Home and End step through the items; other scrolls scroll", () => {
+  const form = must(parse(fx.grillingRound));
+  const at = (step: number) => go(form, newDraft(form), step);
+  const whole = (by: number, hasPointer = false) => ({ by, contentRows: 12, hasPointer });
+  expect(arrowStep(form, at(1), whole(12))).toBe(2);
+  expect(arrowStep(form, at(1), whole(-12))).toBe(0);
+  expect(arrowStep(form, at(0), whole(-12))).toBe(0);
+  expect(arrowStep(form, at(form.items.length), whole(12))).toBe(form.items.length);
+  expect(arrowStep(form, at(1), whole(1))).toBeNull();
+  expect(arrowStep(form, at(1), whole(12, true))).toBeNull();
 });
