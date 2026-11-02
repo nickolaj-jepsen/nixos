@@ -54,7 +54,12 @@ _require-nixos hostname verb:
 build hostname=`just _this-host` *ARGS="":
     meta=$(just _meta {{ hostname }})
     read -r _ _ activation _ <<<"$meta"
-    $(command -v nom || echo nix) build ".#$activation" {{ ARGS }}
+    if ! command -v nom >/dev/null; then
+        exec nix build ".#$activation" {{ ARGS }}
+    fi
+    # Determinate Nix logs 5-digit activity types (e.g. 10113) that nom can't parse; drop them before nom reads the log.
+    { nix build ".#$activation" --log-format internal-json -v {{ ARGS }} 2>&1 1>&3 \
+        | grep --line-buffered -vE '"type":1[0-9]{4}[,}]' | nom --json; } 3>&1
 
 [doc('Print one config value of a host as JSON without building it; an hm. prefix reads its home-manager config')]
 [group('host')]
