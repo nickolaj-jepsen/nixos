@@ -110,7 +110,8 @@ in {
   in {
     storageMode = "local";
     hostPubkey = builtins.readFile (hostSecrets + "/id_ed25519.pub");
-    masterIdentities = [{identity = ../secrets/yubikey-identity.pub;}];
+    # Interpolated to get a store dependency: a bare path stringifies without context, and Nix 2.35 no longer copies the flake source on eval.
+    masterIdentities = [{identity = "${../secrets/yubikey-identity.pub}";}];
     extraEncryptionPubkeys = [
       "age1pzrfw28f8qvsk9g8p2stundf4ph466jut0g6q47sse76zljtqy9q2w32zr" # Backup key (bitwarden)
     ];
