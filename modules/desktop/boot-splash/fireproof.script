@@ -1,96 +1,536 @@
-# The glyph donut spinning on the Flexoki background, centred on every display, with the LUKS
-# passphrase as a line of glyphs underneath. `plymouth update --status=handoff` fades the donut
-# out so the last frame is the bare background niri starts from.
+# The disk unlocking as an `xxd -a` dump in walldye's glyph-hexdump style; sprites.py renders
+# every line, and the data.script prelude above holds the listing's shape and bytes. Booting
+# reads down the LUKS2 header and its JSON; a passphrase prompt seeks to keyslot 0 and each
+# character selects one more byte of it; a wrong passphrase retracts the selection; the root
+# mount seeks into the data segment and decrypts the btrfs superblock until _BHRfS_M is selected.
+# While it waits for input a muted label names what it wants (touch, PIN, passphrase).
+# `plymouth update --status=handoff` fades it to the bare background niri starts from; shutdown
+# re-encrypts and runs back to the LUKS magic. Lengths are pixels, times seconds.
 
 Window.SetBackgroundTopColor(@bgR@, @bgG@, @bgB@);
 Window.SetBackgroundBottomColor(@bgR@, @bgG@, @bgB@);
 
-FRAMES = @frames@;
-TICKS_PER_FRAME = 2; # plymouth refreshes at 50 Hz
-FADE_STEP = 0.05;    # 20 ticks, 0.4 s
+FPS = 50;
+CW = 16;     # a glyph cell: Spleen 8x16 at 2x, as sprites.py draws it
+CH = 32;
+HEX0 = 10;   # xxd's columns: offset, hex groups from HEX0, ASCII from ASC0
+ASC0 = 51;
+COLS = 67;
+HALF = 9;    # lines from the centre line to where the fade ends
+ROW_SLOTS = 21;
+MAX_SEL = KEY_LINES * 16;
+LABEL_ROW = 10;
+BEAT = 1.6;  # security-token rhythm: a double beat
+BEAT2 = 0.28;
+HANDOFF = 0.45; # plymouth-handoff-start deactivates 0.5 s after the handoff status
 
-for (i = 0; i < FRAMES; i++)
-  frame[i] = Image("frame-" + i + ".png");
+pair_count = 0;
 
-donut.sprite = Sprite(frame[0]);
-donut.opacity = 0;
-donut.target = 1;
-tick = 0;
+# Assignment writes an existing global of the same name, so setup keeps its loop variables local.
+fun setup()
+{
+  digits = "0123456789abcdef";
+  for (i = 0; i < 16; i++)
+    global.hexval[digits.SubString(i, i + 1)] = i;
+  for (i = 0; i < ROW_SLOTS; i++) {
+    global.slot_d[i] = Sprite();
+    global.slot_l[i] = Sprite();
+    global.slot_line[i] = -1;
+  }
+  for (i = 0; i < SEG_ROWS; i++) {
+    global.seg_full[i] = Sprite();
+    global.seg_full_name[i] = "";
+    global.seg_off[i] = Sprite();
+    global.noise_spr[i] = Sprite();
+    pair_new("sp" + i);
+    pair_new("sf" + i);
+    pair_new("sc" + i);
+  }
+  for (i = 0; i < KEY_LINES; i++) {
+    pair_new("s" + i);
+    pair_new("m" + i);
+    pair_new("w" + i);
+  }
+  pair_new("fl");
+  pair_new("hd");
+  pair_new("lk");
+  pair_new("mg");
+  for (i = 0; i < 3; i++)
+    global.kn[i] = Sprite();
+}
 
-prompt.sprite = Sprite();
-prompt.sprite.SetOpacity(0);
+fun pair_new(name)
+{
+  global.pair_h[name] = Sprite();
+  global.pair_a[name] = Sprite();
+  global.pair_key[name] = "";
+  global.pair_names[pair_count] = name;
+  global.pair_count = pair_count + 1;
+}
+
+setup();
+cur_h = Sprite(Image("cur-h.png"));
+cur_a = Sprite(Image("cur-a.png"));
+seek_off = Sprite();
+seek_off_name = "";
 message.sprite = Sprite();
+label_spr = Sprite();
+label_op = 0;
+label_kind = "passphrase";
 
-fun text(str, r, g, b)
+tick = 0;
+pos = 0;        # the listing line at the centre, fractional while scrolling
+target = 0;
+head = 0;       # the boot cursor's byte on the target line
+sel_n = 0;      # passphrase characters, one selected keyslot byte each
+wrong_len = 0;
+flash_at = -1;
+fade_at = -1;
+interacted = 0;
+mode = Plymouth.GetMode();
+if (mode == "shutdown" || mode == "reboot") state = "down"; else state = "boot";
+state_at = 0;
+
+fun clamp01(v) { if (v < 0) return 0; if (v > 1) return 1; return v; }
+fun smooth(e0, e1, x) { u = clamp01((x - e0) / (e1 - e0)); return u * u * (3 - 2 * u); }
+fun floor(x) { i = Math.Int(x); if (x < i) return i - 1; return i; }
+fun ceil(x) { return -floor(-x); }
+fun round(x) { return floor(x + 0.5); }
+fun wrap(v, period) { r = v - floor(v / period) * period; return r; }
+# A fast rise, then a decay shaped like exp(-6 t); the script has no Exp.
+fun bump(p) { if (p < 0) return 0; d = 1 - clamp01(p / 0.7); return clamp01(p / 0.05) * d * d * d; }
+fun heart(t) { if (t < 0) return 0; p = wrap(t, BEAT); return bump(p) + 0.65 * bump(p - BEAT2); }
+fun hc(k) { h = Math.Int(k / 2); return HEX0 + h * 5 + (k - h * 2) * 2; }
+fun digit_code(v) { if (v < 10) return 48 + v; return 87 + v; }
+# walldye's selection glow: 1, 0.6, 0.25 over the lines nearest the focus.
+fun lit_at(d)
 {
-  return Image.Text(str, r, g, b, 1, "@font@");
+  if (d < 1) return 1 - 0.4 * d;
+  if (d < 2) return 0.6 - 0.35 * (d - 1);
+  if (d < 3) return 0.25 - 0.25 * (d - 2);
+  return 0;
+}
+fun edge_alpha(d)
+{
+  e = 1 - d / HALF;
+  if (e <= 0.03) return 0;
+  return 0.12 + 0.88 * smooth(0.03, 0.95, e);
 }
 
-fun layout()
+# Images load on first use: most of the listing only shows while scrolling past.
+fun img(name)
 {
-  cx = Window.GetX() + Window.GetWidth() / 2;
-  cy = Window.GetY() + Window.GetHeight() / 2;
-  donut.sprite.SetPosition(cx - frame[0].GetWidth() / 2, cy - frame[0].GetHeight() / 2, 1);
-  if (prompt.image)
-    prompt.sprite.SetPosition(cx - prompt.image.GetWidth() / 2, cy + frame[0].GetHeight() / 2, 2);
-  if (message.image)
-    message.sprite.SetPosition(cx - message.image.GetWidth() / 2, Window.GetY() + Window.GetHeight() * 0.9, 2);
-  laid_out_width = Window.GetWidth();
-  laid_out_height = Window.GetHeight();
+  if (!images[name]) global.images[name] = Image(name + ".png");
+  return images[name];
 }
 
-layout();
+fun go(next)
+{
+  global.state = next;
+  global.state_at = tick / FPS;
+}
+
+fun centre()
+{
+  global.cx = Math.Int(Window.GetX() + Window.GetWidth() / 2);
+  global.cy = Math.Int(Window.GetY() + Window.GetHeight() / 2);
+}
+
+# Bytes [k0, k1) of a full-row image, as two crops: the hex groups and the ASCII gutter.
+fun pair_show(name, image_name, k0, k1, x0, y, z, a)
+{
+  if (k1 <= k0 || a <= 0.004) return;
+  hx = hc(k0) * CW;
+  ax = (ASC0 + k0) * CW;
+  tag = image_name + "/" + k0 + "/" + k1;
+  if (pair_key[name] != tag) {
+    im = img(image_name);
+    pair_h[name].SetImage(im.Crop(hx, 0, (hc(k1 - 1) + 2) * CW - hx, CH));
+    pair_a[name].SetImage(im.Crop(ax, 0, (k1 - k0) * CW, CH));
+    global.pair_key[name] = tag;
+  }
+  pair_h[name].SetPosition(x0 + hx, y, z);
+  pair_h[name].SetOpacity(a);
+  pair_a[name].SetPosition(x0 + ax, y, z);
+  pair_a[name].SetOpacity(a);
+  global.pair_seen[name] = tick;
+}
+
+fun knock(j, code, x, y)
+{
+  kn[j].SetImage(img("g-" + code));
+  kn[j].SetPosition(x, y, 6);
+  kn[j].SetOpacity(1);
+}
+
+# The cursor block on byte k; the byte under it is knocked out to the background when solid.
+fun cursor_show(hexstr, k, x0, y, a)
+{
+  if (k < 0 || k >= 16 || a <= 0.004) return;
+  cur_h.SetPosition(x0 + hc(k) * CW, y, 5);
+  cur_h.SetOpacity(a);
+  cur_a.SetPosition(x0 + (ASC0 + k) * CW, y, 5);
+  cur_a.SetOpacity(a);
+  global.cur_seen = tick;
+  if (!hexstr || a <= 0.5) return;
+  hi = hexval[hexstr.SubString(2 * k, 2 * k + 1)];
+  lo = hexval[hexstr.SubString(2 * k + 1, 2 * k + 2)];
+  b = hi * 16 + lo;
+  c = 46;
+  if (b >= 32 && b < 127) c = b;
+  knock(0, digit_code(hi), x0 + hc(k) * CW, y);
+  knock(1, digit_code(lo), x0 + (hc(k) + 1) * CW, y);
+  knock(2, c, x0 + (ASC0 + k) * CW, y);
+  global.knock_seen = tick;
+}
+
+fun show_line(li, x0, y, a, lit)
+{
+  s = li - Math.Int(li / ROW_SLOTS) * ROW_SLOTS;
+  if (slot_line[s] != li) {
+    slot_d[s].SetImage(img("l-" + li + "-d"));
+    global.slot_line[s] = li;
+    global.slot_lit[s] = 0;
+  }
+  slot_d[s].SetPosition(x0, y, 1);
+  slot_d[s].SetOpacity(a);
+  global.slot_seen[s] = tick;
+  if (lit > 0) {
+    if (!slot_lit[s]) {
+      slot_l[s].SetImage(img("l-" + li + "-l"));
+      global.slot_lit[s] = 1;
+    }
+    slot_l[s].SetPosition(x0, y, 2);
+    slot_l[s].SetOpacity(a * lit);
+    global.slot_lseen[s] = tick;
+  }
+}
+
+fun sel_len(st)
+{
+  if (state == "wrong") return round(wrong_len * (1 - smooth(0.25, 0.7, st)));
+  return Math.Min(sel_n, MAX_SEL);
+}
+
+fun list_alpha(st)
+{
+  if (state == "accept") return 1 - smooth(0.25, 0.45, st);
+  if (state == "down") return smooth(1.3, 1.5, st);
+  return 1;
+}
+
+fun seg_alpha(st)
+{
+  if (state == "accept") return smooth(0.35, 0.5, st);
+  if (state == "down") return smooth(0, 0.3, st) * (1 - smooth(1.3, 1.45, st));
+  return 0;
+}
+
+# How far the view has sought from the keyslot to the superblock, 0 to 1.
+fun seek(st)
+{
+  if (state == "accept") return smooth(0.35, 1.0, st);
+  if (state == "down") return 1 - smooth(1.05, 1.4, st);
+  return 0;
+}
+
+fun draw_list(st, x0, y0, A)
+{
+  n = sel_len(st);
+  input = state == "prompt" || state == "verify" || state == "wrong" || state == "accept";
+  first = Math.Max(0, floor(pos - HALF));
+  last = Math.Min(DUMP_LINES - 1, ceil(pos + HALF));
+  for (li = first; li <= last; li++) {
+    d = Math.Abs(li - pos);
+    a = edge_alpha(d) * A;
+    if (state == "down") a = a * smooth(0, 0.2, 1 - d / HALF - smooth(2.2, 2.8, st) * 1.05); # edges first
+    if (a > 0.004) {
+      y = Math.Int(y0 + (li - pos) * CH);
+      show_line(li, x0, y, a, lit_at(d));
+      if (state == "boot" && li == target && !dump_star[li]) {
+        h = Math.Int(head);
+        pair_show("hd", "l-" + li + "-r", 0, h, x0, y, 3, a);
+        cursor_show(dump_hex[li], h, x0, y, a);
+      }
+      off = (li - KEY_LINE) * 16;
+      if (input && off >= 0 && off < MAX_SEL)
+        draw_selection(st, li - KEY_LINE, n, x0, y, a);
+      if (state == "key" && li == KEY_LINE)
+        cursor_show(dump_hex[li], 0, x0, y, a * (0.35 + 0.65 * clamp01(heart(st - 0.6))));
+      if (state == "down" && li == 0) { # shutdown ends on the LUKS magic
+        k = round(6 * smooth(1.6, 1.9, st));
+        pair_show("lk", "luks", 0, k, x0, y, 3, a);
+        if (st > 1.6) cursor_show(dump_hex[0], k, x0, y, a * (1 - smooth(2.75, 3.05, st)));
+      }
+    }
+  }
+}
+
+# Keyslot line j's share of the n selected bytes.
+fun draw_selection(st, j, n, x0, y, a)
+{
+  off = j * 16;
+  k1 = Math.Max(0, Math.Min(16, n - off));
+  sel_a = 1;
+  m = 0;
+  ink = "s";
+  if (state == "verify") sel_a = 0.75 + 0.25 * Math.Sin(st * 9);
+  if (state == "wrong") {
+    m = smooth(0, 0.2, st);
+    sel_a = 1 - 0.6 * smooth(0, 0.25, st);
+  }
+  if (state == "accept") ink = "h";
+  pair_show("s" + j, "k-" + j + "-" + ink, 0, k1, x0, y, 3, a * sel_a * (1 - m));
+  pair_show("m" + j, "k-" + j + "-m", 0, k1, x0, y, 3, a * sel_a * m);
+  if (state == "verify") { # a highlight runs along the selection while the key derivation runs
+    sw = wrap(st * 48, n + 10) - 3;
+    g0 = Math.Max(Math.Max(floor(sw - 1.5) + 1, off), 0);
+    g1 = Math.Min(Math.Min(ceil(sw + 1.5), off + 16), n);
+    pair_show("w" + j, "k-" + j + "-h", g0 - off, g1 - off, x0, y, 4, a);
+  }
+  if (state == "prompt") {
+    age = tick / FPS - flash_at;
+    if (n > off && n <= off + 16 && age < 0.5)
+      pair_show("fl", "k-" + j + "-f", n - 1 - off, n - off, x0, y, 4, a * (1 - age / 0.5));
+  }
+  if ((state == "prompt" || state == "wrong") && n >= off && n < off + 16)
+    cursor_show(dump_hex[KEY_LINE + j], n - off, x0, y, a);
+}
+
+# How many bytes of segment row r a wave has passed when it has reached x (0 to 1) of the view.
+fun wave_count(x, r)
+{
+  return Math.Max(0, Math.Min(16, ceil(2 * (x * SEG_ROWS * 16 - r * 16))));
+}
+
+fun seg_row(r, st, x0, y, a)
+{
+  if (state == "accept") {
+    pa = wave_count((st - 1.08) / 0.6, r);
+    pf = wave_count((st - 1.0) / 0.6, r);
+  } else {
+    pa = wave_count((1.05 - st) / 0.55, r);
+    pf = wave_count((1.13 - st) / 0.55, r);
+  }
+  if (pa >= 16 || pf <= 0) {
+    if (pa >= 16) name = "p-" + r; else name = "c-" + r;
+    if (seg_full_name[r] != name) {
+      seg_full[r].SetImage(img(name));
+      global.seg_full_name[r] = name;
+    }
+    seg_full[r].SetPosition(x0, y, 1);
+    seg_full[r].SetOpacity(a);
+    global.seg_full_seen[r] = tick;
+    return;
+  }
+  # Mid-wave: the offsets, then plaintext, a scrambled front and ciphertext.
+  if (!seg_off_set[r]) {
+    seg_off[r].SetImage(img("c-" + r).Crop(0, 0, 9 * CW, CH));
+    global.seg_off_set[r] = 1;
+  }
+  seg_off[r].SetPosition(x0, y, 1);
+  seg_off[r].SetOpacity(a);
+  global.seg_off_seen[r] = tick;
+  pair_show("sp" + r, "p-" + r, 0, pa, x0, y, 1, a);
+  pair_show("sf" + r, "f-" + wrap(tick + r, FRONT), pa, pf, x0, y, 1, a);
+  pair_show("sc" + r, "c-" + r, pf, 16, x0, y, 1, a);
+}
+
+fun draw_seg(st, x0, y0, A)
+{
+  sk = seek(st);
+  if (sk < 1) { # seeking: noise lines under a stepped offset column
+    si = Math.Min(SEEK_STEPS - 1, Math.Int(sk * SEEK_STEPS));
+    if (seek_off_name != si) {
+      seek_off.SetImage(img("o-" + si));
+      global.seek_off_name = si;
+    }
+    seek_off.SetPosition(x0, y0 - MAGIC_ROW * CH, 1);
+    seek_off.SetOpacity(A);
+    global.seek_off_seen = tick;
+    for (r = 0; r < SEG_ROWS; r++) {
+      noise_spr[r].SetImage(img("n-" + wrap(tick * 5 + r, NOISE))); # NOISE > SEG_ROWS: no repeats
+      noise_spr[r].SetPosition(x0, y0 + (r - MAGIC_ROW) * CH, 1);
+      noise_spr[r].SetOpacity(edge_alpha(Math.Abs(r - MAGIC_ROW)) * A * 0.55);
+      global.noise_seen[r] = tick;
+    }
+    return;
+  }
+  for (r = 0; r < SEG_ROWS; r++)
+    seg_row(r, st, x0, y0 + (r - MAGIC_ROW) * CH, edge_alpha(Math.Abs(r - MAGIC_ROW)) * A);
+  # The selection settles on the magic after decrypting and leaves before re-encrypting.
+  k = 0;
+  if (state == "accept") k = round(8 * smooth(1.65, 1.9, st));
+  if (state == "down") k = round(8 * (1 - smooth(0.3, 0.6, st)));
+  pair_show("mg", "magic", 0, k, x0, y0, 3, A);
+  if (state == "accept" && st > 1.65) cursor_show(MAGIC_HEX, k, x0, y0, A);
+  if (state == "down" && st < 1.05) {
+    if (st < 0.7) cursor_show(MAGIC_HEX, k, x0, y0, A); else cursor_show(0, k, x0, y0, A);
+  }
+}
+
+fun hide_unused()
+{
+  for (i = 0; i < ROW_SLOTS; i++) {
+    if (slot_seen[i] != tick) slot_d[i].SetOpacity(0);
+    if (slot_lseen[i] != tick) slot_l[i].SetOpacity(0);
+  }
+  for (i = 0; i < SEG_ROWS; i++) {
+    if (seg_full_seen[i] != tick) seg_full[i].SetOpacity(0);
+    if (seg_off_seen[i] != tick) seg_off[i].SetOpacity(0);
+    if (noise_seen[i] != tick) noise_spr[i].SetOpacity(0);
+  }
+  for (i = 0; i < pair_count; i++) {
+    name = pair_names[i];
+    if (pair_seen[name] != tick) {
+      pair_h[name].SetOpacity(0);
+      pair_a[name].SetOpacity(0);
+    }
+  }
+  if (seek_off_seen != tick) seek_off.SetOpacity(0);
+  if (cur_seen != tick) {
+    cur_h.SetOpacity(0);
+    cur_a.SetOpacity(0);
+  }
+  if (knock_seen != tick)
+    for (i = 0; i < 3; i++) kn[i].SetOpacity(0);
+}
+
+fun step(st)
+{
+  if (state == "boot") { # a reading cursor: 16 bytes in ~0.22 s, a squeezed "*" line at once
+    if (dump_star[target]) global.head = head + 160 / FPS; else global.head = head + 72 / FPS;
+    if (head >= 16) {
+      global.head = 0;
+      if (target < KEY_LINE - 1) global.target = target + 1;
+    }
+  }
+  if (state == "down" && st > 1.3) {
+    global.pos = 0;
+    global.target = 0;
+  }
+  rate = 6;
+  if (state == "boot") rate = 14;
+  global.pos = pos + (target - pos) * Math.Min(1, rate / FPS);
+  if (state == "wrong" && st > 0.8) {
+    global.sel_n = 0;
+    go("prompt");
+  }
+}
 
 fun refresh()
 {
-  # Displays can appear after the first frame; re-centre when the canvas changes.
-  if (Window.GetWidth() != laid_out_width || Window.GetHeight() != laid_out_height)
-    layout();
+  centre();
+  global.tick = tick + 1;
+  t = tick / FPS;
+  st = t - state_at;
+  x0 = Math.Int(cx - COLS * CW / 2);
+  y0 = Math.Int(cy - CH / 2); # the top of the centre line
+  g = smooth(0, 0.4, t);
+  if (fade_at >= 0) g = g * (1 - smooth(0, 1, (t - fade_at) / HANDOFF));
+  step(st);
+  st = t - state_at;
+  la = list_alpha(st) * g;
+  sa = seg_alpha(st) * g;
+  if (la > 0.004) draw_list(st, x0, y0, la);
+  if (sa > 0.004) draw_seg(st, x0, y0, sa);
 
-  tick++;
-  donut.sprite.SetImage(frame[Math.Int(tick / TICKS_PER_FRAME) % FRAMES]);
-  if (donut.opacity < donut.target)
-    donut.opacity = Math.Min(donut.opacity + FADE_STEP, donut.target);
-  if (donut.opacity > donut.target)
-    donut.opacity = Math.Max(donut.opacity - FADE_STEP, donut.target);
-  donut.sprite.SetOpacity(donut.opacity);
+  # The label fades in while input is wanted, in 0.25 s.
+  if (state == "prompt" || state == "wrong" || state == "verify" || state == "key")
+    global.label_op = Math.Min(label_op + 0.08, 1);
+  else
+    global.label_op = Math.Max(label_op - 0.08, 0);
+  label_spr.SetImage(img("label-" + label_kind));
+  label_spr.SetPosition(x0 + HEX0 * CW, y0 + LABEL_ROW * CH, 7);
+  label_spr.SetOpacity(label_op * g);
+
+  if (message.image)
+    message.sprite.SetPosition(cx - message.image.GetWidth() / 2, Window.GetY() + Window.GetHeight() * 0.9, 7);
+  hide_unused();
 }
 
 Plymouth.SetRefreshFunction(refresh);
 
-fun display_password(prompt_text, bullets)
+fun display_password(prompt, bullets)
 {
-  line = "> ";
-  for (i = 0; i < bullets; i++)
-    line += "*";
-  prompt.image = text(line + "_", @fgR@, @fgG@, @fgB@);
-  prompt.sprite.SetImage(prompt.image);
-  prompt.sprite.SetOpacity(1);
-  layout();
+  global.interacted = 1;
+  # systemd asks for "passphrase or recovery key" when the disk has both; name the passphrase.
+  global.label_kind = "passphrase";
+  if (prompt) {
+    if (contains(prompt, "PIN")) global.label_kind = "pin";
+    else if (!contains(prompt, "passphrase") && contains(prompt, "recovery key")) global.label_kind = "recovery";
+  }
+  if (state == "verify" || state == "accept") {
+    # A new prompt after an answered one: cryptsetup rejected the passphrase.
+    global.wrong_len = Math.Min(sel_n, MAX_SEL);
+    global.sel_n = 0;
+    go("wrong");
+    return;
+  }
+  if (state == "wrong" && bullets == 0) return;
+  if (state != "prompt") {
+    go("prompt");
+    global.target = KEY_LINE;
+  }
+  if (bullets > sel_n) global.flash_at = tick / FPS;
+  global.sel_n = bullets;
 }
 
 fun display_normal()
 {
-  prompt.sprite.SetOpacity(0);
+  if (state == "prompt") go("verify");
 }
 
-fun display_message(str)
+fun contains(haystack, needle)
 {
-  message.image = text(str, @mutedR@, @mutedG@, @mutedB@);
+  for (i = 0; i + needle.Length() <= haystack.Length(); i++)
+    if (haystack.SubString(i, i + needle.Length()) == needle) return 1;
+  return 0;
+}
+
+fun token_done()
+{
+  if (state == "key") go("verify");
+}
+
+fun display_message(text)
+{
+  if (contains(text, "security token")) {
+    global.interacted = 1;
+    global.label_kind = "touch";
+    if (state == "boot") {
+      go("key");
+      global.target = KEY_LINE;
+    }
+    return;
+  }
+  if (text == "") {
+    token_done();
+    message.sprite.SetOpacity(0);
+    return;
+  }
+  message.image = Image.Text(text, @mutedR@, @mutedG@, @mutedB@, 1, "@font@");
   message.sprite.SetImage(message.image);
   message.sprite.SetOpacity(1);
-  layout();
 }
 
-fun hide_message(str)
+fun hide_message(text)
 {
+  token_done();
   message.sprite.SetOpacity(0);
+}
+
+fun unlocked()
+{
+  if (!interacted) return;
+  if (state == "verify" || state == "key" || state == "prompt") go("accept");
 }
 
 fun update_status(status)
 {
-  if (status == "handoff")
-    donut.target = 0;
+  if (status == "handoff") {
+    if (fade_at < 0) global.fade_at = tick / FPS;
+  } else if (status == "sysroot.mount") unlocked();
 }
 
 Plymouth.SetDisplayPasswordFunction(display_password);
@@ -98,3 +538,4 @@ Plymouth.SetDisplayNormalFunction(display_normal);
 Plymouth.SetDisplayMessageFunction(display_message);
 Plymouth.SetHideMessageFunction(hide_message);
 Plymouth.SetUpdateStatusFunction(update_status);
+Plymouth.SetRootMountedFunction(unlocked);

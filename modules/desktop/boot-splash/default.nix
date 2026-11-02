@@ -1,7 +1,7 @@
 # Every frame between the bootloader and the desktop is the Flexoki background: Limine in the
-# palette, Plymouth's spinning glyph donut, and a GDM-style handoff so no text console shows
-# between Plymouth and niri. Research and timings: ~/.local/share/agents/smooth-boot/.
-{inputs, ...}: {
+# palette, Plymouth's hex dump of the disk unlocking (fireproof.script), and a GDM-style handoff so no text console
+# shows between Plymouth and niri.
+{
   flake.modules.nixos.boot-splash = {
     config,
     lib,
@@ -21,35 +21,31 @@
       "${name}B" = builtins.elemAt ch 2;
     };
 
-    frames = 72; # 5° per frame, so both angles close a full turn
-    donutFrames =
-      pkgs.runCommand "boot-donut-frames" {
-        nativeBuildInputs = [inputs.walldye.packages.${pkgs.stdenv.hostPlatform.system}.default];
+    # Every line of the dump as an image, plus data.script, the listing the script walks.
+    sprites =
+      pkgs.runCommand "boot-hexdump-sprites" {
+        nativeBuildInputs = [(pkgs.python3.withPackages (p: [p.pillow]))];
+        env = {
+          inherit (c) bg bgAlt ui uiAlt muted fgAlt fg accent;
+          # walldye's ACCENT_7 and ACCENT_HI: glyph-hexdump's selection band and cursor.
+          band = "2E1C19";
+          accentHi = "E08A6E";
+        };
       } ''
-        mkdir -p root/wallpapers $out
-        cp -r ${./donut} root/wallpapers/boot-donut
-        export WALLDYE_ROOT=$PWD/root
-        seq 0 ${toString (frames - 1)} | xargs -P "$NIX_BUILD_CORES" -I{} sh -c '
-          walldye render boot-donut --theme fireproof --aspect 640x640 --variant default --fit \
-            --set a=$((-52 + {} * 5)) --set b=$((-20 + {} * 5)) --width 640 -o "$0/frame-{}.png"
-        ' "$out"
+        python3 ${./sprites.py} $out ${pkgs.spleen}/share/fonts/misc/spleen-8x16.bdf
       '';
 
     script = pkgs.replaceVars ./fireproof.script (
-      {
-        frames = toString frames;
-        font = "${font.monoFamily} 14";
-      }
+      {font = "${font.monoFamily} 14";}
       // rgb "bg" c.bg
-      // rgb "fg" c.fg
       // rgb "muted" c.muted
     );
 
     theme = pkgs.runCommand "plymouth-theme-fireproof" {} ''
       dir=$out/share/plymouth/themes/fireproof
       mkdir -p $dir
-      cp ${donutFrames}/*.png $dir/
-      cp ${script} $dir/fireproof.script
+      cp ${sprites}/*.png $dir/
+      cat ${sprites}/data.script ${script} > $dir/fireproof.script
       cat > $dir/fireproof.plymouth <<EOF
       [Plymouth Theme]
       Name=fireproof
@@ -69,7 +65,7 @@
       else "video=${m.name}:${toString m.resolution.width}x${toString m.resolution.height}@${toString (builtins.floor (m.refreshRateNiri + 0.5))}";
     modedMonitors = lib.filter (m: m.name != null && (!m.enable || (m.resolution.width != null && m.refreshRateNiri != null))) config.fireproof.monitors;
 
-    # Fades the donut out, then lets the greeter's compositor take DRM master while Plymouth's
+    # Fades the dump out, then lets the greeter's compositor take DRM master while Plymouth's
     # last frame stays on screen.
     handoffStart = pkgs.writeShellScript "plymouth-handoff-start" ''
       ${plymouth} --ping || exit 0
