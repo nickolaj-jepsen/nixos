@@ -266,7 +266,7 @@ true
 
 
 
-Whether to enable the themed boot chain: a styled Limine, the Plymouth donut and a handoff into niri with no text console in between\.
+Whether to enable the themed boot chain: a styled Limine, the Plymouth hex dump and a handoff into niri with no text console in between\.
 
 
 
