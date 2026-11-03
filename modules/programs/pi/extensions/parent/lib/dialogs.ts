@@ -1,7 +1,8 @@
 /**
- * The permission dialogs open on the agent's behalf, each as a one-line label of
- * the call it asks about: what the registry entry and the hub say the session
- * waits on. A finished run closes whatever is left.
+ * The dialogs open on the agent's behalf, each as a one-line label of what it
+ * asks: what the registry entry and the hub say the session waits on. Permission
+ * prompts report themselves, and a tool's own dialog goes through `during`. A
+ * finished run closes whatever is left.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
@@ -18,6 +19,7 @@ const LABEL_MAX = 200;
 export const createDialogs = (pi: ExtensionAPI) => {
   // Request id → label, in the order they opened; the first is the one shown.
   const open = new Map<string, string>();
+  let ownDialogs = 0;
   const listeners = new Set<() => void>();
   let offs: (() => void)[] = [];
 
@@ -63,6 +65,17 @@ export const createDialogs = (pi: ExtensionAPI) => {
   return {
     /** The label of the dialog the session waits on, or undefined when none is open. */
     current: (): string | undefined => open.values().next().value,
+    /** Counts `label` as a dialog the session waits on until `run` settles. */
+    during: async <T>(label: string, run: () => Promise<T>): Promise<T> => {
+      const id = `own-${ownDialogs++}`;
+      open.set(id, clip(oneLine(label), LABEL_MAX));
+      notify();
+      try {
+        return await run();
+      } finally {
+        if (open.delete(id)) notify();
+      }
+    },
     /** Calls `listener` whenever a dialog opens or closes; returns the unsubscribe. */
     onChange: (listener: () => void) => {
       listeners.add(listener);

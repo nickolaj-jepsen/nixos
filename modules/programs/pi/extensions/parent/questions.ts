@@ -12,6 +12,7 @@
 import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { QuestionsDialog } from "./questions/dialog.ts";
+import type { Services } from "./services.ts";
 import {
   HEADER_MAX,
   LABEL_MAX,
@@ -142,7 +143,7 @@ async function askMultiSelect(
   }
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ExtensionAPI, { dialogs }: Services) {
   pi.registerTool({
     name: TOOL_NAME,
     label: "Ask",
@@ -156,7 +157,8 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const invalid = validateQuestions(params.questions);
       if (invalid) throw new Error(`ask_user_question: ${invalid}`);
-      const result = await ask(ctx, params.questions, signal);
+      const label = `question: ${params.questions[0]?.question ?? ""}`;
+      const result = await dialogs.during(label, () => ask(ctx, params.questions, signal));
       return {
         content: [{ type: "text" as const, text: formatResult(result) }],
         details: result,
