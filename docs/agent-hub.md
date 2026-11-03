@@ -196,6 +196,29 @@ Only a turn whose closing words hold a `?` or request words ("tell me when",
   lands late is dropped. `agent_hub/model.py` holds these rules,
   `agent_hub/readings.py` the calls.
 
+### Measuring it
+
+`agent-hub label` shows you past turn endings, with the hub's verdict hidden, and asks
+whether the bar should have called you and whether the model's `did` line is accurate.
+`agent-hub eval` replays the current gate over your answers. The targets are 95% recall
+and 80% precision: a missed ask leaves an agent idle until you happen to look, while a
+false alarm costs a glance.
+
+- The sample is 35 turns the regex flagged and 15 it passed over, from every agent and
+  profile, at most three a session. Only the unflagged ones can show an ask the regex
+  missed, since the model can't raise a verdict. Fifty turns give a rough figure, and
+  `eval` prints the interval to say how rough.
+- `~/.local/state/agent-hub/labels.jsonl` holds ids and answers, never transcript text.
+  You can stop at any key and carry on later.
+- Model calls run as the session's own profile, about one per turn. `eval --words-only`
+  makes none.
+- A replay knows less than the live gate did: not the jobs still out, nor the repo and
+  branch.
+- `eval` names the prompt's version, so compare runs of it before and after a change to
+  the prompt or the rule. It also says how often an "unverified" marker (edits with no
+  check after them) would fire, which no row shows until that proves quiet on healthy
+  turns.
+
 ## States
 
 In the order the popout lists them. The first four want you.

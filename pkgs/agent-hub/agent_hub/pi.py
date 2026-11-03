@@ -3,7 +3,7 @@
 import os
 import re
 
-from .claude import PROMPT_CHARS, RECENT_PROMPTS, assemble, command_line, shown_path, touched
+from .claude import CHECK, PROMPT_CHARS, RECENT_PROMPTS, assemble, command_line, shown_path, touched
 from .common import folded, json_lines
 
 SHELL_TOOLS = ("bash", "bg_run")
@@ -81,7 +81,8 @@ def turns(entries, leaf=None, cwd=None):
 
     def begin(peer):
         nonlocal turn
-        turn = {"prompts": list(prompts), "files": [], "commands": [], "failed": {}, "said": "", "id": None, "at": None, "peer": peer}
+        turn = {"prompts": list(prompts), "files": [], "commands": [], "failed": {}, "said": "", "id": None, "at": None, "peer": peer,
+                "unchecked": None}
         found.append(turn)
 
     for entry in branch(entries, leaf):
@@ -113,10 +114,13 @@ def turns(entries, leaf=None, cwd=None):
                 target = args.get("path") or args.get("file_path")
                 if name in WRITE_TOOLS and isinstance(target, str):
                     turn["files"] = touched(turn["files"], shown(target, cwd))
+                    turn["unchecked"] = True
                 elif name in SHELL_TOOLS and isinstance(args.get("command"), str):
                     turn["commands"].append((block.get("id"), command_line(args["command"])))
+                    if turn["unchecked"] and CHECK.search(args["command"]):
+                        turn["unchecked"] = False
     return [{**assemble(picked_requests(t["prompts"]), t["files"], t["commands"], t["failed"], t["said"]),
-             "id": t["id"], "at": t["at"], "peer": t["peer"], "prompts": t["prompts"]} for t in found], prompts
+             "id": t["id"], "at": t["at"], "peer": t["peer"], "unchecked": t["unchecked"]} for t in found], prompts
 
 
 def digest(path, leaf=None, cwd=None, prompt=None):

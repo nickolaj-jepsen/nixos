@@ -248,6 +248,21 @@ def cmd_demo(_args):
         pass
 
 
+def cmd_label(_args):
+    from .bench import label
+
+    try:
+        label(load_config())
+    except KeyboardInterrupt:
+        print()
+
+
+def cmd_eval(args):
+    from .bench import evaluate
+
+    evaluate(load_config(), args.words_only)
+
+
 def cmd_daemon(_args):
     # Imported here: the hook and `status` run on every prompt and status-line refresh.
     import asyncio
@@ -270,6 +285,10 @@ def main(argv=None):
     log.add_argument("--since", default="1d", help="1d, 3h, 2w, today, yesterday or a date (default 1d)")
     log.add_argument("--json", action="store_true", help="print the log's own JSON lines")
     log.set_defaults(func=cmd_log)
+    commands.add_parser("label", help="say whether past turns should have called you, for `eval`").set_defaults(func=cmd_label)
+    evaluate = commands.add_parser("eval", help="replay the gate over your labels and print how it did")
+    evaluate.add_argument("--words-only", action="store_true", help="the regex alone, with no model calls")
+    evaluate.set_defaults(func=cmd_eval)
     find = commands.add_parser("find", help="find sessions by what they were called or did, with how to resume them")
     find.add_argument("words", nargs="+")
     find.set_defaults(func=cmd_find)

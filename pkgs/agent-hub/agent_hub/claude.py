@@ -1,6 +1,7 @@
 """Reading Claude Code: a turn's digest from its transcript, and what a tool call does."""
 
 import json
+import re
 from pathlib import Path
 
 from .common import folded, label_line, shown_block
@@ -12,6 +13,8 @@ MAX_FILES = 6
 MAX_COMMANDS = 5
 COMMAND_CHARS = 48
 EDITS = ("Edit", "MultiEdit", "Write", "NotebookEdit")
+# A command that checks work. Rough: `agent-hub eval` says how often it would mislead.
+CHECK = re.compile(r"\b(test|tests|pytest|unittest|just (build|check|eval|test)|nix (build|flake check)|cargo|npm|pnpm|tsc|ruff|mypy|lint|make)\b")
 # `claude -p` as a judge: no session file, no tools, no MCP, no hooks of its own.
 JUDGE_ARGS = [
     "-p", "--model", "haiku", "--no-session-persistence", "--strict-mcp-config", "--tools", "",
@@ -72,14 +75,15 @@ def edit_target(args):
 def turns(path, cwd=None):
     """Every turn of a Claude Code transcript (see `judge`), oldest first, or None when it
     can't be read. Each is a digest with `id` (its last entry), `at` (that entry's stamp,
-    a string) and `peer`, and `files` and `commands` are that turn's alone."""
+    a string), `peer` and `unchecked` (None without an edit, else whether no command checked
+    the work after the last one), and `files` and `commands` are that turn's alone."""
     found, requests = [], []
     turn = None
 
     def begin(peer):
         nonlocal turn
         turn = {"requests": requests[-RECENT_PROMPTS:], "files": [], "commands": [], "failed": {}, "text": [],
-                "id": None, "at": None, "peer": peer}
+                "id": None, "at": None, "peer": peer, "unchecked": None}
         found.append(turn)
 
     try:
@@ -114,8 +118,11 @@ def turns(path, cwd=None):
                         name, args = block.get("name"), block.get("input") or {}
                         if name in EDITS and edit_target(args):
                             turn["files"] = touched(turn["files"], shown_path(edit_target(args), cwd))
+                            turn["unchecked"] = True
                         elif name == "Bash" and args.get("command"):
                             turn["commands"].append((block.get("id"), command_line(args["command"])))
+                            if turn["unchecked"] and CHECK.search(str(args["command"])):
+                                turn["unchecked"] = False
                     elif kind == "text":
                         turn["text"].append(block.get("text") or "")
                 if entry.get("type") == "assistant":
@@ -123,7 +130,7 @@ def turns(path, cwd=None):
     except OSError:
         return None
     return [{**assemble(t["requests"], t["files"], t["commands"], t["failed"], "\n".join(t["text"]).strip()),
-             "id": t["id"], "at": t["at"], "peer": t["peer"]} for t in found]
+             "id": t["id"], "at": t["at"], "peer": t["peer"], "unchecked": t["unchecked"]} for t in found]
 
 
 def digest(path, cwd=None, prompt=None):
