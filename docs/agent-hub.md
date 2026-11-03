@@ -66,6 +66,9 @@ never approve something other than what the pane showed.
 - `Mod+B` opens the popout with the first row selected.
   - `Enter` opens its window, or resumes an ended one in a new terminal.
   - `a` and `d` allow or deny the prompt it holds.
+  - `r` copies a `needs reply`'s likely answer and opens its window. Nothing is sent:
+    you paste it, edit it and press Enter. A message through the peer socket would arrive
+    labelled as another session's request, and typing blind could land in the wrong prompt.
   - `x` dismisses a finished one, or hides an open prompt until the next prompt.
   - `u` brings back the last dismissal, until that session starts a new turn. The
     stack lives in the hub the bar talks to, in memory.

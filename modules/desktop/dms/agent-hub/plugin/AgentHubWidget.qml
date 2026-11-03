@@ -423,6 +423,17 @@ PluginComponent {
         closePopout();
     }
 
+    // Copies the likely reply and goes to the window. It never sends: you edit it and press Enter.
+    function useReply(session) {
+        if (session?.state !== "needs-reply" || !session.reply)
+            return;
+        hub.run(session.id, {
+            "kind": "copy",
+            "value": session.reply
+        });
+        focusSession(session);
+    }
+
     // Only while the pane has shown this prompt long enough to be read, and only all of it.
     function answer(allow) {
         if (!permission || !armed || (allow && !permission.complete))
@@ -1288,6 +1299,8 @@ PluginComponent {
                 }
                 if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                     root.focusSession(root.selected);
+                else if (event.key === Qt.Key_R)
+                    root.useReply(root.selected);
                 else if (event.key === Qt.Key_X)
                     root.dismiss(root.selected);
                 else if (event.key === Qt.Key_W)
@@ -1800,6 +1813,12 @@ PluginComponent {
                             spacing: Theme.spacingS
 
                             PaneButton {
+                                visible: pane.session?.state === "needs-reply" && !!pane.session?.reply
+                                label: "Copy reply"
+                                onClicked: root.useReply(pane.session)
+                            }
+
+                            PaneButton {
                                 visible: !!pane.session && root.wantsYou(pane.session)
                                 label: "Dismiss"
                                 onClicked: root.dismiss(pane.session)
@@ -1968,6 +1987,11 @@ PluginComponent {
                 KeyHint {
                     key: "d"
                     label: "deny"
+                }
+
+                KeyHint {
+                    key: "r"
+                    label: "reply"
                 }
 
                 KeyHint {
