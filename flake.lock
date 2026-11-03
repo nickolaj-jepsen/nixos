@@ -834,11 +834,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1793638663,
-        "narHash": "sha256-07azPHAabuk9he5OS6nyVsRyGnCin+RGSCMT2hPkJ5Q=",
+        "lastModified": 1793665425,
+        "narHash": "sha256-K5LETDmvh8a3qNRGr7SGmK2mtAzio3S2W6qLYZR96q0=",
         "owner": "nickolaj-jepsen",
         "repo": "pocketnix",
-        "rev": "13eecd05e01817df24f6d1b1756007c38f1daf7d",
+        "rev": "6e73512ad906838375e78ef62c2c4aaec8c391b2",
         "type": "github"
       },
       "original": {
