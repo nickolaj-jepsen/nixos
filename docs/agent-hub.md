@@ -329,7 +329,8 @@ daemon starts.
 
 - A switch doesn't reload the bar plugin: run `systemctl --user restart dms` to see
   a QML change.
-- `agent-hub demo` puts fake sessions in every state on the bar until Ctrl-C.
+- `agent-hub demo` puts fake sessions in every state on the bar until Ctrl-C, with
+  what the popout's pane shows of each. Its prompts can't be answered.
 - `journalctl --user -u agent-hub` shows the daemon's log; on the Mac it is
   `~/Library/Logs/agent-hub.log`. It has one line per state change: the session,
   its old and new state, what settled it (`words`, `model`, `error`) and how many

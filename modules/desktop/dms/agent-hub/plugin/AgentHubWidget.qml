@@ -84,12 +84,17 @@ PluginComponent {
     property string hoverTarget: ""
     property real pointerX: -1
     property real pointerY: -1
+    // Whether the pointer has been heard since the popout opened: the popout can open under a
+    // resting pointer, and hearing where that rests isn't the pointer moving.
+    property bool pointerHeard: false
 
     function hoverRow(id, point) {
-        if (point.x === pointerX && point.y === pointerY)
-            return;
+        const moved = pointerHeard && (point.x !== pointerX || point.y !== pointerY);
+        pointerHeard = true;
         pointerX = point.x;
         pointerY = point.y;
+        if (!moved)
+            return;
         hoverTarget = id;
         hoverTimer.restart();
     }
@@ -1121,6 +1126,8 @@ PluginComponent {
                     root.undoName = "";
                     root.noteText = "";
                     root.legendShown = !root.pillHovered;
+                    root.pointerHeard = false;
+                    hoverTimer.stop();
                     root.disarm();
                     list.contentY = 0;
                     pop.grab();

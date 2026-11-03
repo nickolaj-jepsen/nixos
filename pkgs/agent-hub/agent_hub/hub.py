@@ -31,6 +31,7 @@ UNDO_MAX = 50
 PROMPT_MAX = 500
 # How often a working session's last activity is looked at.
 ACTIVITY_S = 15
+DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history")
 # The command behind a folder menu's app, the first one found.
 APP_COMMANDS = {"code": ("code",), "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
 
@@ -335,13 +336,15 @@ class Hub:
         if not permission or permission["id"] != ask or (allow and not permission["complete"]):
             return
         decision = "allow" if allow else "deny"
-        if viewer:
-            self._log_verdict(row, self.sessions.get(sid), answered=decision)
         host, own = links.split_id(sid)
+        session = self.sessions.get(sid)
+        if host not in self.links and not (session and session.holds):
+            return
+        if viewer:
+            self._log_verdict(row, session, answered=decision)
         if host in self.links:
             self.links[host].send({"op": "answer", "session": own, "ask": ask, "allow": allow})
             return
-        session = self.sessions[sid]
         self._release(session, session.holds[0], decision)
         # Claude moves on as soon as it has the answer; its registry entry says so a moment later.
         if not session.holds:
@@ -929,6 +932,9 @@ def demo_row(sid, entry):
         session.turn = model.Turn(n=1, started=t, doing=entry.get("doing") or "")
     elif entry.get("turnState"):
         session.turn = model.Turn(n=1, started=t, ended=t, outcome={
-            "state": entry["turnState"], "ask": entry.get("ask") or "", "reply": "",
-            "summary": entry.get("summary") or "", "jobs": 0})
-    return session.row(now_ms())
+            "state": entry["turnState"], "ask": entry.get("ask") or "", "reply": entry.get("reply") or "",
+            "summary": entry.get("summary") or "", "jobs": 0, "said": entry.get("said") or ""})
+    row = session.row(now_ms())
+    # What only a real session could say, for looking at the popout's pane. `id` 0 answers nothing.
+    row.update({key: entry[key] for key in DEMO_DETAILS if key in entry})
+    return row

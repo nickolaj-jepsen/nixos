@@ -1073,6 +1073,17 @@ class PermissionTest(HubTest):
         hook.kill()
         self.bar.wait(has_session(self.sid, lambda s: "permission" not in s))
 
+    def test_a_demo_prompt_shows_but_answers_nothing(self):
+        demo = {"sessionId": "demo", "status": "waiting", "waitingFor": "Bash: ls", "name": "d", "statusUpdatedAt": 1,
+                "permission": {"id": 0, "tool": "Bash", "about": "", "kind": "command", "body": "ls", "complete": True}}
+        self.bar.send(op="demo", sessions=[demo])
+        self.bar.wait(has_session("demo", lambda s: "permission" in s))
+        self.bar.send(op="answer", session="demo", ask=0, allow=True)
+        hook, permission = self.asks()
+        self.bar.send(op="answer", session=self.sid, ask=permission["id"], allow=False)
+        self.assertEqual(json.loads(self.released(hook))["hookSpecificOutput"]["decision"]["behavior"], "deny")
+        self.assertNotIn("demo", self.hub.command("log", "--since", "1h").stdout)
+
     def test_a_hub_going_away_lets_the_hook_go(self):
         hook, _ = self.asks()
         self.hub.kill()
@@ -1401,7 +1412,9 @@ class LinkFailureTest(unittest.TestCase):
         ssh.chmod(0o755)
         hub = Hub(extra={"remotes": ["far"], "ssh": str(ssh), "sshConfig": "/dev/null"})
         self.addCleanup(hub.stop)
-        bar = hub.subscribe()
+        bar = hub.connect()
+        # The link may have failed by the first state, which then is the one to read.
+        bar.send(op="subscribe")
         return bar.wait(lambda m: m["type"] == "state" and m["links"][0]["status"] != "connecting")["links"][0]["status"]
 
     def test_each_failure_says_what_it_is(self):
