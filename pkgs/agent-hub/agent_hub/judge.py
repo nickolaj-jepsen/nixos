@@ -19,6 +19,7 @@ The model reads every turn and may demote such a candidate to done; it can't rai
 and without its word the candidate stands. `failed` comes only from the agent's own error.
 """
 
+import hashlib
 import re
 
 from .common import BLOCK_MAX, folded, shown_block
@@ -88,6 +89,8 @@ REQUEST = re.compile(
     re.I,
 )
 CLOSERS = ")]\"'”’*_"
+# Names the prompt and the rule a verdict came from, so a log line and an eval can be told apart.
+VERSION = hashlib.sha256("\n".join((SYSTEM, WAITS.pattern, REQUEST.pattern)).encode()).hexdigest()[:8]
 
 
 def render(digest, identity, settle):
@@ -252,4 +255,7 @@ def outcome(fields, guess, digest):
         # For the journal: what settled it and how much it read, never the words themselves.
         "source": "error" if digest.get("error") else "model" if word else "words",
         "chars": len(digest.get("said") or ""),
+        # For the work log: what the verdict was made of.
+        "candidate": bool(guess["ask"]),
+        "word": word or "",
     }

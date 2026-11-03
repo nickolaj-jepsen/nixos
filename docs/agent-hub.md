@@ -292,6 +292,13 @@ daemon starts.
   you may only not care. A prompt you answered in the popout shows as `allowed asking`
   or `denied asking`, on the host you answered from, and never says what it asked. All
   of these name the session and turn.
+- Each ending also records what its verdict was made of: whether the closing words
+  held an ask, the model's word, a hash of the prompt and rules, and the reply it
+  predicted.
+- Your next prompt adds a line of what can be derived from it, never its words: how it
+  reads (`answered`, `corrected`, `interrupted`, `moved-on`), its length, the delay, and
+  how close it came to the predicted reply. The delay is context, not a target: a slow
+  answer usually means you were busy elsewhere.
 - Each row carries its last three endings (`history`), which the popout shows
   under the selected session, ended ones included.
 - Both commands read the file directly, so they work without the daemon.
@@ -343,8 +350,9 @@ daemon starts.
   what the popout's pane shows of each. Its prompts can't be answered.
 - `journalctl --user -u agent-hub` shows the daemon's log; on the Mac it is
   `~/Library/Logs/agent-hub.log`. It has one line per state change: the session,
-  its old and new state, what settled it (`words`, `model`, `error`) and how many
-  characters it read. Never the words themselves, as homelab's journal ships to
+  its old and new state, what settled it (`words`, `model`, `error`, or `read` and
+  `interrupted` for a turn gone straight to idle) and how many characters it read.
+  Never the words themselves, as homelab's journal ships to
   Grafana Cloud; asks stay in the work log.
 - The protocol tests run in every `nix build .#agent-hub`, or with
   `python3 -m unittest discover -s tests` from `pkgs/agent-hub`.

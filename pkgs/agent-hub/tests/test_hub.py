@@ -15,7 +15,7 @@ import unittest
 import uuid
 from pathlib import Path
 
-from agent_hub import claude, links, menus, protocol
+from agent_hub import claude, judge, links, menus, protocol
 
 PACKAGE = Path(__file__).resolve().parent.parent
 TIMEOUT = 5
@@ -564,6 +564,25 @@ class TurnTest(HubTest):
         self.assertRegex(out[2], r"done +Kept the old fixture\.$")
         self.assertEqual(self.hub.command("find", "old", "FIXTURE").stdout.splitlines(), out)
         self.assertEqual(self.hub.command("find", "darwin").stdout, "")
+
+    def test_a_verdict_logs_what_it_was_made_of(self):
+        self.finish("state: blocked\nask: keep the fixture?\nreply: keep it\ndid: Asked.")
+        line = logged(self.hub.tmp / "log.jsonl")[-1]
+        self.assertEqual((line["candidate"], line["word"], line["reply"], line["turn"]), (True, "blocked", "keep it", 1))
+        self.assertEqual(line["prompt"], judge.VERSION)
+
+    def test_your_next_prompt_is_logged_as_what_it_was_never_its_words(self):
+        self.finish("state: blocked\nask: keep the fixture?\nreply: keep it\ndid: Asked.")
+        self.pi.start("keep it please")
+        log = self.hub.tmp / "log.jsonl"
+        eventually(lambda: "next" in logged(log)[-1])
+        line = logged(log)[-1]
+        self.assertEqual((line["next"], line["words"], line["turn"]), ("answered", 3, 1))
+        self.assertGreater(line["replyMatch"], 0.5)
+        self.assertGreaterEqual(line["delay"], 0)
+        self.assertNotIn("keep it please", log.read_text())
+        # It is no turn of its own, in the log's own telling.
+        self.assertEqual(self.hub.command("log", "--since", "1h").stdout.count("\n"), 2)
 
     def test_a_verdict_flagged_wrong_goes_to_the_work_log(self):
         self.finish("state: blocked\nask: keep the fixture?\ndid: Regenerated the fixture.")

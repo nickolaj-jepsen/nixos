@@ -1,13 +1,18 @@
 """The work log: one JSON line per turn that got an ending, across every session, kept in
 the state dir so `agent-hub log` and `find` read it without the daemon.
 
-A line: `{at, session, agent, cwd, configDir, label, state, did, ask}`, `at` in ms. A line
-with `wrong` is you flagging the verdict it names from the popout, one with `unopened` a
-`needs-reply` you dismissed without going to it, a weaker sign, and one with `answered` a
+A line: `{at, session, agent, cwd, configDir, label, state, did, ask}`, `at` in ms, with what
+the verdict was made of: `turn`, `candidate` (the closing words held an ask), `word` (the
+model's, empty without one), `prompt` (`judge.VERSION`) and `reply` (the answer it predicted).
+A line with `wrong` is you flagging the verdict it names from the popout, one with `unopened`
+a `needs-reply` you dismissed without going to it, a weaker sign, and one with `answered` a
 permission prompt you settled at the bar, never saying what it asked: none is a turn's ending.
 A line with `peer` is the ending of a turn another session's message woke it for.
+
+A line with `next` is what you did after `turn` (`next_prompt`), derived and never your words.
 """
 
+import difflib
 import json
 import re
 import time
@@ -17,6 +22,28 @@ from .common import json_lines, write_atomic
 
 KEEP_DAYS = 90
 DAY_MS = 86_400_000
+# How a prompt that pushes back opens. Narrow on purpose: a correction missed is only a `moved-on`.
+CORRECTION = re.compile(
+    r"^\W*(no\b|nope\b|wrong\b|that'?s not\b|not what\b|don'?t\b|stop\b|why did\b|you (didn'?t|forgot|missed)\b"
+    r"|it (still|doesn'?t)\b|still (not|broken|fails?)\b|didn'?t work\b)",
+    re.I,
+)
+
+
+def next_prompt(outcome, prompt):
+    """What your next prompt says of a turn that ended with `outcome` (None: it was cut short,
+    unread): how it reads, its length, and how close it came to the reply predicted."""
+    if outcome is None:
+        kind = "interrupted"
+    elif CORRECTION.match(prompt):
+        kind = "corrected"
+    else:
+        kind = "answered" if outcome.get("state") == "blocked" else "moved-on"
+    line = {"next": kind, "words": len(prompt.split())}
+    predicted = (outcome or {}).get("reply")
+    if predicted:
+        line["replyMatch"] = round(difflib.SequenceMatcher(None, predicted.lower(), prompt.lower()).ratio(), 2)
+    return line
 
 
 def append(path, line):

@@ -16,7 +16,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import links, menus, model, peers, pi, protocol, worklog
+from . import judge, links, menus, model, peers, pi, protocol, worklog
 from .common import (
     LINE_MAX, alive, folded, label_line, log_path, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
 )
@@ -259,10 +259,7 @@ class Hub:
         if outcome is None:
             session.reading(n, False)
         elif session.read(n, outcome, now_ms()):
-            worklog.append(self.log_file, {
-                **session.history[-1], "session": session.id, "agent": session.agent, "cwd": session.cwd,
-                "configDir": session.config_dir, "label": session.label, "ask": outcome.get("ask") or "",
-            })
+            worklog.append(self.log_file, {**session.history[-1], **self._log_fields(session), **verdict_fields(outcome), "turn": n})
             self._read_focused([session])
         self.publish()
 
@@ -273,10 +270,19 @@ class Hub:
             return
         worklog.append(self.log_file, {
             "at": aside.ended, "state": model.FINISHED.get(outcome["state"], "done"), "did": outcome.get("summary") or "",
-            "session": session.id, "agent": session.agent, "cwd": session.cwd, "configDir": session.config_dir,
-            "label": session.label, "ask": outcome.get("ask") or "", "peer": True,
+            **self._log_fields(session), **verdict_fields(outcome), "peer": True,
         })
         self.publish()
+
+    def _log_fields(self, session):
+        return {"session": session.id, "agent": session.agent, "cwd": session.cwd, "configDir": session.config_dir, "label": session.label}
+
+    def _log_next(self, session, before, prompt, now):
+        """What your prompt says of the turn before it, unless that one is still going."""
+        if before is None or before.open:
+            return
+        worklog.append(self.log_file, {"at": now, **self._log_fields(session), "turn": before.n, "delay": now - before.ended,
+                                       **worklog.next_prompt(before.outcome, prompt)})
 
     def notice(self, sid, text):
         conn = self.attached.get(sid)
@@ -545,18 +551,25 @@ class Hub:
 
     def _journal(self, rows):
         """One line per state change: session, states, what settled it and how much it read.
-        Never the words: a homelab journal ships to Grafana Cloud. Asks stay in the work log."""
+        Never the words: a homelab journal ships to Grafana Cloud. Asks stay in the work log.
+        A turn gone straight to idle says why: `read` (focus put away its ending) or `interrupted`."""
         states = {row["id"]: row["state"] for row in rows}
         for sid, state in states.items():
             old = self._logged.get(sid)
             if state == old or (old is None and state not in protocol.ATTENTION):
                 continue
             session = self.sessions.get(sid)
-            outcome = (session.turn.outcome if session and session.turn else None) or {}
+            turn = session.turn if session else None
+            outcome = (turn.outcome if turn else None) or {}
             finished = state in model.DISMISSABLE
-            source = outcome.get("source", "?") if finished else "status"
-            print(f"agent-hub: {sid[:8]} {old or 'new'} -> {state} ({source}, {outcome.get('chars', 0) if finished else 0} chars)",
-                  file=sys.stderr, flush=True)
+            if finished:
+                source = outcome.get("source", "?")
+            elif state == "idle" and old == "working" and turn is not None and not turn.open:
+                source = "read" if outcome else "interrupted"
+            else:
+                source = "status"
+            chars = outcome.get("chars", 0) if finished or source == "read" else 0
+            print(f"agent-hub: {sid[:8]} {old or 'new'} -> {state} ({source}, {chars} chars)", file=sys.stderr, flush=True)
         self._logged = states
 
     def _spawn(self, coro):
@@ -807,6 +820,8 @@ class Hub:
         now = now_ms()
         if message.get("transcript"):
             session.transcript, session.leaf = message["transcript"], message.get("leaf")
+        # A turn only the registry heard of stands in for this one: what came before is the turn it replaced.
+        before = session.replaced if session.turn is not None and session.turn.open and session.turn.by == "registry" else session.turn
         if message.get("peer"):
             session.start_aside(now)
         elif session.start_turn(now) is not None:
@@ -815,6 +830,7 @@ class Hub:
         prompt = message.get("prompt") or ""
         if message.get("fromPerson", True) and prompt.strip() and not prompt.lstrip().startswith("<"):
             session.prompt = folded(prompt)[:PROMPT_MAX]
+            self._log_next(session, before, prompt, now)
         if message.get("fromPerson", True) and prompt.strip() and not pi.is_acknowledgement(prompt):
             self._spawn(self.readings.label(session, prompt))
         self.publish()
@@ -942,6 +958,12 @@ class Hub:
         elif op == "demo":
             conn.demo = {str(e["sessionId"]): e for e in message["sessions"] if isinstance(e, dict) and e.get("sessionId")}
             self.publish()
+
+
+def verdict_fields(outcome):
+    """What a work log line says of a verdict, and what it was made of."""
+    return {"ask": outcome.get("ask") or "", "reply": outcome.get("reply") or "", "candidate": bool(outcome.get("candidate")),
+            "word": outcome.get("word") or "", "prompt": judge.VERSION}
 
 
 def demo_row(sid, entry):

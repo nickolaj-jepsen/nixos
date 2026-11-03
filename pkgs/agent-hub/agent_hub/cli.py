@@ -179,6 +179,8 @@ def print_group(group):
     resume = resume_command(last.get("agent"), last.get("session") or "", last.get("cwd"), last.get("configDir"))
     print(f"{last.get('label') or '(unnamed)'}\t{resume}")
     for line in group:
+        if "next" in line:
+            continue
         stamp = datetime.fromtimestamp((line.get("at") or 0) / 1000).strftime("%a %H:%M")
         text = line.get("did") or ""
         if line.get("ask"):
