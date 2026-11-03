@@ -77,8 +77,16 @@ here, Claude Code's mod (`mods/answer`) and pi's `parent/answer.ts`.
 - The draft is a file, `~/.local/state/agent-hub/forms/<session>.json`
   (`agent_hub/formstore.py`), not the daemon's. `agent-hub answer` reads and writes it
   itself, so a form works with the hub down, and shows on the bar when the hub is back.
-- The TUIs follow the file's mtime once a second, so what you pick in one shows in the
-  others.
+- A TUI attached to the hub answers over the connection it already has (`form-offer`,
+  `form-step`, `form-deliver`, `form-sync`, `form-drop` in `protocol.py`) and draws the
+  view the hub pushes back, so stepping a form spawns no process. Each op calls the same
+  `formstore` functions the CLI does and publishes after a write, so the file stays the
+  one truth and the bar sees the new view in its next push.
+- With no hub, or a daemon too old to know those ops, pi takes `agent-hub answer` and
+  follows the file's mtime once a second, which is what keeps the form working with the
+  daemon stopped. Attached, that poll slows to a safety check for a reply left for it.
+- Claude Code's mod has no socket of its own and follows the file's mtime once a second,
+  so what you pick in one surface shows in the others.
 - On the review, `i` puts the reply in the session's prompt and goes there. `y` sends it
   from the pane. Both stay off for half a second after the pane changes, as Allow does.
 - A reply is left in the file for the session's TUI to take, at most once, and one nobody
