@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Turn a finished brainstorm or research thread into a handoff for a separate builder agent — pin the scope, verify assumptions with read-only subagents, grill the user only on what is still undecided, agree the item graph, then write a self-contained HANDOFF.md whose work items carry owned paths and acceptance commands so /run-handoff can build them in parallel. --quick writes a short one inline, without subagents or stops. Use when the user asks for a handoff, or for a plan another agent will implement in a long-running session.
+description: Turn a finished brainstorm or research thread into a handoff for a separate builder agent — pin the scope, verify assumptions with read-only subagents, grill the user only on what is still undecided, agree the item graph, then write a self-contained HANDOFF.md whose work items carry owned paths and acceptance commands so /run-handoff can build them in parallel. --quick writes a short one inline with no subagents, asking only what's still open. Use when the user asks for a handoff, or for a plan another agent will implement in a long-running session.
 disable-model-invocation: true
 argument-hint: "[scope] [--quick]"
 arguments: scope
@@ -58,7 +58,13 @@ arguments: scope
 
    Fix what it finds. Reopen the grill only for a real decision gap.
 
-9. **Report** in chat, ending with what the user acts on: the `HANDOFF.md` path, the open questions, and the kickoff line `/run-handoff <dir>`, plus `--auto` to run it unattended.
+9. **Ask what's still open,** because a question that is only reported goes unanswered. In one round, ask each open question the user can answer now, with its meanwhile rule as the recommended answer. Use the harness's question tool when they fit, otherwise a numbered list with your pick on each.
+   - An answer moves to Locked decisions under Yours, and the items it touches change to match.
+   - Only what can't be answered yet stays in Open questions.
+   - A fact goes in Gotchas, and something the user has to do goes in the item or gate that needs it.
+   - If nothing is open, skip this step.
+
+10. **Report** in chat, ending with what the user acts on: the `HANDOFF.md` path, what stayed open, and the kickoff line `/run-handoff <dir>`, plus `--auto` to run it unattended.
 
 ## Decomposition
 
@@ -187,11 +193,11 @@ Max items in flight: <n> (default 3; lower if tests contend for a cluster, ports
 
 ## Open questions
 
-<Not the builder's to decide; how to proceed meanwhile.>
+<Not the builder's to decide and not answerable before the build: what will answer each one, and how to proceed meanwhile.>
 
 ## Amendments
 
-<Owner appends dated entries here; they override everything above.>
+<Dated entries from the owner, written by them or by the lead on their word; they override everything above.>
 ```
 
 ## --quick
@@ -201,10 +207,11 @@ For small, settled work where the full spine would cost more than the build. No 
 1. **State the scope, don't wait.** Open with one line giving the scope, what's out of it and the directory, so the user can object. Ask before overwriting a `HANDOFF.md`, as in the spine.
 2. **Harvest decisions** as in step 2 of the spine.
 3. **Check inline** what the plan leans on: read the files and interfaces each item touches, and find the build, test and run commands. Run the ones that are quick, and mark the rest unverified in Context.
-4. **Ask nothing,** unless one undecided choice could change what gets built; then ask that single question. Other gaps go in Open questions, with how to proceed meanwhile.
+4. **Ask nothing yet,** unless one undecided choice could change what gets built; then ask that single question. Other gaps go in Open questions, with how to proceed meanwhile.
 5. **Decompose into at most 3 items in a straight line,** each blocked by the one before, so there are no contracts, gates or spikes. If the work needs more items, parallel ones or a spike, say so in one line and ask whether to run the full `/handoff` instead.
 6. **Write `HANDOFF.md`** under the rules above, with only Mission, Scope, Context, Locked decisions, Work items, Gotchas and Open questions, leaving out any that are empty. Acceptance stays observable.
 7. **Reread it as someone who never saw this chat,** and fix undefined terms, references to the discussion and items without runnable acceptance.
-8. **Report** the path and the open questions, then the kickoff: in a fresh session, `Read <path> and build it`, or `/run-handoff <dir>` for worktrees and a review gate. End with `Deeper: /handoff <scope>`.
+8. **Ask what's still open,** as in step 9 of the spine.
+9. **Report** the path and what stayed open, then the kickoff: in a fresh session, `Read <path> and build it`, or `/run-handoff <dir>` for worktrees and a review gate. End with `Deeper: /handoff <scope>`.
 
 A full run that follows in the same session starts from this file's scope and decisions.

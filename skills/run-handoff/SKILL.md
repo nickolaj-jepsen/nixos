@@ -8,7 +8,7 @@ argument-hint: "[handoff-dir] [--auto]"
 # run-handoff
 
 - You are the lead and integrator. Execute the plan; don't redesign it.
-- `HANDOFF.md` is the plan and is read-only to you. `PROGRESS.md` is yours.
+- `HANDOFF.md` is the plan and is read-only to you, apart from recording the user's word under Amendments. `PROGRESS.md` is yours.
 - Running a handoff is the user asking for worktrees: parallel items need isolated checkouts, so this run uses an integration worktree and one per item. Never work in the primary checkout.
 
 ## Mode
@@ -22,6 +22,7 @@ argument-hint: "[handoff-dir] [--auto]"
 - HANDOFF's **Yours** decisions lock. One that proves wrong and blocks the critical path is a stop condition.
 - Its **Defaults** may change when evidence shows one is wrong. Whoever changes it states the evidence: an item in its report, you in the decision log.
 - In a HANDOFF without these tiers, every locked decision counts as yours.
+- When the user answers an open question or approves a proposed change to HANDOFF, append it to Amendments, dated and in the terms they settled. Never append on your own judgment.
 
 ## Start or resume
 
@@ -30,10 +31,11 @@ argument-hint: "[handoff-dir] [--auto]"
 3. **Resume** if `PROGRESS.md` exists.
    - Check it against git: the integration branch, item worktrees and their commits. Where they disagree, git wins; fix `PROGRESS.md`.
    - Run the standard checks on the integration branch before dispatching anything. If a crashed session left it broken, fixing that comes first.
+   - Add any of HANDOFF's Open questions missing from "Blocked on you".
    - Continue from "Now".
 4. **First run.**
    - Create the integration worktree, branch `<slug>`, off the base branch in Context. Use the user's worktree tooling, otherwise `git worktree add`.
-   - Create `PROGRESS.md` from the template below.
+   - Create `PROGRESS.md` from the template below, with HANDOFF's Open questions in "Blocked on you".
    - Run Context's build and test commands once, and record their durations.
    - Then do the bootstrap items and `G0`, if there are any, yourself.
 
@@ -94,7 +96,7 @@ Long operations:
 ### After a gate
 
 - **Default mode:** post the gate, each item's acceptance result, the reviewer's verdict, surprises, and what the frontier opens next. Ask go or adjust, using the harness's question tool if there is one. When blocked, ask right away; items already running keep going.
-- **`--auto`:** continue past gates. When blocked, add the request to "Blocked on you", send a notification if the harness has a tool for it, and move on to other unblocked work. Never use the question tool, with one exception: an action HANDOFF doesn't authorise that could stop, reboot or replace something on a device the user uses. Dispatch everything else first, because a question stops the turn.
+- **`--auto`:** continue past gates. When blocked, add the request to "Blocked on you", send a notification if the harness has a tool for it, and move on to other unblocked work. Never use the question tool before the final report, with one exception: an action HANDOFF doesn't authorise that could stop, reboot or replace something on a device the user uses. Dispatch everything else first, because a question stops the turn.
 
 ## Stop conditions
 
@@ -105,7 +107,7 @@ Both modes stop when:
 - the next step would push, land, open a PR, call a real external service HANDOFF doesn't allow, or delete work you didn't create;
 - a stop condition in HANDOFF fires.
 
-Never edit `HANDOFF.md` to get unstuck. Propose the change in `PROGRESS.md` for the owner to amend.
+Never edit `HANDOFF.md` to get unstuck. Propose the change in `PROGRESS.md`; it becomes an amendment only on the user's word.
 
 ## Item brief
 
@@ -149,7 +151,7 @@ Each item subagent's prompt contains:
 
 ## Blocked on you
 
-<Dated: what is needed, what it blocks, what continues meanwhile.>
+<Dated, with an ID (Q1…): what is needed, what it blocks, what is done meanwhile, and its answer once there is one. HANDOFF's Open questions, decisions for the user and proposed amendments all go here.>
 
 ## Decision log
 
@@ -174,7 +176,8 @@ Each item subagent's prompt contains:
    - measured timings;
    - the retro;
    - the integration branch and any worktrees left.
-3. End with what the user acts on:
-   - landing, which is the user's call;
+3. Ask, in one round, every unanswered entry in "Blocked on you" that the user can answer now, with what was done meanwhile as the recommended answer. This applies with `--auto` too, since the run is over and a question interrupts nothing. Use the harness's question tool when they fit, otherwise a numbered list with your pick on each. Record each answer, and build what it calls for on the integration branch.
+4. End with what the user acts on:
+   - landing, which is the user's call; whenever it comes up, even mid-run, first name what is still unanswered;
    - anything still blocked on them;
-   - once the branch has landed and no owner gate is left in HANDOFF, an offer to delete the plan dir, since git history is the record. The retro in `PROGRESS.md` goes with it. Delete it only on a yes.
+   - once the branch has landed and no owner gate is left in HANDOFF, an offer to delete the plan dir, since git history is the record. The retro in `PROGRESS.md` and any unanswered question go with it, so name those. Delete it only on a yes.
