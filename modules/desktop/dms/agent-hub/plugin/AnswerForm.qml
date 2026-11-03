@@ -244,7 +244,15 @@ Column {
             color: Theme.surfaceText
             selectionColor: Theme.primary
             font.pixelSize: Theme.fontSizeSmall + 1
-            onAccepted: root.commit()
+            // Not onAccepted: a TextInput lets Return carry on up, where the popout opens the window.
+            Keys.onReturnPressed: event => {
+                root.commit();
+                event.accepted = true;
+            }
+            Keys.onEnterPressed: event => {
+                root.commit();
+                event.accepted = true;
+            }
             Keys.onEscapePressed: event => {
                 root.editing = "";
                 event.accepted = true;
@@ -264,8 +272,11 @@ Column {
     // The field gave its keys back.
     signal fieldLeft
     onEditingChanged: {
-        if (!editing)
-            fieldLeft();
+        if (editing)
+            return;
+        // Or the popout's FocusScope, asked for focus, hands it straight back to the hidden field.
+        field.focus = false;
+        fieldLeft();
     }
 
     Column {
