@@ -426,6 +426,13 @@ def summary(results, gone, words_only):
     healthy = [r for r in fired if not r[0]["wants"]]
     lines.append(f"an \"unverified\" marker would fire on {len(fired)} of {len(editing)} editing turns, "
                  f"{len(healthy)} of them turns you said didn't need you")
+    endings = {}
+    for line, _, found_outcome in results:
+        counts = endings.setdefault(found_outcome["word"] or "(no word)", [0, 0])
+        counts[0 if line["wants"] else 1] += 1
+    lines.extend(["", "ending                 wanted you   did not"])
+    lines.extend(f"{name:<23}{yes:>10}{no:>10}" for name, (yes, no) in sorted(endings.items()))
+    lines.append("")
     misses = [r for r in wanted if not called(r)]
     alarms = [r for r in quiet if called(r)]
     for name, group in (("missed", misses), ("false alarm", alarms)):

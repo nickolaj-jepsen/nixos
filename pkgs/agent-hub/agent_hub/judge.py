@@ -12,11 +12,13 @@ in the latest turn), `commands` (that turn's, each with `(ok)` or `(failed)`), `
 closing words, settle only), `peer` (it answered another session rather than the person),
 `pending` (jobs in flight that may be a server left running),
 `agents` (agent work in flight, which will report back), `doing` (what that work is),
-`repo`, `branch` and `error` (the turn ended on an error).
+`repo`, `branch` and `error` (the turn ended on an error), `landed` and `committed` (what its
+commands did to the default branch), `on_branch` (the branch its transcript names).
 
-The gate: only a turn whose closing words hold a question or a request can need a reply.
-The model reads every turn and may demote such a candidate to done; it can't raise one,
-and without its word the candidate stands. `failed` comes only from the agent's own error.
+The gate: the model names how each turn ended, and `ENDINGS` says which endings call you, so
+tuning the alerts never needs the model or the labels changed. A question or a request in the
+closing words is a candidate, which only a sure model can quiet, and which stands without its
+word. `failed` comes only from the agent's own error.
 """
 
 import hashlib
@@ -24,10 +26,27 @@ import re
 
 from .common import BLOCK_MAX, folded, shown_block
 
-FIELDS = ("label", "doing", "summary", "tags", "state", "did", "ask", "kind", "reply")
+# `state` isn't asked for any more: it is what a model that leaves out `ends` may still give.
+FIELDS = ("label", "doing", "summary", "tags", "ends", "sure", "state", "did", "ask", "reply")
 TURN_STATES = ("done", "blocked", "waiting")
 # What an ask wants of you, as a row's tag says it.
-ASK_KINDS = ("decide", "info", "approve", "do something")
+# How a turn can end: whether it calls you, then what the model is told it means. The first
+# value is the one to tune; nothing else needs to change with it.
+ENDINGS = {
+    "asked": (True, "it puts a question to the person that only they can answer, and needs the answer"),
+    "ready-to-land": (True, "the work is done and waits on their word to commit, push or merge it"),
+    "landed-optional": (False, "the work reached the default branch, and at most an optional push, deploy or activation is left"),
+    "landed-work-left": (True, "the work reached the default branch, and real work is left, such as cleanup"),
+    "suggests-questions": (True, "it is complete and offers further questions or research, even worded as a question"),
+    "suggests-building": (True, "it is complete and offers to build something or plan it, or names that as the next step, even worded as a question"),
+    "cannot-continue": (True, "a limitation or a failure stops it going on with its task"),
+    "needs-hands": (True, "it needs them to do something outside its reach, such as rebooting or testing, and report back"),
+    "waiting": (False, "it ended only to wait for its own background jobs, and carries on by itself when they report back"),
+    "finished": (False, "it is complete with nothing left for the person: a report, an answer, finished work"),
+}
+SURENESS = ("high", "low")
+# Where a commit counts as landed. A repo's other default branch just keeps its alert, the safe side.
+DEFAULT_BRANCHES = ("main", "master")
 TAGS = ("bugfix", "feature", "refactor", "test", "docs", "deps", "ci", "perf", "chore")
 MAX_LABEL = 40
 MAX_DOING = 32
@@ -54,40 +73,30 @@ note: at most 8 words on what its output shows, or empty
 - Go by progress in the output first ("31/40 built"), then by how long it took before.
 - A command's name alone says nothing: leave left empty rather than guess."""
 
+ENDING_LINES = "\n".join(f"  - {name}: {meaning}" for name, (_, meaning) in ENDINGS.items())
 SYSTEM = f"""You keep a coding session's identity current for the person working in it.
 Answer with exactly these nine lines, in this order, and nothing else:
 label: 2-6 lowercase words naming what the work is about
 doing: at most 8 words for the step in flight, or empty
 summary: one sentence of at most 20 words about the session so far
 tags: up to three of {" ".join(TAGS)}
-state: done, blocked or waiting for the assistant turn, or empty
+ends: how the assistant turn ended, one of the endings below, or empty
+sure: high or low, for how plainly the turn is that ending
 did: one sentence of at most 20 words about what the assistant turn did, or empty
-ask: what the assistant turn needs from the person, or empty
-kind: one of {", ".join(ASK_KINDS)} for what ask wants, or empty
+ask: what the assistant turn needs or offers the person, or empty
 reply: what the person would most likely type to answer ask, or empty
 
 - The label names the work, never that you agreed to something.
 - Repeat the current label word for word when the work has not moved on.
 - doing names the step, not the subject: "stuck on the retry test", not "auth work".
 - The branch is a hint about the work, never the label on its own.
-- Fill state, did, ask, kind and reply only from the assistant turn below. Leave all five
+- Fill ends, sure, did, ask and reply only from the assistant turn below. Leave all five
   empty when there is no such turn.
-- state: blocked only when the turn puts a real question or request to the person and
-  can't proceed without their answer, wherever in its message that comes. A list of
-  questions waiting on answers is blocked even if the message ends on something else. An
-  offer to commit, push, deploy or switch that waits on their word is blocked, and so is
-  asking them to do something and report back ("after the reboot, tell me").
-- state: done when the turn finished, including when it reports a problem. Optional
-  extras ("I could also..."), a pointer at the person's next step ("next: run the tests"),
-  an offer that only applies if they want it ("if you'd rather X, tell me") and a
-  rhetorical question are done.
-- state: waiting when it ended only to wait for its own background jobs and carries on
-  by itself when they report back.
+- The endings, judging the whole message, since a list of questions can end on something else:
+{ENDING_LINES}
+- The line `landed` says whether the turn's commands put work on the default branch.
 - ask is a request, not a summary: "keep the old fixture?" not "asked about the fixture".
-  Leave it empty unless state is blocked.
-- kind: decide when they choose between ways forward, info when the agent lacks a fact only
-  they have, approve when it has one action ready and waits for a yes, do something when
-  they have to act themselves, such as rebooting or testing.
+  Leave it empty when the turn wants and offers nothing.
 - reply predicts what the person would type, not what you think they should say:
   their words, their length and their tone, as in the requests above. Leave it
   empty when you cannot tell which way they would answer.
@@ -139,6 +148,13 @@ def parse_estimate(text):
     return {"left": left, "note": note} if answered else None
 
 
+def landed(digest):
+    """Whether the turn put its work on the default branch. A commit counts by the branch it was
+    made on, which the hub knows live and a Claude transcript names."""
+    branch = digest.get("branch") or digest.get("on_branch")
+    return bool(digest.get("landed") or (digest.get("committed") and branch in DEFAULT_BRANCHES))
+
+
 def render(digest, identity, settle):
     """The prompt the model reads: the digest, and what the session is already called
     so the model can repeat it, extend it or re-tag it."""
@@ -154,6 +170,8 @@ def render(digest, identity, settle):
         lines.append(f"files touched in the latest turn: {', '.join(digest['files'])}")
     if digest.get("commands"):
         lines.append(f"commands in the latest turn: {'; '.join(digest['commands'])}")
+    if settle:
+        lines.append(f"landed: {'yes' if landed(digest) else 'no'}")
     if settle and digest.get("pending"):
         lines.append(f"background jobs started that have not reported back: {digest['pending']}")
     if settle and digest.get("peer"):
@@ -190,14 +208,17 @@ def parse(text):
         elif key in ("summary", "did"):
             if value:
                 fields[key] = value[:MAX_SUMMARY]
+        elif key == "ends":
+            if value.lower() in ENDINGS:
+                fields["ends"] = value.lower()
+        elif key == "sure":
+            if value.lower() in SURENESS:
+                fields["sure"] = value.lower()
         elif key == "state":
             if value.lower() in TURN_STATES:
                 fields["state"] = value.lower()
         elif key == "ask":
             fields["ask"] = value[:MAX_ASK]
-        elif key == "kind":
-            if value.lower() in ASK_KINDS:
-                fields["kind"] = value.lower()
         elif key == "reply":
             fields["reply"] = value[:MAX_REPLY]
         elif key == "tags":
@@ -279,14 +300,23 @@ def died(reason):
             "source": "error", "chars": 0}
 
 
+def calls(fields, guess):
+    """Whether the turn calls you: by `ENDINGS` where the model named its ending, with a candidate
+    in `guess` standing unless the model was sure, so one wrong ending can't silence a real ask."""
+    ending = fields.get("ends")
+    if ending:
+        return ENDINGS[ending][0] or (bool(guess["ask"]) and fields.get("sure") != "high")
+    return bool(guess["ask"]) and fields.get("state") not in ("done", "waiting")
+
+
 def outcome(fields, guess, digest):
     """How the turn ended: the gate over the candidate in `guess`, by the model's word in
     `fields` when it gave one. The model's `waiting` only counts with jobs to wait on."""
-    word = fields.get("state")
+    word = fields.get("ends") or fields.get("state")
     agents, pending = int(digest.get("agents") or 0), int(digest.get("pending") or 0)
     if digest.get("error"):
         state = "failed"
-    elif guess["ask"] and word not in ("done", "waiting"):
+    elif calls(fields, guess):
         state = "blocked"
     else:
         state = "done"
@@ -301,8 +331,8 @@ def outcome(fields, guess, digest):
         jobs = guess["jobs"]
     return {
         "state": state,
-        "ask": (fields.get("ask") or guess["ask"])[:MAX_ASK] if state == "blocked" else "",
-        "kind": fields.get("kind", "") if state == "blocked" else "",
+        "ask": (fields.get("ask") or guess["ask"] or fields.get("did") or "")[:MAX_ASK] if state == "blocked" else "",
+        "kind": fields.get("ends", "") if state == "blocked" else "",
         "reply": fields.get("reply", "") if state == "blocked" else "",
         "summary": fields.get("did") or guess["summary"],
         "jobs": jobs,

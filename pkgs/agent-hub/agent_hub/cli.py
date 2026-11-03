@@ -306,7 +306,7 @@ def demo_sessions():
             "permission": {"id": 0, "tool": "Bash", "about": "Rebase onto main and remove the build folder", "kind": "command", "complete": True,
                            "body": "cd ~/dev/app && git fetch origin\ngit rebase origin/main && rm -rf build/"}}),
         ("demo-ask", "pi", "idle", "fixture cleanup", {
-            "turnState": "blocked", "ask": "keep the old fixture, or regenerate it?", "askKind": "decide", "reply": "Regenerate it",
+            "turnState": "blocked", "ask": "keep the old fixture, or regenerate it?", "askKind": "asked", "reply": "Regenerate it",
             "prompt": "Clean up the test fixtures.",
             "said": "The old fixture still passes, but it pins a format nothing else writes any more.\n\nKeep the old fixture, or regenerate it?"}),
         ("demo-form", "cli", "idle", "grilling the plan", {

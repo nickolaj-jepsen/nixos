@@ -2,7 +2,7 @@
 
 import unittest
 
-from agent_hub import judge
+from agent_hub import claude, judge
 
 ROUND = """I've turned these into decisions.
 
@@ -40,24 +40,63 @@ class CandidateTest(unittest.TestCase):
         self.assertEqual(self.ask("Done:\n\n```\nread -p 'continue?'\n```"), "")
 
 
-class AskKindTest(unittest.TestCase):
-    def outcome(self, kind, said="Keep the fixture?", state="blocked"):
+class EndingTest(unittest.TestCase):
+    def outcome(self, ending, said="Keep the fixture?", sure="high"):
         digest = {"said": said}
-        return judge.outcome(judge.parse(f"state: {state}\nask: keep it?\nkind: {kind}\n"), judge.heuristic(digest), digest)
+        fields = judge.parse(f"ends: {ending}\nsure: {sure}\nask: keep it?\ndid: Did it.\n")
+        return judge.outcome(fields, judge.heuristic(digest), digest)
 
-    def test_a_tag_it_knows_is_kept(self):
-        for kind in judge.ASK_KINDS:
-            self.assertEqual(self.outcome(kind)["kind"], kind)
+    def test_an_ending_can_call_you_with_no_question_in_the_words(self):
+        found = self.outcome("needs-hands", said="Plug it in over USB.")
+        self.assertEqual((found["state"], found["kind"], found["ask"]), ("blocked", "needs-hands", "keep it?"))
+
+    def test_a_sure_ending_quiets_a_question(self):
+        found = self.outcome("landed-optional", said="Merged to main. Want me to push?")
+        self.assertEqual((found["state"], found["kind"], found["ask"]), ("done", "", ""))
+
+    def test_an_unsure_ending_doesnt_quiet_a_question(self):
+        self.assertEqual(self.outcome("finished", sure="low")["state"], "blocked")
+
+    def test_an_unsure_ending_with_no_question_stays_quiet(self):
+        self.assertEqual(self.outcome("finished", said="All done.", sure="low")["state"], "done")
 
     def test_case_is_not_the_models_to_get_right(self):
-        self.assertEqual(self.outcome("Do Something")["kind"], "do something")
+        self.assertEqual(self.outcome("Ready-To-Land")["kind"], "ready-to-land")
 
-    def test_a_tag_it_doesnt_is_dropped_and_the_ask_stands(self):
+    def test_an_ending_it_doesnt_know_is_dropped_and_the_candidate_stands(self):
         found = self.outcome("urgent")
         self.assertEqual((found["kind"], found["state"]), ("", "blocked"))
 
-    def test_only_an_ask_has_one(self):
-        self.assertEqual(self.outcome("decide", state="done")["kind"], "")
+    def test_a_model_that_only_gives_a_state_still_counts(self):
+        digest = {"said": "Want me to add more?"}
+        self.assertEqual(judge.outcome(judge.parse("state: done\n"), judge.heuristic(digest), digest)["state"], "done")
+
+
+class LandedTest(unittest.TestCase):
+    def digest(self, *lines, failed=False, **rest):
+        commands = [(str(n), line) for n, line in enumerate(lines)]
+        return {**claude.assemble([], [], commands, {str(n): failed for n in range(len(lines))}, ""), **rest}
+
+    def test_a_landing_counts_whatever_the_branch(self):
+        for line in ("wt land", "gh pr merge 12 --squash", "git push origin main", "git -C /r push origin master"):
+            self.assertTrue(judge.landed(self.digest(line)), line)
+
+    def test_a_commit_counts_only_on_the_default_branch(self):
+        self.assertTrue(judge.landed(self.digest("git commit -m x", branch="main")))
+        self.assertTrue(judge.landed(self.digest("git commit -m x", on_branch="main")))
+        self.assertFalse(judge.landed(self.digest("git commit -m x", branch="feature")))
+        self.assertFalse(judge.landed(self.digest("git commit -m x")))
+
+    def test_a_push_elsewhere_or_a_failed_one_doesnt(self):
+        self.assertFalse(judge.landed(self.digest("git push origin feature")))
+        self.assertFalse(judge.landed(self.digest("wt land", failed=True)))
+
+    def test_a_landing_early_in_a_long_turn_still_counts(self):
+        self.assertTrue(judge.landed(self.digest("wt land", *[f"echo {n}" for n in range(20)])))
+
+    def test_the_model_is_told(self):
+        self.assertIn("landed: yes", judge.render(self.digest("wt land"), {}, True))
+        self.assertIn("landed: no", judge.render(self.digest("ls"), {}, True))
 
 
 class EstimateTest(unittest.TestCase):

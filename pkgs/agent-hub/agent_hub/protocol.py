@@ -92,7 +92,7 @@ ROW = {
     "prompt?": "str",
     # The closing words of a turn that needs a reply, as the agent wrote them.
     "said?": "str",
-    # What it wants of you: decide, info, approve or do something.
+    # How its turn ended, of those that call you: one of `judge.ENDINGS`.
     "askKind?": "str",
     # Why its model is no longer asked, so its row stops updating: failing or capped.
     "readings?": "str",

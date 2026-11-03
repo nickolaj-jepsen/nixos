@@ -1071,7 +1071,7 @@ PluginComponent {
                         OneLine {
                             id: kindLabel
                             anchors.centerIn: parent
-                            text: row.session.askKind ?? ""
+                            text: (row.session.askKind ?? "").replace(/-/g, " ")
                             color: Theme.warning
                             font.pixelSize: Theme.fontSizeSmall - 1
                         }

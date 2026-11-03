@@ -68,11 +68,19 @@ def touched(files, path):
     return [f for f in files if f != path] + [path]
 
 
+# Read over all of a turn's commands, as a landing is rarely among the last few it keeps.
+LANDS = re.compile(r"\bwt land\b|\bgh pr merge\b|\bgit (-C \S+ )?push\b[^|;&]*\b(main|master)\b")
+COMMITS = re.compile(r"\bgit (-C \S+ )?(commit|merge)\b")
+
+
 def assemble(requests, files, commands, failed, said):
     """A digest from what a transcript reader collected: `commands` as (call id, line)
     pairs, `failed` as call id → whether its result was an error."""
     outcomes = {True: " (failed)", False: " (ok)"}
+    ran = [line for call, line in commands if not failed.get(call)]
     return {
+        "landed": any(LANDS.search(line) for line in ran),
+        "committed": any(COMMITS.search(line) for line in ran),
         "requests": requests,
         "files": files[-MAX_FILES:],
         "commands": [line + outcomes.get(failed.get(call), "") for call, line in commands[-MAX_COMMANDS:]],
@@ -95,7 +103,7 @@ def turns(path, cwd=None):
     def begin(peer):
         nonlocal turn
         turn = {"requests": requests[-RECENT_PROMPTS:], "files": [], "commands": [], "failed": {}, "text": [],
-                "id": None, "at": None, "peer": peer, "unchecked": None}
+                "id": None, "at": None, "peer": peer, "unchecked": None, "branch": None}
         found.append(turn)
 
     try:
@@ -139,10 +147,11 @@ def turns(path, cwd=None):
                         turn["text"].append(block.get("text") or "")
                 if entry.get("type") == "assistant":
                     turn["id"], turn["at"] = entry.get("uuid"), entry.get("timestamp")
+                    turn["branch"] = entry.get("gitBranch") or turn["branch"]
     except OSError:
         return None
     return [{**assemble(t["requests"], t["files"], t["commands"], t["failed"], "\n".join(t["text"]).strip()),
-             "id": t["id"], "at": t["at"], "peer": t["peer"], "unchecked": t["unchecked"]} for t in found]
+             "id": t["id"], "at": t["at"], "peer": t["peer"], "unchecked": t["unchecked"], "on_branch": t["branch"]} for t in found]
 
 
 def digest(path, cwd=None, prompt=None):

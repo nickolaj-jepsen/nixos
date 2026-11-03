@@ -282,16 +282,18 @@ haiku` as the session's own profile (`CLAUDE_CONFIG_DIR`, which `SessionStart`
 
 ### The gate
 
-Only a turn whose closing message holds a `?` or request words ("tell me when",
-"your call") anywhere can need a reply, since a list of questions can end on something
-else. That rule and the model's word both live in `agent_hub/judge.py`.
+The model names how each turn ended, and a table says which endings call you, so the alerts
+can be tuned without touching the model or the labels (`ENDINGS` in `agent_hub/judge.py`).
 
-- The model reads every turn and writes its summary.
-- It can only demote a candidate to `done`: optional extras, a pointer at your next
-  step, a rhetorical `?`.
-- A turn stays `needs-reply` when the agent can't proceed without you: an offer to commit,
-  push, deploy or switch that waits on your word, or asking you to do something and report
-  back.
+- The model reads every turn, writes its summary and names its ending: asked, ready to land,
+  landed with only a push or deploy left, landed with work left, suggesting questions,
+  suggesting building, can't continue, needs your hands, waiting on its jobs, or finished.
+- Code, not the model, works out whether a turn landed, from its commands: `wt land`, a
+  merged pull request, a push to `main`, or a commit made on it.
+- A `?` or request words ("tell me when", "your call") anywhere in the closing message
+  make a candidate, since a list of questions can end on something else. A candidate calls
+  you unless the model is sure of an ending that doesn't, so one wrong ending can't silence a
+  real ask.
 - If the model fails, the candidate stays `needs-reply`.
 - `failed` comes only from the agent's own error: Claude's `StopFailure`, or pi's
   error stop. The model can't call a turn failed.
