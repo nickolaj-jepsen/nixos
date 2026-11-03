@@ -76,15 +76,17 @@ export default function (pi: ExtensionAPI, services: Services) {
   let tick = 0;
   let watched = { session: "", path: "", mtime: 0 };
   let isPolling = false;
+  /** A reply taken while the form holds the editor, which can't show it; taken up when it closes. */
+  let waiting: Delivery | undefined;
 
   const sessionOf = (ctx: ExtensionContext) => ctx.sessionManager.getSessionId();
 
   const viewFrom = async (ctx: ExtensionContext, args: string[], stdin?: string) =>
     JSON.parse(await run(sessionOf(ctx), args, stdin)) as HubFormView | null;
 
-  const show = (ctx: ExtensionContext, view: HubFormView | null) => {
+  const show = (ctx: ExtensionContext, view: HubFormView | null, force = false) => {
     const next = signature(view);
-    if (next === shown) return;
+    if (next === shown && !force) return;
     shown = next;
     current = view ?? undefined;
     form?.refresh(view);
@@ -99,8 +101,12 @@ export default function (pi: ExtensionAPI, services: Services) {
 
   /** A reply left at another surface: into the editor, or sent as you sending it. */
   const take = (ctx: ExtensionContext, delivery: Delivery) => {
-    if (delivery.submit) pi.sendUserMessage(delivery.text, { deliverAs: "followUp" });
-    else ctx.ui.setEditorText(placeReply(ctx.ui.getEditorText(), delivery.text));
+    if (delivery.submit) return pi.sendUserMessage(delivery.text, { deliverAs: "followUp" });
+    if (form) {
+      waiting = delivery;
+      return;
+    }
+    ctx.ui.setEditorText(placeReply(ctx.ui.getEditorText(), delivery.text));
   };
 
   // One verb, over the socket when the hub is attached and through the CLI when it is
@@ -135,7 +141,8 @@ export default function (pi: ExtensionAPI, services: Services) {
     const { view, delivery } = await syncForm(ctx);
     if (!delivery) return;
     take(ctx, delivery);
-    show(ctx, view);
+    // Forced: the editor changed, and a widget that says the same thing draws nothing.
+    show(ctx, view, true);
   };
 
   /** With no hub: the file another surface writes is the only news there is. */
@@ -189,6 +196,7 @@ export default function (pi: ExtensionAPI, services: Services) {
   pi.on("session_shutdown", () => {
     clearInterval(ticking);
     latest = undefined;
+    waiting = undefined;
   });
 
   pi.on("agent_end", (event) => {
@@ -235,10 +243,16 @@ export default function (pi: ExtensionAPI, services: Services) {
     } finally {
       form = undefined;
     }
+    // Taking the form's own reply answers a delivery that waited for the form to close.
+    const taken = waiting;
+    waiting = undefined;
     // A turn that ended while the form was up has replaced what it answered.
-    if (current?.id !== opened.id) return;
-    if (result.fill && current.reply) {
+    if (current?.id === opened.id && result.fill && current.reply) {
       ctx.ui.setEditorText(placeReply(ctx.ui.getEditorText(), current.reply));
+    } else if (taken) {
+      take(ctx, taken);
+      // The editor holds a reply the TUI has to be told to draw.
+      show(ctx, current ?? null, true);
     }
   };
 
