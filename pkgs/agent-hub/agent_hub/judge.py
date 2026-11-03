@@ -36,7 +36,7 @@ MAX_TAGS = 3
 # Headroom for the lines, not a target: a reasoning model thinks before it answers, and
 # a cap below that thinking returns no text at all.
 MAX_TOKENS = 1024
-SAID_CHARS = 1500
+SAID_CHARS = 6000
 # Background task types that always report back; a shell task can be a server left running.
 AGENT_TASKS = ("subagent", "workflow", "teammate", "monitor", "cloud session")
 MAX_TASK_LINE = 80
@@ -58,9 +58,11 @@ reply: what the person would most likely type to answer ask, or empty
 - The branch is a hint about the work, never the label on its own.
 - Fill state, did, ask and reply only from the assistant turn below. Leave all four
   empty when there is no such turn.
-- state: blocked only when the closing words put a real question or request to the
-  person and the turn waits on their answer. An offer to commit or push is blocked, and
-  so is asking them to do something and report back ("after the reboot, tell me").
+- state: blocked only when the turn puts a real question or request to the person and
+  waits on their answer, wherever in its message that comes. A list of questions waiting
+  on answers is blocked even if the message ends on something else. An offer to commit or
+  push is blocked, and so is asking them to do something and report back ("after the
+  reboot, tell me").
 - state: done when the turn finished, including when it reports a problem. An offer
   to deploy or to run a switch or rebuild, optional extras ("I could also..."), a pointer
   at the person's next step ("next: run the tests"), an offer that only applies if they
@@ -117,7 +119,7 @@ def render(digest, identity, settle):
     lines.extend(f"- {request}" for request in digest.get("requests") or [])
     said = digest.get("said") if settle else None
     if said:
-        lines.append(f"assistant said: {folded(said)[-SAID_CHARS:]}")
+        lines.append(f"assistant said: {clipped(folded(said))}")
     return "\n".join(lines)
 
 
@@ -171,14 +173,22 @@ def clean_label(raw):
     return (cut[:space] if space > 20 else cut).strip() + "…"
 
 
+def clipped(text):
+    """Long closing words as the model reads them: an ask can sit anywhere in a list of them."""
+    if len(text) <= SAID_CHARS:
+        return text
+    half = SAID_CHARS // 2
+    return f"{text[:half]} […] {text[-half:]}"
+
+
 def heuristic(digest):
-    """How the turn ended by its closing words alone: a question or a request in its last
-    paragraphs is an ask (the gate's candidate), and words of waiting with jobs still out
-    keep it working."""
+    """How the turn ended by its closing words alone: a question or a request anywhere in them
+    is an ask (the gate's candidate), and words of waiting with jobs still out keep it working.
+    A message can end on something else after its questions, and the model can only demote."""
     final = CODE_BLOCK.sub("", digest.get("said") or "").strip()
     paragraphs = [folded(MARKDOWN.sub("", p)) for p in re.split(r"\n\s*\n", final)]
     paragraphs = [p for p in paragraphs if p]
-    sentences = re.split(r"(?<=[.?!])\s+", " ".join(paragraphs[-2:]))
+    sentences = re.split(r"(?<=[.?!])\s+", " ".join(paragraphs))
     asks = [s for s in sentences if s.rstrip(CLOSERS).endswith("?")] or [s for s in sentences if REQUEST.search(s)]
     first = re.split(r"(?<=[.?!])\s+", paragraphs[0])[0] if paragraphs else ""
     pending = int(digest.get("pending") or 0)

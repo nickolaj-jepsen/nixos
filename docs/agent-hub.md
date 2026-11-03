@@ -157,9 +157,9 @@ haiku` as the session's own profile (`CLAUDE_CONFIG_DIR`, which `SessionStart`
 
 ### The gate
 
-Only a turn whose closing words hold a `?` or request words ("tell me when",
-"your call") can need a reply. That rule and the model's word both live in
-`agent_hub/judge.py`.
+Only a turn whose closing message holds a `?` or request words ("tell me when",
+"your call") anywhere can need a reply, since a list of questions can end on something
+else. That rule and the model's word both live in `agent_hub/judge.py`.
 
 - The model reads every turn and writes its summary.
 - It can only demote a candidate to `done`: an offer to deploy or switch,
