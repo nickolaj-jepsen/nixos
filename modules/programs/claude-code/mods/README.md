@@ -10,7 +10,6 @@ claude plugin marketplace add nickolaj-jepsen/nixos
 claude plugin install spellfix@nickolaj-jepsen
 claude plugin install linear-issue@nickolaj-jepsen
 claude plugin install git-menu@nickolaj-jepsen
-claude plugin install answer@nickolaj-jepsen
 ```
 
 My nix build validates and tests each mod against the Claude Code version it
@@ -51,5 +50,5 @@ Code update can break one.
   `/answer` or the band's button; for a key, bind `app:cycleDiffBase` in the
   `Global` context of `~/.claude/keybindings.json` (I use `alt+a`). The parser
   and the draft are `agent-hub answer`'s (`pkgs/agent-hub`), which also backs
-  the pi half and the hub's panel, so **this mod needs `agent-hub` on PATH**;
-  without it the band never shows. The hub's daemon doesn't have to be running.
+  the pi half and the hub's panel, so this mod needs `agent-hub` on PATH and
+  isn't in the marketplace. The hub's daemon doesn't have to be running.

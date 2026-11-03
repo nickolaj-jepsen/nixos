@@ -25,10 +25,6 @@
     {
       "name": "git-menu",
       "source": "./modules/programs/claude-code/mods/git-menu"
-    },
-    {
-      "name": "answer",
-      "source": "./modules/programs/claude-code/mods/answer"
     }
   ]
 }
