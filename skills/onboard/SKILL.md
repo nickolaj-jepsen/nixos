@@ -95,8 +95,9 @@ Use the harness's question tool (pi `ask_user_question`, Claude `AskUserQuestion
 Everything is saved before you send this one message, so walking away loses nothing:
 
 1. The report's path, and in a few lines what the project is.
-2. The deferred list, with exact commands.
-3. 3–5 subsystems to dive into, ranked by complexity, how much depends on them and whether the traced action passes through them. Ask which to dive into, or none.
+2. The claims that failed, most consequential first.
+3. The deferred list, with exact commands.
+4. 3–5 subsystems to dive into, ranked by complexity, how much depends on them and whether the traced action passes through them. Ask which to dive into, or none.
 
 Start the picked dives as soon as the user picks.
 
