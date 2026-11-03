@@ -13,8 +13,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test, type TestContext } from "node:test";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Theme, TUI } from "@earendil-works/pi-tui";
+import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import type { TUI } from "@earendil-works/pi-tui";
 import { parseReview, splitArgv } from "./command.ts";
 import { socketPath } from "./types.ts";
 
@@ -65,7 +65,12 @@ const ctxFor = (cwd: string, options: CtxOptions = {}) => {
     isIdle: () => options.idle !== false,
     ui: {
       custom: async (
-        factory: (tui: TUI, theme: Theme, keys: undefined, done: (value: unknown) => void) => {
+        factory: (
+          tui: TUI,
+          theme: Theme,
+          keys: undefined,
+          done: (value: unknown) => void,
+        ) => {
           handleInput(data: string): void;
         },
       ) => {
