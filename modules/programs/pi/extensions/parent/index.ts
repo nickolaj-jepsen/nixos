@@ -20,6 +20,7 @@ import notify from "./notify.ts";
 import prompts from "./prompts.ts";
 import rewind from "./rewind.ts";
 import { createServices, type Services } from "./services.ts";
+import sessions from "./sessions.ts";
 import spellfix from "./spellfix.ts";
 import stash from "./stash.ts";
 import subagentUsage from "./subagent-usage.ts";
@@ -41,6 +42,7 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["notify", notify],
   ["prompts", prompts],
   ["rewind", rewind],
+  ["sessions", sessions],
   ["spellfix", spellfix],
   ["stash", stash],
   ["subagent-usage", subagentUsage],
