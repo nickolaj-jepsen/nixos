@@ -74,7 +74,8 @@ class RegistrySource:
                 continue
             if not (isinstance(entry, dict) and entry.get("sessionId") and alive(entry)):
                 continue
-            if entry.get("kind") == "interactive":
+            # `claude -p` registers as interactive too, the hub's own readings included.
+            if entry.get("kind") == "interactive" and entry.get("entrypoint") != "sdk-cli":
                 fronts.append(entry)
             elif entry.get("kind") == "bg" and entry.get("jobId"):
                 jobs[entry["jobId"]] = entry

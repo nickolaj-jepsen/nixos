@@ -341,6 +341,14 @@ class HubTest(unittest.TestCase):
 
 
 class SessionTest(HubTest):
+    def test_a_headless_run_never_shows_though_it_registers_as_interactive(self):
+        bar = self.hub.subscribe()
+        headless, proc = str(uuid.uuid4()), self.hub.process()
+        self.hub.write_session(self.hub.process().pid, headless, entrypoint="sdk-cli")
+        self.hub.write_session(proc.pid, self.sid)
+        state = bar.wait(has_session(self.sid))
+        self.assertNotIn(headless, [row["id"] for row in state["sessions"]])
+
     def test_interactive_session_appears_and_drops_when_its_process_exits(self):
         bar = self.hub.subscribe()
         proc = self.hub.process()
