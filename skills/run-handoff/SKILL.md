@@ -39,7 +39,7 @@ argument-hint: "[handoff-dir] [--auto]"
 
 ## Loop
 
-1. **Frontier.** Every item whose blockers are done and whose `Owns` doesn't overlap an item in flight.
+1. **Frontier.** Every item whose blockers are done, or integrated with only device or person acceptance open, and whose `Owns` doesn't overlap an item in flight.
 2. **Dispatch** frontier items up to HANDOFF's concurrency cap (default 3). For each one:
    - create a worktree `<slug>-<id>` off the integration branch's current head;
    - start a background subagent with the item brief below.
@@ -60,6 +60,7 @@ argument-hint: "[handoff-dir] [--auto]"
    - On that tree, re-run the item's acceptance command yourself, plus the repo's standard checks and the walking skeleton if HANDOFF has one. Never take the subagent's "it passes" as the result.
    - If it passes: fast-forward the integration branch, record the command, its result and the commit, then read and delete the worktree's `.handoff-report.md` and remove the worktree.
    - If it fails: send the failing output back to the same subagent, continuing it if the harness allows. After two send-backs, mark the item blocked with the last failing output.
+   - If the desktop part passes and only a device or a person is left: integrate it now and record that acceptance as open in `PROGRESS.md`, so its dependents can run. Run the open step when it can run, and put any fix it needs on top.
 6. **Re-check the frontier** after every integration and dispatch what opened up.
 7. **Update `PROGRESS.md`** after every item and before any long operation. It is how you resume after a context reset, so keep it accurate, not optimistic.
 
@@ -74,6 +75,7 @@ Long operations:
 - A gate passes when its items pass acceptance on the integration branch and a reviewer signs off.
 - After the last item, a final gate reviews the whole integration branch against its base. Fix its confirmed findings in one pass.
 - Fix confirmed findings before any gate passes, and record the gate's commit and verdict.
+- The final gate can't pass while an item's device or person acceptance is open.
 
 ### Reviewer
 
