@@ -48,11 +48,11 @@ bash $S run "$HUB" status
 
 `docs/agent-hub.md` has what the popout's keys do. Its prompts and forms answer only what is in the sandbox.
 
-For a real agent behind the plugin, keep its config dir inside the sandbox, or it registers with your live hub. Link in what it needs to log in rather than copying it, so a token refresh reaches the real file:
+For a real agent behind the plugin, keep its config dir inside the sandbox, or it registers with your live hub. Copy its settings and link only its login, so a token refresh reaches the real file:
 
 ```bash
-bash $S run sh -c 'mkdir -p "$HOME/.claude/sessions"; ln -s "$REAL_HOME/.claude/.credentials.json" "$REAL_HOME/.claude/settings.json" "$HOME/.claude/"'
-bash $S run sh -c 'CLAUDE_CONFIG_DIR="$HOME/.claude" tmux new-session -d -s agent claude'
+bash $S run sh -c 'mkdir -p "$HOME/.claude/sessions"; install -m 644 "$REAL_HOME/.claude/settings.json" "$HOME/.claude/settings.json"; ln -s "$REAL_HOME/.claude/.credentials.json" "$HOME/.claude/"'
+bash $S run sh -c 'CLAUDE_CONFIG_DIR="$HOME/.claude" tmux -L sandbox new-session -d -s agent claude'
 ```
 
 ## Traps
@@ -61,4 +61,5 @@ bash $S run sh -c 'CLAUDE_CONFIG_DIR="$HOME/.claude" tmux new-session -d -s agen
 - Without `niri`, focus goes to sway's rules, so check anything about clicking a layer surface for keys on your real compositor too.
 - A popout opened with `ipc` takes the keyboard; the plugin only sees `key` while it is open.
 - `wtype` waits for the seat: `key` right after `up` can land before a surface has focus. Take a `shot` when a key seems ignored.
+- Never link a sandboxed Claude to your real `settings.json`. It rewrites that file through the link, which replaces a home-manager symlink with a plain file and makes the next switch fail with `would be clobbered`.
 - Never stop a sandbox by process name. The live shell runs the same store paths; `down` finds them by their runtime dir.
