@@ -406,6 +406,20 @@ export function userFrame(o: { content: string; from?: string; sessionId?: strin
   };
 }
 
+/**
+ * `status` of a `peer_message_status` receipt. As of Claude Code 2.1.316, a
+ * Claude sender reads `status` and, on `dropped`, `drop_reason`, and never
+ * `reason`. Each status it knows prints fixed text and queues a prompt for the
+ * sender: `held` blames permission modes and promises a later status, and
+ * `delivered` says the message was approved. So a message that simply arrived
+ * gets no receipt, as from Claude Code itself. Claude ignores `queued`, which
+ * only pi senders read.
+ */
+export type ReceiptStatus = "held" | "delivered" | "denied" | "expired" | "dropped" | "queued";
+
+/** The `drop_reason`s of a `dropped` receipt this extension sends; Claude accepts these names. */
+export type DropReason = "rate-limited" | "duplicate";
+
 export function controlFrame(
   action: string,
   fields: Record<string, unknown>,

@@ -498,6 +498,8 @@ daemon starts.
   does with its row is `parent/identity.ts`.
 - pi's registry entry is written by
   `modules/programs/pi/extensions/parent/claude-peers.ts`, for Claude Code's messaging.
+- Claude Code shows a pi receipt as fixed text for its status and ignores `reason`, so
+  pick the status by what that text says (`ReceiptStatus` in `claude-peers/protocol.ts`).
 - Claude Code can park a conversation in a background job under its daemon; the
   front's entry gets `parkedJobId`. agent-hub's daemon then shows the job's entry in
   the front's place, under the front's window.

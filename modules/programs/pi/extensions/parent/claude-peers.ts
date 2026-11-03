@@ -34,6 +34,7 @@ import {
   buildEnvelope,
   controlFrame,
   decodeAddress,
+  type DropReason,
   encodeAddress,
   escapeTag,
   FEATURE_NOTIFY_IDLE,
@@ -49,6 +50,7 @@ import {
   type PermissionClass,
   pidDomain,
   procStart,
+  type ReceiptStatus,
   type RegistryEntry,
   removeRegistryEntry,
   resolvePeer,
@@ -157,7 +159,7 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
   function receipt(
     address: unknown,
     origMsgId: unknown,
-    status: string,
+    status: ReceiptStatus,
     reason?: string,
     extra: Record<string, unknown> = {},
   ) {
@@ -181,14 +183,15 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
     else pi.sendMessage(message, { deliverAs: "steer" });
   }
 
-  function admitted(sender: string, body: string): boolean {
+  /** Why the loop guard turns this message away, or undefined after admitting it. */
+  function dropReason(sender: string, body: string): DropReason | undefined {
     const now = Date.now();
     const recent = (recentBySender.get(sender) ?? []).filter((r) => now - r.at < RATE_WINDOW_MS);
-    const duplicate = recent.some((r) => r.body === body && now - r.at < DUPLICATE_WINDOW_MS);
-    if (duplicate || recent.length >= RATE_MAX) return false;
+    if (recent.some((r) => r.body === body && now - r.at < DUPLICATE_WINDOW_MS)) return "duplicate";
+    if (recent.length >= RATE_MAX) return "rate-limited";
     recent.push({ at: now, body });
     recentBySender.set(sender, recent);
-    return true;
+    return undefined;
   }
 
   async function onUserFrame(frame: Record<string, unknown>) {
@@ -203,12 +206,14 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
     const replyAddress = target && encodeAddress(target);
     const fromName =
       attr(env.fromName ?? "") || (target ? path.basename(target) : "unknown session");
-    if (!admitted(replyTo ?? fromName, env.body)) {
+    const dropped = dropReason(replyTo ?? fromName, env.body);
+    if (dropped) {
       receipt(
         replyTo,
         frame.msg_id,
-        "denied",
+        "dropped",
         "Rate limited: too many or repeated messages to this pi session.",
+        { drop_reason: dropped },
       );
       return;
     }
@@ -217,6 +222,7 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
     if (hold) {
       receipt(replyTo, frame.msg_id, "held", "Held for approval by the pi user.");
       const c = ctx;
+      const opened = Date.now();
       const approved =
         c?.hasUI === true &&
         (await userWait.markAgentPrompt(c, () =>
@@ -227,7 +233,12 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
           ),
         ));
       if (!approved) {
-        receipt(replyTo, frame.msg_id, "denied", "The pi user did not approve this message.");
+        // confirm reports a timeout as a plain no, so go by how long the dialog stayed open.
+        const unanswered =
+          !live || c?.hasUI !== true || Date.now() - opened >= HOLD_DIALOG_MS - 1000;
+        if (unanswered)
+          receipt(replyTo, frame.msg_id, "expired", "The pi user did not answer in time.");
+        else receipt(replyTo, frame.msg_id, "denied", "The pi user declined this message.");
         return;
       }
     }
@@ -259,15 +270,14 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
       receipt(
         replyTo,
         frame.msg_id,
-        "held",
+        "queued",
         `${ownName()} has finished its turn; the message waits for its user's next prompt. Don't wait on a reply; ask your user if you need its answer now.`,
-        { status_detail: "queued" },
       );
       ctx?.ui.notify(`Message from @${fromName} queued for your next prompt`, "info");
       return;
     }
     deliver(details, llmText, true);
-    receipt(replyTo, frame.msg_id, "delivered");
+    if (hold) receipt(replyTo, frame.msg_id, "delivered");
   }
 
   function sendIdleNotice(sub: IdleSubscriber, state: "idle" | "exited", timeoutMs?: number) {
@@ -296,9 +306,9 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
         const reason = typeof frame.reason === "string" ? `: ${frame.reason}` : "";
         ctx?.ui.notify(
           `Message to @${name} ${frame.status}${reason}`,
-          frame.status === "held" ? "info" : "warning",
+          frame.status === "held" || frame.status === "queued" ? "info" : "warning",
         );
-        if (frame.status_detail === "queued") {
+        if (frame.status === "queued") {
           const body = `Your message to ${name} was queued, not answered${reason}`;
           deliver({ kind: "status", fromName: name, body }, body, false);
         } else if (frame.status !== "held") {
