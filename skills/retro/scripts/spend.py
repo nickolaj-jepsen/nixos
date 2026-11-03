@@ -1,23 +1,31 @@
 #!/usr/bin/env python3
-"""Ledger of one Claude Code or pi session: where its money and time went, and which moments to examine.
+"""Evidence about one Claude Code or pi session, for a review of how the work went.
 
   report [SESSION] [--top N]
-      The ledger, then the moments its numbers select. Without SESSION: the current one.
-  window SESSION FROM TO [--agent ID] [--grep REGEX] [--max-lines N]
-      The condensed transcript of requests rFROM..rTO, to stdout. Nothing is written to disk.
-      --grep lists the matching events' requests instead, to locate a moment you were told about.
+      The ledger: time, spend, tools, subagents, skills, context, turns and events.
+      Without SESSION: the current one.
+  timeline SESSION [--brief] [--max-lines N]
+      The whole session in order: your prompts, the agent's messages, its tool calls with
+      their time and cost, edits, checks, errors, rewinds. --brief reduces calls to counts.
+  window SESSION FROM TO [--agent ID] [--grep REGEX] [--full] [--max-lines N]
+      The condensed transcript of requests rFROM..rTO. --grep lists where something happened.
+  outcome SESSION
+      The commits the session made and the files it edited. On a session older than a day,
+      also which of the lines it added were later changed, and by what.
 
 SESSION is part of a session id. Sources: ~/.claude/projects, ~/.claude-work/projects,
-~/.pi/agent/sessions. Everything from a session's last /retro onward is left out of the
-analysis, and so are subagents started after it, so a retro never reviews itself.
+~/.pi/agent/sessions. Everything from a session's last /retro onward is left out, so a retro
+never reviews itself. Nothing is written to disk.
 
 Dollars are list price, never an invoice. Class totals are computed from recorded usage. Item
 costs are estimates: each arrival is sized by how much the context grew, and each request's read,
 write and input bands are laid over the prefix. A cache-miss premium is charged to its event, not
 to the items that had to be rewritten. "Share while present" is not what removing an item saves.
+`unattributed` is usage Claude Code recorded that never reached the transcript, mostly hidden
+helper calls; it varies widely between sessions, so it says little about any one of them.
 
-Transcript fields are undocumented and can change in any release; what a session doesn't record
-prints as "not available". Compare `unattributed` between runs to notice the parser drifting.
+Transcript fields are undocumented and can change in any release. What a session doesn't record
+prints as "not available".
 """
 
 import argparse
@@ -66,6 +74,7 @@ READ_TOOLS = {"Read", "read"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "edit", "write"}
 BASH_TOOLS = {"Bash", "bash"}
 # Destructive commands and guard bypasses. An rm counts only outside /tmp and past a bare relative name.
+NIL_LEAF = "00000000-0000-0000-0000-000000000000"  # since 2.1.300, written just after a rewind
 RISKY = re.compile(
     r"\brm\s+-[a-z]*(?:rf|fr)[a-z]*\s+(?:--\s+)?(?!/tmp\b)[/~$*.]|\bgit\s+reset\s+--hard|\bgit\s+clean\s+-[a-z]*f"
     r"|\bgit\s+push\b[^|;&\n]*(?:--force|\s-f\b)|--no-verify|\"dangerouslyDisableSandbox\": true"
@@ -74,8 +83,15 @@ RISKY = re.compile(
 CONTEXT_ATTACHMENTS = {
     "file", "edited_text_file", "diagnostics", "instructions", "skill_listing", "mcp_instructions_delta",
     "deferred_tools_delta", "agent_listing_delta", "session_context", "environment", "queued_command", "skill_mention",
+    "invoked_skills", "nested_memory", "task_reminder", "hook_additional_context", "total_tokens_reminder", "silent_turn_reminder",
 }  # fmt: skip
 CLAUDE_NOISE = ("Another Claude", "This session is being continued", "The summarized", "Caveat:", "<local-command-", "<bash-stdout", "<bash-stderr", "<task-notification", "<artifact-")
+# Harness commands that change settings or the view, never a request to the agent.
+LOCAL_COMMANDS = {
+    "agents", "artifacts", "clear", "compact", "config", "context", "cost", "doctor", "effort", "exit", "fast",
+    "help", "hooks", "ide", "list-agents", "login", "logout", "mcp", "memory", "model", "open", "permissions",
+    "plugin", "reload-plugins", "reload-skills", "remote-control", "rename", "resume", "rewind", "status", "usage",
+}  # fmt: skip
 CHARS_PER_TOKEN = 4
 IMAGE_CHARS = 6000  # an image's base64 says nothing about its tokens; about 1.5k tokens each
 CAP_MINUTES = 15  # WakaTime's default; a convention, which is why the report also shows CAPS
@@ -83,13 +99,20 @@ CAPS = (5, 15, 30)
 BUST_MIN_LOST = 1024
 BUST_MIN_SHARE = 0.2
 SHRINK_SHARE = 0.5
-LOOK_BACK = 10  # the signal of a decisive error tends to trail it, so windows start earlier
-LOOK_AHEAD = 3
-MOMENTS_MAX = 5
-COST_FLOOR_USD = 0.25
-COST_FLOOR_SHARE = 0.03
-TIME_FLOOR_S = 120
-TIME_FLOOR_SHARE = 0.02
+BACK_MIN_SHARE = 0.02
+TIMELINE_LABELS = 8
+LABEL_WIDTH = 60
+LATER_COMMITS_MAX = 100
+TOO_RECENT_S = 86400  # a day: later fixes haven't had time to happen
+NOISE_FILES = re.compile(r"(^|/)(flake\.lock|package-lock\.json|pnpm-lock\.yaml|uv\.lock)$|\.(age|lock|png|jpg|svg)$")
+FIX_SUBJECT = re.compile(r"^(fix|revert)\b", re.I)
+# Commands that look like verification. A pointer for the reader, who judges what they actually showed.
+CHECKS = re.compile(
+    r"\b(just\s+(build|check|test|eval|fmt)|pytest|jest|vitest|mypy|pyright|ruff|eslint|tsc|nix\s+(build|flake\s+check)"
+    r"|cargo\s+(test|check|clippy|build)|go\s+(test|build|vet)|make(\s+(test|check))?|(npm|pnpm|yarn)\s+(test|run\s+\w*(test|check|lint|build))|claude\s+plugin\s+(validate|test))\b"
+)
+GIT_WRITES = re.compile(r"\bgit\b.*\b(commit|rebase|pull|cherry-pick|merge)\b|\bwt\s+land\b", re.S)
+COMMIT_OUTPUT = re.compile(r"^\[[^\]]*?\b([0-9a-f]{7,40})\] (.+)$", re.M)
 
 
 _warned_zstd = False
@@ -182,6 +205,7 @@ class Request:
         self.stored_cost = None  # pi records dollars per class itself
         self.skill = self.effort = None
         self.calls = []
+        self.abandoned = False  # on a path a rewind later left; still paid for
 
     @property
     def write(self):
@@ -222,6 +246,8 @@ class Session:
         self.cut_ts = None
         self.children = []
         self.meta = {}
+        self.seen = set()
+        self.copied = set()  # requests replayed from the session this one was forked from
 
     def add(self, kind, ts, **fields):
         self.events.append({"kind": kind, "ts": seconds(ts), **fields})
@@ -238,10 +264,27 @@ def call_label(name, inp):
 def parse_claude(source, path, seen):
     """`seen` holds request keys across a session's files: a fork replays its parent's records."""
     s = Session(source, path)
+    s.seen = seen
     groups = {}
+    rows, tip, open_cut = {}, None, None  # uuid → parent and request, for walking the conversation tree
     for r in records(path):
         kind, ts = r.get("type"), r.get("timestamp")
         s.cwd = s.cwd or r.get("cwd")
+        if kind == "last-prompt" and r.get("leafUuid") == NIL_LEAF and r.get("explicit") and open_cut:
+            open_cut["marked"] = True
+        row = None
+        if r.get("uuid") and kind in ("user", "assistant", "system", "attachment") and not r.get("isSidechain"):
+            parent = r.get("parentUuid")
+            content = (r.get("message") or {}).get("content")
+            answers = isinstance(content, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content)
+            # A tool result points at its call, so parallel results look like forks; only a new turn can be a cut.
+            if tip and parent and parent != tip and parent in rows and (kind == "attachment" or (kind == "user" and not answers)):
+                cut = walk_cut(rows, tip, parent)
+                if cut:
+                    s.add("cut", ts, marked=False, **cut)
+                    open_cut = s.events[-1]
+            row = rows[r["uuid"]] = {"parent": parent, "kind": kind, "req": None}
+            tip = r["uuid"]
         if kind == "cost-state":
             s.cost_state = r
             continue
@@ -274,6 +317,7 @@ def parse_claude(source, path, seen):
                 continue
             key = (msg.get("id"), r.get("requestId"))
             if key in seen and key not in groups:
+                s.copied.add(key)
                 continue
             seen.add(key)
             req = groups.get(key)
@@ -281,6 +325,9 @@ def parse_claude(source, path, seen):
                 req = groups[key] = Request(key, msg.get("model"), ts)
                 s.requests.append(req)
                 s.add("request", ts, req=req)
+                open_cut = None
+            if row:
+                row["req"] = req
             req.last_ts = ts
             req.skill = req.skill or r.get("attributionSkill")
             req.effort = req.effort or r.get("perTurnEffort")
@@ -362,11 +409,36 @@ def parse_claude(source, path, seen):
         if name and name.group(1) == "retro":
             s.add("retro", ts)
         s.add("tick", ts, what="user")
+        command = name.group(1) if name else (re.fullmatch(r"/([\w-]+)\b.*", text) or [None, None])[1]
+        if command in LOCAL_COMMANDS:
+            continue  # you were there, so the time is yours, but it asked the agent nothing
         s.add("prompt", ts, text=re.sub(r"</?(command-[a-z]+)>", " ", text).strip(), chars=size)
     return s
 
 
-def parse_pi(path):
+def walk_cut(rows, tip, parent):
+    """What a turn starting at `parent` abandoned: the path back from `tip`, or None if it isn't an ancestor."""
+    abandoned, seen, at = [], set(), tip
+    conversation = False
+    while at != parent:
+        row = rows.get(at)
+        if row is None or at in seen:
+            return None
+        seen.add(at)
+        conversation = conversation or row["kind"] in ("user", "assistant")
+        if row["req"] and row["req"] not in abandoned:
+            abandoned.append(row["req"])
+        at = row["parent"]
+    if not conversation:
+        return None
+    for req in abandoned:
+        req.abandoned = True
+    while at and not (rows.get(at) or {}).get("req"):
+        at = (rows.get(at) or {}).get("parent")
+    return {"ancestor": rows[at]["req"] if at else None, "abandoned": list(reversed(abandoned))}
+
+
+def parse_pi(path, seen=frozenset()):
     s = Session("pi", path)
     for r in records(path):
         ts, kind = r.get("timestamp"), r.get("type")
@@ -381,7 +453,9 @@ def parse_pi(path):
             continue
         m = r.get("message") or {}
         role = m.get("role")
-        if role == "assistant":
+        if role == "assistant" and r.get("id") in seen:
+            s.copied.add(r.get("id"))
+        elif role == "assistant":
             u = m.get("usage") or {}
             s.records += 1
             req = Request(r.get("id"), m.get("model"), ts)
@@ -442,9 +516,60 @@ def cut_at_retro(s):
         r.n = n
 
 
+def fork_origin(source, path):
+    """Request keys this file copied from the session it forked from: a fork starts with its parent's transcript."""
+    if source == "pi":
+        try:
+            with open(path, errors="replace") as f:
+                parent = json.loads(f.readline() or "{}").get("parentSession")
+        except (OSError, ValueError):
+            return set()
+        if not parent or not os.path.exists(parent):
+            return set()
+        return {r.get("id") for r in records(parent) if r.get("type") == "message" and (r.get("message") or {}).get("role") == "assistant"}
+    first, forked_from, is_parent = None, None, False
+    for r in records(path):
+        first = first or ((r.get("message") or {}).get("id") if r.get("type") == "assistant" else None)
+        forked_from = forked_from or (r.get("forkedFrom") or {}).get("sessionId")
+        is_parent = is_parent or r.get("type") == "continued-in"
+    if not first or is_parent:
+        return set()
+    own = os.path.basename(path).split(".")[0]
+    donors = []
+    for other in glob.glob(os.path.join(os.path.dirname(path), "*.jsonl")):
+        if other == path:
+            continue
+        with open(other, errors="replace") as f:
+            raw = f.read()
+        if first not in raw:
+            continue
+        # The parent names its fork; failing that, assume the file last written longest ago is the older one.
+        if forked_from == os.path.basename(other).split(".")[0] or own in raw:
+            donors = [other]
+            break
+        if os.path.getmtime(other) < os.path.getmtime(path):
+            donors.append(other)
+    if not donors:
+        return set()
+    donor = min(donors, key=os.path.getmtime)
+    return {((r.get("message") or {}).get("id"), r.get("requestId")) for r in records(donor) if r.get("type") == "assistant"}
+
+
+def drop_copied_lead(s):
+    """A fork's copied turns aren't its own: keep from the prompt that led to its first real request."""
+    if not s.copied:
+        return
+    first = next((i for i, e in enumerate(s.events) if e["kind"] == "request"), None)
+    if first is None:
+        s.events = []
+        return
+    start = max((i for i, e in enumerate(s.events[:first]) if e["kind"] == "prompt"), default=first)
+    s.events = s.events[start:]
+
+
 def load_children(s):
     """Subagent sessions, deepest included; a fork's replayed parent records count once."""
-    seen = {r.key for r in s.requests}
+    seen = s.seen or {r.key for r in s.requests}
     if s.source == "pi":
         children = pi_children(s)
     else:
@@ -543,7 +668,9 @@ def resolve(session):
 
 def load(session):
     source, path = resolve(session)
-    s = parse_pi(path) if source == "pi" else parse_claude(source, path, set())
+    origin = fork_origin(source, path)
+    s = parse_pi(path, origin) if source == "pi" else parse_claude(source, path, origin)
+    drop_copied_lead(s)
     cut_at_retro(s)
     load_children(s)
     return s
@@ -572,7 +699,13 @@ def sweep(s, cap_s):
             continue
         gap = max(0.0, e["ts"] - prev)
         prev = e["ts"]
-        what = "compaction" if k == "compact" else e["what"]
+        what = "user" if k == "compact" else e["what"]
+        if k == "compact":
+            # The gap also holds whatever came before it, often you away before typing /compact.
+            spent = min(gap, e.get("duration") or gap)
+            b["compaction"] += spent
+            gaps.append({"what": "compaction", "seconds": spent, "req": req.n if req else 1})
+            gap -= spent
         if what == "user" and pending:
             what = "background"
         if what in ("user", "permission"):
@@ -606,9 +739,9 @@ class Item:
 
 def allocate(s):
     """Items and cache-miss events of the main chain, conserving each request's input-side dollars."""
-    done, events, compactions = [], [], []
+    done, events, compactions, backs = [], [], [], []
     items, ends, full_rate = [], [], [0.0]  # full_rate[k]: read rate owed by every item below index k
-    arrivals, prev, prev_ts, boundary = [], None, None, None
+    arrivals, prev, prev_ts, boundary, cut = [], None, None, None, None
     negative = 0
 
     def close(last_n):
@@ -618,6 +751,17 @@ def allocate(s):
             items[i].cost += items[i].size * rate
             items[i].requests = last_n - items[i].born + 1
         done.extend(items)
+
+    def drop_tail(limit, last_n):
+        """The context went back: items past `limit` left it, so they stop paying here."""
+        while items and ends[-1] > limit:
+            item = items.pop()
+            ends.pop()
+            owed = full_rate.pop()
+            full_rate[-1] += owed
+            item.cost += item.size * owed
+            item.requests = last_n - item.born + 1
+            done.append(item)
 
     def grow(item):
         items.append(item)
@@ -634,25 +778,47 @@ def allocate(s):
             arrivals.append((None, "tool", e["chars"], e["call_id"]))
         elif k == "compact":
             boundary = e
+        elif k == "cut":
+            cut = e
+            arrivals = []  # what the abandoned path brought in left with it
         elif k == "request":
             req = e["req"]
             T = req.context
             costs = req.costs()
-            shrink = prev is not None and prev.context > 5000 and T < prev.context * SHRINK_SHARE
-            if prev is None or boundary or shrink:
+            shrink = prev is not None and not cut and prev.context > 5000 and T < prev.context * SHRINK_SHARE
+            ancestor = cut["ancestor"] if cut else None
+            ref = ancestor or prev  # what this request's context grew from
+            if cut and prev is not None:
+                backs.append({"req": req.n, "before": prev.context, "after": T, "marked": cut["marked"], "abandoned": len(cut["abandoned"]), "structural": True})
+            if prev is None or boundary or shrink or (cut and not ancestor):
                 if prev is not None:
                     close(prev.n)
                     items, ends, full_rate = [], [], [0.0]
                 sized = [(lab, kind, ch // CHARS_PER_TOKEN, cid) for lab, kind, ch, cid in arrivals]
                 rest = max(0, T - sum(x[2] for x in sized))
-                base = "startup context" if prev is None else ("context after compaction" if boundary else "context after shrink")
+                base = "startup context" if prev is None else "context after compaction" if boundary else "context after rewind" if cut else "context after shrink"
                 grow(Item(base, "base", req.n, rest))
+            elif cut:
+                if ancestor is prev:
+                    grow(Item(output_label(prev), "output", prev.n + 1, prev.output))
+                drop_tail(ancestor.context + ancestor.output, prev.n)
+                new = max(0, T - (ends[-1] if ends else 0))
+                chars = sum(x[2] for x in arrivals)
+                sized = [(lab, kind, round(new * ch / chars) if chars else 0, cid) for lab, kind, ch, cid in arrivals]
+                if not arrivals and new:
+                    sized = [("unlabelled growth", "context", new, None)]
             else:
                 new = T - prev.context - prev.output
                 if new < 0:
                     negative += 1
                     new = 0
-                grow(Item(output_label(prev), "output", prev.n + 1, prev.output))
+                if T < prev.context - max(BUST_MIN_LOST, BACK_MIN_SHARE * prev.context):
+                    # No structure says why: a pi branch, or a trim. Neither is a miss.
+                    backs.append({"req": req.n, "before": prev.context, "after": T, "marked": False, "abandoned": 0, "structural": False})
+                    drop_tail(T - sum(x[2] for x in arrivals) // CHARS_PER_TOKEN, prev.n)
+                    new = max(0, T - (ends[-1] if ends else 0))
+                else:
+                    grow(Item(output_label(prev), "output", prev.n + 1, prev.output))
                 chars = sum(x[2] for x in arrivals)
                 sized = [(lab, kind, round(new * ch / chars) if chars else 0, cid) for lab, kind, ch, cid in arrivals]
                 if not arrivals and new:
@@ -671,15 +837,17 @@ def allocate(s):
             r_write = (costs["write"] / req.write) if costs and req.write else 0
             lost = 0
             if prev is not None:
-                missing = prev.context - req.read
-                if missing > max(BUST_MIN_LOST, BUST_MIN_SHARE * prev.context) and req.write:
+                # Only what this request still sends can have been missed.
+                expected = min(ref.context + (ref.output if cut else 0), T)
+                missing = expected - req.read
+                if missing > max(BUST_MIN_LOST, BUST_MIN_SHARE * expected) and req.write:
                     lost = min(missing, req.write)
             if lost:
                 gap = (seconds(req.first_ts) or 0) - (seconds(prev_ts) or 0)
-                ttl = 3600 if prev.w1h or req.w1h else 300
+                ttl = 3600 if ref.w1h or req.w1h else 300
                 if boundary:
                     cause = "compaction"
-                elif req.model != prev.model:
+                elif req.model != ref.model:
                     cause = "model change"
                 elif gap > ttl:
                     cause = f"gap over {'1h' if ttl == 3600 else '5m'} TTL"
@@ -706,11 +874,11 @@ def allocate(s):
                     break
             if boundary:
                 compactions.append({"req": req.n, "pre": boundary.get("pre") or (prev.context if prev else 0), "post": boundary.get("post") or T, "duration": boundary.get("duration") or 0, "trigger": boundary.get("trigger"), "rebuild": costs["write"] if costs else 0, "r_read": r_read})
-            boundary = None
+            boundary, cut = None, None
             prev, prev_ts = req, req.last_ts
     if prev is not None:
         close(prev.n)
-    return done, events, compactions, negative
+    return done, events, compactions, negative, backs
 
 
 def output_label(req):
@@ -749,6 +917,16 @@ def tool_rows(calls, items_by_call):
     return rows
 
 
+def final_report(child):
+    """Size of what a subagent reported at the end; for a background one, its tool result is only a launch stub."""
+    for e in reversed(child.events):
+        if e["kind"] == "call" and "handback" in str(e["name"]).lower():
+            return len(json.dumps(e["input"]))
+        if e["kind"] == "say":
+            return len(e["text"])
+    return None
+
+
 def subagent_rows(s, calls):
     by_agent = {}
     by_tool_use = {}
@@ -771,8 +949,9 @@ def subagent_rows(s, calls):
                 "first_write": sum((r.costs() or {}).get("write", 0) for r in child.requests[:1]),
                 "tokens": sum(r.context + r.output for r in child.requests),
                 "seconds": (max(ts) - min(ts)) if ts else 0,
-                "returned": (c["result"] or {}).get("chars") if c and c["result"] else None,
+                "returned": final_report(child) or ((c["result"] or {}).get("chars") if c and c["result"] else None),
                 "req": c["req"] if c else None,
+                "call": next((cid for cid, x in calls.items() if x is c), None) if c else None,
             }
         )
     return sorted(rows, key=lambda r: -r["cost"])
@@ -799,19 +978,26 @@ def skill_rows(s):
 
 
 def turn_rows(s, subagents):
-    turns, cur, prompts = [], None, 0
+    turns, cur, prompts, prev = [], None, 0, None
     for e in s.events:
         if e["kind"] == "prompt":
             prompts += 1
-            cur = {"n": prompts, "text": e["text"], "requests": [], "ts": e["ts"], "end": e["ts"]}
+            cur = {"n": prompts, "text": e["text"], "requests": [], "active": 0.0}
             turns.append(cur)
         elif e["kind"] == "request":
             if cur is None:
-                cur = {"n": 0, "text": "", "requests": [], "ts": e["ts"], "end": e["ts"]}
+                cur = {"n": 0, "text": "", "requests": [], "active": 0.0}
                 turns.append(cur)
             cur["requests"].append(e["req"])
-        if cur is not None and e["ts"] and e["kind"] != "prompt":
-            cur["end"] = e["ts"]
+        if e["kind"] in ("tick", "compact") and e["ts"]:
+            gap = max(0.0, e["ts"] - prev) if prev else 0.0
+            prev = e["ts"]
+            if cur is not None and e["kind"] == "compact":
+                cur["active"] += min(gap, e.get("duration") or gap)
+            elif cur is not None and e["what"] == "permission":
+                cur["active"] += min(gap, CAP_MINUTES * 60)
+            elif cur is not None and e["what"] != "user":
+                cur["active"] += gap
     for t in turns:
         ns = {r.n for r in t["requests"]}
         t["cost"] = sum(r.cost for r in t["requests"]) + sum(a["cost"] for a in subagents if a["req"] in ns)
@@ -820,10 +1006,17 @@ def turn_rows(s, subagents):
     return turns
 
 
-def friction(s, calls):
+def friction(s, calls, backs):
     """Each event: where it happened, what it was, how bad its kind is (3 = you stepped in)."""
     out = []
     req = 0
+    for b in backs:
+        if b["structural"]:
+            how = "rewound" if b["marked"] else "path jumped back, likely a rewind"
+            lost = f"abandoned {b['abandoned']} request{'s' if b['abandoned'] != 1 else ''}" if b["abandoned"] else "nothing sent since"
+            out.append({"req": b["req"], "what": f"{how}: {lost}", "weight": 3 if b["abandoned"] else 1})
+        else:
+            out.append({"req": b["req"], "what": f"context went back {tok(b['before'])} → {tok(b['after'])} (a branch or a trim), not a cache miss", "weight": 1})
     streak = 0
     reads = {}  # path → read count since it last changed
     failed = set()  # calls that failed with nothing changed since: re-running after a fix is no friction
@@ -887,88 +1080,6 @@ def risky_calls(s):
 
 
 # ---------------------------------------------------------------------------
-# Moments: rules fixed before anyone reads the session.
-
-
-def select_moments(total, active, items, turns, subagents, sweep_result, frictions, risks, busts, last_req):
-    cost_floor = max(COST_FLOOR_USD, COST_FLOOR_SHARE * total)
-    time_floor = max(TIME_FLOOR_S, TIME_FLOOR_SHARE * active)
-
-    def window(at, start=None):
-        lo = at - LOOK_BACK if start is None else min(start, at - LOOK_BACK)
-        return max(1, lo), min(last_req, at + LOOK_AHEAD)
-
-    def share_of_cost(d):
-        return d / total if total else 0
-
-    pools = {"cost": [], "time": [], "friction": []}
-    for it in items:
-        if it.kind == "base" or it.cost < cost_floor:
-            continue
-        pools["cost"].append({"kind": "cost", "at": it.born, "why": f"{it.label or 'tool result'}: ~{it.size:,} tok for {it.requests} requests, ${it.cost:.2f} while present", "share": share_of_cost(it.cost), "shape": "result-dominated"})
-    for t in turns:
-        if t["from"] is None or t["cost"] < cost_floor:
-            continue
-        top = max((i for i in items if t["from"] <= i.born <= t["to"] and i.kind != "base"), key=lambda i: i.cost, default=None)
-        dominated = top is not None and top.cost >= 0.3 * t["cost"]
-        delegated = sum(a["cost"] for a in subagents if a["req"] is not None and t["from"] <= a["req"] <= t["to"])
-        shape = "subagent-dominated" if delegated >= 0.5 * t["cost"] else "result-dominated" if dominated else "turn-dominated" if len(t["requests"]) >= 20 else "short turn"
-        why = f"prompt #{t['n']}: {len(t['requests'])} requests, ${t['cost']:.2f} with its subagents"
-        moment = {"kind": "cost", "why": why, "share": share_of_cost(t["cost"]), "shape": shape}
-        # A turn with one heavy item is about that item; otherwise it is about the turn, so start at its prompt.
-        moment |= {"at": top.born} if dominated else {"at": t["from"], "start": t["from"], "cap": t["to"]}
-        pools["cost"].append(moment)
-    for a in subagents:
-        if a["req"] and a["cost"] >= cost_floor:
-            ret = f", returned {a['returned']:,} chars" if a["returned"] is not None else ""
-            pools["cost"].append({"kind": "cost", "at": a["req"], "why": f"subagent {a['type']} ({clip(a['description'], 40)}): ${a['cost']:.2f}, {fmt_s(a['seconds'])}{ret}", "share": share_of_cost(a["cost"]), "shape": "subagent", "agent": a["id"]})
-    for b in busts:
-        if b["premium"] >= cost_floor and b["cause"] != "compaction":
-            pools["cost"].append({"kind": "cost", "at": b["req"], "why": f"cache miss ({b['cause']}): ~{b['lost']:,} tok rewritten, ${b['premium']:.2f} premium", "share": share_of_cost(b["premium"]), "shape": "cache miss"})
-    for g in sweep_result["gaps"]:
-        if g["seconds"] >= time_floor and g["what"] != "background":  # that work has its own subagent row
-            pools["time"].append({"kind": "time", "at": g["req"], "why": f"{fmt_s(g['seconds'])} in one {g['what']} gap", "share": g["seconds"] / active if active else 0, "shape": g["what"]})
-    for f in frictions:
-        pools["friction"].append({"kind": "friction", "at": f["req"] or 1, "why": f["what"], "share": COST_FLOOR_SHARE * f["weight"], "shape": "friction", "weight": f["weight"]})
-    for p in pools.values():
-        p.sort(key=lambda m: -m["share"])
-
-    chosen = []
-
-    def take(m):
-        if any(m is c["source"] for c in chosen):
-            return False
-        lo, hi = window(m["at"], m.get("start"))
-        if m.get("cap"):
-            hi = min(max(m["at"] + LOOK_AHEAD, min(m["cap"], lo + 40)), last_req)
-        for c in chosen:
-            if c["from"] <= m["at"] <= c["to"]:
-                if m["why"] != c["why"] and m["why"] not in c["also"]:
-                    c["also"].append(m["why"])
-                return False
-        chosen.append({**m, "from": lo, "to": hi, "also": [], "source": m})
-        return True
-
-    risk = risks[0] if risks else None
-    room = MOMENTS_MAX - (1 if risk else 0)
-    # One of each kind first, so a heavy session's cost can't crowd out what was cheap but wrong.
-    for name in ("cost", "time", "friction"):
-        for m in pools[name]:
-            if take(m):
-                break
-        if len(chosen) >= room:
-            break
-    for m in sorted(pools["cost"] + pools["time"] + pools["friction"], key=lambda m: -m["share"]):
-        if len(chosen) >= room:
-            break
-        take(m)
-    if risk:
-        lo, hi = window(risk["req"])
-        chosen.append({"kind": "risk", "at": risk["req"], "from": lo, "to": hi, "why": f"zero-cost risk `{risk['what']}`: {risk['label']}", "share": 0, "shape": "risk", "source": risk, "also": [f"{len(risks) - 1} more risky calls"] if len(risks) > 1 else []})
-    return chosen
-
-
-# ---------------------------------------------------------------------------
 # Output.
 
 
@@ -1009,7 +1120,7 @@ def report(args):
     main_cost = sum(classes.values())
     child_cost = sum(r.cost for c in s.children for r in c.requests)
     total = main_cost + child_cost
-    items, busts, compactions, negative = allocate(s)
+    items, busts, compactions, negative, backs = allocate(s)
     calls = call_table(s)
     items_by_call = {i.call_id: i for i in items if i.call_id}
     for i in items:
@@ -1021,7 +1132,7 @@ def report(args):
     active = sum(b[k] for k in b if k != "away")
     subagents = subagent_rows(s, calls)
     turns = turn_rows(s, subagents)
-    frictions = friction(s, calls)
+    frictions = friction(s, calls, backs)
     risks = risky_calls(s)
 
     ts = [e["ts"] for e in s.events if e["ts"]]
@@ -1031,24 +1142,10 @@ def report(args):
         print("(work profile: paraphrase, never quote)")
     dup = f"{s.records} assistant records → {len(s.requests)} requests" if s.source != "pi" else f"{len(s.requests)} requests"
     print(f"list price, table read {PRICES_READ} · {dup}" + (f" · retro span excluded (${s.excluded_cost:.2f})" if s.cut_ts else ""))
+    if s.copied:
+        print(f"forked from an earlier session: {len(s.copied)} copied requests not charged")
     if unpriced:
         print(f"UNPRICED models, counted as $0: {', '.join(unpriced)}")
-
-    print("\n## Spend")
-    print(f"total ${total:.2f}: main ${main_cost:.2f}, subagents ${child_cost:.2f}")
-    print(
-        f"main by class: read ${classes['read']:.2f} ({pct(classes['read'], main_cost)}, {tok(sum(r.read for r in s.requests))}), "
-        f"write ${classes['write']:.2f} ({pct(classes['write'], main_cost)}, {tok(sum(r.w5m for r in s.requests))} 5m, {tok(sum(r.w1h for r in s.requests))} 1h), "
-        f"output ${classes['output']:.2f} ({pct(classes['output'], main_cost)}, {tok(sum(r.output for r in s.requests))}, thinking {tok(sum(r.thinking for r in s.requests))} included), "
-        f"input ${classes['input']:.2f} ({pct(classes['input'], main_cost)})"
-    )
-    premium = sum(x["premium"] for x in busts)
-    print(f"main allocated: context items ${sum(i.cost for i in items):.2f} (estimated), cache-miss events ${premium:.2f}, output ${classes['output']:.2f}")
-    state = (s.cost_state or {}).get("totalCostUSD")
-    if state is not None:
-        print(f"cost-state ${state:.2f} (whole session, retro included) · unattributed ${state - total - s.excluded_cost:.2f}, never spread over items")
-    else:
-        print("cost-state: not available")
 
     print("\n## Time")
     wall = duration(s)
@@ -1065,6 +1162,24 @@ def report(args):
     print(f"your share of the time: raw {pct(swept['raw_human'], machine + swept['raw_human'])}, " + ", ".join(sens))
     think_ms = sum(r.thinking_ms for r in s.requests)
     print(f"thinking: {tok(sum(r.thinking for r in s.requests))} tokens, " + (fmt_s(think_ms / 1000) if think_ms else "time not available"))
+
+    print("\n## Spend")
+    print(f"total ${total:.2f}: main ${main_cost:.2f}, subagents ${child_cost:.2f}")
+    print(
+        f"main by class: read ${classes['read']:.2f} ({pct(classes['read'], main_cost)}, {tok(sum(r.read for r in s.requests))}), "
+        f"write ${classes['write']:.2f} ({pct(classes['write'], main_cost)}, {tok(sum(r.w5m for r in s.requests))} 5m, {tok(sum(r.w1h for r in s.requests))} 1h), "
+        f"output ${classes['output']:.2f} ({pct(classes['output'], main_cost)}, {tok(sum(r.output for r in s.requests))}, thinking {tok(sum(r.thinking for r in s.requests))} included), "
+        f"input ${classes['input']:.2f} ({pct(classes['input'], main_cost)})"
+    )
+    premium = sum(x["premium"] for x in busts)
+    print(f"main allocated: context items ${sum(i.cost for i in items):.2f} (estimated), cache-miss events ${premium:.2f}, output ${classes['output']:.2f}")
+    state = (s.cost_state or {}).get("totalCostUSD")
+    if s.copied:
+        print("cost-state: not comparable, a fork inherits its parent's")
+    elif state is not None:
+        print(f"cost-state ${state:.2f} (whole session, retro included) · unattributed ${state - total - s.excluded_cost:.2f}, never spread over items")
+    else:
+        print("cost-state: not available")
 
     print("\n## Tools (seconds overlap in parallel batches; estimated cost is of their results while present)")
     rows = tool_rows(calls, items_by_call)
@@ -1101,7 +1216,7 @@ def report(args):
             payback = f"pays back after ~{pay:.0f} requests, {after} followed" if pay is not None else f"{after} requests followed"
             print(f"compaction at r{c['req']}: {tok(c['pre'] or 0)} → {tok(c['post'] or 0)}, {fmt_s(c['duration'])}, {c['trigger'] or '?'}; {payback}")
     if negative:
-        print(f"context shrank between {negative} request pairs without a boundary; those arrivals are unsized")
+        print(f"context failed to grow between {negative} request pairs without a boundary; those arrivals are unsized")
     print("largest items, estimated (share while present, not what removing them saves; pressure = tokens × requests):")
     ranked = sorted((i for i in items), key=lambda i: -i.cost)[:top]
     table(
@@ -1109,14 +1224,14 @@ def report(args):
         [(f"{i.cost:.2f}", pct(i.cost, main_cost), tok(i.size), i.requests, tok(i.size * i.requests), f"r{i.born}", i.label or "tool result") for i in ranked],
     )
 
-    print("\n## Turns (dollars include subagents)")
+    print(f"\n## Turns, costliest {min(top, len(turns))} of {len(turns)} (dollars include subagents; time is working time)")
     table(
         ("#", "$", "requests", "time", "range", "prompt"),
-        [(t["n"], f"{t['cost']:.2f}", len(t["requests"]), fmt_s((t["end"] or 0) - (t["ts"] or 0)), f"r{t['from']}-r{t['to']}" if t["from"] else "-", clip(t["text"], 60)) for t in sorted(turns, key=lambda t: -t["cost"])[:top]],
+        [(t["n"], f"{t['cost']:.2f}", len(t["requests"]), fmt_s(t["active"]), f"r{t['from']}-r{t['to']}" if t["from"] else "-", clip(t["text"], 60)) for t in sorted(turns, key=lambda t: -t["cost"])[:top]],
     )
 
-    print("\n## Friction")
-    print(f"cache misses {len(busts)} (${premium:.2f} premium) · compactions {len(compactions)} · events {len(frictions)} · risky calls {len(risks)} · ran while idle {sum(e['kind'] == 'idle_work' for e in s.events)}")
+    print("\n## Events")
+    print(f"cache misses {len(busts)} (${premium:.2f} premium) · compactions {sum(e['kind'] == 'compact' for e in s.events)} · events {len(frictions)} · risky calls {len(risks)} · ran while idle {sum(e['kind'] == 'idle_work' for e in s.events)}")
     for x in busts:
         if x["premium"] >= 0.01:
             print(f"  r{x['req']}: cache miss, {x['cause']}, ~{tok(x['lost'])} rewritten, ${x['premium']:.2f}")
@@ -1125,7 +1240,7 @@ def report(args):
     if len(frictions) > top * 2:
         print(f"  … {len(frictions) - top * 2} more")
     for r in risks[:top]:
-        print(f"  r{r['req']}: risky: {r['label']}")
+        print(f"  r{r['req']}: risky by pattern, may be harmless: {r['label']}")
 
     print("\n## Model mix")
     mix = {}
@@ -1134,16 +1249,6 @@ def report(args):
         mix[key] = mix.get(key, 0) + 1
     print(" · ".join(f"{m} ({e}): {n}" for (m, e), n in sorted(mix.items(), key=lambda kv: -kv[1])))
 
-    print("\n## Moments")
-    moments = select_moments(total, active, items, turns, subagents, swept, frictions, risks, busts, len(s.requests))
-    if not moments:
-        print("nothing crossed the thresholds")
-    for n, m in enumerate(moments, 1):
-        agent = f" · agent {m['agent']}" if m.get("agent") else ""
-        print(f"{n}. [{m['kind']} · {m['shape']}] r{m['from']}-r{m['to']}{agent}: {m['why']}")
-        for a in m["also"][:3]:
-            print(f"   also here: {a}")
-    print(f"\nRead a moment: python3 <this script> window {s.id} FROM TO")
 
 
 def window(args):
@@ -1159,6 +1264,10 @@ def window(args):
     req = 0
     out = []
     prompts = 0
+
+    def width(n):
+        return 10**9 if args.full else n
+
     for e in s.events:
         k = e["kind"]
         if k == "request":
@@ -1167,19 +1276,19 @@ def window(args):
             line = f"[r{req}] context {tok(r.context)} (read {tok(r.read)}, write {tok(r.write)}), output {tok(r.output)}, ${r.cost:.2f}"
         elif k == "prompt":
             prompts += 1
-            line = f"[you #{prompts}] {clip(e['text'], 1500)}"
+            line = f"[you #{prompts}] {clip(e['text'], width(1500))}"
         elif k == "say":
-            line = f"[agent] {clip(e['text'], 1200)}"
+            line = f"[agent] {clip(e['text'], width(1200))}"
         elif k == "think":
-            line = f"[thinking] {clip(e['text'], 800)}"
+            line = f"[thinking] {clip(e['text'], width(800))}"
         elif k == "call":
             names[e["call_id"]] = e
-            line = f"[call] {e['name']}: {clip(json.dumps(e['input']), 300)}"
+            line = f"[call] {e['name']}: {clip(json.dumps(e['input']), width(300))}"
         elif k == "result":
             c = names.get(e["call_id"]) or {}
             tag = f"denied {e['denial']}" if e["denial"] else ("error" if e["error"] else "result")
             source = f" ({e['source']})" if e["source"] and e["source"] != "config" else ""
-            line = f"[{tag}{source}] {c.get('name', '?')}, {e['chars']:,} chars: {clip(e['text'], 300)}"
+            line = f"[{tag}{source}] {c.get('name', '?')}, {e['chars']:,} chars: {clip(e['text'], width(300))}"
         elif k == "interrupt":
             line = "[interrupted]"
         elif k == "compact":
@@ -1206,21 +1315,246 @@ def window(args):
     print("\n".join(lines))
 
 
+def timeline(args):
+    s = load(args.session)
+    if not s.requests:
+        sys.exit(f"spend: {s.path} has no API requests to review")
+    calls = call_table(s)
+    agents = {}
+    for a in subagent_rows(s, calls):
+        if a["call"]:
+            agents[a["call"]] = a
+    if s.source == "claude-work":
+        print("(work profile: paraphrase, never quote)")
+    print("# Timeline. rN is an API request; `window` opens any range. Lines starting ! are exact events.")
+    print("# `check` lines are commands that look like verification; judge what they actually showed.")
+    print("# `! risky` is a pattern match for a destructive command or guard bypass; it may be harmless.\n")
+    out, labels, counts, span, prompts = [], [], {}, [], 0
+    mark = latest = None  # when the current stretch began, and its newest event
+
+    def flush():
+        nonlocal labels, counts, span, mark
+        if span:
+            first, last = span[0], span[-1]
+            secs = max(0.0, (latest or 0) - (mark or latest or 0))
+            where = f"r{first.n}" if first is last else f"r{first.n}-r{last.n}"
+            lost = " (abandoned later)" if all(r.abandoned for r in span) else ""
+            summary = ", ".join(f"{k}×{v}" if v > 1 else k for k, v in counts.items()) if args.brief else "; ".join(labels[:TIMELINE_LABELS])
+            more = f"; +{len(labels) - TIMELINE_LABELS} more" if not args.brief and len(labels) > TIMELINE_LABELS else ""
+            out.append(f"{where} {fmt_s(secs)} ${sum(r.cost for r in span):.2f}{lost}: {summary}{more}".rstrip(": "))
+        labels, counts, span = [], {}, []
+        mark = latest
+
+    def touch():
+        if req and (not span or span[-1] is not req):
+            span.append(req)
+
+    req = None
+    for e in s.events:
+        k = e["kind"]
+        # Not attachments or waits: their time is yours, not the stretch's.
+        if k in ("request", "call", "say", "think", "result") and e["ts"]:
+            latest = e["ts"]
+        if k == "request":
+            req = e["req"]
+        elif k == "prompt":
+            flush()
+            mark = latest = e["ts"]
+            prompts += 1
+            out.append(f"\n[you #{prompts}] {clip(e['text'], 500)}")
+        elif k == "say":
+            flush()
+            touch()
+            out.append(f"[agent] {clip(e['text'], 300)}")
+        elif k == "think":
+            flush()
+            touch()
+            out.append(f"[thinking] {clip(e['text'], 200)}")
+        elif k == "call":
+            touch()
+            label = call_label(e["name"], e["input"])
+            cmd = str(e["input"].get("command") or "") if e["name"] in BASH_TOOLS else ""
+            if RISKY.search(json.dumps(e["input"])) and e["name"] in BASH_TOOLS:
+                flush()
+                out.append(f"! risky r{req.n}: {label}")
+            if e["name"] in EDIT_TOOLS:
+                flush()
+                out.append(f"edit r{req.n}: {tilde(str(e['input'].get('file_path') or e['input'].get('path') or '?'))}")
+            elif not CHECKS.search(cmd):
+                labels.append(clip(label, LABEL_WIDTH))
+                counts[e["name"]] = counts.get(e["name"], 0) + 1
+        elif k == "result":
+            c = calls.get(e["call_id"]) or {}
+            name, inp = c.get("name"), c.get("input") or {}
+            where = f"r{c.get('req', '?')}"
+            if name in BASH_TOOLS and CHECKS.search(str(inp.get("command") or "")):
+                flush()
+                took = fmt_s(max(0.0, (e["ts"] or 0) - (c.get("ts") or e["ts"] or 0)))
+                out.append(f"check {where} {'FAILED' if e['error'] else 'ok'} {took}: {clip(inp.get('command'), 120)}")
+            elif e["denial"]:
+                flush()
+                out.append(f"! denied {where} ({e['denial']}): {call_label(name, inp)}")
+            elif e["error"]:
+                flush()
+                out.append(f"! error {where}: {clip(call_label(name, inp), LABEL_WIDTH)}: {clip(e['text'], 160)}")
+            if name in HUMAN_TOOLS and not e["denial"]:
+                flush()
+                out.append(f"[answer] {clip(e['text'], 300)}")
+            if e["truncated"]:
+                out.append(f"! truncated {where}: {clip(call_label(name, inp), LABEL_WIDTH)}")
+            if e["call_id"] in agents:
+                a = agents.pop(e["call_id"])
+                flush()
+                ret = f", returned {a['returned']:,} chars" if a["returned"] is not None else ""
+                out.append(f"subagent {a['id'][:10]} {a['type']}: {clip(a['description'], 50)}: ${a['cost']:.2f}, {fmt_s(a['seconds'])}{ret}")
+        elif k == "cut":
+            flush()
+            lost = f"r{e['abandoned'][0].n}-r{e['abandoned'][-1].n} abandoned" if e["abandoned"] else "no requests abandoned"
+            out.append(f"! {'rewound' if e['marked'] else 'path jumped back, likely a rewind'}: {lost}")
+        elif k == "compact":
+            flush()
+            out.append(f"! compaction: {tok(e.get('pre') or 0)} → {tok(e.get('post') or 0)}, {fmt_s(e.get('duration') or 0)}")
+            mark = latest = e["ts"]
+        elif k == "interrupt":
+            flush()
+            out.append("! interrupted")
+        elif k == "queued":
+            flush()
+            out.append("! you queued a message mid-turn")
+        elif k == "hook" and e["blocked"]:
+            flush()
+            out.append("! a hook prevented continuing")
+        elif k == "api_error":
+            flush()
+            out.append("! API error")
+        elif k == "arrival" and e["label"].startswith("skill body:"):
+            flush()
+            out.append(f"[skill loaded] {e['label'].split(': ', 1)[1]}")
+    flush()
+    if args.max_lines and len(out) > args.max_lines:
+        out = out[: args.max_lines] + [f"[… {len(out) - args.max_lines} more lines; raise --max-lines or use --brief]"]
+    print("\n".join(out))
+
+
+def git(repo, *argv):
+    return subprocess.run(["git", "-C", repo, *argv], capture_output=True, text=True, errors="replace")
+
+
+def session_commits(s, repo):
+    """(sha, subject, on HEAD) of commits this session made that the repo still has, oldest first.
+
+    A commit counts if `git commit` output names it, or if its commit time falls inside one of the
+    session's own git calls, since `-q` and landing tools print nothing and a rebase changes the sha.
+    Another session committing in that same moment would be counted too.
+    """
+    found = {}
+    calls = call_table(s)
+    for e in s.events:
+        if e["kind"] != "result" or e["error"]:
+            continue
+        call = calls.get(e["call_id"]) or {}
+        cmd = str(call.get("input", {}).get("command") or "")
+        if not GIT_WRITES.search(cmd):
+            continue
+        for sha, _ in COMMIT_OUTPUT.findall(e["text"]):
+            full = git(repo, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}").stdout.strip()
+            if full:
+                found[full] = None
+        if call.get("ts") and e["ts"]:
+            log = git(repo, "log", "--all", "--no-merges", f"--since={int(call['ts']) - 5}", f"--until={int(e['ts']) + 5}", "--format=%H").stdout
+            found.update(dict.fromkeys(log.split()))
+    rows = []
+    for sha in found:
+        ct, subject = (git(repo, "show", "-s", "--format=%ct%x01%s", sha).stdout.strip().split("\x01", 1) + [""])[:2]
+        rows.append((int(ct or 0), sha, subject, git(repo, "merge-base", "--is-ancestor", sha, "HEAD").returncode == 0))
+    return [(sha, subject, on_head) for _, sha, subject, on_head in sorted(rows)]
+
+
+def outcome(args):
+    s = load(args.session)
+    edited = sorted({tilde(str(e["input"].get("file_path") or e["input"].get("path"))) for e in s.events if e["kind"] == "call" and e["name"] in EDIT_TOOLS})
+    repo = s.cwd if s.cwd and os.path.isdir(s.cwd) else None
+    print(f"# Outcome: {s.id} · {tilde(s.cwd)}")
+    print(f"files edited with edit tools: {len(edited)}" + (f" ({', '.join(edited[:20])}{', …' if len(edited) > 20 else ''})" if edited else ""))
+    if not repo or git(repo, "rev-parse", "--git-dir").returncode:
+        print("commits: not available, the session's directory is gone or isn't a repo")
+        return
+    commits = session_commits(s, repo)
+    if not commits:
+        print("commits: none found (uncommitted, or made in another directory)")
+        return
+    ours = {sha for sha, _, on_head in commits if on_head}
+    added, files = 0, set()
+    print("commits (read one with `git show`):")
+    for sha, subject, on_head in commits:
+        stat = git(repo, "show", "--numstat", "--format=", sha).stdout
+        n = 0
+        for line in stat.splitlines():
+            bits = line.split("\t")
+            if len(bits) == 3 and bits[0].isdigit() and not NOISE_FILES.search(bits[2]):
+                n += int(bits[0])
+                if on_head:
+                    files.add(bits[2])
+        added += n if on_head else 0
+        print(f"  {sha[:8]} +{n}{'' if on_head else ' (not on HEAD)'}: {clip(subject, 80)}")
+    end = max((e["ts"] for e in s.events if e["ts"]), default=time.time())
+    if time.time() - end < TOO_RECENT_S:
+        print("later changes: too recent to say; run this again on the session after a day or more")
+        return
+    if not ours:
+        print("later changes: none of these commits are on HEAD, so nothing to trace")
+        return
+    oldest = next(sha for sha, _, on_head in commits if on_head)
+    log = git(repo, "log", "--no-merges", "--format=%H%x01%ct%x01%s", f"{oldest}..HEAD", "--", *sorted(files)).stdout
+    later = [ln.split("\x01", 2) for ln in log.splitlines()]
+    later = [row for row in later if row[0] not in ours][:LATER_COMMITS_MAX]
+    changed = {}
+    for sha, ct, subject in later:
+        lines = 0
+        for path in sorted(files):
+            ranges = []
+            for line in git(repo, "diff", "-U0", "--no-renames", f"{sha}^", sha, "--", path).stdout.splitlines():
+                m = re.match(r"@@ -(\d+)(?:,(\d+))? ", line)
+                if m and int(m.group(2) or 1):
+                    start, count = int(m.group(1)), int(m.group(2) or 1)
+                    ranges += ["-L", f"{start},{start + count - 1}"]
+            if not ranges:
+                continue
+            for line in git(repo, "blame", "--line-porcelain", *ranges[:80], f"{sha}^", "--", path).stdout.splitlines():
+                m = re.match(r"^([0-9a-f]{40}) \d+ \d+", line)
+                lines += bool(m and m.group(1) in ours)
+        if lines:
+            changed[sha] = (lines, int(ct), subject)
+    total = sum(v[0] for v in changed.values())
+    fixes = sum(bool(FIX_SUBJECT.search(v[2])) for v in changed.values())
+    print(f"later changes: {total} of {added} added lines changed since, in {len(changed)} commits, {fixes} of them fixes or reverts")
+    print("(a pointer, not a verdict: larger diffs draw more changes, and much later change is ordinary development)")
+    for sha, (lines, ct, subject) in sorted(changed.items(), key=lambda kv: -kv[1][0])[:15]:
+        print(f"  {sha[:8]} {fmt_s(max(0, ct - end))} later, {lines} lines: {clip(subject, 80)}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="command", required=True)
     r = sub.add_parser("report")
     r.add_argument("session", nargs="?")
     r.add_argument("--top", type=int, default=8, help="rows per section")
+    l = sub.add_parser("timeline")
+    l.add_argument("session")
+    l.add_argument("--brief", action="store_true", help="tool calls as counts, not labels")
+    l.add_argument("--max-lines", type=int, default=2000)
+    o = sub.add_parser("outcome")
+    o.add_argument("session")
     w = sub.add_parser("window")
     w.add_argument("session")
     w.add_argument("first", type=int, nargs="?", default=1)
     w.add_argument("last", type=int, nargs="?", default=10**9)
     w.add_argument("--agent", help="read this subagent's own transcript; its requests are numbered separately")
     w.add_argument("--grep", help="list matching events and their requests instead")
+    w.add_argument("--full", action="store_true", help="don't clip messages and results")
     w.add_argument("--max-lines", type=int, default=200)
     args = p.parse_args()
-    {"report": report, "window": window}[args.command](args)
+    {"report": report, "timeline": timeline, "outcome": outcome, "window": window}[args.command](args)
 
 
 if __name__ == "__main__":

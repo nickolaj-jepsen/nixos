@@ -34,7 +34,7 @@ claude plugin install skills@nickolaj-jepsen
 - [brainstorm](brainstorm/): finds an approach for a goal that has none yet, offering 2–3 different ones after a round or two of questions, and stops once you pick.
 - [ideate](ideate/): ranked improvement ideas for a repo or one area of it, refuted by a fresh verifier, each routed to `/brainstorm`, `/grill-me` or building it.
 - [mine](mine/): improves a skill, tool, CLI or hook from how its runs went in past Claude Code and pi sessions.
-- [retro](retro/): reviews one session, with a script's cost and time ledger picking the moments and a fresh reviewer explaining them, then applies the fixes you pick; needs `python3`.
+- [retro](retro/): improves how agents work from one session: a fresh reviewer finds the detours and mistakes and what caused them, quality first, then time, then cost, and the fixes you pick get applied; needs `python3`.
 - [compare](compare/): recommends one of a field of candidates after a one-round brief, gated per-candidate research and a refuting verifier, with the verdict in chat; `--quick` answers inline.
 - [onboard](onboard/): teaches you an unfamiliar project by running it in a throwaway clone and tracing one real action, then saves an overview with its core features, architecture and evidence-labelled design choices, plus a trace guide, a quiz and offered dives into subsystems; `--quick` answers from static analysis in chat.
 - [annotate-plan](annotate-plan/): the agent writes a `PLAN.md`, you annotate it in your editor round after round until you approve, then it implements on request.

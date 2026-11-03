@@ -71,6 +71,8 @@ way they do.
 - Every subagent role locks its model; none inherits the parent's, because
   inheritance once ran cheap children on Opus.
 - Explore, general-purpose, reviewer and verifier run on `vm/flash`.
+- retro-reviewer runs on `vm/deep`: it makes all of a `/retro`'s judgements, once
+  per run, so quality outweighs its cost.
 - Plan runs on `vm/architect`. It has no edit tool, so it never leaves
   planning, and Jev rates the parent's brief once to put the whole run on deep
   or flash.
