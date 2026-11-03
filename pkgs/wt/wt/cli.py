@@ -61,13 +61,31 @@ def build_parser() -> argparse.ArgumentParser:
         "one included), it stays open and closes when that session ends.\n"
         "\n"
         "A conflict pauses the rebase inside the worktree: resolve it there, then\n"
-        "`wt land --continue <name>`, or `wt land --abort <name>` to put the branch back.",
+        "`wt land --continue <name>`, or `wt land --abort <name>` to put the branch back.\n"
+        "\n"
+        "Through GitHub instead (needs gh and an origin remote):\n"
+        "  --draft  push and open a draft PR          --pr  push and open a PR ready for review\n"
+        "  --green  open it and merge on green: GitHub auto-merges (--rebase) when <default>\n"
+        "           requires checks; otherwise this waits for the checks, up to --timeout, and a\n"
+        "           rerun resumes the wait.\n"
+        "A branch never pushed is rebased onto origin/<default> first; a pushed one is only pushed\n"
+        "on, never forced. Without --title/--body-file, gh fills both from the commits. A worktree\n"
+        "holding a gh stack submits the whole stack (gh stack submit), and --green merges it with\n"
+        "gh stack merge once every layer's checks pass. The worktree closes afterwards; its branch\n"
+        "stays until the PR merges, and the next `wt close` anywhere in the repo deletes it then.",
     )
     land.add_argument("target", nargs="?", help="worktree name, path, or . (default) for the current one")
     land.add_argument("--dry-run", action="store_true", help="say what would happen")
     land.add_argument("--abort-on-conflict", action="store_true", help="abort the rebase on conflict instead of pausing")
     land.add_argument("--continue", dest="continue_rebase", action="store_true", help="finish a paused rebase, then land")
     land.add_argument("--abort", action="store_true", help="abort a paused rebase")
+    mode = land.add_mutually_exclusive_group()
+    mode.add_argument("--draft", dest="mode", action="store_const", const="draft", help="open a draft PR")
+    mode.add_argument("--pr", dest="mode", action="store_const", const="pr", help="open a PR ready for review")
+    mode.add_argument("--green", dest="mode", action="store_const", const="green", help="open a PR and merge it on green")
+    land.add_argument("--title", help="PR title")
+    land.add_argument("--body-file", help="PR body, from a file")
+    land.add_argument("--timeout", default="30m", help="how long --green waits for checks (default 30m)")
     land.set_defaults(func=cmd_land)
 
     close = _verb(

@@ -60,6 +60,18 @@ def set_record(repo: Repo, name: str, branch: str) -> None:
     run(["git", "--git-dir", repo.common, "config", f"wt.{name}.head", branch])
 
 
+def layers(repo: Repo, name: str) -> list[str]:
+    """The stack layers `name` held when it was closed, besides its head branch."""
+    out = run(["git", "--git-dir", repo.common, "config", "--get-all", f"wt.{name}.layer"], check=False).stdout
+    return [line for line in out.splitlines() if line]
+
+
+def set_layers(repo: Repo, name: str, branches: list[str]) -> None:
+    run(["git", "--git-dir", repo.common, "config", "--unset-all", f"wt.{name}.layer"], check=False)
+    for branch in branches:
+        run(["git", "--git-dir", repo.common, "config", "--add", f"wt.{name}.layer", branch])
+
+
 def clear_record(repo: Repo, name: str) -> None:
     run(["git", "--git-dir", repo.common, "config", "--remove-section", f"wt.{name}"], check=False)
 

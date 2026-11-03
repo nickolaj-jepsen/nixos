@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
+import time
 from typing import Optional
 
 from .commands import close_entry, occupants
+from .gh import GhError, checks_state, gh, has_origin, merged_heads, pr_view, requires_checks, stack
 from .git import die, git, git_ok, info, is_within, run
 from .procs import busy_pids, describe_pid
 from .repo import Repo, RepoLock, current_repo, registered_worktrees
@@ -63,11 +66,12 @@ def _require_checkout_ready(repo: Repo, branch: str, checkout: Optional[str]) ->
     )
 
 
-def rebase(entry: Entry, onto: str, *, abort_on_conflict: bool) -> None:
-    """Rebase `entry` onto `onto`; a conflict exits, paused or aborted."""
+def rebase(entry: Entry, onto: str, *, abort_on_conflict: bool, update_refs: bool = False) -> None:
+    """Rebase `entry` onto `onto`, moving stacked branches along with `update_refs`; a conflict exits, paused or aborted."""
     path = entry.path or ""
     info(f"rebasing {entry.branch} onto {onto}")
-    if run(["git", "-C", path, "rebase", "--quiet", onto], check=False).returncode == 0:
+    extra = ["--update-refs"] if update_refs else []
+    if run(["git", "-C", path, "rebase", "--quiet", *extra, onto], check=False).returncode == 0:
         return
     conflicts = conflicted(path)
     print(f"wt: rebase conflict{': ' + ', '.join(conflicts) if conflicts else ''}", file=sys.stderr)
@@ -133,6 +137,13 @@ def check_landable(repo: Repo, entry: Entry) -> None:
 
 
 def land_local(repo: Repo, entry: Entry, args: argparse.Namespace) -> None:
+    layered = stack(entry.path or "") if has_origin(repo) else None
+    if layered:
+        # Every layer lands at once: rebase the top, and --update-refs carries the layers under it.
+        top = layered["branches"][-1]["name"]
+        if top != entry.branch and not args.dry_run:
+            run(["git", "-C", entry.path or "", "switch", "--quiet", top])
+        entry = Entry(entry.name, top, entry.path, entry.locked)
     if not ahead(repo, entry.branch):
         info(f"{entry.branch} has nothing that is not already in {repo.default}")
         if not args.dry_run:
@@ -145,8 +156,166 @@ def land_local(repo: Repo, entry: Entry, args: argparse.Namespace) -> None:
         return
     if not git_ok(repo.main, "rev-parse", "--verify", "--quiet", f"refs/heads/{repo.default}"):
         die(f"no rebase target: local {repo.default} does not exist")
-    rebase(entry, repo.default, abort_on_conflict=args.abort_on_conflict)
+    rebase(entry, repo.default, abort_on_conflict=args.abort_on_conflict, update_refs=bool(layered))
     _fast_forward_default(repo, entry)
+    close_after_landing(repo, entry)
+
+
+# ---------------------------------------------------------------------------
+# Through GitHub
+
+
+def _duration(value: str) -> float:
+    match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*([smh]?)\s*", value)
+    if not match:
+        die(f"bad duration '{value}'; use e.g. 30s, 5m, 2h")
+    return float(match.group(1)) * {"": 1, "s": 1, "m": 60, "h": 3600}[match.group(2)]
+
+
+def _gh(path: str, *args: str) -> str:
+    try:
+        return gh(path, *args)
+    except GhError as error:
+        die(f"gh {' '.join(args[:2])} failed: {error}")
+
+
+def _publish(repo: Repo, entry: Entry) -> None:
+    """Push the branch, rebased onto origin/<default> first while it has never been pushed."""
+    path = entry.path or ""
+    branch = entry.branch
+    run(["timeout", "20", "git", "-C", path, "fetch", "--quiet", "origin", repo.default], check=False)
+    upstream = f"origin/{repo.default}"
+    if not git_ok(path, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"):
+        # Commits only local <default> has stay out of the PR; they are not this branch's.
+        info(f"rebasing {branch} onto {upstream}")
+        if run(["git", "-C", path, "rebase", "--quiet", "--onto", upstream, repo.default], check=False).returncode:
+            run(["git", "-C", path, "rebase", "--abort"], check=False)
+            die(
+                f"{branch} does not rebase cleanly onto {upstream}: it conflicts, or depends on commits only "
+                f"local {repo.default} has. Push {repo.default} first, or land locally with 'wt land {entry.name}'."
+            )
+    elif not git_ok(path, "merge-base", "--is-ancestor", f"origin/{branch}", branch):
+        die(f"origin/{branch} has diverged from {branch}; pushing would need a force push, which wt never does")
+    if run(["git", "-C", path, "push", "--quiet", "--set-upstream", "origin", branch], check=False).returncode:
+        die(f"git push of {branch} failed")
+
+
+def _open_pr(repo: Repo, entry: Entry, args: argparse.Namespace, draft: bool) -> dict:
+    """The branch's open PR, created or switched to the asked draft state."""
+    path = entry.path or ""
+    pr = pr_view(path, entry.branch)
+    if pr and pr["state"] == "CLOSED":
+        die(f"PR #{pr['number']} for {entry.branch} was closed unmerged; reopen it on GitHub first")
+    if pr is None:
+        create = ["pr", "create", "--base", repo.default, "--head", entry.branch]
+        if args.title or args.body_file:
+            title = args.title or git(path, "log", "-1", "--format=%s").strip()
+            create += ["--title", title]
+            create += ["--body-file", args.body_file] if args.body_file else ["--body", ""]
+        else:
+            create.append("--fill")
+        _gh(path, *create, *(["--draft"] if draft else []))
+        pr = pr_view(path, entry.branch)
+        if pr is None:
+            die(f"gh created no PR for {entry.branch}")
+        info(f"opened {'draft ' if draft else ''}PR #{pr['number']}: {pr['url']}")
+    elif pr["state"] == "OPEN":
+        if draft and not pr.get("isDraft"):
+            _gh(path, "pr", "ready", "--undo", str(pr["number"]))
+        elif not draft and pr.get("isDraft"):
+            _gh(path, "pr", "ready", str(pr["number"]))
+        info(f"PR #{pr['number']} is up to date: {pr['url']}")
+    return pr
+
+
+def _wait_for_checks(path: str, numbers: list[int], timeout: float) -> None:
+    """Return once every PR's checks pass (or it has none); exit on a failure or the timeout."""
+    deadline = time.monotonic() + timeout
+    poll = float(os.environ.get("WT_GH_POLL") or 15)
+    said = ""
+    while True:
+        pending = []
+        for number in numbers:
+            pr = pr_view(path, str(number)) or {}
+            if pr.get("state") == "CLOSED":
+                die(f"PR #{number} was closed")
+            if pr.get("mergeable") == "CONFLICTING":
+                die(f"PR #{number} conflicts with its base; rebase it, push, and rerun")
+            state, failing = checks_state(pr)
+            if state == "fail":
+                die(f"checks failing on #{number}: {', '.join(failing)}; fix them, commit, and rerun 'wt land --green'")
+            if state == "pending" and pr.get("state") != "MERGED":
+                pending.append(number)
+        if not pending:
+            return
+        line = f"waiting for checks on {', '.join(f'#{n}' for n in pending)}"
+        if line != said:
+            info(line)
+            said = line
+        if time.monotonic() >= deadline:
+            die("checks still pending; rerun 'wt land --green' to keep waiting")
+        time.sleep(poll)
+
+
+def _report_behind(repo: Repo) -> None:
+    run(["timeout", "20", "git", "-C", repo.main, "fetch", "--quiet", "origin", repo.default], check=False)
+    behind = ahead(repo, f"origin/{repo.default}")
+    if behind:
+        info(f"local {repo.default} is {behind} commit(s) behind origin/{repo.default}; "
+             f"git -C {default_checkout(repo) or repo.main} pull --ff-only")
+
+
+def land_pr(repo: Repo, entry: Entry, args: argparse.Namespace, mode: str) -> None:
+    """Land through GitHub: `draft` and `pr` open the PR, `green` also merges it once checks pass."""
+    path = entry.path or ""
+    if not has_origin(repo):
+        die("there is no origin remote; land locally with 'wt land'")
+    layered = stack(path)
+    if layered:
+        _land_stack(repo, entry, args, mode, layered)
+        return
+    if args.dry_run:
+        info(f"would push {entry.branch} and open a {'draft ' if mode == 'draft' else ''}PR into {repo.default}")
+        return
+    _publish(repo, entry)
+    if not ahead(repo, entry.branch) or not git(path, "rev-list", f"origin/{repo.default}..{entry.branch}").strip():
+        info(f"{entry.branch} has nothing that is not already in {repo.default}; no PR to open")
+        close_after_landing(repo, entry)
+        return
+    pr = _open_pr(repo, entry, args, draft=mode == "draft")
+    print(pr["url"])
+    if mode == "green" and pr["state"] == "OPEN":
+        sha = git(path, "rev-parse", "HEAD").strip()
+        if requires_checks(path, repo.default):
+            _gh(path, "pr", "merge", str(pr["number"]), "--auto", "--rebase", "--match-head-commit", sha)
+            info(f"GitHub merges #{pr['number']} once its required checks pass")
+        else:
+            _wait_for_checks(path, [pr["number"]], _duration(args.timeout))
+            _gh(path, "pr", "merge", str(pr["number"]), "--rebase", "--match-head-commit", sha)
+            info(f"merged #{pr['number']} into {repo.default}")
+            merged_heads.cache_clear()
+            _report_behind(repo)
+    close_after_landing(repo, entry)
+
+
+def _land_stack(repo: Repo, entry: Entry, args: argparse.Namespace, mode: str, layered: dict) -> None:
+    path = entry.path or ""
+    names = [branch["name"] for branch in layered.get("branches", [])]
+    if args.dry_run:
+        info(f"would submit the stack {' <- '.join(names)} with gh stack")
+        return
+    _gh(path, "stack", "submit", "--auto", "--remote", "origin", *([] if mode == "draft" else ["--open"]))
+    info(f"submitted the stack {' <- '.join(names)}")
+    if mode == "green":
+        # A stack merges all at once and gh stack has no auto-merge, so this waits for every layer's checks.
+        layered = stack(path) or layered
+        prs = [b["pr"]["number"] for b in layered.get("branches", []) if (b.get("pr") or {}).get("state") == "OPEN"]
+        if prs:
+            _wait_for_checks(path, prs, _duration(args.timeout))
+            _gh(path, "stack", "merge", str(prs[-1]), "--yes", "--rebase")
+            info(f"merged the stack up to #{prs[-1]} into {repo.default}")
+            merged_heads.cache_clear()
+            _report_behind(repo)
     close_after_landing(repo, entry)
 
 
@@ -177,4 +346,7 @@ def cmd_land(args: argparse.Namespace) -> None:
             _resume(repo, entry, args)
             return
         check_landable(repo, entry)
-        land_local(repo, entry, args)
+        if args.mode:
+            land_pr(repo, entry, args, args.mode)
+        else:
+            land_local(repo, entry, args)

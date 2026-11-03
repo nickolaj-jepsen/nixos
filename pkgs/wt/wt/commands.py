@@ -9,6 +9,7 @@ import sys
 import time
 from typing import Optional
 
+from .gh import has_origin, pr_merged, stack_layers
 from .git import die, git, git_ok, info, is_within, run
 from .procs import busy_pids, describe_pid
 from .repo import Repo, RepoLock, current_repo, repos_under_root
@@ -25,9 +26,11 @@ from .worktrees import (
     idle_seconds,
     is_wip,
     landed,
+    layers,
     operation_in_progress,
     records,
     resolve,
+    set_layers,
     set_record,
 )
 
@@ -161,16 +164,40 @@ def _check_closable(repo: Repo, entry: Entry) -> None:
             die(f"'{entry.name}' is detached at a commit no branch has; put it on a branch first")
 
 
+def _finished(repo: Repo, branch: str) -> Optional[str]:
+    """Why `branch` can go with nothing lost: its commits are in the default branch, or its PR merged at this tip."""
+    if not branch_exists(repo, branch) or branch == repo.default:
+        return None
+    if landed(repo, branch):
+        return f"its commits are in {repo.default}"
+    sha = git(repo.main, "rev-parse", f"refs/heads/{branch}").strip()
+    if pr_merged(repo, branch, sha):
+        return "its pull request merged"
+    return None
+
+
 def settle_branches(repo: Repo, name: str, branches: list[str]) -> None:
-    """Delete each of `branches` whose work is in the default branch; forget `name` when its branch goes."""
-    record = records(repo).get(name)
+    """Delete each of `branches` that is finished; forget `name` once none of its branches is left."""
     for branch in branches:
-        if not branch_exists(repo, branch) or branch == repo.default or not landed(repo, branch):
-            continue
-        run(["git", "-C", repo.main, "branch", "--quiet", "-D", branch])
-        info(f"deleted {branch}: its commits are in {repo.default}")
-    if record and not branch_exists(repo, record):
+        why = _finished(repo, branch)
+        if why:
+            run(["git", "-C", repo.main, "branch", "--quiet", "-D", branch])
+            info(f"deleted {branch}: {why}")
+    record = records(repo).get(name)
+    remaining = [branch for branch in [record or "", *layers(repo, name)] if branch_exists(repo, branch)]
+    if not remaining:
         clear_record(repo, name)
+    elif record and not branch_exists(repo, record):
+        # The head went but other layers stay: reopen on the topmost one left.
+        set_record(repo, name, remaining[-1])
+
+
+def prune(repo: Repo) -> None:
+    """Delete the branches of closed worktrees that finished since they were closed."""
+    open_names = {entry.name for entry in entries(repo) if entry.open}
+    for name, head in records(repo).items():
+        if name not in open_names:
+            settle_branches(repo, name, [*layers(repo, name), head])
 
 
 def close_entry(repo: Repo, entry: Entry) -> None:
@@ -180,17 +207,21 @@ def close_entry(repo: Repo, entry: Entry) -> None:
     """
     path = entry.path or ""
     _check_closable(repo, entry)
+    # Read before the folder goes: `gh stack` answers for the checkout it runs in.
+    stacked = [b for b in stack_layers(path) if b != entry.branch] if has_origin(repo) else []
     if dirty(path):
         _commit_wip(path, entry.name)
         info(f"committed the uncommitted changes in '{entry.name}' as a wip commit")
     if entry.branch:
         set_record(repo, entry.name, entry.branch)
+    set_layers(repo, entry.name, stacked)
     run(["git", "-C", repo.main, "worktree", "remove", "--force", path])
     run(["git", "-C", repo.main, "worktree", "prune"], check=False)
     info(f"closed {entry.name}")
-    settle_branches(repo, entry.name, [entry.branch] if entry.branch else [])
+    settle_branches(repo, entry.name, [*stacked, entry.branch] if entry.branch else stacked)
     if branch_exists(repo, entry.branch):
         info(f"{entry.branch} keeps {ahead(repo, entry.branch)} commit(s) not in {repo.default}; 'wt new {entry.name}' reopens it")
+    prune(repo)
 
 
 def _detach() -> bool:
@@ -262,8 +293,11 @@ def cmd_drop(args: argparse.Namespace) -> None:
     repo = current_repo()
     with RepoLock(repo):
         entry = resolve(repo, args.name)
+        stacked = layers(repo, entry.name)
         if entry.open:
             path = entry.path or ""
+            if has_origin(repo):
+                stacked = stack_layers(path)
             if is_within(os.getcwd(), os.path.realpath(path)):
                 die(f"you are inside '{entry.name}'; cd out of it first")
             busy = occupants(path)
@@ -275,12 +309,14 @@ def cmd_drop(args: argparse.Namespace) -> None:
             run(["git", "-C", repo.main, "worktree", "remove", "--force", path])
             run(["git", "-C", repo.main, "worktree", "prune"], check=False)
         clear_record(repo, entry.name)
-        if not entry.branch or entry.branch == repo.default:
+        dropped = [b for b in dict.fromkeys([*stacked, entry.branch]) if branch_exists(repo, b) and b != repo.default]
+        if not dropped:
             info(f"dropped {entry.name}")
             return
-        sha = git(repo.main, "rev-parse", f"refs/heads/{entry.branch}").strip()
-        run(["git", "-C", repo.main, "branch", "--quiet", "-D", entry.branch])
-        info(f"dropped {entry.branch} at {sha}; restore with: git branch {entry.branch} {sha}")
+        for branch in dropped:
+            sha = git(repo.main, "rev-parse", f"refs/heads/{branch}").strip()
+            run(["git", "-C", repo.main, "branch", "--quiet", "-D", branch])
+            info(f"dropped {branch} at {sha}; restore with: git branch {branch} {sha}")
 
 
 # ---------------------------------------------------------------------------

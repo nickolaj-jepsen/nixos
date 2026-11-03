@@ -22,7 +22,9 @@ PKG_ROOT = Path(__file__).resolve().parents[1]
 WT_CMD = [WT_BIN] if WT_BIN else [sys.executable, "-m", "wt"]
 
 
-class Fixture(unittest.TestCase):
+class Base(unittest.TestCase):
+    """A repository with one commit on main, and a worktree root of its own."""
+
     def setUp(self) -> None:
         self.root = tempfile.mkdtemp(prefix="wt-tests-")
         self.addCleanup(shutil.rmtree, self.root, True)
@@ -103,6 +105,8 @@ class Fixture(unittest.TestCase):
             time.sleep(0.2)
         self.assertFalse(path.exists(), f"{path} still exists")
 
+
+class Local(Base):
     # interface ---------------------------------------------------------------
 
     def test_help_lists_exactly_the_verbs(self) -> None:
@@ -362,6 +366,151 @@ class Fixture(unittest.TestCase):
         self.wt("land", "idle")
         self.assertFalse(path.exists())
         self.assertEqual(self.subject("main"), "base")
+
+
+class GitHub(Base):
+    """The same repository with an origin remote and a fake `gh` first on PATH."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        origin = os.path.join(self.root, "origin.git")
+        self.git("init", "-q", "--bare", origin)
+        self.git("remote", "add", "origin", origin)
+        self.git("push", "-q", "-u", "origin", "main")
+        self.git("remote", "set-head", "origin", "main")
+        self.state = Path(self.root, "gh")
+        self.state.mkdir()
+        bin_dir = Path(self.root, "bin")
+        bin_dir.mkdir()
+        fake = Path(__file__).resolve().with_name("fake_gh.py")
+        Path(bin_dir, "gh").write_text(f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$@"\n')
+        Path(bin_dir, "gh").chmod(0o755)
+        self.env["PATH"] = f"{bin_dir}{os.pathsep}{self.env['PATH']}"
+        self.env["FAKE_GH_DIR"] = str(self.state)
+        self.env["WT_GH_POLL"] = "0.1"
+
+    def calls(self) -> list[list[str]]:
+        log = self.state / "calls.jsonl"
+        return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+    def called(self, *prefix: str) -> list[list[str]]:
+        return [call for call in self.calls() if call[: len(prefix)] == list(prefix)]
+
+    def set_state(self, name: str, value) -> None:
+        (self.state / name).write_text(json.dumps(value))
+
+    def sha(self, ref: str) -> str:
+        return self.git("rev-parse", ref).strip()
+
+    def test_pr_opens_and_keeps_the_branch_until_it_merges(self) -> None:
+        path = self.feature("proposal")
+        self.wt("land", "--pr", "proposal")
+        self.assertEqual(len(self.called("pr", "create")), 1)
+        self.assertNotIn("--draft", self.called("pr", "create")[0])
+        self.assertEqual(self.git("ls-remote", "origin", "proposal").split()[0], self.sha("proposal"))
+        self.assertFalse(path.exists())
+        self.assertTrue(self.has_branch("proposal"))
+        self.set_state("merged.json", [["proposal", self.sha("proposal")]])
+        self.new("other")
+        self.wt("close", "other")
+        self.assertFalse(self.has_branch("proposal"))
+        self.assertEqual(self.wt("list", "--name").stdout.split(), [])
+
+    def test_a_merged_pr_of_the_same_name_at_another_sha_keeps_the_branch(self) -> None:
+        self.feature("reused")
+        self.wt("close", "reused")
+        self.set_state("merged.json", [["reused", "0" * 40]])
+        self.new("other")
+        self.wt("close", "other")
+        self.assertTrue(self.has_branch("reused"))
+
+    def test_draft_opens_a_draft(self) -> None:
+        self.feature("sketch")
+        self.wt("land", "--draft", "sketch")
+        self.assertIn("--draft", self.called("pr", "create")[0])
+
+    def test_green_auto_merges_when_the_base_requires_checks(self) -> None:
+        self.feature("gated")
+        self.set_state("rules.json", [{"type": "required_status_checks"}])
+        self.wt("land", "--green", "gated")
+        merges = self.called("pr", "merge")
+        self.assertEqual(len(merges), 1)
+        self.assertIn("--auto", merges[0])
+        self.assertIn("--rebase", merges[0])
+        self.assertTrue(self.has_branch("gated"))
+
+    def test_green_waits_and_merges_when_nothing_is_required(self) -> None:
+        path = self.feature("ungated")
+        self.wt("land", "--green", "ungated")
+        merges = self.called("pr", "merge")
+        self.assertEqual(len(merges), 1)
+        self.assertNotIn("--auto", merges[0])
+        self.assertFalse(path.exists())
+        self.assertFalse(self.has_branch("ungated"))
+
+    def test_green_stops_on_failing_checks(self) -> None:
+        self.feature("red")
+        self.wt("land", "--pr", "red")
+        prs = json.loads((self.state / "prs.json").read_text())
+        prs[0]["statusCheckRollup"] = [{"name": "CI gate", "status": "COMPLETED", "conclusion": "FAILURE"}]
+        self.set_state("prs.json", prs)
+        self.new("red")
+        result = self.wt("land", "--green", "red", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("CI gate", result.stderr)
+        self.assertEqual(self.called("pr", "merge"), [])
+
+    def stacked(self) -> Path:
+        path = self.feature("bottom")
+        self.git("switch", "-qc", "top", cwd=str(path))
+        self.write("c.txt", "top\n", cwd=str(path))
+        self.commit("top", cwd=str(path))
+        self.set_state(
+            "stack.json",
+            {"trunk": "main", "currentBranch": "top", "branches": [{"name": "bottom"}, {"name": "top"}]},
+        )
+        return path
+
+    def test_a_stack_lands_locally_all_at_once(self) -> None:
+        path = self.stacked()
+        self.write("a.txt", "moved on\n")
+        self.commit("moved on")
+        self.git("switch", "-q", "bottom", cwd=str(path))
+        self.wt("land", "bottom")
+        self.assertEqual(self.subject("main"), "top")
+        self.assertEqual(self.subject("main~1"), "bottom")
+        self.assertFalse(path.exists())
+        self.assertFalse(self.has_branch("bottom"))
+        self.assertFalse(self.has_branch("top"))
+
+    def test_a_stack_lands_through_gh_stack(self) -> None:
+        path = self.stacked()
+        self.wt("land", "--green", "bottom")
+        submit = self.called("stack", "submit")
+        self.assertEqual(len(submit), 1)
+        self.assertIn("--open", submit[0])
+        self.assertEqual(len(self.called("stack", "merge")), 1)
+        self.assertFalse(path.exists())
+        self.assertFalse(self.has_branch("bottom"))
+        self.assertFalse(self.has_branch("top"))
+
+    def test_a_closed_stack_keeps_its_layers_and_reopens_on_the_top(self) -> None:
+        path = self.stacked()
+        self.wt("close", "bottom")
+        self.assertTrue(self.has_branch("bottom"))
+        self.assertTrue(self.has_branch("top"))
+        self.new("bottom")
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(path)).strip(), "top")
+        stderr = self.wt("drop", "bottom").stderr
+        self.assertIn("dropped top", stderr)
+        self.assertIn("dropped bottom", stderr)
+
+    def test_close_keeps_the_branch_when_gh_fails(self) -> None:
+        path = self.feature("offline")
+        self.env["FAKE_GH_FAIL"] = "1"
+        self.wt("close", "offline")
+        self.assertFalse(path.exists())
+        self.assertTrue(self.has_branch("offline"))
 
 
 if __name__ == "__main__":
