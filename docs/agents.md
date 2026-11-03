@@ -58,7 +58,10 @@ Paths in the table that don't start with `skills/` or `pkgs/` are under
     parser.
   - A helper only one package needs lives in that package.
 - The build runs `tsc --noEmit` over `core/`, `parent/` and `shared/` against
-  the pi that ships, so a type error fails `just build`.
+  the pi that ships, so a type error fails `just build`. That resolves
+  `@earendil-works/pi-ai` to its published types, which no longer carry
+  TypeBox's re-exports (pi's runtime width adds them back), so extension code
+  imports `Type` from `typebox`, the copy pi aliases to the one it loads.
 - npm dependencies go in `modules/programs/pi/extensions/package.json` and its
   lockfile, the npm root, never in `core/` or `parent/package.json`
   (`npm install --package-lock-only`; read via `importNpmLock`, no hash to

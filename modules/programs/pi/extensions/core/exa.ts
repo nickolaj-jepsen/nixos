@@ -5,7 +5,7 @@
  * pages, so the tools stay usable on small windows. `maxChars` changes the
  * per-item cap, but the call total still wins.
  */
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
 import { usdUsage } from "../shared/usage-ledger.ts";

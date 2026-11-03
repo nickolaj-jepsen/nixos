@@ -9,7 +9,7 @@
  * Sequential on purpose. Two questionnaires in the editor slot would replace
  * each other, and pi resolves that by running this tool's calls one at a time.
  */
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { QuestionsDialog } from "./questions/dialog.ts";
 import {

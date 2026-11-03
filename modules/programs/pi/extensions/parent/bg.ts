@@ -11,7 +11,7 @@ import { spawn } from "node:child_process";
 import { closeSync, fstatSync, mkdirSync, openSync, readdirSync, readSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { BG_RUN } from "../shared/tools.ts";
 import type { Services } from "./services.ts";

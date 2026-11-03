@@ -16,7 +16,8 @@
  * agent-hub writes that note, for Claude Code sessions too.
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { contentText, Type } from "@earendil-works/pi-ai";
+import { contentText } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import {
   VERSION,
   type ExtensionAPI,

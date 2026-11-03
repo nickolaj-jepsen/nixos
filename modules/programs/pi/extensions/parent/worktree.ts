@@ -11,7 +11,7 @@
  */
 import { execFile } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import {
   type ExtensionAPI,
   type ExtensionCommandContext,

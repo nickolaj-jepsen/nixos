@@ -19,7 +19,7 @@
  * one is told to hand its volume work to a cheap child, since its own tokens
  * are the scarce ones.
  */
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { ExtensionAPI, ToolInfo } from "@earendil-works/pi-coding-agent";
 import { isLeanModel } from "../shared/lean-model.ts";
 import { isExpensiveModel } from "./lib/model-tier.ts";
