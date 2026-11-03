@@ -14,8 +14,9 @@
  * once and stays off it. A host without the hub leaves the row undefined.
  *
  * The same connection subscribes, so the session can read every row the hub has
- * (never as a `bar`, which is a surface that can open a reader), and it writes
- * an answer form through the hub's form ops rather than a process per step:
+ * (never as a `bar`, which is a surface that can open a reader), go to, resume or
+ * dismiss another session's row, and put its notes up in the bar's reader; and it
+ * writes an answer form through the hub's form ops rather than a process per step:
  * each one goes through `formstore` and is published, so the file stays the one
  * truth and the next push carries the view.
  */
@@ -258,6 +259,21 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     current.on("close", lost);
   };
 
+  /**
+   * Puts the bar's reader up: on `session`'s notes, at `path` when one is named,
+   * else this session's latest. False when no bar took them.
+   */
+  const showReader = (session?: string, path?: string) =>
+    ask(
+      (request) => ({
+        op: "show",
+        request,
+        ...(session === undefined ? {} : { session }),
+        ...(path === undefined ? {} : { path }),
+      }),
+      SHOW_TIMEOUT_MS,
+    ).then((reply) => reply?.shown === true);
+
   dialogs.onChange(() => {
     const waitingFor = dialogs.current();
     setStatus(waitingFor ? "waiting" : "busy");
@@ -292,6 +308,8 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     read: () => row,
     /** Every row the hub reported when it last published, newest last; empty with no hub. */
     rows: () => state?.sessions ?? [],
+    /** The sessions that ended, newest first, as far as the hub still lists them. */
+    recent: () => state?.recent ?? [],
     /** What the hub last said the session is called. */
     identity: () => identity,
     /** Whether the session is attached right now. */
@@ -343,13 +361,22 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       ).then((reply) => reply?.peers);
     },
     /** Puts this session's notes up in the bar's reader; false when there is no bar to show them. */
-    showNotes: () =>
-      ask((request) => ({ op: "show", request }), SHOW_TIMEOUT_MS).then(
-        (reply) => reply?.shown === true,
-      ),
+    showNotes: () => showReader(),
+    /** The same for another session's notes, at `path` when one is named. */
+    show: (session?: string, path?: string) => showReader(session, path),
     /** What this session wrote, read, and the rest of its project's; undefined with no hub. */
     notes: (): Promise<HubNote[] | undefined> =>
       ask((request) => ({ op: "notes", request }), NOTES_TIMEOUT_MS).then((reply) => reply?.notes),
+    /**
+     * Goes to another session: its window on this host, else its tmux pane or
+     * Remote Control page over there. False when there is no hub to go through.
+     */
+    focus: (session: string) => write({ op: "focus", session }),
+    /** Brings an ended session back in a new terminal, over ssh when it ended elsewhere. */
+    resume: (session: string) => write({ op: "resume", session }),
+    /** Puts away a session's finished turn, or that turn alone when it is named. */
+    dismiss: (session: string, turn?: number) =>
+      write({ op: "dismiss", session, ...(turn === undefined ? {} : { turn }) }),
     /** The turn settled; `pending` background jobs still run for it, `error` if the run failed. */
     turnEnd(pending: number, error: boolean) {
       setStatus("idle");
