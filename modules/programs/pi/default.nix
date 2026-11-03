@@ -151,6 +151,7 @@ in {
       localModels);
       theme = "fireproof";
       quietStartup = "header";
+      collapseChangelog = true;
       hideThinkingBlock = false;
       treeFilterMode = "user-only";
       terminal.showTerminalProgress = true;
