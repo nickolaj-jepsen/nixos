@@ -1,0 +1,13 @@
+[
+  {
+    "slug": "repo@main/staged-and-unstaged-and-commits/02a6d85..76bb164",
+    "kind": "local",
+    "path": "/tmp/pi-review-fixture/data/tuicr/reviews/sessions/c41d7e0a9b2658f3.json",
+    "updated_at": "2026-11-03T20:04:11.908000000+00:00",
+    "comment_count": 1,
+    "reviewed_count": 1,
+    "file_count": 2,
+    "anchor": "main",
+    "active": true
+  }
+]
