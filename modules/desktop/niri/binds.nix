@@ -86,6 +86,10 @@
           action.spawn = [(lib.getExe pkgs.agent-hub) "focus-next"];
           hotkey-overlay.title = "Focus the Next Agent That Wants You";
         };
+        "Mod+Alt+B" = lib.mkIf config.fireproof.dev.agent-hub.enable {
+          action.spawn = [(lib.getExe pkgs.agent-hub) "show" "--toggle"];
+          hotkey-overlay.title = "Toggle the Focused Agent's Notes";
+        };
         "Mod+Ctrl+B" = lib.mkIf config.fireproof.dev.agent-hub.enable {
           action.spawn = [(lib.getExe pkgs.agent-hub) "toggle"];
           hotkey-overlay.title = "Dismiss or Bring Back the Focused Agent's Turn";

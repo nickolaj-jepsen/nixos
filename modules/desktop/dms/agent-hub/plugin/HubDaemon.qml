@@ -21,6 +21,45 @@ Item {
     // The menu last asked for, null until it answers; it may answer again with more.
     property var menu: null
     property int menuRequest: 0
+    // The reader's latest ask of each kind; an answer to an older one is dropped.
+    property int notesRequest: 0
+    property int noteRequest: 0
+    property int nextRequest: 1
+
+    NoteReader {
+        id: reader
+        hub: root
+    }
+
+    function readNotes(sessionId, path) {
+        reader.open(sessionId, path, false);
+    }
+
+    function askNotes(sessionId, path) {
+        root.notesRequest = root.nextRequest++;
+        socket.send(Object.assign({
+            "op": "notes",
+            "request": root.notesRequest
+        }, sessionId ? {
+            "session": sessionId
+        } : {}, path ? {
+            "path": path
+        } : {}));
+    }
+
+    // `at` is the mtime the reader holds; below 0 it holds nothing yet.
+    function askNote(sessionId, path, at) {
+        root.noteRequest = root.nextRequest++;
+        socket.send(Object.assign({
+            "op": "note",
+            "request": root.noteRequest,
+            "path": path
+        }, sessionId ? {
+            "session": sessionId
+        } : {}, at >= 0 ? {
+            "at": at
+        } : {}));
+    }
 
     function focusSession(sessionId) {
         socket.send({
@@ -130,6 +169,13 @@ Item {
         } else if (message.type === "menu") {
             if (message.request === root.menuRequest)
                 root.menu = message.menu;
+        } else if (message.type === "reply") {
+            if (message.request === root.notesRequest)
+                reader.listAnswered(message.notes);
+            else if (message.request === root.noteRequest)
+                reader.noteAnswered(message.note);
+        } else if (message.type === "show") {
+            reader.open(message.session, message.path, message.toggle);
         } else if (message.type === "refused") {
             console.warn("agentHub: " + message.text);
             root.refused = message.text;
@@ -146,7 +192,8 @@ Item {
             if (linkUp)
                 send({
                     "op": "subscribe",
-                    "version": 3
+                    "version": 3,
+                    "bar": true
                 });
             else {
                 root.sessions = [];

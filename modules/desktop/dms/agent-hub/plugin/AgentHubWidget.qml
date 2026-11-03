@@ -3,9 +3,10 @@
 // Popout: every session on the left, by what it is, and on the right everything about the
 // selected one, which is whatever you last hovered or moved to. Nothing moves under the
 // pointer. Keys act on the selection: Enter opens it (or resumes an ended one in a new
-// terminal), x dismisses, w logs its verdict as wrong, u undoes the last dismissal, a and d
-// answer its prompt, j/k move, g/G jump to the ends. A session's answer form takes 1-9, b, f, s,
-// r and n, and on its review y sends and i puts the reply in the session's prompt.
+// terminal), p reads its notes, x dismisses, w logs its verdict as wrong, u undoes the last
+// dismissal, a and d answer its prompt, j/k move, g/G jump to the ends. A session's answer form
+// takes 1-9, b, f, s, r and n, and on its review y sends and i puts the reply in the session's
+// prompt.
 import QtQuick
 import QtQuick.Effects
 import Quickshell
@@ -470,6 +471,14 @@ PluginComponent {
         pointerHeard = false;
         hoverTimer.stop();
         disarm();
+    }
+
+    // The reader takes over from here: it stays up while you type in the terminal.
+    function readNotes(session) {
+        if (!session || session.fold)
+            return;
+        hub.readNotes(session.id, "");
+        closePopout();
     }
 
     function runMenuRow(row) {
@@ -1318,6 +1327,8 @@ PluginComponent {
                     root.focusSession(root.selected);
                 else if (event.key === Qt.Key_R)
                     root.useReply(root.selected);
+                else if (event.key === Qt.Key_P)
+                    root.readNotes(root.selected);
                 else if (event.key === Qt.Key_X)
                     root.dismiss(root.selected);
                 else if (event.key === Qt.Key_W)
@@ -1513,6 +1524,39 @@ PluginComponent {
 
                             width: paneScroll.width
                             spacing: Theme.spacingM
+
+                            // The moment a plan wants reading: this turn just wrote it.
+                            Rectangle {
+                                visible: !!pane.session?.note?.new
+                                width: parent.width
+                                height: 34
+                                radius: Theme.cornerRadius
+                                color: Theme.surfaceContainerHigh
+
+                                DIcon {
+                                    id: newNoteIcon
+                                    x: Theme.spacingM
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    name: "description"
+                                    size: 15
+                                    color: Theme.primary
+                                }
+
+                                OneLine {
+                                    anchors.left: newNoteIcon.right
+                                    anchors.leftMargin: Theme.spacingS
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: Theme.spacingM
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "Wrote " + (pane.session?.note?.name ?? "") + " this turn"
+                                    color: Theme.surfaceText
+                                }
+
+                                StateLayer {
+                                    tooltipText: "Read it"
+                                    onClicked: root.readNotes(pane.session)
+                                }
+                            }
 
                             IconLine {
                                 visible: !!pane.session?.prompt
@@ -1811,6 +1855,15 @@ PluginComponent {
                         }
 
                         MetaChip {
+                            visible: (pane.session?.notes ?? 0) > 0
+                            icon: "description"
+                            label: String(pane.session?.notes ?? "")
+                            tip: "Read this session's notes"
+                            clickable: true
+                            onClicked: root.readNotes(pane.session)
+                        }
+
+                        MetaChip {
                             visible: (pane.session?.changed ?? 0) > 0
                             icon: "edit"
                             label: String(pane.session?.changed ?? "")
@@ -2011,6 +2064,11 @@ PluginComponent {
                 KeyHint {
                     key: "↵"
                     label: "open"
+                }
+
+                KeyHint {
+                    key: "p"
+                    label: "notes"
                 }
 
                 KeyHint {
