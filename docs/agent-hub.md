@@ -19,14 +19,16 @@ one is called, the step it is on, and how its last turn ended.
 
 Two panes, so nothing moves under the pointer. The left lists every session, by what
 it is: Waiting on you, Finished, Working, then Idle on slim lines, with the last few
-that ended behind a fold. The right shows the selected one: your last prompt, all of
-what it wants permission for or its closing words as written, the answer you'd likely
-give, its last turns, and one row of icons for where it is.
+that ended behind a fold. A row has its name on the left and its repository, the same
+from any worktree, on the right; a name that repeats it is cut down to the rest. The
+right shows the selected one: what it wants permission for or its closing words as
+written, the answer you'd likely give, your last prompt, its last turns, and one row of
+icons for where it is. A session not waiting on you has your prompt first.
 
-- A working row says what is running and for how long, with this turn's tally of edits,
-  commands and failures under it. The pane shows the agent's narration so far above
-  that. There is no percentage and no `stuck` state: nothing knows the total, and a long
-  build looks exactly like a hang, so it shows the time and leaves that to you.
+- A working row says what is running and for how long. The pane adds the agent's
+  narration so far and this turn's tally of edits, commands and failures. There is no
+  percentage and no `stuck` state: nothing knows the total, and a long build looks
+  exactly like a hang, so it shows the time and leaves that to you.
 - A command still running after 30 minutes gets a side-model reading, repeated every 30
   minutes, shown as `est. 20m left`. It sees the command, its past times and, for a
   background job, the end of its output. A foreground command's output can't be seen, so

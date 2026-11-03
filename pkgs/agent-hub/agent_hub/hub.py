@@ -35,7 +35,7 @@ PROGRESS_S = 2
 ACTIVITY_S = 15
 # A command shorter than this says nothing about how long one takes.
 JOB_LOG_MS = 60_000
-DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind", "estimate", "answer", "readings")
+DEMO_DETAILS = ("prompt", "permission", "project", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind", "estimate", "answer", "readings")
 # The command behind a folder menu's app, the first one found.
 APP_COMMANDS = {"code": ("code",), "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
 
@@ -292,7 +292,7 @@ class Hub:
             return
         # What it is called, not the turn it was on or the process it ran in.
         item = {k: v for k, v in session.saved().items() if k not in ("turn", "pid", "dismissed")}
-        item["endedAt"] = now_ms()
+        item["project"], item["endedAt"] = session.project, now_ms()
         self.recent = [item] + [r for r in self.recent if r["id"] != session.id]
         del self.recent[RECENT_MAX:]
 
@@ -356,9 +356,10 @@ class Hub:
         if not session.cwd:
             return
         root = await self.git.root(session.cwd)
+        project = await self.git.project(session.cwd)
         branch, changed = await self.git.summary(session.cwd)
-        if (root, branch, changed) != (session.root, session.branch, session.changed):
-            session.root, session.branch, session.changed = root or "", branch, changed
+        if (root, project, branch, changed) != (session.root, session.project, session.branch, session.changed):
+            session.root, session.project, session.branch, session.changed = root or "", project or "", branch, changed
             self.publish()
 
     # Prompts a hook holds open.
@@ -646,7 +647,7 @@ class Hub:
     def state(self, rows):
         """The `state` message: the rows the bar shows, what ended, and how many are hidden."""
         recent = [{"id": r["id"], "agent": r.get("agent") or "claude", "label": r.get("label") or "",
-                   "summary": r.get("summary") or "", "cwd": r.get("cwd") or "", "endedAt": r.get("endedAt") or 0,
+                   "summary": r.get("summary") or "", "cwd": r.get("cwd") or "", "project": r.get("project") or "", "endedAt": r.get("endedAt") or 0,
                    "resume": resume_command(r.get("agent"), r["id"], r.get("cwd"), r.get("config_dir")),
                    "history": r.get("history") or []} for r in self.recent]
         shown = [row for row in rows if not row.get("hidden")]

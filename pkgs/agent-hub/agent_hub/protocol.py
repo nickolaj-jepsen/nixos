@@ -102,6 +102,8 @@ ROW = {
     "permission?": {"id": "int", **ASK},
     # The form the last turn asks to be answered with. This host's own: a link never carries it.
     "answer?": FORM_VIEW,
+    # The repository, the same from any of its worktrees; the directory's own name outside git.
+    "project?": "str",
     "branch?": "str",
     # How many files have uncommitted changes.
     "changed?": "int",
@@ -129,6 +131,7 @@ RECENT = {
     "label": "str",
     "summary": "str",
     "cwd": "str",
+    "project": "str",
     "endedAt": "int",
     "resume": "str",
     "history": [TURN],

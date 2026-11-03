@@ -293,22 +293,22 @@ def demo_sessions():
     """Registry-shaped fake sessions, one or more per state."""
     t = now_ms()
     entries = [
-        ("demo-path", "pi", "waiting", "etc hosts cleanup", {"waitingFor": "write: /etc/hosts", "prompt": "Remove the old staging entries."}),
-        ("demo-edit", "cli", "waiting", "dms-gamma", {
+        ("demo-path", "pi", "waiting", "etc hosts cleanup", {"project": "nixos", "waitingFor": "write: /etc/hosts", "prompt": "Remove the old staging entries."}),
+        ("demo-edit", "cli", "waiting", "dms-gamma", {"project": "nixos",
             "waitingFor": "Edit: modules/desktop/dms/gamma.nix", "prompt": "The screen is too warm at night, lower it a bit.", "branch": "main",
             "permission": {"id": 0, "tool": "Edit", "about": "modules/desktop/dms/gamma.nix", "kind": "diff", "complete": True,
                            "body": "- nightTemperature = 3400;\n+ nightTemperature = 4000;"}}),
-        ("demo-bash", "cli", "waiting", "nixos-d0", {
+        ("demo-bash", "cli", "waiting", "nixos-d0", {"project": "nixos",
             "waitingFor": "Bash: cd ~/dev/app && git fetch origin && git rebase origin/main && rm -rf build/",
             "prompt": "Rebase this on main and clean up the old build output.", "branch": "main", "changed": 3, "peers": ["dotfiles-2a"],
             "history": [{"at": t - 720_000, "state": "done", "did": "Fixed the failing auth tests"}],
             "permission": {"id": 0, "tool": "Bash", "about": "Rebase onto main and remove the build folder", "kind": "command", "complete": True,
                            "body": "cd ~/dev/app && git fetch origin\ngit rebase origin/main && rm -rf build/"}}),
-        ("demo-ask", "pi", "idle", "fixture cleanup", {
+        ("demo-ask", "pi", "idle", "fixture cleanup", {"project": "pocketnix",
             "turnState": "blocked", "ask": "keep the old fixture, or regenerate it?", "askKind": "asked", "reply": "Regenerate it",
             "prompt": "Clean up the test fixtures.",
             "said": "The old fixture still passes, but it pins a format nothing else writes any more.\n\nKeep the old fixture, or regenerate it?"}),
-        ("demo-form", "cli", "idle", "grilling the plan", {
+        ("demo-form", "cli", "idle", "grilling the plan", {"project": "sjusk",
             "turnState": "blocked", "ask": "What should happen to --quick?", "prompt": "Grill me on the plan.", "reply": "yes",
             "said": "The bar and the funnel are independent, so this round asks both.\n\n"
                     "**Q1. Should every focus default to the same bar?**\n\n"
@@ -317,17 +317,17 @@ def demo_sessions():
                     "**Q2. Lower the per-generator target to 5–6 ideas?**\n\n"
                     "> **Recommended:** Yes. Four generators still give 20–24.\n\n---\n\n"
                     "**Q3. What should happen to `--quick`?**\n\n- **A.** Drop it.\n- **B.** Keep it as an alias."}),
-        ("demo-fail", "pi", "idle", "nightly bot", {"turnState": "failed", "summary": "The update bot still fails on the darwin eval.", "readings": "failing"}),
-        ("demo-done", "pi", "idle", "footer popup width", {"turnState": "done", "summary": "Fixed the footer popup width on narrow terminals."}),
-        ("demo-busy1", "cli", "busy", "devenv-tilt-68", {}),
-        ("demo-busy2", "pi", "busy", "flaky ci retries", {
+        ("demo-fail", "pi", "idle", "nightly bot", {"project": "nixos", "turnState": "failed", "summary": "The update bot still fails on the darwin eval.", "readings": "failing"}),
+        ("demo-done", "pi", "idle", "footer popup width", {"project": "pi-mono", "turnState": "done", "summary": "Fixed the footer popup width on narrow terminals."}),
+        ("demo-busy1", "cli", "busy", "devenv-tilt-68", {"project": "devenv-tilt"}),
+        ("demo-busy2", "pi", "busy", "flaky ci retries", {"project": "retry-lab",
             "doing": "Rerunning the retry test under load.", "branch": "retries", "activity": t - 30_000,
             "now": "just test retries", "nowAt": t - 2_400_000, "counts": {"edits": 4, "commands": 7, "failed": 1},
             "estimate": {"left": 20, "note": "31/40 built", "at": t - 300_000},
             "trail": [{"at": t - 1_500_000, "text": "Reading the retry code."}, {"at": t - 1_200_000, "text": "Wrote a test that fails the same way."},
                       {"at": t - 720_000, "text": "Rerunning the retry test under load."}]}),
-        ("demo-idle1", "cli", "idle", "dotfiles-2a", {}),
-        ("demo-idle2", "pi", "idle", "homelab grafana alerts", {}),
+        ("demo-idle1", "cli", "idle", "dotfiles-2a", {"project": "dotfiles"}),
+        ("demo-idle2", "pi", "idle", "homelab grafana alerts", {"project": "nixos"}),
     ]
     return [
         {"sessionId": sid, "pid": 0, "kind": "interactive", "entrypoint": entry, "status": status, "name": name,

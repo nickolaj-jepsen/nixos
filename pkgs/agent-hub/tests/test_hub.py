@@ -995,6 +995,16 @@ class PiTest(HubTest):
         pi.wait(lambda: pi.notices)
         self.assertEqual(pi.notices, ["identity: relabel failed"])
 
+    def test_a_session_that_ended_keeps_its_repository(self):
+        repo = git_repo(self.hub.tmp / "repo")
+        pi = self.attach(cwd=str(repo))
+        pi.start()
+        pi.row(lambda p: p["identity"]["label"] == "retry flakes")
+        self.bar.wait(has_session(self.sid, lambda s: s.get("project") == "repo"))
+        pi.close()
+        state = self.bar.wait(lambda m: m["type"] == "state" and m["recent"])
+        self.assertEqual(state["recent"][0]["project"], "repo")
+
     def test_session_that_ended_is_recent_with_the_command_that_resumes_it(self):
         pi = self.attach(cwd="/home/me/repo")
         pi.start()
@@ -1293,6 +1303,13 @@ class RowDetailTest(HubTest):
         state = self.bar.wait(has_session(self.sid, lambda s: s.get("branch") == "topic" and s.get("peers") == ["two"]))
         self.assertEqual(session(state, self.sid)["changed"], 1)
         self.assertEqual(session(state, other)["peers"], ["one"])
+
+    def test_a_row_names_its_repository_from_any_of_its_worktrees(self):
+        repo = git_repo(self.hub.tmp / "repo")
+        tree = self.hub.tmp / "elsewhere"
+        subprocess.run(["git", "-C", str(repo), "worktree", "add", str(tree)], check=True, capture_output=True)
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", cwd=str(tree))
+        self.bar.wait(has_session(self.sid, lambda s: s.get("project") == "repo"))
 
     def test_outside_git_there_is_no_branch_to_show(self):
         self.hub.write_session(self.proc.pid, self.sid, status="idle", cwd=str(self.hub.tmp))
@@ -1619,6 +1636,11 @@ class CleanRowTest(unittest.TestCase):
     def test_what_the_host_says_of_pid_window_and_host_is_ignored(self):
         row = links.clean_row("far", self.row(pid=1, window=7, host="near"))
         self.assertEqual((row["pid"], row["window"], row["host"]), (None, None, "far"))
+
+    def test_another_hosts_repository_comes_through(self):
+        self.assertEqual(links.clean_row("far", self.row(project="repo"))["project"], "repo")
+        item = links.clean_recent("far", {"id": self.SID, "agent": "claude", "cwd": "/a", "project": "repo"})
+        self.assertEqual(item["project"], "repo")
 
     def test_a_held_prompt_keeps_its_lines_and_loses_what_could_disguise_them(self):
         permission = {"id": 3, "tool": "Bash", "about": "a\x1bb", "kind": "evil", "body": "ls\n‮cat\x1b[0m", "complete": True}

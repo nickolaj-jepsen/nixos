@@ -108,8 +108,9 @@ class Session:
     prompt: str = ""
     # The prompts its hook holds open, oldest first, which is the one its dialog shows.
     holds: list = field(default_factory=list)
-    # Its working tree, as git last said: the tree's root, branch, and files changed.
+    # Its working tree, as git last said: the tree's root, its repository, branch, and files changed.
     root: str = ""
+    project: str = ""
     branch: str = ""
     changed: int = 0
     # Whether git has been asked since this hub met it.
@@ -380,7 +381,7 @@ class Session:
             row["tmux"] = self.tmux
         if self.bridge:
             row["bridge"] = self.bridge
-        details = {"prompt": self.prompt, "branch": self.branch, "changed": self.changed,
+        details = {"prompt": self.prompt, "project": self.project, "branch": self.branch, "changed": self.changed,
                    "said": outcome.get("said") if state == "needs-reply" else "",
                    "askKind": outcome.get("kind") if state == "needs-reply" else "",
                    "jobs": outcome.get("tasks") if state == "working" and not aside and not turn.open else None}

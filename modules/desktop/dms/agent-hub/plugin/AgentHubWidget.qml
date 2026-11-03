@@ -29,6 +29,7 @@ PluginComponent {
                 "agent": r.agent,
                 "name": r.label,
                 "cwd": r.cwd,
+                "project": r.project,
                 "reason": r.summary,
                 "state": "ended",
                 "host": r.host,
@@ -189,7 +190,7 @@ PluginComponent {
         burst.restart();
         const ask = fresh.find(waits);
         if (ask) {
-            peekText = displayName(ask) + (ask.state === "asking" ? " wants permission" : " asks");
+            peekText = [repoBeside(ask), shortName(ask)].filter(part => part).join(" · ") + (ask.state === "asking" ? " wants permission" : " asks");
             peekId = ask.id;
             peekOpen = true;
             peekTimer.restart();
@@ -307,6 +308,23 @@ PluginComponent {
         return Paths.shortenHome(session.cwd || "").split("/").pop() || "";
     }
 
+    function repoName(session) {
+        return session.project || folderName(session);
+    }
+
+    // The name, without what the repo beside it already says: `nixos-a0` reads `a0`.
+    function shortName(session) {
+        const name = displayName(session);
+        const repo = repoName(session);
+        return name.startsWith(repo + "-") ? name.slice(repo.length + 1) : name;
+    }
+
+    // The repo to show beside a name, unless that name is the repo.
+    function repoBeside(session) {
+        const repo = repoName(session);
+        return shortName(session) === repo ? "" : repo;
+    }
+
     // How long something has been running; "now" would read as if it had just begun.
     function elapsed(ms) {
         const m = Math.floor((nowMs - ms) / 60000);
@@ -361,11 +379,7 @@ PluginComponent {
     function rowLine(session) {
         if (session.state === "working" && session.now)
             return nowLine(session);
-        const said = session.reason || "";
-        if (said)
-            return said;
-        const folder = folderName(session);
-        return displayName(session).includes(folder) ? "" : folder;
+        return session.reason || "";
     }
 
     // j/k and the ends. Landing on the fold goes through it, which opens it on the way down.
@@ -621,7 +635,7 @@ PluginComponent {
                     id: peekLabel
                     x: 8
                     anchors.verticalCenter: parent.verticalCenter
-                    width: Math.min(implicitWidth, 204)
+                    width: Math.min(implicitWidth, 260)
                     text: root.peekText
                     wrapMode: Text.NoWrap
                     elide: Text.ElideRight
@@ -974,7 +988,6 @@ PluginComponent {
         readonly property string section: root.sectionOf(index)
         readonly property bool headed: section !== "" && (index === 0 || root.sectionOf(index - 1) !== section)
         readonly property string line: slim ? "" : root.rowLine(session)
-        readonly property bool working: session.state === "working"
 
         width: parent.width
 
@@ -989,8 +1002,7 @@ PluginComponent {
 
         Rectangle {
             width: parent.width
-            // A working row keeps room for its tally, so the first edit moves nothing under the pointer.
-            height: row.slim ? 32 : row.working ? 68 : 52
+            height: row.slim ? 32 : 52
             radius: Theme.cornerRadius
             color: row.isSelected ? Theme.surfaceContainerHigh : "transparent"
 
@@ -1021,60 +1033,73 @@ PluginComponent {
                 width: rightSide.x - x - Theme.spacingS
                 spacing: 2
 
-                Row {
+                Item {
                     width: parent.width
-                    spacing: 6
+                    height: firstLine.implicitHeight
 
+                    Row {
+                        id: firstLine
+
+                        width: parent.width - repoText.width - 8
+                        spacing: 6
+
+                        OneLine {
+                            id: nameText
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.min(implicitWidth, parent.width - hostChip.width - kindChip.width - 12)
+                            text: root.shortName(row.session)
+                            font.pixelSize: row.slim ? Theme.fontSizeSmall + 1 : Theme.fontSizeMedium
+                            font.weight: root.waits(row.session) ? Font.DemiBold : row.slim ? Font.Normal : Font.Medium
+                            color: row.slim ? Theme.surfaceVariantText : Theme.surfaceText
+                        }
+
+                        Rectangle {
+                            id: hostChip
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: !!row.session.host
+                            width: visible ? hostLabel.implicitWidth + 10 : 0
+                            height: hostLabel.implicitHeight + 2
+                            radius: 4
+                            color: Theme.withAlpha(Theme.surfaceText, 0.1)
+
+                            OneLine {
+                                id: hostLabel
+                                anchors.centerIn: parent
+                                text: row.session.host ?? ""
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                            }
+                        }
+
+                        // What it wants of you, for a row that needs a reply.
+                        Rectangle {
+                            id: kindChip
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: row.session.state === "needs-reply" && !!row.session.askKind
+                            width: visible ? kindLabel.implicitWidth + 10 : 0
+                            height: kindLabel.implicitHeight + 2
+                            radius: 4
+                            color: Theme.withAlpha(Theme.warning, 0.15)
+
+                            OneLine {
+                                id: kindLabel
+                                anchors.centerIn: parent
+                                text: (row.session.askKind ?? "").replace(/-/g, " ")
+                                color: Theme.warning
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                            }
+                        }
+                    }
+
+                    // Against the right edge, so names and repos each line up whatever their lengths.
                     OneLine {
-                        id: nameText
+                        id: repoText
+                        anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Math.min(implicitWidth, parent.width - agentMark.width - hostChip.width - kindChip.width - 18)
-                        text: root.displayName(row.session)
-                        font.pixelSize: row.slim ? Theme.fontSizeSmall + 1 : Theme.fontSizeMedium
-                        font.weight: root.waits(row.session) ? Font.DemiBold : row.slim ? Font.Normal : Font.Medium
-                        color: row.slim ? Theme.surfaceVariantText : Theme.surfaceText
-                    }
-
-                    AgentIcon {
-                        id: agentMark
-                        anchors.verticalCenter: parent.verticalCenter
-                        agent: row.session.agent ?? ""
-                    }
-
-                    Rectangle {
-                        id: hostChip
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: !!row.session.host
-                        width: visible ? hostLabel.implicitWidth + 10 : 0
-                        height: hostLabel.implicitHeight + 2
-                        radius: 4
-                        color: Theme.withAlpha(Theme.surfaceText, 0.1)
-
-                        OneLine {
-                            id: hostLabel
-                            anchors.centerIn: parent
-                            text: row.session.host ?? ""
-                            font.pixelSize: Theme.fontSizeSmall - 1
-                        }
-                    }
-
-                    // What it wants of you, for a row that needs a reply.
-                    Rectangle {
-                        id: kindChip
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: row.session.state === "needs-reply" && !!row.session.askKind
-                        width: visible ? kindLabel.implicitWidth + 10 : 0
-                        height: kindLabel.implicitHeight + 2
-                        radius: 4
-                        color: Theme.withAlpha(Theme.warning, 0.15)
-
-                        OneLine {
-                            id: kindLabel
-                            anchors.centerIn: parent
-                            text: (row.session.askKind ?? "").replace(/-/g, " ")
-                            color: Theme.warning
-                            font.pixelSize: Theme.fontSizeSmall - 1
-                        }
+                        width: Math.min(implicitWidth, parent.width * 0.4)
+                        text: root.repoBeside(row.session)
+                        font.pixelSize: nameText.font.pixelSize
+                        font.weight: row.slim ? Font.Normal : Font.Medium
+                        color: row.slim ? Theme.withAlpha(Theme.surfaceVariantText, 0.8) : Theme.surfaceVariantText
                     }
                 }
 
@@ -1082,14 +1107,7 @@ PluginComponent {
                     width: parent.width
                     visible: row.line !== ""
                     text: row.line
-                }
-
-                OneLine {
-                    width: parent.width
-                    visible: row.working && text !== ""
-                    text: row.working ? root.countsLine(row.session) : ""
-                    color: Theme.withAlpha(Theme.surfaceVariantText, 0.8)
-                    font.pixelSize: Theme.fontSizeSmall - 1
+                    color: root.waits(row.session) ? Theme.surfaceText : Theme.surfaceVariantText
                 }
             }
 
@@ -1102,6 +1120,13 @@ PluginComponent {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 54
                 height: 26
+
+                AgentIcon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: rowAge.visible
+                    opacity: 0.7
+                    agent: row.session.agent ?? ""
+                }
 
                 StyledText {
                     id: rowAge
@@ -1278,7 +1303,7 @@ PluginComponent {
         }
     }
 
-    popoutWidth: 800
+    popoutWidth: 850
 
     popoutContent: Component {
         FocusScope {
@@ -1398,7 +1423,7 @@ PluginComponent {
                 Column {
                     id: leftColumn
 
-                    width: 310
+                    width: 360
                     height: parent.height
 
                     OneLine {
@@ -1486,11 +1511,21 @@ PluginComponent {
 
                         OneLine {
                             anchors.verticalCenter: parent.verticalCenter
-                            width: Math.min(implicitWidth, parent.width - paneIcon.width - paneAge.width - Theme.spacingS * 3)
-                            text: pane.session ? root.displayName(pane.session) : ""
+                            width: Math.min(implicitWidth, parent.width - paneRepo.width - paneIcon.width - paneAge.width - Theme.spacingS * 4)
+                            text: pane.session ? root.shortName(pane.session) : ""
                             font.pixelSize: Theme.fontSizeLarge
                             font.weight: Font.DemiBold
                             color: Theme.surfaceText
+                        }
+
+                        OneLine {
+                            id: paneRepo
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: text !== ""
+                            width: Math.min(implicitWidth, parent.width * 0.35)
+                            text: pane.session ? root.repoBeside(pane.session) : ""
+                            font.pixelSize: Theme.fontSizeLarge
+                            font.weight: Font.Medium
                         }
 
                         AgentIcon {
@@ -1568,7 +1603,7 @@ PluginComponent {
                             }
 
                             IconLine {
-                                visible: !!pane.session?.prompt
+                                visible: !!pane.session?.prompt && !root.waits(pane.session)
                                 icon: "person"
                                 text: pane.session?.prompt ?? ""
                                 tip: "What you last asked"
@@ -1673,6 +1708,14 @@ PluginComponent {
                                 icon: "auto_awesome"
                                 text: pane.session?.reply ?? ""
                                 tip: "What you would probably say"
+                            }
+
+                            // Below, as what a waiting session wants of you is the first thing to read.
+                            IconLine {
+                                visible: !!pane.session?.prompt && root.waits(pane.session)
+                                icon: "person"
+                                text: pane.session?.prompt ?? ""
+                                tip: "What you last asked"
                             }
 
                             // A working session's trail has this line as its last.
@@ -1837,20 +1880,14 @@ PluginComponent {
                         spacing: 4
 
                         MetaChip {
-                            id: folderChip
-                            icon: "folder"
-                            label: pane.session ? Paths.shortenHome(pane.session.cwd || "") : ""
-                            tip: "Open this folder in another app"
-                            clickable: true
-                            maxLabel: 170
-                            onClicked: {
-                                menuBox.x = x;
-                                root.hub?.openMenu(pane.session.id, "folder");
-                            }
+                            visible: !!pane.session?.readings
+                            icon: "warning"
+                            label: "no readings"
+                            tip: pane.session?.readings === "capped" ? "This session has reached its limit of model readings, so its row won't update or call you on its own" : "The model keeps failing for this session, so its row won't update, and only the words of a turn can call you"
+                            tint: Theme.warning
                         }
 
                         MetaChip {
-                            id: branchChip
                             visible: !!pane.session?.branch
                             icon: "commit"
                             label: pane.session?.branch ?? ""
@@ -1864,27 +1901,19 @@ PluginComponent {
                         }
 
                         MetaChip {
+                            visible: (pane.session?.changed ?? 0) > 0
+                            icon: "edit"
+                            label: String(pane.session?.changed ?? "")
+                            tip: (pane.session?.changed ?? 0) + " files with uncommitted changes"
+                        }
+
+                        MetaChip {
                             visible: (pane.session?.notes ?? 0) > 0
                             icon: "description"
                             label: String(pane.session?.notes ?? "")
                             tip: "Read this session's notes"
                             clickable: true
                             onClicked: root.readNotes(pane.session)
-                        }
-
-                        MetaChip {
-                            visible: !!pane.session?.readings
-                            icon: "warning"
-                            label: "no readings"
-                            tip: pane.session?.readings === "capped" ? "This session has reached its limit of model readings, so its row won't update or call you on its own" : "The model keeps failing for this session, so its row won't update, and only the words of a turn can call you"
-                            tint: Theme.warning
-                        }
-
-                        MetaChip {
-                            visible: (pane.session?.changed ?? 0) > 0
-                            icon: "edit"
-                            label: String(pane.session?.changed ?? "")
-                            tip: (pane.session?.changed ?? 0) + " files with uncommitted changes"
                         }
 
                         MetaChip {
@@ -1901,6 +1930,19 @@ PluginComponent {
                             label: pane.session?.activity ? root.ago(pane.session.activity) : ""
                             tip: "Last activity"
                             tint: quiet ? Theme.warning : Theme.surfaceVariantText
+                        }
+
+                        MetaChip {
+                            icon: "folder"
+                            label: pane.session ? Paths.shortenHome(pane.session.cwd || "") : ""
+                            tip: "Open this folder in another app"
+                            clickable: true
+                            // Last, so it takes what the others leave: its icon and padding come off too.
+                            maxLabel: Math.max(40, paneMeta.width - x - 25)
+                            onClicked: {
+                                menuBox.x = Math.min(x, paneMeta.width - menuBox.width);
+                                root.hub?.openMenu(pane.session.id, "folder");
+                            }
                         }
                     }
 
