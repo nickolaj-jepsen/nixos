@@ -71,7 +71,10 @@ const socketPath = () => {
 };
 
 export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
+  /** Features that repaint this session's own row. */
   const listeners = new Set<() => void>();
+  /** Features that draw the whole hub: the overlay, and anything else listing other sessions. */
+  const rowsListeners = new Set<() => void>();
   let row: HubRow | undefined;
   let state: Extract<HubMessage, { type: "state" }> | undefined;
   let identity: HubIdentity | undefined;
@@ -96,6 +99,10 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
 
   const notify = () => {
     for (const listener of listeners) listener();
+  };
+
+  const notifyRows = () => {
+    for (const listener of rowsListeners) listener();
   };
 
   const write = (message: HubOp) => {
@@ -159,7 +166,8 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       notify();
     } else if (message.type === "state") {
       state = message;
-      notify();
+      // Only what draws other sessions cares: the session's own row did not move.
+      notifyRows();
     } else if (message.type === "judge") {
       void onJudge(message);
     } else if (message.type === "cancel") {
@@ -209,6 +217,7 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
         row = undefined;
         state = undefined;
         notify();
+        notifyRows();
       }
       if (!live || refused) return;
       setTimeout(open, RETRY_MS).unref();
@@ -316,11 +325,21 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     connected: () => attached,
     /** Whether this hub takes the form ops; false for a daemon older than them. */
     formsOverSocket: () => formOps,
-    /** Registers `listener` for every change of the row; returns the unsubscribe. */
+    /** Registers `listener` for every change of this session's row; returns the unsubscribe. */
     onChange(listener: () => void) {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
+      };
+    },
+    /**
+     * Registers `listener` for every change of the rows the hub pushed, this session's own
+     * among them. A feature that only repaints its own row wants `onChange`.
+     */
+    onRows(listener: () => void) {
+      rowsListeners.add(listener);
+      return () => {
+        rowsListeners.delete(listener);
       };
     },
     /** What each (re)attach re-sends. */
