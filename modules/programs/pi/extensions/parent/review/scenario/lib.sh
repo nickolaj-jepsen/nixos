@@ -124,12 +124,20 @@ scenario_pane() {
   scenario_tmux capture-pane -p -t pi -J | sed -e 's/[[:space:]]*$//'
 }
 
+# The pane into a variable first: `capture-pane | grep -q` kills the capture with
+# SIGPIPE once grep has its answer, and under pipefail that reads as a failure.
+scenario_match() {
+  local pattern=$1 frame
+  frame=$(scenario_pane)
+  grep -qE -- "$pattern" <<<"$frame"
+}
+
 scenario_wait() {
   local pattern="${1:?usage: scenario_wait <regex> [seconds]}"
   local limit="${2:-20}"
   local _
   for _ in $(seq $((limit * 5))); do
-    if scenario_pane | grep -qE -- "$pattern"; then
+    if scenario_match "$pattern"; then
       return 0
     fi
     sleep 0.2
@@ -141,7 +149,7 @@ scenario_wait() {
 
 scenario_assert_has() {
   local pattern="${1:?usage: scenario_assert_has <regex>}"
-  if ! scenario_pane | grep -qE -- "$pattern"; then
+  if ! scenario_match "$pattern"; then
     printf "scenario: expected '%s' on the pane, got:\n" "$pattern" >&2
     scenario_pane >&2
     exit 1
@@ -150,7 +158,7 @@ scenario_assert_has() {
 
 scenario_assert_lacks() {
   local pattern="${1:?usage: scenario_assert_lacks <regex>}"
-  if scenario_pane | grep -qE -- "$pattern"; then
+  if scenario_match "$pattern"; then
     printf "scenario: did not expect '%s' on the pane, got:\n" "$pattern" >&2
     scenario_pane >&2
     exit 1
