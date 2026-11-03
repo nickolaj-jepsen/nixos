@@ -389,10 +389,14 @@ class Hub:
 
     def _forget_holds(self, conn):
         """A hook hung up, so what it held can no longer be answered."""
+        forgot = False
         for session in self.sessions.values():
             for hold in [h for h in session.holds if self.held.get(h["id"], (None,))[0] is conn]:
                 self.held.pop(hold["id"], None)
                 session.unhold(hold)
+                forgot = True
+        if forgot:
+            self.publish()
 
     def _answer(self, sid, ask, allow, viewer=True):
         """Settles the prompt `ask` names, here or on the host it belongs to, as long as it is the
