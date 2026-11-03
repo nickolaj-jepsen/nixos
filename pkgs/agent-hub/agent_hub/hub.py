@@ -889,8 +889,11 @@ class Hub:
             async for line in reader:
                 message = None
                 try:
-                    message = protocol.validate(json.loads(line))
-                    await self._dispatch(conn, message)
+                    parsed = json.loads(line)
+                    # Read the request before validating: an op `validate` refuses must still
+                    # answer the client waiting on it.
+                    message = parsed if isinstance(parsed, dict) else None
+                    await self._dispatch(conn, protocol.validate(parsed))
                 except ValueError as error:
                     # Echo the request when the message had one: a client waiting on a reply to a
                     # write that failed must see the failure now, not sit until its timeout.

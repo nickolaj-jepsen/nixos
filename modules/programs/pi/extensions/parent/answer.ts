@@ -110,21 +110,26 @@ export default function (pi: ExtensionAPI, services: Services) {
   };
 
   // One verb, over the socket when the hub is attached and through the CLI when it is
-  // not, or did not answer: a hub older than these ops answers an unknown one with an
-  // error and no reply, which leaves the form working the way it did before them.
+  // not. An unanswered call while attached is not proof the hub did nothing: it may have
+  // written and lost the reply, so a verb that cannot be applied twice is read back
+  // rather than replayed.
 
   const offer = async (ctx: ExtensionContext) => {
-    const reply = await hub.formOffer(lastText);
+    const reply = (await hub.formOffer(lastText)) ?? (await hub.formOffer(lastText));
     return reply ? reply.view : viewFrom(ctx, ["offer"], lastText);
   };
 
   const stepForm = async (ctx: ExtensionContext, id: string, action: FormAction) => {
     const reply = await hub.formStep(id, action as HubFormAction);
-    return reply ? reply.view : viewFrom(ctx, ["step", "--form", id, JSON.stringify(action)]);
+    if (reply) return reply.view;
+    // A step writes text against the current item, so a second one lands on the next item.
+    if (hub.connected()) return viewFrom(ctx, ["show"]);
+    return viewFrom(ctx, ["step", "--form", id, JSON.stringify(action)]);
   };
 
   const syncForm = async (ctx: ExtensionContext): Promise<Synced> => {
-    const reply = await hub.formSync();
+    // Syncing takes the delivery out of the file, so the second ask is the safe retry.
+    const reply = (await hub.formSync()) ?? (await hub.formSync());
     if (reply) return reply;
     const synced = (await viewFrom(ctx, ["sync"])) as Synced | null;
     if (!synced) throw new Error("no sync");
@@ -132,6 +137,8 @@ export default function (pi: ExtensionAPI, services: Services) {
   };
 
   const dropForm = async (ctx: ExtensionContext) => {
+    // Dropping twice leaves the same nothing.
+    if (await hub.formDrop()) return;
     if (await hub.formDrop()) return;
     await run(sessionOf(ctx), ["drop"]);
   };
@@ -157,7 +164,10 @@ export default function (pi: ExtensionAPI, services: Services) {
     );
     if (mtime === watched.mtime) return;
     watched.mtime = mtime;
-    await takeDelivery(ctx);
+    const { view, delivery } = await syncForm(ctx);
+    // What another surface did to the form shows here, delivery or not.
+    show(ctx, view);
+    if (delivery) take(ctx, delivery);
   };
 
   const poll = async () => {
@@ -199,6 +209,8 @@ export default function (pi: ExtensionAPI, services: Services) {
   pi.on("session_shutdown", () => {
     clearInterval(ticking);
     latest = undefined;
+    // A reply parked for a form that was open can't be shown once the session is gone; the
+    // file has already handed it over, so it is dropped rather than kept for the next one.
     waiting = undefined;
   });
 
