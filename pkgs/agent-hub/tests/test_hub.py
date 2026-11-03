@@ -16,6 +16,7 @@ import uuid
 from pathlib import Path
 
 from agent_hub import claude, judge, links, menus, protocol
+from agent_hub.common import parent_pid
 
 PACKAGE = Path(__file__).resolve().parent.parent
 TIMEOUT = 5
@@ -1935,6 +1936,8 @@ class StatusTest(HubTest):
         self.assertEqual(self.status("--session-id", "before-a-clear", "--pid", str(self.proc.pid)),
                          "needs-reply\tkeep the fixture?\tfixture work\n")
 
+    # macOS walks parents with `ps`, which is setuid, so a darwin Nix build isn't allowed to run it.
+    @unittest.skipIf(parent_pid(os.getpid()) is None, "can't read a process's parent here")
     def test_a_pid_under_the_agent_finds_its_session(self):
         parent = subprocess.Popen([sys.executable, "-c", "import subprocess, sys, time\n"
                                    "child = subprocess.Popen(['sleep', '600'])\nprint(child.pid, flush=True)\ntime.sleep(600)"],
