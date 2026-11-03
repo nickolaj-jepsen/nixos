@@ -66,7 +66,7 @@ Use the harness's question tool (pi `ask_user_question`, Claude `AskUserQuestion
   git -C <clone> checkout --detach FETCH_HEAD
   ```
 
-- Follow the README literally first; a failure is a finding. Then trust what CI and the Dockerfiles actually execute.
+- Follow the README literally first; a failure is a finding. Run each first pass alone, with its full log saved beside the clone, because a first run can't be repeated. Then trust what CI and the Dockerfiles actually execute.
 - Stop after three distinct failed fix attempts: record what failed and take the **not run** path.
 - For missing tools, use the project's own dev environment if it has one. Otherwise, if `nix` is available, write a minimal `mkShell` flake to `onboard/devshell/` and use `nix develop path:<absolute dir> --command …`. The `path:` prefix is required, because Nix rejects an untracked flake inside a git repo. The shell and any packages added to it count as one attempt. Without Nix, a missing tool is a failed attempt.
 - **Not run:** mark the report **not run**, and the rest stays static. Mark features **docs only**, follow the action by reading and say so, and skip the probes and contracts. Dives get no clone or commands.
