@@ -34,8 +34,10 @@ export const createReview = (
   const review: Review = {
     meter: () => inboxMeter(env),
     dispatch: async (args, ctx) => {
-      const parsed = await parseReview(args);
+      const parsed = await parseReview(args, ctx);
       switch (parsed.kind) {
+        case "none":
+          return;
         case "refused":
           ctx.ui.notify(parsed.why, "error");
           return;

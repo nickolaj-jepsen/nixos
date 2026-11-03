@@ -191,9 +191,10 @@ test("C6 the socket and the module surface", () => {
 });
 
 test("D11 the subcommands are told apart", async () => {
-  assert.deepEqual(await parseReview(""), { kind: "open", scope: undefined });
+  const ctx = { isIdle: () => true, ui: { notify: () => {} } } as never;
+  assert.deepEqual(await parseReview("", ctx), { kind: "open", scope: undefined });
   for (const kind of ["inbox", "send", "take", "kill"] as const) {
-    assert.deepEqual(await parseReview(kind), { kind });
-    assert.deepEqual(await parseReview(`  ${kind}  `), { kind });
+    assert.deepEqual(await parseReview(kind, ctx), { kind });
+    assert.deepEqual(await parseReview(`  ${kind}  `, ctx), { kind });
   }
 });
