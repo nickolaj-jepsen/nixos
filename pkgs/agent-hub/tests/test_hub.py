@@ -800,7 +800,7 @@ class ClaudeTurnTest(HubTest):
 
     def peer_turn(self, closing, standing=True):
         """A peer's message wakes the session, as Claude reports it, and its turn ends on `closing`."""
-        entries = [prompt("Another Claude session sent a message:\n<cross-session-message from=\"uds:/x\">hi</cross-session-message>")]
+        entries = [prompt("<cross-session-message from=\"uds:/x\" from-name=\"other\">\nhi\n</cross-session-message>")]
         event = {"hook_event_name": "UserPromptSubmit", "session_id": self.sid, "prompt": entries[0]["message"]["content"],
                  "transcript_path": str(self.hub.write_transcript(self.sid, entries))}
         self.hub.command("hook", stdin=json.dumps(event))
