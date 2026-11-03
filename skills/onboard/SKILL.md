@@ -22,7 +22,7 @@ Every subagent brief repeats these.
 - **Running:** never install or start anything before approval, or in the user's checkout. Analysis tools may load project config, so the promise before approval is "won't install or start it", not "read-only". Tools fetched with `uvx` or `pnpm dlx` wait for approval and go in the run plan.
 - **Credentials:** never read or copy a real `.env` or other secret; use example or dummy config. Anything that needs real credentials or an external service goes on the deferred list with its exact command. Run against local instances only.
 - **Asking:** the user may be away. Ask only at the early ask and in the end message; anything else that needs them goes on the deferred list. If the harness refuses a step, don't work around it: count it as a failed attempt and defer the command.
-- **Privacy:** read session logs only where the user points you, never their transcripts on your own. Paraphrase them, and never write a secret into a report.
+- **Privacy:** read session logs only where the user points you, never their transcripts on your own. Plans and handoffs in the notes directory aren't session logs. Paraphrase them, and never write a secret into a report.
 - **Delegation:** do the tracing and writing yourself. Use subagents only for wide searches of large repos, and for dives; each returns `path` and symbol evidence, since a confident wrong answer can hide in the hand-off.
 
 ## Files
@@ -37,7 +37,7 @@ Every subagent brief repeats these.
 
 ## 1. Scan
 
-Record `git rev-parse HEAD` as the report's commit. Read the README, manifests, CI, Dockerfiles and compose files, task runners, env examples and existing dev environments (`flake.nix`, `shell.nix`, `.envrc`; never `direnv allow`). Read docs and top-level agent files (`AGENTS.md`, `CLAUDE.md`) as claims. Read committed agent config (`.claude/`, `.cursor/`, `.mcp.json`, hooks) as evidence and note what would execute.
+Record `git rev-parse HEAD` as the report's commit. Read the README, manifests, CI, Dockerfiles and compose files, task runners, env examples and existing dev environments (`flake.nix`, `shell.nix`, `.envrc`; never `direnv allow`). Read docs, top-level agent files (`AGENTS.md`, `CLAUDE.md`) and any plans or handoffs in the notes directory as claims. Read committed agent config (`.claude/`, `.cursor/`, `.mcp.json`, hooks) as evidence and note what would execute.
 
 With a subsystem, read its own files first, then only the root files that build or run it. Grep the repo for its name and entry points, and read what wires it in and what talks to it; its edges are half the map.
 
