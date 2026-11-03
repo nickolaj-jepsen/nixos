@@ -28,26 +28,28 @@ const PR =
 const HOME = "/home/me";
 const NOTES = `${HOME}/.local/share/agents`;
 const OPENER = "/etc/profiles/per-user/me/bin/agent-note-open";
+const HUB = "/etc/profiles/per-user/me/bin/agent-hub";
 const NOW = Date.UTC(2026, 9, 31, 12);
 const HOUR = 3_600_000;
+const SESSION = "11111111-2222-3333-4444-555555555555";
 
-type Write = { path: string; tool?: string; isError?: true };
+type Listed = { path: string; name: string; group: string; hours: number };
 
 type Notes = {
-  /** Every file on disk, by absolute path, with its age in hours. */
-  files?: Record<string, number>;
-  /** The session's write tool calls, oldest first. */
-  writes?: Write[];
+  /** What `agent-hub notes` lists, in its order; undefined when the hub is down. */
+  listed?: Listed[];
+  /** Whether a bar takes `agent-hub show`. */
+  bar?: boolean;
   /** What `command -v` finds, by name or absolute path. */
   installed?: string[];
-  /** The main checkout the session runs in. */
-  repo?: string;
 };
 
 type World = {
   /** Every argv the mod ran that was not a read-only question. */
   launched: string[][];
   copied: string[];
+  /** The arguments of each `agent-hub show`. */
+  shown: string[][];
 };
 
 const ok = (stdout: string, exitCode = 0, stderr = "") => ({
@@ -64,48 +66,11 @@ function world(
     tools = ["tuicr", "ghostty"],
   } = {},
 ): World {
-  const w: World = { launched: [], copied: [] };
-  const files = new Map(
-    Object.entries(notes.files ?? {}).map(([path, hours]) => [path, NOW - hours * HOUR]),
-  );
-  const installed = notes.installed ?? [OPENER];
+  const w: World = { launched: [], copied: [], shown: [] };
+  const installed = notes.installed ?? [OPENER, HUB];
   on("env.get", (_, e) => ({ value: ({ HOME, USER: "me" } as Record<string, string>)[e.name] }));
   on("clock.now", () => ({ value: NOW }));
-  on("session.repo", () => ({
-    value: { root: notes.repo ?? "/home/me/nixos", remote: null, internal: false, name: null },
-  }));
-  on("session.messages", () => ({
-    value: (notes.writes ?? []).map((write, i) => ({
-      role: "assistant" as const,
-      text: "",
-      toolUses: [
-        {
-          tool_use_id: `t${i}`,
-          tool: write.tool ?? "Write",
-          input: { file_path: write.path, content: "x" },
-          ...(write.isError ? { isError: true as const } : {}),
-        },
-      ],
-    })),
-  }));
-  on("fs.stat", (_, e) => {
-    const mtimeMs = files.get(e.path);
-    if (mtimeMs === undefined) throw new Error(`ENOENT: ${e.path}`);
-    return { value: { kind: "file" as const, size: 1, mtimeMs, isLink: false } };
-  });
-  on("fs.list", (_, e) => {
-    const prefix = `${e.path}/`;
-    const entries = new Map<string, { kind: "file" | "dir"; mtimeMs: number }>();
-    for (const [path, mtimeMs] of files) {
-      if (!path.startsWith(prefix)) continue;
-      const [name = "", ...rest] = path.slice(prefix.length).split("/");
-      entries.set(name, rest.length ? { kind: "dir", mtimeMs: 0 } : { kind: "file", mtimeMs });
-    }
-    if (entries.size === 0) throw new Error(`ENOENT: ${e.path}`);
-    return {
-      value: [...entries].map(([name, entry]) => ({ name, size: 1, isLink: false, ...entry })),
-    };
-  });
+  on("session.id", () => ({ value: SESSION }));
   on("ui.open", () => ({ value: { isPlaced: true } }));
   on("ui.close", () => ({ value: undefined }));
   on("ui.panes", () => ({ value: [] }));
@@ -135,8 +100,20 @@ function world(
       if (line.endsWith("rev-parse --git-dir")) return ok(".git\n");
       return ok("", 1);
     }
-    // `command -v` over the note opener's candidates.
-    if (argv[0] === "sh" && argv.includes("agent-note-open")) {
+    if (argv[0] === HUB && argv[1] === "show") {
+      w.shown.push(argv.slice(2));
+      return ok("", notes.bar ? 0 : 1);
+    }
+    if (argv[0] === HUB && argv[1] === "notes") {
+      if (!notes.listed) return ok("", 1);
+      return ok(
+        notes.listed
+          .map(({ hours, ...note }) => `${JSON.stringify({ ...note, at: NOW - hours * HOUR })}\n`)
+          .join(""),
+      );
+    }
+    // `command -v` over a command's candidates.
+    if (argv[0] === "sh" && (argv.includes("agent-note-open") || argv.includes("agent-hub"))) {
       const hit = argv.slice(4).find((c) => installed.includes(c));
       if (!hit) return ok("", 1);
       return ok(`${hit.includes("/") ? hit : `/run/current-system/sw/bin/${hit}`}\n`);
@@ -234,114 +211,94 @@ async function shownRows($: Engine) {
 
 const openPlan = ($: Engine) => $.command.run({ ...RUN, command: "open", args: "plan" });
 
-test("/open plan lists the session's notes, the last one written first", async ($, on) => {
+/** Everything the pane says. */
+async function paneText($: Engine) {
+  const pane = await $.ui.mount({ ...PANE, surface: "terminal" });
+  const texts = await pane.findAll({ type: "Text" });
+  await pane.unmount();
+  return texts.map((t) => t.text).join(" ");
+}
+
+const NOTE = {
+  path: `${NOTES}/nixos/findings.md`,
+  name: "nixos/findings.md",
+  group: "written",
+  hours: 1,
+};
+
+test("/open plan goes to the bar's reader, naming this session, and opens no pane", async ($, on) => {
+  const w = world(on, { notes: { bar: true, listed: [NOTE] } });
+  await start($, on);
+  await openPlan($);
+  expect(w.shown).toEqual([["--session-id", SESSION]]);
+  expect(await shownRows($)).toEqual([]);
+});
+
+test("with no bar, /open plan lists what the hub lists, in its order", async ($, on) => {
   world(on, {
     notes: {
-      files: { [`${NOTES}/nixos/plans/a/PLAN.md`]: 3, [`${NOTES}/nixos/findings.md`]: 1 },
-      writes: [
-        { path: `${NOTES}/nixos/plans/a/PLAN.md` },
-        { path: `${NOTES}/nixos/findings.md`, tool: "Edit" },
-        { path: "/home/me/nixos/README.md" },
+      listed: [
+        NOTE,
+        { path: `${NOTES}/nixos/HANDOFF.md`, name: "nixos/HANDOFF.md", group: "read", hours: 3 },
+        { path: `${NOTES}/nixos/old.md`, name: "nixos/old.md", group: "project", hours: 48 },
       ],
     },
   });
   await start($, on);
   await openPlan($);
-  expect(await shownRows($)).toEqual(["nixos/findings.md 1h", "a/PLAN.md 3h"]);
+  expect(await shownRows($)).toEqual([
+    "nixos/findings.md 1h",
+    "nixos/HANDOFF.md 3h read",
+    "nixos/old.md 2d project",
+  ]);
 });
 
-test("a write that failed is not one of the session's notes", async ($, on) => {
-  world(on, {
-    notes: {
-      files: { [`${NOTES}/nixos/a.md`]: 1, [`${NOTES}/nixos/b.md`]: 2 },
-      writes: [{ path: `${NOTES}/nixos/a.md` }, { path: `${NOTES}/nixos/b.md`, isError: true }],
-    },
-  });
+test("with no notes, /open plan says so and guesses nothing", async ($, on) => {
+  world(on, { notes: { listed: [] } });
   await start($, on);
   await openPlan($);
-  expect(await shownRows($)).toEqual(["nixos/a.md 1h"]);
+  expect(await paneText($)).toContain("No notes yet.");
 });
 
-test("superseded versions and annotate-plan's copy are not notes", async ($, on) => {
-  const plan = `${NOTES}/nixos/plans/a`;
-  world(on, {
-    notes: {
-      files: { [`${plan}/PLAN.md`]: 2, [`${plan}/PLAN.prev.md`]: 1, [`${plan}/history/1.md`]: 1 },
-      writes: [
-        { path: `${plan}/PLAN.md` },
-        { path: `${plan}/PLAN.prev.md` },
-        { path: `${plan}/history/1.md` },
-      ],
-    },
-  });
+test("without the hub running, /open plan says what is missing", async ($, on) => {
+  world(on);
   await start($, on);
   await openPlan($);
-  expect(await shownRows($)).toEqual(["a/PLAN.md 2h"]);
-});
-
-test("with no notes this session, the project's newest note stands in", async ($, on) => {
-  world(on, {
-    notes: {
-      files: {
-        [`${NOTES}/other/newest.md`]: 1,
-        [`${NOTES}/nixos/plans/a/HANDOFF.md`]: 5,
-        [`${NOTES}/nixos/plans/a/history/HANDOFF.md`]: 2,
-        [`${NOTES}/nixos/old.md`]: 9,
-      },
-      writes: [{ path: "/home/me/nixos/README.md" }],
-    },
-  });
-  await start($, on);
-  await openPlan($);
-  expect(await shownRows($)).toEqual(["a/HANDOFF.md 5h"]);
-});
-
-test("with no notes in the project either, the newest note anywhere stands in", async ($, on) => {
-  world(on, {
-    notes: { files: { [`${NOTES}/other/newest.md`]: 1, [`${NOTES}/old/old.md`]: 9 } },
-  });
-  await start($, on);
-  await openPlan($);
-  expect(await shownRows($)).toEqual(["other/newest.md 1h"]);
-});
-
-test("two notes of one name in different dirs read apart", async ($, on) => {
-  const notes = [`${NOTES}/pi/plans/x/PLAN.md`, `${NOTES}/wt/plans/x/PLAN.md`];
-  world(on, {
-    notes: { files: { [notes[0]!]: 2, [notes[1]!]: 1 }, writes: notes.map((path) => ({ path })) },
-  });
-  await start($, on);
-  await openPlan($);
-  expect(await shownRows($)).toEqual(["wt/plans/x/PLAN.md 1h", "pi/plans/x/PLAN.md 2h"]);
+  expect(await paneText($)).toContain("agent-hub isn't running");
 });
 
 test("pressing a note hands its path to the opener", async ($, on) => {
-  const note = `${NOTES}/nixos/findings.md`;
-  const w = world(on, { notes: { files: { [note]: 1 }, writes: [{ path: note }] } });
+  const w = world(on, { notes: { listed: [NOTE] } });
   await start($, on);
   await openPlan($);
   const pane = await $.ui.mount({ ...PANE, surface: "terminal" });
-  await pane.press({ key: note });
+  await pane.press({ key: NOTE.path });
   await pane.unmount();
-  expect(w.launched).toEqual([[OPENER, note]]);
+  expect(w.launched).toEqual([[OPENER, NOTE.path]]);
 });
 
 test("without the opener installed, a note opens in VS Code", async ($, on) => {
-  const note = `${NOTES}/nixos/findings.md`;
-  const w = world(on, {
-    notes: { files: { [note]: 1 }, writes: [{ path: note }], installed: ["code"] },
-  });
+  const w = world(on, { notes: { listed: [NOTE], installed: ["code", HUB] } });
   await start($, on);
   await openPlan($);
   const pane = await $.ui.mount({ ...PANE, surface: "terminal" });
-  await pane.press({ key: note });
+  await pane.press({ key: NOTE.path });
   await pane.unmount();
-  expect(w.launched).toEqual([["/run/current-system/sw/bin/code", "--reuse-window", note]]);
+  expect(w.launched).toEqual([["/run/current-system/sw/bin/code", "--reuse-window", NOTE.path]]);
 });
 
-test("the folder menu's Notes row switches the pane to the notes", async ($, on) => {
-  const note = `${NOTES}/nixos/findings.md`;
-  const w = world(on, { notes: { files: { [note]: 1 }, writes: [{ path: note }] } });
+test("the folder menu's Notes row goes to the reader where there is one", async ($, on) => {
+  const w = world(on, { notes: { bar: true, listed: [NOTE] } });
+  await start($, on);
+  await $.command.run({ ...RUN, command: "open" });
+  const pane = await $.ui.mount({ ...PANE, surface: "terminal" });
+  await pane.press({ key: "notes" });
+  await pane.unmount();
+  expect(w.shown).toEqual([["--session-id", SESSION]]);
+});
+
+test("the folder menu's Notes row switches the pane to the notes elsewhere", async ($, on) => {
+  const w = world(on, { notes: { listed: [NOTE] } });
   await start($, on);
   await $.command.run({ ...RUN, command: "open" });
   const pane = await $.ui.mount({ ...PANE, surface: "terminal" });

@@ -27,7 +27,7 @@ export default function (pi: ExtensionAPI, { identity, userWait, editorHooks, hu
     state.ctx = ctx;
     state.live = ctx.mode === "tui" && ctx.hasUI;
   });
-  const actions = createActions(pi, state, git);
+  const actions = createActions(pi, state, git, hub);
   const openArgs = [
     { value: "plan", label: "plan", description: "this session's notes" },
     { value: "diff", label: "diff", description: "review the changes in tuicr" },
@@ -66,7 +66,7 @@ export default function (pi: ExtensionAPI, { identity, userWait, editorHooks, hu
       await (args.trim() === "plan" ? actions.notes(ctx) : actions.folder(ctx));
     },
   });
-  // Recorded as each write lands: a codemode-nested write over 8 KiB keeps no path in the transcript.
+  // Recorded as each write lands, for the hub to read: a codemode-nested write over 8 KiB keeps no path in the transcript.
   pi.on("tool_result", (event, ctx) => {
     const path = writtenNote(event, ctx.cwd);
     if (!path || recordedNotes(ctx.sessionManager.getBranch()).has(path)) return;

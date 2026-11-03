@@ -32,11 +32,12 @@ Code update can break one.
 - **git-menu**: `/git` opens the checkout's repository, branch, commit or pull
   request on GitHub, GitLab or Codeberg, links the compare page for a new pull
   request, and copies the branch, SHA or PR URL; `/open` hands the checkout to
-  VS Code, Sublime Merge, the file manager or Ghostty, and `/open diff` opens
+  VS Code, Sublime Merge, the file manager or Ghostty, `/open plan` reads this
+  session's notes, and `/open diff` opens
   [tuicr](https://github.com/agavra/tuicr) on the changes in a new Ghostty
   window and tells the model how to read your comments back. Rows that can't
-  run say why. Needs `git`, `gh` for the pull request, and `tuicr` and Ghostty
-  for `/open diff`.
+  run say why. Needs `git`, `gh` for the pull request, `agent-hub` for
+  `/open plan`, and `tuicr` and Ghostty for `/open diff`.
 - **answer**: when a turn ends on a round of questions or a numbered pick
   list, a band row offers a form for it in a pane: one question per screen,
   its options plus "Write your own answer" as numbered entries. A number,

@@ -8,6 +8,8 @@ one is called, the step it is on, and how its last turn ended.
   per working one, and is a quick way to them.
 - The popout can allow or deny a Claude Code permission prompt, and answer a form a
   turn ended on. Anything else you answer in the agent's own terminal.
+- A session's notes open in a reader at the screen's edge, which stays up while you
+  type in that terminal.
 - Elsewhere (a server, the Mac) the hub runs headless: no windows, and it polls
   the registry instead of watching it.
 - Its socket is `$XDG_RUNTIME_DIR/agent-hub/hub.sock`, or
@@ -36,6 +38,8 @@ give, its last turns, and one row of icons for where it is.
 - Hovering a row swaps its age for buttons: dismiss and flag as wrong.
 - Clicking a row opens it. A click on the Ended heading opens that until the popout
   closes.
+- A note the current turn wrote gets a row at the top of the pane, and any session
+  with notes gets a chip in the icon row. Both open the reader.
 - The folder and branch icons open menus: VS Code, Sublime Merge, Files, Ghostty and
   the path; the pull request, branch and repository on the web, and their names. Every
   row is a link, a copy or an app opening a folder (`agent_hub/menus.py`). From another
@@ -92,10 +96,72 @@ agent-hub answer deliver --session ID [--send]       # needs the session's TUI t
 agent-hub answer parse < text                        # exit 1 when it asks nothing
 ```
 
+## Notes
+
+A note is Markdown under `~/.local/share/agents`, or a plan under `~/.claude/plans`
+or `~/.claude-work/plans`. `history/`, `PLAN.prev.md` and dot dirs don't count.
+
+### Which notes a session has
+
+`agent_hub/notes.py` reads the session's tool calls from its transcript and from its
+subagents' beside it (`<session>/subagents/` for Claude, `<session>/tasks/` for pi),
+picking up where it left off. A transcript can pass a gigabyte, so lines naming no
+note are not parsed. pi also records each write as an `agent-note` entry, since a
+nested call's transcript may not name it.
+
+The list goes in this order, each group newest first:
+
+1. **Written**: a write or edit that didn't fail, or a shell command that redirects,
+   tees, moves or copies onto the note. Telling those from a read is a regex.
+2. **Read**: a read, or a command naming the note in any other way.
+3. **Project**: the rest of `<notes>/<project>/`, where `<project>` is the main
+   checkout's folder name. A note nothing named still shows here.
+
+There is no guess: a session with no notes and an empty project says so. About half
+of real notes sit outside `<project>/`, so the folder alone isn't enough either.
+
+A row carries `notes` (written and read) and `note` (the last one written, `new` if
+during this turn). Sessions are read at a turn's end, every 15 s while working, when
+the popout opens and when asked, and nothing about notes is saved in the state file.
+
+### The reader
+
+`NoteReader.qml`, one `DSlideout` the bar's daemon owns. A slideout rather than the
+popout, which closes on a click outside it.
+
+- Opens from `p` in the popout, `Mod+Alt+B` (the focused window's session, toggling),
+  `/open plan`, or `agent-hub show`. `agent-note-open` goes through it too, so a note
+  path clicked in Ghostty opens here, among the notes of the session you are looking
+  at. A link with `:line` still goes to VS Code, as annotate-plan's `PLAN.md` does.
+- Polls while it shows: the note every 1.5 s, the list every 5 s. A rewritten note
+  updates in place and keeps your scroll position.
+- The wheel works wherever the pointer is. Keys need a click on it first, so they stay
+  in your terminal until you ask: `j`/`k` and Space scroll, `g`/`G` jump, `[`/`]` or
+  `h`/`l` change note, `e` edits in VS Code, `y` copies the path, `s` goes to the
+  session, `Esc` or `q` closes.
+- `agent-hub show` fails when no bar took it, which is how a caller knows to fall back:
+  `/open plan` then lists notes in the terminal (`agent-hub notes`), for VS Code or the
+  path. Without a running hub it says so; nothing else knows a session's notes.
+
+### What a note can do
+
+`agent_hub/render.py` turns Markdown into the rich text the reader draws, at the viewer.
+Qt's Markdown mode, `RichText` and `StyledText` all fetch an image a document names, so
+`Text.MarkdownText` must not be used here: opening a note could reach out to anywhere.
+
+- Images become their alt text and raw HTML stays literal.
+- A link lives only if it goes to https or to another note. A relative `.md` link and a
+  code span holding a note's whole path both open that note.
+- Control, bidi and zero-width characters show as a mark, as in the popout's pane. The
+  pane itself still reads nothing as markup.
+- The socket reads only notes: a path has to pass `is_note` both as given and with its
+  links resolved, so a symlink can't reach out of the folder. Notes are cut at 1 MiB.
+
 ## Keys
 
 - `Mod+B` opens the popout with the first row selected.
   - `Enter` opens its window, or resumes an ended one in a new terminal.
+  - `p` reads its notes.
   - `a` and `d` allow or deny the prompt it holds.
   - `r` copies a `needs reply`'s likely answer and opens its window. Nothing is sent:
     you paste it, edit it and press Enter. A message through the peer socket would arrive
@@ -111,6 +177,8 @@ agent-hub answer parse < text                        # exit 1 when it asks nothi
   that wants you, cycling on repeat.
 - `Mod+Ctrl+B` (`agent-hub toggle`) dismisses the finished turn of the session
   you're looking at, or brings back the one you dismissed.
+- `Mod+Alt+B` (`agent-hub show --toggle`) opens or closes the reader on the session
+  you're looking at.
 
 ## Alerts
 
@@ -143,11 +211,14 @@ end, with no TCP port of its own.
 - On the far end that key is `restrict` with a forced `agent-hub attach`, so it can do
   nothing else. A jump host also opens the hops in `linkJumps`.
 - `attach` passes `subscribe`, and with `--control` also `dismiss`, `undismiss`,
-  `answer` and `git-facts`, each rebuilt from its allowed fields (`attach_filter` in
-  `agent_hub/links.py`). So a link key can approve a call an agent there has already
-  asked to make, but can't start anything.
+  `answer`, `git-facts`, `notes` and `note`, each rebuilt from its allowed fields
+  (`attach_filter` in `agent_hub/links.py`). So a link key can approve a call an agent
+  there has already asked to make and read that host's notes, but can't start anything
+  or read any other file.
 - A git menu takes only what git says from the far host. Its URLs are built at the
   viewer, whose own `gh` looks up the pull request, so the far host needs no login.
+- A note comes over as text and is rendered at the viewer. `e` in the reader opens it
+  over Remote SSH.
 - A subscribe through `attach` gets that host's own sessions only, so hubs listing
   each other never echo rows around.
 - Remote rows are untrusted (`clean_row`). The viewer stamps the host, ids must be
@@ -307,7 +378,8 @@ Each agent's TUI repeats the row the hub has for _that session_, not an overview
 of the others.
 
 - It shows the state as a word and, for `needs reply` and `failed`, the ask or the
-  failure behind it, truncated. `idle` draws nothing. Both also show the label.
+  failure behind it, truncated. `idle` draws nothing. Both also show the label, and
+  the note the session wrote last. In Claude Code's status line that is a link.
 - Claude Code's status line (`modules/programs/claude-code/statusline.sh`) asks
   `agent-hub status --session-id …` on each refresh. It prints nothing when the
   daemon is down, and `agent-hub` joins that script's PATH only on hosts with the

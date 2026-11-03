@@ -11,28 +11,38 @@
  * than a shortcut that did nothing.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { Hub } from "../lib/hub.ts";
+import { formatAge } from "../lib/format.ts";
 import { appLabel, canLaunch, copyText, folderApps, launch, openNote } from "./apps.ts";
 import type { Menu } from "./menu.ts";
-import { type FoundNotes, noteLabels } from "./notes.ts";
 
-/** Opens the one note, or asks which of several. */
-export const openNotes = async (ctx: ExtensionContext, found: FoundNotes) => {
-  let path = found.notes[0]?.path;
+/**
+ * Puts the session's notes up in the bar's reader. Where there is no bar (over
+ * ssh, on a Mac) it opens the one note, or asks which of several.
+ */
+export const openNotes = async (ctx: ExtensionContext, hub: Hub) => {
+  if (await hub.showNotes()) return;
+  const notes = await hub.notes();
+  if (!notes) {
+    ctx.ui.notify("chrome: agent-hub isn't running, and it is what knows the notes", "warning");
+    return;
+  }
+  let path = notes[0]?.path;
   if (!path) {
     ctx.ui.notify("chrome: no notes yet", "info");
     return;
   }
-  if (found.notes.length > 1) {
-    const labels = noteLabels(found.notes);
+  if (notes.length > 1) {
+    const labels = notes.map((n) => `${n.name} · ${formatAge(Date.now() - n.at, "now")}`);
     const picked = await ctx.ui.select("Notes", labels);
     if (picked === undefined) return;
-    path = found.notes[labels.indexOf(picked)].path;
+    path = notes[labels.indexOf(picked)].path;
   }
   if (!(await openNote(path)))
     ctx.ui.notify(`chrome: no note viewer or VS Code; ${path}`, "warning");
 };
 
-export const folderMenu = (cwd: string, notes: FoundNotes): Menu => ({
+export const folderMenu = (cwd: string, hub: Hub): Menu => ({
   title: "Open folder",
   // The editor is where the work continues, so it leads when it can run.
   preferred: canLaunch("code", cwd) ? "code" : undefined,
@@ -46,9 +56,9 @@ export const folderMenu = (cwd: string, notes: FoundNotes): Menu => ({
     {
       id: "notes",
       label: "Notes",
-      description: notes.fallback ? "latest" : `${notes.notes.length} this session`,
-      unavailable: notes.notes.length === 0 ? "no notes yet" : undefined,
-      run: (ctx) => openNotes(ctx, notes),
+      description: hub.read()?.notes ? `${hub.read()?.notes} this session` : undefined,
+      unavailable: hub.connected() ? undefined : "agent-hub isn't running",
+      run: (ctx) => openNotes(ctx, hub),
     },
     {
       id: "copy",

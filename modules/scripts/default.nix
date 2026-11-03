@@ -16,13 +16,9 @@
       };
     agent-note-open = makeScript {
       path = ./agent-note-open.bash;
-      runtimeInputs = with pkgs;
-        [
-          glow
-          less
-          coreutils
-        ]
-        ++ lib.optional stdenv.isLinux util-linux; # for setsid
+      runtimeInputs =
+        [pkgs.coreutils]
+        ++ lib.optional config.fireproof.dev.agent-hub.enable pkgs.agent-hub;
     };
   in {
     age.secrets = lib.optionalAttrs (config.fireproof.scripts.tunnel-home.enable && pkgs.stdenv.isLinux) {

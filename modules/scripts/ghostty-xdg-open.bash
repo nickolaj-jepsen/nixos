@@ -149,7 +149,7 @@ if [[ -z $path ]]; then
   exit 1
 fi
 
-# glow can't jump to a line, so a note link with `:line` still goes to VS Code.
+# The reader can't jump to a line, so a note link with `:line` still goes to VS Code.
 if [[ -f $path && $path == "$HOME"/.local/share/agents/*.md && -z $line ]]; then
   exec @agentNoteOpen@ "$path"
 fi

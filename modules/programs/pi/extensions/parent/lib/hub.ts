@@ -21,6 +21,7 @@ import type { Dialogs } from "./dialogs.ts";
 import {
   type HubIdentity,
   type HubMessage,
+  type HubNote,
   type HubOp,
   type HubRow,
   PROTOCOL_VERSION,
@@ -42,6 +43,9 @@ type Status = "busy" | "idle" | "waiting";
 
 // A daemon that is down now may be up later; asking again is one failed connect.
 const RETRY_MS = 5000;
+// The first read of a long session's notes takes seconds; a person waits, not a turn.
+const NOTES_TIMEOUT_MS = 15_000;
+const SHOW_TIMEOUT_MS = 1000;
 
 // As the daemon's `socket_path`: the runtime dir, or the state dir where there is none (macOS).
 const socketPath = () => {
@@ -66,7 +70,10 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
   let attachInfo: () => AttachInfo = () => ({ record: {} });
   let judge: ((request: JudgeRequest) => Promise<string | undefined>) | undefined;
   let requests = 0;
-  const replies = new Map<number, (reply: { peers?: string } | undefined) => void>();
+  const replies = new Map<
+    number,
+    (reply: Extract<HubMessage, { type: "reply" }> | undefined) => void
+  >();
   const judging = new Map<number, AbortController>();
 
   const notify = () => {
@@ -77,6 +84,24 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     if (!socket || !attached) return false;
     socket.write(`${JSON.stringify(message)}\n`);
     return true;
+  };
+
+  /** Sends what `build` makes of a new request number; undefined when no reply comes in time. */
+  const ask = (build: (request: number) => HubOp, timeoutMs: number) => {
+    if (!attached) return Promise.resolve(undefined);
+    requests += 1;
+    const request = requests;
+    return new Promise<Extract<HubMessage, { type: "reply" }> | undefined>((resolve) => {
+      const timer = setTimeout(() => {
+        replies.delete(request);
+        resolve(undefined);
+      }, timeoutMs);
+      replies.set(request, (reply) => {
+        clearTimeout(timer);
+        resolve(reply);
+      });
+      write(build(request));
+    });
   };
 
   const setStatus = (next: Status) => {
@@ -257,20 +282,27 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       setStatus("busy");
       if (!attached || !ctx) return Promise.resolve(undefined);
       const where = transcript(ctx);
-      requests += 1;
-      const request = requests;
-      return new Promise<string | undefined>((resolve) => {
-        const timer = setTimeout(() => {
-          replies.delete(request);
-          resolve(undefined);
-        }, timeoutMs);
-        replies.set(request, (reply) => {
-          clearTimeout(timer);
-          resolve(reply?.peers);
-        });
-        write({ op: "turn-start", request, prompt, fromPerson, peer, worktreeTool, ...where });
-      });
+      return ask(
+        (request) => ({
+          op: "turn-start",
+          request,
+          prompt,
+          fromPerson,
+          peer,
+          worktreeTool,
+          ...where,
+        }),
+        timeoutMs,
+      ).then((reply) => reply?.peers);
     },
+    /** Puts this session's notes up in the bar's reader; false when there is no bar to show them. */
+    showNotes: () =>
+      ask((request) => ({ op: "show", request }), SHOW_TIMEOUT_MS).then(
+        (reply) => reply?.shown === true,
+      ),
+    /** What this session wrote, read, and the rest of its project's; undefined with no hub. */
+    notes: (): Promise<HubNote[] | undefined> =>
+      ask((request) => ({ op: "notes", request }), NOTES_TIMEOUT_MS).then((reply) => reply?.notes),
     /** The turn settled; `pending` background jobs still run for it, `error` if the run failed. */
     turnEnd(pending: number, error: boolean) {
       setStatus("idle");
