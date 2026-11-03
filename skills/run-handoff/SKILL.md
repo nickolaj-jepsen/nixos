@@ -94,7 +94,7 @@ Long operations:
 ### After a gate
 
 - **Default mode:** post the gate, each item's acceptance result, the reviewer's verdict, surprises, and what the frontier opens next. Ask go or adjust, using the harness's question tool if there is one. When blocked, ask right away; items already running keep going.
-- **`--auto`:** continue past gates. When blocked, add the request to "Blocked on you", send a notification if the harness has a tool for it, and move on to other unblocked work.
+- **`--auto`:** continue past gates. When blocked, add the request to "Blocked on you", send a notification if the harness has a tool for it, and move on to other unblocked work. Never use the question tool, with one exception: an action HANDOFF doesn't authorise that could stop, reboot or replace something on a device the user uses. Dispatch everything else first, because a question stops the turn.
 
 ## Stop conditions
 
