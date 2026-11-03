@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import claude, judge, pi, worklog
-from .common import json_lines, shown_block
+from .common import json_lines, log_path, shown_block
 
 FLAGGED = 35
 UNFLAGGED = 15
@@ -343,3 +343,6 @@ def evaluate(cfg, words_only=False, out=None):
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         results = list(pool.map(judged, readable))
     print(summary(results, len(turns) - len(readable), words_only), file=out)
+    errors = sorted(worklog.estimate_errors(log_path(cfg)))
+    if errors:
+        print(f"long-command estimates: {len(errors)}, off by a median of {errors[len(errors) // 2]:.0f} minutes", file=out)

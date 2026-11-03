@@ -310,7 +310,26 @@ PluginComponent {
     }
 
     function nowLine(session) {
-        return session.now ? session.now + " · " + elapsed(session.nowAt) : "";
+        if (!session.now)
+            return "";
+        const line = session.now + " · " + elapsed(session.nowAt);
+        const guess = estimateWords(session);
+        return guess ? line + " · " + guess : line;
+    }
+
+    // A model's guess at a long command, always worded as one, counted down from when it was made.
+    function estimateWords(session) {
+        const estimate = session.estimate;
+        if (!estimate)
+            return "";
+        const parts = [];
+        if (estimate.left !== null) {
+            const left = Math.ceil(estimate.left - (nowMs - estimate.at) / 60000);
+            parts.push(left > 0 ? "est. " + left + "m left" : "past its estimate");
+        }
+        if (estimate.note)
+            parts.push(estimate.note);
+        return parts.join(", ");
     }
 
     // This turn's tally, leaving out what hasn't happened.

@@ -60,6 +60,28 @@ class AskKindTest(unittest.TestCase):
         self.assertEqual(self.outcome("decide", state="done")["kind"], "")
 
 
+class EstimateTest(unittest.TestCase):
+    def test_minutes_and_a_note(self):
+        self.assertEqual(judge.parse_estimate("left: 20\nnote: 31/40 built"), {"left": 20, "note": "31/40 built"})
+
+    def test_it_may_not_know(self):
+        self.assertEqual(judge.parse_estimate("left:\nnote: empty"), {"left": None, "note": ""})
+
+    def test_a_model_that_adds_a_word_still_counts(self):
+        self.assertEqual(judge.parse_estimate("**left**: about 20 minutes\nnote: ")["left"], 20)
+
+    def test_no_answer_is_none(self):
+        self.assertIsNone(judge.parse_estimate("I can't say."))
+
+    def test_it_reads_the_past_and_the_output_only_when_there_are_any(self):
+        bare = judge.estimate_prompt("just build", 34, [], "")
+        self.assertNotIn("earlier runs", bare)
+        self.assertNotIn("output", bare)
+        full = judge.estimate_prompt("just build", 34, [36, 40], "31/40 built")
+        self.assertIn("36, 40", full)
+        self.assertIn("31/40 built", full)
+
+
 class RenderTest(unittest.TestCase):
     def test_a_long_message_keeps_its_start_and_its_end(self):
         said = "Q1 keep it? " + "x" * 10_000 + " the end"

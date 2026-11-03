@@ -9,8 +9,8 @@ the reading of the last one's ending, and `Session.read` drops one that lands la
 import asyncio
 import os
 
-from . import claude, judge, pi
-from .common import now_ms, socket_path
+from . import claude, judge, pi, worklog
+from .common import now_ms, shown_block, socket_path
 
 # A runaway guard rather than a budget: a reading costs a fraction of a cent.
 CALL_CAP = 500
@@ -21,6 +21,20 @@ CLAUDE_RELABEL_MS = 10 * 60_000
 # A dead model should stop being asked, not be asked again every turn.
 MAX_FAILURES = 3
 TIMEOUT = 60
+OUTPUT_BYTES = 2000
+
+
+def output_tail(path):
+    """The end of what a background job has written, as text that can be shown, or ""."""
+    if not path:
+        return ""
+    try:
+        with open(path, "rb") as output:
+            output.seek(0, os.SEEK_END)
+            output.seek(max(0, output.tell() - OUTPUT_BYTES))
+            return shown_block(output.read().decode(errors="replace"), OUTPUT_BYTES)[0]
+    except OSError:
+        return ""
 
 
 def digest(session, prompt=None):
@@ -154,6 +168,26 @@ class Readings:
                 fields = await self._call(session, "settle", found, identity=False)
         self.hub.aside_read(session, aside, judge.outcome(fields or {}, guess, found))
 
+    # A long command.
+
+    async def estimate(self, session, call, log_file):
+        """Reads how long a long command has left, onto `call`, for its row and the work log."""
+        backend = self.backend(session)
+        if backend is None or self.failures.get(session.id, 0) >= MAX_FAILURES or session.calls >= CALL_CAP:
+            return
+        session.calls += 1
+        past = await asyncio.to_thread(worklog.past_minutes, log_file, call["line"])
+        output = await asyncio.to_thread(output_tail, call.get("output"))
+        prompt = judge.estimate_prompt(call["line"], (now_ms() - call["at"]) // 60_000, past, output)
+        if backend[0] == "agent":
+            text = await self._ask_agent(backend[1], prompt, "settle", judge.ESTIMATE_SYSTEM, "job estimate", judge.ESTIMATE_MAX_TOKENS)
+        else:
+            text = await self._ask_claude(backend[1], prompt, judge.ESTIMATE_SYSTEM)
+        found = judge.parse_estimate(text) if text else None
+        if found:
+            call["estimate"] = {**found, "at": now_ms(), "after": now_ms() - call["at"]}
+            self.hub.publish()
+
     # The call.
 
     async def _call(self, session, moment, found, manual=False, identity=True):
@@ -193,14 +227,14 @@ class Readings:
             session.tags = fields["tags"]
         return fields
 
-    async def _ask_agent(self, conn, prompt, moment):
+    async def _ask_agent(self, conn, prompt, moment, system=judge.SYSTEM, source=None, max_tokens=judge.MAX_TOKENS):
         conn.next_call += 1
         request = conn.next_call
         future = asyncio.get_running_loop().create_future()
         conn.calls[request] = future
         # The settle half runs once per turn, so pi's /cost shows it on its own.
-        conn.send({"type": "judge", "request": request, "system": judge.SYSTEM, "prompt": prompt,
-                   "maxTokens": judge.MAX_TOKENS, "source": "session ask" if moment == "settle" else "session label"})
+        conn.send({"type": "judge", "request": request, "system": system, "prompt": prompt, "maxTokens": max_tokens,
+                   "source": source or ("session ask" if moment == "settle" else "session label")})
         try:
             return await asyncio.wait_for(future, TIMEOUT)
         except asyncio.TimeoutError:
@@ -211,7 +245,7 @@ class Readings:
         finally:
             conn.calls.pop(request, None)
 
-    async def _ask_claude(self, config_dir, prompt):
+    async def _ask_claude(self, config_dir, prompt, system=judge.SYSTEM):
         env = dict(os.environ)
         # Unset means the default profile; naming ~/.claude instead would move its config file.
         if config_dir:
@@ -219,7 +253,7 @@ class Readings:
         proc = None
         try:
             proc = await asyncio.create_subprocess_exec(
-                self.claude, *claude.JUDGE_ARGS, "--system-prompt", judge.SYSTEM,
+                self.claude, *claude.JUDGE_ARGS, "--system-prompt", system,
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
                 env=env, cwd=str(socket_path().parent),
             )

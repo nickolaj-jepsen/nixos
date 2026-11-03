@@ -85,6 +85,14 @@ def clean_trail(steps):
     return [{"at": whole(step.get("at")), "text": text(step.get("text"), 200)} for step in steps[-TRAIL_MAX:] if isinstance(step, dict)]
 
 
+def clean_estimate(value):
+    if not isinstance(value, dict) or not whole(value.get("at")):
+        return None
+    left = value.get("left")
+    return {"left": left if isinstance(left, int) and not isinstance(left, bool) else None,
+            "note": text(value.get("note"), 80), "at": value["at"]}
+
+
 def clean_permission(value):
     """A held prompt from another host: text only, and whatever had to be cut can't be allowed."""
     if not isinstance(value, dict) or not whole(value.get("id")):
@@ -144,6 +152,7 @@ def clean_row(host, row):
         "nowAt": whole(row.get("nowAt")),
         "counts": clean_counts(row.get("counts")),
         "trail": clean_trail(row.get("trail")),
+        "estimate": clean_estimate(row.get("estimate")),
     }
     cleaned.update({key: value for key, value in details.items() if value})
     return cleaned

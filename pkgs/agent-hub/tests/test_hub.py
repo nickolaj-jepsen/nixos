@@ -774,6 +774,30 @@ class ClaudeTurnTest(HubTest):
         state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
         self.assertNotIn("now", session(state, self.sid))
 
+    def test_a_long_command_gets_an_estimate_logged_against_what_it_took(self):
+        self.hub.claude_answer.write_text("left: 20\nnote: 31/40 built\n")
+        self.settled()
+        started = time.time() - 40 * 60
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(started))
+        use = {"type": "assistant", "timestamp": stamp, "message": {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "t", "name": "Bash", "input": {"command": "just build --secret"}}]}}
+        path = self.hub.write_transcript(self.sid, [prompt("build it"), use])
+        self.hub.command("hook", stdin=json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": self.sid, "prompt": "build it",
+                                                   "transcript_path": str(path)}))
+        state = self.bar.wait(has_session(self.sid, lambda s: s.get("estimate", {}).get("left") == 20))
+        self.assertEqual(session(state, self.sid)["estimate"]["note"], "31/40 built")
+        self.assertIn("running for: 40 minutes", (self.hub.tmp / "claude.log.prompts").read_text())
+        now = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+        done = {"type": "user", "timestamp": now, "toolUseResult": {}, "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "t"}]}}
+        with open(path, "a") as out:
+            out.write(json.dumps(done) + "\n")
+        log = self.hub.tmp / "log.jsonl"
+        eventually(lambda: any("job" in line for line in logged(log)))
+        line = next(line for line in logged(log) if "job" in line)
+        self.assertEqual((line["job"], line["left"]), ("just build", 20))
+        self.assertNotIn("--secret", log.read_text())
+
     def peer_turn(self, closing, standing=True):
         """A peer's message wakes the session, as Claude reports it, and its turn ends on `closing`."""
         entries = [prompt("Another Claude session sent a message:\n<cross-session-message from=\"uds:/x\">hi</cross-session-message>")]

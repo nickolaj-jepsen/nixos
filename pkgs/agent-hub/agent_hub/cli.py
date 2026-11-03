@@ -179,7 +179,7 @@ def print_group(group):
     resume = resume_command(last.get("agent"), last.get("session") or "", last.get("cwd"), last.get("configDir"))
     print(f"{last.get('label') or '(unnamed)'}\t{resume}")
     for line in group:
-        if "next" in line:
+        if "next" in line or "job" in line:
             continue
         stamp = datetime.fromtimestamp((line.get("at") or 0) / 1000).strftime("%a %H:%M")
         text = line.get("did") or ""
@@ -223,7 +223,8 @@ def demo_sessions():
         ("demo-busy1", "cli", "busy", "devenv-tilt-68", {}),
         ("demo-busy2", "pi", "busy", "flaky ci retries", {
             "doing": "Rerunning the retry test under load.", "branch": "retries", "activity": t - 30_000,
-            "now": "just test retries", "nowAt": t - 720_000, "counts": {"edits": 4, "commands": 7, "failed": 1},
+            "now": "just test retries", "nowAt": t - 2_400_000, "counts": {"edits": 4, "commands": 7, "failed": 1},
+            "estimate": {"left": 20, "note": "31/40 built", "at": t - 300_000},
             "trail": [{"at": t - 1_500_000, "text": "Reading the retry code."}, {"at": t - 1_200_000, "text": "Wrote a test that fails the same way."},
                       {"at": t - 720_000, "text": "Rerunning the retry test under load."}]}),
         ("demo-idle1", "cli", "idle", "dotfiles-2a", {}),

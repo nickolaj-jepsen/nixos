@@ -87,6 +87,8 @@ ROW = {
     "nowAt?": "int",
     "counts?": {"edits": "int", "commands": "int", "failed": "int"},
     "trail?": [{"at": "int", "text": "str"}],
+    # A model's estimate for a command that has run long: minutes left when it was made.
+    "estimate?": {"left": "int|null", "note": "str", "at": "int", "after?": "int"},
 }
 
 RECENT = {

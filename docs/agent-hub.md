@@ -25,6 +25,11 @@ give, its last turns, and one row of icons for where it is.
   commands and failures under it. The pane shows the agent's narration so far above
   that. There is no percentage and no `stuck` state: nothing knows the total, and a long
   build looks exactly like a hang, so it shows the time and leaves that to you.
+- A command still running after 30 minutes gets a side-model reading, repeated every 30
+  minutes, shown as `est. 20m left`. It sees the command, its past times and, for a
+  background job, the end of its output. A foreground command's output can't be seen, so
+  its estimate is weak. The work log keeps each estimate beside what the command took,
+  and `agent-hub eval` says how far off they run.
 - A row is selected by hovering it (after 120 ms, and only when the pointer itself
   moved) or with the keys, which share the one selection. The pane stops following
   once the pointer is inside it.
@@ -329,6 +334,8 @@ daemon starts.
   reads (`answered`, `corrected`, `interrupted`, `moved-on`), its length, the delay, and
   how close it came to the predicted reply. The delay is context, not a target: a slow
   answer usually means you were busy elsewhere.
+- A command that ran for over a minute adds a line with its first two words and how long
+  it took, never its arguments. Past times build up from here, for later estimates.
 - Each row carries its last three endings (`history`), which the popout shows
   under the selected session, ended ones included.
 - Both commands read the file directly, so they work without the daemon.

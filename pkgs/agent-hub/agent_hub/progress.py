@@ -24,6 +24,10 @@ LINE_CHARS = 80
 START_BYTES = 2 << 20
 MARKDOWN = re.compile(r"[*`#>]+")
 NOTIFIED = re.compile(r"<tool-use-id>([^<:]+)")
+OUTPUT_FILE = re.compile(r"written to: (\S+\.output)")
+# A command this old gets a reading of how long it has left, and another this often.
+ESTIMATE_AFTER_MS = 30 * 60_000
+ESTIMATE_EVERY_MS = 30 * 60_000
 
 
 def stamp(value, fallback):
@@ -66,6 +70,8 @@ class Progress:
     def __init__(self, agent="claude", cwd=None):
         self.agent, self.cwd = agent, cwd
         self.jobs = {}
+        # Commands that finished, for the work log: `{line, ms, estimate?}`.
+        self.finished = []
         self.new_turn()
 
     def new_turn(self):
@@ -79,7 +85,7 @@ class Progress:
             self.steps = [*self.steps, {"at": at, "text": line}][-TRAIL_MAX:]
 
     def _call(self, call_id, line, at, edit=False, command=False):
-        self.running[call_id] = {"line": line, "at": at}
+        self.running[call_id] = {"line": line, "at": at, "shell": bool(command)}
         self.edits += edit
         self.commands += command
 
@@ -103,22 +109,32 @@ class Progress:
                     self.jobs = {call: job for call, job in self.jobs.items() if job.get("task") != args.get("task_id")}
                 self._call(block.get("id"), claude_line(name, args, self.cwd), at, name in EDITS and bool(edit_target(args)), name == "Bash")
             elif kind == "tool_result":
-                self._result(block.get("tool_use_id"), bool(block.get("is_error")), entry.get("toolUseResult"), at)
+                self._result(block.get("tool_use_id"), block, entry.get("toolUseResult"), at)
             elif kind == "text":
                 self._notified(block.get("text"), at)
 
-    def _result(self, call_id, error, result, at):
+    def _result(self, call_id, block, result, at):
         call = self.running.pop(call_id, None)
-        self.failed += error
+        self.failed += bool(block.get("is_error"))
         # A background job's tool call returns at once, and the job goes on.
         if call and isinstance(result, dict) and (result.get("backgroundTaskId") or result.get("isAsync")):
-            self.jobs[call_id] = {**call, "at": at, "task": result.get("backgroundTaskId") or result.get("agentId")}
+            output = OUTPUT_FILE.search(json.dumps(block.get("content")))
+            self.jobs[call_id] = {**call, "at": at, "task": result.get("backgroundTaskId") or result.get("agentId"),
+                                  "output": output.group(1) if output else None}
+        elif call:
+            self._finish(call, at)
 
-    def _notified(self, text, _at):
+    def _finish(self, call, at):
+        if call.get("shell"):
+            self.finished.append({"line": call["line"], "ms": at - call["at"], "estimate": call.get("estimate")})
+
+    def _notified(self, text, at):
         """A background job reporting back, which names the tool call that started it."""
         if text and str(text).lstrip().startswith("<task-notification>"):
             for call_id in NOTIFIED.findall(text):
-                self.jobs.pop(call_id, None)
+                job = self.jobs.pop(call_id, None)
+                if job:
+                    self._finish(job, at)
 
     def _feed_pi(self, entry, now):
         at = stamp(entry.get("timestamp"), now)
@@ -132,8 +148,10 @@ class Progress:
         if role == "user":
             self.new_turn()
         elif role == "toolResult":
-            self.running.pop(message.get("toolCallId"), None)
+            call = self.running.pop(message.get("toolCallId"), None)
             self.failed += bool(message.get("isError"))
+            if call:
+                self._finish(call, at)
         elif role == "assistant":
             content = message.get("content")
             for block in content if isinstance(content, list) else []:
@@ -159,12 +177,29 @@ class Progress:
             oldest = min(running, key=lambda call: call["at"])
             fields["now"] = oldest["line"] + (f" +{len(running) - 1}" if len(running) > 1 else "")
             fields["nowAt"] = oldest["at"]
+            if oldest.get("estimate"):
+                fields["estimate"] = oldest["estimate"]
         if self.edits or self.commands or self.failed:
             fields["counts"] = {"edits": self.edits, "commands": self.commands, "failed": self.failed}
         if self.steps:
             fields["trail"] = list(self.steps)
             fields["step"] = self.steps[-1]["text"][:DOING_CHARS]
         return fields
+
+
+    def due_estimates(self, now, jobs=False):
+        """The commands that have run long enough to be worth a reading, marked as asked. `jobs`
+        takes background jobs too, as for `view`. Only commands: a subagent has no end to read."""
+        calls = [*self.running.values(), *(self.jobs.values() if jobs else ())]
+        due = [call for call in calls if call.get("shell") and now - call["at"] >= ESTIMATE_AFTER_MS
+               and now - call.get("asked", 0) >= ESTIMATE_EVERY_MS]
+        for call in due:
+            call["asked"] = now
+        return due
+
+    def drain_finished(self):
+        finished, self.finished = self.finished, []
+        return finished
 
 
 class Tail:

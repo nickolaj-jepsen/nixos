@@ -10,6 +10,9 @@ permission prompt you settled at the bar, never saying what it asked: none is a 
 A line with `peer` is the ending of a turn another session's message woke it for.
 
 A line with `next` is what you did after `turn` (`next_prompt`), derived and never your words.
+
+A line with `job` is a command that ran for a while: its first words only (`job_key`), and `ms`.
+If it ran long enough to get an estimate, `left` and `after` say what that said and when.
 """
 
 import difflib
@@ -28,6 +31,32 @@ CORRECTION = re.compile(
     r"|it (still|doesn'?t)\b|still (not|broken|fails?)\b|didn'?t work\b)",
     re.I,
 )
+
+
+def job_key(line):
+    """What tells one command from another, without the arguments a secret could be in."""
+    words = [word for word in str(line).split() if "=" not in word]
+    return " ".join(words[:2])
+
+
+def job_line(session_fields, finished, now):
+    """A work log line for a finished command: the estimate it got, if any, beside what it took."""
+    estimate = finished.get("estimate") or {}
+    line = {"at": now, **session_fields, "job": job_key(finished["line"]), "ms": finished["ms"]}
+    if estimate.get("left") is not None:
+        line.update({"left": estimate["left"], "after": estimate["after"]})
+    return line
+
+
+def past_minutes(path, command, keep=5):
+    """How long the latest runs of a command took, in whole minutes, oldest first."""
+    key = job_key(command)
+    return [line["ms"] // 60_000 for line in read(path) if line.get("job") == key][-keep:]
+
+
+def estimate_errors(path):
+    """How far each estimate was from what the command then took, in minutes."""
+    return [abs(line["left"] - (line["ms"] - line["after"]) / 60_000) for line in read(path) if line.get("left") is not None and "after" in line]
 
 
 def next_prompt(outcome, prompt):

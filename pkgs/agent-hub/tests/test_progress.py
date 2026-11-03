@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_hub.progress import START_BYTES, Progress, Tail, first_line
+from agent_hub.progress import ESTIMATE_AFTER_MS, ESTIMATE_EVERY_MS, START_BYTES, Progress, Tail, first_line
 
 AT = "2026-11-03T00:00:00.000Z"
 AT_MS = 1793664000000
@@ -92,6 +92,45 @@ class ClaudeProgressTest(unittest.TestCase):
     def test_a_trail_keeps_its_latest(self):
         view = fed(prompt(), *[said(f"step {n}") for n in range(20)]).view()
         self.assertEqual(view["trail"][0]["text"], "step 8")
+
+
+class EstimateTest(unittest.TestCase):
+    LATER = AT_MS + ESTIMATE_AFTER_MS
+
+    def test_a_command_gets_its_reading_once_it_has_run_long_enough(self):
+        progress = fed(prompt(), call("c", "Bash", command="just build"))
+        self.assertEqual(progress.due_estimates(self.LATER - 1), [])
+        self.assertEqual([c["line"] for c in progress.due_estimates(self.LATER)], ["just build"])
+
+    def test_it_is_asked_again_only_after_a_while(self):
+        progress = fed(prompt(), call("c", "Bash", command="just build"))
+        progress.due_estimates(self.LATER)
+        self.assertEqual(progress.due_estimates(self.LATER + 1), [])
+        self.assertEqual(len(progress.due_estimates(self.LATER + ESTIMATE_EVERY_MS)), 1)
+
+    def test_a_subagent_gets_none(self):
+        self.assertEqual(fed(prompt(), call("c", "Agent", description="x")).due_estimates(self.LATER), [])
+
+    def test_a_job_gets_one_only_while_a_turn_waits_on_it(self):
+        content = "Output is being written to: /tmp/x/tasks/abc.output. You will be notified"
+        job = result("j", backgroundTaskId="t1")
+        job["message"]["content"][0]["content"] = content
+        progress = fed(prompt(), call("j", "Bash", command="nix build", run_in_background=True), job)
+        self.assertEqual(progress.due_estimates(self.LATER), [])
+        self.assertEqual([c["output"] for c in progress.due_estimates(self.LATER, jobs=True)], ["/tmp/x/tasks/abc.output"])
+
+    def test_the_row_shows_an_estimate_with_what_it_is_for(self):
+        progress = fed(prompt(), call("c", "Bash", command="just build"))
+        progress.due_estimates(self.LATER)[0]["estimate"] = {"left": 5, "note": "", "at": self.LATER, "after": 1}
+        self.assertEqual(progress.view()["estimate"]["left"], 5)
+
+    def test_a_finished_command_says_what_it_took_and_what_was_estimated(self):
+        progress = fed(prompt(), call("c", "Bash", command="just build"))
+        progress.due_estimates(self.LATER)[0]["estimate"] = {"left": 5, "note": "", "at": self.LATER, "after": 1}
+        progress.feed({**result("c"), "timestamp": "2026-11-03T00:40:00.000Z"}, 1)
+        finished = progress.drain_finished()
+        self.assertEqual((finished[0]["line"], finished[0]["ms"], finished[0]["estimate"]["left"]), ("just build", 40 * 60_000, 5))
+        self.assertEqual(progress.drain_finished(), [])
 
 
 class PiProgressTest(unittest.TestCase):

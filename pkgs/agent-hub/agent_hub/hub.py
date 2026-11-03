@@ -33,7 +33,9 @@ PROMPT_MAX = 500
 # How often a working session's transcript is looked at, and how often its row is sent regardless.
 PROGRESS_S = 2
 ACTIVITY_S = 15
-DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind")
+# A command shorter than this says nothing about how long one takes.
+JOB_LOG_MS = 60_000
+DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind", "estimate")
 # The command behind a folder menu's app, the first one found.
 APP_COMMANDS = {"code": ("code",), "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
 
@@ -169,6 +171,12 @@ class Hub:
             if tail is None or tail.path != session.transcript:
                 tail = self.tails[session.id] = Tail(session.transcript, session.agent, session.cwd)
             moved = tail.advance(now) or moved
+            for finished in tail.progress.drain_finished():
+                if finished["ms"] >= JOB_LOG_MS:
+                    worklog.append(self.log_file, worklog.job_line(self._log_fields(session), finished, now))
+            if session.state(now) == "working":
+                for call in tail.progress.due_estimates(now, jobs=not turn.open):
+                    self._spawn(self.readings.estimate(session, call, self.log_file))
         return moved
 
     # Sessions.
