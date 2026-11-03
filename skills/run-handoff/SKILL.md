@@ -35,7 +35,7 @@ argument-hint: "[handoff-dir] [--auto]"
    - Create the integration worktree, branch `<slug>`, off the base branch in Context. Use the user's worktree tooling, otherwise `git worktree add`.
    - Create `PROGRESS.md` from the template below.
    - Run Context's build and test commands once, and record their durations.
-   - Then do the bootstrap items and `G0` yourself.
+   - Then do the bootstrap items and `G0`, if there are any, yourself.
 
 ## Loop
 

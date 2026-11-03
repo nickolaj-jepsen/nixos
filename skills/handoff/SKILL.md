@@ -1,8 +1,8 @@
 ---
 name: handoff
-description: Turn a finished brainstorm or research thread into a handoff for a separate builder agent — pin the scope, verify assumptions with read-only subagents, grill the user only on what is still undecided, agree the item graph, then write a self-contained HANDOFF.md whose work items carry owned paths and acceptance commands so /run-handoff can build them in parallel. Use when the user asks for a handoff, or for a plan another agent will implement in a long-running session.
+description: Turn a finished brainstorm or research thread into a handoff for a separate builder agent — pin the scope, verify assumptions with read-only subagents, grill the user only on what is still undecided, agree the item graph, then write a self-contained HANDOFF.md whose work items carry owned paths and acceptance commands so /run-handoff can build them in parallel. --quick writes a short one inline, without subagents or stops. Use when the user asks for a handoff, or for a plan another agent will implement in a long-running session.
 disable-model-invocation: true
-argument-hint: "[scope]"
+argument-hint: "[scope] [--quick]"
 arguments: scope
 ---
 
@@ -10,7 +10,7 @@ arguments: scope
 
 - The reader is a builder agent that never saw this conversation.
 - It runs `/run-handoff <dir>`, which owns the operating loop: progress tracking, subagent briefs, worktrees, merging, gates and stopping. Don't restate that loop in the handoff; write only what is specific to the project.
-- `scope` is free text naming what to hand off (`1-4`, `options 2 and 3`, `all but the migration`). Empty means what the conversation just settled on.
+- `scope` is free text naming what to hand off (`1-4`, `options 2 and 3`, `all but the migration`). Empty means what the conversation just settled on. `--quick` isn't part of it and replaces the spine with the section of that name.
 
 ## Spine
 
@@ -193,3 +193,18 @@ Max items in flight: <n> (default 3; lower if tests contend for a cluster, ports
 
 <Owner appends dated entries here; they override everything above.>
 ```
+
+## --quick
+
+For small, settled work where the full spine would cost more than the build. No subagents, no graph review, no cold read. It still writes `HANDOFF.md`, because the builder has nothing else to go on.
+
+1. **State the scope, don't wait.** Open with one line giving the scope, what's out of it and the directory, so the user can object. Ask before overwriting a `HANDOFF.md`, as in the spine.
+2. **Harvest decisions** as in step 2 of the spine.
+3. **Check inline** what the plan leans on: read the files and interfaces each item touches, and find the build, test and run commands. Run the ones that are quick, and mark the rest unverified in Context.
+4. **Ask nothing,** unless one undecided choice could change what gets built; then ask that single question. Other gaps go in Open questions, with how to proceed meanwhile.
+5. **Decompose into at most 3 items in a straight line,** each blocked by the one before, so there are no contracts, gates or spikes. If the work needs more items, parallel ones or a spike, say so in one line and ask whether to run the full `/handoff` instead.
+6. **Write `HANDOFF.md`** under the rules above, with only Mission, Scope, Context, Locked decisions, Work items, Gotchas and Open questions, leaving out any that are empty. Acceptance stays observable.
+7. **Reread it as someone who never saw this chat,** and fix undefined terms, references to the discussion and items without runnable acceptance.
+8. **Report** the path and the open questions, then the kickoff: in a fresh session, `Read <path> and build it`, or `/run-handoff <dir>` for worktrees and a review gate. End with `Deeper: /handoff <scope>`.
+
+A full run that follows in the same session starts from this file's scope and decisions.
