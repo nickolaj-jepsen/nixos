@@ -8,6 +8,8 @@ from .common import folded, json_lines
 
 SHELL_TOOLS = ("bash", "bg_run")
 WRITE_TOOLS = ("edit", "write")
+# The custom message type claude-peers.ts puts a peer's message in the session as.
+PEER_MESSAGE = "claude-peer-message"
 # Bare acknowledgements only. A word count cannot tell "sounds good, but make it async"
 # from "sounds good", and dropping that sentence freezes the name on the work before it.
 ACK = frozenset(
@@ -52,41 +54,56 @@ def shown(path, cwd):
     return shown_path(os.path.normpath(path), cwd)
 
 
-def digest(path, leaf=None, cwd=None, prompt=None):
-    """The digest of a pi session file (see `judge`) along the branch ending at entry
-    `leaf`, or None when the file can't be read. `cwd` defaults to the session's own.
-    `prompt` is one the file doesn't have yet, as at `before_agent_start`; a session pi
-    hasn't written yet is read as empty when there is one, since pi creates the file only
-    with its first message. pi reports its running jobs itself."""
+def picked_requests(prompts):
+    """The first request says what the session is for; the latest what it is doing now."""
+    picked = prompts[-RECENT_PROMPTS:]
+    if prompts and prompts[0] not in picked:
+        picked = [prompts[0], *picked]
+    return [folded(text)[:PROMPT_CHARS] for text in picked]
+
+
+def read_entries(path):
+    """A session file's entries and its header. OSError when it can't be read."""
     entries, header = [], {}
-    try:
-        for entry in json_lines(path):
-            if entry.get("type") == "session":
-                header = entry
-            else:
-                entries.append(entry)
-    except FileNotFoundError:
-        if not prompt:
-            return None
-    except OSError:
-        return None
-    cwd = cwd or header.get("cwd")
-    prompts, files, commands, failed = [], [], [], {}
-    said = ""
+    for entry in json_lines(path):
+        if entry.get("type") == "session":
+            header = entry
+        else:
+            entries.append(entry)
+    return entries, header
+
+
+def turns(entries, leaf=None, cwd=None):
+    """Every turn along the branch ending at entry `leaf`, oldest first (see `claude.turns`),
+    with `prompts` the person's substantive requests so far, for what comes next."""
+    found, prompts = [], []
+    turn = None
+
+    def begin(peer):
+        nonlocal turn
+        turn = {"prompts": list(prompts), "files": [], "commands": [], "failed": {}, "said": "", "id": None, "at": None, "peer": peer}
+        found.append(turn)
+
     for entry in branch(entries, leaf):
+        if entry.get("type") == "custom_message" and entry.get("customType") == PEER_MESSAGE:
+            begin(True)
+            continue
         message = entry.get("message")
         if entry.get("type") != "message" or not isinstance(message, dict):
             continue
         role = message.get("role")
         if role == "user":
-            said = ""
             text = text_of(message)
             if not is_acknowledgement(text):
                 prompts.append(text)
+            begin(False)
+        elif turn is None:
+            continue
         elif role == "toolResult":
-            failed[message.get("toolCallId")] = bool(message.get("isError"))
+            turn["failed"][message.get("toolCallId")] = bool(message.get("isError"))
         elif role == "assistant":
-            said = text_of(message).strip() or said
+            turn["said"] = text_of(message).strip() or turn["said"]
+            turn["id"], turn["at"] = entry.get("id"), entry.get("timestamp")
             content = message.get("content")
             for block in content if isinstance(content, list) else []:
                 if not isinstance(block, dict) or block.get("type") != "toolCall":
@@ -95,13 +112,29 @@ def digest(path, leaf=None, cwd=None, prompt=None):
                 args = args if isinstance(args, dict) else {}
                 target = args.get("path") or args.get("file_path")
                 if name in WRITE_TOOLS and isinstance(target, str):
-                    files = touched(files, shown(target, cwd))
+                    turn["files"] = touched(turn["files"], shown(target, cwd))
                 elif name in SHELL_TOOLS and isinstance(args.get("command"), str):
-                    commands.append((block.get("id"), command_line(args["command"])))
+                    turn["commands"].append((block.get("id"), command_line(args["command"])))
+    return [{**assemble(picked_requests(t["prompts"]), t["files"], t["commands"], t["failed"], t["said"]),
+             "id": t["id"], "at": t["at"], "peer": t["peer"], "prompts": t["prompts"]} for t in found], prompts
+
+
+def digest(path, leaf=None, cwd=None, prompt=None):
+    """The digest of a pi session file's latest turn (see `judge`) along the branch ending at
+    entry `leaf`, or None when the file can't be read. `cwd` defaults to the session's own.
+    `prompt` is one the file doesn't have yet, as at `before_agent_start`; a session pi
+    hasn't written yet is read as empty when there is one, since pi creates the file only
+    with its first message. pi reports its running jobs itself."""
+    entries, header = [], {}
+    try:
+        entries, header = read_entries(path)
+    except FileNotFoundError:
+        if not prompt:
+            return None
+    except OSError:
+        return None
+    found, prompts = turns(entries, leaf, cwd or header.get("cwd"))
+    latest = found[-1] if found else assemble([], [], [], {}, "")
     if prompt and not is_acknowledgement(prompt):
-        prompts.append(prompt)
-    # The first request says what the session is for; the latest what it is doing now.
-    picked = prompts[-RECENT_PROMPTS:]
-    if prompts and prompts[0] not in picked:
-        picked = [prompts[0], *picked]
-    return assemble([folded(text)[:PROMPT_CHARS] for text in picked], files, commands, failed, said)
+        prompts = [*prompts, prompt]
+    return {**latest, "requests": picked_requests(prompts)}

@@ -7,9 +7,10 @@ The answer comes as `key: value` lines rather than JSON: a missing key means
 "unchanged", a malformed line costs only itself, and there is no schema for a small
 model to lose its way in.
 
-Digest fields, all optional: `requests` (the person's latest prompts), `files`
-(touched), `commands` (each with `(ok)` or `(failed)`), `said` (the turn's closing
-words, settle only), `pending` (jobs in flight that may be a server left running),
+Digest fields, all optional: `requests` (the person's latest prompts), `files` (touched
+in the latest turn), `commands` (that turn's, each with `(ok)` or `(failed)`), `said` (its
+closing words, settle only), `peer` (it answered another session rather than the person),
+`pending` (jobs in flight that may be a server left running),
 `agents` (agent work in flight, which will report back), `doing` (what that work is),
 `repo`, `branch` and `error` (the turn ended on an error).
 
@@ -101,9 +102,9 @@ def render(digest, identity, settle):
     if identity.get("tags"):
         lines.append(f"tags so far: {', '.join(identity['tags'])}")
     if digest.get("files"):
-        lines.append(f"files touched: {', '.join(digest['files'])}")
+        lines.append(f"files touched in the latest turn: {', '.join(digest['files'])}")
     if digest.get("commands"):
-        lines.append(f"commands: {'; '.join(digest['commands'])}")
+        lines.append(f"commands in the latest turn: {'; '.join(digest['commands'])}")
     if settle and digest.get("pending"):
         lines.append(f"background jobs started that have not reported back: {digest['pending']}")
     if digest.get("peer"):

@@ -136,7 +136,7 @@ and one parser (`agent_hub/judge.py`) serve both agents.
 - At a turn's end the same prompt also asks how it ended, what it did, what it
   asks of you and the reply you would likely type.
 - The model reads a digest, not the transcript: the latest requests, the files
-  touched, the commands run, jobs still out, and the turn's closing words.
+  touched and commands run in the latest turn, jobs still out, and its closing words.
 - A prompt that only agrees ("ok", "thanks") is not worth naming the work again.
 
 Who runs the call differs:

@@ -28,13 +28,19 @@ def blocks(entry):
 
 def prompt_text(entry):
     """What the person typed, when a transcript entry is a prompt that starts a turn."""
-    if entry.get("type") != "user" or entry.get("isMeta") or "toolUseResult" in entry:
+    if entry.get("type") != "user" or entry.get("isMeta") or entry.get("isCompactSummary") or "toolUseResult" in entry:
         return None
     parts = [b.get("text") or "" for b in blocks(entry) if b.get("type") == "text"]
     # A background job reporting back resumes the turn; it doesn't start one.
     if not parts or parts[0].lstrip().startswith("<task-notification>"):
         return None
     return "\n".join(parts)
+
+
+def peer_message(entry):
+    """Whether a transcript entry is another session's message, which starts a turn too."""
+    origin = entry.get("origin")
+    return entry.get("type") == "user" and isinstance(origin, dict) and origin.get("kind") == "peer"
 
 
 def command_line(command):
@@ -63,11 +69,19 @@ def edit_target(args):
     return args.get("file_path") or args.get("notebook_path")
 
 
-def digest(path, cwd=None, prompt=None):
-    """The digest of a Claude Code transcript (see `judge`), or None when it can't be
-    read. `prompt` is one the transcript doesn't have yet, as at UserPromptSubmit."""
-    requests, files, commands, failed = [], [], [], {}
-    text = []
+def turns(path, cwd=None):
+    """Every turn of a Claude Code transcript (see `judge`), oldest first, or None when it
+    can't be read. Each is a digest with `id` (its last entry), `at` (that entry's stamp,
+    a string) and `peer`, and `files` and `commands` are that turn's alone."""
+    found, requests = [], []
+    turn = None
+
+    def begin(peer):
+        nonlocal turn
+        turn = {"requests": requests[-RECENT_PROMPTS:], "files": [], "commands": [], "failed": {}, "text": [],
+                "id": None, "at": None, "peer": peer}
+        found.append(turn)
+
     try:
         with open(path, encoding="utf-8", errors="replace") as lines:
             for line in lines:
@@ -77,33 +91,52 @@ def digest(path, cwd=None, prompt=None):
                     continue
                 if not isinstance(entry, dict) or entry.get("isSidechain"):
                     continue
+                if peer_message(entry):
+                    begin(True)
+                    continue
                 said = prompt_text(entry)
                 if said is not None:
-                    text = []
-                    # A slash command's own lines are not the person's words.
-                    if not said.lstrip().startswith("<"):
+                    # A slash command's own lines and an interrupt's marker are not the person's words.
+                    if not said.lstrip().startswith(("<", "[Request interrupted")):
                         requests.append(folded(said)[:PROMPT_CHARS])
+                    begin(False)
+                    continue
+                if turn is None:
                     continue
                 for block in blocks(entry):
                     kind = block.get("type")
                     if kind == "tool_result":
-                        failed[block.get("tool_use_id")] = bool(block.get("is_error"))
+                        turn["failed"][block.get("tool_use_id")] = bool(block.get("is_error"))
                     elif entry.get("type") != "assistant":
                         continue
                     elif kind == "tool_use":
-                        text = []
+                        turn["text"] = []
                         name, args = block.get("name"), block.get("input") or {}
                         if name in EDITS and edit_target(args):
-                            files = touched(files, shown_path(edit_target(args), cwd))
+                            turn["files"] = touched(turn["files"], shown_path(edit_target(args), cwd))
                         elif name == "Bash" and args.get("command"):
-                            commands.append((block.get("id"), command_line(args["command"])))
+                            turn["commands"].append((block.get("id"), command_line(args["command"])))
                     elif kind == "text":
-                        text.append(block.get("text") or "")
+                        turn["text"].append(block.get("text") or "")
+                if entry.get("type") == "assistant":
+                    turn["id"], turn["at"] = entry.get("uuid"), entry.get("timestamp")
     except OSError:
         return None
+    return [{**assemble(t["requests"], t["files"], t["commands"], t["failed"], "\n".join(t["text"]).strip()),
+             "id": t["id"], "at": t["at"], "peer": t["peer"]} for t in found]
+
+
+def digest(path, cwd=None, prompt=None):
+    """The digest of a Claude Code transcript's latest turn (see `judge`), or None when it
+    can't be read. `prompt` is one the transcript doesn't have yet, as at UserPromptSubmit:
+    the turn before it is then the latest, which still says what the work is."""
+    found = turns(path, cwd)
+    if found is None:
+        return None
+    latest = found[-1] if found else assemble([], [], [], {}, "")
     if prompt and not prompt.lstrip().startswith("<"):
-        requests.append(folded(prompt)[:PROMPT_CHARS])
-    return assemble(requests[-RECENT_PROMPTS:], files, commands, failed, "\n".join(text).strip())
+        latest = {**latest, "requests": [*latest["requests"], folded(prompt)[:PROMPT_CHARS]][-RECENT_PROMPTS:]}
+    return latest
 
 
 def shown_path(path, cwd):

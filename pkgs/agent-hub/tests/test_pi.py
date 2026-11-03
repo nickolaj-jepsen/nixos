@@ -40,6 +40,12 @@ class Session:
         return self.add({"role": "toolResult", "toolCallId": call, "isError": error,
                          "content": [{"type": "text", "text": "output"}]}, **kw)
 
+    def peer(self):
+        entry = {"type": "custom_message", "customType": pi.PEER_MESSAGE, "id": f"e{len(self.entries)}", "parentId": self.last, "content": "hi"}
+        self.entries.append(entry)
+        self.last = entry["id"]
+        self.path.write_text("".join(json.dumps(e) + "\n" for e in self.entries))
+
 
 class DigestTest(unittest.TestCase):
     def setUp(self):
@@ -142,6 +148,30 @@ class DigestTest(unittest.TestCase):
         s.assistant("")
         d = self.digest()
         self.assertEqual(d["said"], "All done, shall I commit?")
+
+    def test_files_and_commands_are_the_latest_turns_alone(self):
+        s = self.session
+        s.user("first job")
+        s.assistant(calls=[("a", "edit", {"path": "old.py"}), ("b", "bash", {"command": "just old"})])
+        s.user("second job")
+        s.assistant(calls=[("c", "edit", {"path": "new.py"})])
+        d = self.digest()
+        self.assertEqual((d["files"], d["commands"]), (["new.py"], []))
+
+    def test_before_a_new_prompt_the_turn_before_still_says_what_the_work_is(self):
+        s = self.session
+        s.user("first job")
+        s.assistant(calls=[("a", "edit", {"path": "old.py"})])
+        d = self.digest(prompt="second job")
+        self.assertEqual((d["files"], d["requests"]), (["old.py"], ["first job", "second job"]))
+
+    def test_a_peers_message_starts_a_turn_marked_as_one(self):
+        s = self.session
+        s.user("first job")
+        s.assistant("Done, shall I commit?")
+        s.peer()
+        d = self.digest()
+        self.assertEqual((d["peer"], d["said"], d["requests"]), (True, "", ["first job"]))
 
     def test_appends_a_prompt_not_yet_on_the_file(self):
         self.session.user("fix the login form")
