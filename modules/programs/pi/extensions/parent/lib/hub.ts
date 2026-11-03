@@ -80,6 +80,8 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
   let attached = false;
   /** Set once a hub on another version turns the session away; it is not asked again. */
   let refused = false;
+  /** False once the hub says it does not know the form ops: an older daemon, and the CLI does them. */
+  let formOps = true;
   let status: Status = "idle";
   let since = Date.now();
   let attachInfo: () => AttachInfo = () => ({ record: {} });
@@ -119,10 +121,10 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     });
   };
 
-  /** A form op, naming this session; undefined when there is no connection to ask on or no reply. */
+  /** A form op, naming this session; undefined when the CLI should do it instead. */
   const formAsk = (build: (request: number, session: string) => HubOp) => {
     const session = ctx?.sessionManager.getSessionId();
-    if (session === undefined) return Promise.resolve(undefined);
+    if (session === undefined || !formOps) return Promise.resolve(undefined);
     return ask((request) => build(request, session), FORM_TIMEOUT_MS);
   };
 
@@ -164,11 +166,15 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     } else if (message.type === "reply") {
       replies.get(message.request)?.(message);
       replies.delete(message.request);
-    } else if (message.type === "error" && message.request !== undefined) {
+    } else if (message.type === "error") {
       // A write the hub refused, an op it doesn't know among them: fail it now, not at its
       // timeout, so the caller can take the CLI instead.
-      replies.get(message.request)?.(undefined);
-      replies.delete(message.request);
+      if (message.request !== undefined) {
+        replies.get(message.request)?.(undefined);
+        replies.delete(message.request);
+      }
+      // An older daemon: every form op would fail the same way, so stop asking for them.
+      if (/^unknown op 'form-/.test(message.error)) formOps = false;
     } else if (message.type === "notice" && live && ctx) {
       ctx.ui.notify(message.text, "warning");
     } else if (message.type === "refused") {
@@ -212,6 +218,7 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       const { record, name } = attachInfo();
       const waitingFor = dialogs.current();
       attached = true;
+      formOps = true;
       write({
         op: "attach",
         version: PROTOCOL_VERSION,
@@ -289,6 +296,8 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     identity: () => identity,
     /** Whether the session is attached right now. */
     connected: () => attached,
+    /** Whether this hub takes the form ops; false for a daemon older than them. */
+    formsOverSocket: () => formOps,
     /** Registers `listener` for every change of the row; returns the unsubscribe. */
     onChange(listener: () => void) {
       listeners.add(listener);

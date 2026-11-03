@@ -165,9 +165,12 @@ export default function (pi: ExtensionAPI, services: Services) {
     if (!ctx || isPolling) return;
     isPolling = true;
     try {
-      // Attached, the view arrives pushed; this only catches a delivery whose push was missed.
-      if (!hub.connected()) await pollFile(ctx);
-      else if (++tick % (SAFETY_POLL_MS / POLL_MS) === 0) await takeDelivery(ctx);
+      // Attached to a hub that takes the form ops, the view arrives pushed, and the socket is
+      // cheap: this only catches a delivery whose push was missed. A daemon too old for them
+      // leaves the file as the only news, as it is with no hub at all.
+      if (hub.connected() && hub.formsOverSocket()) {
+        if (++tick % (SAFETY_POLL_MS / POLL_MS) === 0) await takeDelivery(ctx);
+      } else await pollFile(ctx);
     } catch {
       // No agent-hub here, or it failed: the session goes on without a form.
     } finally {
