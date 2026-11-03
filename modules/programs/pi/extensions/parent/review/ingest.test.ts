@@ -21,8 +21,8 @@ import type { ReviewEnv } from "./env.ts";
 import { type TuicrResult, type TuicrSource, cliTuicr, ingestWith } from "./ingest.ts";
 import { type ReviewEntry, socketPath } from "./types.ts";
 
-/** `recordEntry` is A5's stub today, so every assertion is on what ingest returns (C1). */
-const env = {} as ReviewEnv;
+/** Every assertion is on what ingest returns (C1); the appends it makes go nowhere. */
+const env = { pi: { appendEntry: () => {} } } as unknown as ReviewEnv;
 
 const ctx = (cwd: string, session: string) =>
   ({ cwd, sessionManager: { getSessionId: () => session } }) as unknown as ExtensionContext;
