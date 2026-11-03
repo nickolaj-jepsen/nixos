@@ -29,6 +29,7 @@ TEXT_MAX = 500
 HISTORY_MAX = 3
 PEERS_MAX = 5
 JOBS_MAX = 5
+TRAIL_MAX = 12
 # Long enough for the git and gh of the other host, short enough that a menu isn't left open on it.
 CALL_TIMEOUT = 5
 UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
@@ -71,6 +72,17 @@ def clean_history(entries):
 
 def clean_list(values, limit):
     return [text(value, 120) for value in values[:limit] if isinstance(value, str)] if isinstance(values, list) else []
+
+
+def clean_counts(value):
+    value = value if isinstance(value, dict) else {}
+    counts = {key: whole(value.get(key)) for key in ("edits", "commands", "failed")}
+    return counts if any(counts.values()) else None
+
+
+def clean_trail(steps):
+    steps = steps if isinstance(steps, list) else []
+    return [{"at": whole(step.get("at")), "text": text(step.get("text"), 200)} for step in steps[-TRAIL_MAX:] if isinstance(step, dict)]
 
 
 def clean_permission(value):
@@ -127,6 +139,10 @@ def clean_row(host, row):
         "peers": clean_list(row.get("peers"), PEERS_MAX),
         "activity": whole(row.get("activity")),
         "jobs": clean_list(row.get("jobs"), JOBS_MAX),
+        "now": text(row.get("now"), 120),
+        "nowAt": whole(row.get("nowAt")),
+        "counts": clean_counts(row.get("counts")),
+        "trail": clean_trail(row.get("trail")),
     }
     cleaned.update({key: value for key, value in details.items() if value})
     return cleaned

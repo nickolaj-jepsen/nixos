@@ -220,7 +220,11 @@ def demo_sessions():
         ("demo-fail", "pi", "idle", "nightly bot", {"turnState": "failed", "summary": "The update bot still fails on the darwin eval."}),
         ("demo-done", "pi", "idle", "footer popup width", {"turnState": "done", "summary": "Fixed the footer popup width on narrow terminals."}),
         ("demo-busy1", "cli", "busy", "devenv-tilt-68", {}),
-        ("demo-busy2", "pi", "busy", "flaky ci retries", {"doing": "rerunning the retry test", "branch": "retries", "activity": t - 300_000}),
+        ("demo-busy2", "pi", "busy", "flaky ci retries", {
+            "doing": "Rerunning the retry test under load.", "branch": "retries", "activity": t - 30_000,
+            "now": "just test retries", "nowAt": t - 720_000, "counts": {"edits": 4, "commands": 7, "failed": 1},
+            "trail": [{"at": t - 1_500_000, "text": "Reading the retry code."}, {"at": t - 1_200_000, "text": "Wrote a test that fails the same way."},
+                      {"at": t - 720_000, "text": "Rerunning the retry test under load."}]}),
         ("demo-idle1", "cli", "idle", "dotfiles-2a", {}),
         ("demo-idle2", "pi", "idle", "homelab grafana alerts", {}),
     ]

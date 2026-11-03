@@ -21,6 +21,7 @@ from .common import (
     LINE_MAX, alive, folded, label_line, log_path, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
 )
 from .desktop import Niri
+from .progress import Tail
 from .readings import Readings
 from .registry import RegistrySource
 
@@ -29,9 +30,10 @@ RECENT_MAX = 100
 UNSEEN_MS = 60_000
 UNDO_MAX = 50
 PROMPT_MAX = 500
-# How often a working session's last activity is looked at.
+# How often a working session's transcript is looked at, and how often its row is sent regardless.
+PROGRESS_S = 2
 ACTIVITY_S = 15
-DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history")
+DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail")
 # The command behind a folder menu's app, the first one found.
 APP_COMMANDS = {"code": ("code",), "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
 
@@ -72,6 +74,8 @@ class Hub:
         self.state_file = Path(cfg["state"]).expanduser()
         self.log_file = log_path(cfg)
         self.readings = Readings(self, cfg.get("claude"))
+        # Session id → its transcript as far as it has been followed.
+        self.tails = {}
         self.conns = set()
         # Session id → the connection it is attached on.
         self.attached = {}
@@ -143,11 +147,29 @@ class Hub:
             await asyncio.gather(*tasks)
 
     async def _watch_activity(self):
-        """Nothing else says a working session is still moving, so its row is looked at again."""
+        """Nothing else says a working session is still moving, so its transcript is followed and
+        its row is looked at again."""
+        ticks = 0
         while True:
-            await asyncio.sleep(ACTIVITY_S)
-            if any(session.turn is not None and session.turn.open for session in self.visible().values()):
+            await asyncio.sleep(PROGRESS_S)
+            ticks += 1
+            moved = self._follow_transcripts()
+            due = ticks % (ACTIVITY_S // PROGRESS_S) == 0
+            if moved or (due and any(session.turn is not None and session.turn.open for session in self.visible().values())):
                 self.publish()
+
+    def _follow_transcripts(self):
+        """Reads on in each working session's transcript; returns whether any progress moved."""
+        now, moved = now_ms(), False
+        for session in self.visible().values():
+            turn = session.turn
+            if not session.transcript or turn is None or not (turn.open or (turn.outcome or {}).get("jobs")):
+                continue
+            tail = self.tails.get(session.id)
+            if tail is None or tail.path != session.transcript:
+                tail = self.tails[session.id] = Tail(session.transcript, session.agent, session.cwd)
+            moved = tail.advance(now) or moved
+        return moved
 
     # Sessions.
 
@@ -245,6 +267,7 @@ class Hub:
         """A session that ended goes to the recent list, when it was ever named."""
         self._release_all(session)
         del self.sessions[session.id]
+        self.tails.pop(session.id, None)
         self.readings.forget(session.id)
         if not session.label:
             return
@@ -473,7 +496,20 @@ class Hub:
                 row["activity"] = int(os.stat(session.transcript).st_mtime * 1000)
             except OSError:
                 pass
+            self._with_progress(session, row)
         return row
+
+    def _with_progress(self, session, row):
+        """What the transcript says of a running turn, or of the jobs one ended to wait on. The
+        agent's latest narration is fresher than the step a model named as the turn started."""
+        tail, turn = self.tails.get(session.id), session.turn
+        if tail is None or turn is None or not (turn.open or (turn.outcome or {}).get("jobs")):
+            return
+        fields = tail.progress.view(jobs=not turn.open)
+        step = fields.pop("step", "")
+        row.update(fields)
+        if turn.open and step:
+            row["doing"] = row["reason"] = step
 
     def _name_peers(self, rows):
         """Tells each row which other sessions share its working tree."""
@@ -826,6 +862,9 @@ class Hub:
             session.start_aside(now)
         elif session.start_turn(now) is not None:
             self.readings.cancel(session.id)
+            # The prompt reaches the transcript a moment later, and the last turn's trail is over now.
+            if session.id in self.tails:
+                self.tails[session.id].progress.new_turn()
         session.observe("busy", None, now)
         prompt = message.get("prompt") or ""
         if message.get("fromPerson", True) and prompt.strip() and not prompt.lstrip().startswith("<"):

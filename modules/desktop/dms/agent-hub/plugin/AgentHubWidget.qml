@@ -303,8 +303,41 @@ PluginComponent {
         return Paths.shortenHome(session.cwd || "").split("/").pop() || "";
     }
 
-    // A row's second line: its ask or step, or else its folder when the name doesn't already say it.
+    // How long something has been running; "now" would read as if it had just begun.
+    function elapsed(ms) {
+        const m = Math.floor((nowMs - ms) / 60000);
+        return m < 1 ? "under 1m" : m < 60 ? m + "m" : Math.floor(m / 60) + "h " + (m % 60) + "m";
+    }
+
+    function nowLine(session) {
+        return session.now ? session.now + " · " + elapsed(session.nowAt) : "";
+    }
+
+    // This turn's tally, leaving out what hasn't happened.
+    function countsLine(session) {
+        const counts = session.counts;
+        if (!counts)
+            return "";
+        const part = (n, word) => n ? n + " " + word + (n === 1 ? "" : "s") : "";
+        const parts = [part(counts.edits, "edit"), part(counts.commands, "command"), counts.failed ? counts.failed + " failed" : ""];
+        return parts.filter(text => text).join(", ");
+    }
+
+    // A running turn's narration, oldest first, as a pane's lines read.
+    function trailLines(session) {
+        if (session?.state !== "working")
+            return [];
+        return (session.trail ?? []).slice(-6).map(step => ({
+                    "did": step.text,
+                    "at": step.at,
+                    "state": "working"
+                }));
+    }
+
+    // A row's second line: what is running, its ask or step, or else its folder when the name doesn't already say it.
     function rowLine(session) {
+        if (session.state === "working" && session.now)
+            return nowLine(session);
         const said = session.reason || "";
         if (said)
             return said;
@@ -867,6 +900,7 @@ PluginComponent {
         readonly property string section: root.sectionOf(index)
         readonly property bool headed: section !== "" && (index === 0 || root.sectionOf(index - 1) !== section)
         readonly property string line: slim ? "" : root.rowLine(session)
+        readonly property bool working: session.state === "working"
 
         width: parent.width
 
@@ -881,7 +915,8 @@ PluginComponent {
 
         Rectangle {
             width: parent.width
-            height: row.slim ? 32 : 52
+            // A working row keeps room for its tally, so the first edit moves nothing under the pointer.
+            height: row.slim ? 32 : row.working ? 68 : 52
             radius: Theme.cornerRadius
             color: row.isSelected ? Theme.surfaceContainerHigh : "transparent"
 
@@ -954,6 +989,14 @@ PluginComponent {
                     width: parent.width
                     visible: row.line !== ""
                     text: row.line
+                }
+
+                OneLine {
+                    width: parent.width
+                    visible: row.working && text !== ""
+                    text: row.working ? root.countsLine(row.session) : ""
+                    color: Theme.withAlpha(Theme.surfaceVariantText, 0.8)
+                    font.pixelSize: Theme.fontSizeSmall - 1
                 }
             }
 
@@ -1494,10 +1537,52 @@ PluginComponent {
                                 tip: "What you would probably say"
                             }
 
+                            // A working session's trail has this line as its last.
                             PaneText {
-                                visible: !!pane.session && !root.waits(pane.session) && text !== ""
+                                visible: !!pane.session && !root.waits(pane.session) && text !== "" && root.trailLines(pane.session).length === 0
                                 text: pane.session?.reason ?? ""
                                 font.pixelSize: Theme.fontSizeMedium
+                            }
+
+                            // What it has said so far, then what is running now and the turn's tally.
+                            Column {
+                                width: parent.width
+                                visible: root.trailLines(pane.session).length > 0
+                                spacing: 5
+
+                                Repeater {
+                                    model: root.trailLines(pane.session)
+
+                                    TurnLine {}
+                                }
+                            }
+
+                            Item {
+                                width: parent.width
+                                height: nowText.implicitHeight
+                                visible: pane.session?.state === "working" && !!pane.session?.now
+
+                                DSpinner {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    size: 11
+                                    strokeWidth: 2
+                                    color: Theme.surfaceVariantText
+                                }
+
+                                OneLine {
+                                    id: nowText
+                                    x: 18
+                                    width: parent.width - x
+                                    text: pane.session ? root.nowLine(pane.session) : ""
+                                    color: Theme.surfaceText
+                                }
+                            }
+
+                            OneLine {
+                                width: parent.width
+                                visible: pane.session?.state === "working" && text !== ""
+                                text: pane.session ? root.countsLine(pane.session) : ""
+                                color: Theme.withAlpha(Theme.surfaceVariantText, 0.8)
                             }
 
                             Column {

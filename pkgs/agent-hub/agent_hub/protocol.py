@@ -80,6 +80,11 @@ ROW = {
     "activity?": "int",
     # The background work a finished turn still waits on.
     "jobs?": ["str"],
+    # While working: what is running and since when, this turn's tally, and the agent's narration so far.
+    "now?": "str",
+    "nowAt?": "int",
+    "counts?": {"edits": "int", "commands": "int", "failed": "int"},
+    "trail?": [{"at": "int", "text": "str"}],
 }
 
 RECENT = {

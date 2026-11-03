@@ -751,6 +751,29 @@ class ClaudeTurnTest(HubTest):
         self.stop([prompt("fix it"), said("Fixed. Want me to commit?")])
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "commit this?"))
 
+    def test_a_running_turn_shows_what_its_transcript_says(self):
+        entries = [prompt("build it"), said("Building it now."),
+                   {"type": "assistant", "timestamp": "2026-11-03T00:00:00.000Z", "message": {"role": "assistant", "content": [
+                       {"type": "tool_use", "id": "t", "name": "Bash", "input": {"command": "just build"}}]}}]
+        # The registry's `idle` from setUp must have landed, or it would end this turn as interrupted.
+        self.settled()
+        event = {"hook_event_name": "UserPromptSubmit", "session_id": self.sid, "prompt": "build it",
+                 "transcript_path": str(self.hub.write_transcript(self.sid, entries))}
+        self.hub.command("hook", stdin=json.dumps(event))
+        state = self.bar.wait(has_session(self.sid, lambda s: s.get("now") == "just build"))
+        row = session(state, self.sid)
+        self.assertEqual((row["doing"], row["reason"]), ("Building it now.", "Building it now."))
+        self.assertEqual(row["counts"]["commands"], 1)
+        self.assertEqual(row["trail"][-1]["text"], "Building it now.")
+        # Its narration is the agent's words: it stays off the state file.
+        self.hub.write_session(self.proc.pid, self.sid, status="busy", name="still going")
+        self.settled()
+        self.assertNotIn("Building it now", (self.hub.tmp / "state.json").read_text())
+        # And it is over with the turn.
+        self.stop(entries, payload={"last_assistant_message": "Done."})
+        state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+        self.assertNotIn("now", session(state, self.sid))
+
     def peer_turn(self, closing, standing=True):
         """A peer's message wakes the session, as Claude reports it, and its turn ends on `closing`."""
         entries = [prompt("Another Claude session sent a message:\n<cross-session-message from=\"uds:/x\">hi</cross-session-message>")]

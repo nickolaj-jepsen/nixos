@@ -21,6 +21,10 @@ that ended behind a fold. The right shows the selected one: your last prompt, al
 what it wants permission for or its closing words as written, the answer you'd likely
 give, its last turns, and one row of icons for where it is.
 
+- A working row says what is running and for how long, with this turn's tally of edits,
+  commands and failures under it. The pane shows the agent's narration so far above
+  that. There is no percentage and no `stuck` state: nothing knows the total, and a long
+  build looks exactly like a hang, so it shows the time and leaves that to you.
 - A row is selected by hovering it (after 120 ms, and only when the pointer itself
   moved) or with the keys, which share the one selection. The pane stops following
   once the pointer is inside it.
@@ -341,8 +345,13 @@ daemon starts.
   `agent-hub status` all read.
 - Your last prompt stays in the daemon's memory, off its state file and the work log.
   Branch and changed files are asked of git when a session is first seen, when a prompt
-  opens, when a turn ends and when the popout opens. A working row's last activity is
-  when its transcript last moved, so a long silent command looks the same as a stuck one.
+  opens, when a turn ends and when the popout opens.
+- `agent_hub/progress.py` follows a working session's transcript every two seconds: the
+  tools running, their tally and the agent's narration. No model is called and nothing
+  prompts the agent, so the step line is only as true as what the agent says it is doing.
+  Narration stays in memory like your prompt, and after a restart it comes back from the
+  end of the transcript. A row names a foreground tool or a background job as they run,
+  and a working row's last activity is when its transcript last moved.
 - The protocol has a version. pi's build generates its TypeScript types from
   `protocol.py`, and a pi built against another version is refused with a notice to
   restart it.
