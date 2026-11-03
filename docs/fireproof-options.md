@@ -751,7 +751,7 @@ true
 
 
 
-Enable agent-hub, the DMS bar hub for live coding-agent sessions and their permission asks
+Enable agent-hub, the daemon that names and judges every live coding-agent session, with its DMS bar on desktops
 
 
 
@@ -764,6 +764,78 @@ boolean
 
 ```nix
 true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.agent-hub\.linkJumps
+
+
+
+host:port hops a viewer’s link key may open through this host, for a viewer’s ProxyJump\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.agent-hub\.remotes
+
+
+
+Hosts whose hubs this one shows, by their ssh name, each with ssh options that differ from the login config’s (ProxyJump = “none”)\. Needs secrets/hosts/\<this host>/agent-hub-link\.age\.
+
+
+
+*Type:*
+attribute set of attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.agent-hub\.viewers
+
+
+
+Hosts whose link key may attach here\. Only ever ` agent-hub attach `, no login\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
 ```
 
 *Declared by:*
@@ -2628,8 +2700,6 @@ string
 
 ## fireproof\.theme\.colors\.red
 
-
-
 Red (errors, destructive)
 
 
@@ -2723,6 +2793,8 @@ string
 
 
 ## fireproof\.theme\.colors\.uiAlt
+
+
 
 Alternative UI element background
 
