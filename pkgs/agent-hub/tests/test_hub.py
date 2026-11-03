@@ -484,7 +484,7 @@ class TurnTest(HubTest):
         self.finish("state: done")
         ask = self.pi.judged[-1]
         self.assertEqual(ask["source"], "session ask")
-        self.assertIn("eight lines", ask["system"])
+        self.assertEqual(ask["system"], judge.SYSTEM)
         self.assertIn("assistant said: Done.", ask["prompt"])
 
     def test_a_turn_whose_reading_fails_ends_by_its_words(self):

@@ -24,8 +24,10 @@ import re
 
 from .common import BLOCK_MAX, folded, shown_block
 
-FIELDS = ("label", "doing", "summary", "tags", "state", "did", "ask", "reply")
+FIELDS = ("label", "doing", "summary", "tags", "state", "did", "ask", "kind", "reply")
 TURN_STATES = ("done", "blocked", "waiting")
+# What an ask wants of you, as a row's tag says it.
+ASK_KINDS = ("decide", "info", "approve", "do something")
 TAGS = ("bugfix", "feature", "refactor", "test", "docs", "deps", "ci", "perf", "chore")
 MAX_LABEL = 40
 MAX_DOING = 32
@@ -42,7 +44,7 @@ AGENT_TASKS = ("subagent", "workflow", "teammate", "monitor", "cloud session")
 MAX_TASK_LINE = 80
 
 SYSTEM = f"""You keep a coding session's identity current for the person working in it.
-Answer with exactly these eight lines, in this order, and nothing else:
+Answer with exactly these nine lines, in this order, and nothing else:
 label: 2-6 lowercase words naming what the work is about
 doing: at most 8 words for the step in flight, or empty
 summary: one sentence of at most 20 words about the session so far
@@ -50,13 +52,14 @@ tags: up to three of {" ".join(TAGS)}
 state: done, blocked or waiting for the assistant turn, or empty
 did: one sentence of at most 20 words about what the assistant turn did, or empty
 ask: what the assistant turn needs from the person, or empty
+kind: one of {", ".join(ASK_KINDS)} for what ask wants, or empty
 reply: what the person would most likely type to answer ask, or empty
 
 - The label names the work, never that you agreed to something.
 - Repeat the current label word for word when the work has not moved on.
 - doing names the step, not the subject: "stuck on the retry test", not "auth work".
 - The branch is a hint about the work, never the label on its own.
-- Fill state, did, ask and reply only from the assistant turn below. Leave all four
+- Fill state, did, ask, kind and reply only from the assistant turn below. Leave all five
   empty when there is no such turn.
 - state: blocked only when the turn puts a real question or request to the person and
   can't proceed without their answer, wherever in its message that comes. A list of
@@ -71,6 +74,9 @@ reply: what the person would most likely type to answer ask, or empty
   by itself when they report back.
 - ask is a request, not a summary: "keep the old fixture?" not "asked about the fixture".
   Leave it empty unless state is blocked.
+- kind: decide when they choose between ways forward, info when the agent lacks a fact only
+  they have, approve when it has one action ready and waits for a yes, do something when
+  they have to act themselves, such as rebooting or testing.
 - reply predicts what the person would type, not what you think they should say:
   their words, their length and their tone, as in the requests above. Leave it
   empty when you cannot tell which way they would answer.
@@ -151,6 +157,9 @@ def parse(text):
                 fields["state"] = value.lower()
         elif key == "ask":
             fields["ask"] = value[:MAX_ASK]
+        elif key == "kind":
+            if value.lower() in ASK_KINDS:
+                fields["kind"] = value.lower()
         elif key == "reply":
             fields["reply"] = value[:MAX_REPLY]
         elif key == "tags":
@@ -255,6 +264,7 @@ def outcome(fields, guess, digest):
     return {
         "state": state,
         "ask": (fields.get("ask") or guess["ask"])[:MAX_ASK] if state == "blocked" else "",
+        "kind": fields.get("kind", "") if state == "blocked" else "",
         "reply": fields.get("reply", "") if state == "blocked" else "",
         "summary": fields.get("did") or guess["summary"],
         "jobs": jobs,

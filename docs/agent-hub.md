@@ -138,7 +138,9 @@ and one parser (`agent_hub/judge.py`) serve both agents.
 - At a turn's start a model names the work (`label`), the step in flight
   (`doing`), a sentence about the session and its tags.
 - At a turn's end the same prompt also asks how it ended, what it did, what it
-  asks of you and the reply you would likely type.
+  asks of you, what kind of help that is, and the reply you would likely type.
+- A `needs reply` row carries that kind as a tag: `decide`, `info`, `approve` or
+  `do something`. It is a label only, and changes no state, order or alert.
 - The model reads a digest, not the transcript: the latest requests, the files
   touched and commands run in the latest turn, jobs still out, and its closing words.
 - A prompt that only agrees ("ok", "thanks") is not worth naming the work again.

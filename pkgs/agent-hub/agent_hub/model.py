@@ -378,6 +378,7 @@ class Session:
             row["bridge"] = self.bridge
         details = {"prompt": self.prompt, "branch": self.branch, "changed": self.changed,
                    "said": outcome.get("said") if state == "needs-reply" else "",
+                   "askKind": outcome.get("kind") if state == "needs-reply" else "",
                    "jobs": outcome.get("tasks") if state == "working" and not aside and not turn.open else None}
         row.update({key: value for key, value in details.items() if value})
         if state == "asking" and self.holds:

@@ -69,6 +69,8 @@ ROW = {
     "prompt?": "str",
     # The closing words of a turn that needs a reply, as the agent wrote them.
     "said?": "str",
+    # What it wants of you: decide, info, approve or do something.
+    "askKind?": "str",
     # The prompt a hook is holding open, which `answer` can settle by this `id`.
     "permission?": {"id": "int", **ASK},
     "branch?": "str",

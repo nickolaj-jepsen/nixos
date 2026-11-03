@@ -954,7 +954,7 @@ PluginComponent {
                     OneLine {
                         id: nameText
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Math.min(implicitWidth, parent.width - agentMark.width - hostChip.width - 12)
+                        width: Math.min(implicitWidth, parent.width - agentMark.width - hostChip.width - kindChip.width - 18)
                         text: root.displayName(row.session)
                         font.pixelSize: row.slim ? Theme.fontSizeSmall + 1 : Theme.fontSizeMedium
                         font.weight: root.waits(row.session) ? Font.DemiBold : row.slim ? Font.Normal : Font.Medium
@@ -980,6 +980,25 @@ PluginComponent {
                             id: hostLabel
                             anchors.centerIn: parent
                             text: row.session.host ?? ""
+                            font.pixelSize: Theme.fontSizeSmall - 1
+                        }
+                    }
+
+                    // What it wants of you, for a row that needs a reply.
+                    Rectangle {
+                        id: kindChip
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: row.session.state === "needs-reply" && !!row.session.askKind
+                        width: visible ? kindLabel.implicitWidth + 10 : 0
+                        height: kindLabel.implicitHeight + 2
+                        radius: 4
+                        color: Theme.withAlpha(Theme.warning, 0.15)
+
+                        OneLine {
+                            id: kindLabel
+                            anchors.centerIn: parent
+                            text: row.session.askKind ?? ""
+                            color: Theme.warning
                             font.pixelSize: Theme.fontSizeSmall - 1
                         }
                     }

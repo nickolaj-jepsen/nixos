@@ -40,6 +40,26 @@ class CandidateTest(unittest.TestCase):
         self.assertEqual(self.ask("Done:\n\n```\nread -p 'continue?'\n```"), "")
 
 
+class AskKindTest(unittest.TestCase):
+    def outcome(self, kind, said="Keep the fixture?", state="blocked"):
+        digest = {"said": said}
+        return judge.outcome(judge.parse(f"state: {state}\nask: keep it?\nkind: {kind}\n"), judge.heuristic(digest), digest)
+
+    def test_a_tag_it_knows_is_kept(self):
+        for kind in judge.ASK_KINDS:
+            self.assertEqual(self.outcome(kind)["kind"], kind)
+
+    def test_case_is_not_the_models_to_get_right(self):
+        self.assertEqual(self.outcome("Do Something")["kind"], "do something")
+
+    def test_a_tag_it_doesnt_is_dropped_and_the_ask_stands(self):
+        found = self.outcome("urgent")
+        self.assertEqual((found["kind"], found["state"]), ("", "blocked"))
+
+    def test_only_an_ask_has_one(self):
+        self.assertEqual(self.outcome("decide", state="done")["kind"], "")
+
+
 class RenderTest(unittest.TestCase):
     def test_a_long_message_keeps_its_start_and_its_end(self):
         said = "Q1 keep it? " + "x" * 10_000 + " the end"

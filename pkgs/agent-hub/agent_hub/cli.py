@@ -215,7 +215,8 @@ def demo_sessions():
             "permission": {"id": 0, "tool": "Bash", "about": "Rebase onto main and remove the build folder", "kind": "command", "complete": True,
                            "body": "cd ~/dev/app && git fetch origin\ngit rebase origin/main && rm -rf build/"}}),
         ("demo-ask", "pi", "idle", "fixture cleanup", {
-            "turnState": "blocked", "ask": "keep the old fixture, or regenerate it?", "reply": "Regenerate it", "prompt": "Clean up the test fixtures.",
+            "turnState": "blocked", "ask": "keep the old fixture, or regenerate it?", "askKind": "decide", "reply": "Regenerate it",
+            "prompt": "Clean up the test fixtures.",
             "said": "The old fixture still passes, but it pins a format nothing else writes any more.\n\nKeep the old fixture, or regenerate it?"}),
         ("demo-fail", "pi", "idle", "nightly bot", {"turnState": "failed", "summary": "The update bot still fails on the darwin eval."}),
         ("demo-done", "pi", "idle", "footer popup width", {"turnState": "done", "summary": "Fixed the footer popup width on narrow terminals."}),

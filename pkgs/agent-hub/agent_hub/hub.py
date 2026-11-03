@@ -33,7 +33,7 @@ PROMPT_MAX = 500
 # How often a working session's transcript is looked at, and how often its row is sent regardless.
 PROGRESS_S = 2
 ACTIVITY_S = 15
-DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail")
+DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind")
 # The command behind a folder menu's app, the first one found.
 APP_COMMANDS = {"code": ("code",), "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
 
@@ -1001,7 +1001,8 @@ class Hub:
 
 def verdict_fields(outcome):
     """What a work log line says of a verdict, and what it was made of."""
-    return {"ask": outcome.get("ask") or "", "reply": outcome.get("reply") or "", "candidate": bool(outcome.get("candidate")),
+    return {"ask": outcome.get("ask") or "", "askKind": outcome.get("kind") or "", "reply": outcome.get("reply") or "",
+            "candidate": bool(outcome.get("candidate")),
             "word": outcome.get("word") or "", "prompt": judge.VERSION}
 
 
