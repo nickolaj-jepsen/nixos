@@ -216,6 +216,25 @@ class AsideTest(unittest.TestCase):
         session.start_aside(300 + REGISTRY_GRACE_MS + 1)
         self.assertEqual((session.turn.n, session.state(300 + REGISTRY_GRACE_MS + 2)), (1, "done"))
 
+    def test_a_turn_given_back_mid_reading_doesnt_wait_on_a_reading_that_was_cancelled(self):
+        session = Session(id="s")
+        n = session.start_turn(0)
+        session.end_turn(10)
+        session.reading(n, True)
+        session.observe("busy", None, 300, registry=True)
+        session.registry_turn(300 + REGISTRY_GRACE_MS)
+        self.assertIs(self.aside(session, DONE, at=300 + REGISTRY_GRACE_MS + 1), False)
+        self.assertEqual(session.state(3000), "idle")
+
+    def test_a_peers_ask_leaves_your_turn_while_it_is_being_read(self):
+        session = Session(id="s")
+        n = session.start_turn(0)
+        session.end_turn(10)
+        session.reading(n, True)
+        self.assertIs(self.aside(session, BLOCKED), False)
+        self.assertTrue(session.read(n, {**DONE, "summary": "Yours."}, 400))
+        self.assertEqual(session.row(401)["summary"], "Yours.")
+
     def test_a_session_with_only_an_aside_survives_saving(self):
         session = Session(id="s")
         session.start_aside(300)

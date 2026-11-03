@@ -175,6 +175,9 @@ class Session:
             if self.turn.by != "registry":
                 return
             self.turn = self.replaced
+            # The registry's turn cancelled any reading of it, so none is coming.
+            if self.turn is not None:
+                self.turn.reading = False
         self.aside = Turn(n=0, started=now)
 
     def end_aside(self, now):
@@ -183,13 +186,14 @@ class Session:
 
     def read_aside(self, aside, outcome, now):
         """How a peer's turn ended; None when it is no longer the one here. Returns whether it
-        reached the row: only what wants you does, and never over an ask already standing."""
+        reached the row: only what wants you does, never over an ask already standing, and never
+        over your own turn while it runs or is being read, since that reading would be dropped."""
         if self.aside is not aside:
             return None
         self.aside = None
         state = FINISHED.get(outcome["state"], "done")
         standing = self.turn is not None and self.dismissed != self.turn.n and (self.turn.outcome or {}).get("state") == "blocked"
-        if state == "done" or standing or (self.turn is not None and self.turn.open):
+        if state == "done" or standing or (self.turn is not None and (self.turn.open or self.turn.reading)):
             return False
         self.turn = Turn(n=self.turn.n + 1 if self.turn else 1, started=aside.started, ended=aside.ended, outcome=outcome)
         self.history = (self.history + [{"at": aside.ended, "state": state, "did": outcome.get("summary") or ""}])[-HISTORY:]

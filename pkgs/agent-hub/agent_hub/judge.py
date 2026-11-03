@@ -156,7 +156,7 @@ def render(digest, identity, settle):
         lines.append(f"commands in the latest turn: {'; '.join(digest['commands'])}")
     if settle and digest.get("pending"):
         lines.append(f"background jobs started that have not reported back: {digest['pending']}")
-    if digest.get("peer"):
+    if settle and digest.get("peer"):
         lines.append("this assistant turn answered another agent session, not the person: "
                      "it is blocked only if it puts something new to the person")
     lines.append("requests:")

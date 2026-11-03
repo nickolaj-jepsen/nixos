@@ -93,3 +93,7 @@ class RenderTest(unittest.TestCase):
     def test_a_turn_answering_a_peer_says_so(self):
         self.assertIn("another agent session", judge.render({"said": "Hi.", "peer": True}, {}, True))
         self.assertNotIn("another agent session", judge.render({"said": "Hi."}, {}, True))
+
+    def test_naming_your_prompt_after_a_peers_turn_doesnt_mention_it(self):
+        digest = {"requests": ["next thing"]}
+        self.assertEqual(judge.render({**digest, "peer": True}, {}, False), judge.render(digest, {}, False))

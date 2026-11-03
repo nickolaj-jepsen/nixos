@@ -171,12 +171,12 @@ def choice(question, keys, stream, out):
     print(question, end=" ", flush=True, file=out)
     while True:
         key = read_key(stream)
-        if key in keys:
-            print(key, file=out)
-            return key
         if not key:
             print(file=out)
             return "q"
+        if key in keys:
+            print(key, file=out)
+            return key
 
 
 def clipped(text):

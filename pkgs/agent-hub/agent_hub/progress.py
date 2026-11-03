@@ -11,7 +11,7 @@ import os
 import re
 from datetime import datetime
 
-from .claude import EDITS, blocks, command_line, edit_target, peer_message, prompt_text, shown_path
+from .claude import EDITS, blocks, command_line, edit_target, peer_message, prompt_text, queued_text, shown_path
 from .common import folded
 from .pi import PEER_MESSAGE, SHELL_TOOLS, WRITE_TOOLS
 
@@ -99,6 +99,7 @@ class Progress:
         if peer_message(entry) or prompt_text(entry) is not None:
             self.new_turn()
             return
+        self._notified(queued_text(entry), at)
         for block in blocks(entry):
             kind = block.get("type")
             if entry.get("type") == "assistant" and kind == "text":
@@ -218,6 +219,7 @@ class Tail:
                 return False
             if size < self.offset:
                 self.offset = 0
+            catching_up = self.offset == 0
             with open(self.path, "rb") as transcript:
                 if self.offset == 0 and size > START_BYTES:
                     # The first of it is the rest of a line cut in two.
@@ -235,10 +237,14 @@ class Tail:
         self.offset += end + 1
         before = self.progress.view()
         for line in data[:end].split(b"\n"):
+            # This runs in the daemon's main loop, and a restart would read the same line again.
             try:
                 entry = json.loads(line)
-            except ValueError:
+                if isinstance(entry, dict):
+                    self.progress.feed(entry, now)
+            except (ValueError, AttributeError, TypeError):
                 continue
-            if isinstance(entry, dict):
-                self.progress.feed(entry, now)
+        # What ended before this tail began was logged by the daemon that saw it end.
+        if catching_up:
+            self.progress.drain_finished()
         return self.progress.view() != before

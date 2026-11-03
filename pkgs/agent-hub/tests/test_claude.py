@@ -28,6 +28,17 @@ def result(call_id, error=False):
         {"type": "tool_result", "tool_use_id": call_id, "is_error": error}]}}
 
 
+class CommandLineTest(unittest.TestCase):
+    def test_a_leading_cd_says_nothing_of_what_the_command_is(self):
+        place = "/home/me/worktrees/some-repo/a-long-branch-name-that-fills-the-line"
+        for command in (f"cd {place} && just build", f"cd {place}; just build", f'cd "{place}" && cd sub && just build'):
+            self.assertEqual(claude.command_line(command), "just build")
+
+    def test_a_cd_with_nothing_after_it_on_the_line_stays(self):
+        self.assertEqual(claude.command_line("cd /repo &&\njust build"), "cd /repo &&")
+        self.assertEqual(claude.command_line("cd /repo"), "cd /repo")
+
+
 class TurnsTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="agent-hub-claude-test-"))

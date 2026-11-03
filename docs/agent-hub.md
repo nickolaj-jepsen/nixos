@@ -219,10 +219,10 @@ whether the bar should have called you and whether the model's `did` line is acc
 and 80% precision: a missed ask leaves an agent idle until you happen to look, while a
 false alarm costs a glance.
 
-- The sample is 35 turns the regex flagged and 15 it passed over, from every agent and
-  profile, at most three a session. Only the unflagged ones can show an ask the regex
-  missed, since the model can't raise a verdict. Fifty turns give a rough figure, and
-  `eval` prints the interval to say how rough.
+- The sample mixes turns the regex flagged with turns it passed over, from every agent and
+  profile, with a few from each session (sizes in `agent_hub/bench.py`). Only the unflagged
+  ones can show an ask the regex missed, since the model can't raise a verdict. It is small
+  enough to give a rough figure, and `eval` prints the interval to say how rough.
 - `~/.local/state/agent-hub/labels.jsonl` holds ids and answers, never transcript text.
   You can stop at any key and carry on later.
 - Model calls run as the session's own profile, about one per turn. `eval --words-only`

@@ -584,6 +584,14 @@ class TurnTest(HubTest):
         # It is no turn of its own, in the log's own telling.
         self.assertEqual(self.hub.command("log", "--since", "1h").stdout.count("\n"), 2)
 
+    def test_a_prompt_while_the_turn_is_being_read_doesnt_call_it_interrupted(self):
+        asked = len(self.pi.judged)
+        self.pi.end(HOLD, said="Keep the fixture?")
+        self.pi.wait(lambda: len(self.pi.judged) > asked)
+        self.pi.start("keep it please")
+        log = self.hub.tmp / "log.jsonl"
+        self.assertFalse(log.exists() and any("next" in json.loads(line) for line in log.read_text().splitlines()))
+
     def test_a_verdict_flagged_wrong_goes_to_the_work_log(self):
         self.finish("state: blocked\nask: keep the fixture?\ndid: Regenerated the fixture.")
         self.bar.send(op="wrong", session=self.sid)
@@ -836,6 +844,8 @@ class ClaudeTurnTest(HubTest):
         state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "may I push?"))
         self.assertEqual(session(state, self.sid)["label"], label)
         self.assertIn("answered another agent session", (self.hub.tmp / "claude.log.prompts").read_text())
+        line = next(line for line in logged(self.hub.tmp / "log.jsonl") if line.get("peer"))
+        self.assertEqual(line["turn"], session(state, self.sid)["turn"])
 
     def test_a_prompt_that_only_quotes_the_tag_is_yours(self):
         text = "x" * 300 + ' <cross-session-message from="a">'

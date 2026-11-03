@@ -297,11 +297,14 @@ class Hub:
     def aside_read(self, session, aside, outcome):
         """How a peer's turn ended, as `readings` made it out. It is always in the work log."""
         now = now_ms()
-        if session.read_aside(aside, outcome, now) is None:
+        reached = session.read_aside(aside, outcome, now)
+        if reached is None:
             return
         worklog.append(self.log_file, {
             "at": aside.ended, "state": model.FINISHED.get(outcome["state"], "done"), "did": outcome.get("summary") or "",
             **self._log_fields(session), **verdict_fields(outcome), "peer": True,
+            # What reached the row is a turn of its own, which your next prompt's line names.
+            **({"turn": session.turn.n} if reached else {}),
         })
         self.publish()
 
@@ -309,8 +312,9 @@ class Hub:
         return {"session": session.id, "agent": session.agent, "cwd": session.cwd, "configDir": session.config_dir, "label": session.label}
 
     def _log_next(self, session, before, prompt, now):
-        """What your prompt says of the turn before it, unless that one is still going."""
-        if before is None or before.open:
+        """What your prompt says of the turn before it, unless that one is still going or still
+        being read: no verdict yet doesn't mean it was cut short."""
+        if before is None or before.open or before.reading:
             return
         worklog.append(self.log_file, {"at": now, **self._log_fields(session), "turn": before.n, "delay": now - before.ended,
                                        **worklog.next_prompt(before.outcome, prompt)})

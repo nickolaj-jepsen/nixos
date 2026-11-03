@@ -84,11 +84,17 @@ class BenchTest(unittest.TestCase):
         self.assertEqual({line["turn"] for line in self.lines()}, {"a1", "b1"})
         self.assertNotEqual(self.lines()[1]["turn"], first)
 
+    def test_the_end_of_the_input_answers_nothing(self):
+        self.transcript("a", "Shall I commit?", "a1")
+        self.run_label("")
+        self.assertFalse(self.labels.exists())
+
     def test_a_skipped_turn_doesnt_come_back_or_count(self):
         self.transcript("a", "Shall I commit?", "a1")
         self.run_label("s\n")
         self.assertIsNone(self.lines()[0]["wants"])
-        self.assertIn("ran out", self.run_label(""))
+        self.run_label("y\ny\n")
+        self.assertEqual(len(self.lines()), 1)
 
     def test_a_turn_a_peer_woke_is_not_in_the_sample(self):
         folder = self.home / ".claude" / "projects" / "-repo"

@@ -15,6 +15,8 @@ COMMAND_CHARS = 48
 EDITS = ("Edit", "MultiEdit", "Write", "NotebookEdit")
 # A command that checks work. Rough: `agent-hub eval` says how often it would mislead.
 CHECK = re.compile(r"\b(test|tests|pytest|unittest|just (build|check|eval|test)|nix (build|flake check)|cargo|npm|pnpm|tsc|ruff|mypy|lint|make)\b")
+# Says where a command runs, not what it is, and a long path would use up all of its line.
+LEADING_CD = re.compile(r"""^\s*(?:cd\s+(?:"[^"]*"|'[^']*'|\S+)\s*(?:&&|;)\s*)+""")
 # `claude -p` as a judge: no session file, no tools, no MCP, no hooks of its own.
 JUDGE_ARGS = [
     "-p", "--model", "haiku", "--no-session-persistence", "--strict-mcp-config", "--tools", "",
@@ -46,9 +48,19 @@ def peer_message(entry):
     return entry.get("type") == "user" and isinstance(origin, dict) and origin.get("kind") == "peer"
 
 
+def queued_text(entry):
+    """What was queued into a running turn, or None. Claude files that as an attachment, so it
+    is no prompt: a background job reporting back, or a message that waits for the next step."""
+    attachment = entry.get("attachment")
+    if entry.get("type") != "attachment" or not isinstance(attachment, dict) or attachment.get("type") != "queued_command":
+        return None
+    text = attachment.get("prompt")
+    return text if isinstance(text, str) else None
+
+
 def command_line(command):
     line = next((part for part in str(command).splitlines() if part.strip()), "")
-    return folded(line)[:COMMAND_CHARS]
+    return folded(LEADING_CD.sub("", line) or line)[:COMMAND_CHARS]
 
 
 def touched(files, path):

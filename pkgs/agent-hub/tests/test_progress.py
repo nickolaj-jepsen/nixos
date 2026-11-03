@@ -76,6 +76,19 @@ class ClaudeProgressTest(unittest.TestCase):
         progress.feed(prompt("<task-notification>\n<tool-use-id>j</tool-use-id>\n</task-notification>"), 1)
         self.assertNotIn("now", progress.view(jobs=True))
 
+    def test_a_job_reporting_back_into_a_running_turn_is_over_and_says_what_it_took(self):
+        progress = fed(prompt(), call("j", "Bash", command="nix build", run_in_background=True), result("j", backgroundTaskId="t1"))
+        report = "<task-notification>\n<task-id>t1</task-id>\n<tool-use-id>j</tool-use-id>\n</task-notification>"
+        progress.feed({"type": "attachment", "timestamp": "2026-11-03T00:40:00.000Z",
+                       "attachment": {"type": "queued_command", "commandMode": "task-notification", "prompt": report}}, 1)
+        self.assertNotIn("now", progress.view(jobs=True))
+        self.assertEqual([(f["line"], f["ms"]) for f in progress.drain_finished()], [("nix build", 40 * 60_000)])
+
+    def test_something_else_queued_into_a_running_turn_leaves_it_going(self):
+        progress = fed(prompt(), call("c", "Bash", command="just build"))
+        progress.feed({"type": "attachment", "timestamp": AT, "attachment": {"type": "queued_command", "prompt": "also this"}}, 1)
+        self.assertEqual(progress.view()["now"], "just build")
+
     def test_a_job_is_named_only_when_asked_since_one_can_stop_without_reporting(self):
         progress = fed(prompt(), call("j", "Bash", command="nix build"), result("j", backgroundTaskId="t1"))
         self.assertNotIn("now", progress.view())
@@ -193,6 +206,22 @@ class TailTest(unittest.TestCase):
         tail = Tail(str(self.path))
         tail.advance(1)
         self.assertEqual([s["text"] for s in tail.progress.view()["trail"]], ["Lately."])
+
+    def test_only_what_ends_after_it_began_following_counts_as_finished(self):
+        self.write(prompt(), call("old", "Bash", command="long ago"), result("old"), call("c", "Bash", command="still going"))
+        tail = Tail(str(self.path))
+        tail.advance(1)
+        self.assertEqual(tail.progress.drain_finished(), [])
+        self.write(result("c"))
+        tail.advance(1)
+        self.assertEqual([f["line"] for f in tail.progress.drain_finished()], ["still going"])
+
+    def test_an_odd_line_costs_only_itself(self):
+        odd_tool = {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "x", "name": "Bash", "input": "odd"}]}}
+        self.write(prompt(), {"type": "assistant", "message": "odd"}, odd_tool, said("Fine."))
+        tail = Tail(str(self.path))
+        tail.advance(1)
+        self.assertEqual(tail.progress.view()["step"], "Fine.")
 
     def test_a_transcript_gone_is_no_error(self):
         self.assertFalse(Tail(str(self.tmp / "missing.jsonl")).advance(1))
