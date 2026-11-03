@@ -61,6 +61,9 @@ FORM_VIEW = {
     "pending": "bool",
 }
 
+# What a TUI takes from the store in its session's file, into its prompt or as what you send.
+DELIVERY = {"text": "str", "submit": "bool", "at": "int"}
+
 ROW = {
     "id": "str",
     "agent": "str",
@@ -165,10 +168,16 @@ OPS = {
     "resume": {"session": "str"},
     # Settles the prompt `ask` names, and only that one.
     "answer": {"session": "str", "ask": "int", "allow": "bool"},
+    # A turn ended on `text`: opens the round or pick list it ends on, answered with its view.
+    "form-offer": {"request": "int", "session": "str", "text": "str"},
     # One step of a session's answer form, when `form` is still the one showing (`forms.apply`).
-    "form-step": {"session": "str", "form": "str", "action": {"do": "str", "entry?": "int", "step?": "int", "text?": "str"}},
+    "form-step": {"request?": "int", "session": "str", "form": "str", "action": {"do": "str", "entry?": "int", "step?": "int", "text?": "str"}},
     # Leaves the form's reply for the session's TUI: in its prompt, or with `submit` sent.
-    "form-deliver": {"session": "str", "form": "str", "submit": "bool"},
+    "form-deliver": {"request?": "int", "session": "str", "form": "str", "submit": "bool"},
+    # What the session's TUI asks when the file moved: the view now, and a delivery at most once.
+    "form-sync": {"request": "int", "session": "str"},
+    # The person spoke: their own message answers the round, or moves past it.
+    "form-drop": {"request": "int", "session": "str"},
     # `agent-hub answer` changed a form's file.
     "form-changed": {"session": "str"},
     # Asks for a row's folder or git menu, answered with `menu`, twice when a lookup follows.
@@ -235,7 +244,7 @@ TYPES = {
     "cancel": {"request": "int"},
     # `decision` answers a held `permission`; without one the prompt closed some other way.
     "reply": {"request": "int", "peers?": "str", "decision?": "allow|deny", "facts?": "any", "notes?": [NOTE],
-              "note?": "any", "shown?": "bool"},
+              "note?": "any", "shown?": "bool", "view?": Nullable(FORM_VIEW), "delivery?": Nullable(DELIVERY)},
     "menu": {"request": "int", "menu": "any"},
     "show": {"session": "str|null", "path": "str|null", "toggle": "bool"},
     "notice": {"text": "str"},
@@ -316,6 +325,7 @@ def typescript():
         f"export type HubIdentity = {_ts(IDENTITY)};",
         f"export type HubTurn = {_ts(TURN)};",
         f"export type HubFormView = {_ts(FORM_VIEW)};",
+        f"export type HubDelivery = {_ts(DELIVERY)};",
         f"export type HubRow = {_ts(ROW)};",
         f"export type HubNote = {_ts(NOTE)};",
         "export type HubOp =",

@@ -588,6 +588,13 @@ class Hub:
         elif notes.is_note(path, self.notes.roots):
             await self.niri.spawn(["code", "--reuse-window", path])
 
+    def _form_reply(self, conn, message, **reply):
+        """Publishes what a form op left, so every subscribed surface sees the new view in its next
+        push, then answers the connection that asked for a reply."""
+        self.publish()
+        if message.get("request") is not None:
+            conn.send({"type": "reply", "request": message["request"], **reply})
+
     # Publishing.
 
     def rows(self, now):
@@ -1065,12 +1072,18 @@ class Hub:
             self._permission(conn, message)
         elif op == "answer":
             self._answer(message["session"], message["ask"], message["allow"], viewer=not conn.local)
+        elif op == "form-offer":
+            self._form_reply(conn, message, view=formstore.offer(self.forms, message["session"], message["text"]))
         elif op == "form-step":
-            formstore.step(self.forms, message["session"], message["action"], message["form"])
-            self.publish()
+            self._form_reply(conn, message, view=formstore.step(self.forms, message["session"], message["action"], message["form"]))
         elif op == "form-deliver":
-            formstore.deliver(self.forms, message["session"], message["submit"], message["form"])
-            self.publish()
+            self._form_reply(conn, message, view=formstore.deliver(self.forms, message["session"], message["submit"], message["form"]))
+        elif op == "form-sync":
+            synced = formstore.sync(self.forms, message["session"])
+            self._form_reply(conn, message, view=synced["view"], delivery=synced["delivery"])
+        elif op == "form-drop":
+            formstore.drop(self.forms, message["session"])
+            self._form_reply(conn, message, view=None)
         elif op == "form-changed":
             self.publish()
         elif op == "menu":
