@@ -267,35 +267,26 @@ const progressOf = async (
   return undefined;
 };
 
-/** The review's main checkout (the socket's root, C6) and the checkout pi runs in. */
-type Where = { main: string; worktree: string; list: string[] };
+/**
+ * The review's main checkout, which is the socket's root (C6) and C1's `root`,
+ * and every checkout its tuicr sessions can be listed under: the worktree pi
+ * runs in first, then the main one (notes/tuicr-dtach.md §2).
+ */
+type Where = { main: string; list: string[] };
 
 const rootsFor = (cwd: string): Where => {
   const { root, main } = gitRoots(cwd);
   const primary = plain(real(main ?? root ?? cwd));
   const worktree = plain(real(root ?? cwd));
-  return { main: primary, worktree, list: worktree === primary ? [primary] : [worktree, primary] };
+  return { main: primary, list: worktree === primary ? [primary] : [worktree, primary] };
 };
 
 /**
- * Until A1's picker lands, a bare `/review` reviews the working tree, and on a
- * clean one opens tuicr's own picker rather than the `-w` run that exits at once.
+ * The last resort when nothing pinned a scope: A1's picker answers that in the
+ * terminal UI, so this only reaches tuicr from a caller that had no picker to
+ * ask. An empty argv is tuicr's own commit and file picker.
  */
-const defaultScope = (cwd: string): PinnedScope => {
-  try {
-    const status = spawnSync("git", ["status", "--porcelain"], {
-      cwd,
-      encoding: "utf8",
-      timeout: 5_000,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    if (status.status === 0 && (status.stdout ?? "").trim() !== "")
-      return { mode: "worktree", args: ["-w"] };
-  } catch {
-    // Not a repository: tuicr's own picker is the honest start.
-  }
-  return { mode: "picker", args: [] };
-};
+const UNPINNED: PinnedScope = { mode: "picker", args: [] };
 
 /** M2: the slug of the review that just registered, polled because tuicr's own line goes to the pty. */
 const registered = async (where: Where, sinceMs: number): Promise<string | undefined> => {
@@ -457,7 +448,7 @@ export const openReview = async (
     ctx.ui.notify(`review: claimed by ${claim}; /review take takes it over`, "info");
     return;
   }
-  const pinned = scope ?? before?.scope ?? defaultScope(where.worktree);
+  const pinned = scope ?? before?.scope ?? UNPINNED;
   // The hub has to hear about this before the TUI stops: spawnSync then holds
   // pi's event loop until the owner detaches (notes/s1-suspend.md).
   reviewLive(env, before);

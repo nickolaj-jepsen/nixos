@@ -25,9 +25,6 @@ DTACH="$(nix build nixpkgs#dtach --no-link --print-out-paths | tail -1)/bin/dtac
 export PATH="$(dirname "$DTACH"):$PATH"
 
 . "$here/lib.sh"
-# `grep -q` leaves the pane capture holding a closed pipe, and with pipefail the
-# whole match reads as a failure. The pipeline's answer is grep's.
-set +o pipefail
 
 scenario_init dtach
 # A failed case must not leave a review running behind it: lib.sh's trap kills
@@ -74,9 +71,10 @@ review_pid() {
 }
 
 wait_listed() {
-  local pattern="${1:?usage: wait_listed <regex>}" _
+  local pattern="${1:?usage: wait_listed <regex>}" _ listed
   for _ in $(seq 100); do
-    if tuicr review list --repo "$SCENARIO_FIXTURE" | grep -qE -- "$pattern"; then return 0; fi
+    listed=$(tuicr review list --repo "$SCENARIO_FIXTURE" 2>/dev/null || true)
+    if grep -qE -- "$pattern" <<<"$listed"; then return 0; fi
     sleep 0.2
   done
   printf "scenario: review list never matched '%s':\n" "$pattern" >&2
@@ -98,17 +96,23 @@ attach_pane() {
 
 attach_lacks() {
   local pattern="${1:?usage: attach_lacks <regex>}"
-  if attach_pane | grep -qE -- "$pattern"; then
+  if attach_match "$pattern"; then
     printf "scenario: did not expect '%s' in the attach window, pane follows:\n" "$pattern" >&2
     attach_pane >&2
     exit 1
   fi
 }
 
+attach_match() {
+  local pattern=$1 frame
+  frame=$(attach_pane)
+  grep -qE -- "$pattern" <<<"$frame"
+}
+
 attach_wait() {
   local pattern="${1:?usage: attach_wait <regex>}" limit="${2:-20}" _
   for _ in $(seq $((limit * 5))); do
-    if attach_pane | grep -qE -- "$pattern"; then return 0; fi
+    if attach_match "$pattern"; then return 0; fi
     sleep 0.2
   done
   printf "scenario: no match for '%s' in the attach window, pane follows:\n" "$pattern" >&2
@@ -130,10 +134,25 @@ detach_direct() {
   attach_wait '\[detached\]'
 }
 
-case_one() {
-  printf 'scenario: case one, the round trip\n' >&2
+# A bare /review with nothing live opens A1's scope picker (D11). Enter takes the
+# row the cursor is on, which on this dirty fixture is "uncommitted changes": the
+# scope it pins is -w, and the opener then suspends pi.
+open_picked_review() {
   scenario_type '/review'
   scenario_keys Enter
+  scenario_wait 'Review scope' 20
+  scenario_keys Enter
+}
+
+# While a review is live, bare /review resumes it without a picker (D11).
+open_live_review() {
+  scenario_type '/review'
+  scenario_keys Enter
+}
+
+case_one() {
+  printf 'scenario: case one, the round trip\n' >&2
+  open_picked_review
   SOCK=$(wait_socket)
   scenario_wait 'Files · 0/1' 25
   scenario_assert_has 'a\.ts'
@@ -182,8 +201,7 @@ case_one() {
 
 case_two() {
   printf 'scenario: case two, adoption after the pi session is killed outright\n' >&2
-  scenario_type '/review'
-  scenario_keys Enter
+  open_picked_review
   SOCK=$(wait_socket)
   scenario_wait 'Files · 1/1' 25
   scenario_wait '✓ a\.ts' 10
@@ -209,9 +227,10 @@ case_two() {
   # A fresh session attaches the surviving review: the same pid, the same mark.
   scenario_start
   scenario_assert_lacks '\[Extension issues\]'
-  scenario_type '/review'
-  scenario_keys Enter
+  open_live_review
   scenario_wait 'Files · 1/1' 25
+  # The live socket is what should keep the picker away (D11).
+  scenario_assert_lacks 'Review scope'
   scenario_wait '✓ a\.ts' 10
   AFTER=$(review_pid)
   [ "$AFTER" = "$BEFORE" ] || {
@@ -234,8 +253,7 @@ case_two() {
 
 case_three() {
   printf 'scenario: case three, /reload ends the review without orphaning it\n' >&2
-  scenario_type '/review'
-  scenario_keys Enter
+  open_picked_review
   SOCK=$(wait_socket)
   # The same slug, and the mark the earlier cases saved, are still the review's.
   scenario_wait 'Files · 1/1' 25
@@ -258,9 +276,9 @@ case_three() {
   wait_listed '"active": false'
   wait_listed '"reviewed_count": 0'
 
-  # What the review had is on disk: the next /review reuses the same session.
-  scenario_type '/review'
-  scenario_keys Enter
+  # What the review had is on disk: the next /review reuses the same session. The
+  # review is gone with the reload, so this is the picker's path again.
+  open_picked_review
   SOCK=$(wait_socket)
   scenario_wait 'Files · 0/1' 25
   # Marked again, so the store ends where the acceptance reads it: one file
