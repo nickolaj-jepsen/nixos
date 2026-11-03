@@ -146,6 +146,26 @@ const pad = (text: string, width: number) =>
 
 const column = (text: string, width: number) => pad(truncateToWidth(text, width, "…"), width);
 
+/**
+ * A previous round's answer as a draft: options it names are picked, anything
+ * else is what the user typed, which is where those answers came from.
+ */
+function draftFrom(question: Question, values: readonly string[]): Draft {
+  const picked: number[] = [];
+  const typed: string[] = [];
+  for (const value of values) {
+    const index = question.options.findIndex((option) => option.label === value);
+    if (index >= 0) picked.push(index);
+    else typed.push(value);
+  }
+  const sorted = [...new Set(picked)].sort((left, right) => left - right);
+  return {
+    // A single-select answer is one option; a multi-select answer keeps every pick.
+    picked: question.multiSelect ? sorted : sorted.slice(0, 1),
+    text: typed.join(", "),
+  };
+}
+
 export class QuestionsDialog implements Component, Focusable {
   private readonly tabs: Tab[];
   private readonly drafts: Draft[];
@@ -193,12 +213,29 @@ export class QuestionsDialog implements Component, Focusable {
     private readonly theme: Theme,
     private readonly questions: readonly Question[],
     private readonly done: (result: QuestionsResult) => void,
+    /** Answers from an earlier round, preselected so re-answering starts from them. */
+    previous: readonly QuestionAnswer[] = [],
   ) {
     this.tabs = questions.map((_, index) => ({ kind: "question", index }) as const);
     // The review step earns its rows only when there is more than one answer to check.
     if (questions.length > 1) this.tabs.push({ kind: "review" });
-    this.drafts = questions.map(() => ({ picked: [], text: "" }));
-    this.notes = questions.map(() => "");
+    // A round answers its questions in order and skips the ones left blank, so
+    // the header and the question text together are what pair them back up.
+    const was = (question: Question) =>
+      previous.find(
+        (answer) => answer.header === question.header && answer.question === question.question,
+      );
+    this.drafts = questions.map((question) => {
+      const answer = was(question);
+      return answer ? draftFrom(question, answer.values) : { picked: [], text: "" };
+    });
+    this.notes = questions.map((question) => was(question)?.note ?? "");
+    // Start on the answer this round already has: its first pick, or the row its typed text sits on.
+    const first = this.drafts[0];
+    const typed = first?.text.trim()
+      ? this.items().findIndex((item) => item.kind === "custom")
+      : -1;
+    this.row = first?.picked[0] ?? Math.max(0, typed);
     this.input = new Input({ prompt: "", placeholder: "Your answer" });
     this.noteInput = new Input({ prompt: "✎ ", placeholder: "Your note" });
   }

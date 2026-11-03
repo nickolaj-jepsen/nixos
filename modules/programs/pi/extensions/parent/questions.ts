@@ -51,24 +51,34 @@ const QuestionSchema = Type.Object({
   ),
 });
 
+/** One answer per line, with its note beneath, as every message about answers reads. */
+export function answerLines(answers: readonly QuestionAnswer[]): string[] {
+  const lines: string[] = [];
+  for (const answer of answers) {
+    lines.push(`- ${answer.header}: ${answer.values.join(", ")}`);
+    if (answer.note) lines.push(`  note: ${answer.note}`);
+  }
+  return lines;
+}
+
 /** What the model sees: the answers as a list it can act on, or the refusal. */
 export function formatResult(result: QuestionsResult): string {
   if (result.cancelled) {
     return "The user cancelled the questions without answering. Do not treat this as a decision.";
   }
-  const lines = ["The user answered:"];
-  for (const answer of result.answers) {
-    lines.push(`- ${answer.header}: ${answer.values.join(", ")}`);
-    if (answer.note) lines.push(`  note: ${answer.note}`);
-  }
-  return lines.join("\n");
+  return ["The user answered:", ...answerLines(result.answers)].join("\n");
 }
 
-/** The TUI dialog, or a sequential walk of the host's own dialogs elsewhere. */
-async function ask(
+/**
+ * The questionnaire a call asked for; elsewhere a sequential walk of the host's
+ * own dialogs. `previous` pre-selects its answers in the terminal dialog only,
+ * which is where re-answering happens.
+ */
+export async function askQuestions(
   ctx: ExtensionContext,
   questions: readonly Question[],
   signal: AbortSignal | undefined,
+  previous?: readonly QuestionAnswer[],
 ): Promise<QuestionsResult> {
   if (ctx.mode !== "tui") return askSequentially(ctx, questions);
   return ctx.ui.custom<QuestionsResult>(
@@ -78,7 +88,7 @@ async function ask(
       signal?.addEventListener("abort", () => done({ answers: [], cancelled: true }), {
         once: true,
       });
-      return new QuestionsDialog(tui, theme, questions, done);
+      return new QuestionsDialog(tui, theme, questions, done, previous);
     },
     { overlay: false },
   );
@@ -158,7 +168,7 @@ export default function (pi: ExtensionAPI, { dialogs }: Services) {
       const invalid = validateQuestions(params.questions);
       if (invalid) throw new Error(`ask_user_question: ${invalid}`);
       const label = `question: ${params.questions[0]?.question ?? ""}`;
-      const result = await dialogs.during(label, () => ask(ctx, params.questions, signal));
+      const result = await dialogs.during(label, () => askQuestions(ctx, params.questions, signal));
       return {
         content: [{ type: "text" as const, text: formatResult(result) }],
         details: result,
