@@ -515,5 +515,5 @@ daemon starts.
   `interrupted` for a turn gone straight to idle) and how many characters it read.
   Never the words themselves, as homelab's journal ships to
   Grafana Cloud; asks stay in the work log.
-- The protocol tests run in every `nix build .#agent-hub`, or with
-  `python3 -m unittest discover -s tests` from `pkgs/agent-hub`.
+- The protocol tests run in every `nix build .#agent-hub`, and `--rebuild -L` runs them
+  again. Plain `unittest` can't import `markdown_it` outside that build.
