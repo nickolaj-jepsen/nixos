@@ -5,6 +5,11 @@
 
     fireproof.desktop.enable = true;
     fireproof.dev.enable = true;
+    fireproof.dev.agent-hub.remotes = {
+      "dev.ao" = {};
+      # Its tailnet name; the login config's `macbook` is a LAN address.
+      nij-macbook = {};
+    };
     fireproof.work.enable = true;
     fireproof.hardware.nvidia.enable = true;
     fireproof.dev.llm = {

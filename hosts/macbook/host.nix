@@ -11,6 +11,7 @@
     # always-on tailscale leaf's darwin half. InputLeap is omitted — no Homebrew cask exists.
     fireproof.desktop.enable = true;
     fireproof.dev.enable = true;
+    fireproof.dev.agent-hub.viewers = ["work"];
     fireproof.work.enable = true;
     fireproof.claude-code.work.enable = true;
 

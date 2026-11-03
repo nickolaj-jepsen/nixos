@@ -210,6 +210,15 @@ end, with no TCP port of its own.
   over a full login.
 - On the far end that key is `restrict` with a forced `agent-hub attach`, so it can do
   nothing else. A jump host also opens the hops in `linkJumps`.
+- A jump host outside this repo can't take the link key, so a remote behind one shows
+  only on viewers that reach it directly. `dev.ao` shows on `work` for this reason: from
+  anywhere else it sits behind `bastion.ao`.
+- A `class = "home"` or darwin host has no `users.users`, so home-manager's activation
+  writes the link keys into `~/.ssh/authorized_keys`. It replaces only lines whose comment
+  starts `agent-hub-link-`, so the logins already in that file stay.
+- A `class = "home"` host needs `loginctl enable-linger` once, by hand. Without it the hub
+  stops at your last logout and starts again at your next login, and the viewer says
+  `no hub`. On a Mac the hub is a launchd agent, which runs while you are logged in.
 - `attach` passes `subscribe`, and with `--control` also `dismiss`, `undismiss`,
   `answer`, `git-facts`, `notes` and `note`, each rebuilt from its allowed fields
   (`attach_filter` in `agent_hub/links.py`). So a link key can approve a call an agent

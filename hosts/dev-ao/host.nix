@@ -16,6 +16,7 @@
     fireproof.dev.clickhouse.enable = false; # headless server: no need for the clickhouse client
     fireproof.dev.copilot.enable = false;
     fireproof.dev.ai-usage.enable = false;
+    fireproof.dev.agent-hub.viewers = ["work"];
     fireproof.neovim.full.enable = false;
     fireproof.work.enable = true;
     fireproof.work.sshKey.enable = true; # *.ao hops use the AO key here too
