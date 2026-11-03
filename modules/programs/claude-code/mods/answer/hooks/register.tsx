@@ -14,6 +14,8 @@ const COLUMNS = 120;
 const FIELD = "field";
 // How soon something another surface did to the form shows here.
 const POLL_MS = 1000;
+// A hub that can't be run isn't asked again every second for the session's life.
+const MAX_BACKOFF_POLLS = 300;
 
 // Change the tag when Current changes shape: a reload keeps what the old code stored.
 const current = atom({ plugin: "answer", key: "current" } as const, null, { shape: "current-4" });
@@ -143,8 +145,14 @@ async function take($: EngineInterface, delivery: Delivery) {
 function watch($: EngineInterface) {
   let watched = { session: "", path: "", mtime: 0 };
   let isBusy = false;
+  let wait = 0;
+  let failures = 0;
   return $.clock.every(POLL_MS, async () => {
     if (isBusy) return;
+    if (wait > 0) {
+      wait--;
+      return;
+    }
     isBusy = true;
     try {
       const session = await $.session.id();
@@ -164,8 +172,11 @@ function watch($: EngineInterface) {
       };
       await show($, view);
       if (delivery) await take($, delivery);
+      failures = 0;
     } catch (error) {
       complain($, error);
+      failures++;
+      wait = Math.min(2 ** failures, MAX_BACKOFF_POLLS);
     } finally {
       isBusy = false;
     }

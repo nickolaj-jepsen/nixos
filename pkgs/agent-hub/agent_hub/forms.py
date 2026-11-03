@@ -14,7 +14,7 @@ FENCE = re.compile(r"^\s*(```|~~~)")
 RULE = re.compile(r"^\s*(-{3,}|\*{3,}|_{3,})\s*$")
 HEADING = re.compile(r"^#{1,6}\s")
 # `**Q1. …**`, `### Q2: …`, `1. **…?** …`, `**3.** …`, `Q4) …`; unindented only.
-START = re.compile(r"^(?:#{1,6}\s+)?(\*\*)?(Q)?([0-9]{1,3})[.:)](?:\*\*)?(?:\s+|$)(.*)$")
+START = re.compile(r"^(?:#{1,6}\s+)?(\*\*)?(Q)?([0-9]{1,3})[.:)](\*\*)?(?:\s+|$)(.*)$")
 # `- **A.** …`, `- **A. …**`, `A) …`, `**B.** …`.
 OPTION = re.compile(r"^(\s*)(?:[-*+]\s+)?(?:\*\*)?([A-H])[.)](?:\*\*)?\s+(.+)$")
 RECOMMENDED = re.compile(r"^\s*(?:>\s*)?\**(?:Recommended|(?:My )?recommendation)\**\s*:\s*\**\s*(.*)$", re.I)
@@ -64,8 +64,9 @@ def _find_starts(lines):
         match = START.match(line)
         if not match:
             continue
-        bold, q, n, after = match.groups()
-        title, rest = _split_title(bool(bold), after)
+        bold, q, n, closed, after = match.groups()
+        # `**Q1.** …` closed its bold on the label, so a `**` after it is the title's own.
+        title, rest = _split_title(bool(bold) and not closed, after)
         if not _unbold(title):
             continue
         starts.append({"line": i, "isQ": bool(q), "n": int(n), "label": f"Q{n}" if q else n,

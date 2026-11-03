@@ -21,6 +21,7 @@ DSlideout {
     // The note showing: `html`, `at`, `size`, `cut`, or `gone`. Null while it is asked for.
     property var note: null
     property bool moreOpen: false
+    property bool listFailed: false
     property real nowMs: Date.now()
 
     readonly property var row: (hub.sessions ?? []).find(s => s.id === session) ?? (hub.recent ?? []).find(s => s.id === session) ?? null
@@ -90,7 +91,7 @@ DSlideout {
 
     function pick(notePath) {
         moreOpen = false;
-        if (notePath === path)
+        if (notePath === path && !note?.gone)
             return;
         path = notePath;
         note = null;
@@ -105,6 +106,8 @@ DSlideout {
     }
 
     function listAnswered(list) {
+        // No list at all means nobody answered, which an empty one doesn't.
+        listFailed = !list;
         notes = list ?? notes;
         listed = true;
         if (!path && notes.length)
@@ -152,7 +155,7 @@ DSlideout {
         running: reader.isVisible && reader.path !== ""
         onTriggered: {
             reader.nowMs = Date.now();
-            if (reader.note && !reader.note.gone)
+            if (reader.note)
                 reader.hub.askNote(reader.session, reader.path, reader.note.at);
         }
     }
@@ -431,6 +434,8 @@ DSlideout {
                         return "";
                     if (!reader.listed)
                         return reader.session.includes(":") ? "Asking the other host…" : "Looking for notes…";
+                    if (reader.listFailed)
+                        return "Couldn't list this session's notes: its host didn't answer.";
                     return "No notes yet: this session hasn't written or read any, and its project's folder is empty.";
                 }
                 textFormat: Text.PlainText

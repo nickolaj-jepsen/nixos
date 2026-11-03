@@ -332,7 +332,9 @@ def outcome(fields, guess, digest):
     return {
         "state": state,
         "ask": (fields.get("ask") or guess["ask"] or fields.get("did") or "")[:MAX_ASK] if state == "blocked" else "",
-        "kind": fields.get("ends", "") if state == "blocked" else "",
+        # Only an ending that calls you explains the row: a low-confidence `finished` that stood
+        # because of its words would otherwise label a `needs-reply` as finished.
+        "kind": fields["ends"] if state == "blocked" and ENDINGS.get(fields.get("ends"), (False,))[0] else "",
         "reply": fields.get("reply", "") if state == "blocked" else "",
         "summary": fields.get("did") or guess["summary"],
         "jobs": jobs,

@@ -12,7 +12,7 @@ from pathlib import Path
 from . import worklog
 from .claude import SAID_MAX, claude_label, permission_ask
 from .common import (
-    folded, hub_message, hub_request, hub_state, label_line, load_config, log_path, nearest, now_ms, resume_command, socket_path,
+    NOTES_TIMEOUT, folded, hub_message, hub_request, hub_state, label_line, load_config, log_path, nearest, now_ms, resume_command, socket_path,
 )
 
 # The hook's input doesn't say where a prompt came from. Claude Code opens a peer's with a line of
@@ -27,7 +27,6 @@ def peer_prompt(prompt):
 
 
 # The first read of a long session can take seconds; nothing waits on this but a person.
-NOTES_TIMEOUT = 15
 
 
 def status_row(rows, session_id=None, pid=None):

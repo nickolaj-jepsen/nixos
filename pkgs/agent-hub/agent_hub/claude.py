@@ -69,21 +69,21 @@ def touched(files, path):
 
 
 # Read over all of a turn's commands, as a landing is rarely among the last few it keeps.
-LANDS = re.compile(r"\bwt land\b|\bgh pr merge\b|\bgit (-C \S+ )?push\b[^|;&]*\b(main|master)\b")
+LANDS = re.compile(r"\bwt land\b|\bgh pr merge\b|\bgit (-C \S+ )?push\b[^|;&\n]*(?<![\w/-])(main|master)(?![\w/-])")
 COMMITS = re.compile(r"\bgit (-C \S+ )?(commit|merge)\b")
 
 
 def assemble(requests, files, commands, failed, said):
-    """A digest from what a transcript reader collected: `commands` as (call id, line)
-    pairs, `failed` as call id → whether its result was an error."""
+    """A digest from what a transcript reader collected: `commands` as (call id, line shown, the
+    whole command), `failed` as call id → whether its result was an error."""
     outcomes = {True: " (failed)", False: " (ok)"}
-    ran = [line for call, line in commands if not failed.get(call)]
+    ran = [whole for call, _, whole in commands if not failed.get(call)]
     return {
-        "landed": any(LANDS.search(line) for line in ran),
-        "committed": any(COMMITS.search(line) for line in ran),
+        "landed": any(LANDS.search(whole) for whole in ran),
+        "committed": any(COMMITS.search(whole) for whole in ran),
         "requests": requests,
         "files": files[-MAX_FILES:],
-        "commands": [line + outcomes.get(failed.get(call), "") for call, line in commands[-MAX_COMMANDS:]],
+        "commands": [line + outcomes.get(failed.get(call), "") for call, line, _ in commands[-MAX_COMMANDS:]],
         "said": said[-SAID_MAX:],
     }
 
@@ -140,7 +140,7 @@ def turns(path, cwd=None):
                             turn["files"] = touched(turn["files"], shown_path(edit_target(args), cwd))
                             turn["unchecked"] = True
                         elif name == "Bash" and args.get("command"):
-                            turn["commands"].append((block.get("id"), command_line(args["command"])))
+                            turn["commands"].append((block.get("id"), command_line(args["command"]), args["command"]))
                             if turn["unchecked"] and CHECK.search(str(args["command"])):
                                 turn["unchecked"] = False
                     elif kind == "text":

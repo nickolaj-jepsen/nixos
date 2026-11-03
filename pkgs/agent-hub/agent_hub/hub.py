@@ -18,7 +18,7 @@ from pathlib import Path
 
 from . import formstore, judge, links, menus, model, notes, peers, pi, protocol, render, worklog
 from .common import (
-    LINE_MAX, alive, folded, label_line, log_path, nearest, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
+    LINE_MAX, NOTES_TIMEOUT, alive, folded, label_line, log_path, nearest, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
 )
 from .desktop import Niri
 from .progress import Tail
@@ -78,6 +78,7 @@ class Hub:
         self.state_file = Path(cfg["state"]).expanduser()
         self.log_file = log_path(cfg)
         self.forms = formstore.root_of(cfg)
+        self.scanning = set()
         self.readings = Readings(self, cfg.get("claude"))
         # Session id → its transcript as far as it has been followed.
         self.tails = {}
@@ -286,7 +287,7 @@ class Hub:
         del self.sessions[session.id]
         self.tails.pop(session.id, None)
         self.readings.forget(session.id)
-        self.notes.forget(session.id)
+        self._spawn(asyncio.to_thread(self.notes.forget, session.id))
         if not session.label:
             return
         # What it is called, not the turn it was on or the process it ran in.
@@ -510,8 +511,18 @@ class Hub:
     # Notes.
 
     async def _scan_notes(self, session):
-        """Catches up on what the session's transcripts say; publishes when its row's note moved."""
-        if await asyncio.to_thread(self.notes.scan, session.id, session.transcript, session.cwd):
+        """Catches up on what the session's transcripts say; publishes when its row's note moved.
+        One at a time per session: a scan reads all that the last one didn't, so more only queue."""
+        if session.id in self.scanning:
+            return
+        self.scanning.add(session.id)
+        try:
+            moved = await asyncio.to_thread(self.notes.scan, session.id, session.transcript, session.cwd)
+        finally:
+            self.scanning.discard(session.id)
+        if session.id not in self.sessions:
+            await asyncio.to_thread(self.notes.forget, session.id)
+        elif moved:
             self.publish()
 
     def _note_host(self, sid):
@@ -523,7 +534,7 @@ class Hub:
         sid, path = message.get("session") or conn.session, message.get("path")
         link = self._note_host(sid)
         if link is not None:
-            said = await link.call({"op": "notes", "session": links.split_id(sid)[1]})
+            said = await link.call({"op": "notes", "session": links.split_id(sid)[1]}, timeout=NOTES_TIMEOUT)
             found = links.clean_notes((said or {}).get("notes"))
         else:
             # An ended session is listed too, from what the recent list kept of it.
@@ -558,7 +569,9 @@ class Hub:
             sid = row["id"] if row else None
         if not sid and self.niri.focused is not None:
             sid = next((r["id"] for r in rows if r["window"] == self.niri.focused), None)
-        bars = [other for other in self.conns if other.bar]
+        path = message.get("path")
+        readable = not path or self._note_host(sid) is not None or notes.is_note(path, self.notes.roots)
+        bars = [other for other in self.conns if other.bar] if readable else []
         for bar in bars:
             bar.send({"type": "show", "session": sid, "path": message.get("path"), "toggle": bool(message.get("toggle"))})
         if message.get("request") is not None:

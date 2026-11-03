@@ -236,7 +236,7 @@ class Link:
         if self.proc is not None and self.proc.stdin is not None and self.status == "up":
             self.proc.stdin.write((json.dumps(message) + "\n").encode())
 
-    async def call(self, message):
+    async def call(self, message, timeout=CALL_TIMEOUT):
         """Sends an op that is answered, and returns the `reply`, or None when none comes in time."""
         self.next_call += 1
         request = self.next_call
@@ -244,7 +244,7 @@ class Link:
         self.calls[request] = future
         self.send({**message, "request": request})
         try:
-            return await asyncio.wait_for(future, CALL_TIMEOUT)
+            return await asyncio.wait_for(future, timeout)
         except asyncio.TimeoutError:
             return None
         finally:

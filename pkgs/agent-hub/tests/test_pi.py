@@ -173,6 +173,16 @@ class DigestTest(unittest.TestCase):
         d = self.digest()
         self.assertEqual((d["peer"], d["said"], d["requests"]), (True, "", ["first job"]))
 
+    def test_a_peers_message_steered_into_a_running_turn_stays_in_it(self):
+        s = self.session
+        s.user("first job")
+        s.assistant(calls=[("a", "edit", {"path": "old.py"})])
+        s.result("a")
+        s.peer()
+        s.assistant("Done, shall I commit?")
+        d = self.digest()
+        self.assertEqual((d["peer"], d["said"], d["files"]), (False, "Done, shall I commit?", ["old.py"]))
+
     def test_appends_a_prompt_not_yet_on_the_file(self):
         self.session.user("fix the login form")
         self.assertEqual(self.digest(prompt="now  the\nsignup form")["requests"],

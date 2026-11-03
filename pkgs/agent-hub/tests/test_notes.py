@@ -290,6 +290,11 @@ class ReaderOpsTest(ProtocolCase):
         shown = bar.wait(lambda m: m["type"] == "show")
         self.assertEqual((shown["session"], shown["path"], shown["toggle"]), (self.sid, str(self.plan), False))
 
+    def test_show_leaves_a_file_it_wont_serve_to_whoever_can_open_it(self):
+        self.open_bar(self.hub)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.hub.command("show", str(self.plan.parent / "PLAN.prev.md"))
+
     def test_show_with_no_session_means_the_focused_windows(self):
         proc = self.hub.process()
         bar = self.open_bar(self.hub)

@@ -13,7 +13,8 @@ from datetime import datetime
 
 from .claude import EDITS, blocks, command_line, edit_target, peer_message, prompt_text, queued_text, shown_path
 from .common import folded
-from .pi import PEER_MESSAGE, SHELL_TOOLS, WRITE_TOOLS
+from .pi import SHELL_TOOLS, WRITE_TOOLS, mid_turn
+from .protocol import PEER_MESSAGE
 
 TRAIL_MAX = 12
 STEP_CHARS = 160
@@ -72,6 +73,7 @@ class Progress:
         self.jobs = {}
         # Commands that finished, for the work log: `{line, ms, estimate?}`.
         self.finished = []
+        self.last_message = None
         self.new_turn()
 
     def new_turn(self):
@@ -140,11 +142,13 @@ class Progress:
     def _feed_pi(self, entry, now):
         at = stamp(entry.get("timestamp"), now)
         if entry.get("type") == "custom_message" and entry.get("customType") == PEER_MESSAGE:
-            self.new_turn()
+            if not mid_turn(self.last_message):
+                self.new_turn()
             return
         message = entry.get("message")
         if entry.get("type") != "message" or not isinstance(message, dict):
             return
+        self.last_message = message
         role = message.get("role")
         if role == "user":
             self.new_turn()

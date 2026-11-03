@@ -60,6 +60,10 @@ class EndingTest(unittest.TestCase):
     def test_an_unsure_ending_with_no_question_stays_quiet(self):
         self.assertEqual(self.outcome("finished", said="All done.", sure="low")["state"], "done")
 
+    def test_an_ending_that_calls_nobody_doesnt_label_the_row(self):
+        found = self.outcome("finished", sure="low")
+        self.assertEqual((found["state"], found["kind"]), ("blocked", ""))
+
     def test_case_is_not_the_models_to_get_right(self):
         self.assertEqual(self.outcome("Ready-To-Land")["kind"], "ready-to-land")
 
@@ -74,7 +78,7 @@ class EndingTest(unittest.TestCase):
 
 class LandedTest(unittest.TestCase):
     def digest(self, *lines, failed=False, **rest):
-        commands = [(str(n), line) for n, line in enumerate(lines)]
+        commands = [(str(n), line[:48], line) for n, line in enumerate(lines)]
         return {**claude.assemble([], [], commands, {str(n): failed for n in range(len(lines))}, ""), **rest}
 
     def test_a_landing_counts_whatever_the_branch(self):
@@ -89,7 +93,13 @@ class LandedTest(unittest.TestCase):
 
     def test_a_push_elsewhere_or_a_failed_one_doesnt(self):
         self.assertFalse(judge.landed(self.digest("git push origin feature")))
+        self.assertFalse(judge.landed(self.digest("git push origin feature/main-fix")))
         self.assertFalse(judge.landed(self.digest("wt land", failed=True)))
+
+    def test_a_command_counts_past_what_the_row_shows(self):
+        long_add = "git add modules/programs/agent-hub.nix pkgs/agent-hub/agent_hub/hub.py && git commit -m x"
+        self.assertTrue(judge.landed(self.digest(long_add, branch="main")))
+        self.assertTrue(judge.landed(self.digest("git add x\ngit commit -m y", branch="main")))
 
     def test_a_landing_early_in_a_long_turn_still_counts(self):
         self.assertTrue(judge.landed(self.digest("wt land", *[f"echo {n}" for n in range(20)])))

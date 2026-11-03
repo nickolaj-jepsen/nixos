@@ -211,6 +211,11 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(first["body"], "Help you discover things, or warn you about state?")
         self.assertIn("| Hotspots | churn × size |", forms.parse(ROUND_AFTER_RESEARCH)["items"][0]["body"])
 
+    def test_a_label_bolded_apart_from_its_title_keeps_the_whole_title(self):
+        options = "- **A.** Yes\n- **B.** No\n\n"
+        form = forms.parse(f"**Q1.** **Should X?**\n\n{options}**Q2.** Use **bold** word here?\n\n{options}")
+        self.assertEqual([item["title"] for item in form["items"]], ["Should X?", "Use bold word here?"])
+
     def test_a_bold_option_title_leaves_its_prose_as_detail(self):
         a, b, _ = forms.parse(LEAN_TOWARD)["items"][0]["options"]
         self.assertEqual(a["text"], "Read-only page (my recommendation for v1).")

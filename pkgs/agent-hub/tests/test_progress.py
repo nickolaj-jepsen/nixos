@@ -161,6 +161,11 @@ class PiProgressTest(unittest.TestCase):
         self.assertNotIn("now", progress.view())
         self.assertEqual(progress.view()["counts"]["failed"], 1)
 
+    def test_a_peers_message_steered_into_a_running_turn_keeps_its_progress(self):
+        calling = self.entry("assistant", [{"type": "toolCall", "id": "c", "name": "bash", "arguments": {"command": "nix build"}}], stopReason="toolUse")
+        peer = {"type": "custom_message", "customType": "claude-peer-message", "content": "hi"}
+        self.assertEqual(fed(self.entry("user"), calling, peer, agent="pi").view()["now"], "nix build")
+
     def test_a_new_prompt_and_a_peers_message_start_over(self):
         said_something = self.entry("assistant", [{"type": "text", "text": "Old."}])
         self.assertEqual(fed(self.entry("user"), said_something, self.entry("user"), agent="pi").view(), {})

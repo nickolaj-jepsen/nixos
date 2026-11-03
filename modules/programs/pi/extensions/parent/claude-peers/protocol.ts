@@ -8,7 +8,7 @@
  * Node built-ins only, so it can run outside pi for protocol tests.
  */
 /** The custom message type a peer's message reaches pi's transcript as. */
-export const PEER_MESSAGE_TYPE = "claude-peer-message";
+export { PEER_MESSAGE_TYPE } from "../lib/protocol.gen.ts";
 
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";

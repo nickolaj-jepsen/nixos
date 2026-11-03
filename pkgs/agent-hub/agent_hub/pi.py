@@ -4,12 +4,11 @@ import os
 import re
 
 from .claude import CHECK, PROMPT_CHARS, RECENT_PROMPTS, assemble, command_line, shown_path, touched
+from .protocol import PEER_MESSAGE
 from .common import folded, json_lines
 
 SHELL_TOOLS = ("bash", "bg_run")
 WRITE_TOOLS = ("edit", "write")
-# The custom message type claude-peers.ts puts a peer's message in the session as.
-PEER_MESSAGE = "claude-peer-message"
 # Bare acknowledgements only. A word count cannot tell "sounds good, but make it async"
 # from "sounds good", and dropping that sentence freezes the name on the work before it.
 ACK = frozenset(
@@ -62,6 +61,12 @@ def picked_requests(prompts):
     return [folded(text)[:PROMPT_CHARS] for text in picked]
 
 
+def mid_turn(message):
+    """Whether the agent carries on after `message`, the last one so far: it is waiting on a tool,
+    so a peer's message arriving now is steered into its turn rather than starting one."""
+    return bool(message) and (message.get("role") == "toolResult" or message.get("stopReason") == "toolUse")
+
+
 def read_entries(path):
     """A session file's entries and its header. OSError when it can't be read."""
     entries, header = [], {}
@@ -77,7 +82,7 @@ def turns(entries, leaf=None, cwd=None):
     """Every turn along the branch ending at entry `leaf`, oldest first (see `claude.turns`),
     with `prompts` the person's substantive requests so far, for what comes next."""
     found, prompts = [], []
-    turn = None
+    turn, last = None, None
 
     def begin(peer):
         nonlocal turn
@@ -87,11 +92,13 @@ def turns(entries, leaf=None, cwd=None):
 
     for entry in branch(entries, leaf):
         if entry.get("type") == "custom_message" and entry.get("customType") == PEER_MESSAGE:
-            begin(True)
+            if not mid_turn(last):
+                begin(True)
             continue
         message = entry.get("message")
         if entry.get("type") != "message" or not isinstance(message, dict):
             continue
+        last = message
         role = message.get("role")
         if role == "user":
             text = text_of(message)
@@ -116,7 +123,7 @@ def turns(entries, leaf=None, cwd=None):
                     turn["files"] = touched(turn["files"], shown(target, cwd))
                     turn["unchecked"] = True
                 elif name in SHELL_TOOLS and isinstance(args.get("command"), str):
-                    turn["commands"].append((block.get("id"), command_line(args["command"])))
+                    turn["commands"].append((block.get("id"), command_line(args["command"]), args["command"]))
                     if turn["unchecked"] and CHECK.search(args["command"]):
                         turn["unchecked"] = False
     return [{**assemble(picked_requests(t["prompts"]), t["files"], t["commands"], t["failed"], t["said"]),
