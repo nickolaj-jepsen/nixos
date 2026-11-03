@@ -73,9 +73,9 @@ Use the harness's question tool (pi `ask_user_question`, Claude `AskUserQuestion
 
 ## 4. Learn
 
-- **Core features:** use it as its users would. For a library, call its main API. List what a user can do, and mark each **ran it** or **docs only**. Capture what you can, following `references/capture.md`.
+- **Core features:** use it as its users would. For a library, call its main API. List what a user can do, and mark each **ran it**, **tests only** (a passing test covers it, but you didn't drive it) or **docs only**. Capture what you can, following `references/capture.md`.
 - **Architecture:** entry points, import graph and the real schema. Write down the layers you believe exist and test them with a contract from `references/tools.md`; the failures show where the model is wrong.
-- **Trace:** follow the chosen action from entry to storage and back, using a debugger, a tracer or spans, and note each boundary. For each gate you were told about, grep for every caller of what it guards, and try the ones that skip it. Before each probe, write down what your account predicts (an output, a stored row, a log line), then run it. Change a string, stub a function, and break what you called essential. Stub a core function to see whether the tests notice. A wrong prediction goes in the report. Run `git restore .` in the clone after each probe.
+- **Trace:** follow the chosen action from entry to storage and back, using a debugger, a tracer, spans or state inspection (API, database, git refs), say in the report which, and note each boundary. For each gate you were told about, grep for every caller of what it guards, and try the ones that skip it. Before each probe, write down what your account predicts (an output, a stored row, a log line), then run it. Change a string, stub a function, and break what you called essential. Stub a core function to see whether the tests notice. A wrong prediction goes in the report. Run `git restore .` in the clone after each probe.
 - **Design choices:** look in plan files, ADRs, commit messages, PRs and any logs the user pointed at. Label each choice:
   - **stated:** a source gives the reason; cite it.
   - **inferred:** your reading of the code; say what supports it.

@@ -17,7 +17,7 @@ Commands that worked, each one verified. Then the deferred commands, each with w
 
 ## Core features
 
-For each: what it's for, how to do it (command, URL or API call), what you should see, **ran it** or **docs only**, and a screenshot or text capture if there is one. Mark the traced feature.
+For each: what it's for, how to do it (command, URL or API call), what you should see, **ran it**, **tests only** or **docs only**, and a screenshot or text capture if there is one. Mark the traced feature.
 
 ## Architecture
 
