@@ -3,8 +3,9 @@
 # Agents write temp files wherever TMPDIR points and nothing removes them, so the
 # wrappers point TMPDIR at /tmp/agent/<pid> and this owns that root. Around it sit
 # the leftovers with no owner: Claude Code's finished jobs, branches merged months
-# ago, worktrees nothing landed in, and build dirs in repos nobody has opened since
-# spring. Transcripts are kept: they are eval and mining data.
+# ago, and build dirs in repos nobody has opened since spring. Worktrees are wt's:
+# it closes them when the session in one ends. Transcripts are kept: they are eval
+# and mining data.
 #
 #   (no args)|report  what is here, what a pass would free; deletes nothing
 #   plan [--json]     the same as data, one item per line of output

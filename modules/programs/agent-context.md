@@ -25,7 +25,7 @@ Repository-local instructions and existing conventions take precedence over thes
 - Never discard uncommitted work or force-push without approval.
 - Prefer `gh` for GitHub operations (PRs, issues, API).
 - Work in the checkout you are in, on its current branch (main included). Use a worktree or a new branch only when this session started in or was moved into one, or the user asks for it. Commit, land (`wt land`) or open a PR only when the current message asks for it.
-- Worktrees live in `~/worktrees/<repo>/<name>` and go through `wt`; ask before `wt remove --force` or `--ignore-in-use`.
+- Worktrees live in `~/worktrees/<repo>/<name>` and go through `wt`; ask before `wt drop`, which throws unlanded work away. A worktree closes itself when the session in it ends.
 - In Digital-Udvikling repositories, use `ds` when it supports the operation; check `ds --help` when uncertain.
 - A wrapper (`env CMD`, `xargs`, `nohup`, `sh -c`, `eval`, `sudo`, `find -exec`) hides the command it runs, so it asks for approval even when that command is harmless. Set variables as `VAR=x cmd`, not `env VAR=x cmd`. `timeout` and `time` pass through only when the command after them is spelled literally (`timeout 180 ./result/bin/pi`, not `timeout 180 $builtpi`).
 

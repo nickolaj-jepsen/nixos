@@ -7,8 +7,10 @@ repos.
 - Claude Code gives every session a scratch directory under `TMPDIR` and
   removes none of them; `/tmp` on this machine reached 44 GB of 47 GB that way.
 - Around that sit leftovers with no owner: finished job directories, branches
-  merged months ago, worktrees nothing landed in, and build directories in
-  repos nobody has opened since spring.
+  merged months ago, and build directories in repos nobody has opened since
+  spring.
+- Worktrees are not the janitor's: `wt` closes the one a session ends in
+  (`wt close --help`), and the janitor has no worktree rule.
 - Everything here is behind `fireproof.janitor.enable`, which cascades from
   `dev.enable`.
 - The CLI is `pkgs/janitor`, and its subcommands are listed at the top of
@@ -26,8 +28,6 @@ repos.
 - `/tmp` strays: `pi-*`, `jiti` and `node-compile-cache` past 3 days.
 - Merged branches: every commit is reachable from the default branch, and no
   worktree has it checked out.
-- Worktrees: `wt clean` decides (clean tree, landed, not busy, not locked, not
-  new).
 - Build dirs: `node_modules`, `.venv`, `target`, `dist`, `.pytest_cache` and
   `__pycache__`, in a repo with no commit in 60 days, with no process whose cwd
   is inside it, and the directory itself untouched that long.
@@ -56,9 +56,8 @@ Both are systemd user units, Linux only.
   finished job directories and strays, then enforces the 16 GB budget and the
   10 % free floor by evicting dead sessions oldest-first.
 - `janitor-repo` runs at 04:00 with `Persistent=true`, and five minutes after
-  login. It deletes merged branches, runs `wt clean` in every repo that has
-  something to clean, drops stale `/tmp` out-links, then recomputes the cached
-  plan the widget reads.
+  login. It deletes merged branches, drops stale `/tmp` out-links, then
+  recomputes the cached plan the widget reads.
 - The weekly nix GC collects what those links held. `apply` runs
   `nix-store --gc` itself once it has removed a root, so the checklist shows the
   space straight away.
@@ -145,11 +144,3 @@ journalctl --user -u janitor-repo   # what it actually did
     gain smaller.
   - Roots outside `/tmp` and the repo roster, such as `~/.local/share/agents/*`
     builds, are never touched.
-- `wt clean` deletes what it deletes. The janitor only decides _when_ to run
-  it, never what a worktree is worth.
-- Busy means a process's cwd is inside. Subagents and editors that reach a
-  worktree by path don't count, so `wt` instead keeps a branch nothing has
-  committed to for a day.
-- A swept worktree takes its gitignored files with it. Untracked files keep a
-  worktree; ignored ones (`.env`, local databases, output under an ignored
-  path) don't, so anything worth keeping there needs a home outside the tree.

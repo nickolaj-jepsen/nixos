@@ -45,21 +45,6 @@ scan_branches() {
   done < <(repos)
 }
 
-# wt owns what a worktree is worth: its safeToRemove already means clean tree,
-# landed, not busy, not locked. Anything else is not this command's business.
-scan_worktrees() {
-  command -v wt >/dev/null 2>&1 || return 0
-  local main name path idle size
-  while IFS=$'\t' read -r main name path idle; do
-    [ -n "$path" ] || continue
-    size=$(size_of "$path")
-    printf 'worktree:%s|%s\tworktree\t%s\t1\t%s@%s\t%s@%s\tidle %sd\n' \
-      "$main" "$name" "$size" "$main" "$name" "$(label_for "$main")" "$name" "$((idle / 86400))"
-  done < <(wt list --all --json 2>/dev/null |
-    jq -r '.repos[] | .main as $main | .worktrees[] | select(.safeToRemove == true) |
-      [$main, .name, .path, (.idleSeconds // 0)] | @tsv' 2>/dev/null)
-}
-
 # A repo is idle when nothing has been committed in it for the age, nothing is
 # running inside it, and the directory itself has not been touched. The process
 # check is what stops a deletion from under a dev server.
@@ -98,7 +83,6 @@ scan_tmp() {
 plan_items() {
   scan_tmp
   scan_jobs
-  scan_worktrees
   scan_build_dirs
   scan_gcroots
   scan_branches
@@ -155,7 +139,7 @@ cmd_report() {
   local avail total bytes title detail count
   read -r avail total < <(free_space) || { avail=0; total=1; }
   printf 'janitor: %s free of %s on /\n' "$(gib "$avail")" "$(gib "$total")"
-  for category in tmp jobs build gcroot worktree branch; do
+  for category in tmp jobs build gcroot branch; do
     count=$(awk -F'\t' -v c="$category" '$2 == c {n++} END {print n + 0}' "$PLAN_TMP")
     [ "$count" -gt 0 ] || continue
     printf '\n%s (%d)\n' "$category" "$count"
@@ -283,18 +267,6 @@ apply_item() {
     printf '  unroot  %s (%s link(s))\n' "$rest" "$size"
     GCROOTS_REMOVED=1
     ;;
-  worktree)
-    repo=${rest%%|*}
-    branch=${rest#*|}
-    is_known_repo "$repo" || {
-      printf '  refused %s (repo is not in the roster)\n' "$rest"
-      return 0
-    }
-    command -v wt >/dev/null 2>&1 || return 0
-    # One row at a time: `wt clean` takes every finished worktree in the repo,
-    # which is not the granularity the checklist just promised.
-    (cd -- "$repo" && wt remove -- "$branch" 2>&1) | sed 's/^/  /'
-    ;;
   branch)
     repo=${rest%%|*}
     branch=${rest#*|}
@@ -402,7 +374,7 @@ cmd_repo_plan_refresh() {
   rm -f -- "$PLAN_TMP" "$CWD_CACHE"
 }
 
-# The daily pass: merged branches, finished worktrees, finished jobs, and the
+# The daily pass: merged branches, finished jobs, and the
 # cached numbers the widget reads.
 cmd_repo_pass() {
   local freed=0 repo branch def checked path size removed=0
@@ -419,14 +391,6 @@ cmd_repo_pass() {
       fi
     done < <(git -C "$repo" branch --merged "$def" --format='%(refname:short)' 2>/dev/null)
   done < <(repos)
-
-  if command -v wt >/dev/null 2>&1; then
-    while IFS= read -r repo; do
-      [ -d "$repo" ] || continue
-      (cd -- "$repo" && wt clean 2>&1) | sed 's/^/janitor: /' || true
-    done < <(wt list --all --json 2>/dev/null |
-      jq -r '.repos[] | select(.worktrees | map(select(.safeToRemove == true)) | length > 0) | .main' 2>/dev/null)
-  fi
 
   while IFS=$'\t' read -r _ _ _ _ path _ _; do
     [ -d "$path" ] || continue

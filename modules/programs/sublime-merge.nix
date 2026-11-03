@@ -200,8 +200,7 @@
       ])
       (run "Git: Range Diff against Branch…" ["range-diff" "$select_branch...HEAD"])
       (run "Worktree: Land This Worktree" ["sm-land"])
-      (run "Worktree: Clean Landed Worktrees" ["sm-clean"])
-      (run "Worktree: Show Archived Work" ["sm-trash"])
+      (run "Worktree: Close This Worktree" ["sm-close"])
       (run "Stack: Submit (auto titles)" ["sm-submit"])
       (run "Stack: Sync" ["sm-sync"])
       (run "Stack: View" ["sm-view"])
@@ -247,7 +246,7 @@
     worktreeMenu = [
       (openMenu "Open Worktree In" "$worktree_path")
       (run "Land $worktree_name with wt" ["sm-land" "$worktree_name"])
-      (run "Remove $worktree_name with wt (archives work)" ["sm-remove" "$worktree_name"])
+      (run "Close $worktree_name with wt (keeps its work on the branch)" ["sm-close" "$worktree_name"])
       (agentMenu "$worktree_path" "Review the changes in worktree $worktree_name and report bugs, risky changes and missing tests.")
     ];
 

@@ -36,10 +36,10 @@
         Install.WantedBy = ["timers.target"];
       };
 
-      # Once a day, and after a laptop wakes: merged branches, finished
-      # worktrees, finished jobs, and the cached plan.
+      # Once a day, and after a laptop wakes: merged branches, finished jobs,
+      # and the cached plan.
       systemd.user.services.janitor-repo = lib.mkIf pkgs.stdenv.isLinux {
-        Unit.Description = "Reclaim merged branches and finished worktrees";
+        Unit.Description = "Reclaim merged branches and finished jobs";
         Service = {
           Type = "oneshot";
           ExecStart = "${lib.getExe pkgs.janitor} run repo";
@@ -50,7 +50,7 @@
       };
 
       systemd.user.timers.janitor-repo = lib.mkIf pkgs.stdenv.isLinux {
-        Unit.Description = "Reclaim merged branches and finished worktrees";
+        Unit.Description = "Reclaim merged branches and finished jobs";
         Timer = {
           OnCalendar = "04:00";
           Persistent = true;

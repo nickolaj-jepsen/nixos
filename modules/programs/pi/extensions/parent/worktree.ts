@@ -1,7 +1,8 @@
 /**
  * pi's adapter for `wt`: moves a running session into a worktree, or back to
- * the repo's primary checkout. It never commits, lands, or removes worktrees;
- * those stay explicit `git`/`wt` commands for the agent or user.
+ * the repo's primary checkout, and closes the worktree a session leaves or quits
+ * in (`wt close --when-free`: uncommitted work becomes a wip commit on the branch,
+ * and the folder goes once nothing works in it). Landing stays an explicit `wt land`.
  *
  * pi pins a session's cwd at startup, so a move forks the conversation into a
  * new session file whose header names the target directory and switches to it:
@@ -33,18 +34,31 @@ const wt = (args: string[], cwd: string) =>
     ),
   );
 
-/** Worktree names in this repo, for completion and the picker. */
+/** Worktree names in this repo, open and closed, for completion and the picker. */
 const names = (cwd: string) =>
-  wt(["names"], cwd).then(
+  wt(["list", "--name"], cwd).then(
     (out) => out.split("\n").filter(Boolean),
     () => [] as string[],
   );
 
-/** A worktree's path for a name, creating it off `base` (default: the default branch) when new. */
-async function resolveWorktree(target: string, cwd: string, base?: string): Promise<string> {
-  if ((await names(cwd)).includes(target)) return wt(["cd", target], cwd);
-  return wt(base ? ["create", target, base] : ["create", target], cwd);
-}
+/** A worktree's path for a name: open, reopened, or created off `base` (default: the default branch). */
+const resolveWorktree = (target: string, cwd: string, base?: string) =>
+  wt(base ? ["new", target, base] : ["new", target], cwd);
+
+/**
+ * Closes the worktree at `path` once nothing works in it; `wt` refuses the primary checkout
+ * and anything that is not a worktree, which is the common case and not worth reporting.
+ */
+const closeWhenFree = (path: string) =>
+  wt(["close", "--when-free", path], "/").then(
+    () => undefined,
+    (error: Error) =>
+      /primary checkout|not inside a worktree|not inside a git repository|already closed/.test(
+        error.message,
+      )
+        ? undefined
+        : error.message,
+  );
 
 /** Writes the active branch of the conversation to a new session file rooted at `cwd`. */
 function forkInto(ctx: ExtensionCommandContext, cwd: string): string {
@@ -97,6 +111,8 @@ export default function (pi: ExtensionAPI) {
       withSession: async (next) => {
         follow(path);
         next.ui.notify(`Moved session to ${path}`, "info");
+        const refused = await closeWhenFree(from);
+        if (refused) next.ui.notify(`Left ${from} open: ${refused}`, "warning");
         await next.sendMessage(
           {
             customType: MOVED,
@@ -119,6 +135,11 @@ export default function (pi: ExtensionAPI) {
     if (!ctx.hasUI || isLeanModel(ctx.model) || pi.getActiveTools().includes(ENTER_WORKTREE_TOOL))
       return;
     pi.setActiveTools([...pi.getActiveTools(), ENTER_WORKTREE_TOOL]);
+  });
+
+  // Quitting inside a worktree closes it; reload, /new, /resume and /fork keep the process going.
+  pi.on("session_shutdown", async (event, ctx) => {
+    if (event.reason === "quit") await closeWhenFree(ctx.cwd);
   });
 
   pi.on("tool_call", (event) => {
@@ -181,7 +202,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("back", {
     description:
-      "Move this session back to the repo's primary checkout. The worktree you leave stays as it is.",
+      "Move this session back to the repo's primary checkout, closing the worktree it leaves.",
     handler: async (_args, ctx) => {
       await ctx.waitForIdle();
       let path: string;
@@ -205,7 +226,7 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "Move this session into a git worktree of its own",
     promptGuidelines: [
       "Use enter_worktree when the user asks for a worktree, or for more than a quick edit while a peer session works in this checkout (make a quick one in place and tell that peer). Otherwise edit the checkout you are in.",
-      "Move with enter_worktree (`wt list` shows existing worktrees), not `wt create`/`wt cd` in bash, which leave this session where it is.",
+      "Move with enter_worktree (`wt list` shows existing worktrees), not `wt new`/`wt cd` in bash, which leave this session where it is.",
     ],
     parameters: Type.Object({
       name: Type.String({

@@ -4,7 +4,7 @@
  * persistent representation; everything else is derived when a session starts.
  *
  * A worktree session sees its own store (writable), the main checkout's store
- * and the global store. A store whose worktree root has gone (after `wt clean`)
+ * and the global store. A store whose worktree root has gone (after `wt close`)
  * is an orphan: never injected, only offered for promotion or deletion.
  */
 import { createHash } from "node:crypto";

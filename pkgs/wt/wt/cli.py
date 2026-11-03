@@ -97,7 +97,8 @@ def build_parser() -> argparse.ArgumentParser:
         "A kept branch reopens with `wt new <name>`, wip commit undone. Refuses mid-rebase, merge\n"
         "or conflict, and while a process works inside; --when-free instead waits in the\n"
         "background until the folder is empty (an hour at most), which is what session-exit\n"
-        "hooks run.",
+        "hooks run. Gitignored files (.env, build output, result links) go with the folder;\n"
+        "`wt new` copies the paths in the primary checkout's .worktreeinclude back in.",
     )
     close.add_argument("target", nargs="?", help="worktree name, path, or . (default) for the current one")
     close.add_argument("--when-free", action="store_true", help="close in the background once nothing works inside")

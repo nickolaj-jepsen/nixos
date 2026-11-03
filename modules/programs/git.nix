@@ -62,11 +62,10 @@
           # Wrappers for non-git tools, because Sublime Merge's custom commands can
           # only run `git` argv (see modules/programs/sublime-merge.nix). Absolute
           # paths: the GUI process has no shell PATH of its own. `sm-land` and
-          # `sm-remove` default to the worktree the command runs in.
+          # `sm-close` default to the worktree the command runs in; closing waits
+          # in the background until the git process Sublime Merge started has left it.
           sm-land = "!${lib.getExe pkgs.wt} land \"\${1:-.}\"";
-          sm-remove = "!${lib.getExe pkgs.wt} remove \"\${1:-.}\"";
-          sm-clean = "!${lib.getExe pkgs.wt} clean";
-          sm-trash = "!${lib.getExe pkgs.wt} trash";
+          sm-close = "!${lib.getExe pkgs.wt} close --when-free \"\${1:-.}\"";
           sm-submit = "!${lib.getExe pkgs.unstable.gh} stack submit --auto";
           sm-sync = "!${lib.getExe pkgs.unstable.gh} stack sync";
           sm-view = "!${lib.getExe pkgs.unstable.gh} stack view";
@@ -78,7 +77,7 @@
         };
       };
       # pi's background tasks write their output into the checkout, and untracked
-      # files there would keep `wt clean` from sweeping a landed worktree.
+      # files there would ride into the wip commit `wt close` makes of a worktree.
       ignores = ["**/.claude/settings.local.json" "**/.pi/tasks/"];
       includes = [
         {

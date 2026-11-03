@@ -57,16 +57,6 @@
       }
     ];
 
-    # A PreToolUse hook that refuses `git worktree add` outside ~/worktrees/<repo>/,
-    # and branch switches inside a worktree there.
-    # The layout and the check live in `wt guard`, so pi enforces the
-    # same rule; this only adds Claude's hook contract around it.
-    worktreeGuard = pkgs.writeShellApplication {
-      name = "claude-worktree-guard";
-      runtimeInputs = [pkgs.jq pkgs.coreutils];
-      text = builtins.readFile ./worktree-guard.sh;
-    };
-
     skillGuard = pkgs.writeShellApplication {
       name = "claude-skill-guard";
       runtimeInputs = [pkgs.jq pkgs.gnugrep];
@@ -75,8 +65,9 @@
     };
 
     # Claude Code's own worktrees (EnterWorktree, `claude -w`, agent isolation)
-    # are created by `wt create` and removed by `wt remove`. Without the remove
-    # half Claude falls back to `git worktree remove --force` and keeps the branch.
+    # are made by `wt new` and closed by `wt close`, and a session that ends in a
+    # worktree closes it. Without the remove half Claude falls back to
+    # `git worktree remove --force`, which would discard uncommitted work.
     worktreeHooks = pkgs.writeShellApplication {
       name = "claude-worktree-hooks";
       runtimeInputs = [pkgs.jq pkgs.coreutils];
@@ -318,45 +309,41 @@
             CwdChanged = direnvHooks;
             WorktreeCreate = worktreeLifecycle;
             WorktreeRemove = worktreeLifecycle;
-            PreToolUse = [
-              {
+            # Claude is exiting: an async hook can die before it reaches the hub.
+            SessionEnd = worktreeLifecycle ++ lib.optionals hub (hubHook {timeout = 2;});
+            PreToolUse =
+              # Nudge, never block: the janitor evicts dead sessions, so a live
+              # one holding the space is the one that has to give some back.
+              lib.optional janitor {
                 matcher = "Bash";
-                hooks =
-                  [
-                    {
-                      type = "command";
-                      command = lib.getExe worktreeGuard;
-                    }
-                  ]
-                  # Nudge, never block: the janitor evicts dead sessions, so a live
-                  # one holding the space is the one that has to give some back.
-                  ++ lib.optional janitor {
-                    type = "command";
-                    command = "${lib.getExe pkgs.janitor} warn";
-                  };
-              }
-              {
-                matcher = "Skill";
                 hooks = [
                   {
                     type = "command";
-                    command = lib.getExe skillGuard;
+                    command = "${lib.getExe pkgs.janitor} warn";
                   }
                 ];
               }
-            ];
+              ++ [
+                {
+                  matcher = "Skill";
+                  hooks = [
+                    {
+                      type = "command";
+                      command = lib.getExe skillGuard;
+                    }
+                  ];
+                }
+              ];
           }
           # PermissionRequest shows the hub the prompt and waits for an answer from the bar, racing
           # the terminal's dialog, for as long as a prompt can stay open;
           # Stop hands the hub the turn's closing words and the tasks still out, and
           # StopFailure the API error that ended it, so it can tell how the turn ended;
-          # SessionEnd ends the session without waiting for its pid to die.
+          # SessionEnd (above) ends the session without waiting for its pid to die.
           // lib.optionalAttrs hub {
             PermissionRequest = hubHook {timeout = 86400;};
             Stop = hubAsync;
             StopFailure = hubAsync;
-            # Claude is exiting: an async hook can die before it reaches the hub.
-            SessionEnd = hubHook {timeout = 2;};
             # Waited on: the hub's note on the other sessions in this working tree
             # joins the prompt. The hook itself gives up on the hub after a second.
             UserPromptSubmit = hubHook {timeout = 5;};
