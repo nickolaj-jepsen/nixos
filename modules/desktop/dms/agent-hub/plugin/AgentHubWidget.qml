@@ -1348,7 +1348,7 @@ PluginComponent {
                 }
                 if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                     root.focusSession(root.selected);
-                else if (event.key === Qt.Key_R)
+                else if (event.key === Qt.Key_R && !root.answerForm)
                     root.useReply(root.selected);
                 else if (event.key === Qt.Key_P)
                     root.readNotes(root.selected);
@@ -1923,10 +1923,10 @@ PluginComponent {
                             spacing: Theme.spacingS
 
                             PaneButton {
-                                visible: pane.session?.state === "needs-reply" && !!pane.session?.reply
+                                // A form hides the model's guess at a reply, so it can't be copied unseen.
+                                visible: pane.session?.state === "needs-reply" && !!pane.session?.reply && root.answerForm === null
                                 label: "Copy reply"
-                                // On a question the form takes r for its review.
-                                shortcut: root.answerForm?.item ? "" : "r"
+                                shortcut: "r"
                                 onClicked: root.useReply(pane.session)
                             }
 

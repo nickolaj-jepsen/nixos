@@ -167,6 +167,7 @@ Qt's Markdown mode, `RichText` and `StyledText` all fetch an image a document na
   - `r` copies a `needs reply`'s likely answer and opens its window. Nothing is sent:
     you paste it, edit it and press Enter. A message through the peer socket would arrive
     labelled as another session's request, and typing blind could land in the wrong prompt.
+    A row with a form doesn't show that guess, so there `r` only belongs to the form.
   - `x` dismisses a finished one, or hides an open prompt until the next prompt.
   - `u` brings back the last dismissal, until that session starts a new turn. The
     stack lives in the hub the bar talks to, in memory.
