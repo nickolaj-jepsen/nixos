@@ -14,13 +14,6 @@
         set -a; . "${secretPath}"; set +a
         exec ${pkgs.mcp-grafana}/bin/mcp-grafana "$@"
       '';
-
-    # npx, not pkgs.snyk: `snyk mcp` lives in the Go CLI the npm package fetches.
-    # The package's bin needs node on PATH; without it npx exits 127 and prints nothing.
-    snykMcpWrapper = pkgs.writeShellScript "snyk-mcp-wrapper" ''
-      export PATH="${pkgs.nodejs}/bin:$PATH"
-      exec npx -y snyk@1.1308.3 mcp -t stdio
-    '';
   in {
     config = lib.mkIf config.fireproof.dev.mcp.enable (lib.mkMerge [
       {
@@ -52,7 +45,6 @@
           # Hosted GrowthBook MCP; auth is browser OAuth, so no API-key secret.
           growthbook.url = "https://mcp.growthbook.io/mcp";
           grafana-work.command = toString (grafanaMcpWrapper "work" config.age.secrets.grafana-mcp-env.path);
-          snyk.command = toString snykMcpWrapper;
         };
       })
     ]);
