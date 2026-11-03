@@ -1,6 +1,6 @@
 # Report structure
 
-Keep the section order. Write "none" rather than dropping a section. Mark the header **not run** when the project never ran, and **short** on a short overview: a rerun treats both as unfinished.
+Keep the section order. Write "none" rather than dropping a section. A quiz the user asks for goes last, under `## Quiz`. Mark the header **not run** when the project never ran, and **short** on a short overview: a rerun treats both as unfinished.
 
 ## `overview.md`
 
@@ -25,7 +25,7 @@ The map, with a diagram.
 
 ## Traced action
 
-From entry to storage and back, with each boundary. Then the trace guide.
+From entry to storage and back, with each boundary.
 
 ## Design choices
 
@@ -36,10 +36,6 @@ Each with its label (**stated**, **inferred**, **accidental**, **unknown**) and 
 What a doc, comment, test or prediction said, and what actually happened.
 
 ## Open questions
-
-## Quiz
-
-The five questions, then results once answered.
 
 ## Dive candidates
 
@@ -63,8 +59,6 @@ What it owns, what it doesn't, and what crosses the edge. One line on how users 
 
 ## Traced flow
 
-Then the trace guide.
-
 ## Invariants and failure handling
 
 What must stay true, and what happens when a dependency fails. Say which you tested.
@@ -78,8 +72,4 @@ What must stay true, and what happens when a dependency fails. Say which you tes
 Exact commands for what needed the user, each with what it needs.
 
 ## Open questions
-
-## Quiz
-
-The five questions, marked unanswered, then results once answered.
 ```

@@ -1,6 +1,6 @@
 ---
 name: onboard
-description: Learn how an unfamiliar project works, how to run it, what its users do with it, its architecture and why it's built that way. Runs it in a throwaway clone, traces one real action, and saves a checked overview, a trace guide and a quiz, then offers dives into subsystems. --quick answers from static analysis in chat.
+description: Learn how an unfamiliar project works, how to run it, what its users do with it, its architecture and why it's built that way. Runs it in a throwaway clone, traces real actions, and saves a checked overview, then offers dives into subsystems. --quick answers from static analysis in chat.
 disable-model-invocation: true
 argument-hint: "[subsystem] [--quick]"
 ---
@@ -33,8 +33,7 @@ Every subagent brief repeats these.
 - If the target file exists, this is a rerun. Read it, then go by its state:
   - Marked **short** or **not run:** unfinished. Run from stage 1, keeping what still holds.
   - Older commit: read `git log <its commit>..HEAD`, then re-check and update what changed.
-  - Same commit, quiz unanswered: hand over its guide and quiz instead of redoing the work.
-  - Same commit, quiz answered: say it's current and stop.
+  - Same commit: say it's current and stop.
 
 ## 1. Scan
 
@@ -70,7 +69,7 @@ Use the harness's question tool (pi `ask_user_question`, Claude `AskUserQuestion
 - Follow the README literally first; a failure is a finding. Then trust what CI and the Dockerfiles actually execute.
 - Stop after three distinct failed fix attempts: record what failed and take the **not run** path.
 - For missing tools, use the project's own dev environment if it has one. Otherwise, if `nix` is available, write a minimal `mkShell` flake to `onboard/devshell/` and use `nix develop path:<absolute dir> --command …`. The `path:` prefix is required, because Nix rejects an untracked flake inside a git repo. The shell and any packages added to it count as one attempt. Without Nix, a missing tool is a failed attempt.
-- **Not run:** mark the report **not run**, and the rest stays static. Mark features **docs only**, follow the action by reading and say so, skip the probes and contracts, write the guide as what to read and what to expect, and make the quiz answerable by reading. Dives get no clone or commands.
+- **Not run:** mark the report **not run**, and the rest stays static. Mark features **docs only**, follow the action by reading and say so, and skip the probes and contracts. Dives get no clone or commands.
 
 ## 4. Learn
 
@@ -88,10 +87,8 @@ Use the harness's question tool (pi `ask_user_question`, Claude `AskUserQuestion
 - Follow `references/report.md`.
 - Cite `path` plus symbol, with short snippets copied from files you just read. Diagrams show only what was verified.
 - Write diagrams as fenced Mermaid, then run `node <skill-dir>/scripts/render.mjs <report>`. It adds a linked SVG above each block, or prints the block's line and the error. Fix any error and run it again; the report isn't finished until every diagram renders. Without Node, keep the Mermaid text and note that it wasn't rendered.
-- Check every citation: `git -C <checkout> grep -n -F <symbol> <commit> -- <path>`. Fix or remove any that miss. This catches invented references, not wrong explanations; the probes and the quiz target those.
-- Write the trace guide: breakpoints, or commands, with the values you predict at each.
-- Write five quiz questions that would expose whether someone understood this. If the project ran, at least two are answered by running something. Keep the answers out of the file.
-- Stop anything you started. Leave the `trace/` clone restored, for the trace guide.
+- Check every citation: `git -C <checkout> grep -n -F <symbol> <commit> -- <path>`. Fix or remove any that miss. This catches invented references, not wrong explanations; the probes target those.
+- Stop anything you started.
 
 ## 6. End message
 
@@ -99,16 +96,16 @@ Everything is saved before you send this one message, so walking away loses noth
 
 1. The report's path, and in a few lines what the project is.
 2. The deferred list, with exact commands.
-3. The trace guide and its clone, to step through before the quiz. Say that a rerun resets the clone.
-4. The quiz, without answers.
-5. 3–5 subsystems to dive into, ranked by complexity, how much depends on them and whether the traced action passes through them. Ask which to dive into, or none.
+3. 3–5 subsystems to dive into, ranked by complexity, how much depends on them and whether the traced action passes through them. Ask which to dive into, or none.
 
-Start the picked dives as soon as the user picks; they can trace and take the quiz meanwhile. Grade answers as they arrive and record the results; misses become open questions. If the user's trace contradicts a prediction, check what they ran, then correct the report if they're right.
+Start the picked dives as soon as the user picks.
+
+If the user asks for a quiz, write five questions that would expose whether someone understood this, at least two answered by running something if the project ran, with the answers kept out of the file. Grade answers as they arrive and record the results; misses become open questions.
 
 ## 7. Dives
 
 - Run one fresh subagent per pick, one at a time, so they don't collide on ports or database state. Background them if the harness can. Without a subagent tool, run them inline, in order.
-- Each dive gets its own clone, `dive-<subsystem>/`, because the user may be tracing in `trace/` at the same time. Use a different port and separate dummy data where the config allows; otherwise stay static for that step and say so.
+- Each dive gets its own clone, `dive-<subsystem>/`.
 - Each brief gives: the rules above, the overview's path, the commit, the checkout, its clone, the approved commands, this skill's `references/` and `scripts/` paths, and the one report it writes.
-- A dive does stages 4 and 5 for its subsystem and never asks the user. It writes its deferred commands, guide and quiz into its report, with the quiz marked unanswered.
-- After each dive, run the citation check on its report yourself, then tell the user in one line, with its path and how many commands it deferred. Its quiz waits until they run `/onboard <subsystem>`.
+- A dive does stages 4 and 5 for its subsystem and never asks the user. It writes its deferred commands into its report.
+- After each dive, run the citation check on its report yourself, then tell the user in one line, with its path and how many commands it deferred.
