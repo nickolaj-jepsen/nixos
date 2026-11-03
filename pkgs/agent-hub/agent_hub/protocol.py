@@ -249,7 +249,9 @@ TYPES = {
     "show": {"session": "str|null", "path": "str|null", "toggle": "bool"},
     "notice": {"text": "str"},
     "refused": {"text": "str"},
-    "error": {"error": "str"},
+    # Carries `request` when the message it rejects had one, so a client can fail that call now
+    # instead of waiting for its timeout.
+    "error": {"error": "str", "request?": "int"},
 }
 
 

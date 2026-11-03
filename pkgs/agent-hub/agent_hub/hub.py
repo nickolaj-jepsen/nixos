@@ -588,10 +588,12 @@ class Hub:
         elif notes.is_note(path, self.notes.roots):
             await self.niri.spawn(["code", "--reuse-window", path])
 
-    def _form_reply(self, conn, message, **reply):
+    def _form_reply(self, conn, message, changed=True, **reply):
         """Publishes what a form op left, so every subscribed surface sees the new view in its next
-        push, then answers the connection that asked for a reply."""
-        self.publish()
+        push, then answers the connection that asked for a reply. `changed` is false for an op
+        that read without writing, so a client's poll does not turn into a publish."""
+        if changed:
+            self.publish()
         if message.get("request") is not None:
             conn.send({"type": "reply", "request": message["request"], **reply})
 
@@ -885,11 +887,15 @@ class Hub:
         self.conns.add(conn)
         try:
             async for line in reader:
+                message = None
                 try:
                     message = protocol.validate(json.loads(line))
                     await self._dispatch(conn, message)
                 except ValueError as error:
-                    conn.send({"type": "error", "error": str(error)})
+                    # Echo the request when the message had one: a client waiting on a reply to a
+                    # write that failed must see the failure now, not sit until its timeout.
+                    request = (message or {}).get("request")
+                    conn.send({"type": "error", "error": str(error), **({"request": request} if isinstance(request, int) else {})})
                 if conn.writer.is_closing():
                     break
         except (ConnectionError, asyncio.LimitOverrunError, ValueError):
@@ -1080,7 +1086,10 @@ class Hub:
             self._form_reply(conn, message, view=formstore.deliver(self.forms, message["session"], message["submit"], message["form"]))
         elif op == "form-sync":
             synced = formstore.sync(self.forms, message["session"])
-            self._form_reply(conn, message, view=synced["view"], delivery=synced["delivery"])
+            # Taking the delivery is the only thing sync writes; a poll must not republish the hub.
+            self._form_reply(
+                conn, message, changed=synced["delivery"] is not None, view=synced["view"], delivery=synced["delivery"]
+            )
         elif op == "form-drop":
             formstore.drop(self.forms, message["session"])
             self._form_reply(conn, message, view=None)

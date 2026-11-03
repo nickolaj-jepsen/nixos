@@ -465,7 +465,14 @@ class LinkTest(unittest.TestCase):
     """A reply can start anything, so forms stay on the host: nothing of one crosses a link."""
 
     def test_no_form_op_passes_an_attach_even_with_control(self):
-        for op in ("form-step", "form-deliver", "form-changed"):
+        for op in (
+            "form-offer",
+            "form-step",
+            "form-deliver",
+            "form-sync",
+            "form-drop",
+            "form-changed",
+        ):
             line = json.dumps({"op": op, "session": HubFormTest.SID, "form": "x", "submit": True, "action": pick(0)})
             self.assertIsNone(links.attach_filter(line, True))
 

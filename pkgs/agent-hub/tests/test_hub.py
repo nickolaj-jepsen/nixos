@@ -1755,6 +1755,31 @@ class FormOpsTest(HubTest):
         self.assertIsNone(self.call(op="form-drop", session=self.sid)["view"])
         self.assertIsNone(self.call(op="form-sync", session=self.sid)["view"])
         self.bar.wait(has_session(self.sid, lambda s: "answer" not in s))
+    def test_a_request_less_op_gets_no_reply(self):
+        offered = self.call(op="form-offer", session=self.sid, text=self.ROUND)["view"]
+        self.bar.send(op="form-step", session=self.sid, form=offered["id"], action={"do": "pick", "entry": 1})
+        self.assertEqual(self.shown(lambda form: form["answered"] == 1)["reply"], "Q1: B")
+        self.ops.send(op="form-sync", session=self.sid)
+        with self.assertRaises(TimeoutError):
+            self.ops.wait(lambda m: m["type"] == "reply", 0.4)
+
+    def test_a_failed_op_answers_with_the_request_that_asked(self):
+        offered = self.call(op="form-offer", session=self.sid, text=self.ROUND)["view"]
+        self.next += 1
+        self.ops.send(op="form-step", request=self.next, session=self.sid, form=offered["id"], action={"do": "nope"})
+        error = self.ops.wait(lambda m: m["type"] == "error", 2)
+        self.assertEqual(error.get("request"), self.next)
+
+    def test_a_submitted_delivery_is_handed_over_once_and_takes_the_form_with_it(self):
+        offered = self.call(op="form-offer", session=self.sid, text=self.ROUND)["view"]
+        self.call(op="form-step", session=self.sid, form=offered["id"], action={"do": "pick", "entry": 0})
+        self.assertTrue(self.call(op="form-deliver", session=self.sid, form=offered["id"], submit=True)["view"]["pending"])
+        taken = self.call(op="form-sync", session=self.sid)
+        self.assertEqual((taken["delivery"]["text"], taken["delivery"]["submit"]), ("Q1: A", True))
+        self.assertIsNone(taken["view"])
+        self.assertIsNone(self.call(op="form-sync", session=self.sid)["delivery"])
+        self.assertIsNone(self.cli_show())
+        self.bar.wait(has_session(self.sid, lambda s: "answer" not in s))
 
 
 class PeersTest(HubTest):
