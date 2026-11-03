@@ -295,7 +295,9 @@ else. That rule and the model's word both live in `agent_hub/judge.py`.
 - If the model fails, the candidate stays `needs-reply`.
 - `failed` comes only from the agent's own error: Claude's `StopFailure`, or pi's
   error stop. The model can't call a turn failed.
-- Three failures in a row, or 500 readings, and the session is not asked again.
+- Three failures in a row, or 500 readings, and the session is not asked again. Its pane
+  and `agent-hub status` then say so, with no pulse, or a broken model would look like a run
+  of real asks with no labels.
 - A name you chose (`/name` in pi, `/rename` in Claude Code) outranks the label.
   Until then pi's session name follows it, so `/resume` lists it.
 

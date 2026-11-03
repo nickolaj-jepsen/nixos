@@ -692,6 +692,14 @@ class ClaudeTurnTest(HubTest):
         state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push?"))
         self.assertEqual(session(state, self.sid)["summary"], "Rebased onto main.")
 
+    def test_a_session_whose_model_keeps_failing_says_so(self):
+        for turn in range(3):
+            self.hub.write_session(self.proc.pid, self.sid, status="busy")
+            self.stop([prompt(f"do {turn}"), said(f"Did {turn}.")])
+            self.hub.write_session(self.proc.pid, self.sid, status="idle")
+            self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["summary"] == f"Did {turn}."))
+        self.bar.wait(has_session(self.sid, lambda s: s.get("readings") == "failing"))
+
     def test_a_turn_is_read_before_it_shows_and_is_working_meanwhile(self):
         # A guess read off the turn's words would show `done` first, then the model's verdict
         # overrules it, announcing one turn end twice.

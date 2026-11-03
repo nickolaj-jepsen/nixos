@@ -71,7 +71,8 @@ def print_state(state, as_json):
         print(json.dumps(state))
         return
     for row in state.get("sessions") or []:
-        print("\t".join(folded(str(row.get(key) or "")) for key in ("state", "name", "cwd", "reason")))
+        stopped = [f"readings stopped: {row['readings']}"] if row.get("readings") else []
+        print("\t".join([*(folded(str(row.get(key) or "")) for key in ("state", "name", "cwd", "reason")), *stopped]))
     if state.get("hidden"):
         print(f"hidden\t{state['hidden']}")
 
@@ -317,7 +318,7 @@ def demo_sessions():
                     "**Q2. Lower the per-generator target to 5–6 ideas?**\n\n"
                     "> **Recommended:** Yes. Four generators still give 20–24.\n\n---\n\n"
                     "**Q3. What should happen to `--quick`?**\n\n- **A.** Drop it.\n- **B.** Keep it as an alias."}),
-        ("demo-fail", "pi", "idle", "nightly bot", {"turnState": "failed", "summary": "The update bot still fails on the darwin eval."}),
+        ("demo-fail", "pi", "idle", "nightly bot", {"turnState": "failed", "summary": "The update bot still fails on the darwin eval.", "readings": "failing"}),
         ("demo-done", "pi", "idle", "footer popup width", {"turnState": "done", "summary": "Fixed the footer popup width on narrow terminals."}),
         ("demo-busy1", "cli", "busy", "devenv-tilt-68", {}),
         ("demo-busy2", "pi", "busy", "flaky ci retries", {

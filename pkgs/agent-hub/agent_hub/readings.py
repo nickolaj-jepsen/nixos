@@ -63,6 +63,12 @@ class Readings:
             table.pop(sid, None)
         self.cancel(sid)
 
+    def stopped(self, session):
+        """Why this session's model is no longer asked: `failing`, `capped`, or "" while it is."""
+        if self.failures.get(session.id, 0) >= MAX_FAILURES:
+            return "failing"
+        return "capped" if session.calls >= CALL_CAP else ""
+
     def backend(self, session):
         """("agent", conn) for an attached pi, ("claude", config dir) for Claude, else None.
         A hidden session is never read."""

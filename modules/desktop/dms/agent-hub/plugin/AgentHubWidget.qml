@@ -1887,6 +1887,14 @@ PluginComponent {
                         }
 
                         MetaChip {
+                            visible: !!pane.session?.readings
+                            icon: "warning"
+                            label: "no readings"
+                            tip: pane.session?.readings === "capped" ? "This session has reached its limit of model readings, so its row won't update or call you on its own" : "The model keeps failing for this session, so its row won't update, and only the words of a turn can call you"
+                            tint: Theme.warning
+                        }
+
+                        MetaChip {
                             visible: (pane.session?.changed ?? 0) > 0
                             icon: "edit"
                             label: String(pane.session?.changed ?? "")

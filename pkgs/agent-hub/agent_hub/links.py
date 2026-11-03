@@ -174,6 +174,7 @@ def clean_row(host, row):
         "prompt": text(row.get("prompt")),
         "said": shown_block(row.get("said"), BLOCK_MAX)[0],
         "askKind": text(row.get("askKind"), 20),
+        "readings": text(row.get("readings"), 20),
         "permission": clean_permission(row.get("permission")),
         "branch": text(row.get("branch"), 200),
         "changed": whole(row.get("changed")),

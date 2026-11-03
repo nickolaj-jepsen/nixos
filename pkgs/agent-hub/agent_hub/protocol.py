@@ -94,6 +94,8 @@ ROW = {
     "said?": "str",
     # What it wants of you: decide, info, approve or do something.
     "askKind?": "str",
+    # Why its model is no longer asked, so its row stops updating: failing or capped.
+    "readings?": "str",
     # The prompt a hook is holding open, which `answer` can settle by this `id`.
     "permission?": {"id": "int", **ASK},
     # The form the last turn asks to be answered with. This host's own: a link never carries it.

@@ -35,7 +35,7 @@ PROGRESS_S = 2
 ACTIVITY_S = 15
 # A command shorter than this says nothing about how long one takes.
 JOB_LOG_MS = 60_000
-DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind", "estimate", "answer")
+DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind", "estimate", "answer", "readings")
 # The command behind a folder menu's app, the first one found.
 APP_COMMANDS = {"code": ("code",), "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
 
@@ -589,6 +589,9 @@ class Hub:
         form = formstore.view_of(self.forms, session.id)
         if form:
             row["answer"] = form
+        stopped = self.readings.stopped(session)
+        if stopped:
+            row["readings"] = stopped
         if row["state"] == "working" and session.transcript:
             try:
                 row["activity"] = int(os.stat(session.transcript).st_mtime * 1000)
