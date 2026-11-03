@@ -97,6 +97,14 @@ class Git:
             self.roots[cwd] = await asyncio.to_thread(self._run, cwd, "rev-parse", "--show-toplevel") or os.path.realpath(cwd)
         return self.roots[cwd]
 
+    async def project(self, cwd):
+        """The main checkout's folder name, which every worktree of a repository shares, or the
+        directory's own name outside git. It names the project's folder of agent notes."""
+        if not cwd:
+            return None
+        common = await asyncio.to_thread(self._run, cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
+        return os.path.basename(os.path.dirname(common) if common and common.endswith("/.git") else common or cwd)
+
     async def context(self, cwd, digest):
         """Names the repo and branch in `digest`, unless it already does."""
         if digest.get("repo"):

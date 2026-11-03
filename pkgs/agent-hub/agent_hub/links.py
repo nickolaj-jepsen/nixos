@@ -17,6 +17,7 @@ from pathlib import Path
 
 from . import protocol
 from .common import BLOCK_MAX, LINE_MAX, folded, resume_command, shown_block, state_dir
+from .notes import NOTE_MAX
 
 # `attach` beats this often, so a dead link shows long before ssh's own keepalives say so.
 BEAT = 20
@@ -30,6 +31,7 @@ HISTORY_MAX = 3
 PEERS_MAX = 5
 JOBS_MAX = 5
 TRAIL_MAX = 12
+NOTES_MAX = 120
 # Long enough for the git and gh of the other host, short enough that a menu isn't left open on it.
 CALL_TIMEOUT = 5
 UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
@@ -108,6 +110,36 @@ def clean_permission(value):
     }
 
 
+def clean_latest(value):
+    """A row's latest note from another host."""
+    if not isinstance(value, dict) or not isinstance(value.get("path"), str) or not value["path"].startswith("/"):
+        return None
+    if CONTROL.search(value["path"]):
+        return None
+    return {"path": value["path"], "name": text(value.get("name"), 200), "at": whole(value.get("at")), "new": value.get("new") is True}
+
+
+def clean_notes(values):
+    """A session's notes from another host, as this one lists them, or None if none came."""
+    if not isinstance(values, list):
+        return None
+    return [{"path": value["path"], "name": text(value.get("name"), 200),
+             "group": value["group"] if value.get("group") in ("written", "read") else "project", "at": whole(value.get("at"))}
+            for value in values[:NOTES_MAX]
+            if isinstance(value, dict) and isinstance(value.get("path"), str) and value["path"].startswith("/")
+            and not CONTROL.search(value["path"])]
+
+
+def clean_note(value):
+    """A note from another host: the text to render here, marked where it can't be shown."""
+    if not isinstance(value, dict):
+        return None
+    if value.get("unchanged") is True:
+        return {"at": whole(value.get("at")), "unchanged": True}
+    return {"at": whole(value.get("at")), "size": whole(value.get("size")), "cut": value.get("cut") is True,
+            "text": shown_block(value.get("text"), NOTE_MAX)[0]}
+
+
 def clean_row(host, row):
     """A row from `host`, as this hub shows it, or None when it can't be. Only what is named here
     survives: pid and window stay on the host they mean something on."""
@@ -153,6 +185,8 @@ def clean_row(host, row):
         "counts": clean_counts(row.get("counts")),
         "trail": clean_trail(row.get("trail")),
         "estimate": clean_estimate(row.get("estimate")),
+        "notes": whole(row.get("notes")),
+        "note": clean_latest(row.get("note")),
     }
     cleaned.update({key: value for key, value in details.items() if value})
     return cleaned
@@ -309,13 +343,19 @@ def attach_filter(line, control):
         return {"op": op, "session": message["session"], "ask": message["ask"], "allow": message["allow"]}
     if op == "git-facts" and control and isinstance(message.get("session"), str) and isinstance(message.get("request"), int):
         return {"op": op, "session": message["session"], "request": message["request"]}
+    if op == "notes" and control and isinstance(message.get("session"), str) and isinstance(message.get("request"), int):
+        return {"op": op, "session": message["session"], "request": message["request"]}
+    # The far hub answers only for a note under its own notes folders.
+    if op == "note" and control and isinstance(message.get("path"), str) and isinstance(message.get("request"), int):
+        at = message.get("at")
+        return {"op": op, "path": message["path"], "request": message["request"], **({"at": at} if isinstance(at, int) else {})}
     return None
 
 
 def attach(control=False):
     """Bridges stdin and stdout to this host's hub until either side goes. Only `subscribe` passes
     by default; `control` adds dismissing and undoing it, answering a prompt an agent there has
-    already put, and asking what git says of a session, for a key that may."""
+    already put, and asking what git says of a session and what notes it has, for a key that may."""
     path = attach_socket()
     if path is None:
         sys.exit("agent-hub: no hub here")

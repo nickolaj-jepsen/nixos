@@ -15,6 +15,7 @@ in
     src = ./.;
 
     build-system = [python3Packages.setuptools];
+    dependencies = [python3Packages.markdown-it-py];
     nativeCheckInputs = [python3Packages.unittestCheckHook git];
     unittestFlags = ["-s" "tests" "-p" "test_*.py"];
 

@@ -16,9 +16,9 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import formstore, judge, links, menus, model, peers, pi, protocol, worklog
+from . import formstore, judge, links, menus, model, notes, peers, pi, protocol, render, worklog
 from .common import (
-    LINE_MAX, alive, folded, label_line, log_path, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
+    LINE_MAX, alive, folded, label_line, log_path, nearest, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
 )
 from .desktop import Niri
 from .progress import Tail
@@ -49,6 +49,8 @@ class Conn:
         self.writer = writer
         self.uid = peer_uid(writer.get_extra_info("socket"))
         self.subscriber = False
+        # A bar, which can put the reader up. A viewer on another host never asks to be one.
+        self.bar = False
         # Subscribed to this host's own sessions only: a viewer on another host.
         self.local = False
         self.demo = {}
@@ -79,6 +81,7 @@ class Hub:
         self.readings = Readings(self, cfg.get("claude"))
         # Session id → its transcript as far as it has been followed.
         self.tails = {}
+        self.notes = notes.Notes(cfg.get("notes"))
         self.conns = set()
         # Session id → the connection it is attached on.
         self.attached = {}
@@ -159,7 +162,11 @@ class Hub:
             ticks += 1
             moved = self._follow_transcripts()
             due = ticks % (ACTIVITY_S // PROGRESS_S) == 0
-            if moved or (due and any(session.turn is not None and session.turn.open for session in self.visible().values())):
+            working = [session for session in self.visible().values() if session.turn is not None and session.turn.open]
+            if due:
+                for session in working:
+                    self._spawn(self._scan_notes(session))
+            if moved or (due and working):
                 self.publish()
 
     def _follow_transcripts(self):
@@ -279,6 +286,7 @@ class Hub:
         del self.sessions[session.id]
         self.tails.pop(session.id, None)
         self.readings.forget(session.id)
+        self.notes.forget(session.id)
         if not session.label:
             return
         # What it is called, not the turn it was on or the process it ran in.
@@ -475,6 +483,8 @@ class Hub:
             await self.niri.spawn(["wl-copy", "--", value])
         elif kind == "app" and value in APP_COMMANDS:
             await self._open_app(message["session"], value)
+        elif kind == "note":
+            await self._open_note(message["session"], value)
 
     async def _open_app(self, sid, app):
         place = self._place(sid)
@@ -492,6 +502,73 @@ class Hub:
         else:
             command = next(c for c in APP_COMMANDS[app] if shutil.which(c, path=self.app_path))
             await self.niri.spawn([command, cwd])
+
+    # Notes.
+
+    async def _scan_notes(self, session):
+        """Catches up on what the session's transcripts say; publishes when its row's note moved."""
+        if await asyncio.to_thread(self.notes.scan, session.id, session.transcript, session.cwd):
+            self.publish()
+
+    def _note_host(self, sid):
+        """The link a session's notes are behind, or None when they are on this host."""
+        host = links.split_id(sid)[0] if sid else None
+        return self.links.get(host)
+
+    async def _reply_notes(self, conn, message):
+        sid, path = message.get("session") or conn.session, message.get("path")
+        link = self._note_host(sid)
+        if link is not None:
+            said = await link.call({"op": "notes", "session": links.split_id(sid)[1]})
+            found = links.clean_notes((said or {}).get("notes"))
+        else:
+            # An ended session is listed too, from what the recent list kept of it.
+            known = self.sessions.get(sid) or next((r for r in self.recent if r["id"] == sid), None)
+            transcript = known.transcript if isinstance(known, model.Session) else (known or {}).get("transcript")
+            cwd = known.cwd if isinstance(known, model.Session) else (known or {}).get("cwd")
+            project = self.notes.project_of(path) if path and known is None else await self.git.project(cwd)
+            found = await asyncio.to_thread(self.notes.listing, sid or "", transcript, cwd, project)
+        conn.send({"type": "reply", "request": message["request"], **({} if found is None else {"notes": found})})
+
+    async def _reply_note(self, conn, message):
+        path, since = message["path"], message.get("at")
+        link = self._note_host(message.get("session"))
+        if link is not None:
+            said = await link.call({"op": "note", "path": path, **({"at": since} if since is not None else {})})
+            found = links.clean_note((said or {}).get("note"))
+        else:
+            found = await asyncio.to_thread(self.notes.read, path, since)
+        # Another hub takes the text and renders it for its own bar.
+        if found and not conn.local and not found.get("unchanged"):
+            shown = await asyncio.to_thread(render.render, found["text"], path)
+            found = {key: value for key, value in found.items() if key != "text"} | {"html": shown}
+        conn.send({"type": "reply", "request": message["request"], **({"note": {**found, "path": path}} if found else {})})
+
+    def _show(self, conn, message):
+        """Puts the reader up on a session: the one named, the one a pid is under, else the
+        focused window's, so a note clicked in a terminal opens among that session's own."""
+        sid = message.get("session") or conn.session
+        rows = (self._last or {}).get("sessions") or []
+        if not sid and message.get("pid"):
+            row = nearest(message["pid"], {r["pid"]: r for r in rows if r.get("pid")})
+            sid = row["id"] if row else None
+        if not sid and self.niri.focused is not None:
+            sid = next((r["id"] for r in rows if r["window"] == self.niri.focused), None)
+        bars = [other for other in self.conns if other.bar]
+        for bar in bars:
+            bar.send({"type": "show", "session": sid, "path": message.get("path"), "toggle": bool(message.get("toggle"))})
+        if message.get("request") is not None:
+            conn.send({"type": "reply", "request": message["request"], "shown": bool(bars)})
+
+    async def _open_note(self, sid, path):
+        """Opens a note where it can be edited, over Remote SSH when it is on another host."""
+        if not self._can_run("code"):
+            return
+        host = links.split_id(sid)[0]
+        if host in self.links:
+            await self.niri.spawn(["code", "--remote", f"ssh-remote+{host}", path])
+        elif notes.is_note(path, self.notes.roots):
+            await self.niri.spawn(["code", "--reuse-window", path])
 
     # Publishing.
 
@@ -514,6 +591,11 @@ class Hub:
             except OSError:
                 pass
             self._with_progress(session, row)
+        latest, touched = self.notes.latest.get(session.id, (None, 0))
+        if touched:
+            row["notes"] = touched
+        if latest:
+            row["note"] = {**latest, **({"new": True} if session.turn and latest["at"] >= session.turn.started else {})}
         return row
 
     def _with_progress(self, session, row):
@@ -817,6 +899,7 @@ class Hub:
         session.ending = False
         session.hidden = bool(message.get("hidden"))
         session.tmux = message.get("tmux") or ""
+        self._spawn(self._scan_notes(session))
         name = message["name"]
         session.name = name.strip() if isinstance(name, str) else ""
         # pi's branch is the authority on its own record.
@@ -921,6 +1004,7 @@ class Hub:
         session.observe("idle", None, now)
         self._release_all(session)
         self._spawn(self._ask_git(session))
+        self._spawn(self._scan_notes(session))
         if n is not None:
             # Read before idle: the bar shows the reading, never a gap before it.
             self.readings.settle(session, n, message)
@@ -934,6 +1018,7 @@ class Hub:
                 return
             conn.subscriber = True
             conn.local = bool(message.get("local"))
+            conn.bar = bool(message.get("bar"))
             # The last state sent is current: anything that changes it publishes.
             if self._last is None:
                 self.publish(force_to=conn)
@@ -974,6 +1059,13 @@ class Hub:
             await self._run(message)
         elif op == "git-facts":
             self._spawn(self._reply_facts(conn, message))
+        elif op == "notes":
+            # Not waited on: the first read of a long session takes seconds.
+            self._spawn(self._reply_notes(conn, message))
+        elif op == "note":
+            self._spawn(self._reply_note(conn, message))
+        elif op == "show":
+            self._show(conn, message)
         elif op == "named":
             session = self._own(conn, message)
             if session is not None:
@@ -988,7 +1080,11 @@ class Hub:
             if future is not None and not future.done():
                 future.set_result(message.get("text"))
         elif op == "session-start":
-            self._own(conn, message).ending = False
+            session = self._own(conn, message)
+            session.ending = False
+            if message.get("transcript"):
+                session.transcript = message["transcript"]
+                self._spawn(self._scan_notes(session))
             self.publish()
         elif op == "session-end":
             session = self.sessions.get(message["session"])
@@ -1014,6 +1110,7 @@ class Hub:
             # You are about to read their rows, and a checkout moves between turns too.
             for session in self.visible().values():
                 self._spawn(self._ask_git(session))
+                self._spawn(self._scan_notes(session))
             self.publish()
         elif op == "toggle":
             self._toggle()
