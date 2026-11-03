@@ -16,6 +16,7 @@ import { agentParts } from "./agents.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { hubParts } from "./hub.ts";
 import { memoryParts } from "./memory.ts";
+import type { Review } from "../review.ts";
 import { formatCost, splitPath } from "../lib/format.ts";
 import type { Git } from "./git.ts";
 import { PR_COMMAND } from "./git.ts";
@@ -55,6 +56,7 @@ export const createFooter = (
   actions: ReturnType<typeof createActions>,
   git: Git,
   hub: Hub,
+  review: Review,
 ) => {
   const usage = createUsage(state);
   const stats = createStats();
@@ -86,6 +88,8 @@ export const createFooter = (
     const meters = [
       cost === undefined ? undefined : { id: "cost", text: cost, action: actions.cost },
       speed === undefined ? undefined : { id: "speed", text: speed },
+      // The inbox is a measurement like the rest, and dim when nothing is new (D3).
+      review.meter(),
     ].filter((meter): meter is Meter => meter !== undefined);
     return { context: stats.contextFor(ctx, model), meters };
   };
