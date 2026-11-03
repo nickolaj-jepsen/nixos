@@ -7,7 +7,7 @@
 // answer its prompt, j/k move, g/G jump to the ends.
 import QtQuick
 import QtQuick.Effects
-import QtQuick.Window
+import Quickshell
 import qs.Common
 import qs.Services
 import qs.DCommon.Widgets
@@ -66,12 +66,32 @@ PluginComponent {
     // What the pane shows: a new one keeps Allow and Deny off long enough to read what they'd answer.
     readonly property string paneKey: (selected?.id ?? "") + ":" + (permission?.id ?? "")
     property bool armed: true
-    onPaneKeyChanged: disarm()
+    onPaneKeyChanged: {
+        disarm();
+        paneFade.restart();
+    }
 
     function disarm() {
         armed = false;
         armTimer.restart();
     }
+
+    // The pane changes what it says in place, so a soft fade is all the motion it needs.
+    property real paneOpacity: 1
+
+    NumberAnimation {
+        id: paneFade
+        target: root
+        property: "paneOpacity"
+        from: 0.55
+        to: 1
+        duration: 130
+        easing.type: Easing.OutCubic
+    }
+
+    // One height whatever it holds, known before it first opens: the popout never resizes.
+    readonly property real contentHeightFixed: Math.min((parentScreen?.height ?? 1080) * 0.6, 620)
+    popoutHeight: contentHeightFixed + PopoutMetrics.contentPadding * 2
 
     Timer {
         id: armTimer
@@ -356,6 +376,25 @@ PluginComponent {
         if (!permission || !armed || (allow && !permission.complete))
             return;
         hub.answer(selected.id, permission.id, allow);
+        // It moves down to Working, so the highlight stays put on whatever waits next.
+        const next = rows[selectedIndex + 1];
+        if (next && waits(next))
+            selectedId = next.id;
+    }
+
+    // What it opens with. Set before it shows, so nothing changes on screen as it does.
+    function prepareToOpen() {
+        nowMs = Date.now();
+        hub?.closeMenu();
+        selectedId = "";
+        flaggedId = "";
+        endedOpen = false;
+        undoName = "";
+        noteText = "";
+        legendShown = !pillHovered;
+        pointerHeard = false;
+        hoverTimer.stop();
+        disarm();
     }
 
     function runMenuRow(row) {
@@ -716,6 +755,12 @@ PluginComponent {
         border.color: Theme.outline
         opacity: enabled ? 1 : 0.4
 
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 120
+            }
+        }
+
         StyledText {
             id: buttonLabel
             anchors.centerIn: parent
@@ -840,6 +885,12 @@ PluginComponent {
             radius: Theme.cornerRadius
             color: row.isSelected ? Theme.surfaceContainerHigh : "transparent"
 
+            Behavior on color {
+                ColorAnimation {
+                    duration: 90
+                }
+            }
+
             HoverHandler {
                 id: rowHover
             }
@@ -906,13 +957,14 @@ PluginComponent {
                 }
             }
 
+            // Wide enough for its buttons at all times, so the text beside it never reflows on hover.
             Item {
                 id: rightSide
 
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.spacingS
                 anchors.verticalCenter: parent.verticalCenter
-                width: rowHover.hovered && rowActions.visibleCount > 0 ? rowActions.implicitWidth : rowAge.implicitWidth
+                width: 54
                 height: 26
 
                 StyledText {
@@ -1099,14 +1151,17 @@ PluginComponent {
             property var parentPopout: null
             property var closePopout: null
 
-            implicitHeight: root.rows.length ? Math.min(Screen.height * 0.6, 620) : 120
+            implicitHeight: root.contentHeightFixed
             focus: true
 
             function grab() {
                 Qt.callLater(() => pop.forceActiveFocus());
             }
 
-            Component.onCompleted: grab()
+            Component.onCompleted: {
+                root.prepareToOpen();
+                grab();
+            }
 
             // PluginPopout focuses its own container whenever it shows; take the keys back.
             onActiveFocusChanged: {
@@ -1116,20 +1171,14 @@ PluginComponent {
 
             Connections {
                 target: pop.parentPopout
+                function onShouldBeVisibleChanged() {
+                    if (pop.parentPopout.shouldBeVisible) {
+                        root.prepareToOpen();
+                        list.positionViewAtBeginning();
+                    }
+                }
                 function onOpened() {
-                    root.nowMs = Date.now();
                     root.hub?.seen();
-                    root.hub?.closeMenu();
-                    root.selectedId = "";
-                    root.flaggedId = "";
-                    root.endedOpen = false;
-                    root.undoName = "";
-                    root.noteText = "";
-                    root.legendShown = !root.pillHovered;
-                    root.pointerHeard = false;
-                    hoverTimer.stop();
-                    root.disarm();
-                    list.contentY = 0;
                     pop.grab();
                 }
             }
@@ -1144,13 +1193,8 @@ PluginComponent {
 
             // Only the keyboard scrolls the list: a row you are pointing at is already in view.
             function reveal() {
-                const item = rowRepeater.itemAt(root.selectedIndex);
-                if (!item)
-                    return;
-                if (item.y < list.contentY)
-                    list.contentY = item.y;
-                else if (item.y + item.height > list.contentY + list.height)
-                    list.contentY = item.y + item.height - list.height;
+                if (root.selectedIndex >= 0)
+                    list.revealIndex(root.selectedIndex);
             }
 
             Keys.onPressed: event => {
@@ -1202,7 +1246,8 @@ PluginComponent {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.bottom: legend.visible ? legend.top : parent.bottom
+                // The legend's room is kept whether it shows or not, so the buttons never shift.
+                anchors.bottom: legend.top
                 visible: root.rows.length > 0
 
                 Column {
@@ -1219,45 +1264,54 @@ PluginComponent {
                         text: (root.hub?.links ?? []).filter(l => l.status !== "up").map(l => l.host + ": " + l.status).join(" · ")
                     }
 
-                    DFlickable {
+                    DListView {
                         id: list
 
                         width: parent.width
                         height: parent.height - (linkLine.visible ? linkLine.height : 0)
                         clip: true
-                        contentWidth: width
-                        contentHeight: listColumn.implicitHeight
+                        spacing: 2
+                        // Keyed, so a new state from the hub updates rows in place instead of
+                        // rebuilding them, which lost the hover and the scroll position.
+                        model: ScriptModel {
+                            objectProp: "id"
+                            values: root.rows
+                        }
 
-                        Column {
-                            id: listColumn
+                        // A session changing state slides to its new place.
+                        displaced: Transition {
+                            NumberAnimation {
+                                properties: "y"
+                                duration: 160
+                                easing.type: Easing.OutCubic
+                            }
+                        }
 
-                            width: list.width - Theme.spacingS
-                            spacing: 2
+                        move: Transition {
+                            NumberAnimation {
+                                properties: "y"
+                                duration: 160
+                                easing.type: Easing.OutCubic
+                            }
+                        }
 
-                            Repeater {
-                                id: rowRepeater
+                        delegate: Column {
+                            id: rowSlot
 
-                                model: root.rows
+                            required property var modelData
+                            required property int index
 
-                                Column {
-                                    id: rowSlot
+                            width: ListView.view.width - Theme.spacingS
 
-                                    required property var modelData
-                                    required property int index
+                            FoldRow {
+                                visible: !!rowSlot.modelData.fold
+                                members: rowSlot.modelData.members ?? []
+                            }
 
-                                    width: listColumn.width
-
-                                    FoldRow {
-                                        visible: !!rowSlot.modelData.fold
-                                        members: rowSlot.modelData.members ?? []
-                                    }
-
-                                    SessionRow {
-                                        visible: !rowSlot.modelData.fold
-                                        modelData: rowSlot.modelData
-                                        index: rowSlot.index
-                                    }
-                                }
+                            SessionRow {
+                                visible: !rowSlot.modelData.fold
+                                modelData: rowSlot.modelData
+                                index: rowSlot.index
                             }
                         }
                     }
@@ -1296,6 +1350,7 @@ PluginComponent {
                         width: parent.width
                         height: 26
                         visible: pane.session !== null
+                        opacity: root.paneOpacity
                         spacing: Theme.spacingS
 
                         OneLine {
@@ -1340,6 +1395,7 @@ PluginComponent {
                         contentWidth: width
                         contentHeight: paneBody.implicitHeight
                         visible: pane.session !== null
+                        opacity: root.paneOpacity
 
                         Column {
                             id: paneBody
@@ -1554,6 +1610,7 @@ PluginComponent {
                         anchors.bottomMargin: Theme.spacingS
                         width: parent.width
                         visible: pane.session !== null
+                        opacity: root.paneOpacity
                         spacing: 4
 
                         MetaChip {
@@ -1765,8 +1822,15 @@ PluginComponent {
                 anchors.bottom: parent.bottom
                 x: Theme.spacingS
                 topPadding: Theme.spacingS
-                visible: root.legendShown && root.rows.length > 0
+                visible: root.rows.length > 0
+                opacity: root.legendShown ? 1 : 0
                 spacing: Theme.spacingL
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 150
+                    }
+                }
 
                 KeyHint {
                     key: "↵"
