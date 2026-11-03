@@ -18,6 +18,28 @@ import {
   type Status,
 } from "./menus";
 import { HUB, notesMenu, OPENER, parseNotes } from "./notes";
+import {
+  batchMarker,
+  batchText,
+  claimFile,
+  claimPath,
+  freshItems,
+  newClaim,
+  ownsClaim,
+  parseComments,
+  parseList,
+  pickSlug,
+  placeReply,
+  REVIEW_PANE,
+  REVIEW_TITLE,
+  reviewMenu,
+  revsetScope,
+  type Claim,
+  type PinnedScope,
+  type ReviewFacts,
+  type ReviewMenu,
+  type ReviewRow,
+} from "./review";
 
 const PANE = "git-menu";
 const TITLES: Record<MenuKind, string> = { git: "Git", folder: "Open folder", notes: "Notes" };
@@ -230,11 +252,242 @@ async function buildNotes($: EngineInterface): Promise<Menu> {
   return notesMenu({ notes, opener, now });
 }
 
+/** tuicr takes a few seconds to write its session; anything older is another review. */
+const SLUG_WINDOW_MS = 10_000;
+
+/** The review picker as drawn; it is not persisted, since no pane survives a reload. */
+let picker: ReviewMenu | undefined;
+
 const isOpen = async ($: EngineInterface) => (await $.ui.panes()).some((p) => p.id === PANE);
 
 async function close($: EngineInterface) {
   await update($, menu, () => null);
   await $.ui.close({ id: PANE });
+}
+
+/** The review's own facts: the branch, the hashes to pin, and what gh says about it. */
+async function reviewFacts($: EngineInterface, cwd: string): Promise<ReviewFacts | undefined> {
+  const out = await git($, cwd, ["status", "--porcelain=v2", "--branch", "--untracked-files=no"]);
+  if (!out) return undefined;
+  const status = parseStatus(out);
+  const head = /^[0-9a-f]{40}$/i.test(status.oid) ? status.oid : "";
+  const [base, parent, pr] = await Promise.all([
+    git($, cwd, ["rev-parse", "--verify", "--quiet", "origin/HEAD"]),
+    head ? git($, cwd, ["rev-parse", "--verify", "--quiet", `${head}~1`]) : "",
+    lookupPr($, cwd, status),
+  ]);
+  const dirty = out.split("\n").some((row) => row !== "" && !row.startsWith("#"));
+  return { branch: status.branch, head, parent, base, dirty, pr };
+}
+
+const reviewIsOpen = async ($: EngineInterface) =>
+  (await $.ui.panes()).some((pane) => pane.id === REVIEW_PANE);
+
+async function closeReview($: EngineInterface) {
+  picker = undefined;
+  if (await reviewIsOpen($)) await $.ui.close({ id: REVIEW_PANE });
+}
+
+/** `/review`: D1's scopes, the pane up before git answers, as the menus above open. */
+async function openReview($: EngineInterface) {
+  const cwd = await $.session.cwd();
+  picker = { title: REVIEW_TITLE, rows: null };
+  if (!(await reviewIsOpen($))) {
+    const opened = await $.ui.open({
+      id: REVIEW_PANE,
+      title: REVIEW_TITLE,
+      focus: true,
+      closeOnEscape: true,
+      rows: 10,
+    });
+    if (!opened.isPlaced) $.ui.toast(`The review picker can't show yet: ${opened.reason}`);
+  }
+  const facts = await reviewFacts($, cwd);
+  // A close while git answered wins over this one.
+  if (!picker) return;
+  picker = facts
+    ? reviewMenu(facts)
+    : { title: REVIEW_TITLE, rows: [], error: "Not a git repository." };
+}
+
+/** openDiff's window, on the argv the scope pinned: tuicr's own args, never a shell string (B2). */
+async function reviewWindow($: EngineInterface, cwd: string, args: readonly string[]) {
+  const mac = await isMac($);
+  const probe = await run($, [
+    "sh",
+    "-c",
+    'for c; do command -v "$c"; done; exit 0',
+    "sh",
+    "tuicr",
+    "ghostty",
+  ]);
+  const found = (probe?.stdout ?? "").split("\n").filter(Boolean);
+  // An absolute path: a mac app started through `open` does not get this PATH.
+  const tuicr = found.find((path) => path.endsWith("/tuicr"));
+  if (!tuicr) return undefined;
+  // `exec "$@"` hands tuicr the argv as argv: a revset with a quote in it stays one element.
+  const review = [
+    `--working-directory=${cwd}`,
+    "-e",
+    "sh",
+    "-c",
+    'exec "$@"',
+    "sh",
+    tuicr,
+    ...args,
+  ];
+  if (mac)
+    return (await $.fs.exists("/Applications/Ghostty.app"))
+      ? ["open", "-na", "Ghostty.app", "--args", ...review]
+      : undefined;
+  const ghostty = found.find((path) => path.endsWith("/ghostty"));
+  return ghostty ? [ghostty, ...review] : undefined;
+}
+
+/** This Claude process's pid, for C2's staleness rule: there is no Node here, so the shell says it. */
+async function reviewPid($: EngineInterface) {
+  const said = await run($, ["sh", "-c", "echo $PPID"]);
+  const pid = Number((said?.stdout ?? "").trim());
+  return Number.isInteger(pid) && pid > 0 ? pid : 0;
+}
+
+/** pi's agent directory: where C2's claim lives, so both harnesses write one file. */
+async function reviewClaimPath($: EngineInterface, root: string) {
+  const [dir, home] = await Promise.all([$.env.get("PI_CODING_AGENT_DIR"), $.env.get("HOME")]);
+  return claimPath(dir ?? `${home ?? ""}/.pi/agent`, root);
+}
+
+async function readClaim($: EngineInterface, path: string): Promise<Claim | undefined> {
+  if (!(await $.fs.exists(path))) return undefined;
+  try {
+    const claim = JSON.parse(await $.fs.read(path)) as Partial<Claim> | null;
+    return typeof claim?.root === "string" && typeof claim.session === "string"
+      ? (claim as Claim)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** C2's write: a pid-suffixed temp beside the claim, then a rename, so no reader sees half a file. */
+async function writeClaim($: EngineInterface, path: string, claim: Claim) {
+  const { temp, text } = claimFile(claim, path);
+  await $.fs.write(temp, text);
+  const moved = await $.process.run(["mv", temp, path]).catch(() => undefined);
+  if (moved?.exitCode !== 0)
+    $.ui.log(`review: could not write the claim at ${path}`, { to: "debug" });
+}
+
+/** Pins the scope, opens the window and records the claim the next send reads. */
+async function launchReview($: EngineInterface, scope: PinnedScope) {
+  const [cwd, repo] = await Promise.all([$.session.cwd(), $.session.repo()]);
+  if (!repo) {
+    $.ui.toast("Not a git repository.");
+    return;
+  }
+  const argv = await reviewWindow($, cwd, scope.args);
+  if (!argv) {
+    $.ui.toast("tuicr and Ghostty are both needed for a review window.");
+    return;
+  }
+  const started = await run($, [...DETACH, ...argv]);
+  if (started?.exitCode !== 0) {
+    $.ui.toast("Couldn't start Ghostty.");
+    return;
+  }
+  const claim = newClaim({
+    root: repo.root,
+    session: await $.session.id(),
+    pid: await reviewPid($),
+    scope,
+    at: new Date(await $.clock.now()).toISOString(),
+  });
+  await writeClaim($, await reviewClaimPath($, claim.root), claim);
+  $.ui.toast("Opened tuicr in a Ghostty window; its comments land in your next prompt.");
+}
+
+/** One row: the revset row asks for one first, the rest pin what they carry. */
+async function pressReview($: EngineInterface, row: ReviewRow) {
+  if (row.unavailable !== undefined || row.pin === undefined) {
+    $.ui.toast(`${row.label}: ${row.unavailable ?? "not available"}`);
+    return;
+  }
+  if (row.pin === "revset") {
+    if (picker) picker = { ...picker, rows: [], typing: true };
+    return;
+  }
+  await launchReview($, row.pin);
+  await closeReview($);
+}
+
+/** The revset typed into the picker's field, pinned as one argv element (B2). */
+async function pinRevset($: EngineInterface, answer: string) {
+  const scope = revsetScope(answer);
+  if (!scope) return;
+  await launchReview($, scope);
+  await closeReview($);
+}
+
+/** The review's slug: the session tuicr opened for this checkout after the claim (M2). */
+async function reviewSlug($: EngineInterface, root: string, since: string) {
+  const tuicr = await locate($, "tuicr");
+  if (!tuicr) return undefined;
+  const listed = await run($, [tuicr, "review", "list", "--repo", root]);
+  if (listed?.exitCode !== 0) return undefined;
+  return pickSlug(parseList(listed.stdout), since, SLUG_WINDOW_MS);
+}
+
+async function reviewComments($: EngineInterface, root: string, slug: string) {
+  const tuicr = await locate($, "tuicr");
+  if (!tuicr) return undefined;
+  const printed = await run($, [tuicr, "review", "comments", "--session", slug, "--repo", root]);
+  return printed?.exitCode === 0 ? parseComments(printed.stdout) : undefined;
+}
+
+/**
+ * After a send: the review's comments become one batch in the prompt box, and the
+ * send that carried a batch empties the claim's inbox (U2, D4, D9). Nothing is
+ * attached to the prompt unseen and nothing is sent for the person.
+ */
+async function afterReviewSubmit($: EngineInterface, sent: string) {
+  const repo = await $.session.repo();
+  if (!repo) return;
+  const path = await reviewClaimPath($, repo.root);
+  const claim = await readClaim($, path);
+  if (!claim || !ownsClaim(claim, await $.session.id())) return;
+  const now = new Date(await $.clock.now()).toISOString();
+  const slug = claim.slug ?? (await reviewSlug($, claim.root, claim.at));
+  if (slug === undefined) return;
+  if (sent.includes(batchMarker(slug))) {
+    // The batch reached the model: the inbox is empty, and nothing from before this
+    // send is drafted again on the next one.
+    await writeClaim($, path, { ...claim, slug, seen: [], at: now });
+    return;
+  }
+  const found = await reviewComments($, claim.root, slug);
+  if (!found) return;
+  const fresh = freshItems(found, claim.seen, claim.at);
+  if (fresh.length === 0) {
+    // The slug is worth keeping: the next send reads the comments without asking tuicr first.
+    if (claim.slug !== slug) await writeClaim($, path, { ...claim, slug });
+    return;
+  }
+  const box = await $.prompt.read();
+  const filled = await $.prompt.fill({
+    text: placeReply(box.text, batchText(slug, claim.root, fresh)),
+    mode: "replace",
+  });
+  if (!filled.isFilled) {
+    // The ids stay unseen, so the next send drafts them again.
+    $.ui.toast("The review batch couldn't go in the prompt: a dialog is open.");
+    return;
+  }
+  await writeClaim($, path, {
+    ...claim,
+    slug,
+    seen: [...claim.seen, ...fresh.map((item) => item.id)],
+    at: now,
+  });
 }
 
 /**
@@ -294,6 +547,11 @@ export const register: Register = (on) => {
         "Open the folder menu: this checkout in an editor, file manager or terminal; `plan` reads this session's notes, `diff` reviews the changes in tuicr",
         "[plan|diff]",
       ],
+      [
+        "review",
+        "Review the changes in tuicr, in a Ghostty window; its comments are drafted into the next prompt",
+        undefined,
+      ],
     ] as const) {
       await $.command
         .register({ name, description, argumentHint, immediate: true })
@@ -320,8 +578,29 @@ export const register: Register = (on) => {
     return { text: "Opened the folder menu." };
   });
 
+  on("command.run", { command: "review" }, async ($) => {
+    await openReview($);
+    return { text: "Opened the review picker." };
+  });
+
+  // The comments come back on the person's next send, as one batch in the prompt
+  // box: nothing is sent for them, and nothing is attached to the prompt unseen.
+  on("prompt.submit", async ($, e, next) => {
+    const result = await next(e);
+    await afterReviewSubmit($, e.text).catch((error) =>
+      $.ui.log(`review: ${String(error)}`, { to: "debug" }),
+    );
+    return result;
+  }).catch((_$, e, next) => (next.called ? undefined : next(e)));
+
   on("ui.close", { id: PANE }, async ($, e, next) => {
     await update($, menu, () => null);
+    return next(e);
+  });
+
+  on("ui.close", { id: REVIEW_PANE }, async ($, e, next) => {
+    // The pane is going; only the rows it drew are left to forget.
+    picker = undefined;
     return next(e);
   });
 
@@ -360,6 +639,55 @@ export const register: Register = (on) => {
           })
         )}
         <Text dimColor>{HINTS}</Text>
+      </Box>
+    );
+  });
+
+  on("ui.render", { component: "Pane", requestId: REVIEW_PANE }, async ($, e) => {
+    const elements = $.ui.resolve(e);
+    const { Box, Text, Button } = elements;
+    // Only the terminal, the desktop and the editor take a field; a phone shows the rows alone.
+    const Input = "Input" in elements ? elements.Input : undefined;
+    const shown = picker;
+    if (!shown) return <Text dimColor>No review open.</Text>;
+    const rows = shown.rows ?? [];
+    // Labels share one column, so the reasons read as a column too.
+    const width = Math.max(0, ...rows.map((r) => r.label.length));
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="row">
+          <Text bold>{shown.title}</Text>
+          {shown.context ? <Text dimColor>{`  ${shown.context}`}</Text> : null}
+        </Box>
+        {shown.typing && Input !== undefined ? (
+          <Input
+            key="revset"
+            label="Revset"
+            autoFocus
+            onSubmit={(text: string) => void pinRevset($, text)}
+          />
+        ) : shown.error ? (
+          <Text dimColor>{shown.error}</Text>
+        ) : shown.rows === null ? (
+          <Text dimColor>Asking git…</Text>
+        ) : (
+          rows.map((row, i) => {
+            const note = row.unavailable ?? row.description;
+            return (
+              <Button
+                key={row.id}
+                plain
+                hotkey={i < 9 ? String(i + 1) : undefined}
+                dimColor={row.unavailable !== undefined}
+                onPress={() => void pressReview($, row)}
+              >
+                {row.label.padEnd(width)}
+                {note ? <Text dimColor>{`  ${note}`}</Text> : null}
+              </Button>
+            );
+          })
+        )}
+        <Text dimColor>{shown.typing ? "Enter pins the revset · Esc closes" : HINTS}</Text>
       </Box>
     );
   });
