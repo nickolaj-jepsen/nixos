@@ -52,19 +52,27 @@ sleep 0.5
 scenario_assert_lacks 'Review scope'
 
 # --- the same checkout with the change committed --------------------------
-# Nothing uncommitted is left, so the row says so and the cursor starts on the
-# first row that can be picked: tuicr's own picker.
+# Nothing uncommitted is left, so that row says so, and the commit gives the
+# last-commit row a parent: it becomes the first row the cursor can land on.
 git -C "$SCENARIO_FIXTURE" -c user.email=review@example.invalid -c user.name=Review \
   commit -qam "committed before the second look"
 scenario_type '/review'
 scenario_keys Enter
 scenario_wait 'Review scope' 15
 scenario_assert_has 'the working tree is clean'
-scenario_assert_has "› tuicr's commit picker"
+scenario_assert_has '› last commit'
 
 # Enter hands the pinned scope to the opener and the overlay closes.
 scenario_keys Enter
 sleep 0.5
+scenario_assert_lacks 'Review scope'
+
+# --- a diff filter is not a scope -----------------------------------------
+# -p only narrows the diff, so an argv of nothing else has no identity to pin
+# and says so instead of starting a session that cannot be resumed.
+scenario_type '/review -p a.ts'
+scenario_keys Enter
+scenario_wait 'review: -p only filters the diff; name a scope too' 15
 scenario_assert_lacks 'Review scope'
 
 scenario_pass
