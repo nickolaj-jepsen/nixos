@@ -59,14 +59,14 @@ reply: what the person would most likely type to answer ask, or empty
 - Fill state, did, ask and reply only from the assistant turn below. Leave all four
   empty when there is no such turn.
 - state: blocked only when the turn puts a real question or request to the person and
-  waits on their answer, wherever in its message that comes. A list of questions waiting
-  on answers is blocked even if the message ends on something else. An offer to commit or
-  push is blocked, and so is asking them to do something and report back ("after the
-  reboot, tell me").
-- state: done when the turn finished, including when it reports a problem. An offer
-  to deploy or to run a switch or rebuild, optional extras ("I could also..."), a pointer
-  at the person's next step ("next: run the tests"), an offer that only applies if they
-  want it ("if you'd rather X, tell me") and a rhetorical question are done.
+  can't proceed without their answer, wherever in its message that comes. A list of
+  questions waiting on answers is blocked even if the message ends on something else. An
+  offer to commit, push, deploy or switch that waits on their word is blocked, and so is
+  asking them to do something and report back ("after the reboot, tell me").
+- state: done when the turn finished, including when it reports a problem. Optional
+  extras ("I could also..."), a pointer at the person's next step ("next: run the tests"),
+  an offer that only applies if they want it ("if you'd rather X, tell me") and a
+  rhetorical question are done.
 - state: waiting when it ended only to wait for its own background jobs and carries on
   by itself when they report back.
 - ask is a request, not a summary: "keep the old fixture?" not "asked about the fixture".

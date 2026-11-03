@@ -162,10 +162,11 @@ Only a turn whose closing message holds a `?` or request words ("tell me when",
 else. That rule and the model's word both live in `agent_hub/judge.py`.
 
 - The model reads every turn and writes its summary.
-- It can only demote a candidate to `done`: an offer to deploy or switch,
-  optional extras, a pointer at your next step, a rhetorical `?`.
-- An offer to commit or push stays `needs-reply`, as does asking you to do
-  something and report back.
+- It can only demote a candidate to `done`: optional extras, a pointer at your next
+  step, a rhetorical `?`.
+- A turn stays `needs-reply` when the agent can't proceed without you: an offer to commit,
+  push, deploy or switch that waits on your word, or asking you to do something and report
+  back.
 - If the model fails, the candidate stays `needs-reply`.
 - `failed` comes only from the agent's own error: Claude's `StopFailure`, or pi's
   error stop. The model can't call a turn failed.
