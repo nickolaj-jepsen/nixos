@@ -105,6 +105,13 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     for (const listener of rowsListeners) listener();
   };
 
+  /**
+   * What the session waits on: an open dialog, else a label a feature holds past
+   * the run that opened it (the review, D10). The hub hears about both from the
+   * same `dialog` op, so a review-length wait needs no protocol of its own (U9).
+   */
+  const waitingFor = () => dialogs.current() ?? dialogs.standing();
+
   const write = (message: HubOp) => {
     if (!socket || !attached) return false;
     socket.write(`${JSON.stringify(message)}\n`);
@@ -226,7 +233,7 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     current.on("connect", () => {
       if (!ctx) return;
       const { record, name } = attachInfo();
-      const waitingFor = dialogs.current();
+      const waiting = waitingFor();
       attached = true;
       formOps = true;
       write({
@@ -235,9 +242,9 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
         session: ctx.sessionManager.getSessionId(),
         pid: process.pid,
         cwd: ctx.cwd,
-        status: waitingFor ? "waiting" : status,
+        status: waiting ? "waiting" : status,
         since,
-        waitingFor: waitingFor ?? null,
+        waitingFor: waiting ?? null,
         name: name ?? null,
         record,
         ...(process.env.AGENT_HUB_HIDDEN === "1" ? { hidden: true } : {}),
@@ -284,9 +291,9 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     ).then((reply) => reply?.shown === true);
 
   dialogs.onChange(() => {
-    const waitingFor = dialogs.current();
-    setStatus(waitingFor ? "waiting" : "busy");
-    write({ op: "dialog", text: waitingFor ?? null });
+    const waiting = waitingFor();
+    setStatus(waiting ? "waiting" : "busy");
+    write({ op: "dialog", text: waiting ?? null });
   });
 
   pi.on("session_start", (_event, c) => {

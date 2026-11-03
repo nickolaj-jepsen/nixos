@@ -3,6 +3,10 @@
  * asks: what the registry entry and the hub say the session waits on. Permission
  * prompts report themselves, and a tool's own dialog goes through `during`. A
  * finished run closes whatever is left.
+ *
+ * A wait that outlives the run that started it has a second source: `hold`, for
+ * a feature that is still busy after the agent settled, such as a review the
+ * owner is reading. A settled run does not clear it, because it is not a dialog.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
@@ -19,6 +23,8 @@ const LABEL_MAX = 200;
 export const createDialogs = (pi: ExtensionAPI) => {
   // Request id → label, in the order they opened; the first is the one shown.
   const open = new Map<string, string>();
+  // Feature key → the label it keeps until it clears it; a settled run leaves these alone.
+  const standing = new Map<string, string>();
   let ownDialogs = 0;
   const listeners = new Set<() => void>();
   let offs: (() => void)[] = [];
@@ -47,6 +53,7 @@ export const createDialogs = (pi: ExtensionAPI) => {
   pi.on("session_start", () => {
     unsubscribe();
     open.clear();
+    standing.clear();
     offs = [
       pi.events.on(PERMISSIONS_UI_PROMPT_CHANNEL, onPrompt),
       pi.events.on(PERMISSIONS_DECISION_CHANNEL, onDecision),
@@ -60,11 +67,28 @@ export const createDialogs = (pi: ExtensionAPI) => {
   pi.on("session_shutdown", () => {
     unsubscribe();
     open.clear();
+    standing.clear();
   });
 
   return {
     /** The label of the dialog the session waits on, or undefined when none is open. */
     current: (): string | undefined => open.values().next().value,
+    /**
+     * Holds `label` as the session's wait reason under `key` until the feature
+     * clears it; `undefined` clears it. Unlike `during`, a settled run keeps it.
+     */
+    hold: (key: string, label: string | undefined): void => {
+      const text = label === undefined ? undefined : clip(oneLine(label), LABEL_MAX);
+      if (text === undefined) {
+        if (standing.delete(key)) notify();
+        return;
+      }
+      if (standing.get(key) === text) return;
+      standing.set(key, text);
+      notify();
+    },
+    /** The standing label a feature holds, if any: what the session waits on after a dialog closes. */
+    standing: (): string | undefined => standing.values().next().value,
     /** Counts `label` as a dialog the session waits on until `run` settles. */
     during: async <T>(label: string, run: () => Promise<T>): Promise<T> => {
       const id = `own-${ownDialogs++}`;
