@@ -12,7 +12,9 @@ chromium --headless --disable-gpu --no-first-run \
   --window-size=1280,800 --screenshot=<notes>/onboard/assets/<name>.png http://127.0.0.1:<port>/
 ```
 
-DBus errors on stderr are harmless if the PNG is written. For a multi-step flow, use a browser MCP only if one is already available and runs headless and isolated. Don't add a new dependency for it.
+DBus errors on stderr are harmless if the PNG is written, but a written PNG isn't proof, so open each image. `--screenshot` doesn't wait for content: a page that fills in after load (client rendering, a stream) comes back blank, and `--virtual-time-budget` can hang on it.
+
+For those pages and for multi-step flows, run `node <skill-dir>/scripts/capture.mjs <base-url> <out-dir> <steps.json>`, listed in the run plan under what will be captured. Its header describes the steps. It fails when expected text never appears, and refuses a click when two controls share a label; follow that one up, since each may be its own route. Use a browser MCP instead only if one is already available and runs headless and isolated. Don't add a new dependency for it.
 
 ## TUI and CLI
 
