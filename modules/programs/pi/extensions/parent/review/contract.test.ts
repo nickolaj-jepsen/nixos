@@ -3,6 +3,7 @@
  * bytes and file names the Python side and the two harnesses agree on.
  */
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
 import { test } from "node:test";
 import {
   type Claim,
@@ -191,7 +192,8 @@ test("C6 the socket and the module surface", () => {
 });
 
 test("D11 the subcommands are told apart", async () => {
-  const ctx = { isIdle: () => true, ui: { notify: () => {} } } as never;
+  // A real, hermetic cwd: the bare case asks git where it is, even when nothing is picked.
+  const ctx = { isIdle: () => true, cwd: tmpdir(), ui: { notify: () => {} } } as never;
   assert.deepEqual(await parseReview("", ctx), { kind: "open", scope: undefined });
   for (const kind of ["inbox", "send", "take", "kill"] as const) {
     assert.deepEqual(await parseReview(kind, ctx), { kind });
