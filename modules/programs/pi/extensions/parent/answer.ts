@@ -5,8 +5,10 @@
  * draft, to send.
  *
  * The form itself is `agent-hub answer`'s, which works with the hub down, so
- * the draft is shared with Claude Code's mod and the hub's panel: this follows
- * the form's file, shows what they do, and takes the replies they leave.
+ * the draft is shared with Claude Code's mod and the hub's panel. With the hub
+ * attached the draft is stepped over this session's socket and the hub pushes
+ * the resulting view, so nothing is spawned per keystroke; a session with no hub
+ * falls back to `agent-hub answer` and to following the form's file.
  *
  * The answers outlive closing the form; any input sent drops them.
  */
@@ -16,14 +18,20 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { contentText } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { AnswerForm, type FormAction, type FormResult } from "./answer/form.ts";
-import type { HubFormView } from "./lib/protocol.gen.ts";
+import type { FormAction as HubFormAction, Hub } from "./lib/hub.ts";
+import type { HubDelivery, HubFormView } from "./lib/protocol.gen.ts";
+import type { Services } from "./services.ts";
 
 const WIDGET_KEY = "answer";
 const SHORTCUT = "alt+a";
-// How soon something another surface did to the form shows here.
+// How often the form's file is read while the hub is not there to push it.
 const POLL_MS = 1000;
+// While attached the pushed row drives the widget, so the socket is only asked this
+// often for a reply another surface left for this prompt.
+const SAFETY_POLL_MS = 10_000;
 
 type Delivery = { text: string; submit: boolean };
+type Synced = { view: HubFormView | null; delivery: HubDelivery | null };
 
 const hasEditor = (ctx: ExtensionContext) => ctx.mode === "tui" && ctx.hasUI;
 
@@ -40,6 +48,10 @@ function lastAssistantText(messages: AgentMessage[]): string {
 /** The reply above what the person had typed, never over it. */
 const placeReply = (draft: string, text: string) => (draft.trim() ? `${text}\n\n${draft}` : text);
 
+/** Everything the widget draws of a view, so a push that says the same costs no redraw. */
+const signature = (view: HubFormView | null) =>
+  view ? `${view.id}|${view.step}|${view.answered}|${view.pending}|${view.reply}` : "";
+
 function run(session: string, args: string[], stdin?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = execFile(
@@ -52,12 +64,16 @@ function run(session: string, args: string[], stdin?: string): Promise<string> {
   });
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ExtensionAPI, services: Services) {
+  const hub: Hub = services.hub;
   let current: HubFormView | undefined;
+  /** What the widget last drew, so a push that says the same costs no redraw. */
+  let shown = "";
   let lastText = "";
   let form: AnswerForm | undefined;
   let latest: ExtensionContext | undefined;
   let ticking: ReturnType<typeof setInterval> | undefined;
+  let tick = 0;
   let watched = { session: "", path: "", mtime: 0 };
   let isPolling = false;
 
@@ -67,6 +83,9 @@ export default function (pi: ExtensionAPI) {
     JSON.parse(await run(sessionOf(ctx), args, stdin)) as HubFormView | null;
 
   const show = (ctx: ExtensionContext, view: HubFormView | null) => {
+    const next = signature(view);
+    if (next === shown) return;
+    shown = next;
     current = view ?? undefined;
     form?.refresh(view);
     if (!current) return ctx.ui.setWidget(WIDGET_KEY, undefined);
@@ -84,27 +103,64 @@ export default function (pi: ExtensionAPI) {
     else ctx.ui.setEditorText(placeReply(ctx.ui.getEditorText(), delivery.text));
   };
 
+  // One verb, over the socket when the hub is attached and through the CLI when it is
+  // not, or did not answer: a hub older than these ops answers an unknown one with an
+  // error and no reply, which leaves the form working the way it did before them.
+
+  const offer = async (ctx: ExtensionContext) => {
+    const reply = await hub.formOffer(lastText);
+    return reply ? reply.view : viewFrom(ctx, ["offer"], lastText);
+  };
+
+  const stepForm = async (ctx: ExtensionContext, id: string, action: FormAction) => {
+    const reply = await hub.formStep(id, action as HubFormAction);
+    return reply ? reply.view : viewFrom(ctx, ["step", "--form", id, JSON.stringify(action)]);
+  };
+
+  const syncForm = async (ctx: ExtensionContext): Promise<Synced> => {
+    const reply = await hub.formSync();
+    if (reply) return reply;
+    const synced = (await viewFrom(ctx, ["sync"])) as Synced | null;
+    if (!synced) throw new Error("no sync");
+    return synced;
+  };
+
+  const dropForm = async (ctx: ExtensionContext) => {
+    if (await hub.formDrop()) return;
+    await run(sessionOf(ctx), ["drop"]);
+  };
+
+  /** The hub said a reply waits for this prompt: the file has it, and only once. */
+  const takeDelivery = async (ctx: ExtensionContext) => {
+    const { view, delivery } = await syncForm(ctx);
+    if (!delivery) return;
+    take(ctx, delivery);
+    show(ctx, view);
+  };
+
+  /** With no hub: the file another surface writes is the only news there is. */
+  const pollFile = async (ctx: ExtensionContext) => {
+    const session = sessionOf(ctx);
+    if (session !== watched.session) {
+      watched = { session, path: (await run(session, ["path"])).trim(), mtime: 0 };
+    }
+    const mtime = await stat(watched.path).then(
+      (s) => s.mtimeMs,
+      () => 0,
+    );
+    if (mtime === watched.mtime) return;
+    watched.mtime = mtime;
+    await takeDelivery(ctx);
+  };
+
   const poll = async () => {
     const ctx = latest;
     if (!ctx || isPolling) return;
     isPolling = true;
     try {
-      const session = sessionOf(ctx);
-      if (session !== watched.session) {
-        watched = { session, path: (await run(session, ["path"])).trim(), mtime: 0 };
-      }
-      const mtime = await stat(watched.path).then(
-        (s) => s.mtimeMs,
-        () => 0,
-      );
-      if (mtime === watched.mtime) return;
-      watched.mtime = mtime;
-      const { view, delivery } = JSON.parse(await run(session, ["sync"])) as {
-        view: HubFormView | null;
-        delivery: Delivery | null;
-      };
-      show(ctx, view);
-      if (delivery) take(ctx, delivery);
+      // Attached, the view arrives pushed; this only catches a delivery whose push was missed.
+      if (!hub.connected()) await pollFile(ctx);
+      else if (++tick % (SAFETY_POLL_MS / POLL_MS) === 0) await takeDelivery(ctx);
     } catch {
       // No agent-hub here, or it failed: the session goes on without a form.
     } finally {
@@ -112,9 +168,19 @@ export default function (pi: ExtensionAPI) {
     }
   };
 
+  hub.onChange(() => {
+    const ctx = latest;
+    // Losing the hub clears its row; the form is still the file's, and the poll has it.
+    if (!ctx || !hub.connected()) return;
+    const view = hub.read()?.answer ?? null;
+    show(ctx, view);
+    if (view?.pending) void takeDelivery(ctx).catch(() => undefined);
+  });
+
   pi.on("session_start", (_event, ctx) => {
     if (!hasEditor(ctx)) return;
     latest = ctx;
+    tick = 0;
     clearInterval(ticking);
     ticking = setInterval(() => void poll(), POLL_MS);
     ticking.unref();
@@ -132,7 +198,7 @@ export default function (pi: ExtensionAPI) {
   // A turn that asks nothing leaves the form: a background task's turn ends on that task's news.
   pi.on("agent_settled", async (event, ctx) => {
     if (!hasEditor(ctx) || event.aborted) return;
-    await viewFrom(ctx, ["offer"], lastText).then(
+    await offer(ctx).then(
       (view) => show(ctx, view),
       () => undefined,
     );
@@ -142,7 +208,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("input", (_event, ctx) => {
     if (!current) return;
     show(ctx, null);
-    void run(sessionOf(ctx), ["drop"]).catch(() => undefined);
+    void dropForm(ctx).catch(() => undefined);
   });
 
   const open = async (ctx: ExtensionContext) => {
@@ -153,9 +219,7 @@ export default function (pi: ExtensionAPI) {
     }
     const opened = current;
     const step = async (action: FormAction) => {
-      const view = await viewFrom(ctx, ["step", "--form", opened.id, JSON.stringify(action)]).catch(
-        () => undefined,
-      );
+      const view = await stepForm(ctx, opened.id, action).catch(() => undefined);
       if (view !== undefined) show(ctx, view);
       return view ?? null;
     };

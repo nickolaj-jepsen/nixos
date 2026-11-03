@@ -12,6 +12,12 @@
  * comes up later; each (re)attach re-sends what the session already knows. A
  * hub on another protocol version refuses the attach, and the session says so
  * once and stays off it. A host without the hub leaves the row undefined.
+ *
+ * The same connection subscribes, so the session can read every row the hub has
+ * (never as a `bar`, which is a surface that can open a reader), and it writes
+ * an answer form through the hub's form ops rather than a process per step:
+ * each one goes through `formstore` and is published, so the file stays the one
+ * truth and the next push carries the view.
  */
 import { connect, type Socket } from "node:net";
 import { homedir } from "node:os";
@@ -19,6 +25,8 @@ import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Dialogs } from "./dialogs.ts";
 import {
+  type HubDelivery,
+  type HubFormView,
   type HubIdentity,
   type HubMessage,
   type HubNote,
@@ -26,6 +34,9 @@ import {
   type HubRow,
   PROTOCOL_VERSION,
 } from "./protocol.gen.ts";
+
+/** One step of a session's answer form, as `forms.apply` takes it. */
+export type FormAction = { do: string; entry?: number; step?: number; text?: string };
 
 /** A model call the hub wants run; `signal` aborts when the hub cancels it. */
 export type JudgeRequest = {
@@ -46,6 +57,9 @@ const RETRY_MS = 5000;
 // The first read of a long session's notes takes seconds; a person waits, not a turn.
 const NOTES_TIMEOUT_MS = 15_000;
 const SHOW_TIMEOUT_MS = 1000;
+// A form op is a file write and a publish: a second without a reply means a daemon
+// that doesn't know the op, which is the caller's cue to take the CLI instead.
+const FORM_TIMEOUT_MS = 1000;
 
 // As the daemon's `socket_path`: the runtime dir, or the state dir where there is none (macOS).
 const socketPath = () => {
@@ -58,6 +72,7 @@ const socketPath = () => {
 export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
   const listeners = new Set<() => void>();
   let row: HubRow | undefined;
+  let state: Extract<HubMessage, { type: "state" }> | undefined;
   let identity: HubIdentity | undefined;
   let ctx: ExtensionContext | undefined;
   let live = false;
@@ -104,6 +119,13 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     });
   };
 
+  /** A form op, naming this session; undefined when there is no connection to ask on or no reply. */
+  const formAsk = (build: (request: number, session: string) => HubOp) => {
+    const session = ctx?.sessionManager.getSessionId();
+    if (session === undefined) return Promise.resolve(undefined);
+    return ask((request) => build(request, session), FORM_TIMEOUT_MS);
+  };
+
   const setStatus = (next: Status) => {
     if (next !== status) since = Date.now();
     status = next;
@@ -132,12 +154,20 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       row = message.row ?? undefined;
       identity = message.identity;
       notify();
+    } else if (message.type === "state") {
+      state = message;
+      notify();
     } else if (message.type === "judge") {
       void onJudge(message);
     } else if (message.type === "cancel") {
       judging.get(message.request)?.abort();
     } else if (message.type === "reply") {
       replies.get(message.request)?.(message);
+      replies.delete(message.request);
+    } else if (message.type === "error" && message.request !== undefined) {
+      // A write the hub refused, an op it doesn't know among them: fail it now, not at its
+      // timeout, so the caller can take the CLI instead.
+      replies.get(message.request)?.(undefined);
       replies.delete(message.request);
     } else if (message.type === "notice" && live && ctx) {
       ctx.ui.notify(message.text, "warning");
@@ -167,8 +197,10 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       attached = false;
       settle();
       current.destroy();
-      if (row !== undefined) {
+      // Rows of a hub that is gone are not worth reading; the next subscribe sends them again.
+      if (row !== undefined || state !== undefined) {
         row = undefined;
+        state = undefined;
         notify();
       }
       if (!live || refused) return;
@@ -195,6 +227,9 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
         tmux: process.env.TMUX_PANE ?? null,
         ...transcript(ctx),
       });
+      // The whole hub's rows arrive as one `state` after this, and every publish updates it.
+      // Not `bar`: that asks the hub to hand this connection readers, which this one can't open.
+      write({ op: "subscribe" });
     });
     current.on("data", (chunk: Buffer) => {
       buffered += chunk.toString("utf8");
@@ -241,12 +276,15 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     socket?.destroy();
     socket = undefined;
     row = undefined;
+    state = undefined;
     identity = undefined;
   });
 
   return {
     /** The row as last pushed, or undefined while the hub has said nothing about the session. */
     read: () => row,
+    /** Every row the hub reported when it last published, newest last; empty with no hub. */
+    rows: () => state?.sessions ?? [],
     /** What the hub last said the session is called. */
     identity: () => identity,
     /** Whether the session is attached right now. */
@@ -308,6 +346,34 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       setStatus("idle");
       if (ctx) write({ op: "turn-end", pending, error, ...transcript(ctx) });
     },
+    /**
+     * Opens the form the turn ending on `text` asks for: the view, null when it asks
+     * nothing, or undefined when no hub answered and the caller should use the CLI.
+     */
+    formOffer: (text: string) =>
+      formAsk((request, session) => ({ op: "form-offer", request, session, text })).then((reply) =>
+        reply ? { view: reply.view ?? null } : undefined,
+      ),
+    /** One step of `form`; the same "no hub answered" as `formOffer` when undefined. */
+    formStep: (form: string, action: FormAction) =>
+      formAsk((request, session) => ({ op: "form-step", request, session, form, action })).then(
+        (reply) => (reply ? { view: reply.view ?? null } : undefined),
+      ),
+    /** Leaves the reply in the session's file for this TUI to take, in its prompt or sent. */
+    formDeliver: (form: string, submit: boolean) =>
+      formAsk((request, session) => ({ op: "form-deliver", request, session, form, submit })).then(
+        (reply) => (reply ? { view: reply.view ?? null } : undefined),
+      ),
+    /** The form as it stands, and a reply left for this TUI, handed over at most once. */
+    formSync: () =>
+      formAsk((request, session) => ({ op: "form-sync", request, session })).then((reply) =>
+        reply ? { view: reply.view ?? null, delivery: reply.delivery ?? null } : undefined,
+      ),
+    /** Forgets the session's form, as the person speaking does; false when no hub took it. */
+    formDrop: () =>
+      formAsk((request, session) => ({ op: "form-drop", request, session })).then(
+        (reply) => reply !== undefined,
+      ),
     named(name: string | undefined) {
       write({ op: "named", name: name ?? null });
     },
