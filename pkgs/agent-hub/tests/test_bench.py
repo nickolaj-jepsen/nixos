@@ -30,6 +30,11 @@ def entries(said_words, uuid):
              "message": {"role": "assistant", "content": [{"type": "text", "text": said_words}]}}]
 
 
+class Terminal(io.StringIO):
+    def isatty(self):
+        return True
+
+
 class BenchTest(unittest.TestCase):
     def setUp(self):
         self.home = Path(tempfile.mkdtemp(prefix="agent-hub-bench-test-"))
@@ -67,6 +72,74 @@ class BenchTest(unittest.TestCase):
         self.assertEqual((line["wants"], line["didOk"], line["flagged"], line["turn"], line["path"]), (True, True, True, "a1", str(path)))
         self.assertNotIn("Secret plan", self.labels.read_text())
         self.assertNotIn("please do it", self.labels.read_text())
+
+    def test_a_bad_prompt_takes_its_whole_session_out(self):
+        folder = self.home / ".claude" / "projects" / "-repo"
+        folder.mkdir(parents=True)
+        turns = [e for n in range(3) for e in entries(f"Turn {n}. Shall I commit?", f"a{n}")]
+        (folder / "child.jsonl").write_text("".join(json.dumps(e) + "\n" for e in turns))
+        self.run_label("n\nn\nb\nn\nn\n")
+        self.assertEqual([line.get("bad", False) for line in self.lines()], [False, True])
+        self.assertIn("agent-hub label", self.run_eval())
+
+    def pi_session(self, name, prompt, said_words, folder="-repo", parent=None):
+        path = self.home / ".pi" / "agent" / "sessions" / folder / f"{name}.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lines = [{"type": "session", "id": name, "cwd": "/repo", **({"parentSession": str(parent)} if parent else {})},
+                 {"type": "message", "id": f"{name}-u", "parentId": None,
+                  "message": {"role": "user", "content": [{"type": "text", "text": prompt}]}},
+                 {"type": "message", "id": f"{name}-a", "parentId": f"{name}-u", "timestamp": "2026-11-03T00:00:00.000Z",
+                  "message": {"role": "assistant", "content": [{"type": "text", "text": said_words}], "stopReason": "stop"}}]
+        path.write_text("".join(json.dumps(line) + "\n" for line in lines))
+        return path
+
+    def test_only_sessions_you_started_can_be_sampled(self):
+        parent = self.pi_session("parent", "my own ask", "Parent words.")
+        self.pi_session("fork", "my own ask", "Fork words.", parent=parent)
+        self.pi_session("child", "You are a critic", "Child words.", parent=parent)
+        self.pi_session("task", "Read the docs", "Task words.", folder="-repo/parent/tasks")
+        self.pi_session("orphan", "Read the docs", "Orphan words.", parent=self.home / "gone.jsonl")
+        self.transcript("mine", "Claude words.", "a1")
+        folder = self.home / ".claude" / "projects" / "-repo"
+        (folder / "scripted.jsonl").write_text("".join(json.dumps({**e, "entrypoint": "sdk-cli"}) + "\n" for e in entries("Scripted words.", "b1")))
+        said = " ".join(turn["said"] for bucket in bench.sources(self.home) for source in bucket for turn in bench.endings(source))
+        for kept in ("Parent words", "Fork words", "Claude words"):
+            self.assertIn(kept, said)
+        for dropped in ("Child words", "Task words", "Orphan words", "Scripted words"):
+            self.assertNotIn(dropped, said)
+
+    def test_a_turn_cut_short_is_not_an_ending(self):
+        path = self.pi_session("kept", "my ask", "Pi ending.")
+        cut = {"type": "message", "id": "cut", "parentId": "kept-a",
+               "message": {"role": "assistant", "content": [{"type": "text", "text": "Pi narration."}], "stopReason": "aborted"}}
+        ask = {"type": "message", "id": "ask", "parentId": "kept-a", "message": {"role": "user", "content": "next"}}
+        with path.open("a") as out:
+            out.write(json.dumps(ask) + "\n" + json.dumps({**cut, "parentId": "ask"}) + "\n")
+        folder = self.home / ".claude" / "projects" / "-repo"
+        folder.mkdir(parents=True)
+        interrupt = {"type": "user", "uuid": "i1", "message": {"role": "user", "content": "[Request interrupted by user]"}}
+        lines = [*entries("Claude ending.", "a1"), *entries("Claude narration.", "a2"), interrupt]
+        (folder / "c.jsonl").write_text("".join(json.dumps(line) + "\n" for line in lines))
+        said = " ".join(turn["said"] for bucket in bench.sources(self.home) for source in bucket for turn in bench.endings(source))
+        for kept in ("Pi ending", "Claude ending"):
+            self.assertIn(kept, said)
+        for dropped in ("Pi narration", "Claude narration"):
+            self.assertNotIn(dropped, said)
+
+    def shown(self, out):
+        turn = {"agent": "claude", "path": "/x/-repo/a.jsonl", "at": "2026-11-03T00:00:00Z", "said": "## Plan\n**Bold** word", "requests": ["do it"]}
+        bench.show(turn, 0, 50, out)
+        return out.getvalue()
+
+    def test_a_terminal_gets_the_markdown_read_for_it(self):
+        out = self.shown(Terminal())
+        self.assertNotIn("**Bold**", out)
+        self.assertNotIn("## Plan", out)
+
+    def test_a_pipe_or_no_color_gets_the_words_as_written(self):
+        self.assertIn("## Plan\n**Bold** word", self.shown(io.StringIO()))
+        with mock.patch.dict("os.environ", {"NO_COLOR": "1"}):
+            self.assertIn("## Plan\n**Bold** word", self.shown(Terminal()))
 
     def test_the_verdict_stays_hidden_while_you_answer(self):
         self.transcript("a", "Shall I commit?", "a1")

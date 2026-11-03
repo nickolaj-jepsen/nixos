@@ -337,6 +337,8 @@ false alarm costs a glance.
   profile, with a few from each session (sizes in `agent_hub/bench.py`). Only the unflagged
   ones can show an ask the regex missed, since the model can't raise a verdict. It is small
   enough to give a rough figure, and `eval` prints the interval to say how rough.
+- Only sessions you started can be sampled: not subagents, a pi session's children or
+  headless runs. Marking a prompt as bad drops any other that slips through, session and all.
 - `~/.local/state/agent-hub/labels.jsonl` holds ids and answers, never transcript text.
   You can stop at any key and carry on later.
 - Model calls run as the session's own profile, about one per turn. `eval --words-only`

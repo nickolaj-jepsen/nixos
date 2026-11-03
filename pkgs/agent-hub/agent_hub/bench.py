@@ -1,8 +1,9 @@
 """Measuring the gate on your own turns.
 
 `agent-hub label` shows you past turn endings with the hub's verdict hidden, and asks whether
-the bar should have called you and whether the model's `did` line is accurate. `agent-hub eval`
-replays the current gate over those answers and prints how close it comes to its targets.
+the bar should have called you and whether the model's `did` line is accurate. A turn you mark
+as a bad prompt takes its whole session out of the sample. `agent-hub eval` replays the current
+gate over those answers and prints how close it comes to its targets.
 
 Labels hold ids and answers, never transcript text. A model call runs as the session's own
 profile, so a work transcript stays on the work account. A replay knows less than the live gate
@@ -14,6 +15,7 @@ Only the unflagged turns can show an ask the regex missed, since the model can o
 import math
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -37,6 +39,18 @@ TARGET_PRECISION = 0.80
 TIMEOUT = 90
 WORKERS = 4
 SHOWN_CHARS = 6000
+# Terminal colours, not fixed ones, so the sections follow the theme. Never by verdict: `label` hides it.
+ASKED, SAID, DID = "36", "1;33", "35"
+WANTS_QUESTION = "Read the agent's final message above. When it stopped there, would you have wanted an alert calling you back to this session?"
+WANTS_OPTIONS = """  [y] Yes: it's waiting on me, or there's more work I need to start
+  [n] No: it's finished, and at most an optional push or deploy is left
+  [b] Bad prompt: I never wrote "Your last message" (a subagent or a script), so drop this whole session
+  [s] Skip: I can't tell
+  [q] Quit: everything so far is saved"""
+SUMMARY_QUESTION = "A model wrote this one-line summary. Does it describe what the agent did in this turn?"
+SUMMARY_OPTIONS = """  [y] Yes
+  [n] No: it's wrong or misleading
+  [s] Skip: I can't tell"""
 PI_ARGS = ["-p", "--no-session", "--no-tools", "--no-skills", "--no-context-files", "--no-mcp", "--model", "vm/flash"]
 
 
@@ -49,6 +63,20 @@ def read_labels(path):
         return list(json_lines(path))
     except OSError:
         return []
+
+
+def counted(labels):
+    """The answers that count, and the sessions marked as a bad prompt, whose answers don't."""
+    bad = {line.get("path") for line in labels if line.get("bad")}
+    return [line for line in labels if line.get("wants") is not None and line.get("path") not in bad], bad
+
+
+def progress(labels):
+    """How many of each kind the sample still needs, how many it holds, and the bad sessions."""
+    answered, bad = counted(labels)
+    left = {True: FLAGGED - sum(1 for line in answered if line.get("flagged")),
+            False: UNFLAGGED - sum(1 for line in answered if not line.get("flagged"))}
+    return left, len(answered), bad
 
 
 def sources(home=None):
@@ -75,15 +103,59 @@ def sources(home=None):
     return [bucket for bucket in buckets if bucket]
 
 
+def first_prompt(entries):
+    return next((pi.text_of(entry["message"]) for entry in entries
+                 if entry.get("type") == "message" and entry.get("message", {}).get("role") == "user"), None)
+
+
+def spawned(path, entries, header):
+    """Whether something other than you started this pi session: a subagent's transcript under
+    `tasks/`, or a child with a parent and its own first prompt. A fork keeps its parent's."""
+    if Path(path).parent.name == "tasks":
+        return True
+    parent = header.get("parentSession")
+    return bool(parent) and first_prompt(pi.read_entries(parent)[0]) != first_prompt(entries)
+
+
+def headless(path):
+    """Whether a Claude transcript came from `claude -p` or the SDK, which the hub never shows."""
+    return next((line["entrypoint"] for line in json_lines(path) if line.get("entrypoint")), None) == "sdk-cli"
+
+
+def cut_short(agent, path, entries=None):
+    """The ids of turns that never reached an ending, whose last words are only narration: pi's
+    stopped on a tool call or an abort, Claude's followed by the marker of an interrupt."""
+    if agent == "pi":
+        return {entry.get("id") for entry in entries if entry.get("type") == "message"
+                and entry.get("message", {}).get("role") == "assistant"
+                and entry.get("message", {}).get("stopReason") in ("toolUse", "aborted")}
+    found, last = set(), None
+    for entry in json_lines(path):
+        if entry.get("isSidechain"):
+            continue
+        if entry.get("type") == "assistant":
+            last = entry.get("uuid")
+        elif (claude.prompt_text(entry) or "").lstrip().startswith("[Request interrupted"):
+            found.add(last)
+    return found
+
+
 def read_turns(agent, path):
-    """Every turn of a transcript, or none when it can't be read."""
+    """Every turn of a transcript you started that reached an ending, the only kind the bar could
+    call you for; none for any other, or when it can't be read."""
     try:
         if agent == "pi":
             entries, header = pi.read_entries(path)
-            return pi.turns(entries, None, header.get("cwd"))[0]
+            if spawned(path, entries, header):
+                return []
+            short = cut_short(agent, path, entries)
+            return [turn for turn in pi.turns(entries, None, header.get("cwd"))[0] if turn["id"] not in short]
+        if headless(path):
+            return []
+        short = cut_short(agent, path)
     except OSError:
         return []
-    return claude.turns(path) or []
+    return [turn for turn in claude.turns(path) or [] if turn["id"] not in short]
 
 
 def endings(source):
@@ -196,25 +268,56 @@ def age(at):
     return f"{int(days)}d ago" if days >= 1 else "today"
 
 
+def plain(_code, text):
+    return text
+
+
+def painter(out):
+    """How to colour text for `out`: `plain` for a pipe or under NO_COLOR."""
+    if not out.isatty() or os.environ.get("NO_COLOR"):
+        return plain
+    return lambda code, text: f"\033[{code}m{text}\033[0m"
+
+
+def marked(text, paint):
+    """An agent's markdown as it should read at a terminal; as written when `paint` is `plain`."""
+    if paint is plain:
+        return text
+    text = re.sub(r"^#{1,6} +(.+)$", lambda m: paint(SAID, m[1].replace("**", "")), text, flags=re.M)
+    text = re.sub(r"\*\*(.+?)\*\*", lambda m: paint("1", m[1]), text)
+    return re.sub(r"`([^`\n]+)`", lambda m: paint("32", m[1]), text)
+
+
+def section(title, code, paint, out):
+    width = min(shutil.get_terminal_size().columns, 100)
+    print(paint(code, f"── {title} ".ljust(width, "─")), file=out)
+
+
+def question(text, options, paint):
+    keys = re.sub(r"\[(\w)\]", lambda m: f"[{paint('1;32', m[1])}]", options)
+    return f"{paint('1', text)}\n\n{keys}\n\nYour answer:"
+
+
 def show(turn, done, total, out):
+    paint = painter(out)
     print("\033[2J\033[H" if out.isatty() else "", end="", file=out)
-    place = Path(turn["path"]).parent.name
-    print(f"{done + 1}/{total} · {turn['agent']}{' · work' if turn.get('profile') else ''} · {place} · {age(turn.get('at'))}\n", file=out)
+    details = [turn["agent"], "work" if turn.get("profile") else "", Path(turn["path"]).parent.name, age(turn.get("at"))]
+    print(f"{paint('1', f'Question {done + 1} of {total}')}  {paint('2', ' · '.join(filter(None, details)))}\n", file=out)
     asked = (turn.get("requests") or ["(no request)"])[-1]
-    print(f"You asked: {shown_block(asked, 300)[0]}\n", file=out)
-    print(clipped(turn["said"]), file=out)
+    section("Your last message", ASKED, paint, out)
+    print(f"{paint(ASKED, shown_block(asked, 300)[0])}\n", file=out)
+    section("The agent's final message", SAID, paint, out)
+    print(marked(clipped(turn["said"]), paint), file=out)
     print(file=out)
 
 
 def label(cfg, stream=None, out=None, rng=None):
     """Asks you about turns until the sample is full or you quit, keeping each answer as it comes."""
     stream, out = stream or sys.stdin, out or sys.stdout
+    paint = painter(out)
     path = labels_path(cfg)
     labels = read_labels(path)
-    answered = [line for line in labels if line.get("wants") is not None]
-    left = {True: FLAGGED - sum(1 for line in answered if line.get("flagged")),
-            False: UNFLAGGED - sum(1 for line in answered if not line.get("flagged"))}
-    done = len(answered)
+    left, done, bad = progress(labels)
     found = candidates(sources(), labels, rng or random.Random(), lambda is_flagged: left[is_flagged] > 0)
     pool = ThreadPoolExecutor(max_workers=2)
     ahead = deque()
@@ -225,16 +328,17 @@ def label(cfg, stream=None, out=None, rng=None):
                 turn = next(found, None)
                 if turn is None:
                     break
-                ahead.append((turn, pool.submit(ask_model, turn, cfg)))
+                if turn["path"] not in bad:
+                    ahead.append((turn, pool.submit(ask_model, turn, cfg)))
             if not ahead:
                 print("The transcripts ran out before the sample filled.", file=out)
                 break
             turn, reading = ahead.popleft()
-            if left[turn["flagged"]] <= 0:
+            if left[turn["flagged"]] <= 0 or turn["path"] in bad:
                 reading.cancel()
                 continue
             show(turn, done, FLAGGED + UNFLAGGED, out)
-            wants = choice("Should the bar have called you for this? [y]es [n]o [s]kip [q]uit", "ynsq", stream, out)
+            wants = choice(question(WANTS_QUESTION, WANTS_OPTIONS, paint), "ynbsq", stream, out)
             if wants == "q":
                 print(f"{done} turns labelled so far. Run this again to carry on.", file=out)
                 return
@@ -243,11 +347,17 @@ def label(cfg, stream=None, out=None, rng=None):
             if wants == "s":
                 worklog.append(path, {**line, "wants": None})
                 continue
+            if wants == "b":
+                worklog.append(path, {**line, "wants": None, "bad": True})
+                left, done, bad = progress(read_labels(path))
+                continue
             did_ok = None
             did = reading.result().get("did")
             if did:
-                print(f"\nThe model's did line: {shown_block(did, 300)[0]}", file=out)
-                did_ok = {"y": True, "n": False}.get(choice("Is it accurate? [y]es [n]o [s]kip", "yns", stream, out))
+                print(file=out)
+                section("Summary of this turn", DID, paint, out)
+                print(f"{paint(DID, shown_block(did, 300)[0])}\n", file=out)
+                did_ok = {"y": True, "n": False}.get(choice(question(SUMMARY_QUESTION, SUMMARY_OPTIONS, paint), "yns", stream, out))
             worklog.append(path, {**line, "wants": wants == "y", "didOk": did_ok})
             left[turn["flagged"]] -= 1
             done += 1
@@ -328,7 +438,7 @@ def evaluate(cfg, words_only=False, out=None):
     """Replays the current gate over your labels and prints how it did: with the model's word,
     or `words_only` for the regex alone and no model calls."""
     out = out or sys.stdout
-    labels = [line for line in read_labels(labels_path(cfg)) if line.get("wants") is not None]
+    labels = counted(read_labels(labels_path(cfg)))[0]
     if not labels:
         print("No labels yet: run `agent-hub label` first.", file=out)
         return
