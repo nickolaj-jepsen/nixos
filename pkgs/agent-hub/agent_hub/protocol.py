@@ -155,7 +155,8 @@ OPS = {
     "session-start": {"session": "str", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null", "hidden?": "bool",
                       "tmux?": "str|null"},
     "session-end": {"session": "str"},
-    "turn-start": {"request?": "int", "session?": "str", "prompt?": "str|null", "fromPerson?": "bool",
+    # `peer`: another session's message woke it, so what the row stands on stays.
+    "turn-start": {"request?": "int", "session?": "str", "prompt?": "str|null", "fromPerson?": "bool", "peer?": "bool",
                    "worktreeTool?": "bool", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null",
                    "hidden?": "bool", "tmux?": "str|null", **TRANSCRIPT},
     # `said` and `tasks` are the agent's own word, which a transcript can lag behind.

@@ -41,6 +41,8 @@ class Readings:
         self.failures = {}
         self.last = {}
         self.settling = {}
+        # Session id → the peer's turn being read, which must not cancel the session's own.
+        self.asides = {}
 
     def forget(self, sid):
         for table in (self.locks, self.failures, self.last):
@@ -100,10 +102,21 @@ class Readings:
         self.settling[session.id] = task
         task.add_done_callback(lambda done: self.settling.pop(session.id, None) if self.settling.get(session.id) is done else None)
 
+    def settle_aside(self, session, ending):
+        """Reads how a peer's turn ended, beside any reading of the session's own turn."""
+        aside = session.aside
+        previous = self.asides.get(session.id)
+        if previous is not None:
+            previous.cancel()
+        task = asyncio.create_task(self._settle_aside(session, aside, ending))
+        self.asides[session.id] = task
+        task.add_done_callback(lambda done: self.asides.pop(session.id, None) if self.asides.get(session.id) is done else None)
+
     def cancel(self, sid):
-        task = self.settling.pop(sid, None)
-        if task is not None:
-            task.cancel()
+        for table in (self.settling, self.asides):
+            task = table.pop(sid, None)
+            if task is not None:
+                task.cancel()
 
     async def _settle(self, session, n, ending):
         try:
@@ -127,10 +140,25 @@ class Readings:
             session.reading(n, False)
             raise
 
+    async def _settle_aside(self, session, aside, ending):
+        if ending.get("failure"):
+            self.hub.aside_read(session, aside, judge.died(ending["failure"]))
+            return
+        found = await asyncio.to_thread(digest, session)
+        found = {**judge.with_ending(found or {}, ending), "peer": True}
+        guess = judge.heuristic(found)
+        fields = None
+        # Only an ask can reach the row, so nothing else is worth a call.
+        if guess["ask"] and self.backend(session):
+            async with self._lock(session.id):
+                fields = await self._call(session, "settle", found, identity=False)
+        self.hub.aside_read(session, aside, judge.outcome(fields or {}, guess, found))
+
     # The call.
 
-    async def _call(self, session, moment, found, manual=False):
-        """One reading through the session's backend; the fields it gave, or None."""
+    async def _call(self, session, moment, found, manual=False, identity=True):
+        """One reading through the session's backend; the fields it gave, or None. `identity`
+        false keeps what the session is called out of it, as for a peer's turn."""
         backend = self.backend(session)
         if backend is None:
             return None
@@ -154,6 +182,8 @@ class Readings:
                 self.hub.notice(session.id, "identity: relabel failed")
             return None
         self.failures[session.id] = 0
+        if not identity:
+            return fields
         label = judge.clean_label(fields["label"]) if fields.get("label") else ""
         if label:
             session.label = label

@@ -3,10 +3,14 @@ its own (every change takes `now`), so the hub's behaviour is testable as data.
 
 A turn opens on the agent's own word (pi's `turn-start`, Claude's UserPromptSubmit) and
 closes on it (`turn-end`, Stop). The registry only stands in where that word never
-comes: `busy` with no turn open starts one, `idle` with one open ends it as interrupted
-(Esc fires no Stop). An ending that lands on a turn already closed that way still gets
-read, unless a newer turn started meanwhile. A turn a restart caught open or unread comes
-back `restored`, for the hub to read if its ending went unheard.
+comes: `busy` with no turn open starts one, once the agent has had `REGISTRY_GRACE_MS` to
+speak if that would take an ending off the row, and `idle` with one open ends it as
+interrupted (Esc fires no Stop). An ending that lands on a turn already closed that way
+still gets read, unless a newer turn started meanwhile. A turn a restart caught open or
+unread comes back `restored`, for the hub to read if its ending went unheard.
+
+A peer's message wakes the session without you: that turn is an `aside`, which leaves the
+standing turn alone, so what the row says of you and the session stays true.
 """
 
 from dataclasses import asdict, dataclass, field
@@ -24,6 +28,8 @@ HISTORY = 3
 ASK_GRACE_MS = 1000
 # A `done` pulses once: one breath of the bar's dot.
 ONCE_MS = 1000
+# The registry can say `busy` before the hook does, and only the hook can tell a peer's turn from yours.
+REGISTRY_GRACE_MS = 2000
 # Which field of a row says why it is in its state.
 REASON_FIELD = {"asking": "waitingFor", "needs-reply": "ask", "failed": "summary", "done": "summary", "working": "doing"}
 # What a row says of a held prompt.
@@ -75,6 +81,12 @@ class Session:
     tags: list = field(default_factory=list)
     calls: int = 0
     turn: Turn | None = None
+    # A turn a peer's message woke it for, until it is read. Never saved.
+    aside: Turn | None = None
+    # When the registry said `busy` over a standing ending, with no word yet from the agent.
+    busy_at: int | None = None
+    # The turn a registry-started one replaced, which a peer's word gives back.
+    replaced: Turn | None = None
     # The turn number whose ending you put away.
     dismissed: int | None = None
     # The open prompt you put away, which stays away for as long as it is that prompt.
@@ -130,13 +142,61 @@ class Session:
 
     def start_turn(self, now, by="agent"):
         """A turn starts; returns its number, or None when the open turn already is this one."""
+        self.busy_at = None
+        self.aside = None
         # The registry beat the hook to it: the hook's word adopts the turn it stood in for.
         if self.turn is not None and self.turn.open and self.turn.by == "registry":
             self.turn.by = by
             return None
         n = self.turn.n + 1 if self.turn else 1
+        self.replaced = self.turn if by == "registry" else None
         self.turn = Turn(n=n, started=now, by=by)
         return n
+
+    def standing(self):
+        """Whether a closed turn still holds the row: an ending, or the reading or jobs of one."""
+        turn = self.turn
+        if turn is None or turn.open:
+            return False
+        return turn.reading or bool(turn.outcome and (self.dismissed != turn.n or turn.outcome.get("jobs")))
+
+    def registry_turn(self, now):
+        """Starts the turn the registry said `busy` for over a standing ending, once the agent
+        has had its chance to speak; returns its number, or None when there is nothing due."""
+        if self.busy_at is None or now - self.busy_at < REGISTRY_GRACE_MS:
+            return None
+        return self.start_turn(self.busy_at, by="registry")
+
+    def start_aside(self, now):
+        """A peer's message woke the session. One arriving mid-turn is part of that turn, unless
+        only the registry had spoken for that turn, which then was this."""
+        self.busy_at = None
+        if self.turn is not None and self.turn.open:
+            if self.turn.by != "registry":
+                return
+            self.turn = self.replaced
+        self.aside = Turn(n=0, started=now)
+
+    def end_aside(self, now):
+        self.aside.ended = self.aside.ended or now
+        self.aside.reading = True
+
+    def read_aside(self, aside, outcome, now):
+        """How a peer's turn ended; None when it is no longer the one here. Returns whether it
+        reached the row: only what wants you does, and never over an ask already standing."""
+        if self.aside is not aside:
+            return None
+        self.aside = None
+        state = FINISHED.get(outcome["state"], "done")
+        standing = self.turn is not None and self.dismissed != self.turn.n and (self.turn.outcome or {}).get("state") == "blocked"
+        if state == "done" or standing or (self.turn is not None and self.turn.open):
+            return False
+        self.turn = Turn(n=self.turn.n + 1 if self.turn else 1, started=aside.started, ended=aside.ended, outcome=outcome)
+        self.history = (self.history + [{"at": aside.ended, "state": state, "did": outcome.get("summary") or ""}])[-HISTORY:]
+        return True
+
+    def aside_running(self):
+        return self.aside is not None and (self.aside.open or self.aside.reading)
 
     def end_turn(self, now, interrupted=False):
         """A turn ends; returns the number to read, or None when there is nothing to read."""
@@ -174,7 +234,8 @@ class Session:
         """What the agent says it is doing, or its registry entry: only a move of the
         entry counts, since the hooks may already have said more, and for an entry `now`
         is its own stamp, which every status change renews. Returns `"started"` or
-        `"interrupted"` when the registry stood in for a turn's start or end."""
+        `"interrupted"` when the registry stood in for a turn's start or end, and `"busy"`
+        when a `registry_turn` will be due unless the agent speaks first."""
         if registry:
             if (status, waiting_for, now) == self.registry_seen:
                 return None
@@ -195,11 +256,19 @@ class Session:
             self.dialog = waiting_for
         if not registry:
             return None
-        if status == "busy" and (self.turn is None or not self.turn.open):
+        if status == "busy" and (self.turn is None or not self.turn.open) and not self.aside_running():
+            if self.standing():
+                self.busy_at = now
+                return "busy"
             return "started" if self.start_turn(now, by="registry") else None
-        if status == "idle" and self.turn is not None and self.turn.open:
-            self.end_turn(now, interrupted=True)
-            return "interrupted"
+        if status == "idle":
+            self.busy_at = None
+            # A Stop may still come for it, as for a turn.
+            if self.aside is not None and self.aside.open:
+                self.aside.ended = now
+            if self.turn is not None and self.turn.open:
+                self.end_turn(now, interrupted=True)
+                return "interrupted"
         return None
 
     def wait(self, text, now):
@@ -253,20 +322,26 @@ class Session:
             return "working"
         if turn is not None and turn.outcome and self.dismissed != turn.n:
             return FINISHED.get(turn.outcome["state"], "done")
-        return "idle"
+        return "working" if self.aside_running() else "idle"
 
     def row(self, now, window=None):
         state = self.state(now)
         turn = self.turn
         outcome = (turn.outcome if turn else None) or {}
+        # Working only for a peer: no turn of its own is running or being read.
+        aside = state == "working" and not (turn is not None and (turn.open or turn.reading or outcome.get("jobs")))
         if state == "asking":
             since = self.status_at
+        elif aside:
+            since = self.aside.started
         elif turn is not None:
             since = turn.started if turn.open else turn.ended
         else:
             since = self.status_at
         doing = ""
-        if state == "working":
+        if aside:
+            doing = "answering another session"
+        elif state == "working":
             if turn.open:
                 doing = turn.doing
             elif turn.reading:
@@ -303,7 +378,7 @@ class Session:
             row["bridge"] = self.bridge
         details = {"prompt": self.prompt, "branch": self.branch, "changed": self.changed,
                    "said": outcome.get("said") if state == "needs-reply" else "",
-                   "jobs": outcome.get("tasks") if state == "working" and not turn.open else None}
+                   "jobs": outcome.get("tasks") if state == "working" and not aside and not turn.open else None}
         row.update({key: value for key, value in details.items() if value})
         if state == "asking" and self.holds:
             row["permission"] = {key: self.holds[0][key] for key in PERMISSION}

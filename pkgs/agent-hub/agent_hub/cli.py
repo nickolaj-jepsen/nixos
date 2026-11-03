@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import socket
 import sys
 from datetime import datetime
@@ -13,6 +14,16 @@ from .claude import SAID_MAX, claude_label, permission_ask
 from .common import (
     folded, hub_message, hub_request, hub_state, label_line, load_config, log_path, nearest, now_ms, resume_command, socket_path,
 )
+
+# The hook's input doesn't say where a prompt came from. Claude Code opens a peer's with a line of
+# its own and this tag, so only the head counts: you may well quote the tag in a prompt.
+PEER_PROMPT = re.compile(r"<cross-session-message\s+from=")
+PEER_HEAD = 200
+
+
+def peer_prompt(prompt):
+    """Whether a UserPromptSubmit's prompt is another session's message, not the person's."""
+    return bool(PEER_PROMPT.search(str(prompt or "")[:PEER_HEAD]))
 
 
 def status_row(rows, session_id=None, pid=None):
@@ -117,8 +128,8 @@ def cmd_hook(_args):
     if name == "SessionStart":
         hub_message({"op": "session-start", **who})
     elif name == "UserPromptSubmit":
-        reply = hub_request({"op": "turn-start", "request": 1, "transcript": transcript,
-                             "prompt": event.get("prompt"), **who})
+        origin = {"fromPerson": False, "peer": True} if peer_prompt(event.get("prompt")) else {"prompt": event.get("prompt")}
+        reply = hub_request({"op": "turn-start", "request": 1, "transcript": transcript, **origin, **who})
         if reply and reply.get("peers"):
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                                      "additionalContext": reply["peers"]}}))
@@ -173,7 +184,7 @@ def print_group(group):
         if line.get("ask"):
             text = f"{text} [asks: {line['ask']}]".strip()
         answered = {"allow": "allowed ", "deny": "denied "}.get(line.get("answered"), "")
-        flag = "wrong " if line.get("wrong") else "unopened " if line.get("unopened") else answered
+        flag = "wrong " if line.get("wrong") else "unopened " if line.get("unopened") else "peer " if line.get("peer") else answered
         word = flag + (line.get("state") or "done")
         print(f"  {stamp}  {word:<11} {folded(text)}")
 

@@ -5,6 +5,7 @@ A line: `{at, session, agent, cwd, configDir, label, state, did, ask}`, `at` in 
 with `wrong` is you flagging the verdict it names from the popout, one with `unopened` a
 `needs-reply` you dismissed without going to it, a weaker sign, and one with `answered` a
 permission prompt you settled at the bar, never saying what it asked: none is a turn's ending.
+A line with `peer` is the ending of a turn another session's message woke it for.
 """
 
 import json

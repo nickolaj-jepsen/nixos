@@ -45,6 +45,7 @@ import {
   activityLabel,
   lastActive,
   type Peer,
+  PEER_MESSAGE_TYPE as MESSAGE_TYPE,
   type PermissionClass,
   pidDomain,
   procStart,
@@ -60,7 +61,6 @@ import {
 import { clip, oneLine } from "../shared/naming.ts";
 import type { Services } from "./services.ts";
 
-const MESSAGE_TYPE = "claude-peer-message";
 const OWN_MODE: PermissionClass = "prompting";
 const IDLE_SUBSCRIPTION_TTL_MS = 12 * 60 * 60 * 1000;
 const HOLD_DIALOG_MS = 5 * 60 * 1000;

@@ -732,6 +732,59 @@ class ClaudeTurnTest(HubTest):
         self.stop([prompt("fix it"), said("Fixed. Want me to commit?")])
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "commit this?"))
 
+    def peer_turn(self, closing, standing=True):
+        """A peer's message wakes the session, as Claude reports it, and its turn ends on `closing`."""
+        entries = [prompt("Another Claude session sent a message:\n<cross-session-message from=\"uds:/x\">hi</cross-session-message>")]
+        event = {"hook_event_name": "UserPromptSubmit", "session_id": self.sid, "prompt": entries[0]["message"]["content"],
+                 "transcript_path": str(self.hub.write_transcript(self.sid, entries))}
+        self.hub.command("hook", stdin=json.dumps(event))
+        self.stop([*entries, said(closing)], payload={"last_assistant_message": closing})
+
+    def test_a_peers_message_leaves_your_open_question_and_your_prompt(self):
+        self.stop([prompt("rebase it"), said("Want me to push?")])
+        before = session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply")), self.sid)
+        self.peer_turn("No action needed from me.")
+        log = self.hub.tmp / "log.jsonl"
+        eventually(lambda: any(line.get("peer") for line in logged(log)))
+        after = self.settled()
+        self.assertEqual((after["state"], after["ask"], after["since"]), ("needs-reply", "Want me to push?", before["since"]))
+        self.assertNotIn("prompt", after)
+
+    def test_a_peers_turn_is_in_the_log_as_one(self):
+        self.stop([prompt("rebase it"), said("Rebased.")])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+        self.peer_turn("Replied to the other session.")
+        log = self.hub.tmp / "log.jsonl"
+        eventually(lambda: any(line.get("peer") for line in logged(log)))
+        line = next(line for line in logged(log) if line.get("peer"))
+        self.assertEqual((line["state"], line["did"]), ("done", "Replied to the other session."))
+        self.assertEqual(self.settled()["summary"], "Rebased.")
+
+    def test_a_peers_turn_that_asks_you_something_shows_and_keeps_the_name(self):
+        self.hub.claude_answer.write_text("label: something else\nstate: blocked\nask: may I push?\ndid: Asked.\n")
+        self.stop([prompt("rebase it"), said("Rebased.")], payload={"last_assistant_message": "Rebased."})
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+        label = self.settled()["label"]
+        self.hub.claude_answer.write_text("label: another thing\nstate: blocked\nask: may I push?\ndid: Asked.\n")
+        self.peer_turn("The other session is done. May I push?")
+        state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "may I push?"))
+        self.assertEqual(session(state, self.sid)["label"], label)
+        self.assertIn("answered another agent session", (self.hub.tmp / "claude.log.prompts").read_text())
+
+    def test_a_prompt_that_only_quotes_the_tag_is_yours(self):
+        text = "x" * 300 + ' <cross-session-message from="a">'
+        event = {"hook_event_name": "UserPromptSubmit", "session_id": self.sid, "prompt": text,
+                 "transcript_path": str(self.hub.write_transcript(self.sid, [prompt(text)]))}
+        self.hub.command("hook", stdin=json.dumps(event))
+        self.bar.wait(has_session(self.sid, lambda s: s.get("prompt", "").startswith("xxx")))
+
+    def test_a_turn_only_the_registry_heard_of_starts_after_its_grace(self):
+        self.stop([prompt("rebase it"), said("Want me to push?")])
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        self.hub.write_session(self.proc.pid, self.sid, status="busy")
+        self.assertEqual(self.settled()["state"], "needs-reply")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+
     def running(self):
         """A session mid-turn, as a fresh subscriber sees it: the shared bar may have heard already."""
         self.hub.write_session(self.proc.pid, self.sid, status="busy")

@@ -189,7 +189,10 @@ class Hub:
             if sid not in self.attached:
                 # The entry's own stamp dates the move, so a dialog open since before a restart keeps its age.
                 at = entry.get("statusUpdatedAt") or now
-                if session.observe(entry.get("status"), entry.get("waitingFor"), at, registry=True) == "started":
+                moved = session.observe(entry.get("status"), entry.get("waitingFor"), at, registry=True)
+                if moved == "busy":
+                    asyncio.get_running_loop().call_later(model.REGISTRY_GRACE_MS / 1000, self.changed)
+                if moved == "started" or session.registry_turn(now) is not None:
                     self.readings.cancel(sid)
                 # pi's ending is read once it attaches: its own model does the reading.
                 if session.agent != "pi":
@@ -261,6 +264,18 @@ class Hub:
                 "configDir": session.config_dir, "label": session.label, "ask": outcome.get("ask") or "",
             })
             self._read_focused([session])
+        self.publish()
+
+    def aside_read(self, session, aside, outcome):
+        """How a peer's turn ended, as `readings` made it out. It is always in the work log."""
+        now = now_ms()
+        if session.read_aside(aside, outcome, now) is None:
+            return
+        worklog.append(self.log_file, {
+            "at": aside.ended, "state": model.FINISHED.get(outcome["state"], "done"), "did": outcome.get("summary") or "",
+            "session": session.id, "agent": session.agent, "cwd": session.cwd, "configDir": session.config_dir,
+            "label": session.label, "ask": outcome.get("ask") or "", "peer": True,
+        })
         self.publish()
 
     def notice(self, sid, text):
@@ -792,7 +807,9 @@ class Hub:
         now = now_ms()
         if message.get("transcript"):
             session.transcript, session.leaf = message["transcript"], message.get("leaf")
-        if session.start_turn(now) is not None:
+        if message.get("peer"):
+            session.start_aside(now)
+        elif session.start_turn(now) is not None:
             self.readings.cancel(session.id)
         session.observe("busy", None, now)
         prompt = message.get("prompt") or ""
@@ -817,6 +834,13 @@ class Hub:
         now = now_ms()
         if message.get("transcript"):
             session.transcript, session.leaf = message["transcript"], message.get("leaf")
+        if session.aside is not None:
+            session.end_aside(now)
+            session.observe("idle", None, now)
+            self._release_all(session)
+            self.readings.settle_aside(session, message)
+            self.publish()
+            return
         # An ending with no turn open to end: the agent carried on unannounced, as Claude does
         # when a background job reports back, or the hub restarted mid-turn.
         if session.turn is None or (not session.turn.open and session.turn.outcome is not None):

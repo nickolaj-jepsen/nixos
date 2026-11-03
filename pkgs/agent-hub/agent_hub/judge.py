@@ -106,6 +106,9 @@ def render(digest, identity, settle):
         lines.append(f"commands: {'; '.join(digest['commands'])}")
     if settle and digest.get("pending"):
         lines.append(f"background jobs started that have not reported back: {digest['pending']}")
+    if digest.get("peer"):
+        lines.append("this assistant turn answered another agent session, not the person: "
+                     "it is blocked only if it puts something new to the person")
     lines.append("requests:")
     lines.extend(f"- {request}" for request in digest.get("requests") or [])
     said = digest.get("said") if settle else None

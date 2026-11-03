@@ -2,7 +2,7 @@
 
 import unittest
 
-from agent_hub.model import ASK_GRACE_MS, ONCE_MS, Alerts, Session, ordered
+from agent_hub.model import ASK_GRACE_MS, ONCE_MS, REGISTRY_GRACE_MS, Alerts, Session, ordered
 
 DONE = {"state": "done", "ask": "", "reply": "", "summary": "Fixed the footer.", "jobs": 0}
 BLOCKED = {"state": "blocked", "ask": "keep the fixture?", "reply": "yes", "summary": "Asked.", "jobs": 0}
@@ -65,11 +65,38 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(session.observe("idle", None, 10, registry=True), "interrupted")
         self.assertEqual(session.state(11), "idle")
 
+    def test_registry_busy_leaves_the_last_ending_until_the_agent_had_its_chance(self):
+        session = finished(BLOCKED)
+        self.assertEqual(session.observe("busy", None, 200, registry=True), "busy")
+        self.assertIsNone(session.registry_turn(200 + REGISTRY_GRACE_MS - 1))
+        self.assertEqual(session.state(200 + REGISTRY_GRACE_MS - 1), "needs-reply")
+        self.assertEqual(session.registry_turn(200 + REGISTRY_GRACE_MS), 2)
+        self.assertEqual(session.state(200 + REGISTRY_GRACE_MS), "working")
+
+    def test_registry_going_idle_within_the_grace_starts_nothing(self):
+        session = finished(BLOCKED)
+        session.observe("busy", None, 200, registry=True)
+        session.observe("idle", None, 300, registry=True)
+        self.assertIsNone(session.registry_turn(200 + REGISTRY_GRACE_MS))
+        self.assertEqual(session.state(200 + REGISTRY_GRACE_MS), "needs-reply")
+
     def test_hook_adopts_the_turn_the_registry_started(self):
         session = Session(id="s")
         session.observe("busy", None, 0, registry=True)
         self.assertIsNone(session.start_turn(5))
         self.assertEqual(session.turn.n, 1)
+
+    def test_hook_within_the_grace_is_the_only_start(self):
+        session = finished(BLOCKED)
+        session.observe("busy", None, 200, registry=True)
+        self.assertEqual(session.start_turn(205), 2)
+        self.assertIsNone(session.registry_turn(200 + REGISTRY_GRACE_MS))
+        self.assertEqual(session.turn.n, 2)
+
+    def test_nothing_standing_needs_no_grace(self):
+        session = finished(BLOCKED)
+        session.dismiss()
+        self.assertEqual(session.observe("busy", None, 200, registry=True), "started")
 
     def test_stop_after_the_registry_went_idle_still_reads_the_turn(self):
         session = Session(id="s")
@@ -104,6 +131,95 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(session.row(7)["reason"], "Bash: rm -rf build")
         session.observe("busy", None, 8, registry=True)
         self.assertEqual((session.state(9), session.dialog), ("working", ""))
+
+
+class AsideTest(unittest.TestCase):
+    """A turn a peer's message woke the session for."""
+
+    def aside(self, session, outcome, at=300):
+        session.start_aside(at)
+        aside = session.aside
+        session.end_aside(at + 10)
+        return session.read_aside(aside, outcome, at + 20)
+
+    def test_a_peers_turn_leaves_a_standing_ask_and_its_age(self):
+        session = finished(BLOCKED)
+        before = session.row(200)
+        session.start_aside(300)
+        during = session.row(301)
+        self.assertEqual((during["state"], during["ask"], during["since"]), ("needs-reply", before["ask"], before["since"]))
+        session.end_aside(310)
+        self.assertEqual(session.state(311), "needs-reply")
+
+    def test_a_session_with_nothing_standing_works_while_a_peer_is_answered(self):
+        session = Session(id="s")
+        session.start_aside(300)
+        row = session.row(301)
+        self.assertEqual((row["state"], row["since"]), ("working", 300))
+        self.assertEqual(row["doing"], "answering another session")
+
+    def test_a_peers_turn_that_only_finished_changes_nothing(self):
+        session = finished(DONE)
+        before = session.row(200)
+        self.assertIs(self.aside(session, {**DONE, "summary": "Replied."}), False)
+        self.assertEqual(session.row(200), before)
+
+    def test_a_peers_turn_that_asks_you_something_reaches_the_row(self):
+        session = finished(DONE)
+        self.assertIs(self.aside(session, {**BLOCKED, "ask": "ship it?"}), True)
+        row = session.row(400)
+        self.assertEqual((row["state"], row["ask"], row["since"]), ("needs-reply", "ship it?", 310))
+
+    def test_a_peers_ask_never_replaces_one_already_standing(self):
+        session = finished(BLOCKED)
+        self.assertIs(self.aside(session, {**BLOCKED, "ask": "ship it?"}), False)
+        self.assertEqual(session.row(400)["ask"], "keep the fixture?")
+
+    def test_a_peers_ask_replaces_one_you_dismissed(self):
+        session = finished(BLOCKED)
+        session.dismiss()
+        self.assertIs(self.aside(session, {**BLOCKED, "ask": "ship it?"}), True)
+        self.assertEqual(session.row(400)["ask"], "ship it?")
+
+    def test_a_message_mid_turn_is_part_of_that_turn(self):
+        session = Session(id="s")
+        session.start_turn(0)
+        session.start_aside(5)
+        self.assertIsNone(session.aside)
+
+    def test_your_prompt_ends_the_aside_and_a_late_reading_is_dropped(self):
+        session = finished(DONE)
+        session.start_aside(300)
+        aside = session.aside
+        session.start_turn(310)
+        self.assertIsNone(session.read_aside(aside, BLOCKED, 320))
+        self.assertEqual(session.state(321), "working")
+
+    def test_the_registry_going_idle_keeps_it_for_the_stop_that_may_follow(self):
+        session = finished(DONE)
+        session.start_aside(300)
+        session.observe("idle", None, 305, registry=True)
+        self.assertEqual(session.aside.ended, 305)
+        self.assertEqual(session.state(306), "done")
+
+    def test_the_registry_saying_busy_during_one_starts_no_turn(self):
+        session = finished(DONE)
+        session.start_aside(300)
+        self.assertIsNone(session.observe("busy", None, 301, registry=True))
+        self.assertIsNone(session.registry_turn(301 + REGISTRY_GRACE_MS))
+        self.assertEqual(session.turn.n, 1)
+
+    def test_a_peers_word_gives_back_what_a_registry_turn_replaced(self):
+        session = finished(DONE)
+        session.observe("busy", None, 300, registry=True)
+        session.registry_turn(300 + REGISTRY_GRACE_MS)
+        session.start_aside(300 + REGISTRY_GRACE_MS + 1)
+        self.assertEqual((session.turn.n, session.state(300 + REGISTRY_GRACE_MS + 2)), (1, "done"))
+
+    def test_a_session_with_only_an_aside_survives_saving(self):
+        session = Session(id="s")
+        session.start_aside(300)
+        self.assertNotIn("aside", session.saved())
 
 
 class DismissTest(unittest.TestCase):

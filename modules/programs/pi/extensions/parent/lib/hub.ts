@@ -243,10 +243,17 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     },
     /**
      * A turn starts on `prompt`, which is not on the branch yet; `fromPerson` is
-     * false for a peer's message or a steer. Resolves with the hub's note on the
-     * other sessions in this tree, or undefined after `timeoutMs`.
+     * false for a peer's message or a steer, and `peer` true for a peer's alone.
+     * Resolves with the hub's note on the other sessions in this tree, or
+     * undefined after `timeoutMs`.
      */
-    turnStart(prompt: string, fromPerson: boolean, worktreeTool: boolean, timeoutMs: number) {
+    turnStart(
+      prompt: string,
+      fromPerson: boolean,
+      peer: boolean,
+      worktreeTool: boolean,
+      timeoutMs: number,
+    ) {
       setStatus("busy");
       if (!attached || !ctx) return Promise.resolve(undefined);
       const where = transcript(ctx);
@@ -261,7 +268,7 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
           clearTimeout(timer);
           resolve(reply?.peers);
         });
-        write({ op: "turn-start", request, prompt, fromPerson, worktreeTool, ...where });
+        write({ op: "turn-start", request, prompt, fromPerson, peer, worktreeTool, ...where });
       });
     },
     /** The turn settled; `pending` background jobs still run for it, `error` if the run failed. */

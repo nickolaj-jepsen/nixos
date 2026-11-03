@@ -181,7 +181,17 @@ Only a turn whose closing words hold a `?` or request words ("tell me when",
   from a dev server left running. A question in the closing words beats both.
 - The registry only stands in where that word never comes: a session going busy
   with no turn open starts one, and one going idle mid-turn ends it unread (Esc
-  fires no `Stop`).
+  fires no `Stop`). It can say busy before the hook does, so over a standing ending
+  it waits two seconds for the agent's word.
+- A peer's message wakes a session without you, and Claude reports that as a prompt
+  and a `Stop`. That turn is an aside (`Session.aside`) and leaves the row's state,
+  age and your last prompt alone. It shows as `working` only with nothing standing.
+  - It doesn't rename the session, but still gets the peers note.
+  - It is always in the work log, as `peer done`.
+  - Only an ending that wants you reaches the row, never over a `needs-reply` already
+    there. The model is told the turn answered another session.
+  - Claude's hook input doesn't say where a prompt came from, so `cli.py` looks for
+    the `<cross-session-message` tag at its head. pi knows its own message type.
 - A new turn cancels the reading of the last one's ending, and a reading that
   lands late is dropped. `agent_hub/model.py` holds these rules,
   `agent_hub/readings.py` the calls.
