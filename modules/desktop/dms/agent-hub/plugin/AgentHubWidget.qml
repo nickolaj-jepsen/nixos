@@ -823,15 +823,37 @@ PluginComponent {
         }
     }
 
+    component KeyCap: Rectangle {
+        id: cap
+
+        required property string key
+
+        width: capLabel.implicitWidth + 10
+        height: capLabel.implicitHeight + 2
+        radius: 4
+        color: Theme.withAlpha(Theme.surfaceText, 0.12)
+
+        StyledText {
+            id: capLabel
+            anchors.centerIn: parent
+            text: cap.key
+            font.family: Theme.monoFontFamily
+            font.pixelSize: Theme.fontSizeSmall - 1
+            color: Theme.surfaceText
+        }
+    }
+
     component PaneButton: Rectangle {
         id: button
 
         required property string label
         property string kind: "plain"
+        // Always drawn, as a width that followed the legend could slide Allow under the pointer.
+        property string shortcut: ""
 
         signal clicked
 
-        width: buttonLabel.implicitWidth + Theme.spacingM * 2
+        width: buttonContent.implicitWidth + Theme.spacingM * 2
         height: 34
         radius: Theme.cornerRadius
         color: kind === "open" ? Theme.primaryContainer : kind === "allow" ? Theme.withAlpha(Theme.success, 0.32) : "transparent"
@@ -845,13 +867,24 @@ PluginComponent {
             }
         }
 
-        StyledText {
-            id: buttonLabel
+        Row {
+            id: buttonContent
             anchors.centerIn: parent
-            text: button.label
-            font.pixelSize: Theme.fontSizeSmall + 1
-            font.weight: Font.Medium
-            color: Theme.surfaceText
+            spacing: Theme.spacingXS + 2
+
+            StyledText {
+                anchors.verticalCenter: parent.verticalCenter
+                text: button.label
+                font.pixelSize: Theme.fontSizeSmall + 1
+                font.weight: Font.Medium
+                color: Theme.surfaceText
+            }
+
+            KeyCap {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: button.shortcut !== ""
+                key: button.shortcut
+            }
         }
 
         StateLayer {
@@ -909,31 +942,21 @@ PluginComponent {
     }
 
     component KeyHint: Row {
+        id: hint
+
         required property string key
         required property string label
 
         spacing: 5
 
-        Rectangle {
+        KeyCap {
             anchors.verticalCenter: parent.verticalCenter
-            width: keyLabel.implicitWidth + 10
-            height: keyLabel.implicitHeight + 2
-            radius: 4
-            color: Theme.withAlpha(Theme.surfaceText, 0.12)
-
-            StyledText {
-                id: keyLabel
-                anchors.centerIn: parent
-                text: parent.parent.key
-                font.family: Theme.monoFontFamily
-                font.pixelSize: Theme.fontSizeSmall - 1
-                color: Theme.surfaceText
-            }
+            key: hint.key
         }
 
         StyledText {
             anchors.verticalCenter: parent.verticalCenter
-            text: parent.label
+            text: hint.label
             font.pixelSize: Theme.fontSizeSmall - 1
             color: Theme.withAlpha(Theme.surfaceVariantText, 0.8)
         }
@@ -1902,12 +1925,15 @@ PluginComponent {
                             PaneButton {
                                 visible: pane.session?.state === "needs-reply" && !!pane.session?.reply
                                 label: "Copy reply"
+                                // On a question the form takes r for its review.
+                                shortcut: root.answerForm?.item ? "" : "r"
                                 onClicked: root.useReply(pane.session)
                             }
 
                             PaneButton {
                                 visible: !!pane.session && root.wantsYou(pane.session)
                                 label: "Dismiss"
+                                shortcut: "x"
                                 onClicked: root.dismiss(pane.session)
                             }
 
@@ -1915,6 +1941,7 @@ PluginComponent {
                                 visible: !!pane.session && root.finished(pane.session)
                                 label: "Wrong call"
                                 kind: "quiet"
+                                shortcut: "w"
                                 onClicked: root.flagWrong(pane.session)
                             }
                         }
@@ -1927,6 +1954,7 @@ PluginComponent {
                                 visible: root.permission !== null
                                 enabled: root.armed
                                 label: "Deny"
+                                shortcut: "d"
                                 onClicked: root.answer(false)
                             }
 
@@ -1935,6 +1963,7 @@ PluginComponent {
                                 enabled: root.armed && (root.permission?.complete ?? false)
                                 label: "Allow"
                                 kind: "allow"
+                                shortcut: "a"
                                 onClicked: root.answer(true)
                             }
 
@@ -1942,6 +1971,7 @@ PluginComponent {
                                 enabled: !!pane.session && !root.unreachable(pane.session)
                                 label: pane.session?.state === "ended" ? "Resume" : "Open"
                                 kind: "open"
+                                shortcut: "↵"
                                 onClicked: root.focusSession(pane.session)
                             }
                         }
@@ -2062,43 +2092,13 @@ PluginComponent {
                 }
 
                 KeyHint {
-                    key: "↵"
-                    label: "open"
-                }
-
-                KeyHint {
                     key: "p"
                     label: "notes"
                 }
 
                 KeyHint {
-                    key: "a"
-                    label: "allow"
-                }
-
-                KeyHint {
-                    key: "d"
-                    label: "deny"
-                }
-
-                KeyHint {
-                    key: "r"
-                    label: "reply"
-                }
-
-                KeyHint {
-                    key: "x"
-                    label: "dismiss"
-                }
-
-                KeyHint {
                     key: "u"
                     label: "undo"
-                }
-
-                KeyHint {
-                    key: "w"
-                    label: "wrong call"
                 }
 
                 KeyHint {

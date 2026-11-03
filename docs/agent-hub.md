@@ -44,7 +44,8 @@ give, its last turns, and one row of icons for where it is.
   the path; the pull request, branch and repository on the web, and their names. Every
   row is a link, a copy or an app opening a folder (`agent_hub/menus.py`). From another
   host, VS Code goes over Remote SSH, Ghostty over ssh, and the rest say where it is.
-- The key legend shows only when you opened it from the keyboard, or once you press a key.
+- A button shows its own key. The legend holds the keys with no button, and shows only
+  when you opened the popout from the keyboard, or once you press a key.
 
 ### Answering a prompt
 
