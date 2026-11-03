@@ -1423,22 +1423,8 @@ PluginComponent {
                             values: root.rows
                         }
 
-                        // A session changing state slides to its new place.
-                        displaced: Transition {
-                            NumberAnimation {
-                                properties: "y"
-                                duration: 160
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-
-                        move: Transition {
-                            NumberAnimation {
-                                properties: "y"
-                                duration: 160
-                                easing.type: Easing.OutCubic
-                            }
-                        }
+                        // No displaced or move transition: a view transition parks the positions the
+                        // view writes while it runs, so order changes faster than it lasts stack rows.
 
                         delegate: Column {
                             id: rowSlot
