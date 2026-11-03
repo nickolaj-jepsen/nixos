@@ -1,27 +1,7 @@
 import { atom, read, update } from "claude-code";
 import type { EngineInterface, Register } from "claude-code";
 
-import type { Current } from "../types";
-import {
-  type Answer,
-  arrowStep,
-  type Entry,
-  entries,
-  type Form,
-  go,
-  isChosen,
-  isReview,
-  type Item,
-  newDraft,
-  parse,
-  placeReply,
-  record,
-  reply,
-  said,
-  setNote,
-  skip,
-  startEntry,
-} from "./core";
+import type { Action, Current, Delivery, Entry, View } from "../types";
 
 const PANE = "answer";
 // Borrowed: mods can't define keybinding actions, and the engine handles this
@@ -32,35 +12,70 @@ const CHORD = "alt+a";
 // The dock is held to 45% of the terminal; ask for all of it.
 const COLUMNS = 120;
 const FIELD = "field";
+// How soon something another surface did to the form shows here.
+const POLL_MS = 1000;
 
 // Change the tag when Current changes shape: a reload keeps what the old code stored.
-const current = atom({ plugin: "answer", key: "current" } as const, null, { shape: "current-3" });
+const current = atom({ plugin: "answer", key: "current" } as const, null, { shape: "current-4" });
 
 /** Origins that are the person speaking; a task's notification or a peer's message isn't. */
 const PERSON = new Set<string>(["composer", "bridge", "sdk", "slack-ping"]);
 
-/** A turn that re-asks the same round keeps what was answered so far. */
-const sameForm = (a: Form, b: Form) => JSON.stringify(a) === JSON.stringify(b);
+/** Runs `agent-hub answer`, which works with the hub down; the draft lives in its file. */
+async function hub($: EngineInterface, args: string[], stdin?: string): Promise<string> {
+  const session = await $.session.id();
+  const run = await $.process.run(["agent-hub", "answer", ...args, "--session", session], {
+    ...(stdin === undefined ? {} : { stdin }),
+    timeoutMs: 5000,
+  });
+  if (run.exitCode !== 0) throw new Error(run.stderr.trim() || `exit ${run.exitCode}`);
+  return run.stdout;
+}
+
+const hubView = async ($: EngineInterface, args: string[], stdin?: string) =>
+  JSON.parse(await hub($, args, stdin)) as View | null;
+
+const complain = ($: EngineInterface, error: unknown) =>
+  $.ui.log(`answer: ${String(error)}`, { to: "debug" });
+
+/** Shows the view; a field stays open only while it still types into what is shown. */
+const show = ($: EngineInterface, view: View | null) =>
+  update($, current, (c) =>
+    view
+      ? {
+          view,
+          editing: c && c.view.id === view.id && c.view.step === view.step ? c.editing : null,
+        }
+      : null,
+  );
 
 const edit = ($: EngineInterface, fn: (c: Current) => Current) =>
   update($, current, (c) => (c ? fn(c) : c));
 
 const isOpen = async ($: EngineInterface) => (await $.ui.panes()).some((p) => p.id === PANE);
 
-const title = (form: Form) =>
-  form.kind === "round"
-    ? `Answer ${form.items.length} question${form.items.length === 1 ? "" : "s"}`
-    : `Pick from ${form.items.length} item${form.items.length === 1 ? "" : "s"}`;
-
 /** Moves the focus ring; cosmetic, so a ring that can't move leaves the keys working. */
 const focus = ($: EngineInterface, key: string) =>
   $.ui.focus({ requestId: PANE, key }).catch(() => undefined);
 
+/** One step of the draft, and what it now shows; null when it couldn't be taken, with a toast. */
+async function step($: EngineInterface, action: Action): Promise<View | null> {
+  const c = await read($, current);
+  if (!c) return null;
+  try {
+    const view = await hubView($, ["step", "--form", c.view.id, JSON.stringify(action)]);
+    await update($, current, () => (view ? { view, editing: null } : null));
+    return view;
+  } catch (error) {
+    $.ui.toast(`The answer form can't step: ${String(error)}`);
+    return null;
+  }
+}
+
 /** Shows another item, its ring on the answer or the recommendation. */
-async function move($: EngineInterface, step: (form: Form, c: Current) => Current["draft"]) {
-  const c = await edit($, (cur) => ({ ...cur, draft: step(cur.form, cur), editing: null }));
-  const item = c?.form.items[c.draft.step];
-  await focus($, item && c ? `e${startEntry(item, c.draft.answers[c.draft.step])}` : "fill");
+async function move($: EngineInterface, action: Action) {
+  const view = await step($, action);
+  if (view) await focus($, view.item ? `e${view.item.start}` : "fill");
 }
 
 /** Edits a field and hands it the ring: the write-in, or a note after an answer. */
@@ -70,11 +85,9 @@ async function startEditing($: EngineInterface, editing: "text" | "note") {
 }
 
 /** A picked entry: an answer, then its note; a write-in opens its field instead. */
-async function choose($: EngineInterface, entry: Entry) {
+async function choose($: EngineInterface, entry: Entry, index: number) {
   if (entry.kind === "write") return startEditing($, "text");
-  const value: Answer = entry.kind === "accept" ? { kind: "accept" } : entry;
-  await edit($, (c) => ({ ...c, draft: record(c.form, c.draft, value) }));
-  await startEditing($, "note");
+  if (await step($, { do: "pick", entry: index })) await startEditing($, "note");
 }
 
 /**
@@ -82,10 +95,10 @@ async function choose($: EngineInterface, entry: Entry) {
  * after the press has returned counts as the plugin's own, and waits undrawn
  * below 144 columns.
  */
-async function open($: EngineInterface, c: Current) {
+async function open($: EngineInterface, view: View) {
   const opened = await $.ui.open({
     id: PANE,
-    title: title(c.form),
+    title: view.title,
     focus: true,
     closeOnEscape: true,
     holdToasts: true,
@@ -102,41 +115,82 @@ async function toggle($: EngineInterface) {
     $.ui.toast("Nothing to answer: the last turn asked no questions.");
     return;
   }
-  await open($, c);
+  await open($, c.view);
 }
+
+/** The reply above what the person had typed, never over it. */
+const placeReply = (draft: string, text: string) => (draft.trim() ? `${text}\n\n${draft}` : text);
 
 /** Writes the reply into the prompt, above any draft, for the person to send. */
-async function fill($: EngineInterface) {
-  const c = await read($, current);
-  const text = c ? reply(c.form, c.draft) : "";
-  if (!text) {
-    $.ui.toast("Nothing answered yet.");
-    return;
-  }
+async function fill($: EngineInterface, text: string): Promise<boolean> {
   const box = await $.prompt.read();
-  await $.prompt.fill({ text: placeReply(box.text, text), mode: "replace" });
-  await $.ui.close({ id: PANE });
+  const { isFilled } = await $.prompt.fill({ text: placeReply(box.text, text), mode: "replace" });
+  if (isFilled && (await isOpen($))) await $.ui.close({ id: PANE });
+  return isFilled;
 }
 
-/** An entry's words: an option with its letter, the recommendation, or the write-in. */
-function entryText(form: Form, item: Item, entry: Entry): string {
-  if (entry.kind === "write")
-    return form.kind === "round" ? "Write your own answer" : "Something else";
-  if (entry.kind === "accept") return `Yes: ${item.recommended || "as recommended"}`;
-  const o = item.options[entry.index];
-  return form.kind === "round" ? `${o?.key}. ${o?.text}` : (o?.text ?? "");
+/** A reply left at another surface: into the prompt, or sent as you sending it. */
+async function take($: EngineInterface, delivery: Delivery) {
+  if (delivery.submit) {
+    if (await isOpen($)) await $.ui.close({ id: PANE });
+    await $.prompt.submit({ text: delivery.text });
+  } else if (!(await fill($, delivery.text))) {
+    $.ui.toast("The answer couldn't go in the prompt: a dialog is open.");
+  }
 }
 
-/** What an item's answer reads as on the review: the option's words, not just its key. */
-function shown(item: Item, a: Answer | null): string {
-  if (!a) return "skipped";
-  if (a.kind === "text") return `"${a.text}"`;
-  const index = a.kind === "option" ? a.index : item.recommendedOption;
-  if (index === undefined) return "yes";
-  return `${said(item, a)}: ${item.options[index]?.text ?? ""}`;
+/** Follows the form's file, so what another surface does shows here and its replies arrive. */
+function watch($: EngineInterface) {
+  let watched = { session: "", path: "", mtime: 0 };
+  let isBusy = false;
+  return $.clock.every(POLL_MS, async () => {
+    if (isBusy) return;
+    isBusy = true;
+    try {
+      const session = await $.session.id();
+      if (session !== watched.session) {
+        const path = (await hub($, ["path"])).trim();
+        watched = { session, path, mtime: 0 };
+      }
+      const mtime = await $.fs.stat(watched.path).then(
+        (s) => s.mtimeMs,
+        () => 0,
+      );
+      if (mtime === watched.mtime) return;
+      watched.mtime = mtime;
+      const { view, delivery } = JSON.parse(await hub($, ["sync"])) as {
+        view: View | null;
+        delivery: Delivery | null;
+      };
+      await show($, view);
+      if (delivery) await take($, delivery);
+    } catch (error) {
+      complain($, error);
+    } finally {
+      isBusy = false;
+    }
+  });
+}
+
+/**
+ * The item a person's scroll of the pane moves to, or null to let it scroll.
+ *
+ * Home and End (and ←/→, bound to them) scroll by the whole tree with no pointer;
+ * those move back and forward. Inline, a page key on a tree that fits reads the same.
+ */
+function arrowAction(scroll: {
+  by: number;
+  contentRows: number;
+  hasPointer: boolean;
+}): Action | null {
+  if (scroll.hasPointer || scroll.by === 0 || Math.abs(scroll.by) !== scroll.contentRows)
+    return null;
+  return { do: scroll.by > 0 ? "forward" : "back" };
 }
 
 export const register: Register = (on) => {
+  let ticking: { cancel: () => void } | undefined;
+
   on("session.start", async ($, e, next) => {
     await $.command
       .register({
@@ -144,19 +198,19 @@ export const register: Register = (on) => {
         description: "Answer the questions or pick list the last turn ended on, from a form",
         immediate: true,
       })
-      .catch((error) =>
-        $.ui.log(`answer: /answer not registered: ${String(error)}`, { to: "debug" }),
-      );
+      .catch((error) => complain($, `/answer not registered: ${String(error)}`));
+    ticking?.cancel();
+    ticking = watch($);
     return next(e);
   });
 
   // Only a new round replaces the form; the person's send is what drops it. A turn a
   // background task woke ends on that task's news while the round still waits.
   on("turn.complete", async ($, e, next) => {
-    const form = e.agentId === undefined && e.reason === "answer" ? parse(e.answer) : null;
-    if (form)
-      await update($, current, (c) =>
-        c && sameForm(c.form, form) ? c : { form, draft: newDraft(form), editing: null },
+    if (e.agentId === undefined && e.reason === "answer")
+      await hubView($, ["offer"], e.answer).then(
+        (view) => show($, view),
+        (error) => complain($, error),
       );
     return next(e);
   });
@@ -166,6 +220,7 @@ export const register: Register = (on) => {
     if (PERSON.has(e.origin.kind) && (await read($, current))) {
       await update($, current, () => null);
       if (await isOpen($)) await $.ui.close({ id: PANE });
+      await hub($, ["drop"]).catch((error) => complain($, error));
     }
     return next(e);
   }).catch((_$, e, next) => (next.called ? undefined : next(e)));
@@ -173,9 +228,9 @@ export const register: Register = (on) => {
   on("ui.scroll", { component: "Pane", requestId: PANE }, async ($, e, next) => {
     const c = e.origin.kind === "person" ? await read($, current) : null;
     const scroll = { by: e.by, contentRows: e.contentRows, hasPointer: e.pointer !== undefined };
-    const step = c ? arrowStep(c.form, c.draft, scroll) : null;
-    if (!c || step === null) return next(e);
-    if (step !== c.draft.step) await move($, (f, cur) => go(f, cur.draft, step));
+    const action = c ? arrowAction(scroll) : null;
+    if (!action) return next(e);
+    await move($, action);
     return {};
   });
 
@@ -196,14 +251,16 @@ export const register: Register = (on) => {
     const c = await read($, current);
     if (!c) return below;
     const { Box, Button, Text } = $.ui.resolve(e);
-    const done = c.draft.answers.filter(Boolean).length;
+    const { answered, title } = c.view;
     // Kept mounted while there is a form: the key bound to ACTION reaches only a mounted Button.
     return (
       <Box flexDirection="column">
         {below}
-        <Button key="answer" plain action={ACTION} onPress={() => void open($, c)}>
-          {title(c.form)}
-          <Text dimColor>{`${done ? ` · ${done} answered` : ""} · ${CHORD} or /answer`}</Text>
+        <Button key="answer" plain action={ACTION} onPress={() => void open($, c.view)}>
+          {title}
+          <Text
+            dimColor
+          >{`${answered ? ` · ${answered} answered` : ""} · ${CHORD} or /answer`}</Text>
         </Button>
       </Box>
     );
@@ -214,7 +271,7 @@ export const register: Register = (on) => {
     const { Box, Text, Button, Markdown } = els;
     const c = await read($, current);
     if (!c) return <Text dimColor>Nothing to answer.</Text>;
-    const { form, draft, editing } = c;
+    const { view, editing } = c;
     const field = (placeholder: string, value: string, onSubmit: (text: string) => void) =>
       "Input" in els ? (
         <els.Input
@@ -233,46 +290,47 @@ export const register: Register = (on) => {
         ))}
       </Box>
     );
-    const back = () => move($, (f, cur) => go(f, cur.draft, cur.draft.step - 1));
+    const back = () => move($, { do: "back" });
 
-    if (isReview(form, draft)) {
-      const text = reply(form, draft);
+    if (!view.item) {
       const saveNote = async (t: string) => {
-        await edit($, (cur) => ({ ...cur, draft: setNote(cur.form, cur.draft, t), editing: null }));
-        await focus($, "fill");
+        if (await step($, { do: "note", text: t })) await focus($, "fill");
       };
       return (
         <Box flexDirection="column" rowGap={1}>
           <Text weight="semibold">Review</Text>
           <Box flexDirection="column">
-            {form.items.map((item, i) => (
+            {view.review.map((row, i) => (
               <Button
                 key={`item${i}`}
                 plain
                 hotkey={i < 9 ? String(i + 1) : undefined}
-                onPress={() => void move($, (f, cur) => go(f, cur.draft, i))}
+                onPress={() => void move($, { do: "go", step: i })}
               >
-                {`${item.label}  `}
-                <Text dimColor={!draft.answers[i]}>{shown(item, draft.answers[i] ?? null)}</Text>
-                {draft.notes[i] ? <Text dimColor>{` — ${draft.notes[i]}`}</Text> : null}
+                {`${row.label}  `}
+                <Text dimColor={!row.isAnswered}>{row.shown}</Text>
+                {row.note ? <Text dimColor>{` — ${row.note}`}</Text> : null}
               </Button>
             ))}
           </Box>
           {editing === "note" ? (
-            field("A note on the whole round, Enter to keep", draft.note, (t) => void saveNote(t))
-          ) : draft.note ? (
-            <Text>{`Note: ${draft.note}`}</Text>
+            field("A note on the whole round, Enter to keep", view.note, (t) => void saveNote(t))
+          ) : view.note ? (
+            <Text>{`Note: ${view.note}`}</Text>
           ) : null}
           <Box flexDirection="column">
             <Text dimColor>The reply:</Text>
-            <Text>{text || "(nothing answered yet)"}</Text>
+            <Text>{view.reply || "(nothing answered yet)"}</Text>
           </Box>
           <Button
             key="fill"
             variant="primary"
             autoFocus={editing ? undefined : true}
             label="fill the prompt"
-            onPress={() => void fill($)}
+            onPress={() => {
+              if (view.reply) void fill($, view.reply);
+              else $.ui.toast("Nothing answered yet.");
+            }}
           />
           {nav([
             ["n", "note", () => startEditing($, "note")],
@@ -283,70 +341,54 @@ export const register: Register = (on) => {
       );
     }
 
-    const item = form.items[draft.step];
-    if (!item) return <Text dimColor>Nothing to answer.</Text>;
-    const chosen = draft.answers[draft.step];
-    const note = draft.notes[draft.step] ?? "";
-    const list = entries(item);
-    const start = startEntry(item, chosen);
-    const saveText = async (t: string) => {
-      await edit($, (cur) => ({
-        ...cur,
-        draft: record(cur.form, cur.draft, { kind: "text", text: t }),
-      }));
-      await move($, (f, cur) => go(f, cur.draft, cur.draft.step + 1));
-    };
+    const { item } = view;
     return (
       <Box flexDirection="column" rowGap={1}>
-        <Text dimColor>{`${item.label} · ${draft.step + 1} of ${form.items.length}`}</Text>
+        <Text dimColor>{`${item.label} · ${view.step + 1} of ${view.count}`}</Text>
         <Text weight="semibold">{item.title}</Text>
         {item.body ? <Markdown key="body" text={item.body} /> : null}
         <Box flexDirection="column">
-          {list.map((entry, k) => {
-            const isRec = entry.kind === "option" && entry.index === item.recommendedOption;
-            const detail = entry.kind === "option" ? item.options[entry.index]?.detail : "";
-            return (
-              <Box key={`row${k}`} flexDirection="column">
-                <Button
-                  key={`e${k}`}
-                  plain
-                  hotkey={k < 9 ? String(k + 1) : undefined}
-                  autoFocus={!editing && k === start ? true : undefined}
-                  onPress={() => void choose($, entry)}
-                >
-                  {entryText(form, item, entry)}
-                  {isRec ? <Text dimColor> (recommended)</Text> : null}
-                  {isChosen(item, chosen, entry) ? <Text color="success"> ✓</Text> : null}
-                </Button>
-                {detail ? <Text dimColor>{`   ${detail.replace(/\n/g, "\n   ")}`}</Text> : null}
-              </Box>
-            );
-          })}
+          {item.entries.map((entry, k) => (
+            <Box key={`row${k}`} flexDirection="column">
+              <Button
+                key={`e${k}`}
+                plain
+                hotkey={k < 9 ? String(k + 1) : undefined}
+                autoFocus={!editing && k === item.start ? true : undefined}
+                onPress={() => void choose($, entry, k)}
+              >
+                {entry.text}
+                {entry.isRecommended ? <Text dimColor> (recommended)</Text> : null}
+                {entry.isChosen ? <Text color="success"> ✓</Text> : null}
+              </Button>
+              {entry.detail ? (
+                <Text dimColor>{`   ${entry.detail.replace(/\n/g, "\n   ")}`}</Text>
+              ) : null}
+            </Box>
+          ))}
         </Box>
-        {chosen?.kind === "text" && editing !== "text" ? (
-          <Text>{`Your answer: ${chosen.text}`}</Text>
-        ) : null}
+        {item.written && editing !== "text" ? <Text>{`Your answer: ${item.written}`}</Text> : null}
         {editing === "text"
           ? field(
               "Your answer, Enter to save",
-              chosen?.kind === "text" ? chosen.text : "",
-              (t) => void saveText(t),
+              item.written,
+              (t) => void move($, { do: "write", text: t }),
             )
           : null}
         {editing === "note" ? (
           field(
             "A note, or Enter to go on",
-            note,
-            (t) => void move($, (f, cur) => go(f, setNote(f, cur.draft, t), cur.draft.step + 1)),
+            item.note,
+            (t) => void move($, { do: "note", text: t }),
           )
-        ) : note ? (
-          <Text dimColor>{`Note: ${note}`}</Text>
+        ) : item.note ? (
+          <Text dimColor>{`Note: ${item.note}`}</Text>
         ) : null}
         {nav([
           ["b", "back", back],
-          ["f", "forward", () => move($, (f, cur) => go(f, cur.draft, cur.draft.step + 1))],
-          ["s", "skip", () => move($, (f, cur) => skip(f, cur.draft))],
-          ["r", "review", () => move($, (f, cur) => go(f, cur.draft, f.items.length))],
+          ["f", "forward", () => move($, { do: "forward" })],
+          ["s", "skip", () => move($, { do: "skip" })],
+          ["r", "review", () => move($, { do: "review" })],
         ])}
         <Text dimColor>
           1-9 or Enter answers · ←→ questions · ↑↓ or Tab moves · Esc closes, answers kept

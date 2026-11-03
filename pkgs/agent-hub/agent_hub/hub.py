@@ -16,7 +16,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import judge, links, menus, model, peers, pi, protocol, worklog
+from . import formstore, judge, links, menus, model, peers, pi, protocol, worklog
 from .common import (
     LINE_MAX, alive, folded, label_line, log_path, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
 )
@@ -35,7 +35,7 @@ PROGRESS_S = 2
 ACTIVITY_S = 15
 # A command shorter than this says nothing about how long one takes.
 JOB_LOG_MS = 60_000
-DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind", "estimate")
+DEMO_DETAILS = ("prompt", "permission", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind", "estimate", "answer")
 # The command behind a folder menu's app, the first one found.
 APP_COMMANDS = {"code": ("code",), "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
 
@@ -75,6 +75,7 @@ class Hub:
         self.app_path = os.pathsep.join(cfg["appPath"]) if cfg.get("appPath") else None
         self.state_file = Path(cfg["state"]).expanduser()
         self.log_file = log_path(cfg)
+        self.forms = formstore.root_of(cfg)
         self.readings = Readings(self, cfg.get("claude"))
         # Session id → its transcript as far as it has been followed.
         self.tails = {}
@@ -141,6 +142,7 @@ class Hub:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         path.unlink(missing_ok=True)
         worklog.prune(self.log_file, now_ms())
+        formstore.prune(self.forms, now_ms())
         server = await asyncio.start_unix_server(self._serve, path=str(path), limit=LINE_MAX)
         path.chmod(0o600)
         self.source.start()
@@ -498,11 +500,14 @@ class Hub:
         self._name_peers(rows)
         for conn in self.conns:
             for sid, entry in conn.demo.items():
-                rows.append(demo_row(sid, entry))
+                rows.append(demo_row(sid, entry, self.forms))
         return model.ordered(rows)
 
     def _row_of(self, session, now):
         row = session.row(now, self.niri.window_of(session.pid))
+        form = formstore.view_of(self.forms, session.id)
+        if form:
+            row["answer"] = form
         if row["state"] == "working" and session.transcript:
             try:
                 row["activity"] = int(os.stat(session.transcript).st_mtime * 1000)
@@ -954,6 +959,14 @@ class Hub:
             self._permission(conn, message)
         elif op == "answer":
             self._answer(message["session"], message["ask"], message["allow"], viewer=not conn.local)
+        elif op == "form-step":
+            formstore.step(self.forms, message["session"], message["action"], message["form"])
+            self.publish()
+        elif op == "form-deliver":
+            formstore.deliver(self.forms, message["session"], message["submit"], message["form"])
+            self.publish()
+        elif op == "form-changed":
+            self.publish()
         elif op == "menu":
             # Not waited on: gh can take seconds, and this connection is the bar's.
             self._spawn(self._menu(conn, message))
@@ -1018,7 +1031,7 @@ def verdict_fields(outcome):
             "word": outcome.get("word") or "", "prompt": judge.VERSION}
 
 
-def demo_row(sid, entry):
+def demo_row(sid, entry, forms_root):
     """A fake session for `agent-hub demo`, from a registry-shaped entry."""
     t = entry.get("statusUpdatedAt") or 0
     session = model.Session(id=sid, agent=agent_of(entry), cwd=entry.get("cwd") or "", derived=entry.get("name") or "",
@@ -1035,4 +1048,7 @@ def demo_row(sid, entry):
     row = session.row(now_ms())
     # What only a real session could say, for looking at the popout's pane. `id` 0 answers nothing.
     row.update({key: entry[key] for key in DEMO_DETAILS if key in entry})
+    form = formstore.view_of(forms_root, sid)
+    if form:
+        row["answer"] = form
     return row

@@ -49,6 +49,7 @@ Code update can break one.
   send drops them. ←/→ go back and forward too, once bound to `pane:top` and
   `pane:bottom` in the `Pane` context (Home and End then do the same). Open it with
   `/answer` or the band's button; for a key, bind `app:cycleDiffBase` in the
-  `Global` context of `~/.claude/keybindings.json` (I use `alt+a`). Its
-  parser also backs the pi half in
-  `modules/programs/pi/extensions/parent/answer.ts`.
+  `Global` context of `~/.claude/keybindings.json` (I use `alt+a`). The parser
+  and the draft are `agent-hub answer`'s (`pkgs/agent-hub`), which also backs
+  the pi half and the hub's panel, so **this mod needs `agent-hub` on PATH**;
+  without it the band never shows. The hub's daemon doesn't have to be running.

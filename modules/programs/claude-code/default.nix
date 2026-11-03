@@ -128,7 +128,11 @@
     # card redesign only hides it, with a toast (mods/linear-issue).
     linearIssue = mkMod "linear-issue";
     gitMenu = mkMod "git-menu";
-    answer = mkMod "answer";
+    answer = (mkMod "answer").overrideAttrs {
+      preBuild = ''
+        PYTHONPATH=${../../../pkgs/agent-hub} ${pkgs.python3.interpreter} tests/views.py --check
+      '';
+    };
 
     # ctrl+q presses spellfix's band button and alt+a answer's, each borrowing an
     # action; a single modified key reaches a plugin Button only from the Global context.

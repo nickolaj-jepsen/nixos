@@ -36,6 +36,26 @@ TURN = {"at": "int", "state": "str", "did": "str"}
 # and then nothing may allow it from the bar: you can't approve what you can't read.
 ASK = {"tool": "str", "about": "str", "kind": "command|diff|text", "body": "str", "complete": "bool"}
 
+# What a surface draws of a session's answer form (`forms.view`).
+FORM_ENTRY = {"kind": "option|accept|write", "text": "str", "detail": "str", "isRecommended": "bool", "isChosen": "bool"}
+FORM_ITEM = {"label": "str", "title": "str", "body": "str", "entries": [FORM_ENTRY], "start": "int", "note": "str", "written": "str"}
+FORM_VIEW = {
+    "id": "str",
+    "kind": "round|picks",
+    "title": "str",
+    "count": "int",
+    "answered": "int",
+    "step": "int",
+    "isReview": "bool",
+    # The item shown; null on the review.
+    "item": Nullable(FORM_ITEM),
+    "review": [{"label": "str", "shown": "str", "isAnswered": "bool", "note": "str"}],
+    "note": "str",
+    "reply": "str",
+    # A reply was left for the session's TUI, which has yet to take it.
+    "pending": "bool",
+}
+
 ROW = {
     "id": "str",
     "agent": "str",
@@ -73,6 +93,8 @@ ROW = {
     "askKind?": "str",
     # The prompt a hook is holding open, which `answer` can settle by this `id`.
     "permission?": {"id": "int", **ASK},
+    # The form the last turn asks to be answered with. This host's own: a link never carries it.
+    "answer?": FORM_VIEW,
     "branch?": "str",
     # How many files have uncommitted changes.
     "changed?": "int",
@@ -130,6 +152,12 @@ OPS = {
     "resume": {"session": "str"},
     # Settles the prompt `ask` names, and only that one.
     "answer": {"session": "str", "ask": "int", "allow": "bool"},
+    # One step of a session's answer form, when `form` is still the one showing (`forms.apply`).
+    "form-step": {"session": "str", "form": "str", "action": {"do": "str", "entry?": "int", "step?": "int", "text?": "str"}},
+    # Leaves the form's reply for the session's TUI: in its prompt, or with `submit` sent.
+    "form-deliver": {"session": "str", "form": "str", "submit": "bool"},
+    # `agent-hub answer` changed a form's file.
+    "form-changed": {"session": "str"},
     # Asks for a row's folder or git menu, answered with `menu`, twice when a lookup follows.
     "menu": {"request": "int", "session": "str", "which": "folder|git"},
     # Does what a menu row says.
@@ -263,6 +291,7 @@ def typescript():
         "export type HubState = HubRow[\"state\"];",
         f"export type HubIdentity = {_ts(IDENTITY)};",
         f"export type HubTurn = {_ts(TURN)};",
+        f"export type HubFormView = {_ts(FORM_VIEW)};",
         f"export type HubRow = {_ts(ROW)};",
         "export type HubOp =",
         *(f"  | ({{ op: {json.dumps(op)} }} & {_ts(spec, '  ')})" for op, spec in OPS.items()),
