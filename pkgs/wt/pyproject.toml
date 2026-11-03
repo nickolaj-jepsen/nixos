@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wt"
-version = "0.1.0"
-description = "Manage git worktrees under a shared root"
+version = "0.2.0"
+description = "Throwaway git worktrees, landed into the default branch"
 requires-python = ">=3.11"
 
 [project.scripts]

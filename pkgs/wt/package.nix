@@ -1,4 +1,4 @@
-# `wt`: git worktrees under ~/worktrees/<repo>, with landing and cleanup.
+# `wt`: throwaway git worktrees under ~/worktrees/<repo>, landed into the default branch.
 # First-party Python tool: the package carries its own CLI tests, and the runtime
 # tools it shells out to are added to PATH by the wrapper.
 {
@@ -7,12 +7,11 @@
   python3Packages,
   makeWrapper,
   git,
-  fzf,
   coreutils,
   lsof,
 }: let
   inherit ((builtins.fromTOML (builtins.readFile ./pyproject.toml))) project;
-  runtime = [git fzf coreutils] ++ lib.optional stdenv.isDarwin lsof;
+  runtime = [git coreutils] ++ lib.optional stdenv.isDarwin lsof;
 in
   python3Packages.buildPythonApplication {
     pname = "wt";

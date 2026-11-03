@@ -19,11 +19,6 @@ def worktree_root() -> str:
     return normpath(os.environ.get("WT_WORKTREE_ROOT") or os.path.expanduser("~/worktrees"))
 
 
-def trash_root() -> str:
-    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
-    return os.path.join(base, "wt", "trash")
-
-
 @dataclass
 class Repo:
     common: str
@@ -35,12 +30,6 @@ class Repo:
     @property
     def marker(self) -> str:
         return os.path.join(self.directory, ".wt-repo")
-
-    @property
-    def trash_dir(self) -> str:
-        # The worktree directory name carries the collision suffix, so two
-        # same-named repositories never share a trash.
-        return os.path.join(trash_root(), os.path.basename(self.directory))
 
     @property
     def lock_path(self) -> str:
@@ -191,7 +180,6 @@ def repos_under_root() -> list[Repo]:
         except SystemExit:
             continue
     return repos
-
 
 
 # ---------------------------------------------------------------------------

@@ -1,3 +1,3 @@
-"""wt: git worktrees under a shared root."""
+"""wt: throwaway git worktrees under a shared root, landed into the default branch."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
