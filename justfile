@@ -296,6 +296,14 @@ clean:
 janitor action='report' *ARGS:
     janitor {{ action }} {{ ARGS }}
 
+# The sweep's own output is masked: it prints fingerprints, never values.
+[arg('action', pattern='plan|apply')]
+[doc('Replace secrets (keys, tokens, passwords) in pi and Claude Code transcripts in place; `just sweep` counts, `just sweep apply` rewrites')]
+[exit-message]
+[group('secret')]
+sweep action='plan' *ARGS:
+    transcript-sweep {{ action }} {{ ARGS }}
+
 [doc('Generate Markdown reference for the fireproof.* options into docs/')]
 [group('dev')]
 [script]

@@ -105,6 +105,40 @@ journalctl --user -u janitor-repo   # what it actually did
   into the checklist. Ticking rows and pressing Apply runs
   `janitor apply --ids`, so the bar can do the whole job without a terminal.
 
+## Transcripts
+
+- An agent that runs `cat .env` or `sops -d` writes the value into its
+  transcript, and it stays there for good. `pkgs/transcript-sweep` replaces the
+  value and keeps the transcript: it parses each JSONL line, walks the strings,
+  and writes the entry back with the ids, `parentId`, timestamps, roles, usage
+  and tool calls untouched. `pi --resume` still opens the file. Unchanged lines
+  are written back byte for byte, so the diff of a sweep is the secrets.
+- `just sweep` counts without touching anything; `just sweep apply` rewrites.
+  Both print only fingerprints (`[redacted:private-key:1f3a9c22]`), never a
+  value, so the report is safe to paste into a ticket or a journal.
+  `--values-from FILE` adds literal values no pattern knows, for passwords and
+  other one-offs.
+- Matching is on decoded strings, not bytes: a key inside a transcript is one
+  string with `\n` escapes in it, and a byte-level pass both misses it and
+  computes against base64 filler. Patterns anchor on both sides for the same
+  reason — the transcript of a `rg AKIA` looks like an AWS key.
+- `thinkingSignature` and other opaque replay payloads are skipped: rewriting
+  them breaks the session and they cannot hold transcript text.
+- A live session appends to its transcript, so a file that is open or was
+  touched in the last two minutes is skipped. Liveness comes from the agent
+  hub's registry (`~/.claude*/sessions/*.json`); `--force` overrides both.
+- The leaf runs `apply` weekly as a user timer (`just list` shows it; the
+  schedule is `fireproof.transcripts.schedule`), because sweeping once does not
+  stop the next `cat .env`. Journal: `journalctl --user -u transcript-sweep`.
+- Redaction does not un-send what already went to a provider, and it does not
+  rotate anything. A key that leaked still has to be replaced where it is used.
+- Run the sweep from a plain shell, not from inside an agent session: the
+  command line, the report and every file it prints land in that session's own
+  transcript, which is the thing being swept.
+- It cannot prevent the leak either. pi can, through a `tool_result` handler that
+  rewrites content before the message is persisted (see `docs/agents.md`);
+  Claude Code's hooks run before or after a tool call, not over its output.
+
 ## Knobs
 
 - The thresholds, roots and repo roster are constants at the top of
@@ -124,14 +158,17 @@ journalctl --user -u janitor-repo   # what it actually did
 - There is no filesystem cap. btrfs quotas are off, and turning them on for one
   20 GB limit costs a filesystem-wide rescan on five hosts; the budget plus the
   warning line stand in for it.
-- Transcripts are never touched. pi-auto-gate's `extract` and `/mine` read the
-  whole history under `~/.claude*/projects`.
+- Transcripts are never deleted, and the janitor has no rule for them.
+  pi-auto-gate's `extract` and `/mine` read the whole history under
+  `~/.claude*/projects`.
   - About nine tenths of the bytes are subagent transcripts, but `/home` is
     btrfs with `compress=zstd:3`, so they already sit compressed on disk.
     Compressing or pruning them here was measured to free a small fraction of
     the apparent size.
   - Revisit only under real disk pressure, and even then never touch a
     workflow's `journal.jsonl`: Claude Code reads it to resume the run.
+  - Secrets in them are a different job, and it rewrites instead of deleting:
+    see "Transcripts" below.
 - The sandbox's qcow2 images are not touched: they live in
   `~/.local/state/pi-auto-sandbox/disks`, outside every root here.
   `pi-auto-gate` has its own `collectGarbage` and knows which disk is a
