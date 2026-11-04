@@ -24,4 +24,9 @@ scenario_assert_has 'flow skeleton'
 scenario_assert_has 'run PENDING'
 scenario_assert_has 'guide PENDING'
 scenario_assert_has 'done PENDING'
+# The skills reach the session through parent/package.json's pi field, which is
+# all-or-nothing: a missing `skills` entry leaves this list empty.
+scenario_type '/skill:flow'
+scenario_wait 'skill:flow-plan' 10
+scenario_keys Escape
 scenario_pass
