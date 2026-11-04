@@ -93,6 +93,61 @@ Paths in the table that don't start with `skills/` or `pkgs/` are under
 - A new mod also gets an entry in `.claude-plugin/marketplace.json` and
   `modules/programs/claude-code/mods/README.md` to be publicly installable.
 
+## Reviews
+
+`/review` runs tuicr in the same terminal with the TUI suspended, so a review
+is part of the session instead of a window beside it. Claude Code's `git-menu`
+mod has the same command without the suspend: a picker pane and a Ghostty
+window. Both write one claim per repository and hand the comments back as one
+batch. The pi half is `parent/review/` (`review.ts` wires it; `types.ts` holds
+what the two harnesses share: the session entry, the claim, the pinned scope,
+the item and the batch text), and `git-menu`'s `hooks/review.ts` mirrors the
+shared half.
+
+- Bare `/review` re-attaches a live review, or opens the scope picker:
+  uncommitted changes, the branch against `origin/HEAD`, the last commit,
+  tuicr's own picker, every tracked file, a pull request, a custom revset. A
+  commit range is resolved to hashes once, because a moved ref would be a
+  different tuicr session.
+- `inbox`, `send`, `take` and `kill` are subcommands. Any other argument goes
+  to tuicr as argv, split without a shell, so quotes and spaces stay data;
+  `-p`/`--path` is dropped because it only filters files within a session, and
+  a command that is only `-p` is refused. Starting or attaching a review is
+  refused while the agent streams; the subcommands still run.
+- tuicr runs under `dtach -A <socket> -r winch -e ^G` at
+  `$XDG_RUNTIME_DIR/pi-review/<sha256(root)[:16]>.sock`. `^G` is the way back
+  to pi and every later hop is a client on the same pty, so marks survive;
+  `q` is still tuicr's quit.
+- A review dies with its pi session, which includes `/reload` and a session
+  replacement: tuicr is asked to save through the socket, then the pid in its
+  `active_sessions.json` is SIGTERMed. A review a crash left running is adopted
+  by the next `/review`. The entry is on the session branch, so `/reload`
+  brings the inbox and its border segment back.
+- One claim per repository: `<agent dir>/review-claims/<sha256(root)[:16]>.json`,
+  the same file from both harnesses. A live claim by another session makes
+  `/review` say whose it is, and `/review take` rewrites it while keeping the
+  ids already delivered. A claim is stale when its pid is gone or the agent-hub
+  no longer lists its session; `at` is not a freshness signal, since Claude
+  keeps its delivered watermark there.
+- `/review send` puts every comment not yet delivered above the draft as one
+  numbered list: a header naming the session slug and the repository, a pointer
+  at the `tuicr` skill, then a location, type and body per comment. Comment
+  text is data: nothing escapes it and its newlines stay. The submitted prompt
+  that carries the batch's `tuicr review comments --session <slug>` line is
+  what empties it from the inbox.
+- The border reads `review 2 new · 5/7` while comments are pending and
+  `review 5/7` after. `/review inbox` or a click opens the list; `j`/`k` move,
+  `y` copies `path:line`, enter goes back into the review.
+- While a review is live the agent-hub row says the session is asking, with
+  `reviewing · 4 comments, 5/7 files`. The label is pushed before the TUI
+  stops, because the review then holds pi's event loop.
+- Unit tests are `parent/review/*.test.ts` (`npm test` in `extensions/`). The
+  round trips are shell scenarios in `parent/review/scenario/`: `lib.sh` gives
+  each a private tmux server, XDG tree, scratch agent dir and fixture
+  repository, starts a real pi on it, and asserts on the captured pane, so a
+  red run shows what the owner would have seen. They are not in `just check`;
+  run `bash …/scenario/smoke.sh` and the one you touched.
+
 ## Language servers
 
 - `fireproof.agents.lspServers` (`command`/`args`/`extensionToLanguage`) is
