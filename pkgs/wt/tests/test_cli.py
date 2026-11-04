@@ -214,7 +214,9 @@ class Local(Base):
         for stamp in stamps:
             self.assertEqual(int(stamp.stat().st_mtime), int(old), f"listing rewrote {stamp}")
         self.assertTrue(row["dirty"])
-        self.assertGreaterEqual(row["idleSeconds"], 3 * 3600)
+        # The index and HEAD stamps are what the row reports on, so a reset index would read 0s.
+        self.assertGreaterEqual(row["idleSeconds"], 3 * 3600 - 60)
+        self.assertLess(row["idleSeconds"], 3 * 3600 + 300)
 
     def test_list_reads_a_detached_worktrees_own_commits(self) -> None:
         path = self.new("detached")
@@ -250,6 +252,54 @@ class Local(Base):
         self.assertTrue(self.entry("gone")["open"])
         self.assertNotIn("prunable", self.git("worktree", "list", "--porcelain"))
 
+    def test_a_detached_registration_whose_folder_is_gone_keeps_its_own_commit(self) -> None:
+        """Detached and stale at once: the row must read the commit git recorded, not the primary HEAD."""
+        path = self.new("detached")
+        self.git("switch", "-q", "--detach", cwd=str(path))
+        self.write("b.txt", "detached work\n", cwd=str(path))
+        self.commit("detached work", cwd=str(path))
+        sha = self.git("rev-parse", "HEAD", cwd=str(path)).strip()
+        shutil.rmtree(path)
+        listed = self.wt("list", "--json", check=False)
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        row = {row["name"]: row for row in json.loads(listed.stdout)["repos"][0]["worktrees"]}["detached"]
+        self.assertFalse(row["open"])
+        self.assertIsNone(row["path"])
+        self.assertEqual(row["branch"], "")
+        self.assertEqual(row["ahead"], 1)
+        self.assertFalse(row["landed"])
+        self.assertIsNone(row["error"])
+        dropped = self.wt("drop", "detached")
+        self.assertIn(sha, dropped.stderr)
+        self.assertNotIn("prunable", self.git("worktree", "list", "--porcelain"))
+
+    def test_new_refuses_a_registration_with_no_branch_and_keeps_it(self) -> None:
+        path = self.new("gone")
+        self.git("switch", "-q", "--detach", cwd=str(path))
+        sha = self.git("rev-parse", "HEAD", cwd=str(path)).strip()
+        shutil.rmtree(path)
+        refused = self.wt("new", "gone", check=False)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn(sha, refused.stderr)
+        self.assertFalse(path.exists())
+        # The registration is what still names the commit: pruning it here would lose it.
+        self.assertIn("prunable", self.git("worktree", "list", "--porcelain"))
+
+    def test_list_all_reports_a_root_whose_repository_is_gone(self) -> None:
+        self.feature("healthy")
+        other = self.other_repo("vanished")
+        self.wt("new", "parked", cwd=other)
+        shutil.rmtree(Path(other, ".git"))
+        result = self.wt("list", "--all", "--json", cwd=self.root, check=False)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        document = json.loads(result.stdout)
+        repos = {repo["name"]: repo for repo in document["repos"]}
+        self.assertEqual([row["name"] for row in repos["repo"]["worktrees"]], ["healthy"])
+        self.assertIsNone(repos["vanished"]["main"])
+        self.assertEqual(repos["vanished"]["worktrees"], [])
+        self.assertIn("vanished", repos["vanished"]["error"])
+        self.assertIn("vanished", result.stderr)
+
     # list: inspection errors -------------------------------------------------
 
     def test_list_all_json_keeps_a_healthy_repository_beside_a_broken_one(self) -> None:
@@ -281,8 +331,11 @@ class Local(Base):
         self.corrupt_index(path)
         table = self.wt("list", check=False)
         self.assertEqual(table.returncode, 1, table.stderr)
-        self.assertIn("hurt", table.stdout)
-        self.assertIn("?", table.stdout)
+        cells = [line.split() for line in table.stdout.splitlines()]
+        header, row = cells[0], cells[1]
+        # The broken row's own DIRTY cell says the value is unknown, not that the tree is clean.
+        self.assertEqual(row[header.index("DIRTY")], "?")
+        self.assertEqual(row[header.index("NAME")], "hurt")
         answer = self.wt("list", "--json", check=False)
         self.assertEqual(answer.returncode, 1, answer.stderr)
         row = json.loads(answer.stdout)["repos"][0]["worktrees"][0]
@@ -475,6 +528,17 @@ class Local(Base):
         self.git(*restore[1:])
         self.assertEqual(self.git("show", "vanished:b.txt"), "vanished\n")
         self.assertNotIn("prunable", self.git("worktree", "list", "--porcelain"))
+
+    def test_drop_aborts_when_the_index_cannot_be_read(self) -> None:
+        path = self.feature("hurt")
+        self.write("b.txt", "edited\n", cwd=str(path))
+        self.corrupt_index(path)
+        result = self.wt("drop", "hurt", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("could not inspect", result.stderr)
+        self.assertTrue(path.exists())
+        self.assertTrue(self.has_branch("hurt"))
+        self.assertEqual(Path(path, "b.txt").read_text(), "edited\n")
 
     # land --------------------------------------------------------------------
 

@@ -111,10 +111,7 @@ def _fast_forward_default(repo: Repo, entry: Entry) -> None:
         info(f"landed {entry.branch} ({count} commit(s)) onto {repo.default}; ref only, since no checkout has it")
         return
     _require_checkout_ready(repo, entry.branch, checkout)
-    try:
-        changed = _incoming_paths(repo, entry.branch)
-    except ProbeError:
-        changed = set()
+    changed = _incoming_paths(repo, entry.branch)
     if run(["git", "-C", checkout, "merge", "--quiet", "--ff-only", entry.branch], check=False).returncode != 0:
         die(f"could not fast-forward {repo.default} onto {entry.branch}; the rebased branch is left in place")
     info(f"landed {entry.branch} ({count} commit(s)) onto {repo.default}")
