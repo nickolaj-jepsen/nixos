@@ -202,8 +202,13 @@ def dirty(path: str) -> bool:
 
 
 def branches_containing(path: str, ref: str) -> list[str]:
-    """Branches whose history has `ref`; raises ProbeError when git cannot answer."""
-    return [line for line in probe(path, "branch", "--contains", ref, "--format=%(refname)").splitlines() if line]
+    """Branches whose history has `ref`; raises ProbeError when git cannot answer.
+
+    `git branch --contains` also prints the synthetic `(HEAD detached from <sha>)` line, which
+    would make a commit no branch has look shared by one.
+    """
+    out = probe(path, "for-each-ref", "refs/heads", f"--contains={ref}", "--format=%(refname)")
+    return [line for line in out.splitlines() if line]
 
 
 def is_wip(cwd: str, ref: str) -> bool:

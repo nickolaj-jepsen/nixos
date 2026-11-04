@@ -347,7 +347,7 @@ def cmd_drop(args: argparse.Namespace) -> None:
         else:
             # Only data that is still somewhere else can be dropped without a recovery point.
             if not entry.branch and entry.head:
-                info(f"'{entry.name}' was detached at {entry.head}; restore it with: git switch --detach {entry.head}")
+                info(f"'{entry.name}' was detached at {entry.head}; keep it with: git branch recovered/{entry.name} {entry.head}")
             # A stale registration still claims its branch: pruned, or the branch delete refuses.
             run(["git", "-C", repo.main, "worktree", "prune"], check=False)
         clear_record(repo, entry.name)
@@ -458,7 +458,7 @@ def cmd_list(args: argparse.Namespace) -> None:
         if args.all:
             found = repos_under_root()
         else:
-            here = current_repo()
+            here = current_repo(create=False)
             found = [Located(name=here.key, repo=here)]
         for item in found:
             repo = item.repo

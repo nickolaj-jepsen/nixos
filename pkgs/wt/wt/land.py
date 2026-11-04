@@ -111,13 +111,19 @@ def _fast_forward_default(repo: Repo, entry: Entry) -> None:
         info(f"landed {entry.branch} ({count} commit(s)) onto {repo.default}; ref only, since no checkout has it")
         return
     _require_checkout_ready(repo, entry.branch, checkout)
-    changed = _incoming_paths(repo, entry.branch)
+    try:
+        changed: Optional[int] = len(_incoming_paths(repo, entry.branch))
+    except ProbeError:
+        # Only the note below needs the count; it must not abort a landing that already checked
+        # the same paths, and a failure must never read as "0 path(s) changed".
+        changed = None
     if run(["git", "-C", checkout, "merge", "--quiet", "--ff-only", entry.branch], check=False).returncode != 0:
         die(f"could not fast-forward {repo.default} onto {entry.branch}; the rebased branch is left in place")
     info(f"landed {entry.branch} ({count} commit(s)) onto {repo.default}")
     busy = busy_pids(checkout)
     if busy:
-        info(f"{len(changed)} path(s) changed under {checkout}, where {describe_pid(busy[0])} is working; tell that session its files moved")
+        moved = f"{changed} path(s) changed" if changed is not None else "files changed"
+        info(f"{moved} under {checkout}, where {describe_pid(busy[0])} is working; tell that session its files moved")
 
 
 def close_after_landing(repo: Repo, entry: Entry) -> None:

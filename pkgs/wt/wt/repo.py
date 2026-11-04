@@ -110,7 +110,7 @@ def stale_worktrees(common: str) -> list[dict]:
     return [item for item in registered_worktrees(common) if not os.path.isdir(item["path"])]
 
 
-def repo_from_common(common: str) -> Repo:
+def repo_from_common(common: str, *, create: bool = True) -> Repo:
     """The repository at `common`; raises RepoError instead of exiting when git cannot identify it."""
     try:
         registered = registered_worktrees(common)
@@ -120,15 +120,21 @@ def repo_from_common(common: str) -> Repo:
         raise RepoError(f"no worktrees registered for {common}")
     main = registered[0]["path"]
     key = os.path.basename(os.path.dirname(common))
-    return Repo(common=common, main=main, key=key, default=default_branch(common), directory=worktree_directory(common, key))
+    return Repo(
+        common=common,
+        main=main,
+        key=key,
+        default=default_branch(common),
+        directory=worktree_directory(common, key, create=create),
+    )
 
 
-def current_repo(cwd: Optional[str] = None) -> Repo:
+def current_repo(cwd: Optional[str] = None, *, create: bool = True) -> Repo:
     common = discover_common(cwd or os.getcwd())
     if not common:
         die("not inside a git repository")
     try:
-        return repo_from_common(common)
+        return repo_from_common(common, create=create)
     except RepoError as error:
         die(str(error))
 
@@ -157,7 +163,12 @@ def _owner_of_dir(directory: str) -> Optional[str]:
     return found
 
 
-def worktree_directory(common: str, key: str) -> str:
+def worktree_directory(common: str, key: str, *, create: bool = True) -> str:
+    """The folder holding this repository's worktrees.
+
+    `create=False` answers where it would be without making it: a listing reports the layout it
+    finds, and writing a marker from a read-only verb is the layout it would report next time.
+    """
     root = worktree_root()
     base = os.path.join(root, key)
     if os.path.exists(base):
@@ -173,14 +184,17 @@ def worktree_directory(common: str, key: str) -> str:
         owner = recorded or _owner_of_dir(base)
         if owner is None:
             # Legacy plain directories belong to this repo; record the claim.
-            try:
-                Path(marker).write_text(common + "\n")
-            except OSError:
-                pass
+            if create:
+                try:
+                    Path(marker).write_text(common + "\n")
+                except OSError:
+                    pass
             return base
         if owner != common:
             suffix = hashlib.sha256(common.encode()).hexdigest()[:8]
             base = os.path.join(root, f"{key}-{suffix}")
+    if not create:
+        return base
     try:
         os.makedirs(base, exist_ok=True)
         marker = os.path.join(base, ".wt-repo")
@@ -218,7 +232,7 @@ def repos_under_root() -> list[Located]:
             repos.append(Located(name=entry.name, error=f"{marker} names {common}, which no longer exists"))
             continue
         try:
-            repo = repo_from_common(common)
+            repo = repo_from_common(common, create=False)
         except RepoError as error:
             # Still report the repository: a listing must say what it could not read, not skip it.
             repos.append(Located(name=entry.name, error=str(error)))

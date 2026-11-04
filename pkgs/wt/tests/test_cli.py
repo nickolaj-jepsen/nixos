@@ -270,7 +270,7 @@ class Local(Base):
         self.assertFalse(row["landed"])
         self.assertIsNone(row["error"])
         dropped = self.wt("drop", "detached")
-        self.assertIn(sha, dropped.stderr)
+        self.assertIn(f"git branch recovered/detached {sha}", dropped.stderr)
         self.assertNotIn("prunable", self.git("worktree", "list", "--porcelain"))
 
     def test_new_refuses_a_registration_with_no_branch_and_keeps_it(self) -> None:
@@ -300,8 +300,14 @@ class Local(Base):
         self.assertIn("vanished", repos["vanished"]["error"])
         self.assertIn("vanished", result.stderr)
 
-    # list: inspection errors -------------------------------------------------
+    def test_list_creates_nothing_in_the_worktree_root(self) -> None:
+        root = Path(self.root, "trees")
+        self.assertEqual(self.wt("list").returncode, 0)
+        self.assertFalse(root.exists(), "listing created the worktree root")
+        self.assertEqual(self.wt("list", "--all").returncode, 0)
+        self.assertFalse(root.exists(), "listing created a root entry to discover")
 
+    # list: inspection errors -------------------------------------------------
     def test_list_all_json_keeps_a_healthy_repository_beside_a_broken_one(self) -> None:
         self.feature("healthy")
         other = self.other_repo("broken")
@@ -449,6 +455,21 @@ class Local(Base):
         self.new("empty")
         self.wt("close", "empty")
         self.assertFalse(self.has_branch("empty"))
+
+    def test_close_refuses_a_detached_commit_no_branch_has(self) -> None:
+        path = self.new("loose")
+        self.git("switch", "-q", "--detach", cwd=str(path))
+        self.write("b.txt", "detached work\n", cwd=str(path))
+        self.commit("detached work", cwd=str(path))
+        sha = self.git("rev-parse", "HEAD", cwd=str(path)).strip()
+        closed = self.wt("close", "loose", check=False)
+        self.assertNotEqual(closed.returncode, 0)
+        self.assertIn("no branch has", closed.stderr)
+        self.assertTrue(path.exists())
+        self.assertEqual(self.git("cat-file", "-t", sha).strip(), "commit")
+        dropped = self.wt("drop", "loose", check=False)
+        self.assertNotEqual(dropped.returncode, 0)
+        self.assertTrue(path.exists())
 
     def test_close_keeps_unlanded_work(self) -> None:
         self.feature("unlanded")
