@@ -1,5 +1,5 @@
 /**
- * `/sessions` (alt+h): every session the hub has, in its own order and with the
+ * `/hub` (alt+h): every session the hub has, in its own order and with the
  * bar's words — what wants you, what finished, what is working, then the idle
  * ones on slim lines and the last few that ended behind a fold.
  *
@@ -462,6 +462,6 @@ export default function (pi: ExtensionAPI, services: Services) {
     }
   };
 
-  pi.registerCommand("sessions", { description: DESCRIPTION, handler: (_args, ctx) => open(ctx) });
+  pi.registerCommand("hub", { description: DESCRIPTION, handler: (_args, ctx) => open(ctx) });
   pi.registerShortcut(SHORTCUT, { description: DESCRIPTION, handler: open });
 }
