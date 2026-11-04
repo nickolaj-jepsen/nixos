@@ -28,6 +28,10 @@ in
       ++ lib.optional stdenv.isDarwin lsof;
     unittestFlags = ["-s" "tests" "-p" "test_*.py"];
 
+    # `unittestCheckHook` runs after install; pointing the suite at the installed command makes it
+    # test the entry point and wrapper users get, not `python -m wt` from the sources.
+    env.WT_BIN = "${placeholder "out"}/bin/wt";
+
     postFixup = ''
       wrapProgram $out/bin/wt --prefix PATH : ${lib.makeBinPath runtime}
     '';

@@ -130,8 +130,14 @@ def cmd_new(args: argparse.Namespace) -> None:
         # that follows; prune that registration alone, since another stale one may be the only
         # record of a detached commit.
         for item in stale_worktrees(repo.common):
-            if normpath(item["path"]) == path or (branch and item["branch"] == branch):
-                prune_registration(repo, item["path"])
+            if normpath(item["path"]) != path and not (branch and item["branch"] == branch):
+                continue
+            if item["locked"]:
+                die(
+                    f"'{name}' is registered and locked at {item['path']}; unlock it with: "
+                    f"git -C '{repo.main}' worktree unlock '{item['path']}'"
+                )
+            prune_registration(repo, item["path"])
         if branch_exists(repo, branch):
             if args.base:
                 die(f"branch '{branch}' already exists; a base applies only to a new branch")

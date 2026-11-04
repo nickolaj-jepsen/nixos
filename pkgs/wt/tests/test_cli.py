@@ -540,6 +540,15 @@ class Local(Base):
         self.assertFalse(self.has_branch("gone"))
         self.assertIn("deleted gone", closed.stderr)
 
+    def test_new_names_the_unlock_command_for_a_locked_registration(self) -> None:
+        gone = self.new("gone")
+        self.git("worktree", "lock", str(gone))
+        shutil.rmtree(gone)
+        refused = self.wt("new", "gone", check=False)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("worktree unlock", refused.stderr)
+        self.assertFalse(gone.exists())
+
     def test_close_keeps_a_branch_a_locked_registration_claims(self) -> None:
         gone = self.new("gone")
         self.git("worktree", "lock", str(gone))
