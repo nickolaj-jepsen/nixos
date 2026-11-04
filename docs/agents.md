@@ -195,4 +195,12 @@ Claude's own; pi has none.
   picks it. `editor-open` (`modules/scripts`) carries the argv for shells and
   niri spawns, and the `FIREPROOF_EDITOR` session variable tells the TUI menus
   which row leads. zed's CLI is `zeditor` on nixpkgs and `zed` from the cask;
-  vscode's is `code` everywhere.
+  vscode's is `code` everywhere. `editor-open` resolves the editor on PATH, so a
+  host with neither opens `nvim` instead of failing. Over ssh it asks the
+  connection's own reverse forward first (SetEnv + RemoteForward in
+  `modules/scripts`, answered by `editor-open-bridge@`), so the remote path opens
+  in the local editor. That needs the remote's sshd to accept `EDITOR_OPEN_*`
+  (`modules/system/ssh.nix`), and the bridge only answers for the hosts named in
+  `bridgeHosts`, since the editor would ssh on with this machine's keys and the
+  loopback port is reachable by any user on the remote; the caller falls back to
+  nvim unless the bridge answers `ok`.

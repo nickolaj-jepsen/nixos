@@ -35,6 +35,9 @@ in {
       enable = true;
       settings.PasswordAuthentication = false;
       settings.KbdInteractiveAuthentication = false;
+      # editor-open's reverse forward names this host in EDITOR_OPEN_HOST (modules/scripts);
+      # without this the remote login never sees it and falls back to nvim.
+      settings.AcceptEnv = ["EDITOR_OPEN_*"];
     };
 
     users.users.${username}.openssh.authorizedKeys.keys = publicKeys;
@@ -65,6 +68,7 @@ in {
       PasswordAuthentication no
       KbdInteractiveAuthentication no
       PermitRootLogin no
+      AcceptEnv EDITOR_OPEN_*
     '';
   };
 
