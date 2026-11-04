@@ -100,10 +100,15 @@ def branch_exists(repo: Repo, branch: str) -> bool:
 
 
 def entries(repo: Repo) -> list[Entry]:
-    """Every worktree except the primary checkout: open ones first, then closed ones whose branch still exists."""
+    """Every worktree except the primary checkout: open ones first, then closed ones whose branch still exists.
+
+    A registration whose folder is gone lists as closed: git keeps it until `worktree prune`, and a
+    dead path is not an open worktree.
+    """
     found: list[Entry] = []
     for item in registered_worktrees(repo.common)[1:]:
-        found.append(Entry(os.path.basename(item["path"]), item["branch"], item["path"], item["locked"]))
+        path = item["path"] if os.path.isdir(item["path"]) else None
+        found.append(Entry(os.path.basename(item["path"]), item["branch"], path, item["locked"]))
     open_names = {entry.name for entry in found}
     for name, branch in sorted(records(repo).items()):
         if name not in open_names and branch_exists(repo, branch):

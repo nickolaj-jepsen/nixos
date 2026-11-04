@@ -84,6 +84,15 @@ def registered_worktrees(common: str) -> list[dict]:
     return items
 
 
+def stale_worktrees(common: str) -> list[dict]:
+    """Registrations whose folder is gone; git keeps them until `worktree prune`.
+
+    They still show up in `registered_worktrees`, and a stale registration blocks both a new
+    checkout at its path and a branch deletion for its branch.
+    """
+    return [item for item in registered_worktrees(common) if not os.path.isdir(item["path"])]
+
+
 def repo_from_common(common: str) -> Repo:
     registered = registered_worktrees(common)
     if not registered:

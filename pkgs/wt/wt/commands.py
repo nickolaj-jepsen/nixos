@@ -10,9 +10,9 @@ import time
 from typing import Optional
 
 from .gh import has_origin, pr_merged, stack_layers
-from .git import ProbeError, die, git, git_ok, info, inspect, is_within, run
+from .git import ProbeError, die, git, git_ok, info, inspect, is_within, normpath, run
 from .procs import busy_pids, describe_pid
-from .repo import Repo, RepoLock, current_repo, repos_under_root
+from .repo import Repo, RepoLock, current_repo, repos_under_root, stale_worktrees
 from .worktrees import (
     WIP_TRAILER,
     Entry,
@@ -110,6 +110,15 @@ def cmd_new(args: argparse.Namespace) -> None:
         if os.path.exists(path):
             die(f"'{path}' exists but is not a worktree; move it away first")
         branch = entry.branch if entry else args.name
+        # A deleted folder keeps its registration, which blocks this checkout and the branch delete
+        # that follows; prune it so the canonical folder and branch can be used again.
+        blocking = [
+            item
+            for item in stale_worktrees(repo.common)
+            if normpath(item["path"]) == path or (branch and item["branch"] == branch)
+        ]
+        if blocking:
+            run(["git", "-C", repo.main, "worktree", "prune"])
         if branch_exists(repo, branch):
             if args.base:
                 die(f"branch '{branch}' already exists; a base applies only to a new branch")
@@ -319,6 +328,9 @@ def cmd_drop(args: argparse.Namespace) -> None:
             if inspect(f"'{entry.name}'", lambda: dirty(path)):
                 _commit_wip(path, entry.name)
             run(["git", "-C", repo.main, "worktree", "remove", "--force", path])
+            run(["git", "-C", repo.main, "worktree", "prune"], check=False)
+        else:
+            # A stale registration still claims its branch: pruned, or the branch delete refuses.
             run(["git", "-C", repo.main, "worktree", "prune"], check=False)
         clear_record(repo, entry.name)
         dropped = [b for b in dict.fromkeys([*stacked, entry.branch]) if branch_exists(repo, b) and b != repo.default]

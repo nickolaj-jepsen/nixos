@@ -187,6 +187,24 @@ class Local(Base):
         self.assertTrue(row["dirty"])
         self.assertGreaterEqual(row["idleSeconds"], 3 * 3600)
 
+    def test_a_deleted_folder_lists_as_closed_and_new_recreates_it(self) -> None:
+        path = self.feature("gone")
+        shutil.rmtree(path)
+        listed = self.wt("list", "--json", check=False)
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        row = {row["name"]: row for row in json.loads(listed.stdout)["repos"][0]["worktrees"]}["gone"]
+        self.assertFalse(row["open"])
+        self.assertIsNone(row["path"])
+        self.assertEqual(self.wt("list", "--name").stdout.split(), ["gone"])
+        reopened = self.new("gone")
+        self.assertEqual(reopened, path)
+        self.assertEqual(Path(reopened, "b.txt").read_text(), "gone\n")
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(reopened)).strip(), "gone")
+        self.assertTrue(self.entry("gone")["open"])
+        self.assertNotIn("prunable", self.git("worktree", "list", "--porcelain"))
+
+    # close -------------------------------------------------------------------
+
     def test_close_commits_the_dirty_tree_and_new_brings_it_back(self) -> None:
         path = self.feature("work")
         self.write("b.txt", "edited\n", cwd=str(path))
@@ -325,6 +343,20 @@ class Local(Base):
         restore = stderr.split("restore with: ", 1)[1].split()
         self.git(*restore[1:])
         self.assertEqual(self.git("show", "hidden:fresh.txt", check=False), "fresh\n")
+
+    def test_drop_removes_the_branch_of_a_deleted_folder(self) -> None:
+        path = self.feature("vanished")
+        shutil.rmtree(path)
+        result = self.wt("drop", "vanished", check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        stderr = result.stderr
+        self.assertFalse(self.has_branch("vanished"))
+        restore = stderr.split("restore with: ", 1)[1].split()
+        self.git(*restore[1:])
+        self.assertEqual(self.git("show", "vanished:b.txt"), "vanished\n")
+        self.assertNotIn("prunable", self.git("worktree", "list", "--porcelain"))
+
+    # land --------------------------------------------------------------------
 
     def test_land_fast_forwards_main_and_closes(self) -> None:
         path = self.feature("land-me")
