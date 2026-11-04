@@ -42,6 +42,11 @@ let
         enable = lib.mkEnableOption "desktop environment with niri, greetd, and all desktop features";
         autologin.enable = lib.mkEnableOption "signing in without a greeter even when no LUKS passphrase was typed at boot. Only for hosts where every disk unlock needs a human (no TPM-only slot)";
         boot-splash.enable = lib.mkEnableOption "the themed boot chain: a styled Limine, the Plymouth hex dump and a handoff into niri with no text console in between";
+        editor = lib.mkOption {
+          type = lib.types.enum ["zed" "vscode"];
+          default = "zed";
+          description = "Which editor opens code files by default. Both stay installed; this only picks the xdg handler.";
+        };
         chromium = {
           enable = cascade config.fireproof.desktop.enable "Enable the Chromium browser";
           work.enable = cascade (config.fireproof.desktop.chromium.enable && config.fireproof.work.enable) "Enable a separate chromium-work instance (own profile, runs alongside the personal one)";

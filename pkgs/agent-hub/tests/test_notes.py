@@ -316,19 +316,22 @@ class ReaderOpsTest(ProtocolCase):
         bar.wait(has_session(self.sid, lambda s: "note" in s))
         self.assertEqual(self.hub.command("status", "--session-id", self.sid).stdout.rstrip("\n").split("\t")[-1], str(self.plan))
 
-    def test_editing_opens_vs_code_and_only_on_a_note(self):
-        tmp = self.hub.tmp / "bin"
-        tmp.mkdir()
-        (tmp / "code").write_text("")
-        (tmp / "code").chmod(0o755)
-        hub, root = self.daemon(appPath=[str(tmp)])
-        note = root / "a.md"
-        note.write_text("x")
-        bar = self.open_bar(hub)
-        for value in (str(hub.tmp / "config.json"), str(note)):
-            bar.send(op="run", session="", kind="note", value=value)
-        spawned = Path(str(hub.focus_log) + ".spawn")
-        self.assertEqual(logged(spawned), [["code", "--reuse-window", str(note)]])
+    def test_editing_opens_the_configured_editor_and_only_on_a_note(self):
+        for editor, argv in (("zed", ["zed"]), ("vscode", ["code", "--reuse-window"])):
+            with self.subTest(editor=editor):
+                tmp = self.hub.tmp / "bin" / editor
+                tmp.mkdir(parents=True)
+                command = tmp / ("code" if editor == "vscode" else editor)
+                command.write_text("")
+                command.chmod(0o755)
+                hub, root = self.daemon(appPath=[str(tmp)], editor=editor)
+                note = root / "a.md"
+                note.write_text("x")
+                bar = self.open_bar(hub)
+                for value in (str(hub.tmp / "config.json"), str(note)):
+                    bar.send(op="run", session="", kind="note", value=value)
+                spawned = Path(str(hub.focus_log) + ".spawn")
+                self.assertEqual(logged(spawned), [argv + [str(note)]])
 
 
 class RemoteNotesTest(ProtocolCase):

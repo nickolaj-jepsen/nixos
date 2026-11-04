@@ -13,7 +13,15 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Hub } from "../lib/hub.ts";
 import { formatAge } from "../lib/format.ts";
-import { appLabel, canLaunch, copyText, folderApps, launch, openNote } from "./apps.ts";
+import {
+  appLabel,
+  canLaunch,
+  copyText,
+  folderApps,
+  launch,
+  openNote,
+  preferredEditor,
+} from "./apps.ts";
 import type { Menu } from "./menu.ts";
 
 /**
@@ -39,34 +47,37 @@ export const openNotes = async (ctx: ExtensionContext, hub: Hub) => {
     path = notes[labels.indexOf(picked)].path;
   }
   if (!(await openNote(path)))
-    ctx.ui.notify(`chrome: no note viewer or VS Code; ${path}`, "warning");
+    ctx.ui.notify(`chrome: no note viewer or editor; ${path}`, "warning");
 };
 
-export const folderMenu = (cwd: string, hub: Hub): Menu => ({
-  title: "Open folder",
-  // The editor is where the work continues, so it leads when it can run.
-  preferred: canLaunch("code", cwd) ? "code" : undefined,
-  rows: [
-    ...folderApps.map((app) => ({
-      id: app,
-      label: appLabel(app),
-      unavailable: canLaunch(app, cwd) ? undefined : "not installed",
-      run: () => launch(app, cwd),
-    })),
-    {
-      id: "notes",
-      label: "Notes",
-      description: hub.read()?.notes ? `${hub.read()?.notes} this session` : undefined,
-      unavailable: hub.connected() ? undefined : "agent-hub isn't running",
-      run: (ctx) => openNotes(ctx, hub),
-    },
-    {
-      id: "copy",
-      label: "Copy path",
-      run: async (ctx) => {
-        await copyText(cwd);
-        ctx.ui.notify("chrome: path copied", "info");
+export const folderMenu = (cwd: string, hub: Hub): Menu => {
+  const editor = preferredEditor();
+  return {
+    title: "Open folder",
+    // The editor is where the work continues, so it leads when it can run.
+    preferred: canLaunch(editor, cwd) ? editor : undefined,
+    rows: [
+      ...folderApps.map((app) => ({
+        id: app,
+        label: appLabel(app),
+        unavailable: canLaunch(app, cwd) ? undefined : "not installed",
+        run: () => launch(app, cwd),
+      })),
+      {
+        id: "notes",
+        label: "Notes",
+        description: hub.read()?.notes ? `${hub.read()?.notes} this session` : undefined,
+        unavailable: hub.connected() ? undefined : "agent-hub isn't running",
+        run: (ctx) => openNotes(ctx, hub),
       },
-    },
-  ],
-});
+      {
+        id: "copy",
+        label: "Copy path",
+        run: async (ctx) => {
+          await copyText(cwd);
+          ctx.ui.notify("chrome: path copied", "info");
+        },
+      },
+    ],
+  };
+};

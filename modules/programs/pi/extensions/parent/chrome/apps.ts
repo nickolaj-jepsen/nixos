@@ -28,13 +28,23 @@ const onPath = (command: string) => which(command) !== undefined;
 /** A mac app bundle in the usual place, for a GUI that ships no CLI on PATH. */
 const appBundle = (name: string) => MAC && existsSync(`/Applications/${name}.app`);
 
-export const folderApps = ["code", "smerge", "files", "ghostty"] as const;
+export const folderApps = ["code", "zed", "smerge", "files", "ghostty"] as const;
 export type FolderApp = (typeof folderApps)[number];
+export type EditorApp = Extract<FolderApp, "code" | "zed">;
+
+/**
+ * The editor this desktop opens folders in, from the flake's `fireproof.desktop.editor`
+ * through the session's environment. The other editor keeps its row, just not the keys.
+ */
+export const preferredEditor = (env: NodeJS.ProcessEnv = process.env): EditorApp =>
+  env.FIREPROOF_EDITOR === "vscode" ? "code" : "zed";
 
 export const appLabel = (app: FolderApp): string => {
   switch (app) {
     case "code":
       return "VS Code";
+    case "zed":
+      return "Zed";
     case "smerge":
       return "Sublime Merge";
     case "files":
@@ -67,6 +77,13 @@ const launcher = (app: FolderApp, cwd: string): Launch | undefined => {
       return (
         (onPath("code") ? { command: "code", args: [cwd] } : undefined) ??
         (MAC ? openBundle("Visual Studio Code", [cwd]) : undefined)
+      );
+    case "zed":
+      // nixpkgs installs zed's CLI as `zeditor`; the cask and every other distro as `zed`.
+      return (
+        (onPath("zed") ? { command: "zed", args: [cwd] } : undefined) ??
+        (onPath("zeditor") ? { command: "zeditor", args: [cwd] } : undefined) ??
+        (MAC ? openBundle("Zed", [cwd]) : undefined)
       );
     case "smerge":
       return (
@@ -109,6 +126,21 @@ export const launch = async (app: FolderApp, cwd: string): Promise<void> => {
   await start(target.command, target.args);
 };
 
+/**
+ * A path in the preferred editor, else in the other one; undefined when neither is
+ * installed. `code` needs `--reuse-window` to land in the focused window, zed does
+ * that on its own.
+ */
+const editorLaunch = (path: string, env: NodeJS.ProcessEnv = process.env) => {
+  const preferred = preferredEditor(env);
+  for (const app of [preferred, preferred === "code" ? "zed" : "code"] as const) {
+    const target = launcher(app, path);
+    if (target)
+      return target.command === "code" ? { ...target, args: ["--reuse-window", path] } : target;
+  }
+  return undefined;
+};
+
 // `tuicr -w` exits on a clean tree, so that opens its commit picker instead. $0 is tuicr.
 const REVIEW = 'if [ -n "$(git status --porcelain)" ]; then exec "$0" -w; fi; exec "$0"';
 
@@ -133,9 +165,9 @@ export const openReview = async (cwd: string): Promise<void> => {
   await start(target.command, target.args);
 };
 
-/** Shows a note in the notes viewer, else VS Code; false when neither is installed. */
+/** Shows a note in the notes viewer, else in the preferred editor; false when neither is installed. */
 export const openNote = async (path: string): Promise<boolean> => {
-  const target = noteOpener(path);
+  const target = noteOpener(path) ?? editorLaunch(path);
   if (!target) return false;
   await start(target.command, target.args);
   return true;

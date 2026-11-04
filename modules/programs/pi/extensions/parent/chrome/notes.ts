@@ -81,15 +81,11 @@ export const openerCandidates = (env: NodeJS.ProcessEnv = process.env) => [
   join(env.HOME ?? homedir(), ".nix-profile", "bin", OPENER),
 ];
 
-/** The command that shows a note: the opener, else VS Code, else undefined. */
+/** The command that shows a note: the opener, else undefined, so a caller can fall back. */
 export const noteOpener = (
   path: string,
   env: NodeJS.ProcessEnv = process.env,
 ): { command: string; args: string[] } | undefined => {
   const opener = openerCandidates(env).find(executable);
-  if (opener) return { command: opener, args: [path] };
-  const code = searchPath(env)
-    .map((dir) => join(dir, "code"))
-    .find(executable);
-  return code ? { command: code, args: ["--reuse-window", path] } : undefined;
+  return opener ? { command: opener, args: [path] } : undefined;
 };

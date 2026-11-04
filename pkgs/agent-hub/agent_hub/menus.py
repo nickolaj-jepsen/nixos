@@ -20,7 +20,25 @@ SEGMENT = re.compile(r"[A-Za-z0-9._-]+")
 SHORT_SHA = 7
 GIT_TIMEOUT = 3
 GH_TIMEOUT = 8
-APPS = (("code", "VS Code"), ("smerge", "Sublime Merge"), ("files", "Files"), ("ghostty", "Ghostty"))
+APPS = (("smerge", "Sublime Merge"), ("files", "Files"), ("ghostty", "Ghostty"))
+
+# fireproof.desktop.editor's values, each with the rows' label, the binaries that provide
+# it (zed's Linux CLI is `zeditor`), and the argv past that binary which opens a path:
+# `local` in this checkout, `remote` on another host, where the ssh form differs.
+EDITORS = {
+    "zed": {
+        "label": "Zed",
+        "commands": ("zed", "zeditor"),
+        "local": lambda path: [path],
+        "remote": lambda host, path: [f"ssh://{host}{path}"],
+    },
+    "vscode": {
+        "label": "VS Code",
+        "commands": ("code",),
+        "local": lambda path: ["--reuse-window", path],
+        "remote": lambda host, path: ["--remote", f"ssh-remote+{host}", path],
+    },
+}
 
 
 def parse_remote(raw):
@@ -179,10 +197,10 @@ def _create_row(found, remote, pr, pr_known, gh_missing):
     return blocked_row("create", label, why)
 
 
-def folder_menu(cwd, host, can_run):
+def folder_menu(cwd, host, can_run, editor="zed"):
     """The folder menu. From another host the folder is out of reach of what can't go over ssh,
     so those rows say where it is. `can_run` says whether an app runs on this desktop."""
-    over_ssh = ("code", "ghostty")
+    over_ssh = (editor, "ghostty")
 
     def row(app, label):
         if not can_run(app):
@@ -191,7 +209,7 @@ def folder_menu(cwd, host, can_run):
             return blocked_row(app, label, f"on {host}")
         return {"id": app, "label": label, "run": {"kind": "app", "value": app}}
 
-    rows = [row(app, label) for app, label in APPS]
-    # The editor is where the work continues, so it leads when it can run.
-    preferred = "code" if "run" in rows[0] else ""
+    # The editor is where the work continues, so it leads, and leads the keys when it can run.
+    rows = [row(editor, EDITORS[editor]["label"]), *(row(app, label) for app, label in APPS)]
+    preferred = editor if "run" in rows[0] else ""
     return {"title": "Open folder", "context": "", "preferred": preferred, "rows": [*rows, copy_row("copy", "Copy path", cwd)]}

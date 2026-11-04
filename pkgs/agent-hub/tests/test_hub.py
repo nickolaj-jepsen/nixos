@@ -1334,14 +1334,15 @@ class MenuTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="agent-hub-menu-"))
         (self.tmp / "bin").mkdir()
-        (self.tmp / "bin" / "code").write_text("")
-        (self.tmp / "bin" / "code").chmod(0o755)
+        for command in ("code", "zed"):
+            (self.tmp / "bin" / command).write_text("")
+            (self.tmp / "bin" / command).chmod(0o755)
         self.gh_answer = self.tmp / "gh.answer"
         gh = self.tmp / "gh"
         gh.write_text(f"#!/bin/sh\nexec cat {self.gh_answer}\n")
         gh.chmod(0o755)
         self.gh_answer.write_text("[]")
-        self.hub = Hub(extra={"appPath": [str(self.tmp / "bin")], "gh": str(gh)})
+        self.hub = Hub(extra={"appPath": [str(self.tmp / "bin")], "gh": str(gh), "editor": "zed"})
         self.addCleanup(self.hub.stop)
         self.bar = self.hub.subscribe()
         self.sid = str(uuid.uuid4())
@@ -1357,13 +1358,13 @@ class MenuTest(unittest.TestCase):
     def test_the_folder_menu_lists_every_app_and_says_which_it_cant_run(self):
         menu = self.menu("folder")
         rows = {r["id"]: r for r in menu["rows"]}
-        self.assertEqual(list(rows), ["code", "smerge", "files", "ghostty", "copy"])
+        self.assertEqual(list(rows), ["zed", "smerge", "files", "ghostty", "copy"])
         self.assertEqual(rows["smerge"]["unavailable"], "not installed")
-        self.assertEqual((rows["copy"]["run"], menu["preferred"]), ({"kind": "copy", "value": str(self.repo)}, "code"))
+        self.assertEqual((rows["copy"]["run"], menu["preferred"]), ({"kind": "copy", "value": str(self.repo)}, "zed"))
 
     def test_an_app_opens_the_rows_folder(self):
-        self.bar.send(op="run", session=self.sid, kind="app", value="code")
-        self.assertEqual(logged(self.spawned)[0], ["code", str(self.repo)])
+        self.bar.send(op="run", session=self.sid, kind="app", value="zed")
+        self.assertEqual(logged(self.spawned)[0], ["zed", str(self.repo)])
 
     def test_an_app_it_cant_run_or_doesnt_know_does_nothing(self):
         self.bar.send(op="run", session=self.sid, kind="app", value="smerge")
@@ -1429,7 +1430,7 @@ class ForgeTest(unittest.TestCase):
 
     def test_from_another_host_the_menu_says_where_the_folder_is(self):
         rows = {r["id"]: r for r in menus.folder_menu("/x", "far", lambda app: True)["rows"]}
-        self.assertEqual((rows["files"]["unavailable"], rows["code"]["run"]["value"]), ("on far", "code"))
+        self.assertEqual((rows["files"]["unavailable"], rows["zed"]["run"]["value"]), ("on far", "zed"))
 
 
 class LinkTest(unittest.TestCase):
@@ -1444,7 +1445,10 @@ class LinkTest(unittest.TestCase):
         ssh = self.tmp / "ssh"
         ssh.write_text(FAKE_SSH.format(python=sys.executable, runtimes=str(self.tmp), log=str(self.ssh_log), package=str(PACKAGE)))
         ssh.chmod(0o755)
-        self.near = Hub(extra={"remotes": ["far"], "ssh": str(ssh), "sshConfig": "/dev/null"})
+        (self.tmp / "bin").mkdir()
+        (self.tmp / "bin" / "zed").write_text("")
+        (self.tmp / "bin" / "zed").chmod(0o755)
+        self.near = Hub(extra={"remotes": ["far"], "ssh": str(ssh), "sshConfig": "/dev/null", "appPath": [str(self.tmp / "bin")]})
         self.addCleanup(self.near.stop)
         self.sid = str(uuid.uuid4())
         self.bar = self.near.subscribe()
@@ -1515,8 +1519,11 @@ class LinkTest(unittest.TestCase):
         self.assertEqual(rows["smerge"]["unavailable"], "not installed" if not shutil.which("smerge") else "on far")
         self.assertEqual(rows["copy"]["run"], {"kind": "copy", "value": "/far/repo"})
         self.bar.send(op="run", session=self.rid, kind="app", value="ghostty")
-        spawned = logged(Path(str(self.near.focus_log) + ".spawn"))
-        self.assertEqual(spawned[0][-4:], ["ssh", "-t", "far", "cd /far/repo && exec \"$SHELL\" -l"])
+        self.bar.send(op="run", session=self.rid, kind="app", value="zed")
+        spawned = Path(str(self.near.focus_log) + ".spawn")
+        eventually(lambda: spawned.exists() and len(spawned.read_text().splitlines()) == 2)
+        self.assertEqual(logged(spawned)[0][-4:], ["ssh", "-t", "far", "cd /far/repo && exec \"$SHELL\" -l"])
+        self.assertEqual(logged(spawned)[1], ["zed", "ssh://far/far/repo"])
 
     def test_the_git_menu_builds_its_links_here_from_what_git_says_there(self):
         repo = git_repo(self.far.tmp / "repo", "git@github.com:me/thing.git")

@@ -455,7 +455,7 @@ DSlideout {
 
                     ReaderButton {
                         visible: reader.path !== ""
-                        label: "Edit in VS Code"
+                        label: "Edit"
                         onClicked: reader.edit()
                     }
 

@@ -190,3 +190,9 @@ Claude's own; pi has none.
   by typing it in a real session.
 - agent-hub (`docs/agent-hub.md`) already sees every pi and Claude Code
   session; don't add per-agent toast hooks.
+- Don't name an editor in the folder menus (pi `parent/chrome/places.ts`,
+  Claude Code's `git-menu`, agent-hub's `menus.py`): `fireproof.desktop.editor`
+  picks it. `editor-open` (`modules/scripts`) carries the argv for shells and
+  niri spawns, and the `FIREPROOF_EDITOR` session variable tells the TUI menus
+  which row leads. zed's CLI is `zeditor` on nixpkgs and `zed` from the cask;
+  vscode's is `code` everywhere.

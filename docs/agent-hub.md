@@ -42,10 +42,11 @@ icons for where it is. A session not waiting on you has your prompt first.
   closes.
 - A note the current turn wrote gets a row at the top of the pane, and any session
   with notes gets a chip in the icon row. Both open the reader.
-- The folder and branch icons open menus: VS Code, Sublime Merge, Files, Ghostty and
-  the path; the pull request, branch and repository on the web, and their names. Every
-  row is a link, a copy or an app opening a folder (`agent_hub/menus.py`). From another
-  host, VS Code goes over Remote SSH, Ghostty over ssh, and the rest say where it is.
+- The folder and branch icons open menus: the editor `fireproof.desktop.editor` names,
+  Sublime Merge, Files, Ghostty and the path; the pull request, branch and repository on
+  the web, and their names. Every row is a link, a copy or an app opening a folder
+  (`agent_hub/menus.py`). From another host, the editor goes over Remote SSH (vscode) or
+  a `ssh://` URL (zed), Ghostty over ssh, and the rest say where it is.
 - A button shows its own key. The legend holds the keys with no button, and shows only
   when you opened the popout from the keyboard, or once you press a key.
 
@@ -143,15 +144,15 @@ popout, which closes on a click outside it.
 - Opens from `p` in the popout, `Mod+Alt+B` (the focused window's session, toggling),
   `/open plan`, or `agent-hub show`. `agent-note-open` goes through it too, so a note
   path clicked in Ghostty opens here, among the notes of the session you are looking
-  at. A link with `:line` still goes to VS Code, as annotate-plan's `PLAN.md` does.
+  at. A link with `:line` still goes to the editor, as annotate-plan's `PLAN.md` does.
 - Polls while it shows: the note every 1.5 s, the list every 5 s. A rewritten note
   updates in place and keeps your scroll position.
 - The wheel works wherever the pointer is. Keys need a click on it first, so they stay
   in your terminal until you ask: `j`/`k` and Space scroll, `g`/`G` jump, `[`/`]` or
-  `h`/`l` change note, `e` edits in VS Code, `y` copies the path, `s` goes to the
+  `h`/`l` change note, `e` edits in the editor, `y` copies the path, `s` goes to the
   session, `Esc` or `q` closes.
 - `agent-hub show` fails when no bar took it, which is how a caller knows to fall back:
-  `/open plan` then lists notes in the terminal (`agent-hub notes`), for VS Code or the
+  `/open plan` then lists notes in the terminal (`agent-hub notes`), for the editor or the
   path. Without a running hub it says so; nothing else knows a session's notes.
 
 ### What a note can do

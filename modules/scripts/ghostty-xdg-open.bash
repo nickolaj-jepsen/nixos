@@ -7,7 +7,7 @@ shopt -s nullglob
 # Claude Code etc.) never resolve. It also matches `api.slack.com/apps` as a path
 # (the dot makes it look file-like), so a bare host needs a scheme. For Ghostty
 # only: resolve paths against the cwds of the terminal's processes, send agent
-# notes to agent-note-open, other text files to VS Code, the rest on.
+# notes to agent-note-open, other text files to the desktop's editor, the rest on.
 real=@xdgOpen@
 
 [[ $# -eq 1 ]] || exec "$real" "$@"
@@ -149,15 +149,15 @@ if [[ -z $path ]]; then
   exit 1
 fi
 
-# The reader can't jump to a line, so a note link with `:line` still goes to VS Code.
+# The reader can't jump to a line, so a note link with `:line` still goes to the editor.
 if [[ -f $path && $path == "$HOME"/.local/share/agents/*.md && -z $line ]]; then
   exec @agentNoteOpen@ "$path"
 fi
 
 if [[ -f $path && (! -s $path || $(file -b --mime-encoding "$path") != binary) ]]; then
-  if [[ -n $line ]]; then
-    exec code --reuse-window --goto "$path:$line${col:+:$col}"
-  fi
-  exec code --reuse-window "$path"
+  position=()
+  [[ -n $line ]] && position+=(--line "$line")
+  [[ -n $col ]] && position+=(--col "$col")
+  exec @editorOpen@ "${position[@]}" "$path"
 fi
 exec "$real" "$path"

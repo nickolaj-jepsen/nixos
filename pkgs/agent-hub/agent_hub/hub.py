@@ -36,8 +36,9 @@ ACTIVITY_S = 15
 # A command shorter than this says nothing about how long one takes.
 JOB_LOG_MS = 60_000
 DEMO_DETAILS = ("prompt", "permission", "project", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind", "estimate", "answer", "readings")
-# The command behind a folder menu's app, the first one found.
-APP_COMMANDS = {"code": ("code",), "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
+# The command behind a folder menu's app, the first one found. The editors' commands come
+# from menus.EDITORS, which also knows the argv that opens a path in each.
+APP_COMMANDS = {**{name: spec["commands"] for name, spec in menus.EDITORS.items()}, "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
 
 
 def agent_of(entry):
@@ -72,6 +73,8 @@ class Hub:
         self.niri = Niri(cfg.get("niri"), self.changed)
         self.git = peers.Git(cfg.get("git"))
         self.terminal = cfg.get("terminal")
+        # fireproof.desktop.editor: the folder menu's first row and what notes open in.
+        self.editor = cfg.get("editor") if cfg.get("editor") in menus.EDITORS else "zed"
         self.gh = cfg.get("gh") or shutil.which("gh")
         # Where a desktop's apps are, which a user unit's own PATH doesn't reach.
         self.app_path = os.pathsep.join(cfg["appPath"]) if cfg.get("appPath") else None
@@ -464,7 +467,7 @@ class Hub:
             conn.send({"type": "menu", "request": request, "menu": None})
             return
         if message["which"] == "folder":
-            conn.send({"type": "menu", "request": request, "menu": menus.folder_menu(place[1], place[0], self._can_run)})
+            conn.send({"type": "menu", "request": request, "menu": menus.folder_menu(place[1], place[0], self._can_run, self.editor)})
             return
         found = await self._git_facts(sid)
         if found is None:
@@ -502,11 +505,13 @@ class Hub:
                 await self._terminal(None, ["ssh", "-t", host, f'cd {shlex.quote(cwd)} && exec "$SHELL" -l'])
             else:
                 await self.niri.spawn(["ghostty", f"--working-directory={cwd}"])
-        elif host:
-            if app == "code":
-                await self.niri.spawn(["code", "--remote", f"ssh-remote+{host}", cwd])
+            return
+        command = next(c for c in APP_COMMANDS[app] if shutil.which(c, path=self.app_path))
+        if host:
+            # Only an editor and Ghostty reach another host; the menu blocks the rest.
+            if app in menus.EDITORS:
+                await self.niri.spawn([command, *menus.EDITORS[app]["remote"](host, cwd)])
         else:
-            command = next(c for c in APP_COMMANDS[app] if shutil.which(c, path=self.app_path))
             await self.niri.spawn([command, cwd])
 
     # Notes.
@@ -580,13 +585,15 @@ class Hub:
 
     async def _open_note(self, sid, path):
         """Opens a note where it can be edited, over Remote SSH when it is on another host."""
-        if not self._can_run("code"):
+        if not self._can_run(self.editor):
             return
+        editor = menus.EDITORS[self.editor]
+        command = next(c for c in editor["commands"] if shutil.which(c, path=self.app_path))
         host = links.split_id(sid)[0]
         if host in self.links:
-            await self.niri.spawn(["code", "--remote", f"ssh-remote+{host}", path])
+            await self.niri.spawn([command, *editor["remote"](host, path)])
         elif notes.is_note(path, self.notes.roots):
-            await self.niri.spawn(["code", "--reuse-window", path])
+            await self.niri.spawn([command, *editor["local"](path)])
 
     def _form_reply(self, conn, message, changed=True, **reply):
         """Publishes what a form op left, so every subscribed surface sees the new view in its next

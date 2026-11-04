@@ -18,8 +18,26 @@
       path = ./agent-note-open.bash;
       runtimeInputs =
         [pkgs.coreutils]
-        ++ lib.optional config.fireproof.dev.agent-hub.enable pkgs.agent-hub;
+        ++ lib.optional config.fireproof.dev.agent-hub.enable pkgs.agent-hub
+        # Only a Linux desktop has the GUIs it opens; elsewhere it falls back to `code`.
+        ++ lib.optional hasEditor editor-open;
     };
+    # The editor the desktop hands a path to, in its own argv: see editor-open.bash.
+    editor-open = pkgs.writeShellApplication {
+      name = "editor-open";
+      text =
+        builtins.replaceStrings ["@editor@" "@editorExe@"] [
+          editor
+          (lib.getExe (
+            if editor == "zed"
+            then pkgs.unstable.zed-editor
+            else pkgs.unstable.vscode
+          ))
+        ]
+        (builtins.readFile ./editor-open.bash);
+    };
+    editor = config.fireproof.desktop.editor;
+    hasEditor = config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux;
   in {
     age.secrets = lib.optionalAttrs (config.fireproof.scripts.tunnel-home.enable && pkgs.stdenv.isLinux) {
       tunnel-home = {
@@ -131,8 +149,9 @@
           ];
         })
       ]
-      # Shadows the system xdg-open (per-user profile precedes it on PATH) so Ghostty link clicks land in VS Code.
-      ++ lib.optionals (config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux) [
+      # Shadows the system xdg-open (per-user profile precedes it on PATH) so Ghostty link clicks land in the editor.
+      ++ lib.optionals hasEditor [
+        editor-open
         (lib.hiPrio (pkgs.writeShellApplication {
           name = "xdg-open";
           runtimeInputs = with pkgs; [
@@ -144,7 +163,11 @@
             libnotify
           ];
           text =
-            builtins.replaceStrings ["@xdgOpen@" "@agentNoteOpen@"] ["${pkgs.xdg-utils}/bin/xdg-open" (lib.getExe agent-note-open)]
+            builtins.replaceStrings ["@xdgOpen@" "@agentNoteOpen@" "@editorOpen@"] [
+              "${pkgs.xdg-utils}/bin/xdg-open"
+              (lib.getExe agent-note-open)
+              (lib.getExe editor-open)
+            ]
             (builtins.readFile ./ghostty-xdg-open.bash);
         }))
       ];

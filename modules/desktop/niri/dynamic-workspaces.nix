@@ -6,7 +6,8 @@
     ...
   }: let
     # Project workspaces: both the spawn programs and ghostty-here's dir lookup
-    # come from here, so a bare terminal opens where the workspace points.
+    # come from here, so a bare terminal opens where the workspace points. The
+    # editor is `editor-open`, which knows the argv zed and vscode each want.
     projects = {
       n = {
         name = "nix";
@@ -50,7 +51,7 @@
     }: {
       inherit name;
       programs = [
-        "code --remote ssh-remote+${host} ${path}"
+        "editor-open --remote ${host} ${path}"
         "ghostty -e ssh -t ${host} 'cd ${path} && exec ${shell} -l'"
       ];
     };
@@ -89,7 +90,7 @@
             // lib.mapAttrs (_: p: {
               inherit (p) name;
               programs = [
-                "code ${p.path}"
+                "editor-open ${p.path}"
                 "ghostty --working-directory=${p.path}"
               ];
             })
@@ -105,7 +106,7 @@
           template = {
             dev = {
               programs = [
-                "code {{path}}"
+                "editor-open {{path}}"
                 "ghostty --working-directory={{path}}"
               ];
               variables = {
@@ -118,7 +119,7 @@
             };
             remote = {
               programs = [
-                "code --remote ssh-remote+{{host}}"
+                "editor-open --remote {{host}}"
                 "ghostty -e ssh -t {{host}}"
               ];
               variables = {

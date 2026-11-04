@@ -315,7 +315,7 @@ test("bare /open still shows the folder menu", async ($, on) => {
   const pane = await $.ui.mount({ ...PANE, surface: "terminal" });
   const keys = (await pane.findAll({ type: "Button" })).map((b) => b.key);
   await pane.unmount();
-  expect(keys).toEqual(["code", "smerge", "files", "ghostty", "copy", "notes"]);
+  expect(keys).toEqual(["code", "zed", "smerge", "files", "ghostty", "copy", "notes"]);
 });
 
 const openDiff = ($: Engine) => $.command.run({ ...RUN, command: "open", args: "diff" });

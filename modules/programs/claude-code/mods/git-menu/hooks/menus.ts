@@ -3,7 +3,7 @@
  * every git row is a link or a copy, so nothing here pushes, rebases or creates
  * anything; a row that cannot run keeps its place and says why in a few words.
  */
-import type { FolderApp, Menu, Row } from "../types";
+import type { EditorApp, FolderApp, Menu, Row } from "../types";
 
 export type Forge = "github" | "gitlab" | "codeberg";
 
@@ -31,7 +31,26 @@ export type Pr = { url: string; number: number; state: PrKind };
 /** The branch's pull request: `null` for none, `unknown` when gh could not say. */
 export type PrAnswer = Pr | null | "unknown" | "no-gh";
 
-export const FOLDER_APPS: readonly FolderApp[] = ["code", "smerge", "files", "ghostty"];
+export const FOLDER_APPS: readonly FolderApp[] = ["code", "zed", "smerge", "files", "ghostty"];
+
+/**
+ * The editor the desktop opens folders in, from the flake's `fireproof.desktop.editor`
+ * through the session's environment. The other editor keeps its row, just not the keys.
+ */
+export const preferredEditor = (value: string | undefined): EditorApp =>
+  value === "vscode" ? "code" : "zed";
+
+/** The CLI names each editor ships under: zed is `zed` from the cask, `zeditor` from nixpkgs. */
+export const EDITOR_COMMANDS: Record<EditorApp, readonly string[]> = {
+  code: ["code"],
+  zed: ["zed", "zeditor"],
+};
+
+/** The editor binaries a note falls back to, the preferred editor's first. */
+export const editorCandidates = (editor: EditorApp): string[] => [
+  ...EDITOR_COMMANDS[editor],
+  ...EDITOR_COMMANDS[editor === "code" ? "zed" : "code"],
+];
 
 const SHORT_SHA = 7;
 
@@ -273,6 +292,8 @@ export const appLabel = (app: FolderApp, isMac: boolean): string => {
   switch (app) {
     case "code":
       return "VS Code";
+    case "zed":
+      return "Zed";
     case "smerge":
       return "Sublime Merge";
     case "files":
@@ -290,6 +311,7 @@ export const folderMenu = (
   cwd: string,
   launchers: Partial<Record<FolderApp, string[]>>,
   isMac: boolean,
+  editor: EditorApp,
 ): Menu => ({
   kind: "folder",
   title: "Open folder",
@@ -303,5 +325,5 @@ export const folderMenu = (
     { id: "copy", label: "Copy path", action: { kind: "copy", text: cwd, what: "path" } },
     { id: "notes", label: "Notes", action: { kind: "menu", menu: "notes" } },
   ],
-  preferred: launchers.code ? "code" : undefined,
+  preferred: launchers[editor] ? editor : undefined,
 });

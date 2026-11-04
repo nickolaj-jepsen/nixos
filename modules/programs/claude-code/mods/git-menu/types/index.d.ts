@@ -1,6 +1,8 @@
 export type MenuKind = "git" | "folder" | "notes";
 
-export type FolderApp = "code" | "smerge" | "files" | "ghostty";
+export type FolderApp = "code" | "zed" | "smerge" | "files" | "ghostty";
+
+export type EditorApp = Extract<FolderApp, "code" | "zed">;
 
 /** What a row does when pressed; plain data, so the menu survives a reload. */
 export type Action =

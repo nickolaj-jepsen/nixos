@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Open an agent note for reading: in the bar's note reader where there is one, else in
-# VS Code, else print the path. annotate-plan's PLAN.md is edited, not read, so it always
-# goes to VS Code.
+# the desktop's editor, else print the path. annotate-plan's PLAN.md is edited, not read,
+# so it always goes to the editor.
 
 if [[ $# -ne 1 ]]; then
   echo "usage: agent-note-open <path>" >&2
@@ -22,6 +22,10 @@ edit=false
 
 if ! $edit && command -v agent-hub >/dev/null && agent-hub show "$path"; then
   exit 0
+fi
+# editor-open is only on a Linux desktop; elsewhere the bare CLI is all there is.
+if command -v editor-open >/dev/null; then
+  exec editor-open "$path"
 fi
 if command -v code >/dev/null; then
   exec code --reuse-window "$path"

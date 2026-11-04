@@ -10,10 +10,12 @@ import type {
 import type { FolderApp, Menu, MenuKind, Row } from "../types";
 import {
   chooseRemote,
+  editorCandidates,
   folderMenu,
   gitMenu,
   parsePr,
   parseStatus,
+  preferredEditor,
   type PrAnswer,
   type Status,
 } from "./menus";
@@ -137,6 +139,7 @@ async function buildGit($: EngineInterface, cwd: string): Promise<Menu> {
 
 async function buildFolder($: EngineInterface, cwd: string): Promise<Menu> {
   const mac = await isMac($);
+  const editor = preferredEditor(await $.env.get("FIREPROOF_EDITOR"));
   const launchers: Partial<Record<FolderApp, string[]>> = {};
   if (mac) {
     const bundle = async (app: FolderApp, name: string, args: string[], fresh = false) => {
@@ -147,6 +150,7 @@ async function buildFolder($: EngineInterface, cwd: string): Promise<Menu> {
     };
     await Promise.all([
       bundle("code", "Visual Studio Code", [cwd]),
+      bundle("zed", "Zed", [cwd]),
       bundle("smerge", "Sublime Merge", [cwd]),
       // Ghostty takes a directory only as a second instance.
       bundle("ghostty", "Ghostty", [`--working-directory=${cwd}`], true),
@@ -158,7 +162,7 @@ async function buildFolder($: EngineInterface, cwd: string): Promise<Menu> {
       "-c",
       'for c; do command -v "$c" >/dev/null && echo "$c"; done',
       "sh",
-      "code",
+      ...editorCandidates(editor),
       "smerge",
       "nautilus",
       "xdg-open",
@@ -166,13 +170,16 @@ async function buildFolder($: EngineInterface, cwd: string): Promise<Menu> {
     ]);
     const found = new Set((probe?.stdout ?? "").split("\n").filter(Boolean));
     if (found.has("code")) launchers.code = ["code", cwd];
+    // zed's own name first, then nixpkgs', which installs `zeditor`.
+    const zed = ["zed", "zeditor"].find((name) => found.has(name));
+    if (zed) launchers.zed = [zed, cwd];
     if (found.has("smerge")) launchers.smerge = ["smerge", cwd];
     if (found.has("nautilus")) launchers.files = ["nautilus", cwd];
     else if (found.has("xdg-open")) launchers.files = ["xdg-open", cwd];
     // A fresh shell in the checkout, not this session resumed.
     if (found.has("ghostty")) launchers.ghostty = ["ghostty", `--working-directory=${cwd}`];
   }
-  return folderMenu(cwd, launchers, mac);
+  return folderMenu(cwd, launchers, mac, editor);
 }
 
 /**
@@ -238,15 +245,23 @@ async function showInReader($: EngineInterface) {
 }
 
 async function buildNotes($: EngineInterface): Promise<Menu> {
+  const editor = preferredEditor(await $.env.get("FIREPROOF_EDITOR"));
   const [hub, found, now] = await Promise.all([
     locate($, HUB),
-    locate($, OPENER, ["code"]),
+    locate($, OPENER, editorCandidates(editor)),
     $.clock.now(),
   ]);
   const listed = hub
     ? await run($, [hub, "notes", "--session-id", await $.session.id(), "--json"], NOTES_TIMEOUT_MS)
     : undefined;
-  const opener = found && (found.endsWith(`/${OPENER}`) ? [found] : [found, "--reuse-window"]);
+  // `code` lands in the focused window only when told; zed does that on its own.
+  const opener =
+    found &&
+    (found.endsWith(`/${OPENER}`)
+      ? [found]
+      : found.endsWith("/code")
+        ? [found, "--reuse-window"]
+        : [found]);
   const notes = listed?.exitCode === 0 ? parseNotes(listed.stdout) : undefined;
   return notesMenu({ notes, opener, now });
 }
