@@ -465,6 +465,31 @@ test("D10 the hub's dialog line carries the review's text, and a settled run kee
   pi.emit("session_shutdown", {}, ctx);
 });
 
+test("D10 clearing a review's label at idle says idle, not busy", async (t) => {
+  const where = world(t);
+  const daemon = await fakeHub(t, where.runtime);
+  const { ctx } = ctxFor(where.root, A);
+  register(where, A);
+  const { pi, env } = wired(ctx);
+
+  pi.emit("session_start", {}, ctx);
+  await until("the first attach", () => daemon.attaches() === 1);
+  reviewLive(env, reviewEntry(where.root));
+  await until(
+    "the review's dialog line",
+    () => lastOp(daemon.lines, "dialog")?.text === "reviewing · 4 comments, 5/7 files",
+  );
+  // The review ends with no turn running: the hub must not be told the session is busy.
+  reviewLive(env, undefined);
+  await until("the cleared dialog line", () => lastOp(daemon.lines, "dialog")?.text === null);
+  await daemon.restart();
+  await until("the second attach", () => daemon.attaches() === 2, 800);
+  const attach = lastOp(daemon.lines, "attach") as Message;
+  assert.equal(attach.waitingFor, null);
+  assert.equal(attach.status, "idle", "a cleared label at idle is not a running turn");
+  pi.emit("session_shutdown", {}, ctx);
+});
+
 test("D10 a hub that reattaches during a review hears the text in the attach payload", async (t) => {
   const where = world(t);
   const daemon = await fakeHub(t, where.runtime);

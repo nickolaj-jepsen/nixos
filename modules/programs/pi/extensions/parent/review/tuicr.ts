@@ -463,7 +463,9 @@ export const openReview = async (
     ctx.ui.notify(`review: claimed by ${claim}; /review take takes it over`, "info");
     return;
   }
-  const live = alive(socket);
+  // A socket with no registered review behind it is a leftover (D8's SIGTERM path),
+  // and -A recovers it: the picked scope is what starts tuicr again.
+  const live = alive(socket) && liveReviews({ roots: where.list }).length > 0;
   // Attaching cannot change what tuicr is diffing, so the recorded scope stands.
   const pinned = (live ? before?.scope : (scope ?? before?.scope)) ?? UNPINNED;
   // The hub has to hear about this before the TUI stops: spawnSync then holds

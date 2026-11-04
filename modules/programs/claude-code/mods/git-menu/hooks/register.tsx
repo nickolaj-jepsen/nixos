@@ -416,9 +416,13 @@ async function launchReview($: EngineInterface, scope: PinnedScope) {
   }
   const path = await reviewClaimPath($, repo.root);
   const existing = await readClaim($, path);
+  const pid = await reviewPid($);
+  // The same engine writing a new session id (after /clear) is this session's
+  // claim: no second session exists for that pid to belong to.
+  const ours = existing !== undefined && (ownsClaim(existing, session) || existing.pid === pid);
   // The file is one repository's review for both harnesses: a live claim that is
   // not this session's is left to it, the same refusal pi's opener makes (U8).
-  if (existing !== undefined && !ownsClaim(existing, session) && (await running($, existing.pid))) {
+  if (existing !== undefined && !ours && (await running($, existing.pid))) {
     $.ui.toast(`This repository's review belongs to another ${existing.harness} session.`);
     return;
   }
@@ -435,12 +439,12 @@ async function launchReview($: EngineInterface, scope: PinnedScope) {
   const claim = newClaim({
     root: repo.root,
     session,
-    pid: await reviewPid($),
+    pid,
     scope,
     at: new Date(await $.clock.now()).toISOString(),
   });
   // Read-modify-write: a re-launch by the same session keeps what it delivered.
-  const seen = existing !== undefined && ownsClaim(existing, session) ? existing.seen : [];
+  const seen = ours && existing !== undefined ? existing.seen : [];
   await writeClaim($, path, { ...claim, seen });
   $.ui.toast("Opened tuicr in a Ghostty window; its comments land in your next prompt.");
 }

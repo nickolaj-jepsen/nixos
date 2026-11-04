@@ -35,6 +35,8 @@ const SESSION = "11111111-2222-3333-4444-555555555555";
 const NOW = Date.UTC(2026, 9, 31, 12);
 const MINUTE = 60_000;
 const PID = 4242;
+/** Another engine's pid: alive, and not the one this fake reports for itself. */
+const OTHER = 5252;
 const TUICR = "/run/current-system/sw/bin/tuicr";
 const GHOSTTY = "/run/current-system/sw/bin/ghostty";
 const BASE = "a".repeat(40);
@@ -186,7 +188,8 @@ function world(
       return ok(`${found === "tuicr" ? TUICR : GHOSTTY}\n`);
     }
     // `kill -0`: the claim's process answers while it runs.
-    if (argv[0] === "kill" && argv[1] === "-0") return argv[2] === String(PID) ? ok("") : ok("", 1);
+    if (argv[0] === "kill" && argv[1] === "-0")
+      return [String(PID), String(OTHER)].includes(String(argv[2])) ? ok("") : ok("", 1);
     if (argv[0] === "gh") return ok(PR);
     if (argv[0] === "git") {
       if (line.includes(" status ")) {
@@ -362,7 +365,7 @@ test("a live claim another session holds refuses the review before a window open
     root: ROOT,
     session: "another-session",
     harness: "pi",
-    pid: PID,
+    pid: OTHER,
     slug: SLUG,
     scope: { mode: "worktree", args: ["-w"] },
     seen: [],
@@ -404,6 +407,26 @@ test("a comment made while the batch waited in the prompt still arrives next tim
   await send($, "something else");
   expect(w.fills).toHaveLength(1);
   expect(w.fills[0]).toContain("while you were reading");
+});
+
+test("a claim this engine wrote under an earlier session id is taken over, not refused", async ($, on) => {
+  // /clear gives the same engine a new session id; the claim's pid is still this one.
+  const earlier = JSON.stringify({
+    v: 1,
+    root: ROOT,
+    session: "an-earlier-session",
+    harness: "claude",
+    pid: PID,
+    slug: SLUG,
+    scope: { mode: "worktree", args: ["-w"] },
+    seen: ["c1"],
+    at: new Date(NOW - MINUTE).toISOString(),
+  });
+  const w = world(on, { claim: earlier });
+  await start($, on);
+  await review($);
+  expect(w.launched).toHaveLength(1);
+  expect(claimOf(w)).toMatchObject({ session: SESSION, pid: PID, seen: ["c1"] });
 });
 
 test("a claim another session holds is left alone", async ($, on) => {
