@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { gitRoots } from "../../shared/git.ts";
 import { readEntry, recordEntry } from "./entry.ts";
+import { foreignClaim } from "./claim.ts";
 import type { ReviewEnv } from "./env.ts";
 import {
   type InboxItem,
@@ -350,5 +351,8 @@ export const ingestWith = async (
  * tuicr, and record what arrived. Persistence is `entry.ts`'s half (A5).
  */
 export const ingestReview = async (env: ReviewEnv, ctx: ExtensionContext): Promise<void> => {
+  // Another session owns this repository's review: its comments are not ours to
+  // ingest, or both sessions would deliver the same ones (U8).
+  if (foreignClaim(env, ctx) !== undefined) return;
   await ingestWith(env, ctx, readEntry(env, ctx), cliTuicr);
 };

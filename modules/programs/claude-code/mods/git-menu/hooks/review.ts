@@ -317,7 +317,7 @@ const location = (item: InboxItem) => {
       : endLine === null || endLine === startLine
         ? `:${startLine}`
         : `:${startLine}-${endLine}`;
-  return `\`${item.path}${lines}\` `;
+  return `\`${batchSafe(item.path)}${lines}\` `;
 };
 
 /**
@@ -325,14 +325,24 @@ const location = (item: InboxItem) => {
  * repository, then one numbered line per comment. Comment text is data — it is
  * never escaped into a command, and newlines stay newlines (B1).
  */
+// Any CSI (private and colon forms too), then OSC, DCS, PM and APC strings up to BEL or ST.
+const TERMINAL_SEQUENCE = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b[\]P^_][\s\S]*?(?:\x07|\x1b\\)/g;
+
+/**
+ * The same rule as the pi side's `batchSafe`: the batch is read by the model and
+ * drawn in the prompt, so terminal control goes and the rest of the bytes stay (B1).
+ */
+const batchSafe = (text: string) =>
+  text.replace(TERMINAL_SEQUENCE, "").replace(/[\x00-\x09\x0b-\x1f\x7f]/g, "");
+
 export const batchText = (slug: string, root: string, items: readonly InboxItem[]) => {
   const header = [
     `Review comments from tuicr (session ${slug}, repo ${root}). Read the full JSON with`,
     `${batchMarker(slug)} (tuicr skill) if you need it.`,
   ].join("\n");
   const lines = items.map((item, index) => {
-    const type = item.type === null ? "" : `[${item.type}] `;
-    return `${index + 1}. ${location(item)}${type}${item.body}`;
+    const type = item.type === null ? "" : `[${batchSafe(item.type)}] `;
+    return `${index + 1}. ${location(item)}${type}${batchSafe(item.body)}`;
   });
   return `${header}\n\n${lines.join("\n")}`;
 };

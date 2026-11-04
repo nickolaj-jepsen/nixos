@@ -8,6 +8,7 @@
  * the model mid-review: it waits in the prompt for the owner's Enter.
  */
 import type { ExtensionContext, InputEvent } from "@earendil-works/pi-coding-agent";
+import { foreignClaim } from "./claim.ts";
 import type { ReviewEnv } from "./env.ts";
 import { readEntry, recordEntry } from "./entry.ts";
 import { type InboxItem, type ReviewEntry, batchMarker, batchText } from "./types.ts";
@@ -55,6 +56,12 @@ const draftOf = async (ctx: ExtensionContext): Promise<string> => {
  */
 export const sendBatch = async (env: ReviewEnv, ctx: ExtensionContext): Promise<void> => {
   if (ctx.mode !== "tui" || !ctx.hasUI) return;
+  // Another session's review: its comments are not this session's to deliver (U8).
+  const claim = foreignClaim(env, ctx);
+  if (claim !== undefined) {
+    ctx.ui.notify(`review: claimed by ${claim}; /review take takes it over`, "info");
+    return;
+  }
   const entry = readEntry(env, ctx);
   const items = entry === undefined ? [] : pending(entry);
   if (items.length === 0) {

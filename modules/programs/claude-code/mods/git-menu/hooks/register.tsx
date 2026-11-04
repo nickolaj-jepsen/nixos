@@ -359,13 +359,30 @@ async function reviewClaimPath($: EngineInterface, root: string) {
   return claimPath(dir ?? `${home ?? ""}/.pi/agent`, root);
 }
 
+/** C2's shape, checked field by field: the file is read and named in notices, never trusted. */
+function asClaim(value: unknown): Claim | undefined {
+  const claim = value as Partial<Claim> | null;
+  if (typeof claim !== "object" || claim === null) return undefined;
+  const ok =
+    typeof claim.root === "string" &&
+    typeof claim.session === "string" &&
+    (claim.harness === "pi" || claim.harness === "claude") &&
+    typeof claim.pid === "number" &&
+    Number.isFinite(claim.pid) &&
+    (claim.slug === null || typeof claim.slug === "string") &&
+    Array.isArray(claim.seen) &&
+    claim.seen.every((id) => typeof id === "string") &&
+    typeof claim.at === "string" &&
+    typeof claim.scope === "object" &&
+    claim.scope !== null &&
+    Array.isArray((claim.scope as { args?: unknown }).args);
+  return ok ? (claim as Claim) : undefined;
+}
+
 async function readClaim($: EngineInterface, path: string): Promise<Claim | undefined> {
   if (!(await $.fs.exists(path))) return undefined;
   try {
-    const claim = JSON.parse(await $.fs.read(path)) as Partial<Claim> | null;
-    return typeof claim?.root === "string" && typeof claim.session === "string"
-      ? (claim as Claim)
-      : undefined;
+    return asClaim(JSON.parse(await $.fs.read(path)));
   } catch {
     return undefined;
   }

@@ -173,6 +173,14 @@ test("C5 the batch is the header and a numbered list, byte for byte", () => {
     ].join("\n"),
   );
   assert.equal(batchMarker(slug), `\`tuicr review comments --session ${slug}\``);
+  // The editor draws the batch, and the model reads it: terminal control goes,
+  // the rest of the bytes stay (B1).
+  const hostile = batchText(slug, root, [
+    item({ id: "h", body: "clear\x1b[2Jthe\x07screen", path: "a\x1b]52;c;x\x07.ts" }),
+  ]);
+  assert.ok(!hostile.includes("\x1b"), "an escape sequence survived into the batch");
+  assert.match(hostile, /clearthescreen/);
+  assert.match(hostile, /`a\.ts:42`/);
   assert.match(batchText(slug, root, items), new RegExp(`session ${slug}`));
 });
 

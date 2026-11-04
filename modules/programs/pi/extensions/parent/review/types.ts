@@ -141,6 +141,16 @@ export const tuicrArgv = (scope: PinnedScope): string[] => {
 /** The line a submitted prompt must carry to have delivered the batch (C5, D4). */
 export const batchMarker = (slug: string) => `\`tuicr review comments --session ${slug}\``;
 
+// Any CSI (private and colon forms too), then OSC, DCS, PM and APC strings up to BEL or ST.
+const TERMINAL_SEQUENCE = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b[\]P^_][\s\S]*?(?:\x07|\x1b\\)/g;
+
+/**
+ * Comment text is read by the model and drawn in the editor that holds the batch,
+ * so terminal control goes and everything else stays, newlines included (B1).
+ */
+export const batchSafe = (text: string) =>
+  text.replace(TERMINAL_SEQUENCE, "").replace(/[\x00-\x09\x0b-\x1f\x7f]/g, "");
+
 const location = (item: InboxItem) => {
   if (item.path === null) return "";
   const { startLine, endLine } = item;
@@ -150,7 +160,7 @@ const location = (item: InboxItem) => {
       : endLine === null || endLine === startLine
         ? `:${startLine}`
         : `:${startLine}-${endLine}`;
-  return `\`${item.path}${lines}\` `;
+  return `\`${batchSafe(item.path)}${lines}\` `;
 };
 
 /**
@@ -164,8 +174,8 @@ export const batchText = (slug: string, root: string, items: readonly InboxItem[
     `${batchMarker(slug)} (tuicr skill) if you need it.`,
   ].join("\n");
   const lines = items.map((item, index) => {
-    const type = item.type === null ? "" : `[${item.type}] `;
-    return `${index + 1}. ${location(item)}${type}${item.body}`;
+    const type = item.type === null ? "" : `[${batchSafe(item.type)}] `;
+    return `${index + 1}. ${location(item)}${type}${batchSafe(item.body)}`;
   });
   return `${header}\n\n${lines.join("\n")}`;
 };
