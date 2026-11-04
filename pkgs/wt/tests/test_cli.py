@@ -147,6 +147,24 @@ class Local(Base):
         self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(path)).strip(), "feat/x")
         self.assertEqual(self.wt("cd", "feat/x").stdout.strip(), str(path))
 
+    def test_new_refuses_a_folder_that_holds_another_branch(self) -> None:
+        path = self.feature("feat/y")
+        self.assertEqual(path.name, "feat-y")
+        self.assertEqual(self.wt("new", "feat/y").stdout.strip(), str(path))
+        result = self.wt("new", "feat-y", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("feat/y", result.stderr)
+        self.assertIn("feat-y", result.stderr)
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(path)).strip(), "feat/y")
+        self.wt("close", "feat/y")
+        self.assertFalse(path.exists())
+        result = self.wt("new", "feat-y", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("feat/y", result.stderr)
+        self.assertFalse(path.exists())
+        self.assertEqual(self.new("feat/y"), path)
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(path)).strip(), "feat/y")
+
     def test_list_json_shows_open_and_closed(self) -> None:
         self.feature("kept")
         self.new("open")

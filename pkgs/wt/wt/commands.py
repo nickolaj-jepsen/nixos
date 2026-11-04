@@ -102,6 +102,12 @@ def cmd_new(args: argparse.Namespace) -> None:
         name = dir_name(args.name)
         known = {entry.name: entry for entry in entries(repo)}
         entry = known.get(name)
+        if entry and entry.branch and entry.branch != args.name and dir_name(entry.branch) == name:
+            # `feat/y` and `feat-y` name one folder: the folder remembers which branch it holds.
+            die(
+                f"'{name}' holds branch '{entry.branch}', not '{args.name}'; "
+                f"both map to the same folder, so name one of them differently"
+            )
         if entry and entry.open:
             if args.base:
                 die(f"'{name}' is already open at {entry.path}; a base applies only to a new branch")
