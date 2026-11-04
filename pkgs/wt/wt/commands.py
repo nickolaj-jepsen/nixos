@@ -19,7 +19,6 @@ from .worktrees import (
     Row,
     ahead,
     branch_exists,
-    branches_containing,
     clear_record,
     conflicted,
     dir_name,
@@ -30,8 +29,10 @@ from .worktrees import (
     landed,
     layers,
     operation_in_progress,
+    prune_registration,
     read_only_git,
     records,
+    refs_containing,
     resolve,
     set_layers,
     set_record,
@@ -126,14 +127,11 @@ def cmd_new(args: argparse.Namespace) -> None:
             )
         branch = entry.branch if entry else args.name
         # A deleted folder keeps its registration, which blocks this checkout and the branch delete
-        # that follows; prune it so the canonical folder and branch can be used again.
-        blocking = [
-            item
-            for item in stale_worktrees(repo.common)
-            if normpath(item["path"]) == path or (branch and item["branch"] == branch)
-        ]
-        if blocking:
-            run(["git", "-C", repo.main, "worktree", "prune"])
+        # that follows; prune that registration alone, since another stale one may be the only
+        # record of a detached commit.
+        for item in stale_worktrees(repo.common):
+            if normpath(item["path"]) == path or (branch and item["branch"] == branch):
+                prune_registration(repo, item["path"])
         if branch_exists(repo, branch):
             if args.base:
                 die(f"branch '{branch}' already exists; a base applies only to a new branch")
@@ -188,8 +186,8 @@ def _check_closable(repo: Repo, entry: Entry) -> None:
     if not entry.branch:
         if inspect(context, lambda: dirty(path)):
             die(f"'{entry.name}' is detached with uncommitted changes; put them on a branch first")
-        if not inspect(context, lambda: branches_containing(path, "HEAD")):
-            die(f"'{entry.name}' is detached at a commit no branch has; put it on a branch first")
+        if not inspect(context, lambda: refs_containing(path, "HEAD")):
+            die(f"'{entry.name}' is detached at a commit nothing else points to; put it on a branch first")
 
 
 def _finished(repo: Repo, branch: str) -> Optional[str]:
@@ -208,11 +206,34 @@ def _finished(repo: Repo, branch: str) -> Optional[str]:
     return None
 
 
+def _free_branch(repo: Repo, branch: str) -> Optional[str]:
+    """Prune stale registrations still claiming `branch`, which `git branch -d` refuses past.
+
+    Only a registration on a branch is pruned: its commit is named by that very ref, so nothing is
+    lost, while a stale registration with no branch is the only name its commit has. Returns why the
+    branch stays when a locked registration claims it, since git refuses to delete past that.
+    """
+    for item in stale_worktrees(repo.common):
+        if item["branch"] != branch:
+            continue
+        if item["locked"]:
+            return (
+                f"a locked registration at {item['path']} claims it; git -C '{repo.main}' worktree "
+                f"unlock '{item['path']}' && git -C '{repo.main}' worktree prune"
+            )
+        prune_registration(repo, item["path"])
+    return None
+
+
 def settle_branches(repo: Repo, name: str, branches: list[str]) -> None:
     """Delete each of `branches` that is finished; forget `name` once none of its branches is left."""
     for branch in branches:
         why = _finished(repo, branch)
         if why:
+            blocked = _free_branch(repo, branch)
+            if blocked:
+                info(f"kept {branch}: {blocked}")
+                continue
             run(["git", "-C", repo.main, "branch", "--quiet", "-D", branch])
             info(f"deleted {branch}: {why}")
     record = records(repo).get(name)
@@ -248,7 +269,7 @@ def close_entry(repo: Repo, entry: Entry) -> None:
         set_record(repo, entry.name, entry.branch)
     set_layers(repo, entry.name, stacked)
     run(["git", "-C", repo.main, "worktree", "remove", "--force", path])
-    run(["git", "-C", repo.main, "worktree", "prune"], check=False)
+    prune_registration(repo, entry.registration)
     info(f"closed {entry.name}")
     settle_branches(repo, entry.name, [*stacked, entry.branch] if entry.branch else stacked)
     if branch_exists(repo, entry.branch):
@@ -343,13 +364,13 @@ def cmd_drop(args: argparse.Namespace) -> None:
             if inspect(f"'{entry.name}'", lambda: dirty(path)):
                 _commit_wip(path, entry.name)
             run(["git", "-C", repo.main, "worktree", "remove", "--force", path])
-            run(["git", "-C", repo.main, "worktree", "prune"], check=False)
+            prune_registration(repo, entry.registration)
         else:
             # Only data that is still somewhere else can be dropped without a recovery point.
             if not entry.branch and entry.head:
                 info(f"'{entry.name}' was detached at {entry.head}; keep it with: git branch recovered/{entry.name} {entry.head}")
             # A stale registration still claims its branch: pruned, or the branch delete refuses.
-            run(["git", "-C", repo.main, "worktree", "prune"], check=False)
+            prune_registration(repo, entry.registration)
         clear_record(repo, entry.name)
         dropped = [b for b in dict.fromkeys([*stacked, entry.branch]) if branch_exists(repo, b) and b != repo.default]
         if not dropped:
@@ -357,6 +378,10 @@ def cmd_drop(args: argparse.Namespace) -> None:
             return
         for branch in dropped:
             sha = git(repo.main, "rev-parse", f"refs/heads/{branch}").strip()
+            blocked = _free_branch(repo, branch)
+            if blocked:
+                info(f"kept {branch} at {sha}: {blocked}; restore it with: git branch {branch} {sha}")
+                continue
             run(["git", "-C", repo.main, "branch", "--quiet", "-D", branch])
             info(f"dropped {branch} at {sha}; restore with: git branch {branch} {sha}")
 

@@ -456,7 +456,7 @@ class Local(Base):
         self.wt("close", "empty")
         self.assertFalse(self.has_branch("empty"))
 
-    def test_close_refuses_a_detached_commit_no_branch_has(self) -> None:
+    def test_close_refuses_a_detached_commit_nothing_else_points_to(self) -> None:
         path = self.new("loose")
         self.git("switch", "-q", "--detach", cwd=str(path))
         self.write("b.txt", "detached work\n", cwd=str(path))
@@ -464,12 +464,100 @@ class Local(Base):
         sha = self.git("rev-parse", "HEAD", cwd=str(path)).strip()
         closed = self.wt("close", "loose", check=False)
         self.assertNotEqual(closed.returncode, 0)
-        self.assertIn("no branch has", closed.stderr)
+        self.assertIn("nothing else points to", closed.stderr)
         self.assertTrue(path.exists())
         self.assertEqual(self.git("cat-file", "-t", sha).strip(), "commit")
         dropped = self.wt("drop", "loose", check=False)
         self.assertNotEqual(dropped.returncode, 0)
         self.assertTrue(path.exists())
+
+    def test_close_takes_a_detached_worktree_a_tag_still_names(self) -> None:
+        path = self.new("tagged")
+        self.git("switch", "-q", "--detach", cwd=str(path))
+        self.write("b.txt", "tagged work\n", cwd=str(path))
+        self.commit("tagged work", cwd=str(path))
+        self.git("tag", "keep", "HEAD", cwd=str(path))
+        self.git("branch", "-q", "-D", "tagged")
+        self.wt("close", "tagged")
+        self.assertFalse(path.exists())
+        self.assertEqual(self.git("log", "-1", "--format=%s", "keep").strip(), "tagged work")
+
+    def test_close_takes_a_detached_worktree_a_remote_ref_still_names(self) -> None:
+        path = self.feature("moved")
+        self.git("update-ref", "refs/remotes/origin/moved", "HEAD", cwd=str(path))
+        self.git("switch", "-q", "--detach", "origin/moved", cwd=str(path))
+        self.wt("close", "moved")
+        self.assertFalse(path.exists())
+        self.assertEqual(self.subject("origin/moved"), "moved")
+
+    def test_new_leaves_another_stale_registration_alone(self) -> None:
+        loose = self.new("loose")
+        self.git("switch", "-q", "--detach", cwd=str(loose))
+        self.write("b.txt", "detached work\n", cwd=str(loose))
+        self.commit("precious", cwd=str(loose))
+        sha = self.git("rev-parse", "HEAD", cwd=str(loose)).strip()
+        shutil.rmtree(loose)
+        kept = self.new("kept")
+        shutil.rmtree(kept)
+        self.new("kept")
+        # The detached registration is the only thing naming its commit: prune only what blocks.
+        self.assertEqual(self.git("cat-file", "-t", sha).strip(), "commit")
+        self.assertIn("prunable", self.git("worktree", "list", "--porcelain"))
+
+    def test_close_leaves_another_stale_registration_alone(self) -> None:
+        loose = self.new("loose")
+        self.git("switch", "-q", "--detach", cwd=str(loose))
+        self.write("b.txt", "detached work\n", cwd=str(loose))
+        self.commit("precious", cwd=str(loose))
+        sha = self.git("rev-parse", "HEAD", cwd=str(loose)).strip()
+        shutil.rmtree(loose)
+        closed = self.feature("closing")
+        self.wt("close", "closing")
+        self.assertFalse(closed.exists())
+        self.assertEqual(self.git("cat-file", "-t", sha).strip(), "commit")
+        self.assertIn("prunable", self.git("worktree", "list", "--porcelain"))
+
+    def test_drop_leaves_another_stale_registration_alone(self) -> None:
+        loose = self.new("loose")
+        self.git("switch", "-q", "--detach", cwd=str(loose))
+        self.write("b.txt", "detached work\n", cwd=str(loose))
+        self.commit("precious", cwd=str(loose))
+        sha = self.git("rev-parse", "HEAD", cwd=str(loose)).strip()
+        shutil.rmtree(loose)
+        self.feature("dropped")
+        self.wt("drop", "dropped")
+        self.assertFalse(self.has_branch("dropped"))
+        self.assertEqual(self.git("cat-file", "-t", sha).strip(), "commit")
+        self.assertIn("prunable", self.git("worktree", "list", "--porcelain"))
+
+    def test_close_settles_a_branch_a_deleted_folder_still_claims(self) -> None:
+        gone = self.new("gone")
+        shutil.rmtree(gone)
+        self.feature("closing")
+        closed = self.wt("close", "closing", check=False)
+        self.assertEqual(closed.returncode, 0, closed.stderr)
+        # The stale registration on a landed branch is repaired, and the close reports it.
+        self.assertFalse(self.has_branch("gone"))
+        self.assertIn("deleted gone", closed.stderr)
+
+    def test_close_keeps_a_branch_a_locked_registration_claims(self) -> None:
+        gone = self.new("gone")
+        self.git("worktree", "lock", str(gone))
+        shutil.rmtree(gone)
+        self.feature("closing")
+        closed = self.wt("close", "closing", check=False)
+        self.assertEqual(closed.returncode, 0, closed.stderr)
+        self.assertTrue(self.has_branch("gone"))
+        self.assertIn("worktree unlock", closed.stderr)
+
+    def test_drop_keeps_a_branch_a_locked_registration_claims(self) -> None:
+        gone = self.new("gone")
+        self.git("worktree", "lock", str(gone))
+        shutil.rmtree(gone)
+        dropped = self.wt("drop", "gone", check=False)
+        self.assertEqual(dropped.returncode, 0, dropped.stderr)
+        self.assertTrue(self.has_branch("gone"))
+        self.assertIn("worktree unlock", dropped.stderr)
 
     def test_close_keeps_unlanded_work(self) -> None:
         self.feature("unlanded")

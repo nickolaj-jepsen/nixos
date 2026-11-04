@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shutil
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Iterator, Optional, TypeVar
 
-from .git import ProbeError, die, git_ok, is_within, probe, run
+from .git import ProbeError, die, git_ok, is_within, normpath, probe, run
 from .procs import busy_pids
 from .repo import Repo, registered_worktrees
 
@@ -40,6 +42,8 @@ class Entry:
     locked: bool = False
     # The commit a registration recorded, which is all a closed detached worktree still knows.
     head: Optional[str] = None
+    # The path git registered, which survives the folder and is what pruning names.
+    registration: Optional[str] = None
 
     @property
     def open(self) -> bool:
@@ -140,7 +144,14 @@ def entries(repo: Repo) -> list[Entry]:
     for item in registered_worktrees(repo.common)[1:]:
         path = item["path"] if os.path.isdir(item["path"]) else None
         found.append(
-            Entry(os.path.basename(item["path"]), item["branch"], path, item["locked"], item["head"] or None)
+            Entry(
+                os.path.basename(item["path"]),
+                item["branch"],
+                path,
+                item["locked"],
+                item["head"] or None,
+                item["path"],
+            )
         )
     open_names = {entry.name for entry in found}
     for name, branch in sorted(records(repo).items()):
@@ -201,14 +212,44 @@ def dirty(path: str) -> bool:
     return bool(probe(path, "status", "--porcelain", "--untracked-files=all").strip())
 
 
-def branches_containing(path: str, ref: str) -> list[str]:
-    """Branches whose history has `ref`; raises ProbeError when git cannot answer.
+def refs_containing(path: str, ref: str) -> list[str]:
+    """Every ref whose history has `ref`, branches and tags and remotes alike.
 
-    `git branch --contains` also prints the synthetic `(HEAD detached from <sha>)` line, which
-    would make a commit no branch has look shared by one.
+    `git branch --contains` is not the question: it also prints the synthetic
+    `(HEAD detached from <sha>)` line, which would make a commit nothing else points at look shared.
     """
-    out = probe(path, "for-each-ref", "refs/heads", f"--contains={ref}", "--format=%(refname)")
+    out = probe(path, "for-each-ref", f"--contains={ref}", "--format=%(refname)")
     return [line for line in out.splitlines() if line]
+
+
+def prune_registration(repo: Repo, path: Optional[str]) -> None:
+    """Remove the registration for `path` alone, leaving every other registration untouched.
+
+    `git worktree prune` takes every stale registration at once, and a stale registration whose
+    worktree was detached is the only thing still naming its commit.
+    """
+    if not path or os.path.isdir(path):
+        # Nothing named, or the folder is back: a live registration is not stale.
+        return
+    admin_root = os.path.join(repo.common, "worktrees")
+    try:
+        names = os.listdir(admin_root)
+    except OSError:
+        return
+    for name in names:
+        admin = os.path.join(admin_root, name)
+        if os.path.exists(os.path.join(admin, "locked")):
+            continue
+        try:
+            recorded = Path(admin, "gitdir").read_text().strip()
+        except OSError:
+            continue
+        # `gitdir` names the worktree's `.git` file, relative to the admin dir when git wrote it so.
+        if not os.path.isabs(recorded):
+            recorded = os.path.join(admin, recorded)
+        if normpath(os.path.dirname(recorded)) == normpath(path):
+            shutil.rmtree(admin, ignore_errors=True)
+            return
 
 
 def is_wip(cwd: str, ref: str) -> bool:
