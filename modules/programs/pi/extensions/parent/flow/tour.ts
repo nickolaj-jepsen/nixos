@@ -68,7 +68,8 @@ export const runCommand: TourRunner = (command, args, cwd) =>
 export const tourArgv = (from: string, branch: string): string[] => ["-r", `${from}..${branch}`];
 
 /** The line the guide prints and the owner types: the shortcut, then the same argv. */
-export const tourRv = (from: string, branch: string): string => `/rv ${tourArgv(from, branch).join(" ")}`;
+export const tourRv = (from: string, branch: string): string =>
+  `/rv ${tourArgv(from, branch).join(" ")}`;
 
 /** tuicr's one line on stderr naming the session it opened, or undefined when it printed none. */
 export const parseSessionSlug = (stderr: string): string | undefined => {
@@ -160,8 +161,7 @@ export const stopProblem = (stop: TourStop, anchors: DiffAnchors): string | unde
   }
   const where = stop.line === undefined ? stop.file : `${stop.file}:${stop.line}`;
   const known = anchors.get(stop.file);
-  if (known === undefined)
-    return `${where} is not a file of this diff`;
+  if (known === undefined) return `${where} is not a file of this diff`;
   if (stop.line === undefined) {
     if (stop.endLine !== undefined) return `${where} has an end line but no line`;
     return undefined;
@@ -346,7 +346,9 @@ export const registerTour = (pi: ExtensionAPI) => {
         const current = readFlow(found.flow.planDir);
         writeFlow({ ...(current.kind === "ok" ? current.flow : found.flow), tour: seeded.tour });
       } catch (error) {
-        return refused(`flow_tour seeded ${seeded.tour.slug} but could not write FLOW.json: ${message(error)}`);
+        return refused(
+          `flow_tour seeded ${seeded.tour.slug} but could not write FLOW.json: ${message(error)}`,
+        );
       }
       return {
         content: [

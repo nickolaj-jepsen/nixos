@@ -114,7 +114,10 @@ test("a stop off the diff is named, a stop on it is not", () => {
   assert.equal(stopProblem({ file: "a.ts", line: 1, type: "note", body: "" }, anchors), undefined);
   assert.equal(stopProblem({ file: "a.ts", type: "note", body: "" }, anchors), undefined);
   assert.equal(stopProblem({ type: "note", body: "" }, anchors), undefined);
-  assert.equal(stopProblem({ file: "gone.ts", line: 1, side: "old", type: "note", body: "" }, anchors), undefined);
+  assert.equal(
+    stopProblem({ file: "gone.ts", line: 1, side: "old", type: "note", body: "" }, anchors),
+    undefined,
+  );
 
   const unknownFile = stopProblem({ file: "z.ts", line: 1, type: "note", body: "" }, anchors);
   assert.match(unknownFile ?? "", /z\.ts:1 is not a file of this diff/);
@@ -123,9 +126,15 @@ test("a stop off the diff is named, a stop on it is not", () => {
   assert.match(offDiff ?? "", /1/);
   const wrongSide = stopProblem({ file: "gone.ts", line: 1, type: "note", body: "" }, anchors);
   assert.match(wrongSide ?? "", /not a changed new line/);
-  const backwards = stopProblem({ file: "c.ts", line: 3, endLine: 1, type: "note", body: "" }, anchors);
+  const backwards = stopProblem(
+    { file: "c.ts", line: 3, endLine: 1, type: "note", body: "" },
+    anchors,
+  );
   assert.match(backwards ?? "", /ends before it starts/);
-  const farEnd = stopProblem({ file: "c.ts", line: 1, endLine: 40, type: "note", body: "" }, anchors);
+  const farEnd = stopProblem(
+    { file: "c.ts", line: 1, endLine: 40, type: "note", body: "" },
+    anchors,
+  );
   assert.match(farEnd ?? "", /c\.ts:40 is not a changed new line/);
   const noFile = stopProblem({ line: 2, type: "note", body: "" }, anchors);
   assert.match(noFile ?? "", /needs the file/);
@@ -149,7 +158,10 @@ test("a tour is seeded headlessly, in Flow's name, at the diff's lines", async (
     rv: `/rv -r ${FROM}..${BRANCH}`,
   });
 
-  assert.deepEqual(calls.map((call) => call.command), ["git", "tuicr", "tuicr", "tuicr", "tuicr"]);
+  assert.deepEqual(
+    calls.map((call) => call.command),
+    ["git", "tuicr", "tuicr", "tuicr", "tuicr"],
+  );
   assert.deepEqual(calls[0]?.args.slice(-2), [`${FROM}..${BRANCH}`, "--"]);
   for (const call of calls) assert.equal(call.cwd, REPO);
   // The headless start is the argv /rv will use, plus the flag that skips the
@@ -183,7 +195,10 @@ test("a stop outside the diff is refused before tuicr is started", async () => {
   });
   assert.equal(seeded.ok, false);
   assert.match(seeded.ok ? "" : seeded.error, /stop 1: a\.ts:9999 is not a changed new line/);
-  assert.deepEqual(calls.map((call) => call.command), ["git"]);
+  assert.deepEqual(
+    calls.map((call) => call.command),
+    ["git"],
+  );
 });
 
 test("a headless start that prints no slug is an error, not a tour", async () => {
@@ -195,7 +210,10 @@ test("a headless start that prints no slug is an error, not a tour", async () =>
   const seeded = await seedTour(run, WHERE, SPEC);
   assert.equal(seeded.ok, false);
   assert.match(seeded.ok ? "" : seeded.error, /No changes to review/);
-  assert.deepEqual(calls.map((call) => call.command), ["git", "tuicr"]);
+  assert.deepEqual(
+    calls.map((call) => call.command),
+    ["git", "tuicr"],
+  );
 });
 
 test("a range that changes no file has nothing to tour", async () => {
@@ -203,16 +221,18 @@ test("a range that changes no file has nothing to tour", async () => {
   const seeded = await seedTour(run, WHERE, SPEC);
   assert.equal(seeded.ok, false);
   assert.match(seeded.ok ? "" : seeded.error, /nothing to tour/);
-  assert.deepEqual(calls.map((call) => call.command), ["git"]);
+  assert.deepEqual(
+    calls.map((call) => call.command),
+    ["git"],
+  );
 });
 
 test("a comment tuicr refuses is reported with the session that holds the others", async () => {
-  const { run } = scripted(
-    ok(DIFF),
-    { code: 1, stdout: "", stderr: STARTED },
-    ok(),
-    { code: 1, stdout: "", stderr: "Error: invalid comment type\n" },
-  );
+  const { run } = scripted(ok(DIFF), { code: 1, stdout: "", stderr: STARTED }, ok(), {
+    code: 1,
+    stdout: "",
+    stderr: "Error: invalid comment type\n",
+  });
   const seeded = await seedTour(run, WHERE, SPEC);
   assert.equal(seeded.ok, false);
   assert.match(seeded.ok ? "" : seeded.error, /comment 1 of 3/);

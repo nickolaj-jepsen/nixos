@@ -109,7 +109,8 @@ jq -e 'all(.[]; .content != "drifted past the diff")' <<<"$comments" >/dev/null 
 mapfile -t argv < <(jq -r '.tour.argv[]' <<<"$state")
 quoted=$(printf '%q ' "${argv[@]}")
 cmd="cd $(printf %q "$SCENARIO_FIXTURE") && $SCENARIO_ENV tuicr $quoted --no-update-check"
-scenario_tmux new-window -t pi -n tuicr -x "$SCENARIO_COLS" -y "$SCENARIO_LINES" "$cmd"
+scenario_tmux new-window -a -t 'pi:' -n tuicr "$cmd"
+scenario_tmux resize-window -t tuicr -x "$SCENARIO_COLS" -y "$SCENARIO_LINES"
 tour_wait 'the value is now 2' 30
 tour_wait 'the doubling helper is the whole feature' 30
 
