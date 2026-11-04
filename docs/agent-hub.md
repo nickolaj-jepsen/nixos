@@ -376,10 +376,9 @@ In the order the popout lists them. The first four want you.
     (`permission prompt`, `input needed`), and its `PermissionRequest` hook sends
     the daemon a one-line label of the call and all of it.
   - pi reports its own while pi-permission-system or its question tool has a dialog open,
-    and while a `/review` holds its terminal. The label there is
-    `reviewing · 4 comments, 5/7 files`, pushed before the TUI stops, and it
-    outlives the turn that started the review until the review ends
-    (`parent/review/claim.ts`).
+    and while a `/rv` holds its terminal. The label there is
+    `reviewing · 4 comments, 5/7 files`, pushed before the TUI stops and
+    cleared when tuicr quits (`parent/review/live.ts`).
   - Claude also says `waiting` for modals that only show something (the history
     view, `/config`). Those carry `waitingFor: "dialog open"` and leave the
     session in the state it was in.

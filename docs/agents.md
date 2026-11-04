@@ -95,52 +95,51 @@ Paths in the table that don't start with `skills/` or `pkgs/` are under
 
 ## Reviews
 
-`/review` runs tuicr in the same terminal with the TUI suspended, so a review
-is part of the session instead of a window beside it. Claude Code's `git-menu`
-mod has the same command without the suspend: a picker pane and a Ghostty
-window. Both write one claim per repository and hand the comments back as one
-batch. The pi half is `parent/review/` (`review.ts` wires it; `types.ts` holds
-what the two harnesses share: the session entry, the claim, the pinned scope,
-the item and the batch text), and `git-menu`'s `hooks/review.ts` mirrors the
-shared half.
+`/rv` runs tuicr in the same terminal with the TUI suspended, so a review
+is part of the session instead of a window beside it. tuicr is pi's child for
+the length of one review: quitting it (`q`, or `:q` where `q_quits` is off)
+gives the terminal back. Claude Code's `git-menu` mod has the same command,
+`/rv`, in a picker pane and a Ghostty window instead. The name is not
+`/review` because Claude Code's built-in `/code-review` owns it and a plugin's
+registration under it is refused. Both hand the comments back as one batch. The
+pi half is `parent/review/` (`review.ts` wires it; `types.ts` holds what the two
+harnesses share: the session entry, the item and the batch text), and
+`git-menu`'s `hooks/review.ts` mirrors the shared half. Its picker pane is
+Claude's own; pi has none.
 
-- Bare `/review` re-attaches a live review, or opens the scope picker:
-  uncommitted changes, the branch against `origin/HEAD`, the last commit,
-  tuicr's own picker, every tracked file, a pull request, a custom revset. A
-  commit range is resolved to hashes once, because a moved ref would be a
-  different tuicr session.
-- `inbox`, `send`, `take` and `kill` are subcommands. Any other argument goes
-  to tuicr as argv, split without a shell, so quotes and spaces stay data;
-  `-p`/`--path` is dropped because it only filters files within a session, and
-  a command that is only `-p` is refused. Starting or attaching a review is
-  refused while the agent streams; the subcommands still run.
-- tuicr runs under `dtach -A <socket> -r winch -e ^G` at
-  `$XDG_RUNTIME_DIR/pi-review/<sha256(root)[:16]>.sock`. `^G` is the way back
-  to pi and every later hop is a client on the same pty, so marks survive;
-  `q` is still tuicr's quit.
-- A review dies with its pi session, which includes `/reload` and a session
-  replacement: tuicr is asked to save through the socket, then the pid in its
-  `active_sessions.json` is SIGTERMed. A review a crash left running is adopted
-  by the next `/review`. The entry is on the session branch, so `/reload`
-  brings the inbox and its border segment back.
-- One claim per repository: `<agent dir>/review-claims/<sha256(root)[:16]>.json`,
-  the same file from both harnesses. A live claim by another session makes
-  `/review` say whose it is, and `/review take` rewrites it while keeping the
-  ids already delivered. A claim is stale when its pid is gone or the agent-hub
-  no longer lists its session; `at` is not a freshness signal, since Claude
-  keeps its delivered watermark there.
-- `/review send` puts every comment not yet delivered above the draft as one
+- There is no picker to keep in step with tuicr: bare `/rv` opens tuicr's own
+  view, and what you type after it is tuicr's argv, split without a shell so
+  quotes and spaces stay data. Four words are shortcuts, and anything typed
+  after one is appended: `changes` = `-w`, `all` = `-A`, `last` =
+  `-r HEAD~1..HEAD`, `branch` = `-r origin/HEAD..HEAD -w`. The refs are left to
+  tuicr like any other revset.
+- `inbox` and `send` are subcommands. Starting a review is refused while the
+  agent streams; the subcommands still run.
+- A review ends when tuicr quits, and tuicr writes its session as it goes, so
+  nothing is saved or killed on the way out and nothing outlives the hop. The
+  opener learns the slug from the newest session tuicr touched since the
+  launch (`latestSession`), records the entry and its argv, and ingests. The
+  inbox's enter hands that argv back to the opener, which is the same review
+  under the same slug. The entry is on the session branch, so `/reload` brings
+  the inbox and its border segment back.
+- Delivery is per session, not per repository: pi keeps the entry on its
+  session branch, Claude keeps `<agent dir>/review-state/<sha256(root)[:16]>.json`
+  (slug, the ids it has drafted, and when). Comments are therefore delivered
+  once per session, and two sessions in one checkout never share a review —
+  each `/rv` opens (or reopens) its own tuicr session.
+- `/rv send` puts every comment not yet delivered above the draft as one
   numbered list: a header naming the session slug and the repository, a pointer
   at the `tuicr` skill, then a location, type and body per comment. Comment
   text is data: nothing escapes it and its newlines stay. The submitted prompt
   that carries the batch's `tuicr review comments --session <slug>` line is
   what empties it from the inbox.
 - The border reads `review 2 new · 5/7` while comments are pending and
-  `review 5/7` after. `/review inbox` or a click opens the list; `j`/`k` move,
+  `review 5/7` after. `/rv inbox` or a click opens the list; `j`/`k` move,
   `y` copies `path:line`, enter goes back into the review.
-- While a review is live the agent-hub row says the session is asking, with
-  `reviewing · 4 comments, 5/7 files`. The label is pushed before the TUI
-  stops, because the review then holds pi's event loop.
+- While tuicr holds the terminal the agent-hub row says the session is asking,
+  with `reviewing · 4 comments, 5/7 files`. The label is pushed before the TUI
+  stops, because the review then holds pi's event loop, and cleared when tuicr
+  quits.
 - Unit tests are `parent/review/*.test.ts` (`npm test` in `extensions/`). The
   round trips are shell scenarios in `parent/review/scenario/`: `lib.sh` gives
   each a private tmux server, XDG tree, scratch agent dir and fixture
@@ -183,5 +182,11 @@ shared half.
   interactive session loads the folder. `just dev-setup` runs one to lay them
   into each mod's gitignored `.claude-plugin/types/`, for the editor and
   `tsc -p <folder>`. Re-run it after a Claude Code upgrade.
+- A plugin command's name can be refused at runtime and neither
+  `claude plugin validate` nor `claude plugin test` says so:
+  `$.command.register` throws for a name a built-in (`review`, now
+  `/code-review`) or a skill (`tuicr`) already has, and the mod's own catch
+  logs it at debug. `/rv` is the review command's free name; check any new one
+  by typing it in a real session.
 - agent-hub (`docs/agent-hub.md`) already sees every pi and Claude Code
   session; don't add per-agent toast hooks.

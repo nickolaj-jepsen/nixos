@@ -35,14 +35,15 @@ Code update can break one.
   VS Code, Sublime Merge, the file manager or Ghostty, `/open plan` reads this
   session's notes, and `/open diff` opens
   [tuicr](https://github.com/agavra/tuicr) on the changes in a new Ghostty
-  window and tells the model how to read your comments back. `/review` offers
-  the same review scopes as rows, pins the one you pick and opens tuicr in the
-  same kind of window, and on your next send drafts the comments you left into
+  window and tells the model how to read your comments back. `/rv` (`/review`
+  is Claude Code's own code review) offers the same review scopes as rows,
+  pins the one you pick and opens tuicr in the same kind of window, and on
+  your next send drafts the comments you left into
   the prompt as one numbered batch above any draft; the send that carries the
-  batch empties it. It claims the repository, so a pi session in the same
-  checkout is told the review is Claude's until you take it over. Rows that
+  batch empties it. What it has drafted is kept per checkout in
+  `<agent dir>/review-state/`, so a second send does not repeat it. Rows that
   can't run say why. Needs `git`, `gh` for the pull request, `agent-hub` for
-  `/open plan`, and `tuicr` and Ghostty for `/open diff` and `/review`.
+  `/open plan`, and `tuicr` and Ghostty for `/open diff` and `/rv`.
 - **answer**: when a turn ends on a round of questions or a numbered pick
   list, a band row offers a form for it in a pane: one question per screen,
   its options plus "Write your own answer" as numbered entries. A number,

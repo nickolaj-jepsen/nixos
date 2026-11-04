@@ -2,9 +2,8 @@
  * A3's ingest against tuicr's recorded output: the fixture cases in HANDOFF
  * (an empty list, a missing session, `+00:00` timestamps, a PR slug, the
  * commits-and-worktree slug, a comment with no path, `start_line ==
- * end_line`, `progress`), the two uncertain mechanisms (M2's wait and its
- * newest-by-time fallback, D6's sessions that went active), and one case
- * against the installed binary when there is one.
+ * end_line`, `progress`), a recorded review beside one that went live (D6), and
+ * one case against the installed binary when there is one.
  *
  * The fixtures are what 0.28.0 printed, with the scratch paths renamed
  * (notes/tuicr-dtach.md §1). Nothing here starts a tuicr process except the
@@ -12,14 +11,14 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ReviewEnv } from "./env.ts";
 import { type TuicrResult, type TuicrSource, cliTuicr, ingestWith } from "./ingest.ts";
-import { type ReviewEntry, socketPath } from "./types.ts";
+import type { ReviewEntry } from "./types.ts";
 
 /** Every assertion is on what ingest returns (C1); the appends it makes go nowhere. */
 const env = { pi: { appendEntry: () => {} } } as unknown as ReviewEnv;
@@ -63,7 +62,7 @@ const entry = (over: Partial<ReviewEntry> = {}): ReviewEntry => ({
   cwd: "/work/repo",
   harness: "pi",
   slug: SLUG,
-  scope: { mode: "worktree", args: ["-w"] },
+  args: ["-w"],
   socket: "/run/user/1000/pi-review/0123456789abcdef.sock",
   items: [],
   seen: [],
@@ -73,20 +72,11 @@ const entry = (over: Partial<ReviewEntry> = {}): ReviewEntry => ({
   ...over,
 });
 
-/** A scratch directory and a socket under it, as a review would leave one (C6, A2). */
+/** A scratch checkout, as a review would leave one. */
 const scratch = (t: { after: (fn: () => void) => void }) => {
   const dir = mkdtempSync(join(tmpdir(), "pi-review-ingest-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const runtime = join(dir, "run");
-  mkdirSync(join(runtime, "pi-review"), { recursive: true });
-  const saved = process.env.XDG_RUNTIME_DIR;
-  process.env.XDG_RUNTIME_DIR = runtime;
-  t.after(() => {
-    if (saved === undefined) delete process.env.XDG_RUNTIME_DIR;
-    else process.env.XDG_RUNTIME_DIR = saved;
-  });
-  const root = realpathSync(dir);
-  return { dir, root, live: () => writeFileSync(socketPath(runtime, root), "") };
+  return { dir, root: realpathSync(dir) };
 };
 
 test("a repository with no sessions reads `[]` and ingests nothing", async (t) => {
@@ -231,26 +221,8 @@ test("an empty orphan is never read, even when it is the newest session", async 
   );
 });
 
-test("M2 waits for a review that is still registering itself", async (t) => {
-  const { dir, live } = scratch(t);
-  live();
-  const bodies = [fixture("list-empty.json"), fixture("list-staged-and-unstaged.json")];
-  let calls = 0;
-  const tuicr: TuicrSource = {
-    // tuicr writes its session file a few seconds after launch; the first look sees nothing.
-    list: async () => ({ code: 0, stdout: bodies[Math.min(calls++, 1)] }),
-    comments: async () => ({ code: 0, stdout: fixture("comments-staged-and-unstaged.json") }),
-  };
-  const started = Date.now();
-  const next = await ingestWith(env, ctx(dir, "s-poll"), undefined, tuicr);
-  assert.ok(calls >= 2);
-  assert.ok(Date.now() - started >= 200);
-  assert.equal(next?.items.length, 4);
-  assert.equal(next?.slug, SLUG);
-});
-
-test("M2 without an active session: the newest with comments, and only while a socket exists", async (t) => {
-  const { dir, live } = scratch(t);
+test("an ended review nobody recorded is not a new inbox", async (t) => {
+  const { dir } = scratch(t);
   // `review list` returns newest first: the empty orphan leads the ended review.
   const mixed = JSON.stringify([
     ...(JSON.parse(fixture("list-orphans.json")) as unknown[]),
@@ -260,12 +232,7 @@ test("M2 without an active session: the newest with comments, and only while a s
     list: mixed,
     comments: { [SLUG]: fixture("comments-staged-and-unstaged.json") },
   };
-  // No review is running: an old session's comments are not a new inbox.
   assert.equal(await ingestWith(env, ctx(dir, "s-quiet"), undefined, source(answers)), undefined);
-  live();
-  const next = await ingestWith(env, ctx(dir, "s-fallback"), undefined, source(answers));
-  assert.equal(next?.slug, SLUG);
-  assert.equal(next?.items.length, 4);
 });
 
 test("D6 a session that went active is still read once it has ended", async (t) => {
@@ -282,7 +249,7 @@ test("D6 a session that went active is still read once it has ended", async (t) 
     ctx(dir, "s-active"),
     entry({ slug }),
     source({
-      // The pinned review is over; another one went live beside it.
+      // The recorded review is over; another one went live beside it.
       list: both("list-staged-and-unstaged-and-commits.json", "list-staged-and-unstaged.json"),
       comments: {
         [SLUG]: fixture("comments-staged-and-unstaged.json"),

@@ -5,12 +5,11 @@
  * The meter is what the border paints through `measurements()`, so it has no
  * `ctx`: it reads the entry A5's `sessionReview()` publishes for exactly this
  * reason. What it counts is what has not been delivered yet — the same pending
- * set `/review send` batches — so a delivered comment leaves the count and the
+ * set `/rv send` batches — so a delivered comment leaves the count and the
  * progress half stays.
  *
  * The overlay lists every comment the review holds, and enter leaves for the
- * review itself through A2's opener: `openReview` with no scope attaches the
- * running tuicr, which is the hop the owner wants from the list.
+ * review itself through the opener, on the argv the entry recorded.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Meter } from "../chrome/measurements.ts";
@@ -53,7 +52,7 @@ export const inboxMeter = (env: ReviewEnv): Meter | undefined => {
 };
 
 /**
- * `/review inbox` and the segment's click: the list over the whole terminal,
+ * `/rv inbox` and the segment's click: the list over the whole terminal,
  * then either back to the prompt or on into the review (D3, D11).
  */
 export const openInbox = async (env: ReviewEnv, ctx: ExtensionContext): Promise<void> => {
@@ -75,7 +74,7 @@ export const openInbox = async (env: ReviewEnv, ctx: ExtensionContext): Promise<
       ),
     { overlay: false },
   );
-  if (result === "attach") await openReview(env, ctx, undefined);
+  if (result === "attach") await openReview(env, ctx, entry.args);
 };
 
 /**

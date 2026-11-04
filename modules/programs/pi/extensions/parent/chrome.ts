@@ -31,7 +31,7 @@ export default function (
   pi.on("session_start", (_event, ctx) => {
     state.ctx = ctx;
     state.live = ctx.mode === "tui" && ctx.hasUI;
-    // Whatever an earlier session recorded is claimed before this one asks tuicr.
+    // Whatever an earlier session recorded is read back before this one asks tuicr.
     // Not awaited: the editor must come up while tuicr is read, and a rejection
     // escaping this handler would take the session down rather than notify.
     void review.ingest(ctx).catch((error) => {
@@ -93,9 +93,9 @@ export default function (
       await actions.git(ctx);
     },
   });
-  pi.registerCommand("review", {
+  pi.registerCommand("rv", {
     description:
-      "Review this repository's changes in tuicr without leaving this terminal; /review inbox lists the comments, /review send puts them in the prompt, /review take takes the review over, /review kill ends it, and any other argument goes to tuicr",
+      "Review this repository's changes in tuicr without leaving this terminal; /rv inbox lists the comments, /rv send puts them in the prompt, and any other argument goes to tuicr",
     handler: async (args, ctx) => {
       await review.dispatch(args, ctx);
     },

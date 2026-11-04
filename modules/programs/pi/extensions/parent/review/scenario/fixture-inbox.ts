@@ -69,7 +69,7 @@ export default function (pi: ExtensionAPI) {
       cwd: ctx.cwd,
       harness: "pi",
       slug: SLUG,
-      scope: { mode: "worktree", args: ["-w"] },
+      args: ["-w"],
       socket: join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "pi-review", "fixture.sock"),
       items,
       seen: items.map((item) => item.id),

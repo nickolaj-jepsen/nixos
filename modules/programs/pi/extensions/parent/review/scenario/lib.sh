@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Harness for the /review scenarios: a private tmux server, its own XDG tree,
+# Harness for the /rv scenarios: a private tmux server, its own XDG tree,
 # its own agent dir and a fixture repository per scenario. Nothing here touches
 # the owner's tuicr store, their pi session or their agent files, and two
-# scenarios can run at once because every socket and directory is named after
-# the scenario.
+# scenarios can run at once because every directory and tmux server is named
+# after the scenario.
 #
 # Usage, from a scenario script:
 #   . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 #   scenario_init smoke          # scratch dirs, tmux server, cleanup trap
 #   scenario_fixture             # a repo with one uncommitted change
 #   scenario_start               # pi with this worktree's extensions
-#   scenario_type /review; scenario_keys Enter
+#   scenario_type /rv; scenario_keys Enter
 #   scenario_wait "review: not implemented yet"
 #   scenario_pass
 #

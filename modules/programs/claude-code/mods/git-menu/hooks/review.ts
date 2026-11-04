@@ -1,5 +1,5 @@
 /**
- * `/review`'s logic, as data: D1's scopes, the claim both harnesses write (C2),
+ * `/rv`'s logic, as data: D1's scopes, the per-repository review state (C2),
  * the comments tuicr prints (C4) and the batch they become (C5).
  *
  * A mod's `$` may only be called at the call site the validator reads, so the
@@ -11,7 +11,7 @@ import type { PrAnswer } from "./menus";
 export const REVIEW_PANE = "review";
 export const REVIEW_TITLE = "Review";
 
-const CLAIMS = "review-claims";
+const STATE = "review-state";
 const SHORT_SHA = 7;
 
 /** C3: what the reviewer picked; `args` is the argv handed to tuicr. */
@@ -24,34 +24,27 @@ export type PinnedScope = {
   target?: string;
 };
 
-/** C2: the per-repository record of which session owns the review. */
-export type Claim = {
+/** C2: what this checkout's review told this session, so the next send can pick it up. */
+export type ReviewState = {
   v: 1;
   root: string;
-  session: string;
-  harness: "pi" | "claude";
-  pid: number;
   slug: string | null;
-  scope: PinnedScope;
   seen: string[];
   at: string;
 };
 
 /**
- * C2's field names, typed as a complete map: a field added to `Claim` fails to
- * compile until it is named here, and the test reads the file back against it.
+ * C2's field names, typed as a complete map: a field added to `ReviewState`
+ * fails to compile until it is named here, and the test reads the file back
+ * against it.
  */
-export const CLAIM_FIELDS = {
+export const STATE_FIELDS = {
   v: true,
   root: true,
-  session: true,
-  harness: true,
-  pid: true,
   slug: true,
-  scope: true,
   seen: true,
   at: true,
-} satisfies Record<keyof Claim, true>;
+} satisfies Record<keyof ReviewState, true>;
 
 /** C4: a comment tuicr holds, as the batch carries it. */
 export type InboxItem = {
@@ -173,36 +166,22 @@ export const revsetScope = (answer: string): PinnedScope | undefined => {
   return revset ? { mode: "revset", args: ["-r", revset] } : undefined;
 };
 
-/** The claim a fresh review writes: no slug yet, nothing seen, this session's (C2). */
-export const newClaim = ({
-  root,
-  session,
-  pid,
-  scope,
-  at,
-}: Pick<Claim, "root" | "session" | "pid" | "scope" | "at">): Claim => ({
+/** The state a fresh review writes: no slug yet, nothing delivered (C2). */
+export const newState = ({ root, at }: Pick<ReviewState, "root" | "at">): ReviewState => ({
   v: 1,
   root,
-  session,
-  harness: "claude",
-  pid,
   slug: null,
-  scope,
   seen: [],
   at,
 });
 
-/** Whether this claim is this session's to feed: another session's, or pi's, is left alone (U8). */
-export const ownsClaim = (claim: Claim, session: string) =>
-  claim.harness === "claude" && claim.session === session;
-
-/** C2's atomic write: a pid-suffixed temp beside the claim, then a rename onto it. */
-export const claimFile = (claim: Claim, path: string) => ({
-  temp: `${path}.${claim.pid}.tmp`,
-  text: `${JSON.stringify(claim, null, 2)}\n`,
+/** C2's atomic write: a stamp-suffixed temp beside the state, then a rename onto it. */
+export const stateFile = (state: ReviewState, path: string, stamp: number) => ({
+  temp: `${path}.${stamp}.tmp`,
+  text: `${JSON.stringify(state, null, 2)}\n`,
 });
 
-/** sha256 of `text` as hex, lower case: what names a claim and an id-less comment. */
+/** sha256 of `text` as hex, lower case: what names the state file and an id-less comment. */
 const sha256 = async (text: string) => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -211,9 +190,9 @@ const sha256 = async (text: string) => {
 /** 16 hex of sha256(root): short enough for a file name, wide enough that two repositories never meet. */
 export const reviewKey = async (root: string) => (await sha256(root)).slice(0, 16);
 
-/** `<agent dir>/review-claims/<key>.json`; pi's agent dir, so both harnesses write one file (C2). */
-export const claimPath = async (agentDir: string, root: string) =>
-  `${agentDir}/${CLAIMS}/${await reviewKey(root)}.json`;
+/** `<agent dir>/review-state/<key>.json`, beside pi's own review state (C2). */
+export const statePath = async (agentDir: string, root: string) =>
+  `${agentDir}/${STATE}/${await reviewKey(root)}.json`;
 
 const text = (value: unknown) => (typeof value === "string" ? value : null);
 const line = (value: unknown) =>

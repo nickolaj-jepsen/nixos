@@ -60,7 +60,7 @@ const entry = (over: Partial<ReviewEntry> = {}): ReviewEntry => ({
   cwd: "/work/repo",
   harness: "pi",
   slug: "repo@main/staged-and-unstaged/9d1b591",
-  scope: { mode: "worktree", args: ["-w"] },
+  args: ["-w"],
   socket: "/run/user/1000/pi-review/0123456789abcdef.sock",
   items: [
     item(),

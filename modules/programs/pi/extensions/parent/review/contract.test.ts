@@ -9,21 +9,14 @@ import {
   type Claim,
   type InboxItem,
   type ReviewEntry,
-  CLAIM_FIELDS,
   REVIEW_ENTRY,
   REVIEW_ENTRY_FIELDS,
   batchMarker,
   batchText,
-  claimPath,
   inboxItem,
-  reviewKey,
-  socketPath,
-  tuicrArgv,
 } from "./types.ts";
 import { createReview } from "../review.ts";
 import { parseReview } from "./command.ts";
-
-const scope = { mode: "worktree" as const, args: ["-w"] };
 
 const item = (over: Partial<InboxItem> = {}): InboxItem => ({
   id: "c1",
@@ -45,8 +38,7 @@ test("C1 the review entry carries exactly the recorded fields", () => {
     cwd: "/work/repo",
     harness: "pi",
     slug: "repo@main/staged-and-unstaged/9d1b591",
-    scope,
-    socket: "/run/user/1000/pi-review/0123456789abcdef.sock",
+    args: ["-w"],
     items: [item()],
     seen: ["c1"],
     sent: [],
@@ -56,49 +48,6 @@ test("C1 the review entry carries exactly the recorded fields", () => {
   assert.equal(REVIEW_ENTRY, "review");
   assert.deepEqual(Object.keys(entry).sort(), Object.keys(REVIEW_ENTRY_FIELDS).sort());
   assert.deepEqual(Object.keys(entry.progress).sort(), ["fileCount", "reviewedCount"]);
-});
-
-test("C2 the claim sits under the agent dir, keyed by the repository", () => {
-  const claim: Claim = {
-    v: 1,
-    root: "/work/repo",
-    session: "session-1",
-    harness: "claude",
-    pid: 4242,
-    slug: null,
-    scope,
-    seen: [],
-    at: "2026-11-03T21:12:12.088148037+00:00",
-  };
-  assert.deepEqual(Object.keys(claim).sort(), Object.keys(CLAIM_FIELDS).sort());
-  const path = claimPath("/agent", "/work/repo");
-  assert.equal(path, `/agent/review-claims/${reviewKey("/work/repo")}.json`);
-  assert.match(path, /\/[0-9a-f]{16}\.json$/);
-  assert.notEqual(claimPath("/agent", "/work/repo"), claimPath("/agent", "/other/repo"));
-});
-
-test("C3 a pinned scope names a mode and the argv tuicr gets", () => {
-  assert.deepEqual(tuicrArgv({ mode: "worktree", args: [] }), ["-w"]);
-  assert.deepEqual(tuicrArgv({ mode: "all", args: [] }), ["-A"]);
-  assert.deepEqual(tuicrArgv({ mode: "picker", args: [] }), []);
-  assert.deepEqual(tuicrArgv({ mode: "pr", args: [], target: "42" }), ["pr", "42"]);
-  assert.deepEqual(tuicrArgv({ mode: "commits", args: [], base: "8cae48e", head: "9d1b591" }), [
-    "-r",
-    "8cae48e..9d1b591",
-    "-w",
-  ]);
-  assert.deepEqual(
-    tuicrArgv({ mode: "commits", args: ["-r", "9d1b591~1..9d1b591"], head: "9d1b591" }),
-    ["-r", "9d1b591~1..9d1b591"],
-  );
-  // Last commit, unresolved: the parent is spelled out so the slug is commits/, not unstaged/.
-  assert.deepEqual(tuicrArgv({ mode: "commits", args: [], head: "9d1b591" }), [
-    "-r",
-    "9d1b591~1..9d1b591",
-  ]);
-  assert.deepEqual(tuicrArgv({ mode: "commits", args: [] }), []);
-  const revset = ["-r", 'a..b --author "Jo Doe"'];
-  assert.deepEqual(tuicrArgv({ mode: "revset", args: revset }), revset);
 });
 
 test("C4 a comment maps to the inbox shape, whatever tuicr leaves out", () => {
@@ -184,10 +133,7 @@ test("C5 the batch is the header and a numbered list, byte for byte", () => {
   assert.match(batchText(slug, root, items), new RegExp(`session ${slug}`));
 });
 
-test("C6 the socket and the module surface", () => {
-  const path = socketPath("/run/user/1000", "/work/repo");
-  assert.equal(path, `/run/user/1000/pi-review/${reviewKey("/work/repo")}.sock`);
-  assert.match(path, /\/[0-9a-f]{16}\.sock$/);
+test("C6 the module surface", () => {
   // The handle the chrome calls: one absent method and `measurements()` throws on every border.
   const review = createReview(
     { on: () => () => {}, registerCommand: () => {} } as never,
@@ -218,10 +164,9 @@ test("a refused review is what the owner is told, and nothing is opened", async 
 });
 
 test("D11 the subcommands are told apart", async () => {
-  // A real, hermetic cwd: the bare case asks git where it is, even when nothing is picked.
   const ctx = { isIdle: () => true, cwd: tmpdir(), ui: { notify: () => {} } } as never;
-  assert.deepEqual(await parseReview("", ctx), { kind: "open", scope: undefined });
-  for (const kind of ["inbox", "send", "take", "kill"] as const) {
+  assert.deepEqual(await parseReview("", ctx), { kind: "open", args: [] });
+  for (const kind of ["inbox", "send"] as const) {
     assert.deepEqual(await parseReview(kind, ctx), { kind });
     assert.deepEqual(await parseReview(`  ${kind}  `, ctx), { kind });
   }

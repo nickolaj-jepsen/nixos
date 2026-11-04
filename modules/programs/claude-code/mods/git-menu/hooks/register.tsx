@@ -21,11 +21,8 @@ import { HUB, notesMenu, OPENER, parseNotes } from "./notes";
 import {
   batchMarker,
   batchText,
-  claimFile,
-  claimPath,
   freshItems,
-  newClaim,
-  ownsClaim,
+  newState,
   parseComments,
   parseList,
   pickSlug,
@@ -34,11 +31,13 @@ import {
   REVIEW_TITLE,
   reviewMenu,
   revsetScope,
-  type Claim,
+  stateFile,
+  statePath,
   type PinnedScope,
   type ReviewFacts,
   type ReviewMenu,
   type ReviewRow,
+  type ReviewState,
 } from "./review";
 
 const PANE = "git-menu";
@@ -288,7 +287,7 @@ async function closeReview($: EngineInterface) {
   if (await reviewIsOpen($)) await $.ui.close({ id: REVIEW_PANE });
 }
 
-/** `/review`: D1's scopes, the pane up before git answers, as the menus above open. */
+/** `/rv`: D1's scopes, the pane up before git answers, as the menus above open. */
 async function openReview($: EngineInterface) {
   const cwd = await $.session.cwd();
   picker = { title: REVIEW_TITLE, rows: null };
@@ -346,86 +345,53 @@ async function reviewWindow($: EngineInterface, cwd: string, args: readonly stri
   return ghostty ? [ghostty, ...review] : undefined;
 }
 
-/** This Claude process's pid, for C2's staleness rule: there is no Node here, so the shell says it. */
-async function reviewPid($: EngineInterface) {
-  const said = await run($, ["sh", "-c", "echo $PPID"]);
-  const pid = Number((said?.stdout ?? "").trim());
-  return Number.isInteger(pid) && pid > 0 ? pid : 0;
-}
-
-/** pi's agent directory: where C2's claim lives, so both harnesses write one file. */
-async function reviewClaimPath($: EngineInterface, root: string) {
+/** pi's agent directory: where this checkout's review state lives (C2). */
+async function reviewStatePath($: EngineInterface, root: string) {
   const [dir, home] = await Promise.all([$.env.get("PI_CODING_AGENT_DIR"), $.env.get("HOME")]);
-  return claimPath(dir ?? `${home ?? ""}/.pi/agent`, root);
+  return statePath(dir ?? `${home ?? ""}/.pi/agent`, root);
 }
 
-/** C2's shape, checked field by field: the file is read and named in notices, never trusted. */
-function asClaim(value: unknown): Claim | undefined {
-  const claim = value as Partial<Claim> | null;
-  if (typeof claim !== "object" || claim === null) return undefined;
+/** C2's shape, checked field by field: the file is read and quoted from, never trusted. */
+function asState(value: unknown): ReviewState | undefined {
+  const state = value as Partial<ReviewState> | null;
+  if (typeof state !== "object" || state === null) return undefined;
   const ok =
-    typeof claim.root === "string" &&
-    typeof claim.session === "string" &&
-    (claim.harness === "pi" || claim.harness === "claude") &&
-    typeof claim.pid === "number" &&
-    Number.isFinite(claim.pid) &&
-    (claim.slug === null || typeof claim.slug === "string") &&
-    Array.isArray(claim.seen) &&
-    claim.seen.every((id) => typeof id === "string") &&
-    typeof claim.at === "string" &&
-    typeof claim.scope === "object" &&
-    claim.scope !== null &&
-    Array.isArray((claim.scope as { args?: unknown }).args);
-  return ok ? (claim as Claim) : undefined;
+    state.v === 1 &&
+    typeof state.root === "string" &&
+    (state.slug === null || typeof state.slug === "string") &&
+    Array.isArray(state.seen) &&
+    state.seen.every((id) => typeof id === "string") &&
+    typeof state.at === "string";
+  return ok ? (state as ReviewState) : undefined;
 }
 
-async function readClaim($: EngineInterface, path: string): Promise<Claim | undefined> {
+async function readState($: EngineInterface, path: string): Promise<ReviewState | undefined> {
   if (!(await $.fs.exists(path))) return undefined;
   try {
-    return asClaim(JSON.parse(await $.fs.read(path)));
+    return asState(JSON.parse(await $.fs.read(path)));
   } catch {
     return undefined;
   }
 }
 
-/** C2's write: a pid-suffixed temp beside the claim, then a rename, so no reader sees half a file. */
-async function writeClaim($: EngineInterface, path: string, claim: Claim) {
-  const { temp, text } = claimFile(claim, path);
+/** C2's write: a stamp-suffixed temp beside the state, then a rename, so no reader sees half a file. */
+async function writeState($: EngineInterface, path: string, state: ReviewState) {
+  const { temp, text } = stateFile(state, path, await $.clock.now());
   await $.fs.write(temp, text);
   const moved = await $.process.run(["mv", temp, path]).catch(() => undefined);
   if (moved?.exitCode !== 0)
-    $.ui.log(`review: could not write the claim at ${path}`, { to: "debug" });
+    $.ui.log(`review: could not write the state at ${path}`, { to: "debug" });
 }
 
-/** Whether a claim's process still runs: a session that quit leaves a claim to overwrite. */
-async function running($: EngineInterface, pid: number): Promise<boolean> {
-  const probe = await $.process.run(["kill", "-0", String(pid)]).catch(() => undefined);
-  return probe?.exitCode === 0;
-}
-
-/** Pins the scope, opens the window and records the claim the next send reads. */
+/** Pins the scope, opens the window and records the state the next send reads. */
 async function launchReview($: EngineInterface, scope: PinnedScope) {
-  const [cwd, repo, session] = await Promise.all([
-    $.session.cwd(),
-    $.session.repo(),
-    $.session.id(),
-  ]);
+  const [cwd, repo] = await Promise.all([$.session.cwd(), $.session.repo()]);
   if (!repo) {
     $.ui.toast("Not a git repository.");
     return;
   }
-  const path = await reviewClaimPath($, repo.root);
-  const existing = await readClaim($, path);
-  const pid = await reviewPid($);
-  // The same engine writing a new session id (after /clear) is this session's
-  // claim: no second session exists for that pid to belong to.
-  const ours = existing !== undefined && (ownsClaim(existing, session) || existing.pid === pid);
-  // The file is one repository's review for both harnesses: a live claim that is
-  // not this session's is left to it, the same refusal pi's opener makes (U8).
-  if (existing !== undefined && !ours && (await running($, existing.pid))) {
-    $.ui.toast(`This repository's review belongs to another ${existing.harness} session.`);
-    return;
-  }
+  const path = await reviewStatePath($, repo.root);
+  const existing = await readState($, path);
   const argv = await reviewWindow($, cwd, scope.args);
   if (!argv) {
     $.ui.toast("tuicr and Ghostty are both needed for a review window.");
@@ -436,16 +402,11 @@ async function launchReview($: EngineInterface, scope: PinnedScope) {
     $.ui.toast("Couldn't start Ghostty.");
     return;
   }
-  const claim = newClaim({
-    root: repo.root,
-    session,
-    pid,
-    scope,
-    at: new Date(await $.clock.now()).toISOString(),
+  // Read-modify-write: a second review in the same checkout keeps what it delivered.
+  await writeState($, path, {
+    ...newState({ root: repo.root, at: new Date(await $.clock.now()).toISOString() }),
+    seen: existing?.seen ?? [],
   });
-  // Read-modify-write: a re-launch by the same session keeps what it delivered.
-  const seen = ours && existing !== undefined ? existing.seen : [];
-  await writeClaim($, path, { ...claim, seen });
   $.ui.toast("Opened tuicr in a Ghostty window; its comments land in your next prompt.");
 }
 
@@ -472,7 +433,7 @@ async function pinRevset($: EngineInterface, answer: string) {
   await closeReview($);
 }
 
-/** The review's slug: the session tuicr opened for this checkout after the claim (M2). */
+/** The review's slug: the session tuicr opened for this checkout after the state was written (M2). */
 async function reviewSlug($: EngineInterface, root: string, since: string) {
   const tuicr = await locate($, "tuicr");
   if (!tuicr) return undefined;
@@ -490,36 +451,36 @@ async function reviewComments($: EngineInterface, root: string, slug: string) {
 
 /**
  * After a send: the review's comments become one batch in the prompt box, and the
- * send that carried a batch empties the claim's inbox (U2, D4, D9). Nothing is
+ * send that carried a batch empties the review's inbox (U2, D4, D9). Nothing is
  * attached to the prompt unseen and nothing is sent for the person.
  */
 async function afterReviewSubmit($: EngineInterface, sent: string) {
   const repo = await $.session.repo();
   if (!repo) return;
-  const path = await reviewClaimPath($, repo.root);
-  const claim = await readClaim($, path);
-  if (!claim || !ownsClaim(claim, await $.session.id())) return;
+  const path = await reviewStatePath($, repo.root);
+  const state = await readState($, path);
+  if (!state) return;
   const now = new Date(await $.clock.now()).toISOString();
-  const slug = claim.slug ?? (await reviewSlug($, claim.root, claim.at));
+  const slug = state.slug ?? (await reviewSlug($, state.root, state.at));
   if (slug === undefined) return;
   if (sent.includes(batchMarker(slug))) {
     // The batch reached the model: the inbox is empty, and nothing from before the
     // draft is drafted again. `at` stays at the draft's time, not this send's, so a
     // comment made while the batch sat in the prompt still arrives next time.
-    await writeClaim($, path, { ...claim, slug, seen: [] });
+    await writeState($, path, { ...state, slug, seen: [] });
     return;
   }
-  const found = await reviewComments($, claim.root, slug);
+  const found = await reviewComments($, state.root, slug);
   if (!found) return;
-  const fresh = freshItems(found, claim.seen, claim.at);
+  const fresh = freshItems(found, state.seen, state.at);
   if (fresh.length === 0) {
     // The slug is worth keeping: the next send reads the comments without asking tuicr first.
-    if (claim.slug !== slug) await writeClaim($, path, { ...claim, slug });
+    if (state.slug !== slug) await writeState($, path, { ...state, slug });
     return;
   }
   const box = await $.prompt.read();
   const filled = await $.prompt.fill({
-    text: placeReply(box.text, batchText(slug, claim.root, fresh)),
+    text: placeReply(box.text, batchText(slug, state.root, fresh)),
     mode: "replace",
   });
   if (!filled.isFilled) {
@@ -527,10 +488,10 @@ async function afterReviewSubmit($: EngineInterface, sent: string) {
     $.ui.toast("The review batch couldn't go in the prompt: a dialog is open.");
     return;
   }
-  await writeClaim($, path, {
-    ...claim,
+  await writeState($, path, {
+    ...state,
     slug,
-    seen: [...claim.seen, ...fresh.map((item) => item.id)],
+    seen: [...state.seen, ...fresh.map((item) => item.id)],
     at: now,
   });
 }
@@ -592,8 +553,11 @@ export const register: Register = (on) => {
         "Open the folder menu: this checkout in an editor, file manager or terminal; `plan` reads this session's notes, `diff` reviews the changes in tuicr",
         "[plan|diff]",
       ],
+      // Not `review` or `tuicr`: Claude Code has the first for its built-in code
+      // review and the second for the tuicr skill, and a plugin's registration
+      // under either name is refused.
       [
-        "review",
+        "rv",
         "Review the changes in tuicr, in a Ghostty window; its comments are drafted into the next prompt",
         undefined,
       ],
@@ -623,7 +587,7 @@ export const register: Register = (on) => {
     return { text: "Opened the folder menu." };
   });
 
-  on("command.run", { command: "review" }, async ($) => {
+  on("command.run", { command: "rv" }, async ($) => {
     await openReview($);
     return { text: "Opened the review picker." };
   });

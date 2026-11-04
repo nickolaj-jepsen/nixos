@@ -17,8 +17,7 @@
     in "#${lib.concatMapStrings (i: pad (mix i)) [0 2 4]}";
   in {
     config = lib.mkIf config.fireproof.dev.enable {
-      # dtach keeps the review alive while pi's TUI is suspended in front of it.
-      home.packages = [pkgs.unstable.tuicr pkgs.dtach];
+      home.packages = [pkgs.unstable.tuicr];
 
       # Same tarball trick as gh-stack in git.nix: the skill matches the installed version.
       fireproof.agents.skills.tuicr = let

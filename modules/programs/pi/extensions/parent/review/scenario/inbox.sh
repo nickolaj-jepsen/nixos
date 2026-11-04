@@ -5,21 +5,11 @@
 # way the extension does, because the opener that does it for real is A2's. The
 # segment is then clicked where it is drawn, the overlay is driven with j/k/y and
 # resized to 60x40 and 160x50, and the whole round trip ends in a real tuicr:
-# /review -w starts one on the dirty fixture, and enter in the inbox attaches the
-# review that is already running instead of starting another.
-#
-# dtach is not on this checkout's PATH (its module edit is not switched in) and
-# the extension looks dtach up on PATH, so the review half exports it here, the
-# way A2's scenario does.
+# /rv -w starts one on the dirty fixture, quitting it keeps the entry, and enter
+# in the inbox opens the pin the entry recorded instead of a picker.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DTACH="$(nix build nixpkgs#dtach --no-link --print-out-paths | tail -1)/bin/dtach"
-[ -x "$DTACH" ] || {
-  printf 'scenario: no dtach at %s\n' "$DTACH" >&2
-  exit 1
-}
-export PATH="$(dirname "$DTACH"):$PATH"
 
 # `y` copies through pi, which would otherwise write the owner's real clipboard:
 # with no display it takes the terminal's OSC 52 route, whose bytes stay in the
@@ -34,29 +24,7 @@ fail() {
   exit 1
 }
 
-review_socket() {
-  find "${XDG_RUNTIME_DIR:-/nonexistent}/pi-review" -name '*.sock' -print -quit 2>/dev/null || true
-}
-
-# The review tuicr itself keeps: its pid file names the process behind the socket.
-review_pid() {
-  sed -n 's/.*"pid": \([0-9]*\).*/\1/p' \
-    "$XDG_DATA_HOME/tuicr/reviews/active_sessions.json" 2>/dev/null | tail -1
-}
-
-finish_leftovers() {
-  local socket
-  socket=$(review_socket)
-  [ -n "$socket" ] || return 0
-  printf ':w\r' | "$DTACH" -p "$socket" 2>/dev/null || true
-  local pid
-  pid=$(sed -n 's/.*"pid": \([0-9]*\).*/\1/p' \
-    "$XDG_DATA_HOME/tuicr/reviews/active_sessions.json" 2>/dev/null | tail -1)
-  [ -z "$pid" ] || kill -TERM "$pid" 2>/dev/null || true
-}
-
 scenario_init inbox
-trap 'finish_leftovers; scenario_stop' EXIT
 scenario_fixture
 scenario_start -e "$HERE/fixture-inbox.ts"
 scenario_assert_lacks '\[Extension issues\]'
@@ -116,7 +84,7 @@ frame_intact() {
 # The segment: two comments are new and the review is 1 of 2 files through (D3, D10).
 scenario_wait 'review 2 new · 1/2' 20
 
-# The segment is a control: a click opens the same overlay /review inbox opens.
+# The segment is a control: a click opens the same overlay /rv inbox opens.
 read -r CLICK_X CLICK_Y < <(segment_at)
 click "$CLICK_X" "$CLICK_Y"
 scenario_wait 'Review inbox' 10
@@ -160,8 +128,8 @@ scenario_keys Escape
 scenario_wait 'review 2 new · 1/2' 10
 scenario_assert_lacks 'Review inbox'
 
-# /review inbox is the other door to the same overlay.
-scenario_type '/review inbox'
+# /rv inbox is the other door to the same overlay.
+scenario_type '/rv inbox'
 scenario_keys Enter
 scenario_wait 'Review inbox' 10
 scenario_assert_has '> src/a\.ts:42'
@@ -169,36 +137,31 @@ scenario_keys Escape
 scenario_wait 'review 2 new · 1/2' 10
 
 # A real review on the dirty fixture: -w is passed through, so no picker.
-scenario_type '/review -w'
+scenario_type '/rv -w'
 scenario_keys Enter
 scenario_wait 'Files · 0/1' 30
 scenario_assert_has 'a\.ts'
-REVIEW_PID=$(review_pid)
-[ -n "$REVIEW_PID" ] || fail 'the pid file names no review to attach'
 
-# Back to pi; the entry A2 recorded keeps the two comments. Then enter in the
-# inbox attaches the review that is running rather than starting a second one.
-scenario_keys C-g
+# Quitting tuicr is the way back. A review with nothing in it is dropped by
+# tuicr on the way out, so there is no session to adopt and the entry the
+# fixture wrote stands, its segment included (D3).
+scenario_type ':q'
+scenario_keys Enter
 scenario_wait 'escape interrupt|commands ·' 20
 scenario_assert_lacks 'Files · 0/1'
-scenario_wait 'review 2 new · 0/1' 20
-scenario_type '/review inbox'
+scenario_wait 'review 2 new · 1/2' 20
+# Enter in the inbox opens the pin the entry recorded, not the picker.
+scenario_type '/rv inbox'
 scenario_keys Enter
 scenario_wait 'Review inbox' 10
 scenario_keys Enter
 scenario_wait 'Files · 0/1' 20
 scenario_assert_has 'a\.ts'
 scenario_assert_lacks 'Review inbox'
-ATTACHED_PID=$(review_pid)
-[ "$ATTACHED_PID" = "$REVIEW_PID" ] ||
-  fail "enter started a second review ($REVIEW_PID -> $ATTACHED_PID) instead of attaching $REVIEW_PID"
 
-# Save and close, so nothing is left running behind the scenario.
-scenario_keys C-g
-scenario_wait 'escape interrupt|commands ·' 20
-scenario_type '/review kill'
+# ... and back out again, so nothing is left running behind the scenario.
+scenario_type ':q'
 scenario_keys Enter
-scenario_wait 'review: saved and closed' 20
-[ -z "$(review_socket)" ] || fail "a review outlived /review kill: $(review_socket)"
+scenario_wait 'escape interrupt|commands ·' 20
 
 scenario_pass

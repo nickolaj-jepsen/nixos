@@ -1,40 +1,47 @@
 /**
- * The `/review` grammar (D11): a bare `/review` resumes a live review or picks a
- * scope, `inbox`, `send`, `take` and `kill` are subcommands, and any other
- * argument is handed to tuicr as argv.
+ * The `/rv` grammar (D11): `inbox` and `send` are subcommands, a handful of
+ * scope names are shortcuts, and everything else is tuicr's own argv — a bare
+ * `/rv` is tuicr's default view. There is no picker to keep in step with tuicr:
+ * what it documents is what you type.
  *
- * The typed scope text is split here and never through a shell (B2): an owner's
+ * The typed text is split here and never through a shell (B2): an owner's
  * revset reaches tuicr as argv elements, so quotes and spaces are data.
  *
- * A review that starts or attaches is refused while the agent is streaming
- * (D5): suspending the TUI mid-turn would stall the model behind a review it
- * cannot see. The subcommands are let through — they queue, notify or kill and
- * never take the terminal.
+ * A review that starts is refused while the agent is streaming (D5):
+ * suspending the TUI mid-turn would stall the model behind a review it cannot
+ * see. The subcommands are let through — they queue or notify and never take
+ * the terminal.
  */
-import { existsSync } from "node:fs";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { gitRoots } from "../../shared/git.ts";
-import { canPick, chooseScope, pinArgv } from "./scope.ts";
-import { type PinnedScope, socketPath } from "./types.ts";
 
 export type ParsedReview =
-  /** Open the pinned scope, attach the live review when there is no scope, or pick one. */
-  | { kind: "open"; scope: PinnedScope | undefined }
+  /** Run tuicr on this argv, split from what the owner typed. */
+  | { kind: "open"; args: string[] }
   | { kind: "inbox" }
   | { kind: "send" }
-  | { kind: "take" }
-  | { kind: "kill" }
-  /** Nothing to do: the owner cancelled, and dispatch must stay silent. */
-  | { kind: "none" }
   | { kind: "refused"; why: string };
 
-const SUBCOMMANDS = ["inbox", "send", "take", "kill"] as const;
+const SUBCOMMANDS = ["inbox", "send"] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
 
 const isSubcommand = (word: string): word is Subcommand =>
   (SUBCOMMANDS as readonly string[]).includes(word);
 
 const STREAMING = "review: the agent is still answering";
+
+/**
+ * The scopes worth a word: each is the tuicr argv it stands for, and anything
+ * typed after it is appended, so `changes -p src/a.ts` is `-w -p src/a.ts`.
+ * `branch` and `last` leave the refs to tuicr, which resolves them where it
+ * resolves any other revset, and a checkout without `origin/HEAD` gets tuicr's
+ * own error.
+ */
+const SHORTCUTS: Record<string, readonly string[]> = {
+  changes: ["-w"],
+  all: ["-A"],
+  last: ["-r", "HEAD~1..HEAD"],
+  branch: ["-r", "origin/HEAD..HEAD", "-w"],
+};
 
 /**
  * The owner's text as argv: whitespace separates, single quotes are literal,
@@ -86,43 +93,19 @@ export const splitArgv = (text: string): string[] => {
 };
 
 /**
- * A review is live while its socket exists: C6's path, the same rule A2's
- * `alive()` implements. Reading it here is what lets a bare `/review` resume
- * without a picker (D11) while A2 owns creating and removing the socket.
+ * What the owner typed, ready to hand to tuicr: a shortcut word expands, and
+ * anything else is the argv as typed. A bare `/rv` is tuicr's default view.
  */
-const reviewLive = (cwd: string): boolean => {
-  const runtime = process.env.XDG_RUNTIME_DIR;
-  if (runtime === undefined || runtime === "") return false;
-  const { root, main } = gitRoots(cwd);
-  return existsSync(socketPath(runtime, main ?? root ?? cwd));
-};
-
-/**
- * Bare `/review`: refuse while streaming, resume what is live, and otherwise
- * ask which scope to review. Without a terminal there is no picker, so tuicr's
- * own default view opens instead of nothing at all.
- */
-const bare = async (ctx: ExtensionContext): Promise<ParsedReview> => {
-  if (!ctx.isIdle()) return { kind: "refused", why: STREAMING };
-  if (reviewLive(ctx.cwd)) return { kind: "open", scope: undefined };
-  if (!canPick(ctx)) {
-    ctx.ui.notify("review: no scope picker without the terminal UI", "info");
-    return { kind: "open", scope: undefined };
-  }
-  const scope = await chooseScope(ctx);
-  return scope === undefined ? { kind: "none" } : { kind: "open", scope };
-};
-
 export const parseReview = async (args: string, ctx: ExtensionContext): Promise<ParsedReview> => {
   const argv = splitArgv(args);
   const [word] = argv;
-  if (word === undefined) return bare(ctx);
   // A leading subcommand word is the subcommand; anything after it is a mistake
   // the owner can see rather than a tuicr flag.
-  if (isSubcommand(word)) return { kind: word };
+  if (word !== undefined && isSubcommand(word)) return { kind: word };
   if (!ctx.isIdle()) return { kind: "refused", why: STREAMING };
-  const scope = pinArgv(argv);
-  if (scope === undefined)
-    return { kind: "refused", why: "review: -p only filters the diff; name a scope too" };
-  return { kind: "open", scope };
+  const shortcut = word === undefined ? undefined : SHORTCUTS[word];
+  return {
+    kind: "open",
+    args: shortcut === undefined ? argv : [...shortcut, ...argv.slice(1)],
+  };
 };

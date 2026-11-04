@@ -4,11 +4,10 @@
  * marker line is what delivers them.
  *
  * The batch is only ever text handed to the editor. No comment text reaches a
- * shell, a dtach or a tuicr argv element here (B1), and nothing is delivered to
- * the model mid-review: it waits in the prompt for the owner's Enter.
+ * shell or a tuicr argv element here (B1), and nothing is delivered to the
+ * model mid-review: it waits in the prompt for the owner's Enter.
  */
 import type { ExtensionContext, InputEvent } from "@earendil-works/pi-coding-agent";
-import { foreignClaim } from "./claim.ts";
 import type { ReviewEnv } from "./env.ts";
 import { readEntry, recordEntry } from "./entry.ts";
 import { type InboxItem, type ReviewEntry, batchMarker, batchText } from "./types.ts";
@@ -51,17 +50,11 @@ const draftOf = async (ctx: ExtensionContext): Promise<string> => {
 };
 
 /**
- * `/review send`: the pending comments above whatever the owner already typed,
+ * `/rv send`: the pending comments above whatever the owner already typed,
  * and nothing appended when there is nothing new (U2, D4, D11).
  */
 export const sendBatch = async (env: ReviewEnv, ctx: ExtensionContext): Promise<void> => {
   if (ctx.mode !== "tui" || !ctx.hasUI) return;
-  // Another session's review: its comments are not this session's to deliver (U8).
-  const claim = foreignClaim(env, ctx);
-  if (claim !== undefined) {
-    ctx.ui.notify(`review: claimed by ${claim}; /review take takes it over`, "info");
-    return;
-  }
   const entry = readEntry(env, ctx);
   const items = entry === undefined ? [] : pending(entry);
   if (items.length === 0) {

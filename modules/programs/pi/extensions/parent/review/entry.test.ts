@@ -32,8 +32,7 @@ const entry = (over: Partial<ReviewEntry> = {}): ReviewEntry => ({
   cwd: "/work/repo",
   harness: "pi",
   slug: "repo@main/staged-and-unstaged/9d1b591",
-  scope: { mode: "worktree", args: ["-w"] },
-  socket: "/run/user/1000/pi-review/0123456789abcdef.sock",
+  args: ["-w"],
   items: [],
   seen: [],
   sent: [],
@@ -156,10 +155,10 @@ test("two writers that overlapped keep both their deliveries and both their inge
 
 test("a review entry's optional fields are validated, not assumed", () => {
   const branch: Branch = [];
-  // The pinned scope is what tuicr is launched with: a mode outside C3 is not one.
+  // The argv is what tuicr is launched with, and the branch is a file on disk.
   recordEntry(env(branch), ctx(branch), {
     ...entry(),
-    scope: { mode: "picket", args: [] },
+    args: [1],
   } as never);
   assert.equal(
     readEntry(env(branch), ctx(branch)),
@@ -169,7 +168,7 @@ test("a review entry's optional fields are validated, not assumed", () => {
 
   const pinned = entry({
     slug: null,
-    scope: { mode: "revset", args: ["-r", "a..b"], head: "9d1b591" },
+    args: ["-r", "a..b"],
     items: [
       {
         id: "c1",

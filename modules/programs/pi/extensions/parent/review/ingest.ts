@@ -9,30 +9,23 @@
  * which is not an error here: it only means there is nothing to read.
  */
 import { execFile } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { realpathSync } from "node:fs";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { gitRoots } from "../../shared/git.ts";
 import { readEntry, recordEntry } from "./entry.ts";
-import { foreignClaim } from "./claim.ts";
 import type { ReviewEnv } from "./env.ts";
 import {
   type InboxItem,
-  type PinnedScope,
   type RawComment,
   type ReviewEntry,
   type ReviewProgress,
   inboxItem,
-  socketPath,
 } from "./types.ts";
 
 /** A large review's comment array is well under this; a runaway one is cut off, not read. */
 const MAX_OUTPUT = 8 << 20;
 /** A hung binary must not hold up an ingest. */
 const CLI_TIMEOUT_MS = 5_000;
-/** tuicr takes seconds to register a launched review, and its slug line goes to the pty (M2). */
-const POLL_BUDGET_MS = 5_000;
-const POLL_INTERVAL_MS = 250;
 
 /** What one tuicr subprocess printed and how it exited. */
 export type TuicrResult = { code: number; stdout: string };
@@ -78,7 +71,7 @@ type RawSession = {
 };
 
 /** A session as `review list` reports it, with the checkout that listed it. */
-type Listing = {
+export type Listing = {
   root: string;
   slug: string;
   active: boolean;
@@ -122,7 +115,7 @@ const listing = (root: string, raw: unknown): Listing | undefined => {
 };
 
 /** `review list` prints a bare JSON array; anything else reads as "no sessions" (notes §1). */
-const sessions = (root: string, result: TuicrResult): Listing[] => {
+export const listedSessions = (root: string, result: TuicrResult): Listing[] => {
   if (result.code !== 0) return [];
   try {
     const parsed: unknown = JSON.parse(result.stdout);
@@ -147,7 +140,7 @@ const comments = (result: TuicrResult): RawComment[] => {
 
 /**
  * The checkouts this review's sessions can be listed under: the main one (C1
- * keys the entry and the claim on it) first, then the worktree pi runs in.
+ * keys the entry on it) first, then the worktree pi runs in.
  * tuicr ties a local session to the checkout it was launched from, so a review
  * started from a worktree is invisible from the main one.
  */
@@ -157,43 +150,14 @@ const rootsFor = (cwd: string): string[] => {
   return root === undefined || root === primary ? [primary] : [primary, root];
 };
 
-/** A review is running, or about to register itself, while its socket exists (C6, A2). */
-const liveSocket = (root: string): boolean => {
-  const runtime = process.env.XDG_RUNTIME_DIR;
-  return runtime !== undefined && runtime !== "" && existsSync(socketPath(runtime, root));
-};
-
 /** Every session of these checkouts, newest first, one listing per slug (main first). */
 const probe = async (roots: readonly string[], tuicr: TuicrSource): Promise<Listing[]> => {
   const byslug = new Map<string, Listing>();
   for (const root of roots) {
-    for (const found of sessions(root, await tuicr.list(root)))
+    for (const found of listedSessions(root, await tuicr.list(root)))
       if (!byslug.has(found.slug)) byslug.set(found.slug, found);
   }
   return [...byslug.values()].sort((a, b) => b.updated - a.updated);
-};
-
-/**
- * M2: wait out tuicr's slow start for as long as a review is there to wait
- * for. It writes its session, and `active_sessions.json`, seconds after
- * launch, and its `tuicr-session:` line goes to the pty rather than to us, so
- * the only way to learn the slug is to keep asking. A session that is already
- * listed and not active cannot go active by being asked again.
- */
-const waitForActive = async (
-  roots: readonly string[],
-  found: Listing[],
-  tuicr: TuicrSource,
-): Promise<Listing[]> => {
-  const before = new Set(found.map((session) => session.slug));
-  const deadline = Date.now() + POLL_BUDGET_MS;
-  let listed = found;
-  const appeared = () => listed.some((session) => session.active || !before.has(session.slug));
-  while (!appeared() && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-    listed = await probe(roots, tuicr);
-  }
-  return listed;
 };
 
 /**
@@ -240,8 +204,7 @@ const sameReview = (a: ReviewEntry, b: ReviewEntry): boolean =>
   a.root === b.root &&
   a.cwd === b.cwd &&
   a.slug === b.slug &&
-  a.socket === b.socket &&
-  JSON.stringify(a.scope) === JSON.stringify(b.scope) &&
+  sameIds(a.args, b.args) &&
   a.progress.reviewedCount === b.progress.reviewedCount &&
   a.progress.fileCount === b.progress.fileCount &&
   sameIds(
@@ -251,12 +214,7 @@ const sameReview = (a: ReviewEntry, b: ReviewEntry): boolean =>
   sameIds(a.seen, b.seen) &&
   sameIds(a.sent, b.sent);
 
-/** No entry yet: a review nobody pinned has no scope, and the picker is the honest empty one. */
-const UNPINNED: PinnedScope = { mode: "picker", args: [] };
-
 const NO_PROGRESS: ReviewProgress = { reviewedCount: 0, fileCount: 0 };
-
-const derivedSocket = (root: string) => socketPath(process.env.XDG_RUNTIME_DIR ?? tmpdir(), root);
 
 /**
  * One ingest: the session's last entry, then what tuicr holds, then what is
@@ -273,11 +231,7 @@ export const ingestWith = async (
   const root = roots[0];
   const pinned = entry?.slug ?? null;
 
-  let listed = await probe(roots, tuicr);
-  const live = liveSocket(root);
-  if (!listed.some((session) => session.active) && live)
-    listed = await waitForActive(roots, listed, tuicr);
-
+  const listed = await probe(roots, tuicr);
   const remembered = remember(
     sessionKey(ctx, root),
     listed
@@ -287,14 +241,9 @@ export const ingestWith = async (
 
   const byslug = (slug: string) => listed.find((session) => session.slug === slug);
   // A pin is authoritative: the review the owner picked is the one to read,
-  // whatever else went live afterwards. Without one, follow the live review,
-  // and while a socket exists take the newest session that has anything in it
-  // — an ended review whose slug nobody wrote down (M2).
-  const current =
-    pinned !== null
-      ? byslug(pinned)
-      : (listed.find((session) => session.active) ??
-        (live ? listed.find((session) => session.comments > 0) : undefined));
+  // whatever else went live afterwards. Without one, follow the live review:
+  // `/open diff` starts tuicr outside pi, and its comments still belong here.
+  const current = pinned !== null ? byslug(pinned) : listed.find((session) => session.active);
   const slug = pinned ?? current?.slug ?? null;
 
   const candidates: Candidate[] = [];
@@ -328,8 +277,7 @@ export const ingestWith = async (
     cwd: ctx.cwd,
     harness: "pi",
     slug,
-    scope: entry?.scope ?? UNPINNED,
-    socket: entry?.socket ?? derivedSocket(root),
+    args: entry?.args ?? [],
     items: [...(entry?.items ?? []), ...fresh],
     seen: [...known],
     sent: entry?.sent ?? [],
@@ -351,8 +299,5 @@ export const ingestWith = async (
  * tuicr, and record what arrived. Persistence is `entry.ts`'s half (A5).
  */
 export const ingestReview = async (env: ReviewEnv, ctx: ExtensionContext): Promise<void> => {
-  // Another session owns this repository's review: its comments are not ours to
-  // ingest, or both sessions would deliver the same ones (U8).
-  if (foreignClaim(env, ctx) !== undefined) return;
   await ingestWith(env, ctx, readEntry(env, ctx), cliTuicr);
 };

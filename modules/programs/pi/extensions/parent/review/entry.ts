@@ -6,18 +6,12 @@
  *
  * `readEntry` and `recordEntry` are the seam every other module uses: ingest
  * reads what the session already knew before it records what it found, the
- * opener records the pinned scope and the socket once the review is up, and
+ * opener records the tuicr argv and the slug once the review is up, and
  * `restoreReview` publishes the entry to the painters, which have no ctx.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ReviewEnv } from "./env.ts";
-import {
-  type InboxItem,
-  type PinnedScope,
-  REVIEW_ENTRY,
-  type ReviewEntry,
-  type ReviewProgress,
-} from "./types.ts";
+import { type InboxItem, REVIEW_ENTRY, type ReviewEntry, type ReviewProgress } from "./types.ts";
 
 /** The entry the last read or write saw; the border meter paints from it. */
 let session: ReviewEntry | undefined;
@@ -26,15 +20,6 @@ let session: ReviewEntry | undefined;
 export const sessionReview = (): ReviewEntry | undefined => session;
 
 type Fields = Record<string, unknown>;
-
-const MODES = new Set<PinnedScope["mode"]>([
-  "worktree",
-  "commits",
-  "picker",
-  "all",
-  "pr",
-  "revset",
-]);
 
 const text = (value: unknown): value is string => typeof value === "string";
 
@@ -50,17 +35,6 @@ const line = (value: unknown) => value === null || count(value);
 const nullable = (value: unknown, ok: (field: unknown) => boolean) => value === null || ok(value);
 
 const optionalText = (value: unknown) => value === undefined || text(value);
-
-const isScope = (value: unknown): value is PinnedScope => {
-  const scope = fields(value);
-  return (
-    scope !== undefined &&
-    MODES.has(scope.mode as PinnedScope["mode"]) &&
-    Array.isArray(scope.args) &&
-    scope.args.every(text) &&
-    [scope.base, scope.head, scope.target].every(optionalText)
-  );
-};
 
 const isItem = (value: unknown): value is InboxItem => {
   const item = fields(value);
@@ -95,10 +69,10 @@ const isEntry = (value: unknown): value is ReviewEntry => {
     entry.harness === "pi" &&
     text(entry.root) &&
     text(entry.cwd) &&
-    text(entry.socket) &&
     text(entry.at) &&
     nullable(entry.slug, text) &&
-    isScope(entry.scope) &&
+    Array.isArray(entry.args) &&
+    entry.args.every(text) &&
     Array.isArray(entry.items) &&
     entry.items.every(isItem) &&
     Array.isArray(entry.seen) &&

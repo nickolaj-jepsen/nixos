@@ -1,26 +1,14 @@
 /**
- * The contracts both harnesses and every review module share: the review
- * entry, the per-repository claim, a pinned scope, an inbox item, the batch
- * text and where the socket and claim file live (HANDOFF C1–C6).
+ * The contracts every review module shares: the review entry, an inbox item
+ * and the batch text (HANDOFF C1–C6).
  *
  * Only Node built-ins are imported at runtime, so `node --experimental-strip-types`
  * loads this outside pi and the contract tests run without the extension host.
  */
 import { createHash } from "node:crypto";
-import { join } from "node:path";
 
 /** The custom entry type a review is recorded under (C1). */
 export const REVIEW_ENTRY = "review";
-
-/** What the reviewer picked; `args` is the argv handed to tuicr (C3). */
-export type PinnedScope = {
-  mode: "worktree" | "commits" | "picker" | "all" | "pr" | "revset";
-  args: string[];
-  base?: string;
-  head?: string;
-  /** A PR number, URL or `owner/repo#N`. */
-  target?: string;
-};
 
 /** A comment tuicr holds, as the inbox and the model see it (C4). */
 export type InboxItem = {
@@ -46,8 +34,8 @@ export type ReviewEntry = {
   cwd: string;
   harness: "pi";
   slug: string | null;
-  scope: PinnedScope;
-  socket: string;
+  /** The argv the review was opened with, so the inbox can open it again (C3). */
+  args: string[];
   items: InboxItem[];
   /** Comment ids already ingested. */
   seen: string[];
@@ -57,26 +45,9 @@ export type ReviewEntry = {
   at: string;
 };
 
-/** The per-repository "this session owns the review" record (C2). */
-export type Claim = {
-  v: 1;
-  root: string;
-  session: string;
-  harness: "pi" | "claude";
-  pid: number;
-  slug: string | null;
-  scope: PinnedScope;
-  seen: string[];
-  at: string;
-};
-
-/** 16 hex characters: short enough for a file name, wide enough that two repositories never meet. */
-export const reviewKey = (root: string) =>
-  createHash("sha256").update(root).digest("hex").slice(0, 16);
-
 /**
  * C1's field names, typed as a complete map: a field added to `ReviewEntry`
- * fails to compile until it is named here. A7 asserts the claim keys the same way.
+ * fails to compile until it is named here.
  */
 export const REVIEW_ENTRY_FIELDS = {
   v: true,
@@ -84,59 +55,13 @@ export const REVIEW_ENTRY_FIELDS = {
   cwd: true,
   harness: true,
   slug: true,
-  scope: true,
-  socket: true,
+  args: true,
   items: true,
   seen: true,
   sent: true,
   progress: true,
   at: true,
 } satisfies Record<keyof ReviewEntry, true>;
-
-/** C2's field names, complete in the same way as `REVIEW_ENTRY_FIELDS`. */
-export const CLAIM_FIELDS = {
-  v: true,
-  root: true,
-  session: true,
-  harness: true,
-  pid: true,
-  slug: true,
-  scope: true,
-  seen: true,
-  at: true,
-} satisfies Record<keyof Claim, true>;
-
-/** `<runtime>/pi-review/<key>.sock`; the review outlives the pi process that started it (C6). */
-export const socketPath = (runtimeDir: string, root: string) =>
-  join(runtimeDir, "pi-review", `${reviewKey(root)}.sock`);
-
-/** `<agent dir>/review-claims/<key>.json` (C2). */
-export const claimPath = (agentDir: string, root: string) =>
-  join(agentDir, "review-claims", `${reviewKey(root)}.json`);
-
-/** The argv that puts tuicr in the pinned scope (C6). */
-export const tuicrArgv = (scope: PinnedScope): string[] => {
-  switch (scope.mode) {
-    case "worktree":
-      return ["-w"];
-    case "all":
-      return ["-A"];
-    case "picker":
-      return [];
-    case "pr":
-      return scope.target === undefined ? [] : ["pr", scope.target];
-    case "commits":
-      if (scope.args.length > 0) return [...scope.args];
-      if (scope.base !== undefined && scope.head !== undefined)
-        return ["-r", `${scope.base}..${scope.head}`, "-w"];
-      // The last commit: tuicr takes the oldest commit inside the range as the
-      // base, so the parent has to be spelled out or the slug changes identity
-      // (notes/tuicr-dtach.md §2).
-      return scope.head === undefined ? [] : ["-r", `${scope.head}~1..${scope.head}`];
-    case "revset":
-      return [...scope.args];
-  }
-};
 
 /** The line a submitted prompt must carry to have delivered the batch (C5, D4). */
 export const batchMarker = (slug: string) => `\`tuicr review comments --session ${slug}\``;

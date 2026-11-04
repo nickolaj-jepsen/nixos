@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A5: C5's batch prefilled above the owner's draft on `/review send`, the inbox
+# A5: C5's batch prefilled above the owner's draft on `/rv send`, the inbox
 # emptied by the submit that carries the batch's marker line, and the entry
 # read back from the branch by /reload (D4, C1, U2).
 #
@@ -36,7 +36,7 @@ scenario_assert_lacks '\[Extension issues\]'
 scenario_wait 'fixture: review entry 1 \(sent 0\)' 30
 
 # The draft the owner had typed. prompt-store keeps it for this session, which
-# is how `/review send` can still put the batch above it: pi empties the editor
+# is how `/rv send` can still put the batch above it: pi empties the editor
 # before an extension command runs.
 scenario_type 'please also update the docs'
 sleep 1
@@ -44,7 +44,7 @@ scenario_assert_has 'please also update the docs'
 
 # One client, so the clear and the command are adjacent: the flow D4 describes.
 scenario_tmux send-keys -t pi C-c \
-  \; send-keys -t pi -l -- '/review send' \
+  \; send-keys -t pi -l -- '/rv send' \
   \; send-keys -t pi Enter
 
 scenario_wait 'Review comments from tuicr' 20
@@ -64,7 +64,7 @@ scenario_keys Enter
 scenario_wait 'noted' 20
 scenario_wait 'review 0/1' 20
 scenario_assert_lacks 'review 1 new'
-scenario_type '/review send'
+scenario_type '/rv send'
 scenario_keys Enter
 scenario_wait 'review: no comments to send' 20
 
@@ -73,7 +73,7 @@ scenario_wait 'review: no comments to send' 20
 scenario_type '/reload'
 scenario_keys Enter
 scenario_wait 'fixture: review entry 2 \(sent 1\)' 40
-scenario_type '/review send'
+scenario_type '/rv send'
 scenario_keys Enter
 scenario_wait '1\. `a\.ts:2` \[issue\] fixture comment 2' 20
 scenario_assert_lacks 'review: 2 comments prefilled'

@@ -1,6 +1,6 @@
 /**
- * `/review` over a fixture checkout: D1's scopes as rows, the argv each one hands
- * tuicr, the claim both harnesses read (C2), and the batch the next send drafts
+ * `/rv` over a fixture checkout: D1's scopes as rows, the argv each one hands
+ * tuicr, the review state the next send reads (C2), and the batch it drafts
  * (C5). The engine here is a fake: git, gh, tuicr and the prompt box answer from
  * memory, so no process, no review store and no window is touched.
  */
@@ -34,9 +34,7 @@ const HOME = "/home/me";
 const SESSION = "11111111-2222-3333-4444-555555555555";
 const NOW = Date.UTC(2026, 9, 31, 12);
 const MINUTE = 60_000;
-const PID = 4242;
 /** Another engine's pid: alive, and not the one this fake reports for itself. */
-const OTHER = 5252;
 const TUICR = "/run/current-system/sw/bin/tuicr";
 const GHOSTTY = "/run/current-system/sw/bin/ghostty";
 const BASE = "a".repeat(40);
@@ -45,12 +43,12 @@ const PARENT = "c".repeat(40);
 const SHORT = HEAD.slice(0, 7);
 const SLUG = `repo@main/staged-and-unstaged/${SHORT}`;
 /** sha256("/repo")'s first 16 hex, which is how C2 names the file. */
-const CLAIM = `${AGENT}/review-claims/816fc349d3faebf8.json`;
+const STATE = `${AGENT}/review-state/816fc349d3faebf8.json`;
 const PR =
   '{"url":"https://github.com/me/repo/pull/12","number":12,"state":"OPEN","isDraft":false}';
 
-/** C2's field names, hand-written: the file pi and Claude share carries exactly these. */
-const C2 = ["at", "harness", "pid", "root", "scope", "seen", "session", "slug", "v"];
+/** C2's field names, hand-written: the file carries exactly these. */
+const C2 = ["at", "root", "seen", "slug", "v"];
 
 /** C5's batch for the two comments below, spelled out. */
 const BATCH = [
@@ -117,7 +115,7 @@ type World = {
  */
 function world(
   on: On,
-  { clean = false, sessions = [] as unknown[], claim = undefined as string | undefined } = {},
+  { clean = false, sessions = [] as unknown[], state = undefined as string | undefined } = {},
 ): World {
   const w: World = {
     launched: [],
@@ -130,7 +128,7 @@ function world(
     sessions,
     clock: mock.clock(on, { now: NOW }),
   };
-  if (claim !== undefined) w.files.set(CLAIM, claim);
+  if (state !== undefined) w.files.set(STATE, state);
   w.comments = COMMENTS;
   on("env.get", (_, e) => ({
     value: ({ HOME, USER: "me", PI_CODING_AGENT_DIR: AGENT } as Record<string, string>)[e.name],
@@ -174,7 +172,6 @@ function world(
       return ok("");
     }
     // This process's pid, as the shell sees it.
-    if (argv[0] === "sh" && argv[2] === "echo $PPID") return ok(`${PID}\n`);
     // The detach wrapper: what it starts is the window.
     if (argv[0] === "sh" && String(argv[2]).startsWith("exec >/dev/null")) {
       w.launched.push(argv.slice(4));
@@ -187,9 +184,6 @@ function world(
       if (found === undefined) return ok("", 1);
       return ok(`${found === "tuicr" ? TUICR : GHOSTTY}\n`);
     }
-    // `kill -0`: the claim's process answers while it runs.
-    if (argv[0] === "kill" && argv[1] === "-0")
-      return [String(PID), String(OTHER)].includes(String(argv[2])) ? ok("") : ok("", 1);
     if (argv[0] === "gh") return ok(PR);
     if (argv[0] === "git") {
       if (line.includes(" status ")) {
@@ -217,7 +211,7 @@ async function start($: Engine, on: On) {
   await $.session.start({ cwd: ROOT, surface: "terminal", isInteractive: true });
 }
 
-const openPicker = ($: Engine) => $.command.run({ ...RUN, command: "review" });
+const openPicker = ($: Engine) => $.command.run({ ...RUN, command: "rv" });
 
 /** Presses one row of the open picker. */
 async function pressRow($: Engine, key: string) {
@@ -226,7 +220,7 @@ async function pressRow($: Engine, key: string) {
   await pane.unmount();
 }
 
-/** `/review`, then the uncommitted-changes row: a review with a claim behind it. */
+/** `/rv`, then the uncommitted-changes row: a review with its state behind it. */
 async function review($: Engine) {
   await openPicker($);
   await pressRow($, "worktree");
@@ -235,12 +229,12 @@ async function review($: Engine) {
 const send = ($: Engine, text: string) =>
   $.prompt.submit({ text, wait: false, origin: { kind: "composer" } });
 
-const claimOf = (w: World) => JSON.parse(w.files.get(CLAIM) ?? "null") as Record<string, unknown>;
+const stateOf = (w: World) => JSON.parse(w.files.get(STATE) ?? "null") as Record<string, unknown>;
 
-/** A review tuicr opened three seconds after the claim was written, still live. */
+/** A review tuicr opened three seconds after the state was written, still live. */
 const SESSIONS = [{ slug: SLUG, updated_at: "2026-10-31T12:00:03+00:00", active: true }];
 
-test("/review offers D1's scopes in one order", async ($, on) => {
+test("/rv offers D1's scopes in one order", async ($, on) => {
   world(on);
   await start($, on);
   await openPicker($);
@@ -261,7 +255,7 @@ test("a clean tree says so on the row and starts nothing", async ($, on) => {
   await pane.unmount();
   expect(worktree?.text).toContain("no changes");
   expect(w.launched).toEqual([]);
-  expect(w.files.has(CLAIM)).toBe(false);
+  expect(w.files.has(STATE)).toBe(false);
 });
 
 test("each scope reaches tuicr as the argv it pinned", async ($, on) => {
@@ -296,7 +290,7 @@ test("the revset row asks for one and hands it to tuicr as a single argument", a
   expect(w.launched.at(-1)?.slice(-3)).toEqual([TUICR, "-r", "origin/HEAD..HEAD 'quoted'"]);
 });
 
-test("the window opens on the checkout and the claim carries exactly C2's keys", async ($, on) => {
+test("the window opens on the checkout and the state carries exactly C2's keys", async ($, on) => {
   const w = world(on);
   await start($, on);
   await review($);
@@ -308,21 +302,17 @@ test("the window opens on the checkout and the claim carries exactly C2's keys",
   expect(argv.at(-1)).toBe("-w");
   expect(argv.at(-2)).toBe(TUICR);
 
-  // C2's atomic write: a pid-suffixed temp, then a rename onto the claim.
-  const temp = `${CLAIM}.${PID}.tmp`;
+  // C2's atomic write: a stamp-suffixed temp, then a rename onto the state.
+  const temp = `${STATE}.${NOW}.tmp`;
   expect(w.written.at(-1)).toBe(temp);
-  expect(w.moved.at(-1)).toEqual([temp, CLAIM]);
+  expect(w.moved.at(-1)).toEqual([temp, STATE]);
 
-  const claim = claimOf(w);
-  expect(Object.keys(claim).sort()).toEqual(C2);
-  expect(claim).toEqual({
+  const state = stateOf(w);
+  expect(Object.keys(state).sort()).toEqual(C2);
+  expect(state).toEqual({
     v: 1,
     root: ROOT,
-    session: SESSION,
-    harness: "claude",
-    pid: PID,
     slug: null,
-    scope: { mode: "worktree", args: ["-w"] },
     seen: [],
     at: new Date(NOW).toISOString(),
   });
@@ -337,7 +327,7 @@ test("the next send drafts C5's batch above the draft and marks the comments see
   await send($, "carry on");
 
   expect(w.fills).toEqual([`${BATCH}\n\nmy own draft`]);
-  expect(claimOf(w)).toMatchObject({ slug: SLUG, seen: ["c1", "c2"] });
+  expect(stateOf(w)).toMatchObject({ slug: SLUG, seen: ["c1", "c2"] });
 });
 
 test("a send carrying the batch's marker clears the seen ids, and nothing is drafted twice", async ($, on) => {
@@ -350,33 +340,13 @@ test("a send carrying the batch's marker clears the seen ids, and nothing is dra
 
   await w.clock.advance(MINUTE);
   await send($, w.box);
-  expect(claimOf(w)).toMatchObject({ slug: SLUG, seen: [] });
+  expect(stateOf(w)).toMatchObject({ slug: SLUG, seen: [] });
 
   // The comments are older than the batch that carried them, so they stay delivered.
   w.fills = [];
   await w.clock.advance(MINUTE);
   await send($, "something else");
   expect(w.fills).toEqual([]);
-});
-
-test("a live claim another session holds refuses the review before a window opens", async ($, on) => {
-  const held = JSON.stringify({
-    v: 1,
-    root: ROOT,
-    session: "another-session",
-    harness: "pi",
-    pid: OTHER,
-    slug: SLUG,
-    scope: { mode: "worktree", args: ["-w"] },
-    seen: [],
-    at: new Date(NOW - MINUTE).toISOString(),
-  });
-  const w = world(on, { claim: held });
-  await start($, on);
-  await review($);
-  expect(w.launched).toEqual([]);
-  expect(w.toasts).toContain("This repository's review belongs to another pi session.");
-  expect(w.files.get(CLAIM)).toBe(held);
 });
 
 test("a comment made while the batch waited in the prompt still arrives next time", async ($, on) => {
@@ -400,51 +370,11 @@ test("a comment made while the batch waited in the prompt still arrives next tim
   ];
   await w.clock.advance(MINUTE);
   await send($, w.box);
-  expect(claimOf(w)).toMatchObject({ slug: SLUG, seen: [] });
+  expect(stateOf(w)).toMatchObject({ slug: SLUG, seen: [] });
 
   w.fills = [];
   await w.clock.advance(MINUTE);
   await send($, "something else");
   expect(w.fills).toHaveLength(1);
   expect(w.fills[0]).toContain("while you were reading");
-});
-
-test("a claim this engine wrote under an earlier session id is taken over, not refused", async ($, on) => {
-  // /clear gives the same engine a new session id; the claim's pid is still this one.
-  const earlier = JSON.stringify({
-    v: 1,
-    root: ROOT,
-    session: "an-earlier-session",
-    harness: "claude",
-    pid: PID,
-    slug: SLUG,
-    scope: { mode: "worktree", args: ["-w"] },
-    seen: ["c1"],
-    at: new Date(NOW - MINUTE).toISOString(),
-  });
-  const w = world(on, { claim: earlier });
-  await start($, on);
-  await review($);
-  expect(w.launched).toHaveLength(1);
-  expect(claimOf(w)).toMatchObject({ session: SESSION, pid: PID, seen: ["c1"] });
-});
-
-test("a claim another session holds is left alone", async ($, on) => {
-  const held = JSON.stringify({
-    v: 1,
-    root: ROOT,
-    session: "another-session",
-    harness: "pi",
-    pid: 999,
-    slug: SLUG,
-    scope: { mode: "worktree", args: ["-w"] },
-    seen: [],
-    at: new Date(NOW - MINUTE).toISOString(),
-  });
-  const w = world(on, { claim: held });
-  await start($, on);
-  w.box = "my own draft";
-  await send($, "carry on");
-  expect(w.fills).toEqual([]);
-  expect(w.files.get(CLAIM)).toBe(held);
 });
