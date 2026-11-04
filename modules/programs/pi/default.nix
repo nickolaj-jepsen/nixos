@@ -534,7 +534,8 @@ in {
               (lib.filter (secret: !lib.hasPrefix config.age.secretsDir secret.path)
                 (lib.attrValues config.age.secrets)));
           # Bash path args are also matched absolute, so gate write locations here,
-          # not in bash rules. The cwd root counts as inside; only `rm * ~*` catches it.
+          # not in bash rules. The cwd root counts as inside, so a path outside the
+          # roots is what asks.
           external_directory_write = let
             roots =
               # /nix/store so `rm result` doesn't ask; ~/worktrees/* so a whole <repo> does.
@@ -547,15 +548,29 @@ in {
                 (lib.nameValuePair "${root}/*..*" "ask")
               ])
               roots);
+          # Reading your own trees is not a decision worth making; the write
+          # direction stays exactly as gated above. The bare root is listed
+          # because `<root>/*` misses the directory itself, which is what a `cd`
+          # operand names.
+          external_directory_read = let
+            roots = ["/tmp" "~/.local/share/agents" "~/worktrees" "~/dev" "~/.claude" "/var/tmp"];
+          in
+            lib.listToAttrs (lib.concatMap (root: [
+                (lib.nameValuePair root "allow")
+                (lib.nameValuePair "${root}/*" "allow")
+              ])
+              roots);
           bash = {
             # Explicit, or the top-level "*" still applies but warns at startup.
             "*" = "allow";
             # Last match wins and Nix sorts keys: `*` sorts first, so narrower rules win.
-            # A computed path gets no absolute spelling, so the write gate can't see it.
-            "rm * $*" = "ask";
-            "rm * .*" = "ask";
-            # Never produced from a relative argument, so only a typed ~ hits it.
-            "rm * ~*" = "ask";
+            # The projection resolves no variable, so a `$name` path gets no absolute
+            # spelling and the write gate never sees it. Only $HOME and $PWD can hide
+            # a home-wide delete that way; every other name, and `./x`, is left to the
+            # write gate, which already asks outside its roots.
+            "rm * $HOME*" = "ask";
+            "rm * \${HOME}*" = "ask";
+            "rm * $PWD*" = "ask";
             "rm * /" = "deny";
             "rm -rf /" = "deny";
             "sudo rm *" = "deny";
