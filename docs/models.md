@@ -71,6 +71,11 @@ way they do.
 - Every subagent role locks its model; none inherits the parent's, because
   inheritance once ran cheap children on Opus.
 - Explore, general-purpose, reviewer and verifier run on `vm/flash`.
+- builder runs `/flow`'s `Tier: flash` items on `vm/flash`, and builder-deep its
+  `Tier: deep` ones on `vm/deep`. Both lock only the model, so the step's
+  thinking level applies.
+- reviewer-deep is the final gate's reviewer on `vm/deep`: it judges a whole
+  branch once, and also names what could be deleted or merged.
 - retro-reviewer runs on `vm/deep`: it makes all of a `/retro`'s judgements, once
   per run, so quality outweighs its cost.
 - Plan runs on `vm/architect`. It has no edit tool, so it never leaves

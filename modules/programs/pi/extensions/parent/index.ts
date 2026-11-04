@@ -13,6 +13,7 @@ import chrome from "./chrome.ts";
 import claudePeers from "./claude-peers.ts";
 import condense from "./condense.ts";
 import cost from "./cost.ts";
+import flow from "./flow.ts";
 import gutter from "./gutter.ts";
 import modelLabels from "./model-labels.ts";
 import questions from "./questions.ts";
@@ -36,6 +37,7 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["claude-peers", claudePeers],
   ["condense", condense],
   ["cost", cost],
+  ["flow", flow],
   ["gutter", gutter],
   ["model-labels", modelLabels],
   ["questions", questions],
