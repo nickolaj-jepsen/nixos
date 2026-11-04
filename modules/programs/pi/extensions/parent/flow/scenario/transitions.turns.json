@@ -1,0 +1,10 @@
+[
+  { "toolCall": { "name": "flow_next", "arguments": { "note": "the brief is written" } } },
+  { "toolCall": { "name": "flow_next", "arguments": { "note": "the brief is written" } } },
+  { "text": "Brief written. Advancing." },
+  { "text": "Plan written." },
+  { "text": "Run finished." },
+  { "toolCall": { "name": "flow_status", "arguments": {} } },
+  { "text": "Review guide written." },
+  { "text": "Second brief written." }
+]
