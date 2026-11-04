@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["core/*.ts", "parent/*.ts", "shared/*.ts"]
+  "include": ["core/*.ts", "parent/*.ts", "parent/flow/*.ts", "shared/*.ts"]
 }

@@ -17,8 +17,10 @@ Required:
 
 - `## Mission` — why this exists, in prose.
 - `## Smallest version` — one paragraph, then a `Not building:` line followed by
-  its bullets. The bullets are what the smallest version leaves out on purpose.
-- `## Scope` — `In:` bullets and, under `Out:`, what stays untouched.
+  at least one bullet. The bullets are what the smallest version leaves out on
+  purpose; an empty list is an error.
+- `## Scope` — `In:` bullets and, under `Out:`, what stays untouched. Both
+  headings are required, and each needs at least one bullet.
 - `## Context` — the repo, the base branch, the terms, the commands and their
   measured durations, and the repo-specific traps a builder needs first.
 - `## Locked decisions` — three `###` subsections:
@@ -31,7 +33,8 @@ Required:
   section.
 - `## Budget` — all five bullets, `- New files: <n>`, `- New abstractions: <n>`,
   `- Lines: <n>`, `- Cost cap: $<n>`, `- Concurrency: <n>`.
-- `## Stops` — what halts this run, including the owner's gates.
+- `## Stops` — what halts this run, including the owner's gates: one bullet per
+  stop. Prose is kept for the reader and dropped from the parse.
 
 Optional, and each is kept verbatim for the approval page to render:
 
@@ -64,26 +67,39 @@ Items run in ID order on a tie; `Blocked by` decides the rest. A spike's title
 ends `(spike, timebox <n>)` and the item carries a `- Why:` line saying what the
 spike buys; without it, the spike is not worth its box.
 
-The field bullets, each `- <Field>: <value>`:
+The field bullets, each `- <Field>: <value>`. Every field below is required
+except `Why:`; a missing one is as much an error as a malformed one. A value is
+the rest of the bullet's line joined with its continuation lines (the indented
+lines under it) by single spaces, so a long value may wrap.
 
 - `- Blocked by:` — item IDs, comma-separated, or `none`. It must not name an
   item's own ID or an item that does not exist.
-- `- Owns:` — the paths and globs the item may change. The value may be the rest
-  of the line or the nested bullets under it. Two items in flight never overlap.
+- `- Owns:` — the paths and globs the item may change, one or more per bullet,
+  each in backticks. Every backticked path under `Owns:` is one of the item's
+  paths. Two items in flight never overlap.
 - `- New:` — what it adds, in prose: systems, files, abstractions.
-- `- Tier: flash | deep` — which builder the item goes to. Exactly one value.
-- `- Outcome:` — what is true when it is done. The value may be nested bullets.
+- `- Tier: flash | deep` — which builder the item goes to. Exactly one value,
+  written even when it is `flash`: the approval page rewrites this line, and an
+  item with no line cannot be retiered.
+- `- Outcome:` — what is true when it is done, kept verbatim.
 - `- Acceptance:` — the command whose output proves the outcome, and what it
-  must print. The value may be nested bullets.
+  must print, kept verbatim.
 - `- Constraints:` — the decisions and contracts the item is bound by.
 - `- Why:` — spikes only.
 
-An acceptance whose last line ends `(unverified)` is flagged on the approval
-page: nobody has run it yet, so it proves nothing until someone does.
+An acceptance whose last characters are `(unverified)` is flagged on the
+approval page: nobody has run it yet, so it proves nothing until someone does.
+Write it as the very end of the field, with nothing after it.
 
 ## Naming
 
 - Paths are relative to the repository root, as written in `Context`.
 - A command sits inside backticks and is runnable as written.
-- The approval page rewrites one line: the `Tier:` line of an item whose tier
-  the owner changes. Nothing else in the file is edited by `/flow`.
+- A contract's name holds no `: ` of its own: the first one ends the name and
+  starts the shape.
+- `/flow` edits `HANDOFF.md` in exactly two ways, and nothing else: the approval
+  page rewrites an item's `Tier:` line, and both the page and the run lead
+  append an entry to `## Amendments`. An entry is one bullet,
+  `- <YYYY-MM-DD>, <source>: <what the owner settled>`, where the source is
+  `owner, approval page` for an answer given on the page and `owner` for one
+  relayed to the run lead. Nothing already written is rewritten.

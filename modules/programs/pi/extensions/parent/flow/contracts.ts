@@ -24,10 +24,7 @@ export type Tier = "flash" | "deep";
 
 // ── settings (C2, D5) ───────────────────────────────────────────────────────
 
-/**
- * Every configurable model choice. `itemsDeep` is `items` for a `Tier: deep`
- * item (D8), so both tiers are overridable the same way.
- */
+/** Every configurable model choice, D5's table row for row. */
 export const SETTING_KEYS = [
   "judge",
   "plan",
@@ -35,15 +32,27 @@ export const SETTING_KEYS = [
   "run",
   "guide",
   "items",
-  "itemsDeep",
   "gateReview",
   "finalReview",
   "simplify",
 ] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
-/** A step's model, or the role that brings its own; at most one of the two. */
-export type StepSetting = { model?: string; role?: string; thinking?: Level };
+/**
+ * The keys a step's own session runs on: a step is a model, never a role,
+ * because the conductor applies it with `setModel` before the kickoff.
+ */
+export const SESSION_KEYS = ["judge", "plan", "planQuick", "run", "guide"] as const;
+
+/** The keys that name a subagent role, spawned inside a step. */
+export const ROLE_KEYS = ["items", "gateReview", "finalReview", "simplify"] as const;
+
+/**
+ * A step's target: a model for a session step, a role (or a hand-picked model)
+ * for a delegated one. `deep` is the role a `Tier: deep` item gets, which only
+ * `items` uses (D8).
+ */
+export type StepSetting = { model?: string; role?: string; deep?: string; thinking?: Level };
 
 /** Every key resolved, in the order `flow_status` reports them. */
 export type ResolvedSettings = Record<SettingKey, StepSetting>;
@@ -60,8 +69,7 @@ export const DEFAULT_SETTINGS: ResolvedSettings = {
   planQuick: { model: "vm/flash", thinking: "high" },
   run: { model: "vm/flash", thinking: "low" },
   guide: { model: "vm/flash", thinking: "low" },
-  items: { role: "builder", thinking: "high" },
-  itemsDeep: { role: "builder-deep", thinking: "high" },
+  items: { role: "builder", deep: "builder-deep", thinking: "high" },
   // The role locks its thinking level, so there is none to set here.
   gateReview: { role: "reviewer" },
   finalReview: { role: "reviewer-deep", thinking: "high" },
@@ -94,7 +102,7 @@ export const kickoffFor = (step: Step, planDir: string, quick = false): string |
 /** Why one settings field was refused; the value it kept is the one before it. */
 export type SettingReport = {
   key: SettingKey;
-  field: "model" | "role" | "thinking";
+  field: "model" | "role" | "deep" | "thinking";
   value: unknown;
   reason: string;
 };
@@ -106,6 +114,12 @@ export const isModelRef = (value: unknown): value is string => {
   return slash > 0 && slash < value.length - 1 && !value.startsWith(" ") && !value.endsWith(" ");
 };
 
+/**
+ * A role name by syntax. Whether a role file of that name exists is the
+ * subagents package's registry, which a pure module cannot see: a caller that
+ * spawns checks it, and pi-subagents falls back to the parent's model when it
+ * does not find one.
+ */
 const isRoleName = (value: unknown): value is string =>
   typeof value === "string" && /^[a-z][a-z0-9-]*$/.test(value);
 
@@ -121,8 +135,10 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
  *
  * Never throws: an unknown key, a bad model reference, an unknown role name or
  * an unknown thinking level keeps the value from the layer below and adds a
- * report. Naming `model` clears `role` and vice versa, since a step has one
- * target; naming both in one layer leaves the role.
+ * report. Naming `model` clears `role`, since a step has one target; naming
+ * both in one layer leaves the role, which is the narrower instruction. A role
+ * on a `SESSION_KEYS` entry is refused outright: only the conductor's
+ * `setModel` can start a step's session, and a role gives it no model.
  */
 export const resolveSettings = (
   defaults: ResolvedSettings,
@@ -147,16 +163,6 @@ export const resolveSettings = (
           reason: `not one of ${LEVELS.join(", ")}`,
         });
     }
-    // The role wins when a layer names both: it is the narrower instruction.
-    if ("role" in raw) {
-      const role = raw.role;
-      if (isRoleName(role)) {
-        settings[key].role = role;
-        delete settings[key].model;
-      } else {
-        reports.push({ key, field: "role", value: role, reason: "not a role name" });
-      }
-    }
     if ("model" in raw) {
       const model = raw.model;
       if (isModelRef(model)) {
@@ -165,6 +171,27 @@ export const resolveSettings = (
       } else {
         reports.push({ key, field: "model", value: model, reason: 'not "provider/model"' });
       }
+    }
+    if ("role" in raw) {
+      const role = raw.role;
+      if (!isRoleName(role)) {
+        reports.push({ key, field: "role", value: role, reason: "not a role name" });
+      } else if ((SESSION_KEYS as readonly string[]).includes(key)) {
+        reports.push({
+          key,
+          field: "role",
+          value: role,
+          reason: "a step that gets its own session runs on a model, not a role",
+        });
+      } else {
+        settings[key].role = role;
+        delete settings[key].model;
+      }
+    }
+    if ("deep" in raw) {
+      const deep = raw.deep;
+      if (isRoleName(deep)) settings[key].deep = deep;
+      else reports.push({ key, field: "deep", value: deep, reason: "not a role name" });
     }
   };
   for (const layer of [leafFlowSetting, flowOverrides]) {
@@ -365,13 +392,21 @@ export const parseFlow = (text: string): ParseFlowResult => {
   };
 };
 
+/** A flow's mode; before the approval page it is `gated`, the strictest reading. */
+export const modeOf = (flow: Flow): Mode => flow.mode ?? "gated";
+
 // ── the tools the skills call (C3) ──────────────────────────────────────────
 
 export const TOOL_NEXT = "flow_next";
 export const TOOL_STATUS = "flow_status";
 export const TOOL_TOUR = "flow_tour";
 
-/** What `flow_status` answers, and the only way a skill reads `FLOW.json` (C3). */
+/**
+ * What `flow_status` answers, and the only way a skill reads `FLOW.json` (C3).
+ *
+ * A cap of 0 means the handoff set no cap on that axis, so nothing can exceed
+ * it; `modeOf` says what an absent mode means before the approval page.
+ */
 export type FlowBudget = {
   costCap: number;
   spentStep: number;
@@ -383,7 +418,13 @@ export type FlowBudget = {
 export type FlowStatus = {
   slug: string;
   planDir: string;
+  /** The main checkout a diff and a tuicr session are taken in. */
+  repoMain: string;
+  /** The diff a run is measured against: `merge-base(base, branch)..branch`. */
+  base: string;
+  branch: string;
   step: Step;
+  /** Before the approval page there is none; `modeOf` reads that as `gated`. */
   mode?: Mode;
   quick: boolean;
   settings: ResolvedSettings;
@@ -459,28 +500,34 @@ export type HandoffItem = {
   blockedBy: string[];
   /** Paths and globs the item may change; two in flight never overlap. */
   owns: string[];
-  /** What it adds: systems, files, abstractions. */
-  adds: string[];
+  /** What it adds: systems, files, abstractions, as the `New:` line reads. */
+  adds: string;
   tier: Tier;
-  /** The `Tier:` line, which the approval page rewrites in place. */
+  /** The `Tier:` line, 1-based, which the approval page rewrites in place. */
   tierLine: number;
   outcome: string;
   acceptance: string;
-  /** An acceptance ending `(unverified)` needs the owner or a device to settle it. */
+  /** An acceptance whose last characters are `(unverified)` needs the owner or a device. */
   acceptanceUnverified: boolean;
   constraints: string;
   why?: string;
   line: number;
 };
 
-/** The `## Budget` bullets; both a plan and `flow_status` measure against them. */
+/** The `## Budget` bullets; all five are required, and C3's caps derive from two of them (D15). */
 export type HandoffBudget = {
-  newFiles?: number;
-  newAbstractions?: number;
-  lines?: number;
-  costCap?: number;
-  concurrency?: number;
+  newFiles: number;
+  newAbstractions: number;
+  lines: number;
+  costCap: number;
+  concurrency: number;
 };
+
+/** The caps `flow_status` reports, from a parsed budget: `Lines` × 1.5, and the cost cap as given. */
+export const budgetCaps = (budget: HandoffBudget): { costCap: number; linesCap: number } => ({
+  costCap: budget.costCap,
+  linesCap: Math.round(budget.lines * 1.5),
+});
 
 export type HandoffQuestion = { id: string; text: string; line: number };
 
@@ -500,6 +547,9 @@ export type ParsedHandoff = {
   stops: string[];
   openQuestions: HandoffQuestion[];
   amendments: string;
-  /** `## Contracts`, `## Review focus`, … by heading, unparsed bodies. */
+  /**
+   * Every `##` section's body keyed by its heading text, required ones
+   * included, so the approval page renders whatever the plan wrote.
+   */
   sections: Record<string, string>;
 };

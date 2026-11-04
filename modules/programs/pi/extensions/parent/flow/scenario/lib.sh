@@ -63,17 +63,14 @@ flow_fixture() {
   git -C "$repo" push -q -u origin feature
 }
 
-# pi on the built tree: both packages, every flow skill, and the replay
-# provider answering as fixture/replay (and fixture/deep, which can hold a
-# thinking level). Extra argv is appended.
+# pi on the built tree: both packages, the flow skills (through the parent
+# package's manifest, so a missing `skills` entry shows here), and the replay
+# provider answering as fixture/replay and fixture/deep. Extra argv is appended.
 flow_start() {
   local ext
   ext=$(scenario_extensions)
   local cmd="cd $(printf %q "$SCENARIO_FIXTURE") && $SCENARIO_ENV FIXTURE=$(printf %q "$FLOW_TURNS") exec pi --no-extensions -e $(printf %q "$ext/parent") -e $(printf %q "$ext/core") -e $(printf %q "$ext/parent/flow/scenario/fixture-provider.ts") --session-dir $(printf %q "$SCENARIO_SESSIONS") --model fixture/replay"
-  local dir arg
-  for dir in "$ext"/parent/flow/skills/*/; do
-    cmd+=" --skill $(printf %q "${dir%/}")"
-  done
+  local arg
   for arg in "$@"; do cmd+=" $(printf %q "$arg")"; done
   scenario_tmux new-session -d -s pi -x "$SCENARIO_COLS" -y "$SCENARIO_LINES" "$cmd"
   scenario_tmux pipe-pane -t pi -o "cat > $SCENARIO_LOG"

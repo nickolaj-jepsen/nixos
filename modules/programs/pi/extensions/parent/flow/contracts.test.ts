@@ -7,12 +7,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
+  budgetCaps,
   DEFAULT_SETTINGS,
   type Flow,
   ITEM_ID,
   isLevel,
   isModelRef,
   kickoffFor,
+  modeOf,
   parseFlow,
   resolveSettings,
   settingKeyFor,
@@ -130,8 +132,12 @@ test("the defaults are D5's table", () => {
   assert.deepEqual(DEFAULT_SETTINGS.plan, { model: "vm/deep", thinking: "high" });
   assert.deepEqual(DEFAULT_SETTINGS.planQuick, { model: "vm/flash", thinking: "high" });
   assert.deepEqual(DEFAULT_SETTINGS.run, { model: "vm/flash", thinking: "low" });
-  assert.deepEqual(DEFAULT_SETTINGS.items, { role: "builder", thinking: "high" });
-  assert.deepEqual(DEFAULT_SETTINGS.itemsDeep, { role: "builder-deep", thinking: "high" });
+  assert.deepEqual(DEFAULT_SETTINGS.items, {
+    role: "builder",
+    deep: "builder-deep",
+    thinking: "high",
+  });
+  assert.equal("itemsDeep" in DEFAULT_SETTINGS, false, "D5 has one items row, not two");
   assert.deepEqual(DEFAULT_SETTINGS.gateReview, { role: "reviewer" });
   assert.deepEqual(DEFAULT_SETTINGS.finalReview, { role: "reviewer-deep", thinking: "high" });
   assert.deepEqual(DEFAULT_SETTINGS.simplify, { role: "builder", thinking: "high" });
@@ -152,16 +158,50 @@ test("the leaf overrides, and a flow overrides the leaf, field by field", () => 
   assert.deepEqual(reports, []);
   assert.deepEqual(settings.plan, { model: "vm/flash", thinking: "medium" });
   assert.deepEqual(settings.run, { model: "vm/deep", thinking: "low" });
-  assert.deepEqual(settings.items, { role: "reviewer", thinking: "high" });
+  assert.deepEqual(settings.items, { role: "reviewer", deep: "builder-deep", thinking: "high" });
 });
 
-test("naming a model drops the role, and a role drops the model", () => {
-  const { settings } = resolveSettings(DEFAULT_SETTINGS, undefined, {
+test("naming a model drops the role", () => {
+  const { settings, reports } = resolveSettings(DEFAULT_SETTINGS, undefined, {
     gateReview: { model: "vm/flash" },
-    plan: { role: "reviewer" },
   });
   assert.deepEqual(settings.gateReview, { model: "vm/flash" });
-  assert.deepEqual(settings.plan, { role: "reviewer", thinking: "high" });
+  assert.deepEqual(reports, []);
+});
+
+test("a role in the same layer as a model wins, which is the narrower instruction", () => {
+  const { settings, reports } = resolveSettings(DEFAULT_SETTINGS, undefined, {
+    finalReview: { model: "vm/deep", role: "reviewer" },
+  });
+  assert.deepEqual(settings.finalReview, { role: "reviewer", thinking: "high" });
+  assert.deepEqual(reports, []);
+});
+
+test("a step with its own session refuses a role", () => {
+  const { settings, reports } = resolveSettings(DEFAULT_SETTINGS, undefined, {
+    plan: { role: "builder" },
+    run: { role: "builder" },
+  });
+  assert.deepEqual(settings.plan, DEFAULT_SETTINGS.plan);
+  assert.deepEqual(settings.run, DEFAULT_SETTINGS.run);
+  assert.deepEqual(
+    reports.map((report) => `${report.key}.${report.field}`),
+    ["plan.role", "run.role"],
+  );
+});
+
+test("the deep item role is a role name like any other", () => {
+  const kept = resolveSettings(DEFAULT_SETTINGS, undefined, { items: { deep: "reviewer-deep" } });
+  assert.equal(kept.settings.items.deep, "reviewer-deep");
+  assert.equal(kept.settings.items.role, "builder");
+  assert.deepEqual(kept.reports, []);
+
+  const refused = resolveSettings(DEFAULT_SETTINGS, undefined, { items: { deep: "Builder Deep" } });
+  assert.equal(refused.settings.items.deep, "builder-deep");
+  assert.deepEqual(
+    refused.reports.map((report) => report.field),
+    ["deep"],
+  );
 });
 
 test("an invalid value falls back and is reported, never thrown", () => {
@@ -180,6 +220,26 @@ test("an invalid value falls back and is reported, never thrown", () => {
     reports.map((report) => `${report.key}.${report.field}`),
     ["judge.thinking", "plan.model", "run.role", "music.model", "guide.model"],
   );
+});
+
+test("a mode is gated until the approval page says otherwise", () => {
+  const parsed = parseFlow(JSON.stringify(flow()));
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.equal(parsed.flow.mode, undefined);
+  assert.equal(modeOf(parsed.flow), "gated");
+  assert.equal(modeOf({ ...parsed.flow, mode: "straight" }), "straight");
+});
+
+test("the budget's caps come from the handoff's own numbers", () => {
+  const caps = budgetCaps({
+    newFiles: 5,
+    newAbstractions: 1,
+    lines: 400,
+    costCap: 15,
+    concurrency: 3,
+  });
+  assert.deepEqual(caps, { costCap: 15, linesCap: 600 });
 });
 
 test("model references and levels are the shapes the rest of the flow assumes", () => {
@@ -214,7 +274,6 @@ test("each step names its settings key and its kickoff", () => {
 
 test("the example handoff carries every required section", () => {
   for (const heading of [
-    "# A CSV export",
     "## Mission",
     "## Smallest version",
     "Not building:",
@@ -232,7 +291,7 @@ test("the example handoff carries every required section", () => {
     "## Open questions",
     "## Amendments",
   ]) {
-    assert.ok(example.includes(`${heading}\n`) || example.includes(heading), `missing ${heading}`);
+    assert.ok(example.includes(`${heading}\n`), `missing the heading line ${heading}`);
   }
 });
 
@@ -285,10 +344,10 @@ test("the example's decisions, items and budget follow the grammar", () => {
     assert.ok(example.includes(`- ${field}`), `no ${field} in the example`);
   }
   assert.equal([...example.matchAll(/^- Tier: (flash|deep)$/gm)].length, 3);
-  // The marker may sit on a continuation line, so read the bullet joined.
+  // The marker ends the joined value, with nothing after it.
   assert.ok(
-    lines.some((line) => line.startsWith("- Acceptance:") && line.includes("(unverified)")),
-    "an acceptance marked (unverified)",
+    lines.some((line) => line.startsWith("- Acceptance:") && line.endsWith("(unverified)")),
+    "an acceptance ending in (unverified)",
   );
 
   const budget = [

@@ -1,12 +1,12 @@
 // @ts-nocheck — jiti strips types and no tsconfig reaches this file.
 /**
- * The flow scenarios' replay provider: the pi-plugin-dev asset's turns, plus a
- * second model that claims to reason.
+ * The flow scenarios' replay provider: the pi-plugin-dev asset's turns, with
+ * two models that both claim to reason.
  *
- * `fixture/replay` is the cheap step: `reasoning: false`, so pi clamps any
- * thinking level to `off` and writes no `thinking_level_change` entry.
- * `fixture/deep` claims reasoning, so a scenario can prove that a step ran on
- * `deep` at `high` (notes/testing.md §3).
+ * Both claim reasoning on purpose: a non-reasoning model clamps every thinking
+ * level to `off`, and a flow step's level could then never be asserted on the
+ * cheap model (notes/testing.md §3). `fixture/replay` stands in for a flash
+ * step, `fixture/deep` for a deep one.
  *
  * FIXTURE names the turns file; the cursor is per process, and a flow's
  * `newSession` keeps the process, so turns are consumed in global order across
@@ -147,7 +147,7 @@ export default function (pi: ExtensionAPI) {
     baseUrl: "http://fixture.invalid",
     apiKey: "fixture",
     api: "fixture-api",
-    models: [model("replay", "Replay (fixture)", false), model("deep", "Deep (fixture)", true)],
+    models: [model("replay", "Replay (fixture)", true), model("deep", "Deep (fixture)", true)],
     streamSimple: streamFixture,
   });
 }

@@ -7,12 +7,11 @@
  * calls. Neither may throw — a broken judge must never hold up a flow.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-  DEFAULT_SETTINGS,
-  type JudgeBriefVerdict,
-  type JudgeHandoffVerdict,
-  type ParsedHandoff,
-  type ResolvedSettings,
+import type {
+  JudgeBriefVerdict,
+  JudgeHandoffVerdict,
+  ParsedHandoff,
+  ResolvedSettings,
 } from "./contracts.ts";
 
 const NOT_YET = "the judge is not implemented yet, so the defaults stand";
@@ -25,7 +24,7 @@ export const judgeBrief = async (
   settings: ResolvedSettings,
 ): Promise<JudgeBriefVerdict> => ({
   plan: "full",
-  model: settings.plan.model ?? DEFAULT_SETTINGS.plan.model ?? "vm/flash",
+  model: settings.plan.model ?? "vm/flash",
   thinking: settings.plan.thinking ?? "high",
   reasons: [NOT_YET],
   cost: 0,
@@ -40,7 +39,7 @@ export const judgeHandoff = async (
 ): Promise<JudgeHandoffVerdict> => ({
   mode: "gated",
   run: {
-    model: settings.run.model ?? DEFAULT_SETTINGS.run.model ?? "vm/flash",
+    model: settings.run.model ?? "vm/flash",
     thinking: settings.run.thinking ?? "low",
   },
   tiers: {},

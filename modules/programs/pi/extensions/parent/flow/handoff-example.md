@@ -88,7 +88,7 @@ Out: every other page, every other format, and the column definitions, which
 - Outcome: the report page shows one button that downloads the table as CSV.
 - Acceptance:
   - `pnpm test:e2e report` → `PASS`, and the downloaded file's first line is the
-    table's header row `(unverified)`.
+    table's header row (unverified)
 - Constraints: U1, U2, C1, D3
 
 ### S1 A refactor worth it or not (spike, timebox 30)
