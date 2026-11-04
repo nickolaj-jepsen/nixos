@@ -6,10 +6,11 @@ recorded in git config `wt.<name>.head`, so `wt new <name>` can bring it back.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterator, Optional
 
 from .git import ProbeError, die, git, git_ok, is_within, probe, run
 from .repo import Repo, registered_worktrees
@@ -42,6 +43,24 @@ class Entry:
 
 def dir_name(branch: str) -> str:
     return branch.replace("/", "-")
+
+
+@contextlib.contextmanager
+def read_only_git() -> Iterator[None]:
+    """Make every git call forgo optional locks, so an inspection cannot change what it reads.
+
+    With optional locks, `git status` refreshes the stat information in the index it reads, which
+    both mutates the checkout and resets the idle time reported from that index to 0s.
+    """
+    previous = os.environ.get("GIT_OPTIONAL_LOCKS")
+    os.environ["GIT_OPTIONAL_LOCKS"] = "0"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("GIT_OPTIONAL_LOCKS", None)
+        else:
+            os.environ["GIT_OPTIONAL_LOCKS"] = previous
 
 
 def records(repo: Repo) -> dict[str, str]:

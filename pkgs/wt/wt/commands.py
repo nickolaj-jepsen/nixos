@@ -29,6 +29,7 @@ from .worktrees import (
     landed,
     layers,
     operation_in_progress,
+    read_only_git,
     records,
     resolve,
     set_layers,
@@ -365,29 +366,32 @@ def _table(rows: list[list[str]]) -> str:
 def cmd_list(args: argparse.Namespace) -> None:
     if args.all and args.target:
         die("--all lists every repository; drop it to narrow to one worktree")
-    if args.all:
-        selected = [(repo, entries(repo)) for repo in repos_under_root()]
-    else:
-        repo = current_repo()
-        selected = [(repo, [resolve(repo, args.target)] if args.target else entries(repo))]
-    if args.name:
-        for _, found in selected:
-            for entry in found:
-                print(entry.name)
-        return
-    try:
-        documents = [
-            {
-                "name": repo.key,
-                "main": repo.main,
-                "defaultBranch": repo.default,
-                "worktrees": [_row(repo, entry) for entry in found],
-            }
-            for repo, found in selected
-        ]
-    except ProbeError as error:
-        # A row that could not be inspected ends the listing until JSON v3 can carry the error.
-        die(str(error))
+    # Listing reports git metadata, so every question it asks must forgo optional locks: a status
+    # call that refreshes the index would mutate the checkout and report its own write as 0s idle.
+    with read_only_git():
+        if args.all:
+            selected = [(repo, entries(repo)) for repo in repos_under_root()]
+        else:
+            repo = current_repo()
+            selected = [(repo, [resolve(repo, args.target)] if args.target else entries(repo))]
+        if args.name:
+            for _, found in selected:
+                for entry in found:
+                    print(entry.name)
+            return
+        try:
+            documents = [
+                {
+                    "name": repo.key,
+                    "main": repo.main,
+                    "defaultBranch": repo.default,
+                    "worktrees": [_row(repo, entry) for entry in found],
+                }
+                for repo, found in selected
+            ]
+        except ProbeError as error:
+            # A row that could not be inspected ends the listing until JSON v3 can carry the error.
+            die(str(error))
     if args.json:
         print(json.dumps({"version": STATUS_VERSION, "repos": documents}, indent=2))
         return

@@ -172,7 +172,20 @@ class Local(Base):
         document = json.loads(self.wt("list", "--all", "--json", cwd=self.root).stdout)
         self.assertEqual([len(repo["worktrees"]) for repo in document["repos"]], [1, 1])
 
-    # close -------------------------------------------------------------------
+    def test_list_leaves_the_metadata_it_reports_untouched(self) -> None:
+        path = self.feature("mtime")
+        # An edit leaves the index's cached stat stale, so the next `git status` rewrites it: the
+        # listing has to read that state, not cause it.
+        self.write("b.txt", "edited\n", cwd=str(path))
+        old = time.time() - 3 * 3600
+        stamps = [self.git_dir(path) / name for name in ("index", "HEAD")]
+        for stamp in stamps:
+            os.utime(stamp, (old, old))
+        row = self.entry("mtime")
+        for stamp in stamps:
+            self.assertEqual(int(stamp.stat().st_mtime), int(old), f"listing rewrote {stamp}")
+        self.assertTrue(row["dirty"])
+        self.assertGreaterEqual(row["idleSeconds"], 3 * 3600)
 
     def test_close_commits_the_dirty_tree_and_new_brings_it_back(self) -> None:
         path = self.feature("work")
@@ -312,8 +325,6 @@ class Local(Base):
         restore = stderr.split("restore with: ", 1)[1].split()
         self.git(*restore[1:])
         self.assertEqual(self.git("show", "hidden:fresh.txt", check=False), "fresh\n")
-
-    # land --------------------------------------------------------------------
 
     def test_land_fast_forwards_main_and_closes(self) -> None:
         path = self.feature("land-me")
