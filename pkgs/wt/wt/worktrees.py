@@ -179,29 +179,46 @@ def is_wip(cwd: str, ref: str) -> bool:
     return value.strip() == "1"
 
 
-def ahead(repo: Repo, ref: str) -> int:
-    """Commits `ref` has that the default branch does not; raises ProbeError rather than counting 0."""
-    out = probe(repo.main, "rev-list", "--count", f"{repo.default}..{ref}", "--").strip()
+def head_of(repo: Repo, entry: Entry) -> tuple[str, str]:
+    """The checkout and ref holding an entry's own commits.
+
+    A detached worktree has its own HEAD, so the primary checkout is the wrong place to ask about
+    it; a closed worktree is known only by the branch git config recorded for it.
+    """
+    if entry.path and not entry.branch:
+        return entry.path, "HEAD"
+    return repo.main, entry.branch or "HEAD"
+
+
+def ahead(repo: Repo, ref: str, cwd: Optional[str] = None) -> int:
+    """Commits `ref` in `cwd` has that the default branch does not; raises ProbeError rather than counting 0."""
+    out = probe(cwd or repo.main, "rev-list", "--count", f"{repo.default}..{ref}", "--").strip()
     if not out.isdigit():
         raise ProbeError(f"git rev-list --count {repo.default}..{ref} answered {out!r}, not a count")
     return int(out)
 
 
-def landed(repo: Repo, ref: str) -> Optional[bool]:
-    """Whether every commit of `ref` is in the default branch; None when git cannot tell.
+def landed(repo: Repo, ref: str, cwd: Optional[str] = None) -> Optional[bool]:
+    """Whether every commit of `ref` in `cwd` is in the default branch; None when git cannot tell.
 
     `merge-base --is-ancestor` exits 1 for a normal no, so only any other failure is unknown.
     """
-    proc = run(["git", "-C", repo.main, "merge-base", "--is-ancestor", ref, repo.default], check=False)
+    proc = run(["git", "-C", cwd or repo.main, "merge-base", "--is-ancestor", ref, repo.default], check=False)
     if proc.returncode == 0:
         return True
     return False if proc.returncode == 1 else None
 
 
 def idle_seconds(repo: Repo, entry: Entry) -> int:
+    """Seconds since the latest git-metadata activity on the entry: its commit, HEAD and index.
+
+    Working-tree file mtimes are ignored on purpose: they move on every save and say nothing about
+    whether the work is idle. A detached worktree's commit is its own, not the primary tip's.
+    """
     now = int(time.time())
     stamps: list[int] = []
-    commit = git(repo.main, "log", "-1", "--format=%ct", entry.branch or "HEAD", "--", check=False).strip()
+    cwd, ref = head_of(repo, entry)
+    commit = git(cwd, "log", "-1", "--format=%ct", ref, "--", check=False).strip()
     if commit.isdigit():
         stamps.append(int(commit))
     if entry.path:

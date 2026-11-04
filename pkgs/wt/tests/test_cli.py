@@ -187,6 +187,24 @@ class Local(Base):
         self.assertTrue(row["dirty"])
         self.assertGreaterEqual(row["idleSeconds"], 3 * 3600)
 
+    def test_list_reads_a_detached_worktrees_own_commits(self) -> None:
+        path = self.new("detached")
+        self.git("switch", "-q", "--detach", cwd=str(path))
+        self.write("b.txt", "detached work\n", cwd=str(path))
+        self.commit("detached work", cwd=str(path))
+        # The primary checkout moves on: its tip is no answer for this worktree.
+        self.write("a.txt", "moved on\n")
+        self.commit("moved on")
+        old = time.time() - 3 * 3600
+        for name in ("index", "HEAD"):
+            os.utime(self.git_dir(path) / name, (old, old))
+        row = self.entry("detached")
+        self.assertTrue(row["open"])
+        self.assertEqual(row["branch"], "")
+        self.assertEqual(row["ahead"], 1)
+        self.assertGreaterEqual(row["idleSeconds"], 3 * 3600)
+        self.assertLess(row["idleSeconds"], 4 * 3600)
+
     def test_a_deleted_folder_lists_as_closed_and_new_recreates_it(self) -> None:
         path = self.feature("gone")
         shutil.rmtree(path)

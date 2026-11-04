@@ -24,6 +24,7 @@ from .worktrees import (
     dir_name,
     dirty,
     entries,
+    head_of,
     idle_seconds,
     is_wip,
     landed,
@@ -348,14 +349,16 @@ def cmd_drop(args: argparse.Namespace) -> None:
 
 
 def _row(repo: Repo, entry: Entry) -> dict:
+    cwd, ref = head_of(repo, entry)
     is_dirty = bool(entry.path) and dirty(entry.path or "")
+    has_commits = bool(entry.branch or entry.path)
     return {
         "name": entry.name,
         "branch": entry.branch,
         "path": entry.path,
         "open": entry.open,
-        "ahead": ahead(repo, entry.branch) if entry.branch else 0,
-        "landed": bool(entry.branch) and landed(repo, entry.branch),
+        "ahead": ahead(repo, ref, cwd) if has_commits else 0,
+        "landed": bool(landed(repo, ref, cwd)) if has_commits else False,
         "dirty": is_dirty,
         "wip": bool(entry.branch) and is_wip(repo.main, entry.branch),
         "busy": bool(entry.path) and bool(busy_pids(entry.path or "")),
