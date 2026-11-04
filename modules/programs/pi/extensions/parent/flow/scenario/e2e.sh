@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The walking skeleton for /flow: both packages load under the scenario harness,
-# the flow skills are shipped and hidden, and `/flow` answers. Every step after
-# the brief is PENDING until the conductor lands; A7 turns this into a drive
-# from brief to done.
+# the flow skills are shipped and hidden, `/flow` starts a flow, its brief step
+# runs in a new linked session and the footer names it. A7 turns this into a
+# drive from brief to done.
 set -euo pipefail
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
@@ -11,19 +11,18 @@ flow_init e2e
 flow_fixture
 flow_start
 
-# A broken import, a package that does not load, or a command clash shows here.
+# A broken import or a package that does not load shows here, before any command.
 scenario_assert_lacks '\[Extension issues\]'
 scenario_assert_lacks 'Extensions failed to load'
 
-# The skills ship through parent/package.json's pi field and reach the session
-# as /skill:<name> commands.
+# `/flow <slug>` starts a flow in this session and sends the brief skill at it,
+# which is the only step that runs where the flow was started.
 scenario_type '/flow skeleton'
 scenario_keys Enter
-scenario_wait 'plan PENDING' 20
-scenario_assert_has 'flow skeleton'
-scenario_assert_has 'run PENDING'
-scenario_assert_has 'guide PENDING'
-scenario_assert_has 'done PENDING'
+scenario_wait 'flow skeleton · brief' 30
+scenario_assert_has 'skill name="flow-brief"'
+scenario_assert_has 'brief done|flow skeleton · brief'
+
 # The skills reach the session through parent/package.json's pi field, which is
 # all-or-nothing: a missing `skills` entry leaves this list empty.
 scenario_type '/skill:flow'
