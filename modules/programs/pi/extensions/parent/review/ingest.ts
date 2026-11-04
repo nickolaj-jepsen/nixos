@@ -24,6 +24,14 @@ import {
 
 /** A large review's comment array is well under this; a runaway one is cut off, not read. */
 const MAX_OUTPUT = 8 << 20;
+
+/**
+ * The author a /flow review tour signs its comments with (D25). Those are a
+ * reading order, not the owner's findings: the batch omits authors, so one left
+ * in would come back to the model as work. The flow's `flow_tour` seeds with
+ * this same name, which is why it is exported rather than repeated there.
+ */
+export const TOUR_AUTHOR = "Flow";
 /** A hung binary must not hold up an ingest. */
 const CLI_TIMEOUT_MS = 5_000;
 
@@ -181,19 +189,26 @@ const remember = (key: string, found: readonly Candidate[]): Candidate[] => {
 
 const unique = (values: readonly string[]): string[] => [...new Set(values)];
 
-/** Comments tuicr holds for one session, minus what was ingested and what already arrived. */
+/**
+ * Comments tuicr holds for one session, minus what was ingested and what
+ * already arrived, and minus the tour's own: `tour` names the ids of those, so
+ * the caller can mark them seen without the batch ever carrying them.
+ */
 const freshItems = async (
   tuicr: TuicrSource,
   candidate: Candidate,
   known: ReadonlySet<string>,
-): Promise<InboxItem[]> => {
+): Promise<{ items: InboxItem[]; tour: string[] }> => {
   const items: InboxItem[] = [];
+  const tour: string[] = [];
   for (const raw of comments(await tuicr.comments(candidate.root, candidate.slug))) {
     const item = inboxItem(raw);
-    if (known.has(item.id) || items.some((seen) => seen.id === item.id)) continue;
-    items.push(item);
+    if (known.has(item.id) || items.some((seen) => seen.id === item.id) || tour.includes(item.id))
+      continue;
+    if (item.author === TOUR_AUTHOR) tour.push(item.id);
+    else items.push(item);
   }
-  return items;
+  return { items, tour };
 };
 
 const sameIds = (a: readonly string[], b: readonly string[]) =>
@@ -264,7 +279,10 @@ export const ingestWith = async (
   for (const candidate of candidates) {
     const session = byslug(candidate.slug);
     if (session !== undefined && !session.active && session.comments === 0) continue;
-    for (const item of await freshItems(tuicr, candidate, known)) {
+    const found = await freshItems(tuicr, candidate, known);
+    // A tour comment is read once and then stays out of the way (D25).
+    for (const id of found.tour) known.add(id);
+    for (const item of found.items) {
       if (known.has(item.id)) continue;
       known.add(item.id);
       fresh.push(item);
