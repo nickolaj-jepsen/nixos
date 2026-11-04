@@ -89,6 +89,71 @@ test("an unreadable newest entry falls back to the newest one that parses", () =
   assert.deepEqual(readEntry(env(branch), ctx(branch)), good);
 });
 
+test("two writers that overlapped keep both their deliveries and both their ingests", async () => {
+  const branch: Branch = [];
+  const first = entry({
+    at: "2026-11-03T21:12:12.088148037+00:00",
+    seen: ["c1"],
+    sent: ["c1"],
+    items: [
+      {
+        id: "c1",
+        path: "a.ts",
+        startLine: 1,
+        endLine: 1,
+        side: "new",
+        type: "issue",
+        author: "N",
+        body: "one",
+        at: "",
+      },
+    ],
+  });
+  recordEntry(env(branch), ctx(branch), first);
+  // A submit cleared the inbox for c1 and c2 while an ingest was waiting on tuicr;
+  // the ingest then writes its own, older snapshot.
+  const stale = entry({
+    at: "2026-11-03T21:12:14.000000000+00:00",
+    seen: ["c1", "c2"],
+    sent: ["c1"],
+    items: [
+      ...first.items,
+      {
+        id: "c2",
+        path: "b.ts",
+        startLine: 2,
+        endLine: 2,
+        side: "new",
+        type: "nit",
+        author: "N",
+        body: "two",
+        at: "",
+      },
+    ],
+  });
+  recordEntry(env(branch), ctx(branch), stale);
+  const merged = readEntry(env(branch), ctx(branch));
+  assert.deepEqual(merged?.seen, ["c1", "c2"]);
+  assert.deepEqual(merged?.sent, ["c1"]);
+  assert.deepEqual(
+    merged?.items.map((item) => item.id),
+    ["c1", "c2"],
+  );
+
+  // And the other order: the surviving entry is the fresher snapshot's, with the
+  // older one's deliveries kept on top of it.
+  const newer = entry({
+    at: "2026-11-03T21:12:16.000000000+00:00",
+    seen: ["c1", "c2"],
+    sent: ["c1", "c2"],
+    items: stale.items,
+  });
+  recordEntry(env(branch), ctx(branch), newer);
+  const latest = readEntry(env(branch), ctx(branch));
+  assert.deepEqual(latest?.sent, ["c1", "c2"]);
+  assert.equal(latest?.at, newer.at);
+});
+
 test("a review entry's optional fields are validated, not assumed", () => {
   const branch: Branch = [];
   // The pinned scope is what tuicr is launched with: a mode outside C3 is not one.

@@ -87,6 +87,12 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
   /** False once the hub says it does not know the form ops: an older daemon, and the CLI does them. */
   let formOps = true;
   let status: Status = "idle";
+  /**
+   * What the run itself is doing. `status` is this plus whatever the session is
+   * waiting on: a standing label (the review, D10) clears at idle, and sending
+   * "busy" then would claim a turn that is not running.
+   */
+  let base: Status = "idle";
   let since = Date.now();
   let attachInfo: () => AttachInfo = () => ({ record: {} });
   let judge: ((request: JudgeRequest) => Promise<string | undefined>) | undefined;
@@ -290,10 +296,12 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       SHOW_TIMEOUT_MS,
     ).then((reply) => reply?.shown === true);
 
+  /** The bar's status follows what the run is doing, unless the session is waiting on something. */
+  const settleStatus = () => setStatus(waitingFor() ? "waiting" : base);
+
   dialogs.onChange(() => {
-    const waiting = waitingFor();
-    setStatus(waiting ? "waiting" : "busy");
-    write({ op: "dialog", text: waiting ?? null });
+    settleStatus();
+    write({ op: "dialog", text: waitingFor() ?? null });
   });
 
   pi.on("session_start", (_event, c) => {
@@ -302,6 +310,7 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     ctx = c;
     live = true;
     refused = false;
+    base = "idle";
     status = "idle";
     since = Date.now();
     open();
@@ -370,7 +379,8 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       worktreeTool: boolean,
       timeoutMs: number,
     ) {
-      setStatus("busy");
+      base = "busy";
+      settleStatus();
       if (!attached || !ctx) return Promise.resolve(undefined);
       const where = transcript(ctx);
       return ask(
@@ -405,7 +415,8 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       write({ op: "dismiss", session, ...(turn === undefined ? {} : { turn }) }),
     /** The turn settled; `pending` background jobs still run for it, `error` if the run failed. */
     turnEnd(pending: number, error: boolean) {
-      setStatus("idle");
+      base = "idle";
+      settleStatus();
       if (ctx) write({ op: "turn-end", pending, error, ...transcript(ctx) });
     },
     /**

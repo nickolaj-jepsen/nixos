@@ -24,8 +24,15 @@ import { type ReviewEntry, socketPath } from "./types.ts";
 /** Every assertion is on what ingest returns (C1); the appends it makes go nowhere. */
 const env = { pi: { appendEntry: () => {} } } as unknown as ReviewEnv;
 
-const ctx = (cwd: string, session: string) =>
-  ({ cwd, sessionManager: { getSessionId: () => session } }) as unknown as ExtensionContext;
+/** The branch `recordEntry` re-reads before it appends, and the appends themselves. */
+const ctx = (cwd: string, session: string, branch: unknown[] = []) =>
+  ({
+    cwd,
+    sessionManager: {
+      getSessionId: () => session,
+      getBranch: () => branch,
+    },
+  }) as unknown as ExtensionContext;
 
 const fixture = (name: string) =>
   readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");

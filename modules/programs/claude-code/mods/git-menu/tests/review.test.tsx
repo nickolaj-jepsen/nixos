@@ -100,6 +100,8 @@ type World = {
   /** The prompt box as it stands, and every fill that reached it. */
   box: string;
   fills: string[];
+  /** Every notice the mod put up, in order. */
+  toasts: string[];
   /** What `tuicr review list` says about this checkout's sessions. */
   sessions: unknown[];
   clock: MockClock;
@@ -120,6 +122,7 @@ function world(
     moved: [],
     box: "",
     fills: [],
+    toasts: [],
     sessions,
     clock: mock.clock(on, { now: NOW }),
   };
@@ -133,7 +136,10 @@ function world(
   on("ui.open", () => ({ value: { isPlaced: true } }));
   on("ui.close", () => ({ value: undefined }));
   on("ui.panes", () => ({ value: [] }));
-  on("ui.toast", () => ({ value: undefined }));
+  on("ui.toast", (_, e) => {
+    w.toasts.push(e.text ?? "");
+    return { value: undefined };
+  });
   on("ui.log", () => ({ value: undefined }));
   on("prompt.read", () => ({ value: { text: w.box, cursor: w.box.length } }));
   on("prompt.fill", (_, e) => {
@@ -176,6 +182,8 @@ function world(
       if (found === undefined) return ok("", 1);
       return ok(`${found === "tuicr" ? TUICR : GHOSTTY}\n`);
     }
+    // `kill -0`: the claim's process answers while it runs.
+    if (argv[0] === "kill" && argv[1] === "-0") return argv[2] === String(PID) ? ok("") : ok("", 1);
     if (argv[0] === "gh") return ok(PR);
     if (argv[0] === "git") {
       if (line.includes(" status ")) {
@@ -343,6 +351,26 @@ test("a send carrying the batch's marker clears the seen ids, and nothing is dra
   await w.clock.advance(MINUTE);
   await send($, "something else");
   expect(w.fills).toEqual([]);
+});
+
+test("a live claim another session holds refuses the review before a window opens", async ($, on) => {
+  const held = JSON.stringify({
+    v: 1,
+    root: ROOT,
+    session: "another-session",
+    harness: "pi",
+    pid: PID,
+    slug: SLUG,
+    scope: { mode: "worktree", args: ["-w"] },
+    seen: [],
+    at: new Date(NOW - MINUTE).toISOString(),
+  });
+  const w = world(on, { claim: held });
+  await start($, on);
+  await review($);
+  expect(w.launched).toEqual([]);
+  expect(w.toasts).toContain("This repository's review belongs to another pi session.");
+  expect(w.files.get(CLAIM)).toBe(held);
 });
 
 test("a claim another session holds is left alone", async ($, on) => {

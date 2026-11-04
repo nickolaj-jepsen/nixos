@@ -61,14 +61,27 @@ const dataHome = () => process.env.XDG_DATA_HOME || join(homedir(), ".local", "s
 const reviewsDir = () => join(dataHome(), "tuicr", "reviews");
 const sessionDir = () => join(reviewsDir(), "sessions");
 
+/**
+ * `active_sessions.json` outlives a SIGTERM, so its pid can be a stranger's.
+ * On Linux the command line settles it; where procfs is unreadable (another
+ * user's process, or another OS) existence is all there is.
+ */
+const isTuicr = (pid: number): boolean => {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, "utf8").includes("tuicr");
+  } catch {
+    return true;
+  }
+};
+
 const isRunning = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
-    return true;
   } catch (error) {
     // A process of another user exists but is not ours to signal.
-    return (error as NodeJS.ErrnoException).code === "EPERM";
+    if ((error as NodeJS.ErrnoException).code !== "EPERM") return false;
   }
+  return isTuicr(pid);
 };
 
 /** One tuicr the pid file lists: its process, the session it holds, and when it was last seen. */
@@ -444,15 +457,33 @@ export const openReview = async (
   const socket = socketPath(runtimeDir(), where.main);
   const before = readEntry(env, ctx);
   const claim = foreignClaim(env, ctx);
-  if (claim !== undefined && !alive(socket)) {
+  // Another session owns this repository's review, running or not: attaching to
+  // it would ingest the same comments twice and deliver them twice (U8).
+  if (claim !== undefined) {
     ctx.ui.notify(`review: claimed by ${claim}; /review take takes it over`, "info");
     return;
   }
-  const pinned = scope ?? before?.scope ?? UNPINNED;
-  // The hub has to hear about this before the TUI stops: spawnSync then holds
-  // pi's event loop until the owner detaches (notes/s1-suspend.md).
-  reviewLive(env, before);
   const live = alive(socket);
+  // Attaching cannot change what tuicr is diffing, so the recorded scope stands.
+  const pinned = (live ? before?.scope : (scope ?? before?.scope)) ?? UNPINNED;
+  // The hub has to hear about this before the TUI stops: spawnSync then holds
+  // pi's event loop until the owner detaches (notes/s1-suspend.md). On the first
+  // review of a session there is no entry yet, so one describes what is opening.
+  const opening: ReviewEntry = before ?? {
+    v: 1,
+    root: where.main,
+    cwd: ctx.cwd,
+    harness: "pi",
+    slug: null,
+    scope: pinned,
+    socket,
+    items: [],
+    seen: [],
+    sent: [],
+    progress: { reviewedCount: 0, fileCount: 0 },
+    at: new Date().toISOString(),
+  };
+  reviewLive(env, opening);
   if (!live) ctx.ui.notify("review: ^G returns to pi; /review kill saves and closes", "info");
   const since = Date.now();
   const spec: Hop = { cwd: ctx.cwd, socket, argv: tuicrArgv(pinned) };
@@ -482,6 +513,12 @@ export const openReview = async (
 export const killReview = async (env: ReviewEnv, ctx: ExtensionContext): Promise<void> => {
   const where = rootsFor(ctx.cwd);
   const socket = socketPath(runtimeDir(), where.main);
+  const claim = foreignClaim(env, ctx);
+  // Saving and closing another session's review is taking it over without saying so.
+  if (claim !== undefined) {
+    ctx.ui.notify(`review: claimed by ${claim}; /review take takes it over`, "info");
+    return;
+  }
   const before = readEntry(env, ctx);
   const ended = await finish(socket, pidOf(where, before?.slug ?? null));
   reviewLive(env, undefined);

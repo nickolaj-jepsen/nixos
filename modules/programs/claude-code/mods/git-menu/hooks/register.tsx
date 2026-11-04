@@ -378,11 +378,29 @@ async function writeClaim($: EngineInterface, path: string, claim: Claim) {
     $.ui.log(`review: could not write the claim at ${path}`, { to: "debug" });
 }
 
+/** Whether a claim's process still runs: a session that quit leaves a claim to overwrite. */
+async function running($: EngineInterface, pid: number): Promise<boolean> {
+  const probe = await $.process.run(["kill", "-0", String(pid)]).catch(() => undefined);
+  return probe?.exitCode === 0;
+}
+
 /** Pins the scope, opens the window and records the claim the next send reads. */
 async function launchReview($: EngineInterface, scope: PinnedScope) {
-  const [cwd, repo] = await Promise.all([$.session.cwd(), $.session.repo()]);
+  const [cwd, repo, session] = await Promise.all([
+    $.session.cwd(),
+    $.session.repo(),
+    $.session.id(),
+  ]);
   if (!repo) {
     $.ui.toast("Not a git repository.");
+    return;
+  }
+  const path = await reviewClaimPath($, repo.root);
+  const existing = await readClaim($, path);
+  // The file is one repository's review for both harnesses: a live claim that is
+  // not this session's is left to it, the same refusal pi's opener makes (U8).
+  if (existing !== undefined && !ownsClaim(existing, session) && (await running($, existing.pid))) {
+    $.ui.toast(`This repository's review belongs to another ${existing.harness} session.`);
     return;
   }
   const argv = await reviewWindow($, cwd, scope.args);
@@ -397,12 +415,14 @@ async function launchReview($: EngineInterface, scope: PinnedScope) {
   }
   const claim = newClaim({
     root: repo.root,
-    session: await $.session.id(),
+    session,
     pid: await reviewPid($),
     scope,
     at: new Date(await $.clock.now()).toISOString(),
   });
-  await writeClaim($, await reviewClaimPath($, claim.root), claim);
+  // Read-modify-write: a re-launch by the same session keeps what it delivered.
+  const seen = existing !== undefined && ownsClaim(existing, session) ? existing.seen : [];
+  await writeClaim($, path, { ...claim, seen });
   $.ui.toast("Opened tuicr in a Ghostty window; its comments land in your next prompt.");
 }
 

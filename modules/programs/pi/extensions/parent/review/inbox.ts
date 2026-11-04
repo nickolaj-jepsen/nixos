@@ -16,7 +16,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Meter } from "../chrome/measurements.ts";
 import type { ReviewEnv } from "./env.ts";
 import { readEntry, sessionReview } from "./entry.ts";
-import { type InboxResult, InboxOverlay, locate } from "./overlay.ts";
+import { type InboxResult, InboxOverlay, locate, shownLocation } from "./overlay.ts";
 import type { ReviewProgress } from "./types.ts";
 import { type InboxItem, type ReviewEntry } from "./types.ts";
 import { openReview } from "./tuicr.ts";
@@ -115,5 +115,6 @@ const copyLocation = async (ctx: ExtensionContext, item: InboxItem): Promise<voi
     ctx.ui.notify(`review: ${error instanceof Error ? error.message : String(error)}`, "error");
     return;
   }
-  ctx.ui.notify(`copied ${where}`, "info");
+  // A notice is drawn too, and a path can carry escape bytes from another process (B1).
+  ctx.ui.notify(`copied ${shownLocation(item) ?? where}`, "info");
 };

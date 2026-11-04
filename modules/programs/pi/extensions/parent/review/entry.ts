@@ -114,23 +114,53 @@ const isEntry = (value: unknown): value is ReviewEntry => {
  * An unreadable record is skipped rather than believed, so a corrupt newest
  * entry falls back to the newest one that still parses.
  */
-export const readEntry = (env: ReviewEnv, ctx: ExtensionContext): ReviewEntry | undefined => {
-  session = undefined;
+const latest = (ctx: ExtensionContext): ReviewEntry | undefined => {
   const branch = ctx.sessionManager.getBranch();
   for (let index = branch.length - 1; index >= 0; index -= 1) {
     const entry = branch[index];
     if (entry?.type !== "custom" || entry.customType !== REVIEW_ENTRY) continue;
     if (!isEntry(entry.data)) continue;
-    session = entry.data;
-    break;
+    return entry.data;
   }
+  return undefined;
+};
+
+export const readEntry = (env: ReviewEnv, ctx: ExtensionContext): ReviewEntry | undefined => {
+  session = latest(ctx);
   return session;
+};
+
+const union = (older: readonly string[], newer: readonly string[]) => [
+  ...new Set([...older, ...newer]),
+];
+
+/**
+ * The entry to append: two writers can overlap (an ingest that waited on tuicr
+ * while the owner submitted a batch, the opener while a turn ran), and each
+ * holds its own snapshot. Deliveries and ingested ids are only ever added, so
+ * their union is kept; the freshest snapshot wins the rest, compared by `at`,
+ * which both writers stamp as they write.
+ */
+const merged = (previous: ReviewEntry | undefined, next: ReviewEntry): ReviewEntry => {
+  if (previous === undefined) return next;
+  const ids = new Map<string, InboxItem>();
+  for (const item of [...previous.items, ...next.items]) ids.set(item.id, item);
+  const fresher = next.at >= previous.at ? next : previous;
+  const older = fresher === next ? previous : next;
+  return {
+    ...fresher,
+    items: [...ids.values()],
+    seen: union(older.seen, fresher.seen),
+    sent: union(older.sent, fresher.sent),
+  };
 };
 
 /** Append a review entry, so a reload, a fork and a restored session see it (C1). */
 export const recordEntry = (env: ReviewEnv, ctx: ExtensionContext, entry: ReviewEntry): void => {
-  session = entry;
-  env.pi.appendEntry<ReviewEntry>(REVIEW_ENTRY, entry);
+  const previous = latest(ctx);
+  const appended = merged(previous, entry);
+  session = appended;
+  env.pi.appendEntry<ReviewEntry>(REVIEW_ENTRY, appended);
 };
 
 /** Restore the review from the branch into this session's state. */

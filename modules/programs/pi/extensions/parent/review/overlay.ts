@@ -47,6 +47,18 @@ export const locate = (item: InboxItem): string | undefined => {
   return `${item.path}:${startLine}-${endLine}`;
 };
 
+/** One line, no escape sequences: what a header field may be drawn as (B1). */
+const header = (text: string) =>
+  plain(text)
+    .replace(/\s*\n\s*/g, " ")
+    .trim();
+
+/** The location as the terminal may show it; the clipboard gets `locate`'s raw path. */
+export const shownLocation = (item: InboxItem): string | undefined => {
+  const where = locate(item);
+  return where === undefined ? undefined : header(where);
+};
+
 /**
  * Comment text is another process's data (B1) and it is drawn into the
  * terminal, so every escape sequence and control byte goes: a colour code or a
@@ -220,9 +232,11 @@ export class InboxOverlay implements Component {
   private block(item: InboxItem, index: number, inner: number, sent: boolean): Block {
     const theme = this.theme;
     const mark = theme.fg("accent", index === this.index ? "> " : "  ");
-    const location = locate(item) ?? "(no file)";
-    const type = item.type === null ? "" : `[${item.type}]`;
-    const author = item.author === null ? "" : item.author;
+    // The header carries three more fields from that same file, so they are
+    // sanitised here like the body: a path or an author can hold escape bytes too.
+    const location = shownLocation(item) ?? "(no file)";
+    const type = item.type === null ? "" : `[${header(item.type)}]`;
+    const author = item.author === null ? "" : header(item.author);
     const head = [location, type, author].filter((part) => part !== "").join(" ".repeat(GAP));
     // A delivered comment stays readable but recedes: what is still new is the point.
     const color = sent ? "dim" : "text";

@@ -109,6 +109,11 @@ kill -0 "$PID_ONE" 2>/dev/null || {
 
 # --- a second session in the same repository is told whose it is ----------
 open_session two
+# /review must say so rather than attach and deliver the same comments (U8). The
+# pass-through scope skips the picker, so the refusal is the first thing said.
+ask two '/review -w'
+pane_wait two "review: claimed by session ${SESSION_ONE:0:8} \\(pid ${PID_ONE}\\); /review take takes it over" 15
+pane_assert_lacks two 'Files ·'
 ask two '/review take'
 pane_wait two "review: claimed by session ${SESSION_ONE:0:8} \\(pid ${PID_ONE}\\); took over" 15
 SESSION_TWO=$(claim_field session)

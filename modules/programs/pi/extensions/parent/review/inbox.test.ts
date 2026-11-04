@@ -237,6 +237,19 @@ test("comment text is drawn as text: control bytes never reach the terminal (B1)
   assert.match(text, /clearthescreen/);
 });
 
+test("the header is text too: path, type and author lose their escapes (B1)", () => {
+  const hostile = item({
+    path: "src/\x1b]52;c;aGFjaw==\x07a.ts",
+    type: "issue\x1b[2J",
+    author: "Nick\x1b[31molaj",
+  });
+  const text = draw([hostile], { width: 60 }).lines.join("\n");
+  assert.ok(!text.includes("\x1b"), "an escape sequence survived");
+  assert.match(text, /src\/a\.ts/);
+  assert.match(text, /\[issue\]/);
+  assert.match(text, /Nickolaj/);
+});
+
 test("a theme change asks for the repaint and changes nothing else", () => {
   const drawn = draw(entry().items, { width: 60 });
   const before = drawn.overlay.render(60);
