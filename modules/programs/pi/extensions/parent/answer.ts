@@ -122,13 +122,15 @@ export default function (pi: ExtensionAPI, services: Services) {
   const stepForm = async (ctx: ExtensionContext, id: string, action: FormAction) => {
     const reply = await hub.formStep(id, action as HubFormAction);
     if (reply) return reply.view;
-    // A step writes text against the current item, so a second one lands on the next item.
-    if (hub.connected()) return viewFrom(ctx, ["show"]);
+    // A step writes text against the current item, so a second one lands on the next item: read
+    // the form back instead of replaying it — but only when the op actually reached the hub.
+    if (hub.connected() && hub.formsOverSocket()) return viewFrom(ctx, ["show"]);
     return viewFrom(ctx, ["step", "--form", id, JSON.stringify(action)]);
   };
 
   const syncForm = async (ctx: ExtensionContext): Promise<Synced> => {
-    // Syncing takes the delivery out of the file, so the second ask is the safe retry.
+    // Sync takes the delivery out of the file before it replies, so a second ask cannot recover
+    // one whose reply was lost; it only covers a request that never reached the hub.
     const reply = (await hub.formSync()) ?? (await hub.formSync());
     if (reply) return reply;
     const synced = (await viewFrom(ctx, ["sync"])) as Synced | null;

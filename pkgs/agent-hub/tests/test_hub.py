@@ -1759,9 +1759,9 @@ class FormOpsTest(HubTest):
         offered = self.call(op="form-offer", session=self.sid, text=self.ROUND)["view"]
         self.bar.send(op="form-step", session=self.sid, form=offered["id"], action={"do": "pick", "entry": 1})
         self.assertEqual(self.shown(lambda form: form["answered"] == 1)["reply"], "Q1: B")
-        self.ops.send(op="form-sync", session=self.sid)
+        # The bar's step carries no request, so it is owed no reply; nothing may arrive on it.
         with self.assertRaises(TimeoutError):
-            self.ops.wait(lambda m: m["type"] == "reply", 0.4)
+            self.bar.wait(lambda m: m["type"] == "reply", 0.4)
 
     def test_a_failed_op_answers_with_the_request_that_asked(self):
         offered = self.call(op="form-offer", session=self.sid, text=self.ROUND)["view"]

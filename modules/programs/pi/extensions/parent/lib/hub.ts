@@ -414,11 +414,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       formAsk((request, session) => ({ op: "form-step", request, session, form, action })).then(
         (reply) => (reply ? { view: reply.view ?? null } : undefined),
       ),
-    /** Leaves the reply in the session's file for this TUI to take, in its prompt or sent. */
-    formDeliver: (form: string, submit: boolean) =>
-      formAsk((request, session) => ({ op: "form-deliver", request, session, form, submit })).then(
-        (reply) => (reply ? { view: reply.view ?? null } : undefined),
-      ),
     /** The form as it stands, and a reply left for this TUI, handed over at most once. */
     formSync: () =>
       formAsk((request, session) => ({ op: "form-sync", request, session })).then((reply) =>
