@@ -191,6 +191,24 @@ test("C6 the socket and the module surface", () => {
   }
 });
 
+test("a refused review is what the owner is told, and nothing is opened", async () => {
+  const review = createReview(
+    { on: () => () => {}, registerCommand: () => {} } as never,
+    { ctx: undefined, live: false, tui: undefined, editor: undefined, borderDrawn: false } as never,
+    { dialogs: undefined, hub: undefined } as never,
+  );
+  const told: string[] = [];
+  const ctx = {
+    cwd: tmpdir(),
+    mode: "tui",
+    hasUI: true,
+    isIdle: () => false,
+    ui: { notify: (text: string) => told.push(text) },
+  } as never;
+  await review.dispatch("", ctx);
+  assert.deepEqual(told, ["review: the agent is still answering"]);
+});
+
 test("D11 the subcommands are told apart", async () => {
   // A real, hermetic cwd: the bare case asks git where it is, even when nothing is picked.
   const ctx = { isIdle: () => true, cwd: tmpdir(), ui: { notify: () => {} } } as never;

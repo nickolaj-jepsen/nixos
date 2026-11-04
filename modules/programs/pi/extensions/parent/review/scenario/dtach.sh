@@ -157,11 +157,10 @@ case_one() {
   scenario_wait 'Files · 0/1' 25
   scenario_assert_has 'a\.ts'
 
-  # The mark and the save, injected blind: no client is attached while pi is suspended.
+  # The mark only, injected blind: no client is attached while pi is suspended, and
+  # mark-only state reaches disk solely through a save from inside the TUI (M1), so
+  # `reviewed_count: 1` below can only come from the kill path's own `:w`.
   printf 'r' | "$DTACH" -p "$SOCK"
-  sleep 0.3
-  printf ':w\r' | "$DTACH" -p "$SOCK"
-  wait_listed '"reviewed_count": 1'
   scenario_wait 'Files · 1/1' 10
   scenario_wait '✓ a\.ts' 10
 
@@ -188,7 +187,8 @@ case_one() {
   attach_wait 'git:main'
   detach_direct
 
-  # /review kill: the save is already in, so this has to leave the mark and no socket.
+  # /review kill: the mark was never saved, so D8/M1's save-then-kill is what has to
+  # leave it on disk, and nothing may be listening afterwards.
   scenario_type '/review kill'
   scenario_keys Enter
   wait_listed '"reviewed_count": 1'

@@ -10,11 +10,30 @@
 # the pane that a capture could prove, and B2 is a deep-equal on argv.
 set -euo pipefail
 
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Picking a row really opens the review, and pi looks dtach up on PATH. Its module
+# edit is not switched in on this checkout, so the store's dtach goes first.
+DTACH="$(nix build nixpkgs#dtach --no-link --print-out-paths | tail -1)/bin/dtach"
+[ -x "$DTACH" ] || {
+  printf 'scenario: no dtach at %s\n' "$DTACH" >&2
+  exit 1
+}
+export PATH="$(dirname "$DTACH"):$PATH"
+
+. "$here/lib.sh"
 
 scenario_init picker
 scenario_fixture
 scenario_start
+
+# A failed case must not leave a review running behind it.
+finish_leftovers() {
+  local socket
+  socket=$(find "${XDG_RUNTIME_DIR:-/nonexistent}/pi-review" -name '*.sock' -print -quit 2>/dev/null)
+  [ -n "$socket" ] || return 0
+  printf ':w\r' | "$DTACH" -p "$socket" 2>/dev/null || true
+}
+trap 'finish_leftovers; scenario_stop' EXIT
 
 # A broken import or a shortcut conflict shows here, before any command runs.
 scenario_assert_lacks '\[Extension issues\]'
@@ -62,10 +81,15 @@ scenario_wait 'Review scope' 15
 scenario_assert_has 'the working tree is clean'
 scenario_assert_has '› last commit'
 
-# Enter hands the pinned scope to the opener and the overlay closes.
+# Enter hands the pinned scope to the opener: the overlay closes and tuicr takes
+# the terminal, showing the pinned commit range rather than the working tree.
 scenario_keys Enter
-sleep 0.5
+scenario_wait 'Files ·' 30
 scenario_assert_lacks 'Review scope'
+# ^G is the way back; the composer is there again, and no tuicr frame is left.
+scenario_keys C-g
+scenario_wait 'escape interrupt|commands ·' 20
+scenario_assert_lacks 'Files ·'
 
 # --- a diff filter is not a scope -----------------------------------------
 # -p only narrows the diff, so an argv of nothing else has no identity to pin

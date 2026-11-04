@@ -56,6 +56,9 @@ scenario_init() {
   SCENARIO_AGENT=$SCENARIO_ROOT/agent
   SCENARIO_SESSIONS=$SCENARIO_ROOT/sessions
   SCENARIO_RUNTIME=$SCENARIO_ROOT/run
+  # pi's registry entries fan out to every registry dir, the owner's included, so
+  # a scenario keeps its own HOME as well.
+  SCENARIO_HOME=$SCENARIO_ROOT/home
   SCENARIO_TMUX=pi-review-$name-$id
   SCENARIO_LOG=$SCENARIO_ROOT/pi.log
   XDG_DATA_HOME=$SCENARIO_ROOT/data
@@ -63,15 +66,15 @@ scenario_init() {
   XDG_RUNTIME_DIR=$SCENARIO_RUNTIME
   TMPDIR=$SCENARIO_ROOT/tmp
   export SCENARIO_NAME SCENARIO_ROOT SCENARIO_FIXTURE SCENARIO_AGENT SCENARIO_SESSIONS
-  export SCENARIO_RUNTIME SCENARIO_TMUX SCENARIO_LOG XDG_DATA_HOME XDG_CONFIG_HOME
-  export XDG_RUNTIME_DIR TMPDIR
+  export SCENARIO_RUNTIME SCENARIO_HOME SCENARIO_TMUX SCENARIO_LOG XDG_DATA_HOME
+  export XDG_CONFIG_HOME XDG_RUNTIME_DIR TMPDIR
   # A scenario stays off the owner's hub and never reaches the network.
   export AGENT_HUB_HIDDEN=1 PI_OFFLINE=1
 
   scenario_stop
   rm -rf "$SCENARIO_ROOT"
   mkdir -p "$SCENARIO_FIXTURE" "$SCENARIO_AGENT" "$SCENARIO_SESSIONS"
-  mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$TMPDIR"
+  mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$SCENARIO_HOME" "$TMPDIR"
   mkdir -p "$SCENARIO_RUNTIME"
   chmod 700 "$SCENARIO_RUNTIME"
   # The scratch agent dir needs the owner's theme and keybindings, or the
@@ -79,7 +82,7 @@ scenario_init() {
   ln -sfn "$HOME/.pi/agent/themes" "$SCENARIO_AGENT/themes"
   ln -sfn "$HOME/.pi/agent/keybindings.json" "$SCENARIO_AGENT/keybindings.json"
   # The tmux server holds the environment its sessions start with.
-  SCENARIO_ENV="XDG_DATA_HOME=$(printf %q "$XDG_DATA_HOME") XDG_CONFIG_HOME=$(printf %q "$XDG_CONFIG_HOME") XDG_RUNTIME_DIR=$(printf %q "$XDG_RUNTIME_DIR") PI_CODING_AGENT_DIR=$(printf %q "$SCENARIO_AGENT") TMPDIR=$(printf %q "$TMPDIR") AGENT_HUB_HIDDEN=1 PI_OFFLINE=1"
+  SCENARIO_ENV="HOME=$(printf %q "$SCENARIO_HOME") XDG_DATA_HOME=$(printf %q "$XDG_DATA_HOME") XDG_CONFIG_HOME=$(printf %q "$XDG_CONFIG_HOME") XDG_RUNTIME_DIR=$(printf %q "$XDG_RUNTIME_DIR") PI_CODING_AGENT_DIR=$(printf %q "$SCENARIO_AGENT") TMPDIR=$(printf %q "$TMPDIR") AGENT_HUB_HIDDEN=1 PI_OFFLINE=1"
   trap scenario_stop EXIT
   # Options in the same invocation as the first session: a server that has not
   # been started yet would otherwise run that session with the owner's shell.
@@ -180,8 +183,14 @@ scenario_resize() {
 
 scenario_pass() {
   printf 'PASS\n'
+  SCENARIO_PASSED=1
 }
 
 scenario_stop() {
   tmux -L "${SCENARIO_TMUX:-none}" kill-server 2>/dev/null || true
+  # A green run leaves nothing behind; a red one keeps its tree and its pane log
+  # for the report, and the janitor owns what is left in /tmp either way.
+  if [ "${SCENARIO_PASSED:-0}" = 1 ] && [ -n "${SCENARIO_ROOT:-}" ]; then
+    rm -rf "$SCENARIO_ROOT"
+  fi
 }

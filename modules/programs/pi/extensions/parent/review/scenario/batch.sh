@@ -58,9 +58,12 @@ draft_line=$(printf '%s\n' "$pane" | grep -n 'please also update the docs' | hea
 [ -n "$batch_line" ] && [ -n "$draft_line" ] && [ "$batch_line" -lt "$draft_line" ] ||
   fail "the batch is not above the draft (batch ${batch_line:-absent}, draft ${draft_line:-absent})"
 
-# Enter delivers it: the marker line in the submitted prompt clears the inbox.
+# Enter delivers it: the marker line in the submitted prompt clears the inbox, and
+# the border segment the owner reads stops saying anything is new (D3, D4).
 scenario_keys Enter
 scenario_wait 'noted' 20
+scenario_wait 'review 0/1' 20
+scenario_assert_lacks 'review 1 new'
 scenario_type '/review send'
 scenario_keys Enter
 scenario_wait 'review: no comments to send' 20

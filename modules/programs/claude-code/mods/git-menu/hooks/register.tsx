@@ -252,8 +252,8 @@ async function buildNotes($: EngineInterface): Promise<Menu> {
   return notesMenu({ notes, opener, now });
 }
 
-/** tuicr takes a few seconds to write its session; anything older is another review. */
-const SLUG_WINDOW_MS = 10_000;
+/** tuicr writes its session once it is up; a large diff can take a while, so the window is generous. */
+const SLUG_WINDOW_MS = 60_000;
 
 /** The review picker as drawn; it is not persisted, since no pane survives a reload. */
 let picker: ReviewMenu | undefined;
@@ -308,6 +308,8 @@ async function openReview($: EngineInterface) {
   picker = facts
     ? reviewMenu(facts)
     : { title: REVIEW_TITLE, rows: [], error: "Not a git repository." };
+  // The pane reads this module state, not a `$.state` value, so nothing redraws it for us.
+  $.ui.invalidate("ui.render");
 }
 
 /** openDiff's window, on the argv the scope pinned: tuicr's own args, never a shell string (B2). */
@@ -434,6 +436,7 @@ async function pressReview($: EngineInterface, row: ReviewRow) {
   }
   if (row.pin === "revset") {
     if (picker) picker = { ...picker, rows: [], typing: true };
+    $.ui.invalidate("ui.render");
     return;
   }
   await launchReview($, row.pin);
@@ -479,9 +482,10 @@ async function afterReviewSubmit($: EngineInterface, sent: string) {
   const slug = claim.slug ?? (await reviewSlug($, claim.root, claim.at));
   if (slug === undefined) return;
   if (sent.includes(batchMarker(slug))) {
-    // The batch reached the model: the inbox is empty, and nothing from before this
-    // send is drafted again on the next one.
-    await writeClaim($, path, { ...claim, slug, seen: [], at: now });
+    // The batch reached the model: the inbox is empty, and nothing from before the
+    // draft is drafted again. `at` stays at the draft's time, not this send's, so a
+    // comment made while the batch sat in the prompt still arrives next time.
+    await writeClaim($, path, { ...claim, slug, seen: [] });
     return;
   }
   const found = await reviewComments($, claim.root, slug);

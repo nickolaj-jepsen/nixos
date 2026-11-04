@@ -104,6 +104,8 @@ type World = {
   toasts: string[];
   /** What `tuicr review list` says about this checkout's sessions. */
   sessions: unknown[];
+  /** What `tuicr review comments` returns for the review. */
+  comments: unknown[];
   clock: MockClock;
 };
 
@@ -127,6 +129,7 @@ function world(
     clock: mock.clock(on, { now: NOW }),
   };
   if (claim !== undefined) w.files.set(CLAIM, claim);
+  w.comments = COMMENTS;
   on("env.get", (_, e) => ({
     value: ({ HOME, USER: "me", PI_CODING_AGENT_DIR: AGENT } as Record<string, string>)[e.name],
   }));
@@ -199,7 +202,7 @@ function world(
     if (argv[0] === TUICR && argv[1] === "review" && argv[2] === "list")
       return ok(JSON.stringify(w.sessions));
     if (argv[0] === TUICR && argv[1] === "review" && argv[2] === "comments")
-      return ok(JSON.stringify(COMMENTS));
+      return ok(JSON.stringify(w.comments));
     return ok("", 1);
   });
   return w;
@@ -371,6 +374,36 @@ test("a live claim another session holds refuses the review before a window open
   expect(w.launched).toEqual([]);
   expect(w.toasts).toContain("This repository's review belongs to another pi session.");
   expect(w.files.get(CLAIM)).toBe(held);
+});
+
+test("a comment made while the batch waited in the prompt still arrives next time", async ($, on) => {
+  const w = world(on, { sessions: SESSIONS });
+  await start($, on);
+  await review($);
+  await w.clock.advance(MINUTE);
+  await send($, "carry on");
+  expect(w.fills).toHaveLength(1);
+
+  // Typed into tuicr after the draft, before the batch went out.
+  w.comments = [
+    ...COMMENTS,
+    {
+      ...COMMENT,
+      id: "c3",
+      start_line: 12,
+      content: "while you were reading",
+      created_at: new Date(NOW + MINUTE + 30_000).toISOString().replace("Z", "+00:00"),
+    },
+  ];
+  await w.clock.advance(MINUTE);
+  await send($, w.box);
+  expect(claimOf(w)).toMatchObject({ slug: SLUG, seen: [] });
+
+  w.fills = [];
+  await w.clock.advance(MINUTE);
+  await send($, "something else");
+  expect(w.fills).toHaveLength(1);
+  expect(w.fills[0]).toContain("while you were reading");
 });
 
 test("a claim another session holds is left alone", async ($, on) => {
