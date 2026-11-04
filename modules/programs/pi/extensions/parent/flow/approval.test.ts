@@ -1,0 +1,458 @@
+/**
+ * A2's approval tests (C5, D13): the page's content and the three rewrites it
+ * lands as, the dialogs a host without a terminal gets, and the overlay driven
+ * by keys — including that enter on the row it opens on approves, which is what
+ * a scenario can press blind.
+ */
+import assert from "node:assert/strict";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-agent";
+import { visibleWidth } from "@earendil-works/pi-tui";
+import { ApprovalOverlay, approve } from "./approval.ts";
+import {
+  amendmentEntries,
+  appendAmendments,
+  applyPage,
+  approvalBlocks,
+  approvalMarkdown,
+  initialPage,
+  type PageState,
+  rewriteTiers,
+  tierEdits,
+  today,
+} from "./approval-view.ts";
+import {
+  DEFAULT_SETTINGS,
+  type Flow,
+  type JudgeHandoffVerdict,
+  type ParsedHandoff,
+  type ResolvedSettings,
+  resolveSettings,
+} from "./contracts.ts";
+import { parseHandoff } from "./handoff.ts";
+
+const exampleText = () => readFileSync(new URL("./handoff-example.md", import.meta.url), "utf8");
+
+const parse = (text: string): ParsedHandoff => {
+  const result = parseHandoff(text);
+  assert.ok(result.ok, `the example must parse: ${JSON.stringify(result)}`);
+  return result.handoff;
+};
+
+const handoff = parse(exampleText());
+
+const verdict: JudgeHandoffVerdict = {
+  mode: "deviation",
+  run: { model: "vm/deep", thinking: "high" },
+  tiers: { G0: "deep" },
+  finalReview: "reviewer-deep",
+  reasons: ["G0 is the writer everything else leans on"],
+  cost: 0,
+};
+
+/** The flow the conductor hands the page: the verdict already merged into its settings. */
+const flow = (over: Partial<Flow> = {}): Flow => ({
+  v: 1,
+  slug: "export",
+  planDir: "/home/owner/.local/share/agents/app/plans/export",
+  repoMain: "/home/owner/app",
+  base: "main",
+  branch: "export",
+  step: "plan",
+  mode: verdict.mode,
+  quick: false,
+  settings: { run: { model: verdict.run.model, thinking: verdict.run.thinking } },
+  steps: [],
+  judge: [],
+  ...over,
+});
+
+/** The settings a flow resolves to, as the conductor hands them to the page. */
+const resolved = (subject: Flow = flow()): ResolvedSettings =>
+  resolveSettings(DEFAULT_SETTINGS, undefined, subject.settings).settings;
+
+const settings: ResolvedSettings = resolved();
+
+const page = (over: Partial<PageState> = {}): PageState => ({
+  ...initialPage(flow(), handoff, verdict, resolved()),
+  ...over,
+});
+
+/** A plan directory holding the example handoff, so the page can rewrite it. */
+const scratch = (): string => {
+  const dir = mkdtempSync(join(tmpdir(), "flow-approval-"));
+  copyFileSync(new URL("./handoff-example.md", import.meta.url), join(dir, "HANDOFF.md"));
+  return dir;
+};
+
+const tierLineOf = (text: string, id: string): number => {
+  const item = parse(text).items.find((candidate) => candidate.id === id);
+  assert.ok(item, `no item ${id}`);
+  return item.tierLine;
+};
+
+test("the page opens on the judge's mode, run model and tiers", () => {
+  const opened = initialPage(flow(), handoff, verdict, resolved());
+  assert.equal(opened.mode, "deviation");
+  assert.equal(opened.runModel, "vm/deep");
+  assert.equal(opened.runThinking, "high");
+  assert.equal(opened.tiers.G0, "deep");
+  // An item the judge left alone keeps what the plan says.
+  assert.equal(opened.tiers.A1, "flash");
+  assert.deepEqual(opened.answers, {});
+});
+
+test("an owner value in FLOW.json wins over the judge's suggestion", () => {
+  const own = flow({ settings: { run: { model: "vm/flash", thinking: "low" } }, mode: "straight" });
+  const opened = initialPage(own, handoff, verdict, resolved(own));
+  assert.equal(opened.mode, "straight");
+  assert.equal(opened.runModel, "vm/flash");
+  assert.equal(opened.runThinking, "low");
+});
+
+test("approving applies the mode and the run settings to FLOW.json's shape", () => {
+  const next = applyPage(flow(), page({ mode: "gated", runModel: "vm/flash", runThinking: "low" }));
+  assert.equal(next.mode, "gated");
+  assert.deepEqual(next.settings.run, { model: "vm/flash", thinking: "low" });
+  // The other settings the flow carried are left alone.
+  assert.equal(next.settings.items, undefined);
+});
+
+test("only the tiers the owner moved are rewritten, and only their own line", () => {
+  // G0 takes the judge's deep, the owner moves A1 up, and S1 keeps what the plan says.
+  const edited = page({ tiers: { ...page().tiers, A1: "deep", S1: "flash" } });
+  const edits = tierEdits(handoff, edited);
+  assert.deepEqual(
+    edits.map((edit) => edit.tier),
+    ["deep", "deep"],
+  );
+  const before = exampleText();
+  const after = rewriteTiers(before, edits);
+  const start = before.split("\n");
+  const end = after.split("\n");
+  assert.equal(start.length, end.length);
+  const changed = start.flatMap((line, index) => (line === end[index] ? [] : [index + 1]));
+  assert.deepEqual(
+    changed,
+    edits.map((edit) => edit.line),
+  );
+  assert.equal(end[tierLineOf(before, "G0") - 1], "- Tier: deep");
+  assert.equal(end[tierLineOf(before, "A1") - 1], "- Tier: deep");
+  assert.equal(end[tierLineOf(before, "S1") - 1], "- Tier: flash", "an unmoved tier was rewritten");
+  // Everything else still parses, so the file is a plan the run can read.
+  parse(after);
+});
+
+test("a tier line that is no longer a Tier: bullet is refused rather than guessed", () => {
+  const before = exampleText();
+  const line = tierLineOf(before, "G0");
+  const broken = before
+    .split("\n")
+    .map((text, index) => (index + 1 === line ? "- Tier: whatever" : text))
+    .join("\n");
+  assert.throws(
+    () => rewriteTiers(broken, [{ line, tier: "deep" }]),
+    /not a "- Tier: flash\|deep"/,
+  );
+  assert.throws(() => rewriteTiers(before, [{ line: 10_000, tier: "deep" }]), /no line 10000/);
+});
+
+test("an answer appends one dated Amendments entry and rewrites nothing else", () => {
+  const answered = page({ answers: { Q1: "  the filename is report-<from>-<to>.csv  " } });
+  const entries = amendmentEntries(handoff, answered, "2026-03-09");
+  assert.deepEqual(entries, [
+    "- 2026-03-09, owner, approval page: Q1 answered: the filename is report-<from>-<to>.csv",
+  ]);
+  const before = exampleText();
+  const after = appendAmendments(before, entries);
+  const lines = after.split("\n");
+  const beforeLines = before.split("\n");
+  // The original file is a prefix: nothing already written is rewritten.
+  assert.deepEqual(lines.slice(0, beforeLines.length - 1), beforeLines.slice(0, -1));
+  assert.equal(lines.filter((line) => /^##\s+Amendments$/.test(line)).length, 1);
+  assert.equal(after.trimEnd().split("\n").at(-1), entries[0]);
+  parse(after);
+});
+
+test("an answer on a plan with no Amendments section creates one", () => {
+  const without = exampleText()
+    .replace(/## Amendments[\s\S]*$/, "")
+    .trimEnd();
+  const after = appendAmendments(without, ["- 2026-03-09, owner, approval page: Q1 answered: yes"]);
+  assert.match(after, /## Amendments\n\n- 2026-03-09, owner, approval page: Q1 answered: yes\n$/);
+  assert.equal(parse(after).amendments, "- 2026-03-09, owner, approval page: Q1 answered: yes");
+});
+
+test("no answers and no moved tiers leave HANDOFF.md untouched", () => {
+  const before = exampleText();
+  const unchanged = appendAmendments(
+    rewriteTiers(before, []),
+    amendmentEntries(handoff, page(), today()),
+  );
+  assert.equal(unchanged, before);
+});
+
+test("APPROVAL.md lists every item, its blocker, its paths, and flags each unverified acceptance", () => {
+  const markdown = approvalMarkdown(approvalBlocks(flow(), handoff, page(), settings));
+  for (const item of handoff.items) assert.ok(markdown.includes(item.id), `no ${item.id}`);
+  for (const item of handoff.items)
+    assert.ok(markdown.includes(item.title), `no title for ${item.id}`);
+  assert.ok(markdown.includes("Blocked by: G0"), "the button's blocker is not shown");
+  assert.ok(markdown.includes("Blocked by: none"), "an unblocked item does not say none");
+  assert.ok(markdown.includes("app/report/export.ts"), "the writer's path is not shown");
+  // A1's acceptance has never been run, so the page says so; G0's is run.
+  const unverified = markdown
+    .split("\n")
+    .filter((line) => line.includes("Acceptance") && line.includes("(unverified)"));
+  assert.equal(unverified.length, 1);
+  assert.match(unverified[0], /pnpm test:e2e report/);
+  const writer = markdown
+    .split("\n")
+    .find((line) => line.includes("Acceptance") && line.includes("pnpm test app"));
+  assert.ok(writer, "the writer's acceptance is missing");
+  assert.ok(!writer.includes("unverified"), "a run acceptance is flagged as unverified");
+  // What the run may stop on, and what it may cost, are both on the page.
+  assert.ok(markdown.includes("G0: the owner reads the writer's interface"));
+  assert.ok(markdown.includes("Cost cap: $2"));
+  assert.ok(markdown.includes("Q1 Does the export need a filename"));
+});
+
+test("a host without a terminal gets APPROVAL.md and the select's answer", async () => {
+  const dir = scratch();
+  const asked: string[][] = [];
+  const notes: string[] = [];
+  const ctx = {
+    mode: "json",
+    ui: {
+      select: async (_title: string, options: string[]) => {
+        asked.push(options);
+        return "approve";
+      },
+      input: async (title: string) => {
+        notes.push(title);
+        return undefined;
+      },
+      notify: () => undefined,
+      custom: () => undefined,
+    },
+  } as unknown as ExtensionCommandContext;
+  const pi = { getSettings: () => ({}) } as unknown as ExtensionAPI;
+
+  const result = await approve(pi, ctx, flow({ planDir: dir }), handoff, verdict);
+  assert.equal(result.kind, "approve");
+  if (result.kind !== "approve") return;
+  assert.deepEqual(asked, [["approve", "send back", "cancel"]]);
+  assert.deepEqual(notes, []);
+
+  // The page's own content is on disk next to the plan.
+  const approval = readFileSync(join(dir, "APPROVAL.md"), "utf8");
+  for (const item of handoff.items)
+    assert.ok(approval.includes(item.id), `APPROVAL.md has no ${item.id}`);
+  assert.match(approval, /# Approval: export/);
+
+  // FLOW.json carries the mode and the run settings the page showed.
+  const written = JSON.parse(readFileSync(join(dir, "FLOW.json"), "utf8"));
+  assert.equal(written.mode, verdict.mode);
+  assert.deepEqual(written.settings.run, verdict.run);
+
+  // The judge's tier was pre-selected and approved, so it landed in the plan.
+  const edited = readFileSync(join(dir, "HANDOFF.md"), "utf8");
+  assert.equal(edited.split("\n")[tierLineOf(exampleText(), "G0") - 1], "- Tier: deep");
+});
+
+test("a send-back on a host without a terminal carries the note it asked for", async () => {
+  const dir = scratch();
+  const ctx = {
+    mode: "rpc",
+    ui: {
+      select: async () => "send back",
+      input: async () => "split A1 into the button and its test",
+      notify: () => undefined,
+      custom: () => undefined,
+    },
+  } as unknown as ExtensionCommandContext;
+  const pi = { getSettings: () => ({}) } as unknown as ExtensionAPI;
+  const result = await approve(pi, ctx, flow({ planDir: dir }), handoff, verdict);
+  assert.deepEqual(result, { kind: "back", note: "split A1 into the button and its test" });
+});
+
+test("a dismissed select cancels, and an empty note with it", async () => {
+  const dir = scratch();
+  const build = (
+    select: () => Promise<string | undefined>,
+    input: () => Promise<string | undefined>,
+  ) =>
+    ({
+      mode: "json",
+      ui: { select, input, notify: () => undefined, custom: () => undefined },
+    }) as unknown as ExtensionCommandContext;
+  const pi = { getSettings: () => ({}) } as unknown as ExtensionAPI;
+  const dismissed = await approve(
+    pi,
+    build(
+      async () => undefined,
+      async () => undefined,
+    ),
+    flow({ planDir: dir }),
+    handoff,
+    verdict,
+  );
+  assert.deepEqual(dismissed, { kind: "cancel" });
+  const empty = await approve(
+    pi,
+    build(
+      async () => "send back",
+      async () => "   ",
+    ),
+    flow({ planDir: dir }),
+    handoff,
+    verdict,
+  );
+  assert.deepEqual(empty, { kind: "cancel" });
+});
+
+// ── the overlay ─────────────────────────────────────────────────────────────
+
+/** Every style as a pass-through: the assertions then read what the owner sees. */
+const theme = {
+  fg: (_color: string, text: string) => text,
+  bold: (text: string) => text,
+} as unknown as Theme;
+
+type Drawn = { kind: string; note?: string; page: PageState };
+
+/** One overlay driven by keys, and the frame it leaves behind. */
+const drive = (keys: string[], options: { rows?: number; width?: number; at?: PageState } = {}) => {
+  let repaints = 0;
+  const results: Drawn[] = [];
+  const opened = options.at ?? page();
+  const overlay = new ApprovalOverlay(
+    { rows: options.rows ?? 40, requestRender: () => (repaints += 1) },
+    theme,
+    { flow: flow(), handoff, settings },
+    opened,
+    (result) => results.push(result as Drawn),
+  );
+  const first = overlay.render(options.width ?? 120);
+  for (const key of keys) overlay.handleInput(key);
+  return {
+    overlay,
+    page: opened,
+    results,
+    first,
+    repaints,
+    render: () => overlay.render(options.width ?? 120),
+  };
+};
+
+test("the page opens at its top on approve, and enter approves", () => {
+  const drawn = drive([]);
+  const frame = drawn.first.join("\n");
+  // It opens where it is read: the mission and the run's mode, not the buttons.
+  assert.match(frame, /Approval: export/);
+  assert.match(frame, /The dashboard prints a table/);
+  assert.match(frame, /Mode {2}deviation — stops only when the plan deviates/);
+  // The cursor is on approve, one jump away, and the items are another.
+  assert.match(drive(["a"]).render().join("\n"), /▸ Approve and start the run/);
+  const items = drive(["t"], { width: 160 }).render().join("\n");
+  for (const item of handoff.items)
+    assert.ok(items.includes(item.id), `the frame has no ${item.id}`);
+  // Nothing else happened by merely drawing it.
+  assert.deepEqual(drawn.results, []);
+
+  const approved = drive(["\r"]);
+  assert.equal(approved.results.length, 1);
+  assert.equal(approved.results[0].kind, "approve");
+  assert.equal(approved.results[0].page.mode, verdict.mode);
+});
+
+test("every frame fits the width it is given", () => {
+  for (const width of [60, 100, 160]) {
+    for (const line of drive([], { width, rows: 30 }).first) {
+      assert.ok(
+        visibleWidth(line) <= width,
+        `a ${visibleWidth(line)}-wide line at ${width}: ${line}`,
+      );
+    }
+  }
+});
+
+test("m takes the mode row and the arrows cycle it", () => {
+  const drawn = drive(["m", "\u001b[C"]);
+  assert.equal(drawn.page.mode, "straight");
+  drive(["m", "\u001b[C"]).render();
+  const cycled = drive(["m", "\u001b[D"]);
+  assert.equal(cycled.page.mode, "gated");
+  // Enter on a cycle row advances it like the right arrow.
+  assert.equal(drive(["m", "\r"]).page.mode, "straight");
+});
+
+test("r edits the run model, and a value that is no provider/model is refused", () => {
+  const typed = drive(["r", "\r", ..."vm/frontier".split(""), "\r"]);
+  assert.equal(typed.page.runModel, "vm/frontier");
+  assert.deepEqual(typed.results, [], "committing a model must not end the page");
+
+  const refused = drive(["r", "\r", ..."frontier".split(""), "\r"]);
+  assert.equal(refused.page.runModel, "vm/deep", "an invalid model changed the setting");
+  assert.deepEqual(refused.results, [], "an invalid model left the page");
+  assert.match(refused.render().join("\n"), /provider\/model/);
+
+  // Escape in the field drops the edit and leaves the page open.
+  const dropped = drive(["r", "\r", ..."vm/flash".split(""), "\u001b"]);
+  assert.equal(dropped.page.runModel, "vm/deep");
+  assert.deepEqual(dropped.results, []);
+});
+
+test("t cycles the first tier, and only that item's", () => {
+  const drawn = drive(["t", "\u001b[C"]);
+  assert.equal(drawn.page.tiers.G0, "flash");
+  assert.equal(drawn.page.tiers.A1, "flash");
+  assert.ok(drawn.render().join("\n").includes("tier: flash"));
+});
+
+test("q answers the first open question, and the answer shows on the page", () => {
+  const drawn = drive(["q", "\r", ..."report-2026-03.csv".split(""), "\r"]);
+  assert.equal(drawn.page.answers.Q1, "report-2026-03.csv");
+  assert.deepEqual(drawn.results, []);
+  assert.match(drawn.render().join("\n"), /report-2026-03\.csv/);
+});
+
+test("s sends back with the note that was typed, and refuses an empty one", () => {
+  const empty = drive(["s", "\r", "\r"]);
+  assert.deepEqual(empty.results, [], "an empty note ended the page");
+  assert.match(empty.render().join("\n"), /needs a note/);
+
+  const sent = drive(["s", "\r", ..."split A1".split(""), "\r"]);
+  assert.equal(sent.results.length, 1);
+  assert.equal(sent.results[0].kind, "back");
+  assert.equal(sent.results[0].note, "split A1");
+});
+
+test("escape cancels and a decided page does not answer twice", () => {
+  const drawn = drive(["\u001b"]);
+  assert.equal(drawn.results.length, 1);
+  assert.equal(drawn.results[0].kind, "cancel");
+  // A key after the answer is not a second one.
+  drawn.overlay.handleInput("\r");
+  drawn.overlay.handleInput("a");
+  assert.equal(drawn.results.length, 1);
+});
+
+test("the frame scrolls to the row the keys jumped to", () => {
+  const drawn = drive(["q"], { rows: 14, width: 90 });
+  const frame = drawn.render().join("\n");
+  assert.match(frame, /Q1 Does the export need a filename/);
+  // The hint stays on the frame whatever the scroll did.
+  assert.match(frame, /esc cancel/);
+});
+
+test("the overlay approves a page it opened with, editing nothing else", () => {
+  const answered = drive(["s", "\r", ..."no".split(""), "\r"], {
+    at: page({ answers: { Q1: "kept" } }),
+  });
+  assert.equal(answered.results[0].kind, "back");
+  assert.equal(answered.results[0].page.answers.Q1, "kept");
+});
