@@ -10,7 +10,7 @@ import time
 from typing import Optional
 
 from .gh import has_origin, pr_merged, stack_layers
-from .git import die, git, git_ok, info, is_within, run
+from .git import ProbeError, die, git, git_ok, info, inspect, is_within, run
 from .procs import busy_pids, describe_pid
 from .repo import Repo, RepoLock, current_repo, repos_under_root
 from .worktrees import (
@@ -18,6 +18,7 @@ from .worktrees import (
     Entry,
     ahead,
     branch_exists,
+    branches_containing,
     clear_record,
     conflicted,
     dir_name,
@@ -113,7 +114,7 @@ def cmd_new(args: argparse.Namespace) -> None:
                 die(f"branch '{branch}' already exists; a base applies only to a new branch")
             info(f"reopening '{name}' on {branch}")
             run(["git", "-C", repo.main, "worktree", "add", "--quiet", path, branch])
-            if is_wip(path, "HEAD"):
+            if inspect(f"'{name}'", lambda: is_wip(path, "HEAD")):
                 # The changes `close` committed come back as they were left, unstaged.
                 run(["git", "-C", path, "reset", "--quiet", "--mixed", "HEAD~"])
                 info("restored the uncommitted changes it was closed with")
@@ -150,17 +151,19 @@ def _commit_wip(path: str, name: str) -> None:
 def _check_closable(repo: Repo, entry: Entry) -> None:
     """Refuse what closing would lose or bury; the folder is untouched when this dies."""
     path = entry.path or ""
+    context = f"'{entry.name}'"
     if entry.locked:
         die(f"'{entry.name}' is locked. Run: git -C '{repo.main}' worktree unlock '{path}'")
-    operation = operation_in_progress(path)
+    operation = inspect(context, lambda: operation_in_progress(path))
     if operation:
         die(f"'{entry.name}' is in the middle of a {operation}; finish or abort it in {path}, then close")
-    if conflicted(path):
+    conflicts = inspect(context, lambda: conflicted(path))
+    if conflicts:
         die(f"'{entry.name}' has unresolved conflicts; resolve them in {path}, then close")
     if not entry.branch:
-        if dirty(path):
+        if inspect(context, lambda: dirty(path)):
             die(f"'{entry.name}' is detached with uncommitted changes; put them on a branch first")
-        if not git(path, "branch", "--contains", "HEAD", "--format=%(refname)", check=False).strip():
+        if not inspect(context, lambda: branches_containing(path, "HEAD")):
             die(f"'{entry.name}' is detached at a commit no branch has; put it on a branch first")
 
 
@@ -168,8 +171,12 @@ def _finished(repo: Repo, branch: str) -> Optional[str]:
     """Why `branch` can go with nothing lost: its commits are in the default branch, or its PR merged at this tip."""
     if not branch_exists(repo, branch) or branch == repo.default:
         return None
-    if landed(repo, branch):
+    state = landed(repo, branch)
+    if state:
         return f"its commits are in {repo.default}"
+    if state is None:
+        info(f"could not tell whether {branch} is in {repo.default}; keeping it")
+        return None
     sha = git(repo.main, "rev-parse", f"refs/heads/{branch}").strip()
     if pr_merged(repo, branch, sha):
         return "its pull request merged"
@@ -209,7 +216,7 @@ def close_entry(repo: Repo, entry: Entry) -> None:
     _check_closable(repo, entry)
     # Read before the folder goes: `gh stack` answers for the checkout it runs in.
     stacked = [b for b in stack_layers(path) if b != entry.branch] if has_origin(repo) else []
-    if dirty(path):
+    if inspect(f"'{entry.name}'", lambda: dirty(path)):
         _commit_wip(path, entry.name)
         info(f"committed the uncommitted changes in '{entry.name}' as a wip commit")
     if entry.branch:
@@ -220,7 +227,11 @@ def close_entry(repo: Repo, entry: Entry) -> None:
     info(f"closed {entry.name}")
     settle_branches(repo, entry.name, [*stacked, entry.branch] if entry.branch else stacked)
     if branch_exists(repo, entry.branch):
-        info(f"{entry.branch} keeps {ahead(repo, entry.branch)} commit(s) not in {repo.default}; 'wt new {entry.name}' reopens it")
+        try:
+            info(f"{entry.branch} keeps {ahead(repo, entry.branch)} commit(s) not in {repo.default}; "
+                 f"'wt new {entry.name}' reopens it")
+        except ProbeError:
+            info(f"{entry.branch} is kept; 'wt new {entry.name}' reopens it")
     prune(repo)
 
 
@@ -304,7 +315,7 @@ def cmd_drop(args: argparse.Namespace) -> None:
             if busy:
                 die(f"'{entry.name}' is in use by {describe_pid(busy[0])}; close that first")
             _check_closable(repo, entry)
-            if dirty(path):
+            if inspect(f"'{entry.name}'", lambda: dirty(path)):
                 _commit_wip(path, entry.name)
             run(["git", "-C", repo.main, "worktree", "remove", "--force", path])
             run(["git", "-C", repo.main, "worktree", "prune"], check=False)
@@ -364,15 +375,19 @@ def cmd_list(args: argparse.Namespace) -> None:
             for entry in found:
                 print(entry.name)
         return
-    documents = [
-        {
-            "name": repo.key,
-            "main": repo.main,
-            "defaultBranch": repo.default,
-            "worktrees": [_row(repo, entry) for entry in found],
-        }
-        for repo, found in selected
-    ]
+    try:
+        documents = [
+            {
+                "name": repo.key,
+                "main": repo.main,
+                "defaultBranch": repo.default,
+                "worktrees": [_row(repo, entry) for entry in found],
+            }
+            for repo, found in selected
+        ]
+    except ProbeError as error:
+        # A row that could not be inspected ends the listing until JSON v3 can carry the error.
+        die(str(error))
     if args.json:
         print(json.dumps({"version": STATUS_VERSION, "repos": documents}, indent=2))
         return

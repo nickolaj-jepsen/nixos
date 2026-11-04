@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from .git import die, git, git_ok, is_within, run
+from .git import ProbeError, die, git, git_ok, is_within, probe, run
 from .repo import Repo, registered_worktrees
 
 # The trailer that marks the commit `close` makes from uncommitted changes.
@@ -119,34 +119,59 @@ def resolve(repo: Repo, target: str) -> Entry:
 
 
 def operation_in_progress(path: str) -> Optional[str]:
+    """The in-progress operation's label, or None; a marker file that is absent is the normal answer.
+
+    Raises ProbeError when git cannot name its own state directories, so the absence stays unproven.
+    """
     for marker, label in _OPERATIONS.items():
-        proc = run(["git", "-C", path, "rev-parse", "--path-format=absolute", "--git-path", marker], check=False)
-        if proc.returncode == 0 and os.path.exists(proc.stdout.strip()):
+        found = probe(path, "rev-parse", "--path-format=absolute", "--git-path", marker).strip()
+        if found and os.path.exists(found):
             return label
     return None
 
 
 def conflicted(path: str) -> list[str]:
-    return [line for line in git(path, "diff", "--name-only", "--diff-filter=U", check=False).splitlines() if line]
+    """Paths with unresolved conflicts; raises ProbeError when git cannot answer."""
+    return [line for line in probe(path, "diff", "--name-only", "--diff-filter=U").splitlines() if line]
 
 
 def dirty(path: str) -> bool:
-    return bool(git(path, "status", "--porcelain", check=False).strip())
+    """Whether the working tree holds uncommitted work, ignored paths aside.
+
+    `--untracked-files=all` overrides status.showUntrackedFiles, which would otherwise hide exactly
+    the untracked-only work a close has to commit. Raises ProbeError when git cannot answer.
+    """
+    return bool(probe(path, "status", "--porcelain", "--untracked-files=all").strip())
+
+
+def branches_containing(path: str, ref: str) -> list[str]:
+    """Branches whose history has `ref`; raises ProbeError when git cannot answer."""
+    return [line for line in probe(path, "branch", "--contains", ref, "--format=%(refname)").splitlines() if line]
 
 
 def is_wip(cwd: str, ref: str) -> bool:
-    value = git(cwd, "log", "-1", f"--format=%(trailers:key={WIP_KEY},valueonly)", ref, "--", check=False)
+    """Whether `ref` is a wip commit from `close`; raises ProbeError when git cannot answer."""
+    value = probe(cwd, "log", "-1", f"--format=%(trailers:key={WIP_KEY},valueonly)", ref, "--")
     return value.strip() == "1"
 
 
 def ahead(repo: Repo, ref: str) -> int:
-    out = git(repo.main, "rev-list", "--count", f"{repo.default}..{ref}", "--", check=False).strip()
-    return int(out) if out.isdigit() else 0
+    """Commits `ref` has that the default branch does not; raises ProbeError rather than counting 0."""
+    out = probe(repo.main, "rev-list", "--count", f"{repo.default}..{ref}", "--").strip()
+    if not out.isdigit():
+        raise ProbeError(f"git rev-list --count {repo.default}..{ref} answered {out!r}, not a count")
+    return int(out)
 
 
-def landed(repo: Repo, ref: str) -> bool:
-    """Whether every commit of `ref` is already in the default branch."""
-    return git_ok(repo.main, "merge-base", "--is-ancestor", ref, repo.default)
+def landed(repo: Repo, ref: str) -> Optional[bool]:
+    """Whether every commit of `ref` is in the default branch; None when git cannot tell.
+
+    `merge-base --is-ancestor` exits 1 for a normal no, so only any other failure is unknown.
+    """
+    proc = run(["git", "-C", repo.main, "merge-base", "--is-ancestor", ref, repo.default], check=False)
+    if proc.returncode == 0:
+        return True
+    return False if proc.returncode == 1 else None
 
 
 def idle_seconds(repo: Repo, entry: Entry) -> int:

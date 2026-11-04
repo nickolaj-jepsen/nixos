@@ -11,32 +11,45 @@ from typing import Optional
 
 from .commands import close_entry, occupants
 from .gh import GhError, checks_state, gh, has_origin, merged_heads, pr_view, requires_checks, stack
-from .git import die, git, git_ok, info, is_within, run
+from .git import ProbeError, die, git, git_ok, info, inspect, is_within, probe, run
 from .procs import busy_pids, describe_pid
 from .repo import Repo, RepoLock, current_repo, registered_worktrees
 from .worktrees import Entry, ahead, conflicted, dirty, entries, is_wip, operation_in_progress, resolve
 
 
 def _dirty_paths(path: str) -> set[str]:
-    """Every path whose working-tree or index state a fast-forward could disturb."""
-    entries = git(path, "status", "--porcelain", "-z", check=False).split("\0")
+    """Every path whose working-tree or index state a fast-forward could disturb.
+
+    `--untracked-files=all` and a probe that raises keep a failed or hidden answer from reading as
+    clean, which would fast-forward over work nobody committed.
+    """
+    fields = probe(path, "status", "--porcelain", "--untracked-files=all", "-z").split("\0")
     names: set[str] = set()
     index = 0
-    while index < len(entries):
-        entry = entries[index]
+    while index < len(fields):
+        entry = fields[index]
         index += 1
         if len(entry) > 3:
             names.add(entry[3:])
             # A rename carries its source path as the next field.
-            if entry[0] in "RC" and index < len(entries) and entries[index]:
-                names.add(entries[index])
+            if entry[0] in "RC" and index < len(fields) and fields[index]:
+                names.add(fields[index])
                 index += 1
     return names
 
 
 def _incoming_paths(repo: Repo, branch: str) -> set[str]:
-    out = git(repo.main, "diff", "--name-only", f"{repo.default}...{branch}", "--", check=False)
+    """Paths `branch` changes against the default branch; an empty diff is a real answer."""
+    out = probe(repo.main, "diff", "--name-only", f"{repo.default}...{branch}", "--")
     return {line for line in out.splitlines() if line}
+
+
+def _conflicts(path: str) -> list[str]:
+    """Conflict names for a message; empty when they cannot be listed, so the pause is still reported."""
+    try:
+        return conflicted(path)
+    except ProbeError:
+        return []
 
 
 def default_checkout(repo: Repo) -> Optional[str]:
@@ -51,10 +64,10 @@ def _require_checkout_ready(repo: Repo, branch: str, checkout: Optional[str]) ->
     """Refuse when `checkout` holds uncommitted changes the fast-forward would have to overwrite."""
     if checkout is None:
         return
-    dirty_paths = _dirty_paths(checkout)
+    dirty_paths = inspect(checkout, lambda: _dirty_paths(checkout))
     if not dirty_paths:
         return
-    clash = sorted(dirty_paths & _incoming_paths(repo, branch))
+    clash = sorted(dirty_paths & inspect(branch, lambda: _incoming_paths(repo, branch)))
     if not clash:
         info(f"{checkout} has uncommitted changes in {len(dirty_paths)} path(s) this branch does not touch; leaving them")
         return
@@ -73,7 +86,7 @@ def rebase(entry: Entry, onto: str, *, abort_on_conflict: bool, update_refs: boo
     extra = ["--update-refs"] if update_refs else []
     if run(["git", "-C", path, "rebase", "--quiet", *extra, onto], check=False).returncode == 0:
         return
-    conflicts = conflicted(path)
+    conflicts = _conflicts(path)
     print(f"wt: rebase conflict{': ' + ', '.join(conflicts) if conflicts else ''}", file=sys.stderr)
     if abort_on_conflict:
         run(["git", "-C", path, "rebase", "--abort"], check=False)
@@ -85,7 +98,7 @@ def rebase(entry: Entry, onto: str, *, abort_on_conflict: bool, update_refs: boo
 
 
 def _fast_forward_default(repo: Repo, entry: Entry) -> None:
-    count = ahead(repo, entry.branch)
+    count = inspect(f"'{entry.name}'", lambda: ahead(repo, entry.branch))
     checkout = default_checkout(repo)
     if checkout is None:
         # Nothing has the default branch checked out, so move the ref and touch no working tree.
@@ -98,7 +111,10 @@ def _fast_forward_default(repo: Repo, entry: Entry) -> None:
         info(f"landed {entry.branch} ({count} commit(s)) onto {repo.default}; ref only, since no checkout has it")
         return
     _require_checkout_ready(repo, entry.branch, checkout)
-    changed = _incoming_paths(repo, entry.branch)
+    try:
+        changed = _incoming_paths(repo, entry.branch)
+    except ProbeError:
+        changed = set()
     if run(["git", "-C", checkout, "merge", "--quiet", "--ff-only", entry.branch], check=False).returncode != 0:
         die(f"could not fast-forward {repo.default} onto {entry.branch}; the rebased branch is left in place")
     info(f"landed {entry.branch} ({count} commit(s)) onto {repo.default}")
@@ -125,14 +141,14 @@ def check_landable(repo: Repo, entry: Entry) -> None:
         die(f"'{entry.name}' is detached; there is no branch to land")
     if entry.branch == repo.default:
         die(f"'{entry.name}' is on {repo.default}; there is nothing to land")
-    operation = operation_in_progress(path)
+    operation = inspect(f"'{entry.name}'", lambda: operation_in_progress(path))
     if operation == "rebase":
         die(f"a rebase is in progress in {path}; finish it with 'wt land --continue' or 'wt land --abort'")
     if operation:
         die(f"'{entry.name}' is in the middle of a {operation}; finish or abort it first")
-    if dirty(path):
+    if inspect(f"'{entry.name}'", lambda: dirty(path)):
         die(f"'{entry.name}' has uncommitted changes; commit them inside the worktree first")
-    if is_wip(path, "HEAD"):
+    if inspect(f"'{entry.name}'", lambda: is_wip(path, "HEAD")):
         die(f"the tip of {entry.branch} is a wip commit from 'wt close'; turn it into a real commit first")
 
 
@@ -144,7 +160,7 @@ def land_local(repo: Repo, entry: Entry, args: argparse.Namespace) -> None:
         if top != entry.branch and not args.dry_run:
             run(["git", "-C", entry.path or "", "switch", "--quiet", top])
         entry = Entry(entry.name, top, entry.path, entry.locked)
-    if not ahead(repo, entry.branch):
+    if not inspect(f"'{entry.name}'", lambda: ahead(repo, entry.branch)):
         info(f"{entry.branch} has nothing that is not already in {repo.default}")
         if not args.dry_run:
             close_after_landing(repo, entry)
@@ -194,8 +210,12 @@ def _publish(repo: Repo, entry: Entry) -> None:
                 f"{branch} does not rebase cleanly onto {upstream}: it conflicts, or depends on commits only "
                 f"local {repo.default} has. Push {repo.default} first, or land locally with 'wt land {entry.name}'."
             )
-    elif not git_ok(path, "merge-base", "--is-ancestor", f"origin/{branch}", branch):
-        die(f"origin/{branch} has diverged from {branch}; pushing would need a force push, which wt never does")
+    else:
+        proc = run(["git", "-C", path, "merge-base", "--is-ancestor", f"origin/{branch}", branch], check=False)
+        if proc.returncode == 1:
+            die(f"origin/{branch} has diverged from {branch}; pushing would need a force push, which wt never does")
+        if proc.returncode != 0:
+            die(f"could not compare {branch} with origin/{branch}: {(proc.stderr or proc.stdout).strip()}")
     if run(["git", "-C", path, "push", "--quiet", "--set-upstream", "origin", branch], check=False).returncode:
         die(f"git push of {branch} failed")
 
@@ -259,7 +279,11 @@ def _wait_for_checks(path: str, numbers: list[int], timeout: float) -> None:
 
 def _report_behind(repo: Repo) -> None:
     run(["timeout", "20", "git", "-C", repo.main, "fetch", "--quiet", "origin", repo.default], check=False)
-    behind = ahead(repo, f"origin/{repo.default}")
+    try:
+        behind = ahead(repo, f"origin/{repo.default}")
+    except ProbeError:
+        # A freshness note is not worth failing a merge that already happened.
+        return
     if behind:
         info(f"local {repo.default} is {behind} commit(s) behind origin/{repo.default}; "
              f"git -C {default_checkout(repo) or repo.main} pull --ff-only")
@@ -278,7 +302,10 @@ def land_pr(repo: Repo, entry: Entry, args: argparse.Namespace, mode: str) -> No
         info(f"would push {entry.branch} and open a {'draft ' if mode == 'draft' else ''}PR into {repo.default}")
         return
     _publish(repo, entry)
-    if not ahead(repo, entry.branch) or not git(path, "rev-list", f"origin/{repo.default}..{entry.branch}").strip():
+    unpublished = inspect(
+        f"'{entry.name}'", lambda: probe(path, "rev-list", f"origin/{repo.default}..{entry.branch}").strip()
+    )
+    if not inspect(f"'{entry.name}'", lambda: ahead(repo, entry.branch)) or not unpublished:
         info(f"{entry.branch} has nothing that is not already in {repo.default}; no PR to open")
         close_after_landing(repo, entry)
         return
@@ -328,7 +355,7 @@ def _resume(repo: Repo, entry: Entry, args: argparse.Namespace) -> None:
         info(f"aborted the rebase; {path} is back on {entry.branch}")
         return
     if run(["git", "-C", path, "rebase", "--continue"], check=False).returncode != 0:
-        conflicts = conflicted(path)
+        conflicts = _conflicts(path)
         die(f"rebase still has conflicts{': ' + ', '.join(conflicts) if conflicts else ''}")
     # Mid-rebase the worktree is detached, so its branch is only known again now.
     entry = next(e for e in entries(repo) if e.path == entry.path)

@@ -105,6 +105,23 @@ class Base(unittest.TestCase):
             time.sleep(0.2)
         self.assertFalse(path.exists(), f"{path} still exists")
 
+    def git_dir(self, path: Path) -> Path:
+        return Path(self.git("rev-parse", "--absolute-git-dir", cwd=str(path)).strip())
+
+    def corrupt_index(self, path: Path) -> None:
+        """Break a worktree's index, as a damaged checkout does: every probe that reads it fails."""
+        index = self.git_dir(path) / "index"
+        self.assertTrue(index.is_file(), f"no index at {index}")
+        index.chmod(0o644)
+        index.write_bytes(b"garbage")
+
+    def corrupt_loose_object(self, sha: str) -> None:
+        """Break one loose object, as a damaged repository does: commits walked through it fail."""
+        loose = Path(self.git("rev-parse", "--absolute-git-dir").strip(), "objects", sha[:2], sha[2:])
+        self.assertTrue(loose.is_file(), f"{sha} is not a loose object")
+        loose.chmod(0o644)
+        loose.write_bytes(b"garbage")
+
 
 class Local(Base):
     # interface ---------------------------------------------------------------
@@ -170,6 +187,33 @@ class Local(Base):
         self.assertEqual(Path(path, "b.txt").read_text(), "edited\n")
         self.assertEqual(Path(path, "untracked.txt").read_text(), "fresh\n")
         self.assertEqual(self.subject(cwd=str(path)), "work")
+
+    def test_close_commits_untracked_work_that_status_configuration_hides(self) -> None:
+        self.git("config", "status.showUntrackedFiles", "no")
+        path = self.new("hidden")
+        self.write("fresh.txt", "fresh\n", cwd=str(path))
+        self.wt("close", "hidden")
+        self.assertFalse(path.exists())
+        self.assertIn("fresh.txt", self.git("ls-tree", "-r", "--name-only", "hidden", check=False))
+        self.assertEqual(self.git("show", "hidden:fresh.txt", check=False), "fresh\n")
+
+    def test_close_aborts_when_the_index_cannot_be_read(self) -> None:
+        path = self.feature("broken")
+        self.write("b.txt", "edited\n", cwd=str(path))
+        self.corrupt_index(path)
+        result = self.wt("close", "broken", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("broken", result.stderr)
+        self.assertTrue(path.exists())
+        self.assertTrue(self.has_branch("broken"))
+        self.assertEqual(Path(path, "b.txt").read_text(), "edited\n")
+
+    def test_close_of_a_clean_worktree_succeeds(self) -> None:
+        path = self.feature("clean")
+        result = self.wt("close", "clean", check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(path.exists())
+        self.assertTrue(self.has_branch("clean"))
 
     def test_close_reopens_on_the_branch_it_was_closed_on(self) -> None:
         path = self.new("stacked")
@@ -259,6 +303,16 @@ class Local(Base):
         self.git(*restore[1:])
         self.assertEqual(self.git("show", "doomed:b.txt"), "uncommitted\n")
 
+    def test_drop_keeps_untracked_work_that_status_configuration_hides(self) -> None:
+        self.git("config", "status.showUntrackedFiles", "no")
+        path = self.new("hidden")
+        self.write("fresh.txt", "fresh\n", cwd=str(path))
+        stderr = self.wt("drop", "hidden").stderr
+        self.assertFalse(path.exists())
+        restore = stderr.split("restore with: ", 1)[1].split()
+        self.git(*restore[1:])
+        self.assertEqual(self.git("show", "hidden:fresh.txt", check=False), "fresh\n")
+
     # land --------------------------------------------------------------------
 
     def test_land_fast_forwards_main_and_closes(self) -> None:
@@ -344,6 +398,31 @@ class Local(Base):
         self.assertTrue(path.exists())
         self.assertEqual(Path(self.main, "a.txt").read_text(), "uncommitted\n")
         self.assertEqual(self.subject("main"), "base")
+
+    def test_land_refuses_an_untracked_path_it_would_overwrite_when_status_hides_untracked(self) -> None:
+        self.git("config", "status.showUntrackedFiles", "no")
+        path = self.feature("adds-b", filename="b.txt")
+        self.write("b.txt", "mine, uncommitted\n")
+        result = self.wt("land", "adds-b", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("b.txt", result.stderr)
+        self.assertTrue(path.exists())
+        self.assertEqual(Path(self.main, "b.txt").read_text(), "mine, uncommitted\n")
+        self.assertEqual(self.subject("main"), "base")
+
+    def test_land_aborts_when_the_commit_walk_fails_and_moves_nothing(self) -> None:
+        path = self.new("corrupt")
+        self.write("b.txt", "one\n", cwd=str(path))
+        self.commit("one", cwd=str(path))
+        self.write("c.txt", "two\n", cwd=str(path))
+        self.commit("two", cwd=str(path))
+        base = self.git("rev-parse", "main").strip()
+        self.corrupt_loose_object(self.git("rev-parse", "HEAD~1", cwd=str(path)).strip())
+        result = self.wt("land", "corrupt", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.git("rev-parse", "main").strip(), base)
+        self.assertTrue(path.exists())
+        self.assertTrue(self.has_branch("corrupt"))
 
     def test_land_moves_only_the_ref_when_no_checkout_has_the_default(self) -> None:
         self.feature("land-me")
