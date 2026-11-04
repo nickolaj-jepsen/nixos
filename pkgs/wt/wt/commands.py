@@ -380,7 +380,7 @@ def cmd_drop(args: argparse.Namespace) -> None:
             sha = git(repo.main, "rev-parse", f"refs/heads/{branch}").strip()
             blocked = _free_branch(repo, branch)
             if blocked:
-                info(f"kept {branch} at {sha}: {blocked}; restore it with: git branch {branch} {sha}")
+                info(f"kept {branch} at {sha}: {blocked}")
                 continue
             run(["git", "-C", repo.main, "branch", "--quiet", "-D", branch])
             info(f"dropped {branch} at {sha}; restore with: git branch {branch} {sha}")
