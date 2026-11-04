@@ -7,6 +7,7 @@ import sys
 from typing import Optional
 
 from .commands import cmd_cd, cmd_close, cmd_drop, cmd_list, cmd_new
+from .git import ProbeError, die
 from .land import cmd_land
 
 
@@ -121,8 +122,12 @@ def build_parser() -> argparse.ArgumentParser:
         "Show this repository's worktrees, open and closed.",
         "AHEAD counts commits not in <default>, or says landed. DIRTY is yes for uncommitted\n"
         "changes and wip for a closed worktree holding a wip commit.\n"
-        "--json prints {version, repos[]}, each repository {name, main, defaultBranch, worktrees[]}\n"
-        "and each worktree {name, branch, path, open, ahead, landed, dirty, wip, busy, idleSeconds}.",
+        "--json prints {version, repos[]}, each repository {name, main, defaultBranch, error,\n"
+        "worktrees[]} and each worktree {name, branch, path, open, ahead, landed, dirty, wip,\n"
+        "busy, idleSeconds, error}. A value git could not answer is null, with the reason in that\n"
+        "row's error; a table prints it as ?. Listing prints every value it could read, including\n"
+        "the healthy rows of a repository beside a broken one, then exits 1 if anything could not\n"
+        "be inspected and 0 otherwise.",
     )
     listing.add_argument("target", nargs="?", help="narrow to one worktree: name, path, or .")
     listing.add_argument("--all", action="store_true", help="every repository under the root")
@@ -152,6 +157,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 1
     try:
         args.func(args)
+    except ProbeError as error:
+        # A probe that reached here is a mutation's unanswered question: stop with git's reason.
+        die(str(error))
     except SystemExit as exc:
         return int(exc.code or 0)
     except KeyboardInterrupt:

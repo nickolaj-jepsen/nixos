@@ -122,6 +122,17 @@ class Base(unittest.TestCase):
         loose.chmod(0o644)
         loose.write_bytes(b"garbage")
 
+    def other_repo(self, name: str) -> str:
+        """A second repository beside the first, with its own commit on main."""
+        path = os.path.join(self.root, name)
+        os.makedirs(path)
+        self.git("init", "-q", "-b", "main", cwd=path)
+        self.git("config", "user.email", "test@example.com", cwd=path)
+        self.git("config", "user.name", "Test", cwd=path)
+        self.write("a.txt", f"{name}\n", cwd=path)
+        self.commit(name, cwd=path)
+        return path
+
 
 class Local(Base):
     # interface ---------------------------------------------------------------
@@ -238,6 +249,79 @@ class Local(Base):
         self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(reopened)).strip(), "gone")
         self.assertTrue(self.entry("gone")["open"])
         self.assertNotIn("prunable", self.git("worktree", "list", "--porcelain"))
+
+    # list: inspection errors -------------------------------------------------
+
+    def test_list_all_json_keeps_a_healthy_repository_beside_a_broken_one(self) -> None:
+        self.feature("healthy")
+        other = self.other_repo("broken")
+        hurt = Path(self.wt("new", "hurt", cwd=other).stdout.strip())
+        self.corrupt_index(hurt)
+        result = self.wt("list", "--all", "--json", cwd=self.root, check=False)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        document = json.loads(result.stdout)
+        self.assertEqual(document["version"], 3)
+        repos = {repo["name"]: repo for repo in document["repos"]}
+        self.assertEqual(sorted(repos), ["broken", "repo"])
+        healthy = repos["repo"]
+        self.assertIsNone(healthy["error"])
+        self.assertEqual(
+            [(row["name"], row["dirty"], row["error"]) for row in healthy["worktrees"]],
+            [("healthy", False, None)],
+        )
+        broken = repos["broken"]["worktrees"]
+        self.assertEqual([row["name"] for row in broken], ["hurt"])
+        self.assertTrue(broken[0]["open"])
+        self.assertIsNone(broken[0]["dirty"])
+        self.assertTrue(broken[0]["error"])
+        self.assertIn("hurt", result.stderr)
+
+    def test_list_marks_an_unknown_value_and_exits_1_for_one_broken_repository(self) -> None:
+        path = self.feature("hurt")
+        self.corrupt_index(path)
+        table = self.wt("list", check=False)
+        self.assertEqual(table.returncode, 1, table.stderr)
+        self.assertIn("hurt", table.stdout)
+        self.assertIn("?", table.stdout)
+        answer = self.wt("list", "--json", check=False)
+        self.assertEqual(answer.returncode, 1, answer.stderr)
+        row = json.loads(answer.stdout)["repos"][0]["worktrees"][0]
+        self.assertEqual(row["name"], "hurt")
+        self.assertIsNone(row["dirty"])
+        self.assertIsNotNone(row["error"])
+
+    def test_list_json_reports_no_errors_when_everything_was_inspected(self) -> None:
+        self.feature("kept")
+        self.new("open")
+        self.wt("close", "kept")
+        result = self.wt("list", "--json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        document = json.loads(result.stdout)
+        self.assertEqual(document["version"], 3)
+        self.assertIsNone(document["repos"][0]["error"])
+        rows = document["repos"][0]["worktrees"]
+        self.assertEqual(sorted(row["name"] for row in rows), ["kept", "open"])
+        for row in rows:
+            self.assertIsNone(row["error"], row)
+            for key in ("ahead", "landed", "dirty", "wip", "idleSeconds"):
+                self.assertIsNotNone(row[key], f"{row['name']}.{key}")
+
+    def test_list_all_names_a_repository_it_cannot_identify(self) -> None:
+        self.feature("healthy")
+        other = self.other_repo("unreadable")
+        self.wt("new", "parked", cwd=other)
+        # A half-written config is what a damaged .git looks like: git cannot name its worktrees.
+        Path(other, ".git", "config").write_text("[core\n")
+        result = self.wt("list", "--all", "--json", cwd=self.root, check=False)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        document = json.loads(result.stdout)
+        self.assertEqual(document["version"], 3)
+        repos = {repo["name"]: repo for repo in document["repos"]}
+        self.assertEqual(sorted(repos), ["repo", "unreadable"])
+        self.assertEqual([row["name"] for row in repos["repo"]["worktrees"]], ["healthy"])
+        self.assertEqual(repos["unreadable"]["worktrees"], [])
+        self.assertIsNone(repos["unreadable"]["main"])
+        self.assertIn("config", repos["unreadable"]["error"])
 
     # close -------------------------------------------------------------------
 

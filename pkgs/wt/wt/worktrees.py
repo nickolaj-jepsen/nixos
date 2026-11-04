@@ -9,11 +9,14 @@ from __future__ import annotations
 import contextlib
 import os
 import time
-from dataclasses import dataclass
-from typing import Iterator, Optional
+from dataclasses import dataclass, field
+from typing import Callable, Iterator, Optional, TypeVar
 
-from .git import ProbeError, die, git, git_ok, is_within, probe, run
+from .git import ProbeError, die, git_ok, is_within, probe, run
+from .procs import busy_pids
 from .repo import Repo, registered_worktrees
+
+T = TypeVar("T")
 
 # The trailer that marks the commit `close` makes from uncommitted changes.
 WIP_KEY = "Wt-Wip"
@@ -39,6 +42,32 @@ class Entry:
     @property
     def open(self) -> bool:
         return self.path is not None
+
+
+@dataclass
+class Row:
+    """One worktree as listing reports it: a status value that could not be inspected stays None.
+
+    `errors` carries the reason, so a partial row says which of its values are unknown instead of
+    presenting a failed probe as a clean tree or a zero count.
+    """
+
+    name: str
+    branch: str
+    path: Optional[str]
+    open: bool
+    ahead: Optional[int] = None
+    landed: Optional[bool] = None
+    dirty: Optional[bool] = None
+    wip: Optional[bool] = None
+    busy: bool = False
+    idle_seconds: Optional[int] = None
+    errors: list[str] = field(default_factory=list)
+
+    @property
+    def error(self) -> Optional[str]:
+        """Why some values are unknown, or None when every probe answered."""
+        return "; ".join(self.errors) or None
 
 
 def dir_name(branch: str) -> str:
@@ -214,18 +243,48 @@ def idle_seconds(repo: Repo, entry: Entry) -> int:
 
     Working-tree file mtimes are ignored on purpose: they move on every save and say nothing about
     whether the work is idle. A detached worktree's commit is its own, not the primary tip's.
+    Raises ProbeError when git cannot name the entry's commit or metadata directory.
     """
     now = int(time.time())
-    stamps: list[int] = []
     cwd, ref = head_of(repo, entry)
-    commit = git(cwd, "log", "-1", "--format=%ct", ref, "--", check=False).strip()
-    if commit.isdigit():
-        stamps.append(int(commit))
+    stamps: list[int] = []
+    commit = probe(cwd, "log", "-1", "--format=%ct", ref, "--").strip()
+    if not commit.isdigit():
+        raise ProbeError(f"git log -1 --format=%ct {ref} in {cwd} answered {commit!r}, not a commit time")
+    stamps.append(int(commit))
     if entry.path:
-        git_dir = git(entry.path, "rev-parse", "--path-format=absolute", "--git-dir", check=False).strip()
+        git_dir = probe(entry.path, "rev-parse", "--path-format=absolute", "--git-dir").strip()
         for name in ("HEAD", "index"):
             try:
                 stamps.append(int(os.stat(os.path.join(git_dir, name)).st_mtime))
             except OSError:
                 pass
-    return max(0, now - max(stamps)) if stamps else 0
+    return max(0, now - max(stamps))
+
+
+def inspect_row(repo: Repo, entry: Entry) -> Row:
+    """Every listing fact about `entry`, keeping the ones that answered.
+
+    One damaged checkout must not cost the whole listing its other rows, so a probe that raises
+    leaves its value unknown and records the reason on the row instead of ending the verb.
+    """
+    cwd, ref = head_of(repo, entry)
+    row = Row(name=entry.name, branch=entry.branch, path=entry.path, open=entry.open)
+
+    def asked(question: Callable[[], T]) -> Optional[T]:
+        try:
+            return question()
+        except ProbeError as error:
+            row.errors.append(str(error))
+            return None
+
+    row.ahead = asked(lambda: ahead(repo, ref, cwd))
+    row.landed = landed(repo, ref, cwd)
+    if row.landed is None:
+        row.errors.append(f"could not tell whether {ref} is in {repo.default}")
+    # A closed worktree has no folder, so there is nothing of it to be dirty or busy.
+    row.dirty = asked(lambda: dirty(entry.path or "")) if entry.path else False
+    row.busy = bool(entry.path) and bool(busy_pids(entry.path or ""))
+    row.wip = asked(lambda: is_wip(repo.main, entry.branch)) if entry.branch else False
+    row.idle_seconds = asked(lambda: idle_seconds(repo, entry))
+    return row

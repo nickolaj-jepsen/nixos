@@ -10,9 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from .git import die, normpath, run
+from .git import ProbeError, die, normpath, probe, run
 
 LOCK_WAIT_SECONDS = float(os.environ.get("WT_LOCK_WAIT_SECONDS") or 10.0)
+
+
+class RepoError(Exception):
+    """A repository is there but git cannot say enough about it to list or enter it."""
 
 
 def worktree_root() -> str:
@@ -34,6 +38,15 @@ class Repo:
     @property
     def lock_path(self) -> str:
         return os.path.join(self.common, "wt.lock")
+
+
+@dataclass
+class Located:
+    """A repository found under the worktree root: its `repo`, or the error that stopped identification."""
+
+    name: str
+    repo: Optional[Repo] = None
+    error: Optional[str] = None
 
 
 def discover_common(cwd: str) -> Optional[str]:
@@ -61,11 +74,12 @@ def default_branch(common: str) -> str:
             check=False,
         ).returncode == 0:
             return branch
-    die("could not determine default branch (no origin/HEAD, no main, no master)")
+    raise RepoError("could not determine default branch (no origin/HEAD, no main, no master)")
 
 
 def registered_worktrees(common: str) -> list[dict]:
-    out = run(["git", "--git-dir", common, "worktree", "list", "--porcelain"]).stdout
+    """Worktrees git has registered; raises ProbeError when git cannot list them."""
+    out = probe(None, "--git-dir", common, "worktree", "list", "--porcelain")
     items: list[dict] = []
     current: Optional[dict] = None
     for line in out.splitlines():
@@ -94,9 +108,13 @@ def stale_worktrees(common: str) -> list[dict]:
 
 
 def repo_from_common(common: str) -> Repo:
-    registered = registered_worktrees(common)
+    """The repository at `common`; raises RepoError instead of exiting when git cannot identify it."""
+    try:
+        registered = registered_worktrees(common)
+    except ProbeError as error:
+        raise RepoError(str(error)) from None
     if not registered:
-        die(f"no worktrees registered for {common}")
+        raise RepoError(f"no worktrees registered for {common}")
     main = registered[0]["path"]
     key = os.path.basename(os.path.dirname(common))
     return Repo(common=common, main=main, key=key, default=default_branch(common), directory=worktree_directory(common, key))
@@ -106,7 +124,10 @@ def current_repo(cwd: Optional[str] = None) -> Repo:
     common = discover_common(cwd or os.getcwd())
     if not common:
         die("not inside a git repository")
-    return repo_from_common(common)
+    try:
+        return repo_from_common(common)
+    except RepoError as error:
+        die(str(error))
 
 
 def _owner_of_dir(directory: str) -> Optional[str]:
@@ -167,9 +188,10 @@ def worktree_directory(common: str, key: str) -> str:
     return base
 
 
-def repos_under_root() -> list[Repo]:
+def repos_under_root() -> list[Located]:
+    """Every repository with a folder under the worktree root, each with the error that blocked it."""
     root = worktree_root()
-    repos: list[Repo] = []
+    repos: list[Located] = []
     if not os.path.isdir(root):
         return repos
     for entry in sorted(os.scandir(root), key=lambda e: e.name):
@@ -185,9 +207,12 @@ def repos_under_root() -> list[Repo]:
         if not os.path.isdir(common):
             continue
         try:
-            repos.append(repo_from_common(common))
-        except SystemExit:
+            repo = repo_from_common(common)
+        except RepoError as error:
+            # Still report the repository: a listing must say what it could not read, not skip it.
+            repos.append(Located(name=entry.name, error=str(error)))
             continue
+        repos.append(Located(name=repo.key, repo=repo))
     return repos
 
 

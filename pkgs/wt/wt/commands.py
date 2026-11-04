@@ -7,15 +7,16 @@ import json
 import os
 import sys
 import time
-from typing import Optional
+from typing import NoReturn, Optional
 
 from .gh import has_origin, pr_merged, stack_layers
 from .git import ProbeError, die, git, git_ok, info, inspect, is_within, normpath, run
 from .procs import busy_pids, describe_pid
-from .repo import Repo, RepoLock, current_repo, repos_under_root, stale_worktrees
+from .repo import Located, Repo, RepoLock, current_repo, repos_under_root, stale_worktrees
 from .worktrees import (
     WIP_TRAILER,
     Entry,
+    Row,
     ahead,
     branch_exists,
     branches_containing,
@@ -24,8 +25,7 @@ from .worktrees import (
     dir_name,
     dirty,
     entries,
-    head_of,
-    idle_seconds,
+    inspect_row,
     is_wip,
     landed,
     layers,
@@ -37,7 +37,7 @@ from .worktrees import (
     set_record,
 )
 
-STATUS_VERSION = 2
+STATUS_VERSION = 3
 # How long a `close --when-free` waits for the folder to empty before it leaves it be.
 WHEN_FREE_TIMEOUT = float(os.environ.get("WT_WHEN_FREE_TIMEOUT") or 3600)
 WHEN_FREE_POLL = 1.0
@@ -354,21 +354,31 @@ def cmd_drop(args: argparse.Namespace) -> None:
 # list and cd
 
 
-def _row(repo: Repo, entry: Entry) -> dict:
-    cwd, ref = head_of(repo, entry)
-    is_dirty = bool(entry.path) and dirty(entry.path or "")
-    has_commits = bool(entry.branch or entry.path)
+def _row_document(row: Row) -> dict:
+    """One listing row in the JSON v3 shape: a value that could not be inspected is null."""
     return {
-        "name": entry.name,
-        "branch": entry.branch,
-        "path": entry.path,
-        "open": entry.open,
-        "ahead": ahead(repo, ref, cwd) if has_commits else 0,
-        "landed": bool(landed(repo, ref, cwd)) if has_commits else False,
-        "dirty": is_dirty,
-        "wip": bool(entry.branch) and is_wip(repo.main, entry.branch),
-        "busy": bool(entry.path) and bool(busy_pids(entry.path or "")),
-        "idleSeconds": idle_seconds(repo, entry),
+        "name": row.name,
+        "branch": row.branch,
+        "path": row.path,
+        "open": row.open,
+        "ahead": row.ahead,
+        "landed": row.landed,
+        "dirty": row.dirty,
+        "wip": row.wip,
+        "busy": row.busy,
+        "idleSeconds": row.idle_seconds,
+        "error": row.error,
+    }
+
+
+def _repo_document(item: Located, found: list[Row]) -> dict:
+    """One repository in the JSON v3 shape; `error` is set when the repository itself failed."""
+    return {
+        "name": item.name,
+        "main": item.repo.main if item.repo else None,
+        "defaultBranch": item.repo.default if item.repo else None,
+        "error": item.error,
+        "worktrees": [_row_document(row) for row in found],
     }
 
 
@@ -384,53 +394,103 @@ def _table(rows: list[list[str]]) -> str:
     return "\n".join("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in rows)
 
 
+# What a value a probe could not answer prints as, instead of a clean tree or a zero count.
+UNKNOWN = "?"
+
+
+def _ahead_cell(row: dict) -> str:
+    if row["landed"] is None:
+        return UNKNOWN
+    if row["landed"]:
+        return "landed"
+    return UNKNOWN if row["ahead"] is None else str(row["ahead"])
+
+
+def _state_cell(row: dict) -> str:
+    if row["dirty"]:
+        return "yes"
+    if row["dirty"] is None:
+        return UNKNOWN
+    if row["wip"]:
+        return "wip"
+    return UNKNOWN if row["wip"] is None else "-"
+
+
+def _table_row(row: dict) -> list[str]:
+    return [
+        row["name"],
+        row["branch"] or "(detached)",
+        "open" if row["open"] else "closed",
+        _ahead_cell(row),
+        _state_cell(row),
+        UNKNOWN if row["idleSeconds"] is None else format_age(row["idleSeconds"]),
+    ]
+
+
+def _die_partial(failures: list[str]) -> NoReturn:
+    """Report each failed inspection, then end the listing as partial instead of successful."""
+    sys.stdout.flush()
+    for failure in failures:
+        info(failure)
+    die("not every value could be inspected; the listing is partial")
+
+
 def cmd_list(args: argparse.Namespace) -> None:
     if args.all and args.target:
         die("--all lists every repository; drop it to narrow to one worktree")
+    failures: list[str] = []
+    documents: list[dict] = []
+    names: list[str] = []
     # Listing reports git metadata, so every question it asks must forgo optional locks: a status
     # call that refreshes the index would mutate the checkout and report its own write as 0s idle.
     with read_only_git():
         if args.all:
-            selected = [(repo, entries(repo)) for repo in repos_under_root()]
+            found = repos_under_root()
         else:
-            repo = current_repo()
-            selected = [(repo, [resolve(repo, args.target)] if args.target else entries(repo))]
-        if args.name:
-            for _, found in selected:
-                for entry in found:
-                    print(entry.name)
-            return
-        try:
-            documents = [
-                {
-                    "name": repo.key,
-                    "main": repo.main,
-                    "defaultBranch": repo.default,
-                    "worktrees": [_row(repo, entry) for entry in found],
-                }
-                for repo, found in selected
-            ]
-        except ProbeError as error:
-            # A row that could not be inspected ends the listing until JSON v3 can carry the error.
-            die(str(error))
+            here = current_repo()
+            found = [Located(name=here.key, repo=here)]
+        for item in found:
+            repo = item.repo
+            if repo is None:
+                failures.append(f"{item.name}: {item.error}")
+                documents.append(_repo_document(item, []))
+                continue
+            try:
+                selected = [resolve(repo, args.target)] if args.target else entries(repo)
+            except ProbeError as error:
+                # The repository is there but its worktrees cannot be read: report it, keep the rest.
+                failures.append(f"{repo.key}: {error}")
+                documents.append(_repo_document(Located(name=repo.key, repo=repo, error=str(error)), []))
+                continue
+            if args.name:
+                names.extend(row.name for row in selected)
+                continue
+            rows = [inspect_row(repo, entry) for entry in selected]
+            failures.extend(f"'{row.name}' in {repo.key}: {row.error}" for row in rows if row.error)
+            documents.append(_repo_document(item, rows))
+    if args.name:
+        for name in names:
+            print(name)
+        if failures:
+            _die_partial(failures)
+        return
     if args.json:
         print(json.dumps({"version": STATUS_VERSION, "repos": documents}, indent=2))
-        return
-    blocks = []
-    for document in documents:
-        if not document["worktrees"]:
-            continue
-        rows = [["NAME", "BRANCH", "FOLDER", "AHEAD", "DIRTY", "IDLE"]]
-        for row in document["worktrees"]:
-            state = "yes" if row["dirty"] else "wip" if row["wip"] else "-"
-            rows.append([row["name"], row["branch"] or "(detached)", "open" if row["open"] else "closed",
-                         "landed" if row["landed"] else str(row["ahead"]), state, format_age(row["idleSeconds"])])
-        table = _table(rows)
-        blocks.append(f"{document['name']}  ({document['main']})\n{table}" if args.all else table)
-    if not blocks:
-        info("no worktrees")
-        return
-    print("\n\n".join(blocks))
+    else:
+        blocks = []
+        for document in documents:
+            if not document["worktrees"]:
+                continue
+            table = [["NAME", "BRANCH", "FOLDER", "AHEAD", "DIRTY", "IDLE"]]
+            table.extend(_table_row(row) for row in document["worktrees"])
+            blocks.append(f"{document['name']}  ({document['main']})\n{_table(table)}" if args.all else _table(table))
+        if blocks:
+            print("\n\n".join(blocks))
+        elif not failures:
+            info("no worktrees")
+    sys.stdout.flush()
+    if failures:
+        _die_partial(failures)
 
 
 def cmd_cd(args: argparse.Namespace) -> None:
