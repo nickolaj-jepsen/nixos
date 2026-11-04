@@ -38,6 +38,8 @@ class Entry:
     branch: str
     path: Optional[str]
     locked: bool = False
+    # The commit a registration recorded, which is all a closed detached worktree still knows.
+    head: Optional[str] = None
 
     @property
     def open(self) -> bool:
@@ -137,7 +139,9 @@ def entries(repo: Repo) -> list[Entry]:
     found: list[Entry] = []
     for item in registered_worktrees(repo.common)[1:]:
         path = item["path"] if os.path.isdir(item["path"]) else None
-        found.append(Entry(os.path.basename(item["path"]), item["branch"], path, item["locked"]))
+        found.append(
+            Entry(os.path.basename(item["path"]), item["branch"], path, item["locked"], item["head"] or None)
+        )
     open_names = {entry.name for entry in found}
     for name, branch in sorted(records(repo).items()):
         if name not in open_names and branch_exists(repo, branch):
@@ -211,12 +215,17 @@ def is_wip(cwd: str, ref: str) -> bool:
 def head_of(repo: Repo, entry: Entry) -> tuple[str, str]:
     """The checkout and ref holding an entry's own commits.
 
-    A detached worktree has its own HEAD, so the primary checkout is the wrong place to ask about
-    it; a closed worktree is known only by the branch git config recorded for it.
+    A detached worktree has its own HEAD, and a closed registration keeps the commit git recorded
+    for it, so the primary checkout is never the right place to ask about either. Raises ProbeError
+    when nothing identifies the entry's commits, rather than answering with another checkout's.
     """
-    if entry.path and not entry.branch:
+    if entry.branch:
+        return repo.main, entry.branch
+    if entry.path:
         return entry.path, "HEAD"
-    return repo.main, entry.branch or "HEAD"
+    if entry.head:
+        return repo.main, entry.head
+    raise ProbeError(f"'{entry.name}' is closed with no branch and no recorded commit to read")
 
 
 def ahead(repo: Repo, ref: str, cwd: Optional[str] = None) -> int:
@@ -268,7 +277,6 @@ def inspect_row(repo: Repo, entry: Entry) -> Row:
     One damaged checkout must not cost the whole listing its other rows, so a probe that raises
     leaves its value unknown and records the reason on the row instead of ending the verb.
     """
-    cwd, ref = head_of(repo, entry)
     row = Row(name=entry.name, branch=entry.branch, path=entry.path, open=entry.open)
 
     def asked(question: Callable[[], T]) -> Optional[T]:
@@ -278,10 +286,19 @@ def inspect_row(repo: Repo, entry: Entry) -> Row:
             row.errors.append(str(error))
             return None
 
-    row.ahead = asked(lambda: ahead(repo, ref, cwd))
-    row.landed = landed(repo, ref, cwd)
-    if row.landed is None:
-        row.errors.append(f"could not tell whether {ref} is in {repo.default}")
+    def ahead_of() -> int:
+        cwd, ref = head_of(repo, entry)
+        return ahead(repo, ref, cwd)
+
+    def landed_of() -> bool:
+        cwd, ref = head_of(repo, entry)
+        answer = landed(repo, ref, cwd)
+        if answer is None:
+            raise ProbeError(f"could not tell whether {ref} is in {repo.default}")
+        return answer
+
+    row.ahead = asked(ahead_of)
+    row.landed = asked(landed_of)
     # A closed worktree has no folder, so there is nothing of it to be dirty or busy.
     row.dirty = asked(lambda: dirty(entry.path or "")) if entry.path else False
     row.busy = bool(entry.path) and bool(busy_pids(entry.path or ""))

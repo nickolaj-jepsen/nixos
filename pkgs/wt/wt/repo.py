@@ -84,10 +84,13 @@ def registered_worktrees(common: str) -> list[dict]:
     current: Optional[dict] = None
     for line in out.splitlines():
         if line.startswith("worktree "):
-            current = {"path": normpath(line[len("worktree ") :]), "branch": "", "locked": False}
+            current = {"path": normpath(line[len("worktree ") :]), "branch": "", "head": "", "locked": False}
             items.append(current)
         elif current is None:
             continue
+        elif line.startswith("HEAD "):
+            # The commit this checkout had, which is all a detached registration still knows.
+            current["head"] = line[len("HEAD ") :].strip()
         elif line.startswith("branch "):
             ref = line[len("branch ") :]
             current["branch"] = ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
@@ -201,10 +204,18 @@ def repos_under_root() -> list[Located]:
         if not os.path.exists(marker):
             continue
         try:
-            common = normpath(Path(marker).read_text().strip())
-        except OSError:
+            recorded = Path(marker).read_text().strip()
+        except OSError as error:
+            repos.append(Located(name=entry.name, error=f"could not read {marker}: {error}"))
             continue
+        if not recorded:
+            # normpath('') is the cwd, which would pass for a repository that is not there.
+            repos.append(Located(name=entry.name, error=f"{marker} is empty"))
+            continue
+        common = normpath(recorded)
         if not os.path.isdir(common):
+            # The checkout folders are still there, holding whatever they hold: not a clean listing.
+            repos.append(Located(name=entry.name, error=f"{marker} names {common}, which no longer exists"))
             continue
         try:
             repo = repo_from_common(common)

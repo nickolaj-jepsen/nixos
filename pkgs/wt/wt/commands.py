@@ -116,6 +116,14 @@ def cmd_new(args: argparse.Namespace) -> None:
         path = os.path.join(repo.directory, name)
         if os.path.exists(path):
             die(f"'{path}' exists but is not a worktree; move it away first")
+        if entry and not entry.branch:
+            # A registration git reported as detached has no branch to recreate the folder from.
+            # Pruning it to get past `worktree add` would drop the only record of its commit.
+            die(
+                f"'{name}' is registered with no branch"
+                + (f", detached at {entry.head}" if entry.head else "")
+                + f"; 'wt drop {name}' removes it and names the commit, then create it again"
+            )
         branch = entry.branch if entry else args.name
         # A deleted folder keeps its registration, which blocks this checkout and the branch delete
         # that follows; prune it so the canonical folder and branch can be used again.
@@ -337,6 +345,9 @@ def cmd_drop(args: argparse.Namespace) -> None:
             run(["git", "-C", repo.main, "worktree", "remove", "--force", path])
             run(["git", "-C", repo.main, "worktree", "prune"], check=False)
         else:
+            # Only data that is still somewhere else can be dropped without a recovery point.
+            if not entry.branch and entry.head:
+                info(f"'{entry.name}' was detached at {entry.head}; restore it with: git switch --detach {entry.head}")
             # A stale registration still claims its branch: pruned, or the branch delete refuses.
             run(["git", "-C", repo.main, "worktree", "prune"], check=False)
         clear_record(repo, entry.name)
