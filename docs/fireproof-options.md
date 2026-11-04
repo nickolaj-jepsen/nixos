@@ -3024,6 +3024,54 @@ string
 
 
 
+## fireproof\.transcripts\.enable
+
+
+
+Replace secrets in agent transcripts in place
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.transcripts\.schedule
+
+
+
+OnCalendar for the weekly transcript sweep\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"Sun 03:00"
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.trusted
 
 
