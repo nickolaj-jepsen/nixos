@@ -11,7 +11,7 @@
 #   plan [--json]     the same as data, one item per line of output
 #   apply             the checklist: pick what goes, branches are bundled first
 #   run tmp|repo|all  the timers' passes
-#   dir [pid]         print (and create) <pid>'s temp dir; wrappers pass their $$
+#   dir [pid]         print (and create) <pid>'s /tmp/agent temp dir (the older root)
 #   state             refresh the cached numbers the widget reads from disk
 #   warn              Claude Code PreToolUse hook: one line for the model under pressure
 #   warnline          the same line as text, for pi's tool_result hook
@@ -21,6 +21,8 @@ set -euo pipefail
 
 ROOT=${JANITOR_ROOT:-/tmp/agent}
 LEGACY_ROOT=${JANITOR_LEGACY_ROOT:-/tmp/claude-1000}
+# `agent-notes tmp` puts each session at <repo>/<pid> here; the repo level stays.
+AGENT_TMP_ROOT=${JANITOR_AGENT_TMP_ROOT:-${XDG_STATE_HOME:-$HOME/.local/state}/agents/tmp}
 # A budget, not a cap: it is what the sweep defends by evicting dead sessions.
 BUDGET_GIB=${JANITOR_TMP_BUDGET_GIB:-16}
 TMP_MAX_AGE_DAYS=${JANITOR_TMP_MAX_AGE_DAYS:-3}

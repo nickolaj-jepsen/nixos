@@ -31,7 +31,7 @@ gcroot_group() {
   [ -L "$link" ] && [ "$(stat -c %u -- "$link" 2>/dev/null)" = "$UID" ] || return 1
   protected "$link" && return 1
   case "$link" in
-  "$ROOT"/* | "$LEGACY_ROOT"/*) return 1 ;;
+  "$ROOT"/* | "$LEGACY_ROOT"/* | "$AGENT_TMP_ROOT"/*) return 1 ;;
   /tmp/*)
     [ "$(age_of "$link")" -ge "$TMP_MAX_AGE_SECONDS" ] || return 1
     top=${link#/tmp/}

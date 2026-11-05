@@ -12,11 +12,11 @@
     homeDir = config.home.homeDirectory;
     janitor = config.fireproof.janitor.enable;
 
-    # Agent temp lives in one root the janitor sweeps, named after the wrapper's
-    # pid (exec keeps it), so a session that is gone can be proven gone. Falls
-    # back to the ambient TMPDIR when the root cannot be created.
+    # Agent temp is the session's own directory in the repository's scratch root,
+    # named after the wrapper's pid (exec keeps it), so a session that is gone can
+    # be proven gone. Falls back to the ambient TMPDIR when it cannot be created.
     tmpDir = ''
-      if TMPDIR=$(${lib.getExe pkgs.janitor} dir "$$"); then export TMPDIR; fi
+      if TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$"); then export TMPDIR; fi
     '';
 
     # Surfaces session state that settings.json can't pin (model, effort as

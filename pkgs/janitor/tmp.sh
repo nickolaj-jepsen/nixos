@@ -20,6 +20,24 @@ tmp_candidates() {
     done
   fi
 
+  # The repository scratch root: <repo>/<pid>. The repository level is what keeps
+  # the links in a checkout from dangling, so only session dirs are candidates.
+  if [ -d "$AGENT_TMP_ROOT" ]; then
+    for dir in "$AGENT_TMP_ROOT"/*; do
+      [ -d "$dir" ] || continue
+      for path in "$dir"/*; do
+        [ -d "$path" ] || continue
+        name=${path##*/}
+        if [[ $name =~ ^[0-9]+$ ]]; then
+          if [ -d "/proc/$name" ]; then kind=live; else kind=dead; fi
+        else
+          kind=unmanaged
+        fi
+        printf '%s\t%s\t%s\t%s\n' "$(age_of "$path")" "$(size_of "$path")" "$kind" "$path"
+      done
+    done
+  fi
+
   # Before the redirect, every session wrote under /tmp/claude-1000/<cwd>/<uuid>.
   if [ -d "$LEGACY_ROOT" ]; then
     for dir in "$LEGACY_ROOT"/*; do
@@ -52,7 +70,7 @@ tmp_candidates() {
 
 total_tmp_bytes() {
   local path total=0
-  for path in "$ROOT" "$LEGACY_ROOT" ${STALE_PATHS[@]+"${STALE_PATHS[@]}"}; do
+  for path in "$ROOT" "$LEGACY_ROOT" "$AGENT_TMP_ROOT" ${STALE_PATHS[@]+"${STALE_PATHS[@]}"}; do
     [ -e "$path" ] || continue
     total=$((total + $(size_of "$path")))
   done

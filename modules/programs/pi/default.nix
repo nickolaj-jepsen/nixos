@@ -183,8 +183,9 @@ in {
       '';
     wrapper = pkgs.writeShellScriptBin "pi" ''
       ${lib.concatLines (lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}") env)}
-      # Agent temp in the root the janitor sweeps, named after this pid (exec keeps it).
-      ${lib.optionalString config.fireproof.janitor.enable ''TMPDIR=$(${lib.getExe pkgs.janitor} dir "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
+      # Agent temp is this session's directory in the repository's scratch root,
+      # named after this pid (exec keeps it), so the janitor can prove a session gone.
+      ${lib.optionalString config.fireproof.janitor.enable ''TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
       dir="''${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
       mkdir -p "$dir"
       ${merge "settings.json" settings}
@@ -539,7 +540,7 @@ in {
           external_directory_write = let
             roots =
               # /nix/store so `rm result` doesn't ask; ~/worktrees/* so a whole <repo> does.
-              ["/tmp" "~/.local/share/agents" "~/.local/state/pi-plugin-dev" "~/worktrees/*" "/nix/store"];
+              ["/tmp" "~/.local/share/agents" "~/.local/state/agents" "~/.local/state/pi-plugin-dev" "~/worktrees/*" "/nix/store"];
           in
             {"*" = "ask";}
             // lib.listToAttrs (lib.concatMap (root: [
@@ -553,7 +554,7 @@ in {
           # because `<root>/*` misses the directory itself, which is what a `cd`
           # operand names.
           external_directory_read = let
-            roots = ["/tmp" "~/.local/share/agents" "~/worktrees" "~/dev" "~/.claude" "/var/tmp"];
+            roots = ["/tmp" "~/.local/share/agents" "~/.local/state/agents" "~/worktrees" "~/dev" "~/.claude" "/var/tmp"];
           in
             lib.listToAttrs (lib.concatMap (root: [
                 (lib.nameValuePair root "allow")

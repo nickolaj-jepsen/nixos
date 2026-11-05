@@ -56,11 +56,14 @@
 
     # Nested subvolumes stay out of /home's snapshots: rebuildable, or churn that snapshots would pin.
     systemd.tmpfiles.rules =
-      lib.mapAttrsToList (dir: mode: "v ${user.home}/${dir} ${mode} ${user.name} ${user.group} -") {
+      ["d ${user.home}/.local/state/agents 0700 ${user.name} ${user.group} -"]
+      ++ lib.mapAttrsToList (dir: mode: "v ${user.home}/${dir} ${mode} ${user.name} ${user.group} -") {
         ".cache" = "0755";
         "models" = "0755";
         ".local/share/Steam" = "0700";
         ".local/share/pnpm" = "0755";
+        # Agent scratch is reaped by the janitor; a snapshot would pin what it frees.
+        ".local/state/agents/tmp" = "0700";
         "vms" = "0755";
       }
       # VM disk images are rewritten in place; copy-on-write fragments them.
