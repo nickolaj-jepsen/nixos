@@ -77,7 +77,7 @@ checkout's directory name. It holds `BRIEF.md`, `HANDOFF.md`, `APPROVAL.md`,
 
 `FLOW.json` is the only state that crosses a session switch: the current step,
 mode, plan stage, settings overrides, each step's session file and cost, the
-judge's verdicts, and the tour. Only `E/parent/flow/` code writes it, atomically.
+judge's verdicts, and the tour. `flow/state.ts` owns every read and write of it, and writes are atomic.
 The format is C1 in the build's own plan; the parser is `parseFlow` in
 `contracts.ts`. A file that does not parse is reported and left as it is.
 

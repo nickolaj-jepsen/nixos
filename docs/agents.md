@@ -84,7 +84,7 @@ Paths in the table that don't start with `skills/` or `pkgs/` are under
 - `parent/flow/` is `/flow`, the brief → plan → approve → run → guide workflow.
   `flow.ts` registers the command, the `flow_next`/`flow_status`/`flow_tour`
   tools and the footer segment; `flow/conductor.ts` holds the step machine and
-  `flow/state.ts` is the only writer of a plan directory's `FLOW.json`. The
+  `flow/state.ts` owns every read and write of a plan directory's `FLOW.json`. The
   four skills in `parent/flow/skills/` are pi-only forks of `handoff` and
   `run-handoff`, shipped from the parent package's `pi` manifest rather than
   `skills/`, and they run items through the `builder`/`builder-deep` and
