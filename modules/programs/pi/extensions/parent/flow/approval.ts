@@ -524,7 +524,10 @@ export const approve = async (
     // written, so the next page still opens on the next judge's suggestion.
     const baseline =
       result.kind === "approve"
-        ? { ...opened, tiers: Object.fromEntries(handoff.items.map((item) => [item.id, item.tier])) }
+        ? {
+            ...opened,
+            tiers: Object.fromEntries(handoff.items.map((item) => [item.id, item.tier])),
+          }
         : opened;
     const edited = rewriteTiers(currentText, tierEdits(handoff, baseline, result.page));
     const amended = appendAmendments(edited, amendmentEntries(handoff, result.page, today()));

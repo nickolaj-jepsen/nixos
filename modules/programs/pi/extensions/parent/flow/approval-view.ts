@@ -160,11 +160,7 @@ export type TierEdit = { line: number; tier: Tier };
  * opened on, not with the file, so a suggestion the judge made and the owner
  * left alone is not written to `HANDOFF.md` as the owner's.
  */
-export const tierEdits = (
-  handoff: ParsedHandoff,
-  opened: PageState,
-  page: PageState,
-): TierEdit[] =>
+export const tierEdits = (handoff: ParsedHandoff, opened: PageState, page: PageState): TierEdit[] =>
   handoff.items
     .filter((item) => item.tierLine > 0 && page.tiers[item.id] !== undefined)
     .filter((item) => page.tiers[item.id] !== opened.tiers[item.id])
