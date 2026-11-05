@@ -382,3 +382,52 @@ test("a verdict wrapped in a fenced block or a sentence is read anyway", async (
     assert.equal(verdict.thinking, "low");
   }
 });
+
+test("a changed suggestion without a reason naming it gives the defaults", async () => {
+  const { call } = answering({
+    text: JSON.stringify({
+      mode: "straight",
+      run: { model: "vm/deep", thinking: "high" },
+      tiers: {},
+      finalReview: "reviewer-deep",
+      // `run` moved off the flow's settings, but only the mode is explained.
+      reasons: { mode: "routine and small" },
+    }),
+    cost: 0.003,
+  });
+  const verdict = await judgeHandoff(pi, ctx, handoff(), settings(), call);
+
+  assert.equal(verdict.mode, "gated");
+  assert.deepEqual(verdict.run, { model: "vm/flash", thinking: "low" });
+  assert.match(verdict.reasons[0]!, /changed run without a reason/);
+  assert.equal(verdict.cost, 0.003);
+});
+
+test("reasons may be a list of `<key>: …` lines, one per changed suggestion", async () => {
+  const { call } = answering({
+    text: JSON.stringify({
+      mode: "straight",
+      run: { model: "vm/flash", thinking: "low" },
+      tiers: {},
+      finalReview: "reviewer",
+      reasons: ["mode: routine and small", "finalReview: one flash pass is enough"],
+    }),
+    cost: 0,
+  });
+  const verdict = await judgeHandoff(pi, ctx, handoff(), settings(), call);
+  assert.equal(verdict.mode, "straight");
+  assert.equal(verdict.finalReview, "reviewer");
+
+  const brief = answering({
+    text: JSON.stringify({
+      plan: "quick",
+      model: "vm/flash",
+      thinking: "high",
+      reasons: ["plan: one file"],
+    }),
+    cost: 0,
+  });
+  const missing = await judgeBrief(pi, ctx, "# Brief\n", settings(), brief.call);
+  assert.equal(missing.plan, "full");
+  assert.match(missing.reasons[0]!, /changed model without a reason/);
+});

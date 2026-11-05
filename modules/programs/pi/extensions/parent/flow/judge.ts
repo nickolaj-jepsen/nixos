@@ -95,27 +95,39 @@ const jsonObject = (text: string): Record<string, unknown> | undefined => {
 
 /**
  * The judge's reasons: an object keyed by the suggestion it explains, or a flat
- * list. Absent or empty means the verdict has no reason to show, which is a
- * failure: the owner reads a suggestion through its reason.
+ * list whose entries read `"<key>: …"`. Absent or empty means the verdict has no
+ * reason to show, which is a failure: the owner reads a suggestion through its
+ * reason (D6).
  */
-type Reasons = { all: string[] };
+type Reasons = { all: string[]; keyed: Map<string, string> };
 
 const reasonsOf = (value: unknown): Reasons | undefined => {
+  const keyed = new Map<string, string>();
   if (Array.isArray(value)) {
     if (!value.every((entry) => typeof entry === "string")) return undefined;
     const all = value.map((entry) => flat(entry)).filter((entry) => entry !== "");
-    return all.length ? { all } : undefined;
+    for (const entry of all) {
+      const match = /^([A-Za-z][\w-]*)\s*:\s*\S/.exec(entry);
+      if (match && !keyed.has(match[1])) keyed.set(match[1], entry);
+    }
+    return all.length ? { all, keyed } : undefined;
   }
   if (isObject(value)) {
-    const all = Object.values(value)
-      .map((entry) => (typeof entry === "string" ? flat(entry) : ""))
-      .filter((entry) => entry !== "");
-    return all.length ? { all } : undefined;
+    for (const [key, entry] of Object.entries(value)) {
+      const text = typeof entry === "string" ? flat(entry) : "";
+      if (text !== "") keyed.set(key, text);
+    }
+    const all = [...keyed.values()];
+    return all.length ? { all, keyed } : undefined;
   }
   return undefined;
 };
 
-/** Whether one of the reasons names `id`, so a deep tier carries the item it argues for. */
+/** The first suggestion key that changed a setting yet carries no reason of its own. */
+const unexplained = (reasons: Reasons, changed: string[]): string | undefined =>
+  changed.find((key) => !reasons.keyed.has(key));
+
+/** Whether one of the reasons names `id`, so a moved tier carries the item it argues for. */
 const namesItem = (reasons: Reasons, id: string) =>
   reasons.all.some((reason) => new RegExp(`\\b${id}\\b`).test(reason));
 
@@ -203,6 +215,13 @@ const parseBrief = (
   const thinking = raw.thinking;
   if (!isLevel(thinking))
     return `the judge chose thinking ${JSON.stringify(thinking)}, which is not one of ${LEVELS.join(", ")}`;
+  const fallback = defaultBrief(settings);
+  const missing = unexplained(reasons, [
+    ...(raw.plan !== fallback.plan ? ["plan"] : []),
+    ...(model !== fallback.model ? ["model"] : []),
+    ...(thinking !== fallback.thinking ? ["thinking"] : []),
+  ]);
+  if (missing) return `the judge changed ${missing} without a reason naming it`;
   return { plan: raw.plan, model, thinking, reasons: reasons.all };
 };
 
@@ -301,11 +320,19 @@ const parseHandoff = (
       return `the judge suggested a tier for ${id}, which is not an item in this handoff`;
     if (tier !== "flash" && tier !== "deep")
       return `the judge suggested tier ${JSON.stringify(tier)} for ${id}, which is not flash or deep`;
-    // Only a move changes anything, and only the expensive direction needs arguing.
+    // Only a move changes anything, and a move without a reason naming its item is dropped.
     if (tier === items.get(id)?.tier) continue;
-    if (tier === "deep" && !namesItem(reasons, id)) continue;
+    if (!namesItem(reasons, id)) continue;
     tiers[id] = tier;
   }
+
+  const fallback = defaultHandoff(settings);
+  const missing = unexplained(reasons, [
+    ...(raw.mode !== fallback.mode ? ["mode"] : []),
+    ...(model !== fallback.run.model || thinking !== fallback.run.thinking ? ["run"] : []),
+    ...(finalReview !== fallback.finalReview ? ["finalReview"] : []),
+  ]);
+  if (missing) return `the judge changed ${missing} without a reason naming it`;
 
   return {
     mode: raw.mode as JudgeHandoffVerdict["mode"],
