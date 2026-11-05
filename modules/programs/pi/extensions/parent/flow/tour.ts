@@ -305,6 +305,24 @@ const whereOf = (ctx: ExtensionContext): { flow: Flow; where: TourWhere } | { er
   return { flow, where: { repoMain: flow.repoMain, branch: flow.branch, from } };
 };
 
+/**
+ * Stores the seeded tour in FLOW.json, re-read first because a tier edit or a
+ * judge verdict may have landed since the turn began. Returns why nothing was
+ * written, or undefined once it is: a file that no longer parses is reported
+ * and left alone, never replaced by an older copy.
+ */
+export const recordTour = (planDir: string, tour: FlowTour): string | undefined => {
+  const current = readFlow(planDir);
+  if (current.kind !== "ok")
+    return `flow_tour seeded ${tour.slug} but did not record it: FLOW.json ${current.kind === "none" ? "is gone" : `does not parse (${current.error})`}, and is left as it is.`;
+  try {
+    writeFlow({ ...current.flow, tour });
+  } catch (error) {
+    return `flow_tour seeded ${tour.slug} but could not write FLOW.json: ${message(error)}`;
+  }
+  return undefined;
+};
+
 /** The `flow_tour` tool. Called once from the feature entry (C3). */
 export const registerTour = (pi: ExtensionAPI) => {
   pi.registerTool({
@@ -340,16 +358,8 @@ export const registerTour = (pi: ExtensionAPI) => {
         stops: params.stops,
       });
       if (!seeded.ok) return refused(`flow_tour refused: ${seeded.error}`);
-      try {
-        // Re-read first: a tier edit or a judge verdict may have landed since
-        // this turn began, and the tour is one field of that same file.
-        const current = readFlow(found.flow.planDir);
-        writeFlow({ ...(current.kind === "ok" ? current.flow : found.flow), tour: seeded.tour });
-      } catch (error) {
-        return refused(
-          `flow_tour seeded ${seeded.tour.slug} but could not write FLOW.json: ${message(error)}`,
-        );
-      }
+      const recorded = recordTour(found.flow.planDir, seeded.tour);
+      if (recorded !== undefined) return refused(recorded);
       return {
         content: [
           {

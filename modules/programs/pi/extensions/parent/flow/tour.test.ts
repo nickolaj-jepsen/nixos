@@ -8,12 +8,17 @@
  * anchor flags.
  */
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import type { TourSpec } from "./contracts.ts";
+import { flowPath } from "./state.ts";
 import {
   type Command,
   diffAnchors,
   parseSessionSlug,
+  recordTour,
   seedTour,
   stopProblem,
   type TourRunner,
@@ -237,4 +242,13 @@ test("a comment tuicr refuses is reported with the session that holds the others
   assert.equal(seeded.ok, false);
   assert.match(seeded.ok ? "" : seeded.error, /comment 1 of 3/);
   assert.match(seeded.ok ? "" : seeded.error, /invalid comment type/);
+});
+
+test("a tour is not recorded over a FLOW.json that stopped parsing", () => {
+  const dir = mkdtempSync(join(tmpdir(), "flow-tour-"));
+  writeFileSync(flowPath(dir), "{ half a file");
+  const tour = { slug: "s", argv: ["-r", "a..b"], cwd: dir, rv: "/rv -r a..b" };
+  const error = recordTour(dir, tour);
+  assert.match(error ?? "", /did not record it.*does not parse/);
+  assert.equal(readFileSync(flowPath(dir), "utf8"), "{ half a file");
 });
