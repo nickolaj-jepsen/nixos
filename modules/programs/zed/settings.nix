@@ -27,7 +27,6 @@
           restore_on_startup = "last_session";
           # A path inside an already-open project still lands in that project's window.
           cli_default_open_behavior = "new_window";
-          default_open_behavior = "new_window";
           # Closing the last tab keeps the window; the window manager closes it.
           when_closing_with_no_tabs = "keep_window_open";
           proxy = "";
@@ -110,9 +109,17 @@
             "**/.direnv"
             "**/__pycache__"
             "**/*.egg-info"
+            # Build outputs point into /nix/store, which is never worth indexing.
+            "**/result"
+            "**/result-*"
             # Agent session scratch: reaped by age, not worth searching.
             "**/.agents/tmp"
           ];
+          # The agent notes are a symlinked folder, `.agents/store`; `expanded` only
+          # scans it once it is clicked open, so its files never showed in search or
+          # in the tree until then. `always` follows every link, which the exclusions
+          # above keep from reaching build outputs.
+          scan_symlinks = "always";
 
           # Panels
           project_panel = {
