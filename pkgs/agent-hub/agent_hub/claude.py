@@ -69,7 +69,8 @@ def touched(files, path):
 
 
 # Read over all of a turn's commands, as a landing is rarely among the last few it keeps.
-LANDS = re.compile(r"\bwt land\b|\bgh pr merge\b|\bgit (-C \S+ )?push\b[^|;&\n]*(?<![\w/-])(main|master)(?![\w/-])")
+# `wt land --pr`/`--draft` only open a PR, so nothing reaches the default branch.
+LANDS = re.compile(r"\bwt land\b(?![^|;&\n]*\s--(pr|draft)\b)|\bgh pr merge\b|\bgit (-C \S+ )?push\b[^|;&\n]*(?<![\w/-])(main|master)(?![\w/-])")
 COMMITS = re.compile(r"\bgit (-C \S+ )?(commit|merge)\b")
 
 

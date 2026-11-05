@@ -82,7 +82,8 @@ class LandedTest(unittest.TestCase):
         return {**claude.assemble([], [], commands, {str(n): failed for n in range(len(lines))}, ""), **rest}
 
     def test_a_landing_counts_whatever_the_branch(self):
-        for line in ("wt land", "gh pr merge 12 --squash", "git push origin main", "git -C /r push origin master"):
+        for line in ("wt land", "wt land --green x", "gh pr merge 12 --squash", "git push origin main",
+                     "git -C /r push origin master"):
             self.assertTrue(judge.landed(self.digest(line)), line)
 
     def test_a_commit_counts_only_on_the_default_branch(self):
@@ -95,6 +96,10 @@ class LandedTest(unittest.TestCase):
         self.assertFalse(judge.landed(self.digest("git push origin feature")))
         self.assertFalse(judge.landed(self.digest("git push origin feature/main-fix")))
         self.assertFalse(judge.landed(self.digest("wt land", failed=True)))
+
+    def test_opening_a_pr_doesnt(self):
+        for line in ("wt land --pr x", "wt land --draft --title y", "wt land --pr --branch feat/z"):
+            self.assertFalse(judge.landed(self.digest(line)), line)
 
     def test_a_command_counts_past_what_the_row_shows(self):
         long_add = "git add modules/programs/agent-hub.nix pkgs/agent-hub/agent_hub/hub.py && git commit -m x"
