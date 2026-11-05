@@ -93,9 +93,50 @@ export type DiffAnchors = Map<string, FileAnchors>;
 
 const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
+const ESCAPES: Record<string, string> = {
+  a: "\x07",
+  b: "\b",
+  f: "\f",
+  n: "\n",
+  r: "\r",
+  t: "\t",
+  v: "\v",
+  "\\": "\\",
+  '"': '"',
+};
+
+/**
+ * The path a quoted path spells. git quotes a path that holds a byte outside
+ * printable ASCII or one of its own separators, writing the byte as `\NNN`
+ * octal; the file it names is the decoded path, so a stop written the way a
+ * human writes it matches.
+ */
+const unquote = (spelled: string): string => {
+  if (!(spelled.startsWith('"') && spelled.endsWith('"'))) return spelled;
+  const chars = [...spelled.slice(1, -1)];
+  const bytes: number[] = [];
+  const push = (text: string) => bytes.push(...new TextEncoder().encode(text));
+  for (let index = 0; index < chars.length; index += 1) {
+    const char = chars[index];
+    if (char !== "\\") {
+      push(char);
+      continue;
+    }
+    const octal = /^[0-7]{3}$/.exec(chars.slice(index + 1, index + 4).join(""));
+    if (octal !== null) {
+      bytes.push(Number.parseInt(octal[0], 8));
+      index += 3;
+      continue;
+    }
+    push(ESCAPES[chars[index + 1]] ?? "\\");
+    index += 1;
+  }
+  return new TextDecoder().decode(Uint8Array.from(bytes));
+};
+
 /** `a/foo.ts` or `b/foo.ts` as `foo.ts`; `/dev/null` as undefined. */
 const sidePath = (value: string): string | undefined => {
-  const path = value.split("\t")[0].trim();
+  const path = unquote(value.split("\t")[0].trim());
   if (path === "" || path === "/dev/null") return undefined;
   return path.startsWith("a/") || path.startsWith("b/") ? path.slice(2) : path;
 };
@@ -107,13 +148,16 @@ const addRange = (lines: Set<number>, start: number, count: number) => {
 /**
  * The file a `diff --git a/x b/y` header names: its new side, run through the
  * same normalisation as the diff's own `---`/`+++` lines so both name the file
- * alike. git quotes a path it would otherwise split (`"a/x y" "b/x y"`).
+ * alike. git quotes a path it cannot print and leaves one it can, spaces
+ * included, so the unquoted split is the header's last ` b/`.
  */
 const headerPath = (line: string): string | undefined => {
   const rest = line.slice("diff --git ".length);
+  // git quotes only what would otherwise split the header, so an unquoted path
+  // may hold a space; the split is then the header's last " b/".
   const sides = rest.startsWith('"')
     ? /^("a\/.*") ("b\/.*")$/.exec(rest)?.slice(1)
-    : /^(a\/\S+) (b\/\S+)$/.exec(rest)?.slice(1);
+    : /^(a\/.+) (b\/.+)$/.exec(rest)?.slice(1);
   return sides === undefined ? undefined : sidePath(sides[1]);
 };
 

@@ -471,10 +471,11 @@ test("a plan row is the whole answer: nothing supplies a model under it", async 
     reasons: [],
     cost: 0,
   });
-  assert.ok(
-    !offered[0].includes("vm/"),
-    `the picker reached below the resolved row: ${offered[0]}`,
-  );
+  // The judge's suggestion is the first entry and never had a default under it;
+  // the full row is the one a `DEFAULT_SETTINGS` fallback would dress up.
+  const full = offered.find((entry) => entry.startsWith("full"));
+  assert.ok(full !== undefined, `no full row offered: ${offered.join(" | ")}`);
+  assert.ok(!full.includes("vm/"), `the picker reached below the resolved row: ${full}`);
 });
 
 test("an invalid settings value falls back to the default and is reported", async () => {

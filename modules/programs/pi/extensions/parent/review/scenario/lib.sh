@@ -72,7 +72,9 @@ scenario_init() {
   export AGENT_HUB_HIDDEN=1 PI_OFFLINE=1
 
   scenario_stop
-  scenario_rm "$SCENARIO_ROOT"
+  # At init a tree that will not clear is the run's own problem: `mkdir -p`
+  # would keep the previous run's FLOW.json and sessions in place.
+  rm -rf "$SCENARIO_ROOT"
   mkdir -p "$SCENARIO_FIXTURE" "$SCENARIO_AGENT" "$SCENARIO_SESSIONS"
   mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$SCENARIO_HOME" "$TMPDIR"
   mkdir -p "$SCENARIO_RUNTIME"
@@ -190,10 +192,7 @@ scenario_pass() {
 # compile cache mid-delete. A tree under /tmp is the janitor's problem, but a
 # non-zero status from the EXIT trap would report a green run as a red one.
 scenario_rm() {
-  local dir
-  for dir in "$@"; do
-    rm -rf "$dir" 2>/dev/null || { sleep 0.2; rm -rf "$dir"; } || true
-  done
+  rm -rf "$1" 2>/dev/null || { sleep 0.2; rm -rf "$1"; } || true
 }
 
 scenario_stop() {

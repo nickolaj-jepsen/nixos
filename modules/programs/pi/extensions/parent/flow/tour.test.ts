@@ -136,21 +136,32 @@ test("a file with no hunks is still a file of the diff", () => {
     stopProblem({ file: "run.sh", line: 1, type: "note", body: "" }, anchors) ?? "",
     /run\.sh:1 is not a changed new line of this diff \(no new lines\)/,
   );
-  // A quoted path is the header's, quotes and all, exactly as the `+++` line names it.
+  // A path with a space is printed bare: git only quotes what it must, so the
+  // header splits at its last ` b/` and the file keys as a human writes it.
+  const spaced = diffAnchors(
+    [
+      "diff --git a/sp ace.png b/sp ace.png",
+      "Binary files a/sp ace.png and b/sp ace.png differ",
+    ].join("\n"),
+  );
+  assert.deepEqual([...spaced.keys()], ["sp ace.png"]);
+  assert.equal(stopProblem({ file: "sp ace.png", type: "note", body: "" }, spaced), undefined);
+
+  // A path git does quote is octal-escaped per byte; the key is the decoded
+  // path, and a deletion keys off its `---` side once, not twice.
   const quoted = diffAnchors(
     [
-      'diff --git "a/sp ace.ts" "b/sp ace.ts"',
-      "index 1234567..89abcde 100644",
-      '--- "a/sp ace.ts"',
-      '+++ "b/sp ace.ts"',
-      "@@ -1 +1 @@",
-      "-one",
-      "+two",
+      'diff --git "a/caf\\303\\251.ts" "b/caf\\303\\251.ts"',
+      "deleted file mode 100644",
+      '--- "a/caf\\303\\251.ts"',
+      "+++ /dev/null",
+      "@@ -1 +0,0 @@",
+      "-x",
       "",
     ].join("\n"),
   );
-  assert.equal(quoted.size, 1);
-  assert.deepEqual([...quoted.get('"b/sp ace.ts"')!.new], [1]);
+  assert.deepEqual([...quoted.keys()], ["caf\u00e9.ts"]);
+  assert.deepEqual([...quoted.get("caf\u00e9.ts")!.old], [1]);
 });
 
 test("a stop off the diff is named, a stop on it is not", () => {
