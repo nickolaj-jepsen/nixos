@@ -115,21 +115,61 @@ test("an owner value in FLOW.json wins over the judge's suggestion", () => {
   assert.equal(opened.settings.run.thinking, "low");
 });
 
-test("approving applies the mode and every step setting to FLOW.json's shape", () => {
-  const edited = page({ mode: "gated" });
-  edited.settings.run = { target: "vm/flash", thinking: "low" };
-  edited.settings.finalReview = { target: "reviewer", thinking: "medium" };
-  edited.settings.items = { target: "builder", deep: "reviewer-deep", thinking: "high" };
-  const next = applyPage(flow(), edited);
+test("approving writes the mode and only the settings the owner changed", () => {
+  const opened = page();
+  const edited = structuredClone(opened);
+  edited.mode = "gated";
+  edited.settings.finalReview.target = "reviewer";
+  const { flow: next, reports } = applyPage(flow(), opened, edited);
+  assert.deepEqual(reports, []);
   assert.equal(next.mode, "gated");
-  assert.deepEqual(next.settings.run, { model: "vm/flash", thinking: "low" });
-  assert.deepEqual(next.settings.finalReview, { role: "reviewer", thinking: "medium" });
-  assert.deepEqual(next.settings.items, {
-    role: "builder",
-    deep: "reviewer-deep",
-    thinking: "high",
+  // Exactly the one edit is added; nothing the owner left alone is frozen.
+  assert.deepEqual(next.settings, { ...flow().settings, finalReview: { role: "reviewer" } });
+
+  // A run model and a thinking level land on what the flow already held.
+  edited.settings.run.target = "vm/flash";
+  edited.settings.items.thinking = "medium";
+  edited.settings.items.deep = "reviewer-deep";
+  const more = applyPage(flow(), opened, edited).flow;
+  assert.deepEqual(more.settings.run, { model: "vm/flash", thinking: "high" });
+  assert.deepEqual(more.settings.items, { deep: "reviewer-deep", thinking: "medium" });
+  assert.equal(more.settings.guide, undefined);
+
+  // A model typed into a role row replaces the role rather than sitting beside it.
+  const asModel = structuredClone(opened);
+  asModel.settings.finalReview.target = "vm/deep";
+  assert.deepEqual(applyPage(flow(), opened, asModel).flow.settings.finalReview, {
+    model: "vm/deep",
   });
-  assert.deepEqual(next.settings.guide, { model: "vm/flash", thinking: "low" });
+});
+
+test("an edited value resolveSettings would refuse is reported", () => {
+  const opened = page();
+  const edited = structuredClone(opened);
+  edited.settings.run.target = "frontier";
+  const { reports } = applyPage(flow(), opened, edited);
+  assert.deepEqual(
+    reports.map((entry) => `${entry.key}.${entry.field}`),
+    ["run.model"],
+  );
+});
+
+test("the gate reviewer's role locks its thinking, so the page offers no level for it", () => {
+  const rows = approvalBlocks(flow(), handoff, page(), settings).flatMap((block) =>
+    block.kind === "row" ? [block.row] : [],
+  );
+  assert.ok(rows.some((row) => row.kind === "setting" && row.key === "gateReview"));
+  assert.ok(!rows.some((row) => row.kind === "settingThinking" && row.key === "gateReview"));
+  assert.ok(rows.some((row) => row.kind === "settingThinking" && row.key === "finalReview"));
+});
+
+test("the page says the plan's stops apply in every mode, straight included", () => {
+  const markdown = approvalMarkdown(
+    approvalBlocks(flow(), handoff, page({ mode: "straight" }), settings),
+  );
+  assert.doesNotMatch(markdown, /never stops/);
+  assert.match(markdown, /Mode — straight — logs deviations and continues to the final report/);
+  assert.match(markdown, /## Stops and flow-run's safety stops apply in every mode/);
 });
 
 test("only the tiers the owner moved are rewritten, and only their own line", () => {
@@ -365,7 +405,10 @@ test("the page opens at its top on approve, and enter approves", () => {
   // It opens where it is read: the mission and the run's mode, not the buttons.
   assert.match(frame, /Approval: export/);
   assert.match(frame, /The dashboard prints a table/);
-  assert.match(frame, /Mode {2}deviation — stops only when the plan deviates/);
+  assert.match(
+    frame,
+    /Mode {2}deviation — self-checks ordinary gates and stops only on a deviation/,
+  );
   // The cursor is on approve, one jump away, and the items are another.
   assert.match(drive(["a"]).render().join("\n"), /▸ Approve and start the run/);
   const items = drive(["t"], { width: 160 }).render().join("\n");
@@ -401,19 +444,33 @@ test("m takes the mode row and the arrows cycle it", () => {
   assert.equal(drive(["m", "\r"]).page.mode, "straight");
 });
 
-test("r edits the run model as text, leaving validation to resolveSettings", () => {
+test("r edits the run model as text, and an empty edit keeps the value", () => {
   const typed = drive(["r", "\r", ..."vm/frontier".split(""), "\r"]);
   assert.equal(typed.page.settings.run.target, "vm/frontier");
   assert.deepEqual(typed.results, [], "committing a model must not end the page");
 
-  const invalid = drive(["r", "\r", ..."frontier".split(""), "\r"]);
-  assert.equal(invalid.page.settings.run.target, "frontier");
-  assert.deepEqual(invalid.results, [], "an invalid model left the page");
+  // Enter twice opens the field and submits it empty: the value stays.
+  const twice = drive(["r", "\r", "\r"]);
+  assert.equal(twice.page.settings.run.target, "vm/deep");
+  // f is the final reviewer; up past the gate reviewer and the items' level is the deep role.
+  const deep = drive(["f", "k", "k", "k", "\r", "\r"]);
+  assert.equal(deep.page.settings.items.deep, "builder-deep");
 
   // Escape in the field drops the edit and leaves the page open.
   const dropped = drive(["r", "\r", ..."vm/flash".split(""), "\u001b"]);
   assert.equal(dropped.page.settings.run.target, "vm/deep");
   assert.deepEqual(dropped.results, []);
+});
+
+test("a refused value keeps the page open on approve and says which", () => {
+  const invalid = drive(["r", "\r", ..."frontier".split(""), "\r", "a", "\r"]);
+  assert.deepEqual(invalid.results, [], "an invalid model approved the page");
+  assert.match(invalid.render().join("\n"), /run\.model = "frontier"/);
+  // Fixing it lets the same keys approve.
+  for (const key of ["r", "\r", ..."vm/flash".split(""), "\r", "a", "\r"])
+    invalid.overlay.handleInput(key);
+  const after: Drawn[] = invalid.results;
+  assert.equal(after[0]?.kind, "approve");
 });
 
 test("f edits the final reviewer role and its thinking row cycles", () => {
@@ -502,4 +559,63 @@ test("the overlay approves a page it opened with, editing nothing else", () => {
   });
   assert.equal(answered.results[0].kind, "back");
   assert.equal(answered.results[0].page.answers.Q1, "kept");
+});
+
+/** A terminal host whose overlay takes these keys, as pi's `custom` would hand them over. */
+const tuiCtx = (keys: string[], notes: string[] = []) =>
+  ({
+    mode: "tui",
+    ui: {
+      notify: (text: string) => notes.push(text),
+      select: async () => undefined,
+      input: async () => undefined,
+      custom: <T>(
+        factory: (
+          tui: unknown,
+          theme: Theme,
+          keybindings: unknown,
+          done: (result: T) => void,
+        ) => ApprovalOverlay,
+      ) =>
+        new Promise<T>((resolve) => {
+          const overlay = factory(
+            { terminal: { rows: 40 }, requestRender: () => undefined },
+            theme,
+            undefined,
+            resolve,
+          );
+          overlay.render(120);
+          for (const key of keys) overlay.handleInput(key);
+        }),
+    },
+  }) as unknown as ExtensionCommandContext;
+
+test("an approved page with one edit writes exactly that key to FLOW.json", async () => {
+  const dir = scratch();
+  const pi = { getSettings: () => ({}) } as unknown as ExtensionAPI;
+  const keys = ["f", "\r", ..."reviewer".split(""), "\r", "a", "\r"];
+  const result = await approve(pi, tuiCtx(keys), flow({ planDir: dir }), handoff, verdict);
+  assert.equal(result.kind, "approve");
+  const written = JSON.parse(readFileSync(join(dir, "FLOW.json"), "utf8"));
+  assert.deepEqual(written.settings, { ...flow().settings, finalReview: { role: "reviewer" } });
+});
+
+test("a send-back writes no settings to FLOW.json", async () => {
+  const dir = scratch();
+  const pi = { getSettings: () => ({}) } as unknown as ExtensionAPI;
+  const keys = ["f", "\r", ..."reviewer".split(""), "\r", "m", "\u001b[C"];
+  const back = [...keys, "s", "\r", ..."split A1".split(""), "\r"];
+  const result = await approve(pi, tuiCtx(back), flow({ planDir: dir }), handoff, verdict);
+  assert.deepEqual(result, { kind: "back", note: "split A1" });
+  assert.equal(existsSync(join(dir, "FLOW.json")), false, "a send-back wrote FLOW.json");
+
+  const cancelled = await approve(
+    pi,
+    tuiCtx([...keys, "\u001b"]),
+    flow({ planDir: dir }),
+    handoff,
+    verdict,
+  );
+  assert.deepEqual(cancelled, { kind: "cancel" });
+  assert.equal(existsSync(join(dir, "FLOW.json")), false, "a cancel wrote FLOW.json");
 });

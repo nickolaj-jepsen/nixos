@@ -49,16 +49,22 @@ import {
   readFlow,
   readText,
   recordOf,
+  reportLine,
   settingsOf,
   transitionOf,
   writeFlow,
 } from "./state.ts";
-import { type Runtime, settingsFor, statusOf } from "./tools.ts";
+import { type Runtime, statusOf } from "./tools.ts";
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** A flow's slug is also its branch, so git itself has the final word on its syntax. */
-const validSlug = (slug: string): boolean => {
+/**
+ * A flow's slug names its plan directory and its branch: letters, digits, dot,
+ * dash and underscore only (no `/`, which would nest the plan directory), in a
+ * form git also accepts as a branch name (no leading dot, no `..`, no `.lock`).
+ */
+export const validSlug = (slug: string): boolean => {
+  if (!/^[A-Za-z0-9._-]+$/.test(slug)) return false;
   try {
     execFileSync("git", ["check-ref-format", "--branch", slug], { stdio: "ignore" });
     return true;
@@ -169,7 +175,7 @@ const showStatus = (deps: Deps, here: ReturnType<typeof flowOf>): void => {
 const start = async (deps: Deps, here: ReturnType<typeof flowOf>, slug: string): Promise<void> => {
   if (!validSlug(slug)) {
     deps.ctx.ui.notify(
-      `flow: "${slug}" cannot be a branch name. Use letters, digits, dot, dash or underscore.`,
+      `flow: "${slug}" is not a usable slug. Use letters, digits, dot, dash or underscore, in a form git accepts as a branch name (no leading dot or dash, no "..", no ".lock" ending).`,
       "error",
     );
     return;
@@ -233,8 +239,13 @@ const start = async (deps: Deps, here: ReturnType<typeof flowOf>, slug: string):
   footer(deps.ctx, flow);
   // The brief keeps this session and this model (D5, U3). A turn the owner
   // started is idle here, so this begins one.
-  deps.pi.sendUserMessage(kickoff, { expandPromptTemplates: true });
-  writeFlow(markKickoffSent(flow, "brief"));
+  await deliverKickoff(
+    (text, options) => deps.pi.sendUserMessage(text, options),
+    planDir,
+    "brief",
+    kickoff,
+    (text, kind) => deps.ctx.ui.notify(text, kind),
+  );
 };
 
 // ── advancing ───────────────────────────────────────────────────────────────
@@ -316,17 +327,29 @@ export type PlanPick = { quick: boolean; model: string; thinking: Level };
 
 /**
  * The `brief → plan` picker: the judge's suggestion first, the other plan stage
- * beside it, and an edit path for both fields. The first entry is what Enter
- * takes, so confirming the judge is one key (D4).
+ * beside it, and an edit path for the suggested stage's model and level. The
+ * first entry is what Enter takes, so confirming the judge is one key (D4).
  */
 export const pickPlanStep = async (
   deps: Deps,
-  _settings: ResolvedSettings,
+  settings: ResolvedSettings,
   verdict: JudgeBriefVerdict,
 ): Promise<PlanPick | undefined> => {
-  const full: PlanPick = { quick: false, model: verdict.model, thinking: verdict.thinking };
-  const quick: PlanPick = { ...full, quick: true };
-  const order = verdict.plan === "quick" ? [quick, full] : [full, quick];
+  // Only the stage the judge chose takes the verdict's model and level; the
+  // other keeps its own row, so quick never runs on the deep planner and full
+  // never on flash by accident (D5's plan/planQuick rows, U2).
+  const own = (quick: boolean): PlanPick => {
+    const row = settings[quick ? "planQuick" : "plan"];
+    const fallback = DEFAULT_SETTINGS[quick ? "planQuick" : "plan"];
+    return {
+      quick,
+      model: row.model ?? fallback.model ?? "",
+      thinking: row.thinking ?? fallback.thinking ?? "high",
+    };
+  };
+  const judged = verdict.plan === "quick";
+  const suggested: PlanPick = { quick: judged, model: verdict.model, thinking: verdict.thinking };
+  const order = [suggested, own(!judged)];
   const edit = "edit the model and level…";
   const label = (pick: PlanPick) =>
     `${pick.quick ? "quick" : "full"} — ${pick.model} · ${pick.thinking}`;
@@ -341,7 +364,7 @@ export const pickPlanStep = async (
     const index = options.indexOf(choice);
     return index >= 0 && index < order.length ? order[index] : undefined;
   }
-  const model = await deps.ctx.ui.input("Plan model, as provider/model", full.model);
+  const model = await deps.ctx.ui.input("Plan model, as provider/model", suggested.model);
   if (model === undefined) return undefined;
   const thinking = await deps.ctx.ui.select("Plan thinking level", [...LEVELS]);
   if (thinking === undefined) return undefined;
@@ -349,7 +372,7 @@ export const pickPlanStep = async (
     deps.ctx.ui.notify(`flow: "${model}" and "${thinking}" are not a model and a level.`, "error");
     return undefined;
   }
-  return { quick: false, model, thinking };
+  return { quick: suggested.quick, model, thinking };
 };
 
 /**
@@ -381,13 +404,21 @@ const planToRun = async (deps: Deps, flow: Flow): Promise<void> => {
   const { settings, reports } = settingsOf(leafOf(deps.pi), flow);
   report(deps, reports);
   const verdict = await deps.judgeHandoff(deps.pi, deps.ctx, parsed.handoff, settings);
-  const judged = judge(applyVerdict(flow, verdict, settings), "handoff", verdict, settings);
-  // The page reads and rewrites FLOW.json (settings, mode) and HANDOFF.md (tiers).
+  const judged = judge(flow, "handoff", verdict, settings);
+  // Only the verdict's record goes to disk now. Its settings are the page's
+  // defaults in memory, and the page writes them only on approval, so after a
+  // send-back the next judge's suggestions are not mistaken for the owner's.
   writeFlow(judged);
 
   let approval: Approval;
   try {
-    approval = await deps.approve(deps.pi, deps.ctx, judged, parsed.handoff, verdict);
+    approval = await deps.approve(
+      deps.pi,
+      deps.ctx,
+      applyVerdict(judged, verdict, settings),
+      parsed.handoff,
+      verdict,
+    );
   } catch (error) {
     deps.ctx.ui.notify(`flow: the approval page failed: ${message(error)}`, "error");
     return;
@@ -437,7 +468,9 @@ const guideToDone = async (deps: Deps, flow: Flow): Promise<void> => {
 /** Resolve the target step's one settings row, then start its session. */
 const beginResolvedStep = async (deps: Deps, flow: Flow, step: Step): Promise<void> => {
   const key = settingKeyFor(step, flow.quick);
-  const setting = key ? settingsFor(leafOf(deps.pi), flow)[key] : undefined;
+  const { settings, reports } = settingsOf(leafOf(deps.pi), flow);
+  report(deps, reports);
+  const setting = key ? settings[key] : undefined;
   const fallback = key ? DEFAULT_SETTINGS[key] : undefined;
   await beginStep(
     deps,
@@ -495,10 +528,13 @@ const beginStep = async (
           const current = readFlow(next.planDir);
           // Still pending means `session_start` refused the model and said so.
           if (current.kind !== "ok" || current.flow.pending) return;
-          await replaced.sendUserMessage(text, { expandPromptTemplates: true });
-          const sent = readFlow(next.planDir);
-          if (sent.kind !== "ok") throw new Error("FLOW.json changed while the kickoff was sent");
-          writeFlow(markKickoffSent(sent.flow, step));
+          await deliverKickoff(
+            (message, options) => replaced.sendUserMessage(message, options),
+            next.planDir,
+            step,
+            text,
+            (message, kind) => replaced.ui.notify(message, kind),
+          );
         } catch (error) {
           replaced.ui.notify(
             `flow: the ${step} kickoff failed: ${message(error)}. /flow resume retries the step.`,
@@ -659,14 +695,18 @@ const resume = async (
   const kickoff =
     record.kickoffSent === true ? undefined : kickoffFor(flow.step, flow.planDir, flow.quick);
   footer(deps.ctx, flow);
+  const { planDir, slug: name, step } = flow;
   try {
     if (record.session === deps.ctx.sessionManager.getSessionFile()) {
       if (kickoff) {
-        await deps.pi.sendUserMessage(kickoff, { expandPromptTemplates: true });
-        const sent = readFlow(flow.planDir);
-        if (sent.kind !== "ok") throw new Error("FLOW.json changed while the kickoff was sent");
-        writeFlow(markKickoffSent(sent.flow, flow.step));
-        deps.ctx.ui.notify(`flow ${flow.slug}: resent the ${flow.step} kickoff.`, "info");
+        const sent = await deliverKickoff(
+          (text, options) => deps.pi.sendUserMessage(text, options),
+          planDir,
+          step,
+          kickoff,
+          (text, kind) => deps.ctx.ui.notify(text, kind),
+        );
+        if (sent) deps.ctx.ui.notify(`flow ${name}: resent the ${step} kickoff.`, "info");
       } else {
         deps.ctx.ui.notify(
           `This is already the ${flow.step} step. /flow next advances it.`,
@@ -677,13 +717,22 @@ const resume = async (
     }
     await deps.ctx.switchSession(record.session, {
       withSession: async (replaced) => {
-        if (kickoff) {
-          await replaced.sendUserMessage(kickoff, { expandPromptTemplates: true });
-          const sent = readFlow(flow?.planDir ?? "");
-          if (sent.kind !== "ok") throw new Error("FLOW.json changed while the kickoff was sent");
-          writeFlow(markKickoffSent(sent.flow, flow?.step ?? record.step));
+        // A throw in here takes pi down with it (notes/testing.md §3): catch it all.
+        try {
+          if (kickoff) {
+            const sent = await deliverKickoff(
+              (text, options) => replaced.sendUserMessage(text, options),
+              planDir,
+              step,
+              kickoff,
+              (text, kind) => replaced.ui.notify(text, kind),
+            );
+            if (!sent) return;
+          }
+          replaced.ui.notify(`flow ${name}: resumed the ${step} step.`, "info");
+        } catch (error) {
+          replaced.ui.notify(`flow: resuming the ${step} step failed: ${message(error)}`, "error");
         }
-        replaced.ui.notify(`flow ${flow?.slug}: resumed the ${flow?.step} step.`, "info");
       },
     });
   } catch (error) {
@@ -762,6 +811,47 @@ const leafOf = (pi: ExtensionAPI): unknown =>
 
 const lastSession = (flow: Flow): string | undefined => flow.steps[flow.steps.length - 1]?.session;
 
+type Notify = (text: string, kind: "info" | "warning" | "error") => void;
+type Send = (text: string, options: { expandPromptTemplates: boolean }) => unknown;
+
+/**
+ * Sends a step's kickoff, then marks it delivered in FLOW.json. Never throws: a
+ * failed send leaves the marker unset, so `/flow resume` sends it again, and
+ * either failure is reported through `notify`. Returns whether it was marked.
+ */
+const deliverKickoff = async (
+  send: Send,
+  planDir: string,
+  step: Step,
+  kickoff: string,
+  notify: Notify,
+): Promise<boolean> => {
+  try {
+    // A send that returns is the only evidence pi offers: `pi.sendUserMessage`
+    // returns void and reports a later failure through the session, with no
+    // delivery signal, so the marker can still be set for a turn that failed.
+    await send(kickoff, { expandPromptTemplates: true });
+  } catch (error) {
+    notify(
+      `flow: the ${step} kickoff failed: ${message(error)}. /flow resume retries it.`,
+      "error",
+    );
+    return false;
+  }
+  try {
+    const sent = readFlow(planDir);
+    if (sent.kind !== "ok") throw new Error("FLOW.json changed while the kickoff was sent");
+    writeFlow(markKickoffSent(sent.flow, step));
+    return true;
+  } catch (error) {
+    notify(
+      `flow: the ${step} kickoff was sent, but FLOW.json could not record it (${message(error)}); /flow resume would send it again.`,
+      "warning",
+    );
+    return false;
+  }
+};
+
 /** Mark the current step's kickoff as delivered without disturbing its other fields. */
 const markKickoffSent = (flow: Flow, step: Step): Flow => {
   const record = recordOf(flow, step);
@@ -779,9 +869,9 @@ const spend = (deps: Deps): number => {
   }
 };
 
+/** The closed steps' spend; a judge's call is already in its step's ledger, so it is not added again. */
 const recordedCost = (flow: Flow): number =>
-  flow.steps.reduce((sum, record) => sum + (record.cost ?? 0), 0) +
-  flow.judge.reduce((sum, entry) => sum + entry.cost, 0);
+  flow.steps.reduce((sum, record) => sum + (record.cost ?? 0), 0);
 
 /** The judge's verdict, with its cost, kept next to the step's own (D6). */
 const judge = (
@@ -827,11 +917,8 @@ const applyVerdict = (
 /** An invalid settings value falls back to the layer below and is reported, never thrown (C2). */
 const report = (deps: Deps, reports: SettingReport[]): void => {
   if (reports.length === 0) return;
-  const lines = reports.map(
-    (entry) => `${entry.key}.${entry.field} = ${JSON.stringify(entry.value)}: ${entry.reason}`,
-  );
   deps.ctx.ui.notify(
-    `flow: ${reports.length} setting${reports.length === 1 ? "" : "s"} refused, the defaults stand:\n${lines.join("\n")}`,
+    `flow: ${reports.length} setting${reports.length === 1 ? "" : "s"} refused, the defaults stand:\n${reports.map(reportLine).join("\n")}`,
     "warning",
   );
 };

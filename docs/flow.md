@@ -56,8 +56,9 @@ step needs the owner's word first, `flow_next` opens that question:
 ## Commands
 
 - `/flow <slug>` starts a flow in this session and sends the brief skill at it.
-  The slug names the plan directory and the integration branch. Without a slug,
-  pi asks for one.
+  The slug names the plan directory and the integration branch: letters,
+  digits, dot, dash and underscore, in a form git accepts as a branch name.
+  Without a slug, pi asks for one.
 - `/flow` shows the status: steps and their sessions, models, spend per step,
   mode, budget, and PROGRESS.md's "Blocked on you" section when it has one.
 - `/flow resume [slug]` reopens the recorded session of the current step, or
@@ -137,12 +138,14 @@ version and its not-building list, the item graph with blockers, the files each
 item owns, gates, stops and the budget, and flags every acceptance marked
 `(unverified)`.
 
-Editable on the page: the mode, the run step's model and thinking level, each
-item's tier, and answers to open questions. Answers are appended under
-`## Amendments`, dated and marked as the owner's. Approving starts the run;
-sending back returns the note to the plan session; cancelling leaves the flow at
-its plan step. Outside the TUI it writes `APPROVAL.md` and asks with
-`ctx.ui.select`.
+Editable on the page: the mode, each step's model or role and its thinking
+level (the gate reviewer's role locks its level), each item's tier, and answers
+to open questions. Answers are appended under `## Amendments`, dated and marked
+as the owner's. Only the settings the owner changed reach `FLOW.json`, and only
+on approval. A value the settings check refuses keeps the page open and names
+the value. Approving starts the run; sending back returns the note to the plan
+session; cancelling leaves the flow at its plan step. Outside the TUI it writes
+`APPROVAL.md` and asks with `ctx.ui.select`.
 
 ## The handoff
 

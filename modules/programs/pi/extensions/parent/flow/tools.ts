@@ -16,7 +16,7 @@ import {
   type Step,
   type ResolvedSettings,
 } from "./contracts.ts";
-import { budgetOf, diffLines, flowOf, settingsOf, transitionOf, writeFlow } from "./state.ts";
+import { budgetOf, diffLines, flowOf, transitionOf, writeFlow } from "./state.ts";
 
 /**
  * A step whose advance is in flight. `flow_next` sets it so a second call in
@@ -89,20 +89,19 @@ export const nextTool = (deps: ToolDeps, ctx: ExtensionContext, note?: string): 
         break;
       }
     }
-    if (index < 0)
-      return {
-        text: `flow_next refused: the ${flow.step} step has no open record for its note.`,
-        isError: true,
-      };
-    const steps = flow.steps.slice();
-    steps[index] = { ...steps[index], note };
-    try {
-      writeFlow({ ...flow, steps });
-    } catch (error) {
-      return {
-        text: `flow_next refused: FLOW.json could not be written: ${message(error)}`,
-        isError: true,
-      };
+    // A step with no record (a brief started in an unsaved session) still
+    // advances: its note is only in this answer, with nowhere to keep it.
+    if (index >= 0) {
+      const steps = flow.steps.slice();
+      steps[index] = { ...steps[index], note };
+      try {
+        writeFlow({ ...flow, steps });
+      } catch (error) {
+        return {
+          text: `flow_next refused: FLOW.json could not be written: ${message(error)}`,
+          isError: true,
+        };
+      }
     }
   }
   deps.runtime.advancing = here;
@@ -116,7 +115,7 @@ export const nextTool = (deps: ToolDeps, ctx: ExtensionContext, note?: string): 
 /**
  * What `flow_status` answers: where the flow is, the settings resolved for it,
  * and the budget, whose caps come from the handoff and whose spend is what the
- * steps and the judges have cost so far.
+ * steps' session ledgers (judge calls included) have cost so far.
  */
 export const statusOf = (
   deps: ToolDeps,
@@ -127,12 +126,13 @@ export const statusOf = (
   const record = flow.steps[flow.steps.length - 1];
   const live = record && record.step === flow.step && record.endedAt === undefined;
   const spentStep = live ? spent(deps, ctx) : (recordCost(flow, flow.step) ?? 0);
-  const judges = flow.judge.reduce((sum, entry) => sum + entry.cost, 0);
+  // A judge's call is billed to the ledger of the step it ran in, so the step
+  // costs already hold it; `flow.judge` keeps its cost for display only.
   const ended = flow.steps.reduce((sum, entry) => sum + (entry.cost ?? 0), 0);
   const budget: FlowBudget = {
     ...budgetOf(flow.planDir),
     spentStep,
-    spentTotal: ended + judges + (live ? spentStep : 0),
+    spentTotal: ended + (live ? spentStep : 0),
     lines: diffLines(flow.repoMain, flow.base, flow.branch),
   };
   return {
@@ -158,7 +158,3 @@ const recordCost = (flow: Flow, step: Step): number | undefined => {
   }
   return undefined;
 };
-
-/** The settings `flow_status` reports, from the leaf's `flow` key and the flow's own. */
-export const settingsFor = (leafFlowSetting: unknown, flow: Flow): ResolvedSettings =>
-  settingsOf(leafFlowSetting, flow).settings;

@@ -106,6 +106,19 @@ test("flow_next stores and returns its note without closing the step", () => {
   assert.equal(status.budget.spentStep, 0.25);
 });
 
+test("flow_next takes a note when the step has no record to keep it on", () => {
+  const dir = scratch();
+  // A brief started in an unsaved session has no step record.
+  writeFlow(demo(dir, { steps: [] }));
+  const runtime = createRuntime();
+  const outcome = nextTool(deps({ runtime }), ctxOf(dir), "Two decisions, one open question.");
+  assert.equal(outcome.isError ?? false, false, outcome.text);
+  assert.match(outcome.text, /Note: Two decisions, one open question\./);
+  assert.deepEqual(runtime.request, { planDir: dir, step: "brief" });
+  const read = readFlow(dir);
+  assert.deepEqual(read.kind === "ok" ? read.flow.steps : "read", []);
+});
+
 test("a second flow_next in the same step is a no-op", () => {
   const dir = scratch();
   writeFlow(demo(dir));
@@ -179,7 +192,7 @@ test("flow_status's caps come from the handoff and its lines from the branch", (
   assert.equal(status.repoMain, dir);
 });
 
-test("flow_status sums the finished steps and the judges, and prices the live one", () => {
+test("flow_status counts each ledger once: a judge's cost is already in its step's", () => {
   const dir = scratch();
   const flow = demo(dir, {
     step: "plan",
@@ -205,7 +218,8 @@ test("flow_status sums the finished steps and the judges, and prices the live on
   });
   const status = statusOf(deps({ cost: () => 0.25 }), ctxOf(dir), flow, DEFAULT_SETTINGS);
   assert.equal(status.budget.spentStep, 0.25);
-  assert.equal(status.budget.spentTotal, 0.5 + 0.125 + 0.25);
+  // The judge ran in the brief session, so the brief's $0.5 already holds its $0.125.
+  assert.equal(status.budget.spentTotal, 0.5 + 0.25);
   assert.equal(status.step, "plan");
   assert.equal(status.mode, undefined);
 });

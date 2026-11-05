@@ -114,7 +114,8 @@ jq -e '.step == "run"' <<<"$state" >/dev/null || fail "the flow did not move to 
 jq -e '.mode == "deviation"' <<<"$state" >/dev/null || fail "the page's mode was not written"
 jq -e '.settings.run == {"model": "fixture/deep", "thinking": "low"}' <<<"$state" >/dev/null ||
   fail "the page's run settings were not written"
-jq -e '.settings.finalReview == {"role": "reviewer", "thinking": "high"}' <<<"$state" >/dev/null ||
+# Only the field the owner changed: the default thinking level is not frozen as theirs.
+jq -e '.settings.finalReview == {"role": "reviewer"}' <<<"$state" >/dev/null ||
   fail "the page's final reviewer was not written"
 
 # The run session really ran on the model the page chose.
@@ -172,6 +173,8 @@ scenario_wait 'Revising the plan.' 30
 state2=$(cat "$PLAN2/FLOW.json")
 jq -e '.step == "plan"' <<<"$state2" >/dev/null || fail "a sent-back plan left the plan step"
 jq -e '.pending == null' <<<"$state2" >/dev/null || fail "a sent-back plan queued a run session"
+jq -e '.settings == {} and .mode == null' <<<"$state2" >/dev/null ||
+  fail "a send-back froze the page's settings or mode into FLOW.json"
 grep -rl 'split A1 into the button and its test' "$SCENARIO_SESSIONS"/*.jsonl >/dev/null ||
   fail "the note never reached the plan session"
 

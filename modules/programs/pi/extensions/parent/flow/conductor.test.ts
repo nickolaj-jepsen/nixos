@@ -24,6 +24,7 @@ import {
   sessionStart,
   settled,
   statusText,
+  validSlug,
 } from "./conductor.ts";
 import {
   DEFAULT_SETTINGS,
@@ -49,6 +50,8 @@ type Options = {
   hasRunning?: boolean;
   cost?: number;
   kickoffThrows?: boolean;
+  /** `pi.sendUserMessage` throws, as the same-session send does on a dead provider. */
+  piSendThrows?: boolean;
   judgeBrief?: Deps["judgeBrief"];
   judgeHandoff?: Deps["judgeHandoff"];
   approve?: Deps["approve"];
@@ -90,6 +93,9 @@ const harness = (options: Options = {}) => {
   let level = "low";
   let spawned = 0;
   let kickoffThrows = options.kickoffThrows ?? false;
+  let piSendThrows = options.piSendThrows ?? false;
+  /** What escaped a `withSession`: in pi that is `handleFatalRuntimeError`, which exits. */
+  const fatal: unknown[] = [];
   const answers = [...(options.select ?? [])];
   const typed = [...(options.input ?? [])];
 
@@ -153,8 +159,12 @@ const harness = (options: Options = {}) => {
       ) => {
         switches.push(path);
         sessionFile = path;
-        if (init?.withSession)
-          await init.withSession(toolContext(context(path, { planDir: dir, slug: flow.slug })));
+        try {
+          if (init?.withSession)
+            await init.withSession(toolContext(context(path, { planDir: dir, slug: flow.slug })));
+        } catch (error) {
+          fatal.push(error);
+        }
         return { cancelled: false };
       },
       newSession: async (init?: {
@@ -179,7 +189,11 @@ const harness = (options: Options = {}) => {
           reason: "new",
           previousSessionFile: flow.steps[0]?.session,
         });
-        if (init?.withSession) await init.withSession(toolContext(next));
+        try {
+          if (init?.withSession) await init.withSession(toolContext(next));
+        } catch (error) {
+          fatal.push(error);
+        }
         return { cancelled: false };
       },
     }) as unknown as ExtensionCommandContext;
@@ -199,6 +213,7 @@ const harness = (options: Options = {}) => {
     getSettings: () => ({}),
     appendEntry: () => "entry",
     sendUserMessage: (text: string, opts?: { expandPromptTemplates?: boolean }) => {
+      if (piSendThrows) throw new Error("the provider is gone");
       sent.push({ text, expand: opts?.expandPromptTemplates });
     },
     setModel: async (model: Model) => {
@@ -260,8 +275,12 @@ const harness = (options: Options = {}) => {
     selections,
     inputs,
     confirms,
+    fatal,
     setKickoffThrows: (value: boolean) => {
       kickoffThrows = value;
+    },
+    setPiSendThrows: (value: boolean) => {
+      piSendThrows = value;
     },
     read: () => {
       const read = readFlow(dir);
@@ -313,7 +332,8 @@ test("/flow next in the brief writes the ended step and the pending one before t
   assert.equal(after.steps[1].session, join(run.dir, "s1.jsonl"));
   assert.equal(after.steps[1].parentSession, join(run.dir, "s0.jsonl"));
   assert.equal(after.steps[1].kickoffSent, true);
-  assert.equal(run.statuses.at(-1), "flow demo · plan · $0.2600");
+  // The judge's $0.01 is in the brief's ledger, so the brief's $0.25 already holds it.
+  assert.equal(run.statuses.at(-1), "flow demo · plan · $0.2500");
 });
 
 test("the picker offers quick beside the suggestion and edits both fields", async () => {
@@ -342,11 +362,12 @@ test("the picker offers quick beside the suggestion and edits both fields", asyn
   };
   assert.deepEqual(await pickPlanStep(run.deps, settings, verdict), {
     quick: true,
-    model: "fixture/deep",
-    thinking: "high",
+    model: "fixture/replay",
+    thinking: "medium",
   });
   assert.equal(offered.length, 3);
   assert.match(offered[0], /^full — fixture\/deep · high$/);
+  assert.match(offered[1], /^quick — fixture\/replay · medium$/);
   assert.match(offered[2], /edit the model and level/);
 
   // The edit path takes a typed model and a chosen level.
@@ -367,27 +388,57 @@ test("the picker offers quick beside the suggestion and edits both fields", asyn
   assert.match(run.notes.at(-1)?.text ?? "", /not a model and a level/);
 });
 
-test("a quick verdict carries its non-default model and level on both picks", async () => {
+test("the judged stage takes the verdict and the other stage its own settings row", async () => {
   const run = harness();
   const ui = run.deps.ctx.ui as unknown as {
     select: (title: string, list: string[]) => Promise<string | undefined>;
   };
   const offered: string[][] = [];
-  ui.select = async (_title, list) => {
-    offered.push(list);
-    return list[1];
+  const settings: ResolvedSettings = {
+    ...DEFAULT_SETTINGS,
+    plan: { model: "fixture/planner", thinking: "xhigh" },
+    planQuick: { model: "fixture/quick", thinking: "medium" },
   };
-  const picked = await pickPlanStep(run.deps, DEFAULT_SETTINGS, {
+  const pickBoth = async (verdict: JudgeBriefVerdict) => {
+    const picks = [];
+    for (const index of [0, 1]) {
+      ui.select = async (_title, list) => {
+        offered.push(list);
+        return list[index];
+      };
+      picks.push(await pickPlanStep(run.deps, settings, verdict));
+    }
+    return picks;
+  };
+
+  // A quick verdict on a non-default model: quick is the verdict, full is `plan`.
+  const quick = await pickBoth({
     plan: "quick",
     model: "fixture/special",
     thinking: "max",
     reasons: ["plan: one file"],
     cost: 0,
   });
-  assert.deepEqual(picked, { quick: false, model: "fixture/special", thinking: "max" });
+  assert.deepEqual(quick, [
+    { quick: true, model: "fixture/special", thinking: "max" },
+    { quick: false, model: "fixture/planner", thinking: "xhigh" },
+  ]);
   assert.deepEqual(offered[0]?.slice(0, 2), [
     "quick — fixture/special · max",
-    "full — fixture/special · max",
+    "full — fixture/planner · xhigh",
+  ]);
+
+  // A full verdict: full is the verdict, quick is `planQuick`.
+  const full = await pickBoth({
+    plan: "full",
+    model: "fixture/special",
+    thinking: "max",
+    reasons: ["plan: many items"],
+    cost: 0,
+  });
+  assert.deepEqual(full, [
+    { quick: false, model: "fixture/special", thinking: "max" },
+    { quick: true, model: "fixture/quick", thinking: "medium" },
   ]);
 });
 
@@ -424,7 +475,7 @@ test("/flow next at the plan calls the judge, then the page, and starts the run"
   assert.equal(atSwitch.judge[0].cost, 0.02);
 });
 
-test("a changed final reviewer reaches FLOW.json before the approval page", async () => {
+test("a changed final reviewer reaches the page but FLOW.json only on approval", async () => {
   let atPage: Flow | undefined;
   const run = harness({
     flow: { step: "plan" },
@@ -444,7 +495,38 @@ test("a changed final reviewer reaches FLOW.json before the approval page", asyn
   run.handoff();
   await command(run.deps, run.runtime, "next");
   assert.deepEqual(atPage?.settings.finalReview, { role: "reviewer" });
-  assert.deepEqual(run.read().settings.finalReview, { role: "reviewer" });
+  assert.equal(run.read().settings.finalReview, undefined);
+  assert.equal(run.read().mode, undefined);
+  assert.equal(run.read().judge.length, 1);
+});
+
+test("after a send-back the next page opens on the next judge's suggestions", async () => {
+  const pages: Flow[] = [];
+  const verdicts = ["fixture/first", "fixture/second"];
+  const run = harness({
+    flow: { step: "plan" },
+    judgeHandoff: async () => ({
+      mode: "deviation",
+      run: { model: verdicts.shift() ?? "fixture/none", thinking: "low" },
+      tiers: {},
+      finalReview: pages.length === 0 ? "reviewer" : "reviewer-deep",
+      reasons: ["run: as the plan reads"],
+      cost: 0,
+    }),
+    approve: async (_pi, _ctx, flow) => {
+      pages.push(flow);
+      return { kind: "back", note: "split A1" };
+    },
+  });
+  run.handoff();
+  await command(run.deps, run.runtime, "next");
+  await command(run.deps, run.runtime, "next");
+  assert.deepEqual(
+    pages.map((page) => (page.settings.run as { model?: string }).model),
+    ["fixture/first", "fixture/second"],
+  );
+  assert.deepEqual(pages[0].settings.finalReview, { role: "reviewer" });
+  assert.equal(pages[1].settings.finalReview, undefined);
 });
 
 test("a handoff that does not parse is refused and goes back to the planner", async () => {
@@ -513,7 +595,8 @@ test("approval send-back sends its note and keeps the plan's spend live", async 
     DEFAULT_SETTINGS,
   );
   assert.equal(status.budget.spentStep, 0.75);
-  assert.equal(status.budget.spentTotal, 1.27);
+  // The judge's $0.02 is in the plan's live ledger, not added on top.
+  assert.equal(status.budget.spentTotal, 1.25);
 });
 
 test("declining the guide keeps the run open and counts the following turn", async () => {
@@ -631,6 +714,7 @@ test("a throwing kickoff is caught, then resume delivers it", async () => {
   run.brief();
   await assert.doesNotReject(command(run.deps, run.runtime, "next"));
   assert.match(run.notes.at(-1)?.text ?? "", /kickoff failed: the provider is gone/);
+  assert.deepEqual(run.fatal, []);
   // The step is committed; only the kickoff is lost, and its marker is absent.
   assert.equal(run.read().pending, undefined);
   assert.equal(run.read().step, "plan");
@@ -860,9 +944,71 @@ test("a slug git rejects writes no flow and sends no brief", async () => {
     process.env.HOME = was;
   }
   assert.deepEqual(fresh.sent, []);
-  assert.match(fresh.notes.at(-1)?.text ?? "", /cannot be a branch name/);
+  assert.match(fresh.notes.at(-1)?.text ?? "", /not a usable slug/);
   assert.equal(
     existsSync(`${home}/.local/share/agents/${cwd.split("/").at(-1)}/plans/foo..bar/FLOW.json`),
     false,
   );
+});
+
+test("a slug is letters, digits, dot, dash and underscore, in a form git takes", () => {
+  for (const slug of ["export-csv", "v1.2_fix", "A9"]) assert.equal(validSlug(slug), true, slug);
+  for (const slug of ["a/b", "feature/x", "foo..bar", ".hidden", "-x", "x.lock", "a b", "ø"])
+    assert.equal(validSlug(slug), false, slug);
+});
+
+test("a throwing send on a resume into the step's session is reported and keeps pi alive", async () => {
+  const run = harness({
+    kickoffThrows: true,
+    flow: {
+      step: "plan",
+      steps: [
+        {
+          step: "brief",
+          session: "/s/brief.jsonl",
+          model: "m/1",
+          thinking: "low",
+          startedAt: 1,
+          endedAt: 2,
+          cost: 0,
+        },
+        { step: "plan", session: "/s/plan.jsonl", model: "m/1", thinking: "high", startedAt: 3 },
+      ],
+    },
+  });
+  await assert.doesNotReject(command(run.deps, run.runtime, "resume"));
+  assert.deepEqual(run.switches, ["/s/plan.jsonl"]);
+  assert.deepEqual(run.fatal, [], "a throw escaped withSession, which exits pi");
+  assert.match(run.notes.at(-1)?.text ?? "", /plan kickoff failed: the provider is gone/);
+  assert.equal(run.read().steps.at(-1)?.kickoffSent, undefined);
+
+  // A FLOW.json that stops parsing mid-resume is reported the same way.
+  run.setKickoffThrows(false);
+  const ctx = run.deps.ctx as unknown as {
+    switchSession: (path: string, init?: unknown) => Promise<unknown>;
+  };
+  const real = ctx.switchSession;
+  ctx.switchSession = async (path, init) => {
+    writeFileSync(flowPath(run.dir), "{ torn");
+    return real(path, init);
+  };
+  await assert.doesNotReject(command(run.deps, run.runtime, "resume"));
+  assert.deepEqual(run.switches, ["/s/plan.jsonl", "/s/plan.jsonl"]);
+  assert.deepEqual(run.fatal, []);
+  assert.match(run.notes.at(-1)?.text ?? "", /could not record it/);
+});
+
+test("a throwing same-session resend is not marked sent, so the next resume sends it", async () => {
+  const run = harness({ piSendThrows: true });
+  await assert.doesNotReject(command(run.deps, run.runtime, "resume"));
+  assert.deepEqual(run.switches, []);
+  assert.deepEqual(run.sent, []);
+  assert.match(run.notes.at(-1)?.text ?? "", /brief kickoff failed: the provider is gone/);
+  assert.equal(run.read().steps[0]?.kickoffSent, undefined);
+
+  run.setPiSendThrows(false);
+  await command(run.deps, run.runtime, "resume");
+  assert.deepEqual(run.sent, [{ text: `/skill:flow-brief ${run.dir}`, expand: true }]);
+  assert.equal(run.read().steps[0]?.kickoffSent, true);
+  assert.match(run.notes.at(-1)?.text ?? "", /resent the brief kickoff/);
 });

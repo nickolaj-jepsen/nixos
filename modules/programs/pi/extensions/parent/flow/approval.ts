@@ -44,7 +44,7 @@ import {
   type ParsedHandoff,
   type ResolvedSettings,
 } from "./contracts.ts";
-import { readText, settingsOf, writeFlow } from "./state.ts";
+import { readText, reportLine, settingsOf, writeFlow } from "./state.ts";
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -92,6 +92,8 @@ export class ApprovalOverlay implements Component {
   private readonly done: (result: PageResult) => void;
   /** The owner's edits so far; approving applies them. */
   private readonly page: PageState;
+  /** The page as it opened, so approving can tell the owner's edits from the defaults. */
+  private readonly opened: PageState;
   private focus = 0;
   private editing: { row: ApprovalRow; input: Input } | undefined;
   private warning: string | undefined;
@@ -116,6 +118,7 @@ export class ApprovalOverlay implements Component {
     this.theme = theme;
     this.source = source;
     this.page = page;
+    this.opened = structuredClone(page);
     this.done = done;
     const approved = this.rows().findIndex((row) => row.kind === "approve");
     this.focus = approved >= 0 ? approved : 0;
@@ -325,9 +328,17 @@ export class ApprovalOverlay implements Component {
     const row = this.focusedRow();
     if (!row) return;
     switch (row.kind) {
-      case "approve":
+      case "approve": {
+        // A refused value would silently fall back, so the page stays open and says which.
+        const { reports } = applyPage(this.source.flow, this.opened, this.page);
+        if (reports.length > 0) {
+          this.warning = `fix before approving: ${reports.map(reportLine).join("; ")}`;
+          this.viewport.requestRender();
+          return;
+        }
         this.finish({ kind: "approve" });
         return;
+      }
       case "cancel":
         this.finish({ kind: "cancel" });
         return;
@@ -376,10 +387,13 @@ export class ApprovalOverlay implements Component {
         }
         this.finish({ kind: "back", note: value });
         return;
+      // An empty field keeps the value it opened on: a blank target is no setting.
       case "setting":
+        if (value === "") break;
         this.page.settings[row.key].target = value;
         break;
       case "settingDeep":
+        if (value === "") break;
         this.page.settings[row.key].deep = value;
         break;
       case "question":
@@ -427,12 +441,14 @@ const askDialogs = async (ctx: ExtensionCommandContext, page: PageState): Promis
 };
 
 /**
- * C5: show the plan, let the owner change the mode, the run's settings, item
+ * C5: show the plan, let the owner change the mode, the step settings, item
  * tiers and open-question answers, and answer approve, back or cancel. The
- * edits are written before the answer is returned: `FLOW.json`'s mode and run
- * settings, one `Tier:` line per retiered item, and one dated Amendments entry
- * per answer. A write that fails refuses the approval instead of starting a run
- * on something other than what the owner saw.
+ * edits are written before the answer is returned: one `Tier:` line per
+ * retiered item and one dated Amendments entry per answer whatever the answer,
+ * and, only on approval, `FLOW.json`'s mode and the settings fields the owner
+ * changed. A write that fails, or an edited setting `resolveSettings` refuses,
+ * refuses the approval instead of starting a run on something other than what
+ * the owner saw.
  */
 export const approve = async (
   pi: ExtensionAPI,
@@ -444,6 +460,8 @@ export const approve = async (
 ): Promise<Approval> => {
   const settings = settingsOf(leafOf(pi), flow).settings;
   const page = initialPage(flow, handoff, verdict, settings);
+  // The overlay edits `page` in place; this is what it opened on.
+  const opened = structuredClone(page);
   const handoffPath = join(flow.planDir, "HANDOFF.md");
   const handoffText = read(handoffPath);
   // The conductor parsed this file a moment ago; if it is gone now, approving
@@ -508,20 +526,33 @@ export const approve = async (
     ctx.ui.notify(`flow: could not rewrite HANDOFF.md: ${message(error)}`, "error");
     return { kind: "cancel" };
   }
-  const next = applyPage(flow, result.page);
   try {
-    writeFlow(next);
     // Rewritten with the edits, so the plan directory records what was decided.
     writeFileSync(
       join(flow.planDir, "APPROVAL.md"),
       approvalMarkdown(approvalBlocks(flow, handoff, result.page, settings)),
     );
   } catch (error) {
+    ctx.ui.notify(`flow: could not write APPROVAL.md: ${message(error)}`, "warning");
+  }
+  // Settings and mode land only on approval: after a send-back or a cancel the
+  // next page opens on the next judge's suggestions, not on this page's.
+  if (result.kind === "back") return { kind: "back", note: result.note };
+  if (result.kind === "cancel") return { kind: "cancel" };
+
+  const applied = applyPage(flow, opened, result.page);
+  if (applied.reports.length > 0) {
+    ctx.ui.notify(
+      `flow: the page's settings were refused, so nothing was approved:\n${applied.reports.map(reportLine).join("\n")}`,
+      "error",
+    );
+    return { kind: "cancel" };
+  }
+  try {
+    writeFlow(applied.flow);
+  } catch (error) {
     ctx.ui.notify(`flow: could not write FLOW.json: ${message(error)}`, "error");
     return { kind: "cancel" };
   }
-
-  if (result.kind === "approve") return { kind: "approve", flow: next };
-  if (result.kind === "back") return { kind: "back", note: result.note };
-  return { kind: "cancel" };
+  return { kind: "approve", flow: applied.flow };
 };

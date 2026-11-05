@@ -121,6 +121,10 @@ export const settingsOf = (
 ): { settings: ResolvedSettings; reports: SettingReport[] } =>
   resolveSettings(DEFAULT_SETTINGS, leafFlowSetting, flow.settings);
 
+/** One refused settings field as the owner reads it: `key.field = value: reason`. */
+export const reportLine = (entry: SettingReport): string =>
+  `${entry.key}.${entry.field} = ${JSON.stringify(entry.value)}: ${entry.reason}`;
+
 /** The handoff's `## Budget` caps, or zeros while HANDOFF.md is missing or unparsable (C3). */
 export const budgetOf = (planDir: string): { costCap: number; linesCap: number } => {
   const text = readText(join(planDir, "HANDOFF.md"));

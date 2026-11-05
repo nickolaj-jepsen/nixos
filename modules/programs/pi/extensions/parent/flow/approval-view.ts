@@ -8,17 +8,21 @@
  */
 import {
   budgetCaps,
+  DEFAULT_SETTINGS,
   type Flow,
+  isModelRef,
   type JudgeHandoffVerdict,
   type Level,
   type Mode,
   MODES,
   type ParsedHandoff,
   type ResolvedSettings,
+  resolveSettings,
   ROLE_KEYS,
   SESSION_KEYS,
   SETTING_KEYS,
   type SettingKey,
+  type SettingReport,
   type Tier,
 } from "./contracts.ts";
 
@@ -52,12 +56,19 @@ export type ApprovalBlock =
   | { kind: "title" | "heading" | "text" | "bullet"; text: string }
   | { kind: "row"; row: ApprovalRow; label: string; value: string };
 
-/** D14's three modes, as the page explains the chosen one. */
+/** D14's three modes, as the page explains the chosen one; `flow-run` holds the rules. */
 const MODE_MEANING: Record<Mode, string> = {
-  gated: "stops at every gate",
-  deviation: "stops only when the plan deviates",
-  straight: "never stops before the final report",
+  gated: "stops at every gate and on every deviation",
+  deviation: "self-checks ordinary gates and stops only on a deviation",
+  straight: "logs deviations and continues to the final report",
 };
+
+/** What no mode changes, said once beside the modes. */
+const EVERY_MODE =
+  "A mode governs gates and deviations; the plan's ## Stops and flow-run's safety stops apply in every mode.";
+
+/** A key whose default sets no thinking level is one whose role locks it (D5's `gateReview`). */
+const thinkingLocked = (key: SettingKey): boolean => DEFAULT_SETTINGS[key].thinking === undefined;
 
 /**
  * The page as it opens: the judge's suggestions, unless the flow or the owner
@@ -87,29 +98,58 @@ export const initialPage = (
   answers: {},
 });
 
-/** The flow after the page's edits: its mode and every step setting (D13). */
-export const applyPage = (flow: Flow, page: PageState): Flow => ({
-  ...flow,
-  mode: page.mode,
-  settings: {
-    ...flow.settings,
-    ...Object.fromEntries(
-      SETTING_KEYS.map((key) => {
-        const setting = page.settings[key];
-        return [
-          key,
-          {
-            ...((SESSION_KEYS as readonly string[]).includes(key)
-              ? { model: setting.target }
-              : { role: setting.target }),
-            ...(key === "items" ? { deep: setting.deep ?? "" } : {}),
-            ...(setting.thinking === undefined ? {} : { thinking: setting.thinking }),
-          },
-        ];
-      }),
-    ),
-  },
-});
+/**
+ * The settings fields the owner changed on the page, in `FLOW.json.settings`'
+ * shape: a session key's target is a model, a role key's target a role unless
+ * it reads as `provider/model`. A field left as the page opened is not here, so
+ * a default or a suggestion the owner never touched is not frozen as theirs.
+ */
+export const pageEdits = (
+  opened: PageState,
+  page: PageState,
+): Partial<Record<SettingKey, Record<string, string>>> => {
+  const edits: Partial<Record<SettingKey, Record<string, string>>> = {};
+  for (const key of SETTING_KEYS) {
+    const before = opened.settings[key];
+    const after = page.settings[key];
+    const edit: Record<string, string> = {};
+    if (after.target !== before.target) {
+      const asModel = (SESSION_KEYS as readonly string[]).includes(key) || isModelRef(after.target);
+      edit[asModel ? "model" : "role"] = after.target;
+    }
+    if (after.deep !== undefined && after.deep !== before.deep) edit.deep = after.deep;
+    if (after.thinking !== undefined && after.thinking !== before.thinking)
+      edit.thinking = after.thinking;
+    if (Object.keys(edit).length > 0) edits[key] = edit;
+  }
+  return edits;
+};
+
+/**
+ * The flow after the page's edits (D13): the page's mode, and only the settings
+ * fields the owner changed, laid over what the flow already holds. `reports`
+ * names every edited value `resolveSettings` would refuse; a page with any
+ * must not be approved, since the refused value would silently fall back.
+ */
+export const applyPage = (
+  flow: Flow,
+  opened: PageState,
+  page: PageState,
+): { flow: Flow; reports: SettingReport[] } => {
+  const edits = pageEdits(opened, page);
+  const reports = resolveSettings(DEFAULT_SETTINGS, undefined, edits).reports;
+  const settings: Record<string, unknown> = { ...flow.settings };
+  for (const [key, edit] of Object.entries(edits)) {
+    const held = settings[key];
+    const below: Record<string, unknown> =
+      typeof held === "object" && held !== null && !Array.isArray(held) ? { ...held } : {};
+    // A step has one target; leaving the other field would let it win (C2).
+    if ("model" in edit) delete below.role;
+    if ("role" in edit) delete below.model;
+    settings[key] = { ...below, ...edit };
+  }
+  return { flow: { ...flow, mode: page.mode, settings }, reports };
+};
 
 /** One item's `Tier:` line and the tier it should read after the page. */
 export type TierEdit = { line: number; tier: Tier };
@@ -222,9 +262,9 @@ export const approvalBlocks = (
     },
     {
       kind: "text",
-      text: `the other stops are D14's: ${MODES.filter((mode) => mode !== page.mode)
+      text: `The other modes: ${MODES.filter((mode) => mode !== page.mode)
         .map((mode) => `${mode} ${MODE_MEANING[mode]}`)
-        .join("; ")}`,
+        .join("; ")}. ${EVERY_MODE}`,
     },
     ...SETTING_KEYS.flatMap((key): ApprovalBlock[] => {
       const name = (
@@ -256,12 +296,13 @@ export const approvalBlocks = (
           label: "Items deep role",
           value: setting.deep ?? "",
         });
-      rows.push({
-        kind: "row",
-        row: { kind: "settingThinking", key },
-        label: `${name} thinking`,
-        value: setting.thinking ?? "role default",
-      });
+      if (!thinkingLocked(key))
+        rows.push({
+          kind: "row",
+          row: { kind: "settingThinking", key },
+          label: `${name} thinking`,
+          value: setting.thinking ?? "role default",
+        });
       return rows;
     }),
     { kind: "heading", text: "Work items" },
