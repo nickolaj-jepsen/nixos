@@ -26,7 +26,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Worktrees live in <root>/<repo>/<name> (root: WT_WORKTREE_ROOT, default ~/worktrees).\n"
             "\n"
             "  wt new <name>     start work, or reopen a closed worktree as it was left\n"
-            "  wt land [name]    put it in <default>, locally or through a PR, then close it\n"
+            "  wt land [name]    put it in <default>, locally or through a PR, then close it;\n"
+            "                    from the primary checkout, push <default> or land its branch\n"
             "  wt close [name]   commit what is uncommitted as a wip commit, remove the folder,\n"
             "                    and delete the branch once its work is in <default>\n"
             "\n"
@@ -54,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     land = _verb(
         sub,
         "land",
-        "Land a worktree in the default branch, then close it",
+        "Land a worktree, or the primary checkout, in the default branch",
         "Rebase a worktree onto <default>, fast-forward <default> onto it, then close the worktree.",
         "Commit first: land refuses uncommitted changes and a wip commit at the tip. When the\n"
         "checkout holding <default> has uncommitted changes, landing leaves them alone and refuses\n"
@@ -73,9 +74,23 @@ def build_parser() -> argparse.ArgumentParser:
         "on, never forced. Without --title/--body-file, gh fills both from the commits. A worktree\n"
         "holding a gh stack submits the whole stack (gh stack submit), and --green merges it with\n"
         "gh stack merge once every layer's checks pass. The worktree closes afterwards; its branch\n"
-        "stays until the PR merges, and the next `wt close` anywhere in the repo deletes it then.",
+        "stays until the PR merges, and the next `wt close` anywhere in the repo deletes it then.\n"
+        "\n"
+        "From the primary checkout (`.` there, or the branch it has checked out), uncommitted\n"
+        "changes are left alone unless a step would overwrite one, and a live process there is\n"
+        "named whenever its branch or files change:\n"
+        "  on <default>  push it to origin, fast-forward only. When origin/<default> is ahead this\n"
+        "                refuses unless --rebase, which rebases <default> onto it first (uncommitted\n"
+        "                changes autostashed). --draft/--pr/--green need --branch <name>: the\n"
+        "                unpushed commits move to that new branch, the checkout switches to it at\n"
+        "                the same commit, local <default> goes back to origin's, and it lands as below.\n"
+        "  on a branch   rebase it onto <default>, fast-forward <default>, switch to it, and delete\n"
+        "                the branch. Through a PR the checkout stays on the branch until the PR\n"
+        "                merges; once it has, it switches to <default>, fast-forwards to origin's\n"
+        "                and deletes the branch. Refused while <default> is checked out in a\n"
+        "                worktree, and for a gh stack.",
     )
-    land.add_argument("target", nargs="?", help="worktree name, path, or . (default) for the current one")
+    land.add_argument("target", nargs="?", help="worktree name, path, branch, or . (default) for the current checkout")
     land.add_argument("--dry-run", action="store_true", help="say what would happen")
     land.add_argument("--abort-on-conflict", action="store_true", help="abort the rebase on conflict instead of pausing")
     land.add_argument("--continue", dest="continue_rebase", action="store_true", help="finish a paused rebase, then land")
@@ -87,6 +102,8 @@ def build_parser() -> argparse.ArgumentParser:
     land.add_argument("--title", help="PR title")
     land.add_argument("--body-file", help="PR body, from a file")
     land.add_argument("--timeout", default="30m", help="how long --green waits for checks (default 30m)")
+    land.add_argument("--rebase", action="store_true", help="primary checkout on <default>: rebase it onto origin's first")
+    land.add_argument("--branch", help="primary checkout on <default>: the new branch a PR's commits move to")
     land.set_defaults(func=cmd_land)
 
     close = _verb(

@@ -1,4 +1,7 @@
-"""wt land: rebase a worktree onto the default branch and fast-forward the default branch onto it."""
+"""wt land: rebase a worktree onto the default branch and fast-forward the default branch onto it.
+
+Landing from the primary checkout builds on these helpers in `land_root`.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +10,7 @@ import os
 import re
 import sys
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 from .commands import close_entry, occupants
 from .gh import GhError, checks_state, gh, has_origin, merged_heads, pr_view, requires_checks, stack
@@ -52,6 +55,19 @@ def _conflicts(path: str) -> list[str]:
         return []
 
 
+def is_root(repo: Repo, path: str) -> bool:
+    """Whether `path` is the primary checkout, which other sessions share and wt never closes."""
+    return os.path.realpath(path) == os.path.realpath(repo.main)
+
+
+def tell_sessions(repo: Repo, what: str) -> None:
+    """Name a live process in the primary checkout, so the landing session can tell it `what`."""
+    busy = busy_pids(repo.main)
+    if busy:
+        more = f" (and {len(busy) - 1} more process(es))" if len(busy) > 1 else ""
+        info(f"{describe_pid(busy[0])}{more} is working in {repo.main}; {what}; tell that session")
+
+
 def default_checkout(repo: Repo) -> Optional[str]:
     """The registered worktree that has the default branch checked out, or None."""
     for item in registered_worktrees(repo.common):
@@ -79,11 +95,62 @@ def _require_checkout_ready(repo: Repo, branch: str, checkout: Optional[str]) ->
     )
 
 
-def rebase(entry: Entry, onto: str, *, abort_on_conflict: bool, update_refs: bool = False) -> None:
-    """Rebase `entry` onto `onto`, moving stacked branches along with `update_refs`; a conflict exits, paused or aborted."""
+def changed_paths(path: str, *refs: str) -> set[str]:
+    """Paths `git diff --name-only <refs>` names in `path`; an empty diff is a real answer."""
+    return {line for line in probe(path, "diff", "--name-only", *refs, "--").splitlines() if line}
+
+
+def rebase_moves(path: str, onto: str, upstream: str) -> set[str]:
+    """Paths a `rebase --onto <onto> <upstream>` of HEAD in `path` would change in its working tree.
+
+    The branch's own commits stay; only the base under them changes, from where they fork off
+    `upstream` to `onto`.
+    """
+    base = probe(path, "merge-base", upstream, "HEAD").strip()
+    return changed_paths(path, base, onto)
+
+
+def sits_on(path: str, onto: str, upstream: str) -> bool:
+    """Whether HEAD's commits past `upstream` already sit directly on `onto`, so a rebase would be a no-op."""
+    base = run(["git", "-C", path, "merge-base", upstream, "HEAD"], check=False)
+    tip = run(["git", "-C", path, "rev-parse", "--verify", "--quiet", f"{onto}^{{commit}}"], check=False)
+    return base.returncode == 0 and tip.returncode == 0 and base.stdout.strip() == tip.stdout.strip()
+
+
+def clashes(path: str, moving: Callable[[], set[str]]) -> list[str]:
+    """Uncommitted paths in `path` that an operation changing `moving()` would have to overwrite."""
+    dirty_paths = inspect(path, lambda: _dirty_paths(path))
+    return sorted(dirty_paths & inspect(path, moving)) if dirty_paths else []
+
+
+def guard_moves(path: str, moving: Callable[[], set[str]], doing: str) -> None:
+    """Refuse when `path` holds uncommitted changes to a path that `doing` changes."""
+    clash = clashes(path, moving)
+    if clash:
+        die(
+            f"{path} has uncommitted changes to {', '.join(clash)}, which {doing} would change.\n"
+            f"  Yours: commit or stash them in {path} first.\n"
+            "  Another session's: leave them alone and land once that checkout is clean."
+        )
+
+
+def rebase(
+    entry: Entry,
+    onto: str,
+    *,
+    abort_on_conflict: bool,
+    update_refs: bool = False,
+    autostash: bool = False,
+    resume: Optional[str] = None,
+) -> None:
+    """Rebase `entry` onto `onto`, moving stacked branches along with `update_refs`; a conflict exits, paused or aborted.
+
+    `autostash` carries uncommitted changes across, for a checkout shared with other work; `resume`
+    is the target the pause message names, the entry's name by default.
+    """
     path = entry.path or ""
     info(f"rebasing {entry.branch} onto {onto}")
-    extra = ["--update-refs"] if update_refs else []
+    extra = (["--update-refs"] if update_refs else []) + (["--autostash"] if autostash else [])
     if run(["git", "-C", path, "rebase", "--quiet", *extra, onto], check=False).returncode == 0:
         return
     conflicts = _conflicts(path)
@@ -91,9 +158,12 @@ def rebase(entry: Entry, onto: str, *, abort_on_conflict: bool, update_refs: boo
     if abort_on_conflict:
         run(["git", "-C", path, "rebase", "--abort"], check=False)
         die(f"aborted the rebase; {path} is back on {entry.branch}")
+    target = entry.name if resume is None else resume
+    suffix = f" {target}" if target else ""
     die(
         f"rebase paused in {path}; resolve the conflicts, then "
-        f"'wt land --continue {entry.name}' or 'wt land --abort {entry.name}'"
+        f"'wt land --continue{suffix}' or 'wt land --abort{suffix}'"
+        + ("" if target else f" from {path}")
     )
 
 
@@ -204,15 +274,24 @@ def _publish(repo: Repo, entry: Entry) -> None:
     branch = entry.branch
     run(["timeout", "20", "git", "-C", path, "fetch", "--quiet", "origin", repo.default], check=False)
     upstream = f"origin/{repo.default}"
+    root = is_root(repo, path)
     if not git_ok(path, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"):
         # Commits only local <default> has stay out of the PR; they are not this branch's.
-        info(f"rebasing {branch} onto {upstream}")
-        if run(["git", "-C", path, "rebase", "--quiet", "--onto", upstream, repo.default], check=False).returncode:
-            run(["git", "-C", path, "rebase", "--abort"], check=False)
-            die(
-                f"{branch} does not rebase cleanly onto {upstream}: it conflicts, or depends on commits only "
-                f"local {repo.default} has. Push {repo.default} first, or land locally with 'wt land {entry.name}'."
-            )
+        if not sits_on(path, upstream, repo.default):
+            if root:
+                # The primary checkout is shared, so the rebase must not overwrite anyone's uncommitted work.
+                guard_moves(path, lambda: rebase_moves(path, upstream, repo.default), f"rebasing {branch} onto {upstream}")
+            info(f"rebasing {branch} onto {upstream}")
+            extra = ["--autostash"] if root else []
+            if run(["git", "-C", path, "rebase", "--quiet", *extra, "--onto", upstream, repo.default], check=False).returncode:
+                run(["git", "-C", path, "rebase", "--abort"], check=False)
+                retry = "" if root else f" {entry.name}"
+                die(
+                    f"{branch} does not rebase cleanly onto {upstream}: it conflicts, or depends on commits only "
+                    f"local {repo.default} has. Push {repo.default} first, or land locally with 'wt land{retry}'."
+                )
+            if root:
+                tell_sessions(repo, f"files moved under it while {branch} was rebased")
     else:
         proc = run(["git", "-C", path, "merge-base", "--is-ancestor", f"origin/{branch}", branch], check=False)
         if proc.returncode == 1:
@@ -292,26 +371,29 @@ def _report_behind(repo: Repo) -> None:
              f"git -C {default_checkout(repo) or repo.main} pull --ff-only")
 
 
-def land_pr(repo: Repo, entry: Entry, args: argparse.Namespace, mode: str) -> None:
-    """Land through GitHub: `draft` and `pr` open the PR, `green` also merges it once checks pass."""
+def land_pr(repo: Repo, entry: Entry, args: argparse.Namespace, mode: str) -> Optional[dict]:
+    """Land through GitHub: `draft` and `pr` open the PR, `green` also merges it once checks pass.
+
+    Returns the branch's PR as it stands afterwards, or None when there was none to open, for a
+    stack, or on a dry run. Closing the worktree is the caller's.
+    """
     path = entry.path or ""
     if not has_origin(repo):
         die("there is no origin remote; land locally with 'wt land'")
-    layered = stack(path)
+    layered = None if is_root(repo, path) else stack(path)
     if layered:
         _land_stack(repo, entry, args, mode, layered)
-        return
+        return None
     if args.dry_run:
         info(f"would push {entry.branch} and open a {'draft ' if mode == 'draft' else ''}PR into {repo.default}")
-        return
+        return None
     _publish(repo, entry)
     unpublished = inspect(
         f"'{entry.name}'", lambda: probe(path, "rev-list", f"origin/{repo.default}..{entry.branch}").strip()
     )
     if not inspect(f"'{entry.name}'", lambda: ahead(repo, entry.branch)) or not unpublished:
         info(f"{entry.branch} has nothing that is not already in {repo.default}; no PR to open")
-        close_after_landing(repo, entry)
-        return
+        return None
     pr = _open_pr(repo, entry, args, draft=mode == "draft")
     print(pr["url"])
     if mode == "green" and pr["state"] == "OPEN":
@@ -324,8 +406,11 @@ def land_pr(repo: Repo, entry: Entry, args: argparse.Namespace, mode: str) -> No
             _gh(path, "pr", "merge", str(pr["number"]), "--rebase", "--match-head-commit", sha)
             info(f"merged #{pr['number']} into {repo.default}")
             merged_heads.cache_clear()
-            _report_behind(repo)
-    close_after_landing(repo, entry)
+            pr = pr_view(path, str(pr["number"])) or pr
+            if not is_root(repo, path):
+                # The primary checkout's own landing pulls for itself.
+                _report_behind(repo)
+    return pr
 
 
 def _land_stack(repo: Repo, entry: Entry, args: argparse.Namespace, mode: str, layered: dict) -> None:
@@ -346,7 +431,6 @@ def _land_stack(repo: Repo, entry: Entry, args: argparse.Namespace, mode: str, l
             info(f"merged the stack up to #{prs[-1]} into {repo.default}")
             merged_heads.cache_clear()
             _report_behind(repo)
-    close_after_landing(repo, entry)
 
 
 def _resume(repo: Repo, entry: Entry, args: argparse.Namespace) -> None:
@@ -367,9 +451,18 @@ def _resume(repo: Repo, entry: Entry, args: argparse.Namespace) -> None:
 
 
 def cmd_land(args: argparse.Namespace) -> None:
+    # land_root builds on this module's helpers, so it is imported where it is used.
+    from .land_root import land_root, targets_root
+
     repo = current_repo()
     with RepoLock(repo):
-        entry = resolve(repo, args.target or ".")
+        target = args.target or "."
+        if targets_root(repo, target):
+            land_root(repo, args)
+            return
+        if args.rebase or args.branch:
+            die("--rebase and --branch apply only to landing from the primary checkout")
+        entry = resolve(repo, target)
         if args.continue_rebase or args.abort:
             if not entry.open:
                 die(f"'{entry.name}' is closed")
@@ -378,5 +471,7 @@ def cmd_land(args: argparse.Namespace) -> None:
         check_landable(repo, entry)
         if args.mode:
             land_pr(repo, entry, args, args.mode)
+            if not args.dry_run:
+                close_after_landing(repo, entry)
         else:
             land_local(repo, entry, args)

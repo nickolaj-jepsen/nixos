@@ -90,6 +90,9 @@ class Base(unittest.TestCase):
     def has_branch(self, branch: str) -> bool:
         return bool(self.git("branch", "--list", branch).strip())
 
+    def current(self, cwd: str | None = None) -> str:
+        return self.git("branch", "--show-current", cwd=cwd).strip()
+
     def subject(self, ref: str = "HEAD", cwd: str | None = None) -> str:
         return self.git("log", "-1", "--format=%s", ref, cwd=cwd).strip()
 
@@ -791,6 +794,79 @@ class Local(Base):
         self.assertFalse(path.exists())
         self.assertEqual(self.subject("main"), "base")
 
+    # land from the primary checkout -------------------------------------------
+
+    def topic(self, filename: str = "b.txt", text: str = "topic\n") -> None:
+        """Put the primary checkout on a branch `topic` holding one commit, with main one commit further."""
+        self.write("c.txt", "main\n")
+        self.commit("moved on")
+        self.git("switch", "-qc", "topic", "HEAD~1")
+        self.write(filename, text)
+        self.commit("topic")
+
+    def test_land_from_the_root_lands_its_branch_and_returns_to_main(self) -> None:
+        self.topic()
+        self.write("d.txt", "someone else's\n")
+        self.wt("land")
+        self.assertEqual(self.current(), "main")
+        self.assertEqual(self.subject("main"), "topic")
+        self.assertEqual(self.subject("main~1"), "moved on")
+        self.assertFalse(self.has_branch("topic"))
+        self.assertEqual(Path(self.main, "d.txt").read_text(), "someone else's\n")
+
+    def test_land_names_the_root_branch_from_a_worktree(self) -> None:
+        self.topic()
+        path = self.new("elsewhere")
+        self.wt("land", "topic", cwd=str(path))
+        self.assertEqual(self.current(), "main")
+        self.assertEqual(self.subject("main"), "topic")
+
+    def test_land_from_the_root_refuses_while_main_is_in_a_worktree(self) -> None:
+        self.topic()
+        self.git("worktree", "add", "-q", os.path.join(self.root, "holder"), "main")
+        result = self.wt("land", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("checked out in", result.stderr)
+        self.assertEqual(self.current(), "topic")
+        self.assertEqual(self.subject("main"), "moved on")
+
+    def test_land_refuses_a_branch_checked_out_nowhere(self) -> None:
+        self.git("branch", "loose")
+        result = self.wt("land", "loose", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not checked out anywhere", result.stderr)
+
+    def test_land_from_the_root_names_a_live_process(self) -> None:
+        self.topic()
+        process = self.sleeper(Path(self.main))
+        result = self.wt("land")
+        self.assertIn(f"pid {process.pid}", result.stderr)
+
+    def test_land_from_the_root_refuses_to_rebase_over_a_dirty_path(self) -> None:
+        self.topic()
+        self.write("c.txt", "uncommitted\n")
+        result = self.wt("land", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("c.txt", result.stderr)
+        self.assertEqual(self.current(), "topic")
+        self.assertEqual(Path(self.main, "c.txt").read_text(), "uncommitted\n")
+
+    def test_land_from_the_root_continues_a_paused_rebase(self) -> None:
+        self.write("a.txt", "ours\n")
+        self.commit("ours")
+        self.git("switch", "-qc", "topic", "HEAD~1")
+        self.write("a.txt", "theirs\n")
+        self.commit("topic")
+        result = self.wt("land", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("rebase conflict", result.stderr)
+        self.write("a.txt", "both\n")
+        self.git("add", "a.txt")
+        self.wt("land", "--continue")
+        self.assertEqual(self.current(), "main")
+        self.assertEqual(self.subject("main"), "topic")
+        self.assertEqual(Path(self.main, "a.txt").read_text(), "both\n")
+
 
 class GitHub(Base):
     """The same repository with an origin remote and a fake `gh` first on PATH."""
@@ -928,6 +1004,96 @@ class GitHub(Base):
         stderr = self.wt("drop", "bottom").stderr
         self.assertIn("dropped top", stderr)
         self.assertIn("dropped bottom", stderr)
+
+    # land from the primary checkout -------------------------------------------
+
+    def advance_origin(self, filename: str = "c.txt") -> None:
+        """Put a commit on origin/main that local main does not have."""
+        self.write(filename, "origin\n")
+        self.commit("origin's")
+        self.git("push", "-q", "origin", "main")
+        self.git("reset", "-q", "--hard", "HEAD~1")
+
+    def remote_sha(self, branch: str) -> str:
+        out = self.git("ls-remote", "origin", f"refs/heads/{branch}").split()
+        return out[0] if out else ""
+
+    def test_root_on_main_pushes_its_commits(self) -> None:
+        self.write("b.txt", "mine\n")
+        self.commit("mine")
+        self.wt("land")
+        self.assertEqual(self.remote_sha("main"), self.sha("main"))
+
+    def test_root_on_main_rebases_onto_origin_only_with_rebase(self) -> None:
+        self.advance_origin()
+        self.write("b.txt", "mine\n")
+        self.commit("mine")
+        self.write("a.txt", "someone else's\n")
+        result = self.wt("land", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--rebase", result.stderr)
+        self.assertEqual(self.subject(self.remote_sha("main")), "origin's")
+        self.wt("land", "--rebase")
+        self.assertEqual(self.remote_sha("main"), self.sha("main"))
+        self.assertEqual(self.subject("main"), "mine")
+        self.assertEqual(self.subject("main~1"), "origin's")
+        self.assertEqual(Path(self.main, "a.txt").read_text(), "someone else's\n")
+
+    def test_root_on_main_refuses_to_rebase_over_a_dirty_path(self) -> None:
+        self.advance_origin("c.txt")
+        self.write("b.txt", "mine\n")
+        self.commit("mine")
+        self.write("c.txt", "uncommitted\n")
+        result = self.wt("land", "--rebase", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("c.txt", result.stderr)
+        self.assertEqual(Path(self.main, "c.txt").read_text(), "uncommitted\n")
+        self.assertEqual(self.subject("main"), "mine")
+
+    def test_root_on_main_moves_its_commits_to_a_branch_for_a_pr(self) -> None:
+        self.write("b.txt", "mine\n")
+        self.commit("mine")
+        result = self.wt("land", "--pr", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--branch", result.stderr)
+        self.wt("land", "--pr", "--branch", "feat/mine")
+        self.assertEqual(self.current(), "feat/mine")
+        self.assertEqual(self.sha("main"), self.sha("origin/main"))
+        self.assertEqual(self.remote_sha("feat/mine"), self.sha("feat/mine"))
+        self.assertEqual(self.subject("feat/mine"), "mine")
+        self.assertEqual(len(self.called("pr", "create")), 1)
+        self.assertTrue(Path(self.main, "b.txt").exists())
+
+    def test_root_branch_stays_checked_out_while_its_draft_is_open(self) -> None:
+        self.git("switch", "-qc", "topic")
+        self.write("b.txt", "topic\n")
+        self.commit("topic")
+        self.wt("land", "--draft")
+        self.assertIn("--draft", self.called("pr", "create")[0])
+        self.assertEqual(self.current(), "topic")
+
+    def test_root_branch_returns_to_main_once_its_pr_merges(self) -> None:
+        self.git("switch", "-qc", "topic")
+        self.write("b.txt", "topic\n")
+        self.commit("topic")
+        self.wt("land", "--green")
+        self.assertEqual(len(self.called("pr", "merge")), 1)
+        self.assertEqual(self.current(), "main")
+        self.assertFalse(self.has_branch("topic"))
+
+    def test_root_branch_rerun_returns_to_main_after_an_auto_merge(self) -> None:
+        self.git("switch", "-qc", "topic")
+        self.write("b.txt", "topic\n")
+        self.commit("topic")
+        self.set_state("rules.json", [{"type": "required_status_checks"}])
+        self.wt("land", "--green")
+        self.assertEqual(self.current(), "topic")
+        prs = json.loads((self.state / "prs.json").read_text())
+        prs[0]["state"] = "MERGED"
+        self.set_state("prs.json", prs)
+        self.wt("land", "--green")
+        self.assertEqual(self.current(), "main")
+        self.assertFalse(self.has_branch("topic"))
 
     def test_close_keeps_the_branch_when_gh_fails(self) -> None:
         path = self.feature("offline")
