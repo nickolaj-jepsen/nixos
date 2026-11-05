@@ -16,15 +16,7 @@ import {
   type Step,
   type ResolvedSettings,
 } from "./contracts.ts";
-import {
-  budgetOf,
-  closeStep,
-  diffLines,
-  flowOf,
-  settingsOf,
-  transitionOf,
-  writeFlow,
-} from "./state.ts";
+import { budgetOf, diffLines, flowOf, settingsOf, transitionOf, writeFlow } from "./state.ts";
 
 /**
  * A step whose advance is in flight. `flow_next` sets it so a second call in
@@ -65,12 +57,13 @@ const spent = (deps: ToolDeps, ctx: ExtensionContext): number => {
 };
 
 /**
- * Ends the current step: its cost and end go into FLOW.json now, while this
- * session's transcript is still readable, and the advance is queued for
- * `agent_settled`. Refuses while a subagent runs, because the switch that
- * follows aborts it (D26), and repeats a no-op for the same step.
+ * Queues the current step's advance for `agent_settled`, optionally leaving a
+ * note on its record. The conductor closes and prices the step only after the
+ * owner accepts the transition, immediately before the session switch. Refuses
+ * while a subagent runs, because that switch aborts it (D26), and repeats a
+ * no-op for the same step.
  */
-export const nextTool = (deps: ToolDeps, ctx: ExtensionContext): ToolOutcome => {
+export const nextTool = (deps: ToolDeps, ctx: ExtensionContext, note?: string): ToolOutcome => {
   const found = flowOf(ctx);
   if (found.kind === "none")
     return {
@@ -87,19 +80,36 @@ export const nextTool = (deps: ToolDeps, ctx: ExtensionContext): ToolOutcome => 
       text: "flow_next refused: a subagent is still running, and the next step's session switch would abort it. Wait for it to finish, then call flow_next again.",
       isError: true,
     };
-  try {
-    writeFlow(closeStep(flow, deps.now(), spent(deps, ctx)));
-  } catch (error) {
-    return {
-      text: `flow_next refused: FLOW.json could not be written: ${message(error)}`,
-      isError: true,
-    };
+  if (note !== undefined) {
+    let index = -1;
+    for (let cursor = flow.steps.length - 1; cursor >= 0; cursor -= 1) {
+      const record = flow.steps[cursor];
+      if (record.step === flow.step && record.endedAt === undefined) {
+        index = cursor;
+        break;
+      }
+    }
+    if (index < 0)
+      return {
+        text: `flow_next refused: the ${flow.step} step has no open record for its note.`,
+        isError: true,
+      };
+    const steps = flow.steps.slice();
+    steps[index] = { ...steps[index], note };
+    try {
+      writeFlow({ ...flow, steps });
+    } catch (error) {
+      return {
+        text: `flow_next refused: FLOW.json could not be written: ${message(error)}`,
+        isError: true,
+      };
+    }
   }
   deps.runtime.advancing = here;
   deps.runtime.request = here;
   const next = transitionOf(flow.step, modeOf(flow));
   return {
-    text: `flow: the ${flow.step} step ends${next ? `; /flow next moves to ${next.to}` : ""} once this turn settles.`,
+    text: `flow: the ${flow.step} step asked to advance${next ? `; /flow next moves to ${next.to}` : ""} once this turn settles.${note === undefined ? "" : `\nNote: ${note}`}`,
   };
 };
 

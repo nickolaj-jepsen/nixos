@@ -81,8 +81,8 @@ export default function (pi: ExtensionAPI) {
     name: TOOL_NEXT,
     label: "Flow next",
     description:
-      "End this /flow step and move to the next one: brief → plan → approve → run → guide → done. " +
-      "The step's cost is recorded now, and the next step's session starts once this turn ends. " +
+      "Ask to end this /flow step and move to the next one: brief → plan → approve → run → guide → done. " +
+      "The next step's session starts once this turn ends and its transition is accepted. " +
       "It refuses while a subagent is still running, and a repeat in the same turn is a no-op.",
     promptSnippet: "End the /flow step and advance to the next one",
     parameters: Type.Object({
@@ -90,8 +90,8 @@ export default function (pi: ExtensionAPI) {
         Type.String({ description: "One line for the next step about what this one decided." }),
       ),
     }),
-    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
-      const outcome = nextTool({ runtime, now: Date.now, hasRunning, cost }, ctx);
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const outcome = nextTool({ runtime, now: Date.now, hasRunning, cost }, ctx, params.note);
       return {
         content: [{ type: "text" as const, text: outcome.text }],
         details: undefined,

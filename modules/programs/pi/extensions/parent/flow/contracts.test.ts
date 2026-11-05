@@ -62,6 +62,8 @@ test("a well-formed FLOW.json parses whole", () => {
           model: "vm/flash",
           thinking: "low",
           startedAt: 1,
+          kickoffSent: true,
+          note: "Carry this into the next step.",
           endedAt: 2,
           cost: 0.25,
         },
@@ -80,6 +82,8 @@ test("a well-formed FLOW.json parses whole", () => {
   const parsed: Flow = result.flow;
   assert.equal(parsed.mode, "deviation");
   assert.equal(parsed.steps[0]?.cost, 0.25);
+  assert.equal(parsed.steps[0]?.kickoffSent, true);
+  assert.equal(parsed.steps[0]?.note, "Carry this into the next step.");
   assert.equal(parsed.pending?.step, "guide");
   assert.deepEqual(parsed.tour?.argv, ["-r", "a..b"]);
   assert.equal(parsed.judge.length, 1);
@@ -108,6 +112,36 @@ test("a corrupt FLOW.json fails with the field that broke", () => {
     [
       { steps: [{ step: "brief", session: "s", model: "m", thinking: "low", startedAt: "then" }] },
       /startedAt/,
+    ],
+    [
+      {
+        steps: [
+          {
+            step: "brief",
+            session: "s",
+            model: "m/1",
+            thinking: "low",
+            startedAt: 1,
+            kickoffSent: "yes",
+          },
+        ],
+      },
+      /^steps\[0\]\.kickoffSent must be/,
+    ],
+    [
+      {
+        steps: [
+          {
+            step: "brief",
+            session: "s",
+            model: "m/1",
+            thinking: "low",
+            startedAt: 1,
+            note: 7,
+          },
+        ],
+      },
+      /^steps\[0\]\.note must be/,
     ],
     [{ judge: [{ at: "plan", verdict: {}, cost: 0, model: "m" }] }, /^judge\[0\]\.at must be/],
     [{ tour: { slug: "s", argv: "x", cwd: "/c", rv: "/rv" } }, /^tour\.argv must be/],

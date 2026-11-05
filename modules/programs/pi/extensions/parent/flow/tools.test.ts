@@ -77,7 +77,7 @@ test("flow_next outside a flow session refuses", () => {
   assert.match(outcome.text, /\/flow <slug>/);
 });
 
-test("flow_next ends the step, records its cost, and asks for one advance", () => {
+test("flow_next leaves the step open and asks for one advance", () => {
   const dir = scratch();
   writeFlow(demo(dir));
   const runtime = createRuntime();
@@ -86,10 +86,24 @@ test("flow_next ends the step, records its cost, and asks for one advance", () =
   const read = readFlow(dir);
   assert.equal(read.kind, "ok");
   const record = read.kind === "ok" ? read.flow.steps[0] : undefined;
-  assert.equal(record?.endedAt, 2_000);
-  assert.equal(record?.cost, 0.25);
+  assert.equal(record?.endedAt, undefined);
+  assert.equal(record?.cost, undefined);
   assert.deepEqual(runtime.request, { planDir: dir, step: "brief" });
   assert.deepEqual(runtime.advancing, { planDir: dir, step: "brief" });
+});
+
+test("flow_next stores and returns its note without closing the step", () => {
+  const dir = scratch();
+  writeFlow(demo(dir));
+  const outcome = nextTool(deps(), ctxOf(dir), "The brief kept the existing API.");
+  assert.match(outcome.text, /Note: The brief kept the existing API\./);
+  const read = readFlow(dir);
+  assert.equal(read.kind, "ok");
+  if (read.kind !== "ok") return;
+  assert.equal(read.flow.steps[0]?.note, "The brief kept the existing API.");
+  assert.equal(read.flow.steps[0]?.endedAt, undefined);
+  const status = statusOf(deps(), ctxOf(dir), read.flow, DEFAULT_SETTINGS);
+  assert.equal(status.budget.spentStep, 0.25);
 });
 
 test("a second flow_next in the same step is a no-op", () => {

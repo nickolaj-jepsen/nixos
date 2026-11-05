@@ -7,7 +7,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -33,7 +33,7 @@ import {
 } from "./contracts.ts";
 import { parseHandoff } from "./handoff.ts";
 import { flowPath, newFlow, readFlow, writeFlow } from "./state.ts";
-import { createRuntime, type Runtime } from "./tools.ts";
+import { createRuntime, nextTool, type Runtime, statusOf } from "./tools.ts";
 
 type Note = { text: string; kind?: "info" | "warning" | "error" };
 type Model = { provider: string; id: string };
@@ -89,6 +89,7 @@ const harness = (options: Options = {}) => {
   let sessionFile = flow.steps[0]?.session ?? join(dir, "s0.jsonl");
   let level = "low";
   let spawned = 0;
+  let kickoffThrows = options.kickoffThrows ?? false;
   const answers = [...(options.select ?? [])];
   const typed = [...(options.input ?? [])];
 
@@ -146,8 +147,14 @@ const harness = (options: Options = {}) => {
       thinkingLevel: level,
       isIdle: () => true,
       waitForIdle: async () => {},
-      switchSession: async (path: string) => {
+      switchSession: async (
+        path: string,
+        init?: { withSession?: (ctx: unknown) => Promise<void> },
+      ) => {
         switches.push(path);
+        sessionFile = path;
+        if (init?.withSession)
+          await init.withSession(toolContext(context(path, { planDir: dir, slug: flow.slug })));
         return { cancelled: false };
       },
       newSession: async (init?: {
@@ -182,7 +189,7 @@ const harness = (options: Options = {}) => {
       sendUserMessage?: (text: string, opts?: { expandPromptTemplates?: boolean }) => Promise<void>;
     };
     base.sendUserMessage = async (text: string, opts?: { expandPromptTemplates?: boolean }) => {
-      if (options.kickoffThrows) throw new Error("the provider is gone");
+      if (kickoffThrows) throw new Error("the provider is gone");
       sent.push({ text, expand: opts?.expandPromptTemplates });
     };
     return base;
@@ -253,6 +260,9 @@ const harness = (options: Options = {}) => {
     selections,
     inputs,
     confirms,
+    setKickoffThrows: (value: boolean) => {
+      kickoffThrows = value;
+    },
     read: () => {
       const read = readFlow(dir);
       assert.equal(read.kind, "ok", "FLOW.json should parse");
@@ -302,6 +312,7 @@ test("/flow next in the brief writes the ended step and the pending one before t
   assert.equal(after.steps[1].thinking, "high");
   assert.equal(after.steps[1].session, join(run.dir, "s1.jsonl"));
   assert.equal(after.steps[1].parentSession, join(run.dir, "s0.jsonl"));
+  assert.equal(after.steps[1].kickoffSent, true);
   assert.equal(run.statuses.at(-1), "flow demo · plan · $0.2600");
 });
 
@@ -331,8 +342,8 @@ test("the picker offers quick beside the suggestion and edits both fields", asyn
   };
   assert.deepEqual(await pickPlanStep(run.deps, settings, verdict), {
     quick: true,
-    model: "fixture/replay",
-    thinking: "medium",
+    model: "fixture/deep",
+    thinking: "high",
   });
   assert.equal(offered.length, 3);
   assert.match(offered[0], /^full — fixture\/deep · high$/);
@@ -354,6 +365,30 @@ test("the picker offers quick beside the suggestion and edits both fields", asyn
     list.find((entry) => entry.startsWith("edit")) ?? "medium";
   assert.equal(await pickPlanStep(run.deps, DEFAULT_SETTINGS, verdict), undefined);
   assert.match(run.notes.at(-1)?.text ?? "", /not a model and a level/);
+});
+
+test("a quick verdict carries its non-default model and level on both picks", async () => {
+  const run = harness();
+  const ui = run.deps.ctx.ui as unknown as {
+    select: (title: string, list: string[]) => Promise<string | undefined>;
+  };
+  const offered: string[][] = [];
+  ui.select = async (_title, list) => {
+    offered.push(list);
+    return list[1];
+  };
+  const picked = await pickPlanStep(run.deps, DEFAULT_SETTINGS, {
+    plan: "quick",
+    model: "fixture/special",
+    thinking: "max",
+    reasons: ["plan: one file"],
+    cost: 0,
+  });
+  assert.deepEqual(picked, { quick: false, model: "fixture/special", thinking: "max" });
+  assert.deepEqual(offered[0]?.slice(0, 2), [
+    "quick — fixture/special · max",
+    "full — fixture/special · max",
+  ]);
 });
 
 test("an invalid settings value falls back to the default and is reported", async () => {
@@ -389,6 +424,29 @@ test("/flow next at the plan calls the judge, then the page, and starts the run"
   assert.equal(atSwitch.judge[0].cost, 0.02);
 });
 
+test("a changed final reviewer reaches FLOW.json before the approval page", async () => {
+  let atPage: Flow | undefined;
+  const run = harness({
+    flow: { step: "plan" },
+    judgeHandoff: async () => ({
+      mode: "gated",
+      run: { model: "fixture/replay", thinking: "low" },
+      tiers: {},
+      finalReview: "reviewer",
+      reasons: ["finalReview: one flash pass is enough"],
+      cost: 0,
+    }),
+    approve: async (_pi, _ctx, flow) => {
+      atPage = flow;
+      return { kind: "cancel" };
+    },
+  });
+  run.handoff();
+  await command(run.deps, run.runtime, "next");
+  assert.deepEqual(atPage?.settings.finalReview, { role: "reviewer" });
+  assert.deepEqual(run.read().settings.finalReview, { role: "reviewer" });
+});
+
 test("a handoff that does not parse is refused and goes back to the planner", async () => {
   const run = harness({
     flow: { step: "plan" },
@@ -407,24 +465,105 @@ test("a handoff that does not parse is refused and goes back to the planner", as
   assert.match(run.sent.at(-1)?.text ?? "", /Fix these/);
 });
 
-test("back from the page sends its note into the plan session", async () => {
+test("approval send-back sends its note and keeps the plan's spend live", async () => {
   const run = harness({
-    flow: { step: "plan" },
+    flow: {
+      step: "plan",
+      steps: [
+        {
+          step: "brief",
+          session: "/s/brief.jsonl",
+          model: "m/1",
+          thinking: "low",
+          startedAt: 1,
+          endedAt: 2,
+          cost: 0.5,
+        },
+        {
+          step: "plan",
+          session: join("/tmp", "plan.jsonl"),
+          model: "m/2",
+          thinking: "high",
+          startedAt: 3,
+        },
+      ],
+    },
     approve: async () => ({ kind: "back", note: "split item A3" }),
   });
   run.handoff();
+  nextTool(
+    {
+      runtime: run.runtime,
+      now: run.deps.now,
+      hasRunning: run.deps.hasRunning,
+      cost: run.deps.cost,
+    },
+    run.ctx,
+  );
   await command(run.deps, run.runtime, "next");
   assert.equal(run.atNewSession.length, 0);
   assert.deepEqual(run.sent, [{ text: "split item A3", expand: undefined }]);
+  const plan = run.read().steps.at(-1);
+  assert.equal(plan?.endedAt, undefined);
+  assert.equal(plan?.cost, undefined);
+  const status = statusOf(
+    { runtime: run.runtime, now: run.deps.now, hasRunning: run.deps.hasRunning, cost: () => 0.75 },
+    run.ctx,
+    run.read(),
+    DEFAULT_SETTINGS,
+  );
+  assert.equal(status.budget.spentStep, 0.75);
+  assert.equal(status.budget.spentTotal, 1.27);
 });
 
-test("gated mode asks before the guide, other modes do not", async () => {
-  const stay = harness({ flow: { step: "run" }, confirm: false });
+test("declining the guide keeps the run open and counts the following turn", async () => {
+  const stay = harness({
+    flow: {
+      step: "run",
+      steps: [
+        {
+          step: "run",
+          session: "/s/run.jsonl",
+          model: "m/1",
+          thinking: "low",
+          startedAt: 1,
+        },
+      ],
+    },
+    confirm: false,
+  });
+  nextTool(
+    {
+      runtime: stay.runtime,
+      now: stay.deps.now,
+      hasRunning: stay.deps.hasRunning,
+      cost: stay.deps.cost,
+    },
+    stay.ctx,
+  );
   await command(stay.deps, stay.runtime, "next");
   assert.equal(stay.confirms.length, 1);
   assert.equal(stay.atNewSession.length, 0);
-  assert.equal(stay.read().step, "run");
+  const flow = stay.read();
+  assert.equal(flow.step, "run");
+  assert.equal(flow.steps[0]?.endedAt, undefined);
+  assert.equal(flow.steps[0]?.cost, undefined);
+  const status = statusOf(
+    {
+      runtime: stay.runtime,
+      now: stay.deps.now,
+      hasRunning: stay.deps.hasRunning,
+      cost: () => 0.75,
+    },
+    stay.ctx,
+    flow,
+    DEFAULT_SETTINGS,
+  );
+  assert.equal(status.budget.spentStep, 0.75);
+  assert.equal(status.budget.spentTotal, 0.75);
+});
 
+test("gated mode asks before the guide, other modes do not", async () => {
   const straight = harness({ flow: { step: "run", mode: "straight" } });
   await command(straight.deps, straight.runtime, "next");
   assert.equal(straight.confirms.length, 0);
@@ -484,7 +623,7 @@ test("a model pi refuses keeps the step pending, with an error", async () => {
   assert.equal(run.read().pending?.step, "plan");
 });
 
-test("a throwing kickoff is caught and reported, not thrown out of withSession", async () => {
+test("a throwing kickoff is caught, then resume delivers it", async () => {
   const run = harness({
     registry: { "fixture/deep": { provider: "fixture", id: "deep" } },
     kickoffThrows: true,
@@ -492,9 +631,17 @@ test("a throwing kickoff is caught and reported, not thrown out of withSession",
   run.brief();
   await assert.doesNotReject(command(run.deps, run.runtime, "next"));
   assert.match(run.notes.at(-1)?.text ?? "", /kickoff failed: the provider is gone/);
-  // The step is committed; only the kickoff is lost, and resume can retry the message.
+  // The step is committed; only the kickoff is lost, and its marker is absent.
   assert.equal(run.read().pending, undefined);
   assert.equal(run.read().step, "plan");
+  assert.equal(run.read().steps.at(-1)?.kickoffSent, undefined);
+  assert.deepEqual(run.sent, []);
+
+  run.setKickoffThrows(false);
+  await command(run.deps, run.runtime, "resume");
+  assert.deepEqual(run.switches, [join(run.dir, "s1.jsonl")]);
+  assert.deepEqual(run.sent, [{ text: `/skill:flow-plan ${run.dir}`, expand: true }]);
+  assert.equal(run.read().steps.at(-1)?.kickoffSent, true);
 });
 
 test("a running subagent refuses the advance", async () => {
@@ -590,7 +737,14 @@ test("the status names every step, the settings and what blocks on the owner", a
           endedAt: 4,
           cost: 1.25,
         },
-        { step: "run", session: "/s/run.jsonl", model: "m/3", thinking: "low", startedAt: 5 },
+        {
+          step: "run",
+          session: "/s/run.jsonl",
+          model: "m/3",
+          thinking: "low",
+          startedAt: 5,
+          note: "Keep the existing public API.",
+        },
       ],
     },
   });
@@ -605,6 +759,7 @@ test("the status names every step, the settings and what blocks on the owner", a
   assert.match(text, /deviation mode/);
   assert.match(text, /spend \$4\.7500/);
   assert.match(text, /settings: judge .*, plan .*, run /);
+  assert.match(text, /run: \/s\/run\.jsonl[^\n]*\n    note: Keep the existing public API\./);
   assert.match(text, /- A2 needs the owner's YubiKey\.\n- A5 waits on G0\./);
   assert.doesNotMatch(text, /- written/);
   assert.match(run.statuses.at(-1) ?? "", /^flow demo · run · \$4\.7500$/);
@@ -680,4 +835,34 @@ test("/flow <slug> in a fresh session starts a brief and sends its kickoff", asy
   assert.equal(fresh.sent[0].expand, true);
   const written = `${home}/.local/share/agents/${cwd.split("/").at(-1)}/plans/demo/FLOW.json`;
   assert.equal(JSON.parse(readFileSync(written, "utf8")).step, "brief");
+});
+
+test("a slug git rejects writes no flow and sends no brief", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "flow-slug-"));
+  const home = mkdtempSync(join(tmpdir(), "flow-slug-home-"));
+  execFileSync("git", ["init", "-q", cwd]);
+  const fresh = harness();
+  const ctx = {
+    ...(fresh.ctx as unknown as Record<string, unknown>),
+    cwd,
+    sessionManager: {
+      getEntries: () => [],
+      getSessionFile: () => join(cwd, "s.jsonl"),
+      getSessionId: () => "sid",
+      getSessionDir: () => cwd,
+    },
+  } as unknown as ExtensionCommandContext;
+  const was = process.env.HOME;
+  process.env.HOME = home;
+  try {
+    await command({ ...fresh.deps, ctx }, fresh.runtime, "foo..bar");
+  } finally {
+    process.env.HOME = was;
+  }
+  assert.deepEqual(fresh.sent, []);
+  assert.match(fresh.notes.at(-1)?.text ?? "", /cannot be a branch name/);
+  assert.equal(
+    existsSync(`${home}/.local/share/agents/${cwd.split("/").at(-1)}/plans/foo..bar/FLOW.json`),
+    false,
+  );
 });

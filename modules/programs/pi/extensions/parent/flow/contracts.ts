@@ -215,7 +215,7 @@ export const resolveSettings = (
 
 // ── the state file (C1) ─────────────────────────────────────────────────────
 
-/** One step's session, and what it cost once `flow_next` closed it. */
+/** One step's session, and what it cost once its transition closed it. */
 export type FlowStepRecord = {
   step: Step;
   /** The session file; the step is unreadable after the next switch. */
@@ -224,6 +224,10 @@ export type FlowStepRecord = {
   model: string;
   thinking: Level;
   startedAt: number;
+  /** Set only after the step's kickoff was delivered, so resume can retry a lost one. */
+  kickoffSent?: boolean;
+  /** The note `flow_next` left for this step's owner. */
+  note?: string;
   endedAt?: number;
   cost?: number;
 };
@@ -327,6 +331,10 @@ export const parseFlow = (text: string): ParseFlowResult => {
     if (!isText(value.model)) return fail(`${at}.model`, "a non-empty string");
     if (!isLevel(value.thinking)) return fail(`${at}.thinking`, `one of ${LEVELS.join(", ")}`);
     if (!isNumber(value.startedAt)) return fail(`${at}.startedAt`, "a number");
+    if (value.kickoffSent !== undefined && typeof value.kickoffSent !== "boolean")
+      return fail(`${at}.kickoffSent`, "a boolean");
+    if (value.note !== undefined && typeof value.note !== "string")
+      return fail(`${at}.note`, "a string");
     if (value.endedAt !== undefined && !isNumber(value.endedAt))
       return fail(`${at}.endedAt`, "a number");
     if (value.cost !== undefined && !isNumber(value.cost)) return fail(`${at}.cost`, "a number");
@@ -337,6 +345,8 @@ export const parseFlow = (text: string): ParseFlowResult => {
       model: value.model,
       thinking: value.thinking,
       startedAt: value.startedAt,
+      kickoffSent: value.kickoffSent as boolean | undefined,
+      note: value.note as string | undefined,
       endedAt: value.endedAt as number | undefined,
       cost: value.cost as number | undefined,
     });
