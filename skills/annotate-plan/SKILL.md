@@ -9,9 +9,8 @@ The arguments name the change to plan; none means what the conversation is about
 
 ## Setup
 
-- Pick a kebab-case slug. The plan is `plans/<slug>/PLAN.md` in the project's agent notes.
-- The user's instructions say where agent notes live and what a project is. Without them, the notes are `.agents/notes/` in the repo (write a `.gitignore` containing `*` there first) and the project is the repo.
-- If a `PLAN.md` is already there, ask whether to resume it or start over. When resuming without a `PLAN.prev.md`, read the whole plan for notes instead of diffing.
+- Pick a kebab-case slug. The plan is `plans/<slug>/PLAN.md` in the project's store. `agent-notes root --ensure` gives the store's path, and the checkout sees it as `.agents/store`.
+- If a `PLAN.md` is already there, ask whether to resume it or start over. When resuming without a `history/PLAN.prev.md`, read the whole plan for notes instead of diffing.
 
 ## First draft
 
@@ -27,10 +26,10 @@ Research the code the change touches: inline for a few reads, a fresh subagent f
 
 ## Rounds
 
-- After every write, copy the plan to `PLAN.prev.md` beside it.
+- After every write, copy the plan to `history/PLAN.prev.md` in the same plan directory.
 - End each round with the plan's absolute path, how many notes you addressed, which are still open, and "annotate and say go, or approve".
 
-On go, diff `PLAN.md` against `PLAN.prev.md`. Every change is feedback, as is anything said in chat:
+On go, diff `PLAN.md` against `history/PLAN.prev.md`. Every change is feedback, as is anything said in chat:
 
 - An edit to your text is the user's wording now. Keep it.
 - A deleted line means drop it.

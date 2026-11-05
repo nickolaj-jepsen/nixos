@@ -147,6 +147,17 @@ Claude's own; pi has none.
   red run shows what the owner would have seen. They are not in `just check`;
   run `bash …/scenario/smoke.sh` and the one you touched.
 
+## Notes
+
+- Every agent writes notes into the checkout's store, `.agents/store`, which is a
+  symlink into `~/.local/share/agents/store/<repo-id>`. `agent-notes root --ensure`
+  is the resolver, and `docs/notes.md` covers the identity, the git hook, scratch
+  and the migration.
+- A skill names its files relative to that store and never repeats where notes
+  live: `agent-context.md` states the rule once, and the six skills that write
+  files (`annotate-plan`, `handoff`, `run-handoff`, `ideate`, `mine`, `onboard`)
+  only name their own layout.
+
 ## Language servers
 
 - `fireproof.agents.lspServers` (`command`/`args`/`extensionToLanguage`) is

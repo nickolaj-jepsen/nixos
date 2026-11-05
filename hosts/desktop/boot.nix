@@ -44,8 +44,8 @@
         ${pkgs.microcode-intel}/intel-ucode.img
     '';
 
-    # On trial against systemd-boot + lanzaboote; the go/no-go criteria are in
-    # ~/.local/share/agents/nvme-migration/plan.md.
+    # On trial against systemd-boot + lanzaboote; the go/no-go criteria are in the
+    # nvme-migration plan in this repo's agent notes.
     boot.loader.systemd-boot.enable = false;
     boot.loader.limine = {
       enable = true;

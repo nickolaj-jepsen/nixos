@@ -7,7 +7,7 @@ Repository-local instructions and existing conventions take precedence over thes
 - This machine is managed by the `~/nixos` flake (NixOS, or nix-darwin on macOS). Persistent system or user configuration belongs there; do not use `apt`, global npm/pip installs, or edit `/etc`.
 - For one-off tools, use `nix run nixpkgs#<tool>` or `nix shell nixpkgs#<tool>`.
 - Use $TMPDIR, $(mktemp -d) or any other computed path for throwaway files (benchmarks, experiments, spikes, builds, test fixtures), this directory is volatile and clears on reboot. Don't copy files out of it or the scratchpad just to keep them.
-- Notes and persistent files live in `~/.local/share/agents/<project>/`, where `<project>` is the main checkout's directory name; skills name their own files there. Don't create files or folders directly in `~`.
+- Notes and persistent files live in the project's store, `agent-notes root`, which every checkout sees as `.agents/store` (its scratch is `.agents/tmp`, reaped by age). Write notes through the link, so an editor shows them beside the code and git only ever sees a link. `agent-notes root --ensure` creates the store and repairs the links. Don't create files or folders directly in `~`.
 
 ## Tooling
 

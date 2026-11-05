@@ -27,8 +27,7 @@ Every subagent brief repeats these.
 
 ## Files
 
-- The user's instructions say where agent notes live and what a project is. Without them, the notes are `.agents/notes/` in the repo and the project is the repo; write a `.gitignore` containing `*` there first.
-- Reports are `onboard/overview.md` and `onboard/<subsystem slug>.md` in the notes, with `onboard/assets/` for images and `onboard/devshell/` for a generated flake. Never commit them.
+- Reports are `onboard/overview.md` and `onboard/<subsystem slug>.md` in the project's store, with `onboard/files/assets/` for images and `onboard/files/devshell/` for a generated flake. `agent-notes root --ensure` gives the store's path, and the checkout sees it as `.agents/store`. Never commit them.
 - Clones live under `/tmp/onboard/<checkout path as a slug>/`, as `trace/` and `dive-<subsystem>/`. They're disposable: a rerun resets them, so nothing there is kept.
 - If the target file exists, this is a rerun. Read it, then go by its state:
   - Marked **short** or **not run:** unfinished. Run from stage 1, keeping what still holds.

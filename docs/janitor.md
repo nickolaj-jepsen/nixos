@@ -17,12 +17,16 @@ repos.
   `pkgs/janitor/head.sh`. `modules/programs/janitor.nix` puts it on `PATH` and
   runs the timers.
 - The `claude`, `claude-work` and `pi` wrappers export
-  `TMPDIR=/tmp/agent/<pid>` (from `janitor dir`), the root the tmp pass sweeps.
+  `TMPDIR=$(agent-notes tmp)` — `~/.local/state/agents/tmp/<repo>/<pid>`, beside
+  the notes of the checkout the session works in (`docs/notes.md`). The tmp pass
+  sweeps that root and the older `/tmp/agent/<pid>` one.
 
 ## What each rule deletes
 
 - Agent temp: the dir is named after its wrapper's pid and `/proc/<pid>` is
-  gone. A legacy `/tmp/claude-1000` path goes once the session registry no
+  gone. In the repository scratch root the repository level stays, so a
+  checkout's `.agents/tmp` link never dangles; only the session dirs below it are
+  candidates. A legacy `/tmp/claude-1000` path goes once the session registry no
   longer knows it and it has been idle an hour.
 - Claude Code job tmp: the job directory has been untouched for 7 days.
 - `/tmp` strays: `pi-*`, `jiti` and `node-compile-cache` past 3 days.

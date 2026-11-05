@@ -18,10 +18,9 @@ arguments: scope
    - each selected item, restated in full from the conversation;
    - an explicit out-of-scope list;
    - a kebab-case slug;
-   - the directory: `plans/<slug>/` in the project's agent notes.
+   - the directory: `plans/<slug>/` in the project's store. `agent-notes root --ensure` gives the store's path, and the checkout sees it as `.agents/store`.
 
    Then:
-   - The user's instructions say where agent notes live and what a project is. Without them, the notes are `.agents/notes/` in the repo (write a `.gitignore` containing `*` there first) and the project is the repo.
    - If the directory already holds a `HANDOFF.md`, ask before overwriting.
    - Wait for a go or a correction.
 

@@ -26,7 +26,7 @@ argument-hint: "[handoff-dir] [--auto]"
 
 ## Start or resume
 
-1. **Resolve the directory.** If none is given, take the most recently modified `plans/<slug>/` holding a `HANDOFF.md` in the user's agent notes (or `.agents/notes/` in the repo), and confirm it before starting.
+1. **Resolve the directory.** If none is given, take the most recently modified `plans/<slug>/` holding a `HANDOFF.md` in the project's store, skipping `plans/history/`, and confirm it before starting. `agent-notes root --ensure` gives the store's path, and the checkout sees it as `.agents/store`.
 2. **Read `HANDOFF.md` in full.** Amendments override everything above them. Read `notes/` files only when an item needs them.
 3. **Resume** if `PROGRESS.md` exists.
    - Check it against git: the integration branch, item worktrees and their commits. Where they disagree, git wins; fix `PROGRESS.md`.
@@ -180,4 +180,4 @@ Each item subagent's prompt contains:
 4. End with what the user acts on:
    - landing, which is the user's call; whenever it comes up, even mid-run, first name what is still unanswered;
    - anything still blocked on them;
-   - once the branch has landed and no owner gate is left in HANDOFF, an offer to delete the plan dir, since git history is the record. The retro in `PROGRESS.md` and any unanswered question go with it, so name those. Delete it only on a yes.
+   - once the branch has landed and no owner gate is left in HANDOFF, an offer to archive the plan dir to `plans/history/<slug>/`, which the notes no longer list as active. The retro and any unanswered question go with it, so name those. Move it only on a yes.

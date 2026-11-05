@@ -34,9 +34,8 @@ This skill finds ideas worth doing and ranks them.
 
 ## The file
 
-- The ideas file is `ideas/<focus slug>.md` in the project's agent notes, or `ideas/<project>.md` with no focus.
-- The user's instructions say where agent notes live and what a project is. Without them, the notes are `.agents/notes/` in the repo and the project is the repo; write a `.gitignore` containing `*` there first.
-- Apart from that `.gitignore`, the ideas file is the only file a run writes. The grounding summary, the briefs and the generators' and verifier's results stay in context, and subagents write no files.
+- The ideas file is `ideas/<focus slug>.md` in the project's store, or `ideas/<project>.md` with no focus. `agent-notes root --ensure` gives the store's path, and the checkout sees it as `.agents/store`.
+- The ideas file is the only file a run writes. The grounding summary, the briefs and the generators' and verifier's results stay in context, and subagents write no files.
 - Never commit it.
 - If it already exists, this is a rerun: read it first.
 

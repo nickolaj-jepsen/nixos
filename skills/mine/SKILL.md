@@ -50,9 +50,8 @@ Turn the target into matchers for `runs`, using the recipe for its kind. Before 
 
 ## The file
 
-- The findings file is `findings/<target>.md` in the agent notes of the project the target belongs to.
-- The user's instructions say where agent notes live and what a project is. Without them, the notes are `.agents/notes/` in the repo and the project is the repo; write a `.gitignore` containing `*` there first.
-- Apart from that `.gitignore`, the findings file is the only file a run writes. Subagents return their notes in their reply and write no files.
+- The findings file is `findings/<target>.md` in the store of the project the target belongs to. `agent-notes root --ensure` gives the store's path, and the checkout sees it as `.agents/store`.
+- The findings file is the only file a run writes. Subagents return their notes in their reply and write no files.
 - Never commit it.
 - If it exists, this is a rerun. Read it first, pass `--since <its date>` so only newer runs are read, and update the counts of the findings already there.
 

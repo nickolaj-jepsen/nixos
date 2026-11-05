@@ -110,8 +110,10 @@ agent-hub answer parse < text                        # exit 1 when it asks nothi
 
 ## Notes
 
-A note is Markdown under `~/.local/share/agents`, or a plan under `~/.claude/plans`
-or `~/.claude-work/plans`. `history/`, `PLAN.prev.md` and dot dirs don't count.
+A note is Markdown under the store (`~/.local/share/agents/store`), or a plan under
+`~/.claude/plans` or `~/.claude-work/plans`. `history/`, `files/` and dot dirs don't
+count: the first holds superseded copies, the second the artefacts a note names
+(`docs/notes.md`).
 
 ### Which notes a session has
 
@@ -126,8 +128,10 @@ The list goes in this order, each group newest first:
 1. **Written**: a write or edit that didn't fail, or a shell command that redirects,
    tees, moves or copies onto the note. Telling those from a read is a regex.
 2. **Read**: a read, or a command naming the note in any other way.
-3. **Project**: the rest of `<notes>/<project>/`, where `<project>` is the main
-   checkout's folder name. A note nothing named still shows here.
+3. **Project**: the rest of `<store>/<repo-id>/`. A note nothing named still shows
+   here. The id is read from the checkout's `.agents/store` link, so the formula
+   that builds it lives in `agent-notes` alone; a checkout with no link falls back
+   to a single store directory named after it.
 
 There is no guess: a session with no notes and an empty project says so. About half
 of real notes sit outside `<project>/`, so the folder alone isn't enough either.
