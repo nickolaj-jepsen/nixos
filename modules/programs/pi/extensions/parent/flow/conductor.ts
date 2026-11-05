@@ -326,37 +326,45 @@ const briefToPlan = async (deps: Deps, flow: Flow): Promise<void> => {
 export type PlanPick = { quick: boolean; model: string; thinking: Level };
 
 /**
+ * What a plan step runs on from the settings alone: the row its `quick` flag
+ * names. The row is why quick never lands on the deep planner and full never on
+ * flash by accident (D5, U2).
+ */
+const rowPlan = (settings: ResolvedSettings, quick: boolean): PlanPick => {
+  const row = settings[quick ? "planQuick" : "plan"];
+  const fallback = DEFAULT_SETTINGS[quick ? "planQuick" : "plan"];
+  return {
+    quick,
+    model: row.model ?? fallback.model ?? "",
+    thinking: row.thinking ?? fallback.thinking ?? "high",
+  };
+};
+
+/**
  * The `brief → plan` picker: the judge's suggestion first, the other plan stage
  * beside it, and an edit path for the suggested stage's model and level. The
  * first entry is what Enter takes, so confirming the judge is one key (D4).
+ *
+ * `question` replaces the title for a caller that is not asking on the judge's
+ * behalf: a send-back passes what the plan step currently runs on as the
+ * verdict, so its own settings are the preselected first entry.
  */
 export const pickPlanStep = async (
   deps: Deps,
   settings: ResolvedSettings,
   verdict: JudgeBriefVerdict,
+  question?: string,
 ): Promise<PlanPick | undefined> => {
-  // Only the stage the judge chose takes the verdict's model and level; the
-  // other keeps its own row, so quick never runs on the deep planner and full
-  // never on flash by accident (D5's plan/planQuick rows, U2).
-  const own = (quick: boolean): PlanPick => {
-    const row = settings[quick ? "planQuick" : "plan"];
-    const fallback = DEFAULT_SETTINGS[quick ? "planQuick" : "plan"];
-    return {
-      quick,
-      model: row.model ?? fallback.model ?? "",
-      thinking: row.thinking ?? fallback.thinking ?? "high",
-    };
-  };
   const judged = verdict.plan === "quick";
   const suggested: PlanPick = { quick: judged, model: verdict.model, thinking: verdict.thinking };
-  const order = [suggested, own(!judged)];
+  const order = [suggested, rowPlan(settings, !judged)];
   const edit = "edit the model and level…";
   const label = (pick: PlanPick) =>
     `${pick.quick ? "quick" : "full"} — ${pick.model} · ${pick.thinking}`;
   const options = [...order.map(label), edit];
   const reason = verdict.reasons[0] ? ` — ${verdict.reasons[0]}` : "";
   const choice = await deps.ctx.ui.select(
-    `Plan step (the judge suggests ${verdict.plan})${reason}`,
+    question ?? `Plan step (the judge suggests ${verdict.plan})${reason}`,
     options,
   );
   if (choice === undefined) return undefined;
@@ -424,8 +432,7 @@ const planToRun = async (deps: Deps, flow: Flow): Promise<void> => {
     return;
   }
   if (approval.kind === "back") {
-    deps.ctx.ui.notify(`flow: sent back to the plan step: ${approval.note}`, "info");
-    await deps.pi.sendUserMessage(approval.note);
+    await sendBack(deps, judged, approval.note);
     return;
   }
   if (approval.kind === "cancel") {
@@ -433,6 +440,67 @@ const planToRun = async (deps: Deps, flow: Flow): Promise<void> => {
     return;
   }
   await beginResolvedStep(deps, approval.flow, "run");
+};
+
+/**
+ * A send-back asks the plan choice again, on the same picker as `brief → plan`
+ * and preselected on what the plan step runs on. A different choice is a
+ * different plan, so the old plan session is closed with its cost and a new one
+ * starts on the chosen settings: a cheap plan that grew into the full spine
+ * can escalate, and a model is never switched on a long session (U3). An
+ * unchanged or dismissed pick keeps the note in the current session.
+ */
+const sendBack = async (deps: Deps, flow: Flow, note: string): Promise<void> => {
+  const { settings } = settingsOf(leafOf(deps.pi), flow);
+  const record = recordOf(flow, "plan");
+  const current: PlanPick = record
+    ? { quick: flow.quick, model: record.model, thinking: record.thinking }
+    : rowPlan(settings, flow.quick);
+  const pick = await pickPlanStep(
+    deps,
+    settings,
+    {
+      plan: current.quick ? "quick" : "full",
+      model: current.model,
+      thinking: current.thinking,
+      reasons: [],
+      cost: 0,
+    },
+    "Plan step after the send-back",
+  );
+  if (
+    !pick ||
+    (pick.quick === current.quick &&
+      pick.model === current.model &&
+      pick.thinking === current.thinking)
+  ) {
+    deps.ctx.ui.notify(`flow: sent back to the plan step: ${note}`, "info");
+    await deps.pi.sendUserMessage(note);
+    return;
+  }
+  const kickoff = kickoffFor("plan", flow.planDir, pick.quick);
+  if (!kickoff) {
+    deps.ctx.ui.notify("flow: the plan step has no kickoff to send.", "error");
+    return;
+  }
+  // Close the plan step where it is before the switch (the approve step has no
+  // record of its own, and closing a `plan` that is already ended is a no-op).
+  const closed = closeStep({ ...flow, step: "plan" }, deps.now(), spend(deps));
+  const chosen: Flow = {
+    ...closed,
+    quick: pick.quick,
+    settings: {
+      ...closed.settings,
+      [pick.quick ? "planQuick" : "plan"]: { model: pick.model, thinking: pick.thinking },
+    },
+  };
+  deps.ctx.ui.notify(
+    `flow: the plan step now runs ${pick.quick ? "quick" : "full"} on ${pick.model} · ${pick.thinking}, in a new session; the note travels with its kickoff.`,
+    "info",
+  );
+  // One message, not two: `sendUserMessage` delivers the first and waits for
+  // the whole turn, so a second send would land after the planner's first turn.
+  await beginStep(deps, chosen, "plan", pick.model, pick.thinking, `${kickoff}\n\n${note}`);
 };
 
 /** In gated mode every gate stops the run; other modes only stop on a deviation (D14). */

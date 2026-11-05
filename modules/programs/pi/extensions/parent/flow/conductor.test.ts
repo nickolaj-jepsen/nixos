@@ -85,6 +85,7 @@ const harness = (options: Options = {}) => {
   const statuses: (string | undefined)[] = [];
   const sent: { text: string; expand?: boolean }[] = [];
   const atNewSession: Flow[] = [];
+  const parents: (string | undefined)[] = [];
   const switches: string[] = [];
   const models: string[] = [];
   const levels: string[] = [];
@@ -175,6 +176,7 @@ const harness = (options: Options = {}) => {
         setup?: (m: { appendCustomEntry: (type: string, data: unknown) => void }) => Promise<void>;
         withSession?: (ctx: unknown) => Promise<void>;
       }) => {
+        parents.push(init?.parentSession);
         const captured = readFlow(dir);
         if (captured.kind === "ok") atNewSession.push(captured.flow);
         let entry: { planDir: string; slug: string } | undefined;
@@ -272,6 +274,7 @@ const harness = (options: Options = {}) => {
     statuses,
     sent,
     atNewSession,
+    parents,
     switches,
     models,
     levels,
@@ -603,6 +606,127 @@ test("approval send-back sends its note and keeps the plan's spend live", async 
   assert.equal(status.budget.spentStep, 0.75);
   // The judge's $0.02 is in the plan's live ledger, not added on top.
   assert.equal(status.budget.spentTotal, 1.25);
+});
+
+/** A flow at its plan step, running quick, with the full row priced for the picker. */
+const planningQuick = (): Partial<Flow> => ({
+  step: "plan",
+  quick: true,
+  steps: [
+    {
+      step: "plan",
+      session: "/tmp/plan.jsonl",
+      model: "fixture/replay",
+      thinking: "high",
+      startedAt: 3,
+      kickoffSent: true,
+    },
+  ],
+  settings: {
+    plan: { model: "fixture/deep", thinking: "high" },
+    planQuick: { model: "fixture/replay", thinking: "high" },
+  },
+});
+
+test("a send-back that escalates quick to full starts a new plan session on the plan row", async () => {
+  const run = harness({
+    flow: planningQuick(),
+    approve: async () => ({ kind: "back", note: "the plan needs the deep planner" }),
+    select: ["full — fixture/deep · high"],
+  });
+  run.handoff();
+  await command(run.deps, run.runtime, "next");
+
+  // The picker came back, preselected on what the plan step runs on.
+  assert.deepEqual(run.selections[0], [
+    "Plan step after the send-back",
+    "quick — fixture/replay · high",
+    "full — fixture/deep · high",
+    "edit the model and level…",
+  ]);
+
+  // The old plan step is closed with its cost, and pending is on disk before
+  // the switch, on the plan row's model and level rather than planQuick's.
+  const atSwitch = run.atNewSession[0];
+  assert.equal(atSwitch.quick, false);
+  const closed = atSwitch.steps.at(-1);
+  assert.equal(closed?.step, "plan");
+  assert.equal(closed?.endedAt, 2_000);
+  assert.equal(closed?.cost, 0.25);
+  assert.equal(closed?.model, "fixture/replay");
+  assert.deepEqual(atSwitch.pending, {
+    step: "plan",
+    model: "fixture/deep",
+    thinking: "high",
+    kickoff: `/skill:flow-plan ${run.dir}\n\nthe plan needs the deep planner`,
+  });
+
+  // A new session, parented on the old plan session, on the full planner; the
+  // kickoff carries the note with no `--quick`, so the planner sees both.
+  assert.deepEqual(run.parents, ["/tmp/plan.jsonl"]);
+  assert.deepEqual(run.models, ["fixture/deep"]);
+  assert.deepEqual(run.levels, ["high"]);
+  assert.equal(run.sent.length, 1);
+  assert.match(run.sent[0]?.text ?? "", /^\/skill:flow-plan /);
+  assert.doesNotMatch(run.sent[0]?.text ?? "", /--quick/);
+  assert.match(run.sent[0]?.text ?? "", /\n\nthe plan needs the deep planner$/);
+  assert.equal(run.sent[0]?.expand, true);
+
+  const after = run.read();
+  assert.equal(after.step, "plan");
+  assert.equal(after.quick, false);
+  assert.deepEqual(after.settings.plan, { model: "fixture/deep", thinking: "high" });
+  assert.equal(after.steps.length, 2);
+  assert.equal(after.steps.at(-1)?.model, "fixture/deep");
+  assert.equal(after.steps.at(-1)?.thinking, "high");
+  assert.equal(after.steps.at(-1)?.parentSession, "/tmp/plan.jsonl");
+  assert.equal(after.steps.at(-1)?.kickoffSent, true);
+});
+
+test("a send-back that changes nothing keeps the note in the current session", async () => {
+  const run = harness({
+    flow: planningQuick(),
+    approve: async () => ({ kind: "back", note: "tighten A2's acceptance" }),
+  });
+  run.handoff();
+  await command(run.deps, run.runtime, "next");
+
+  // Enter on the first entry is what the plan step already runs on.
+  assert.match(run.selections[0]?.[1] ?? "", /^quick — fixture\/replay · high$/);
+  assert.deepEqual(run.atNewSession, []);
+  assert.deepEqual(run.parents, []);
+  assert.deepEqual(run.sent, [{ text: "tighten A2's acceptance", expand: undefined }]);
+
+  const after = run.read();
+  assert.equal(after.step, "plan");
+  assert.equal(after.quick, true);
+  assert.deepEqual(after.steps.at(-1)?.endedAt, undefined);
+  assert.deepEqual(after.steps.at(-1)?.cost, undefined);
+});
+
+test("dismissing the send-back picker keeps the note in the current session", async () => {
+  const run = harness({
+    flow: planningQuick(),
+    approve: async () => ({ kind: "back", note: "split A1" }),
+  });
+  const ui = run.deps.ctx.ui as unknown as {
+    select: (title: string, list: string[]) => Promise<string | undefined>;
+  };
+  let offered: string[] = [];
+  ui.select = async (_title, list) => {
+    offered = list;
+    return undefined;
+  };
+  run.handoff();
+  await command(run.deps, run.runtime, "next");
+
+  assert.equal(offered.length, 3);
+  assert.deepEqual(run.atNewSession, []);
+  assert.deepEqual(run.sent, [{ text: "split A1", expand: undefined }]);
+  const after = run.read();
+  assert.equal(after.step, "plan");
+  assert.equal(after.quick, true);
+  assert.equal(after.steps.at(-1)?.endedAt, undefined);
 });
 
 test("declining the guide keeps the run open and counts the following turn", async () => {

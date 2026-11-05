@@ -167,6 +167,11 @@ scenario_keys s
 scenario_keys Enter
 scenario_type 'split A1 into the button and its test'
 scenario_keys Enter
+# A send-back re-asks the plan choice, preselected on what the plan step already
+# runs on; enter keeps it, so the note goes into the same plan session and no
+# step is closed.
+scenario_wait 'Plan step after the send-back' 30
+scenario_keys Enter
 scenario_wait 'sent back to the plan step' 30
 scenario_wait 'Revising the plan.' 30
 
