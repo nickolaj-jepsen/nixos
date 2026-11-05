@@ -32,18 +32,35 @@ SHELL_WRITE = re.compile(r"(?:>>?|\btee(?:\s+-a)?|\b(?:mv|cp)\s+\S+)\s*[\"']?$")
 
 def default_roots():
     home = Path.home()
-    return [home / ".local/share/agents", home / ".claude/plans", home / ".claude-work/plans"]
+    data = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
+    return [data / "agents" / "store", home / ".claude/plans", home / ".claude-work/plans"]
+
+
+def store_root():
+    """The durable note store every checkout's `.agents/store` points into."""
+    return default_roots()[0]
 
 
 def is_note(path, roots):
-    """Whether absolute `path` is a note: Markdown under a root, minus superseded copies
-    (`history/`, annotate-plan's `PLAN.prev.md`) and dot dirs."""
-    if not path.endswith(".md") or os.path.basename(path) == "PLAN.prev.md":
+    """Whether absolute `path` is a note: Markdown under a root, minus artefacts (`files/`),
+    superseded copies (`history/`) and dot dirs.
+
+    A path reached through a checkout's `.agents/store` link counts as the note it resolves
+    to; `Notes.read` still resolves the link and requires that the target is a note, so no
+    link can reach out of the store.
+    """
+    if _under_root(path, roots):
+        return True
+    return "/.agents/" in path and _under_root(os.path.realpath(path), roots)
+
+
+def _under_root(path, roots):
+    if not path.endswith(".md"):
         return False
     for root in roots:
         if path.startswith(f"{root}/"):
-            parts = path[len(str(root)) + 1:].split("/")
-            return not any(part == "history" or part.startswith(".") for part in parts[:-1])
+            parts = path[len(str(root)) + 1:].split("/")[:-1]
+            return not any(part in {"history", "files"} or part.startswith(".") for part in parts)
     return False
 
 
@@ -94,8 +111,14 @@ class Notes:
         forms += ["~" + re.escape(root[len(home):]) for root in self.roots if root.startswith(f"{home}/")]
         self.in_command = re.compile(rf"(?:{'|'.join(forms)})/[^\"'`\n<>|*;&)]{{1,200}}?\.md\b")
         # Most lines hold no note, and a transcript can pass a gigabyte, so they aren't parsed.
-        tails = [root[len(home) + 1:] if root.startswith(f"{home}/") else root for root in self.roots]
-        self.hints = re.compile(b"|".join([*(re.escape(tail.encode()) for tail in tails), FAILED, RECORD.encode()]))
+        # The store's own name is too common a word (`restore`, `stored`) to hint on, so its
+        # hint is the path fragment a note is written through, by link or in full.
+        hints = [b"/agents/store/", b".agents/store"]
+        for root in self.roots:
+            if not str(root).endswith("/store"):
+                tail = root[len(home) + 1:] if root.startswith(f"{home}/") else root
+                hints.append(tail.encode())
+        self.hints = re.compile(b"|".join([*(re.escape(hint) for hint in hints), FAILED, RECORD.encode()]))
 
     def _resolve(self, raw, cwd):
         """A tool's path as absolute, as pi's tools and the shell read it; None when it isn't one."""
@@ -216,8 +239,11 @@ class Notes:
         return sorted(((path, at) for path, at in dated if at is not None), key=lambda item: -item[1])
 
     def project_of(self, path):
-        """The project folder a note lies in, or None for a plan or anything else."""
+        """The project folder a note lies in, or None for a plan or anything else. A note named
+        through a checkout's link names its project after `.agents/store`."""
         root = self.roots[0]
+        if not path.startswith(f"{root}/") and "/.agents/store/" in path:
+            path = f"{root}/{path.split('/.agents/store/', 1)[1]}"
         return path[len(root) + 1:].split("/")[0] if path.startswith(f"{root}/") and path.count("/") > root.count("/") + 1 else None
 
     def _project(self, project):
@@ -226,7 +252,7 @@ class Notes:
             return []
         found = []
         for folder, dirs, files in os.walk(os.path.join(self.roots[0], project)):
-            dirs[:] = [d for d in dirs if d != "history" and not d.startswith(".")]
+            dirs[:] = [d for d in dirs if d not in {"history", "files"} and not d.startswith(".")]
             found += [os.path.join(folder, name) for name in files if is_note(os.path.join(folder, name), self.roots)]
         dated = ((path, mtime_ms(path)) for path in found)
         return heapq.nlargest(LIST_MAX, ((path, at) for path, at in dated if at is not None), key=lambda item: item[1])

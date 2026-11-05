@@ -150,8 +150,11 @@ if [[ -z $path ]]; then
 fi
 
 # The reader can't jump to a line, so a note link with `:line` still goes to the editor.
-if [[ -f $path && $path == "$HOME"/.local/share/agents/*.md && -z $line ]]; then
-  exec @agentNoteOpen@ "$path"
+# A note, whether named by its store path or through the link in a checkout.
+if [[ -f $path && -z $line ]]; then
+  case "$path" in
+    "$HOME"/.local/share/agents/store/*.md | */.agents/store/*.md) exec @agentNoteOpen@ "$path" ;;
+  esac
 fi
 
 if [[ -f $path && (! -s $path || $(file -b --mime-encoding "$path") != binary) ]]; then

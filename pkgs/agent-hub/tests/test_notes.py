@@ -114,10 +114,11 @@ class TouchedTest(NotesCase):
 
 
 class ListingTest(NotesCase):
-    def test_superseded_copies_and_archives_are_not_notes(self):
+    def test_superseded_copies_artefacts_and_archives_are_not_notes(self):
         roots = [self.root]
         self.assertTrue(is_note(f"{self.root}/p/plans/a/PLAN.md", roots))
-        for rel in ("p/plans/a/PLAN.prev.md", "p/plans/a/history/1.md", ".archive/p/a.md", "p/a.txt"):
+        for rel in ("p/plans/a/history/PLAN.prev.md", "p/plans/a/files/prototype.md",
+                    "p/plans/a/files/spikes/run.md", ".archive/p/a.md", "p/a.txt"):
             self.assertFalse(is_note(f"{self.root}/{rel}", roots), rel)
         self.assertFalse(is_note("/elsewhere/a.md", roots))
 
@@ -154,6 +155,25 @@ class ReadTest(NotesCase):
         for path in (str(secret), f"{self.root}/p/key", f"{self.root}/p/link.md", f"{self.root}/../secret.md", f"{self.root}/p/missing.md"):
             self.assertIsNone(self.notes.read(path), path)
 
+    def test_a_note_read_through_the_checkout_link_is_the_same_note(self):
+        path = self.note("p/a.md", text="# through the link\n")
+        checkout = self.tmp / "checkout"
+        (checkout / ".agents").mkdir(parents=True)
+        (checkout / ".agents" / "store").symlink_to(self.root)
+        linked = str(checkout / ".agents" / "store" / "p" / "a.md")
+        self.assertEqual(self.notes.read(linked)["text"], "# through the link\n")
+        self.assertEqual(self.notes.project_of(linked), "p")
+
+    def test_a_link_out_of_the_store_is_still_refused(self):
+        secret = self.tmp / "outside.md"
+        secret.write_text("secret")
+        checkout = self.tmp / "checkout"
+        (checkout / ".agents").mkdir(parents=True)
+        (checkout / ".agents" / "store").symlink_to(self.root)
+        (self.root / "p").mkdir(parents=True)
+        (self.root / "p" / "escape.md").symlink_to(secret)
+        self.assertIsNone(self.notes.read(str(checkout / ".agents" / "store" / "p" / "escape.md")))
+
     def test_a_huge_note_is_cut_and_says_so(self):
         found = self.notes.read(self.note("p/big.md", text="x" * (NOTE_MAX + 5)))
         self.assertEqual((len(found["text"]), found["cut"]), (NOTE_MAX, True))
@@ -163,7 +183,7 @@ class ReadTest(NotesCase):
 
 
 class RenderTest(unittest.TestCase):
-    PATH = "/home/me/.local/share/agents/p/plans/a/PLAN.md"
+    PATH = "/home/me/.local/share/agents/store/p/plans/a/PLAN.md"
 
     def html(self, text):
         return render(text, self.PATH)
@@ -187,13 +207,13 @@ class RenderTest(unittest.TestCase):
         self.assertIn("<p>a</p>", self.html("[a](http://example.org)"))
 
     def test_a_relative_link_to_markdown_opens_that_note(self):
-        self.assertIn('href="note:/home/me/.local/share/agents/p/plans/b/PLAN.md"', self.html("[b](../b/PLAN.md#top)"))
-        self.assertIn('href="note:/home/me/.local/share/agents/p/plans/a/my report.md"', self.html("[r](my%20report.md)"))
+        self.assertIn('href="note:/home/me/.local/share/agents/store/p/plans/b/PLAN.md"', self.html("[b](../b/PLAN.md#top)"))
+        self.assertIn('href="note:/home/me/.local/share/agents/store/p/plans/a/my report.md"', self.html("[r](my%20report.md)"))
 
     def test_a_notes_path_in_a_code_span_opens_it(self):
-        shown = self.html("See `~/.local/share/agents/p/x y.md` and `/home/me/.local/share/agents/q/z.md`, not `/etc/a.md`.")
-        self.assertIn('href="note:/home/me/.local/share/agents/p/x y.md"', shown)
-        self.assertIn('href="note:/home/me/.local/share/agents/q/z.md"', shown)
+        shown = self.html("See `~/.local/share/agents/store/p/x y.md` and `/home/me/.local/share/agents/store/q/z.md`, not `/etc/a.md`.")
+        self.assertIn('href="note:/home/me/.local/share/agents/store/p/x y.md"', shown)
+        self.assertIn('href="note:/home/me/.local/share/agents/store/q/z.md"', shown)
         self.assertEqual(shown.count("<a "), 2)
 
     def test_code_keeps_its_lines_and_tables_stay_tables(self):
@@ -293,7 +313,7 @@ class ReaderOpsTest(ProtocolCase):
     def test_show_leaves_a_file_it_wont_serve_to_whoever_can_open_it(self):
         self.open_bar(self.hub)
         with self.assertRaises(subprocess.CalledProcessError):
-            self.hub.command("show", str(self.plan.parent / "PLAN.prev.md"))
+            self.hub.command("show", str(self.plan.parent / "history" / "PLAN.prev.md"))
 
     def test_show_with_no_session_means_the_focused_windows(self):
         proc = self.hub.process()

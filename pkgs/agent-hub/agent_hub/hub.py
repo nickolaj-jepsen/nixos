@@ -547,7 +547,7 @@ class Hub:
             known = self.sessions.get(sid) or next((r for r in self.recent if r["id"] == sid), None)
             transcript = known.transcript if isinstance(known, model.Session) else (known or {}).get("transcript")
             cwd = known.cwd if isinstance(known, model.Session) else (known or {}).get("cwd")
-            project = self.notes.project_of(path) if path and known is None else await self.git.project(cwd)
+            project = self.notes.project_of(path) if path and known is None else await self.git.store_project(cwd)
             found = await asyncio.to_thread(self.notes.listing, sid or "", transcript, cwd, project)
         conn.send({"type": "reply", "request": message["request"], **({} if found is None else {"notes": found})})
 

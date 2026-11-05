@@ -13,9 +13,10 @@ from urllib.parse import unquote
 
 from markdown_it import MarkdownIt
 
-NOTES_DIR = "/.local/share/agents/"
+# Where a note's own path marks the checkout's store, for resolving a `~` span below.
+STORE_MARK = "/agents/store/"
 # The whole of an inline code span that names a note, as an agent writes one in prose.
-NOTE_IN_CODE = re.compile(r"(~|/[^`]*?)/\.local/share/agents/[^`\n]+\.md")
+NOTE_IN_CODE = re.compile(r"(~|/[^`]*?)/(?:\.local/share/)?agents/store/[^`\n]+\.md")
 
 
 def _note_link(href, path):
@@ -34,9 +35,12 @@ def _code_target(code, path):
         return None
     if not code.startswith("~"):
         return "note:" + code
-    # `~` is the home of the host the note is on, which this one may not share.
-    at = path.find(NOTES_DIR)
-    return "note:" + path[:at] + code[1:] if at > 0 else None
+    # `~` is the home of the host the note is on, which this one may not share, so the
+    # absolute store is taken from the note's own path.
+    at = path.find(STORE_MARK)
+    if at <= 0:
+        return None
+    return "note:" + path[:at] + STORE_MARK.rstrip("/") + "/" + code.split(STORE_MARK, 1)[1]
 
 
 def render(text, path):
