@@ -1,1 +1,32 @@
-[{ "text": "The flow skeleton has no steps to drive yet." }]
+[
+  { "toolCall": { "name": "flow_next", "arguments": { "note": "the brief is written" } } },
+  { "text": "Brief written. Advancing." },
+  { "text": "Plan written." },
+  { "toolCall": { "name": "flow_status", "arguments": {} } },
+  { "toolCall": { "name": "flow_next", "arguments": { "note": "the toy item is built" } } },
+  { "text": "Run finished." },
+  {
+    "toolCall": {
+      "name": "flow_tour",
+      "arguments": {
+        "intro": "Read a.ts first: the value moves, then the new helpers in c.ts.",
+        "stops": [
+          {
+            "file": "a.ts",
+            "line": 1,
+            "type": "note",
+            "body": "the value is now 2"
+          },
+          {
+            "file": "c.ts",
+            "line": 1,
+            "type": "praise",
+            "body": "the doubling helper is the whole feature"
+          }
+        ]
+      }
+    }
+  },
+  { "toolCall": { "name": "flow_next", "arguments": { "note": "the guide is written" } } },
+  { "text": "Review guide written." }
+]
