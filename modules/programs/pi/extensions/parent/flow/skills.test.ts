@@ -78,3 +78,26 @@ test("flow-run carries only open questions no Amendment answers", () => {
   const text = prose("flow-run");
   assert.equal(text.match(/Open questions with no Amendment answering them/g)?.length, 2);
 });
+
+test("flow-plan keeps Explore read-only and measures commands in general-purpose", () => {
+  const text = prose("flow-plan");
+  assert.match(text, /Keep `Explore` to reading and searching\./);
+  assert.match(
+    text,
+    /A `general-purpose` child, also on `vm\/flash`, runs the builds and tests and measures their durations\./,
+  );
+  assert.doesNotMatch(text, /how long they take: run them/);
+});
+
+test("flow-plan's child fallback discloses both skipped independent checks", () => {
+  const text = prose("flow-plan");
+  assert.match(
+    text,
+    /Children cannot call `subagent`, so do the research yourself without fan-out or a cold read/,
+  );
+  assert.match(text, /report that the research fan-out and independent cold read were skipped/);
+  assert.match(
+    text,
+    /Only a parent session can provide those independent checks; `--quick` explicitly omits them\./,
+  );
+});
