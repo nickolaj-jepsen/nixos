@@ -698,9 +698,10 @@ const resume = async (
   const { planDir, slug: name, step } = flow;
   try {
     if (record.session === deps.ctx.sessionManager.getSessionFile()) {
-      // `pi.sendUserMessage` returns void and reports a failure later, so a send
-      // from a streaming turn could be marked delivered without ever running.
-      // Refuse instead: an idle session is the one case its return means anything.
+      // `pi.sendUserMessage` returns void and reports a failure through the
+      // session, so a send from a streaming turn would be marked delivered
+      // without running. Refuse that case; an idle session is where pi's own
+      // preflight (no model, no key) is the only failure left, and it says so.
       if (kickoff && !deps.ctx.isIdle()) {
         deps.ctx.ui.notify(
           `flow ${name}: a turn is still running, so the ${step} kickoff was not resent. /flow resume once it settles.`,
