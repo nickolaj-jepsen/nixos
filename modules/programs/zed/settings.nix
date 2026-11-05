@@ -44,6 +44,13 @@
 
           toolbar = {
             code_actions = false;
+            quick_actions = false;
+            selections_menu = false;
+          };
+
+          status_bar = {
+            line_endings_button = true;
+            active_encoding_button = "enabled";
           };
 
           indent_guides = {
@@ -61,12 +68,15 @@
           buffer_font_family = config.fireproof.theme.font.family;
           buffer_font_size = 14;
           buffer_line_height.custom = 1.5;
-          ui_font_family = config.fireproof.theme.font.family;
+          # VSCode's workbench font: the system sans (Inter via fontconfig on NixOS).
+          ui_font_family =
+            if pkgs.stdenv.isDarwin
+            then ".SystemUIFont"
+            else "Inter";
           ui_font_size = 14;
 
           # Editor behavior
           cursor_blink = true;
-          cursor_animation.enabled = true;
           scroll_beyond_last_line = "one_page";
           sticky_scroll.enabled = true;
           colorize_brackets = true;
@@ -103,6 +113,7 @@
           # Panels
           project_panel = {
             git_status_indicator = true;
+            folder_indicator = "chevron";
             diagnostic_badges = false;
             bold_folder_labels = false;
             git_status = true;

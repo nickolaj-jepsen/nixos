@@ -26,7 +26,8 @@
                 background = hex "bg";
                 "background.appearance" = "opaque";
                 text = "#dedede";
-                "text.muted" = hex "muted";
+                # Also the colour of unchanged project-panel entries; VSCode's sidebar grey.
+                "text.muted" = "#cccccc";
                 "text.placeholder" = hex "muted";
                 "text.disabled" = hex "muted";
                 "text.accent" = hex "accent";
