@@ -99,7 +99,7 @@
               y = mkRemoteWorkspace {
                 name = "scw-tf";
                 host = "dev.ao";
-                path = "/home/nij/scw-tf";
+                path = "/home/nij/dev/scw-tf";
               };
             };
 
