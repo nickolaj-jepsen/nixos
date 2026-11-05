@@ -195,12 +195,23 @@ test("the leaf overrides, and a flow overrides the leaf, field by field", () => 
   assert.deepEqual(settings.items, { role: "reviewer", deep: "builder-deep", thinking: "high" });
 });
 
-test("naming a model drops the role", () => {
+test("a model on a role key is refused, symmetrically with a role on a session key", () => {
   const { settings, reports } = resolveSettings(DEFAULT_SETTINGS, undefined, {
+    items: { model: "vm/flash" },
     gateReview: { model: "vm/flash" },
+    finalReview: { model: "vm/deep" },
+    simplify: { model: "vm/flash", thinking: "low" },
   });
-  assert.deepEqual(settings.gateReview, { model: "vm/flash" });
-  assert.deepEqual(reports, []);
+  // The role stays, and the level beside it is a field of its own and still lands.
+  assert.deepEqual(settings.items, DEFAULT_SETTINGS.items);
+  assert.deepEqual(settings.gateReview, DEFAULT_SETTINGS.gateReview);
+  assert.deepEqual(settings.finalReview, DEFAULT_SETTINGS.finalReview);
+  assert.deepEqual(settings.simplify, { role: "builder", thinking: "low" });
+  assert.deepEqual(
+    reports.map((report) => `${report.key}.${report.field}`),
+    ["items.model", "gateReview.model", "finalReview.model", "simplify.model"],
+  );
+  assert.equal(settings.items.model, undefined, "a role key never carries a model");
 });
 
 test("a role in the same layer as a model wins, which is the narrower instruction", () => {
@@ -208,7 +219,10 @@ test("a role in the same layer as a model wins, which is the narrower instructio
     finalReview: { model: "vm/deep", role: "reviewer" },
   });
   assert.deepEqual(settings.finalReview, { role: "reviewer", thinking: "high" });
-  assert.deepEqual(reports, []);
+  assert.deepEqual(
+    reports.map((report) => `${report.key}.${report.field}`),
+    ["finalReview.model"],
+  );
 });
 
 test("a step with its own session refuses a role", () => {

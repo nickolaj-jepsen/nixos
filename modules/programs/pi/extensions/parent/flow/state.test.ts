@@ -134,6 +134,39 @@ test("the record a resume goes back to is the last one for that step", () => {
   assert.equal(recordOf(flow, "guide"), undefined);
 });
 
+test("closing a step prices the record the lookup returns, not one behind it", () => {
+  const dir = scratch();
+  const base = demo(dir, { step: "plan" });
+  const plan = (session: string, startedAt: number, end?: number) => ({
+    step: "plan" as const,
+    session,
+    model: "m/1",
+    thinking: "high" as const,
+    startedAt,
+    ...(end === undefined ? {} : { endedAt: end, cost: 1 }),
+  });
+
+  // The step's last record is the one its work goes on; a closed one behind it
+  // is history and is never re-closed.
+  const closedAhead: Flow = {
+    ...base,
+    steps: [plan("/p/one.jsonl", 2), plan("/p/two.jsonl", 3, 4)],
+  };
+  assert.equal(recordOf(closedAhead, "plan")?.session, "/p/two.jsonl");
+  assert.deepEqual(closeStep(closedAhead, 9, 2), closedAhead);
+
+  // Re-entered after a resume: the open last record is the one that closes.
+  const reopened: Flow = { ...base, steps: [plan("/p/one.jsonl", 2, 3), plan("/p/two.jsonl", 4)] };
+  const closed = closeStep(reopened, 9, 2);
+  assert.deepEqual(
+    closed.steps.map((record) => [record.session, record.endedAt, record.cost]),
+    [
+      ["/p/one.jsonl", 3, 1],
+      ["/p/two.jsonl", 9, 2],
+    ],
+  );
+});
+
 test("settings layer the leaf over the defaults and the flow over the leaf", () => {
   const dir = scratch();
   const flow = demo(dir, {

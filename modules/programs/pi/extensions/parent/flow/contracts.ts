@@ -135,10 +135,12 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
  *
  * Never throws: an unknown key, a bad model reference, an unknown role name or
  * an unknown thinking level keeps the value from the layer below and adds a
- * report. Naming `model` clears `role`, since a step has one target; naming
- * both in one layer leaves the role, which is the narrower instruction. A role
- * on a `SESSION_KEYS` entry is refused outright: only the conductor's
- * `setModel` can start a step's session, and a role gives it no model.
+ * report. A step has one target, and the key's kind decides which may carry it:
+ * a role on a `SESSION_KEYS` entry is refused, since only the conductor's
+ * `setModel` can start a step's session and a role gives it no model; a model on
+ * a `ROLE_KEYS` entry is refused for the same reason in reverse, since every
+ * consumer spawns that role. Naming a model clears `role` and naming a role
+ * clears `model`, so the other field never sits beside it.
  */
 export const resolveSettings = (
   defaults: ResolvedSettings,
@@ -165,11 +167,18 @@ export const resolveSettings = (
     }
     if ("model" in raw) {
       const model = raw.model;
-      if (isModelRef(model)) {
+      if (!isModelRef(model)) {
+        reports.push({ key, field: "model", value: model, reason: 'not "provider/model"' });
+      } else if ((ROLE_KEYS as readonly string[]).includes(key)) {
+        reports.push({
+          key,
+          field: "model",
+          value: model,
+          reason: "a step that spawns a subagent runs on a role, not a model",
+        });
+      } else {
         settings[key].model = model;
         delete settings[key].role;
-      } else {
-        reports.push({ key, field: "model", value: model, reason: 'not "provider/model"' });
       }
     }
     if ("role" in raw) {

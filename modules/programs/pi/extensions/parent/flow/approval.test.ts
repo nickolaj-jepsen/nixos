@@ -135,12 +135,16 @@ test("approving writes the mode and only the settings the owner changed", () => 
   assert.deepEqual(more.settings.items, { deep: "reviewer-deep", thinking: "medium" });
   assert.equal(more.settings.guide, undefined);
 
-  // A model typed into a role row replaces the role rather than sitting beside it.
+  // A model typed into a role row is refused: the row spawns a role, so the
+  // model would sit where nothing reads it (see `resolveSettings`).
   const asModel = structuredClone(opened);
   asModel.settings.finalReview.target = "vm/deep";
-  assert.deepEqual(applyPage(flow(), opened, asModel).flow.settings.finalReview, {
-    model: "vm/deep",
-  });
+  const roleEdit = applyPage(flow(), opened, asModel);
+  assert.equal(roleEdit.flow.settings.finalReview, undefined, "a model was written for a role");
+  assert.deepEqual(
+    roleEdit.reports.map((entry) => `${entry.key}.${entry.field}`),
+    ["finalReview.model"],
+  );
 });
 
 test("an edited value resolveSettings would refuse is reported", () => {
@@ -476,6 +480,14 @@ test("a refused value keeps the page open on approve and says which", () => {
     invalid.overlay.handleInput(key);
   const after: Drawn[] = invalid.results;
   assert.equal(after[0]?.kind, "approve");
+});
+
+test("a model typed into a role row keeps the page open too", () => {
+  // `f` is the final reviewer's row; the page takes a role there, so a model is
+  // an edit it cannot approve, and the default role stays.
+  const refused = drive(["f", "\r", ..."vm/deep".split(""), "\r", "a", "\r"]);
+  assert.deepEqual(refused.results, [], "a model in a role row approved the page");
+  assert.match(refused.render().join("\n"), /finalReview\.model = "vm\/deep"/);
 });
 
 test("f edits the final reviewer role and its thinking row cycles", () => {

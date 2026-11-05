@@ -114,6 +114,45 @@ test("the diff's anchors are the lines each side offers", () => {
   assert.deepEqual([...anchors.get("gone.ts")!.new], []);
 });
 
+test("a file with no hunks is still a file of the diff", () => {
+  // git prints no `---`/`+++` for a binary change or a mode change, so only the
+  // `diff --git` header names the file. A file-level stop must anchor there.
+  const anchors = diffAnchors(
+    [
+      "diff --git a/logo.png b/logo.png",
+      "index 1234567..89abcde 100644",
+      "Binary files a/logo.png and b/logo.png differ",
+      "diff --git a/run.sh b/run.sh",
+      "old mode 100644",
+      "new mode 100755",
+      "",
+    ].join("\n"),
+  );
+  assert.deepEqual([...anchors.keys()], ["logo.png", "run.sh"]);
+  assert.equal(stopProblem({ file: "logo.png", type: "note", body: "" }, anchors), undefined);
+  assert.equal(stopProblem({ file: "run.sh", type: "note", body: "" }, anchors), undefined);
+  // It offers no line on either side, so a line stop is still refused.
+  assert.match(
+    stopProblem({ file: "run.sh", line: 1, type: "note", body: "" }, anchors) ?? "",
+    /run\.sh:1 is not a changed new line of this diff \(no new lines\)/,
+  );
+  // A quoted path is the header's, quotes and all, exactly as the `+++` line names it.
+  const quoted = diffAnchors(
+    [
+      'diff --git "a/sp ace.ts" "b/sp ace.ts"',
+      "index 1234567..89abcde 100644",
+      '--- "a/sp ace.ts"',
+      '+++ "b/sp ace.ts"',
+      "@@ -1 +1 @@",
+      "-one",
+      "+two",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(quoted.size, 1);
+  assert.deepEqual([...quoted.get('"b/sp ace.ts"')!.new], [1]);
+});
+
 test("a stop off the diff is named, a stop on it is not", () => {
   const anchors = diffAnchors(DIFF);
   assert.equal(stopProblem({ file: "a.ts", line: 1, type: "note", body: "" }, anchors), undefined);

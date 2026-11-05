@@ -17,7 +17,7 @@ import { approve } from "./flow/approval.ts";
 import { command, type Deps, sessionStart, settled } from "./flow/conductor.ts";
 import { TOOL_NEXT, TOOL_STATUS } from "./flow/contracts.ts";
 import { judgeBrief, judgeHandoff } from "./flow/judge.ts";
-import { flowOf, settingsOf } from "./flow/state.ts";
+import { flowOf, guardFlow, settingsOf } from "./flow/state.ts";
 import { createRuntime, nextTool, statusOf } from "./flow/tools.ts";
 import { registerTour } from "./flow/tour.ts";
 
@@ -109,18 +109,16 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "Read this /flow's step, settings and budget",
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
-      const here = flowOf(ctx);
-      if (here.kind !== "ok")
+      const guarded = guardFlow(flowOf(ctx), {
+        none: {
+          text: "flow_status only works inside a flow session; start one with /flow <slug>.",
+          kind: "error",
+        },
+        corrupt: (error) => ({ text: `flow_status refused: ${error}`, kind: "error" }),
+      });
+      if ("notice" in guarded)
         return {
-          content: [
-            {
-              type: "text" as const,
-              text:
-                here.kind === "none"
-                  ? "flow_status only works inside a flow session; start one with /flow <slug>."
-                  : `flow_status refused: ${here.error}`,
-            },
-          ],
+          content: [{ type: "text" as const, text: guarded.notice.text }],
           details: undefined,
           isError: true,
         };
@@ -128,8 +126,8 @@ export default function (pi: ExtensionAPI) {
       const status = statusOf(
         { runtime, now: Date.now, hasRunning, cost },
         ctx,
-        here.flow,
-        settingsOf(leaf, here.flow).settings,
+        guarded.flow,
+        settingsOf(leaf, guarded.flow).settings,
       );
       return {
         content: [{ type: "text" as const, text: JSON.stringify(status, null, 2) }],

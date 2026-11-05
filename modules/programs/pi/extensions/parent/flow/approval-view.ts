@@ -129,8 +129,9 @@ export const pageEdits = (
 /**
  * The flow after the page's edits (D13): the page's mode, and only the settings
  * fields the owner changed, laid over what the flow already holds. `reports`
- * names every edited value `resolveSettings` would refuse; a page with any
- * must not be approved, since the refused value would silently fall back.
+ * names every edited value `resolveSettings` would refuse, and a refused field
+ * is left out of the flow: a page with any report must not be approved, since
+ * the refused value would silently fall back.
  */
 export const applyPage = (
   flow: Flow,
@@ -138,16 +139,20 @@ export const applyPage = (
   page: PageState,
 ): { flow: Flow; reports: SettingReport[] } => {
   const edits = pageEdits(opened, page);
-  const reports = resolveSettings(DEFAULT_SETTINGS, undefined, edits).reports;
+  const { reports } = resolveSettings(DEFAULT_SETTINGS, undefined, edits);
+  const refused = new Set(reports.map((entry) => `${entry.key}.${entry.field}`));
   const settings: Record<string, unknown> = { ...flow.settings };
   for (const [key, edit] of Object.entries(edits)) {
+    const kept = Object.entries(edit).filter(([field]) => !refused.has(`${key}.${field}`));
+    if (kept.length === 0) continue;
     const held = settings[key];
     const below: Record<string, unknown> =
       typeof held === "object" && held !== null && !Array.isArray(held) ? { ...held } : {};
+    const change = Object.fromEntries(kept);
     // A step has one target; leaving the other field would let it win (C2).
-    if ("model" in edit) delete below.role;
-    if ("role" in edit) delete below.model;
-    settings[key] = { ...below, ...edit };
+    if ("model" in change) delete below.role;
+    if ("role" in change) delete below.model;
+    settings[key] = { ...below, ...change };
   }
   return { flow: { ...flow, mode: page.mode, settings }, reports };
 };

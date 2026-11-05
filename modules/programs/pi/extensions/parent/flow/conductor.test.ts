@@ -451,6 +451,32 @@ test("the judged stage takes the verdict and the other stage its own settings ro
   ]);
 });
 
+test("a plan row is the whole answer: nothing supplies a model under it", async () => {
+  const run = harness();
+  const ui = run.deps.ctx.ui as unknown as {
+    select: (title: string, list: string[]) => Promise<string | undefined>;
+  };
+  let offered: string[] = [];
+  ui.select = async (_title, list) => {
+    offered = list;
+    return list[1];
+  };
+  // `resolveSettings` always leaves a session key with a model and a level, so
+  // a row that has none is a row the picker must not dress up with a default.
+  const bare: ResolvedSettings = { ...DEFAULT_SETTINGS, plan: {} };
+  await pickPlanStep(run.deps, bare, {
+    plan: "quick",
+    model: "fixture/quick",
+    thinking: "low",
+    reasons: [],
+    cost: 0,
+  });
+  assert.ok(
+    !offered[0].includes("vm/"),
+    `the picker reached below the resolved row: ${offered[0]}`,
+  );
+});
+
 test("an invalid settings value falls back to the default and is reported", async () => {
   const run = harness({ flow: { settings: { plan: { thinking: "extreme" } } } });
   run.brief();
@@ -882,8 +908,11 @@ test("a corrupt FLOW.json is reported and left as it is", async () => {
   writeFileSync(flowPath(run.dir), "{ half a file");
   await command(run.deps, run.runtime, "next");
   await command(run.deps, run.runtime, "status");
+  await command(run.deps, run.runtime, "resume");
   assert.match(run.notes[0].text, /half a file|not JSON/);
   assert.match(run.notes[1].text, /not JSON/);
+  // Resume says the file is broken, not "which flow?": the session names it.
+  assert.match(run.notes[2].text, /not JSON.*FLOW\.json is left as it is/);
   assert.equal(readFileSync(flowPath(run.dir), "utf8"), "{ half a file");
 });
 
@@ -1008,15 +1037,27 @@ test("statusText reports an absent mode as gated", () => {
 
 test("the settled handler sends one /flow next, and none for an aborted turn", () => {
   const run = harness();
-  run.runtime.request = { planDir: run.dir, step: "brief" };
+  const here = { planDir: run.dir, step: "brief" as const };
+  run.runtime.request = { ...here };
+  run.runtime.advancing = { ...here };
   settled(run.pi, run.runtime, false, run.ctx);
   assert.deepEqual(run.sent, [{ text: "/flow next", expand: true }]);
   assert.equal(run.runtime.request, undefined);
+  // Not aborted: the step stays queued until `/flow next` runs and clears it.
+  assert.deepEqual(run.runtime.advancing, here);
 
-  run.runtime.request = { planDir: run.dir, step: "brief" };
+  run.runtime.request = { ...here };
   settled(run.pi, run.runtime, true, run.ctx);
   assert.equal(run.sent.length, 1);
   assert.match(run.notes.at(-1)?.text ?? "", /aborted/);
+  // The advance never ran, so this step is askable again: without this the
+  // owner would have to type /flow next by hand to recover.
+  assert.equal(run.runtime.advancing, undefined);
+  const asked = nextTool(
+    { runtime: run.runtime, now: () => 2_000, hasRunning: () => false, cost: () => 0 },
+    run.ctx,
+  );
+  assert.match(asked.text, /asked to advance/);
 });
 
 test("/flow <slug> in a fresh session starts a brief and sends its kickoff", async () => {

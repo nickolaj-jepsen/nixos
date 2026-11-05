@@ -16,7 +16,7 @@ import {
   type Step,
   type ResolvedSettings,
 } from "./contracts.ts";
-import { budgetOf, diffLines, flowOf, transitionOf, writeFlow } from "./state.ts";
+import { budgetOf, diffLines, flowOf, recordOf, transitionOf, writeFlow } from "./state.ts";
 
 /**
  * A step whose advance is in flight. `flow_next` sets it so a second call in
@@ -81,19 +81,12 @@ export const nextTool = (deps: ToolDeps, ctx: ExtensionContext, note?: string): 
       isError: true,
     };
   if (note !== undefined) {
-    let index = -1;
-    for (let cursor = flow.steps.length - 1; cursor >= 0; cursor -= 1) {
-      const record = flow.steps[cursor];
-      if (record.step === flow.step && record.endedAt === undefined) {
-        index = cursor;
-        break;
-      }
-    }
+    const record = recordOf(flow, flow.step);
     // A step with no record (a brief started in an unsaved session) still
     // advances: its note is only in this answer, with nowhere to keep it.
-    if (index >= 0) {
+    if (record && record.endedAt === undefined) {
       const steps = flow.steps.slice();
-      steps[index] = { ...steps[index], note };
+      steps[flow.steps.lastIndexOf(record)] = { ...record, note };
       try {
         writeFlow({ ...flow, steps });
       } catch (error) {
@@ -123,9 +116,9 @@ export const statusOf = (
   flow: Flow,
   settings: ResolvedSettings,
 ): FlowStatus => {
-  const record = flow.steps[flow.steps.length - 1];
-  const live = record && record.step === flow.step && record.endedAt === undefined;
-  const spentStep = live ? spent(deps, ctx) : (recordCost(flow, flow.step) ?? 0);
+  const record = recordOf(flow, flow.step);
+  const live = record !== undefined && record.endedAt === undefined;
+  const spentStep = live ? spent(deps, ctx) : (record?.cost ?? 0);
   // A judge's call is billed to the ledger of the step it ran in, so the step
   // costs already hold it; `flow.judge` keeps its cost for display only.
   const ended = flow.steps.reduce((sum, entry) => sum + (entry.cost ?? 0), 0);
@@ -147,14 +140,4 @@ export const statusOf = (
     settings,
     budget,
   };
-};
-
-/** The price a closed step recorded, if that step has one. */
-const recordCost = (flow: Flow, step: Step): number | undefined => {
-  for (let index = flow.steps.length - 1; index >= 0; index -= 1) {
-    const record = flow.steps[index];
-    if (record.step !== step) continue;
-    return record.cost;
-  }
-  return undefined;
 };

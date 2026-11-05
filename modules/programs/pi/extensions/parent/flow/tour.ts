@@ -105,9 +105,23 @@ const addRange = (lines: Set<number>, start: number, count: number) => {
 };
 
 /**
+ * The file a `diff --git a/x b/y` header names: its new side, run through the
+ * same normalisation as the diff's own `---`/`+++` lines so both name the file
+ * alike. git quotes a path it would otherwise split (`"a/x y" "b/x y"`).
+ */
+const headerPath = (line: string): string | undefined => {
+  const rest = line.slice("diff --git ".length);
+  const sides = rest.startsWith('"')
+    ? /^("a\/.*") ("b\/.*")$/.exec(rest)?.slice(1)
+    : /^(a\/\S+) (b\/\S+)$/.exec(rest)?.slice(1);
+  return sides === undefined ? undefined : sidePath(sides[1]);
+};
+
+/**
  * The lines each side of a zero-context diff changed, from its hunk headers. A
- * file with no hunks (a binary change, a mode change) is still a file of the
- * diff, so a file-level stop anchors to it and a line stop on it is refused.
+ * file with no hunks (a binary change, a mode change) prints no `---`/`+++`
+ * pair, so it is recorded from its `diff --git` header: it is still a file of
+ * the diff, a file-level stop anchors to it, and a line stop on it is refused.
  */
 export const diffAnchors = (diff: string): DiffAnchors => {
   const anchors: DiffAnchors = new Map();
@@ -120,6 +134,14 @@ export const diffAnchors = (diff: string): DiffAnchors => {
   };
   let path: string | undefined;
   for (const line of diff.split("\n")) {
+    if (line.startsWith("diff --git ")) {
+      const named = headerPath(line);
+      if (named !== undefined) {
+        path = named;
+        file(named);
+      }
+      continue;
+    }
     if (line.startsWith("--- ")) {
       path = sidePath(line.slice(4)) ?? path;
       continue;

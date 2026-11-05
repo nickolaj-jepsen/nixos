@@ -109,6 +109,35 @@ export const flowOf = (ctx: ExtensionContext): ReadFlow => {
   return entry ? readFlow(entry.planDir) : { kind: "none" };
 };
 
+// ── "there is no flow to act on" ─────────────────────────────────────────────
+
+/** What a handler tells the owner instead of acting, in place of a flow (C1). */
+export type FlowNotice = { text: string; kind: "info" | "warning" | "error" };
+
+/** What a caller says for the two ways a flow is not there; the callers word them differently. */
+export type FlowMissing = { none: FlowNotice; corrupt: (error: string) => FlowNotice };
+
+/** A flow, or the notice that replaces it. */
+export type FlowGuard = { flow: Flow } | { notice: FlowNotice };
+
+/**
+ * One guard for "this session has no flow" and "its FLOW.json does not parse":
+ * the flow to act on, or the notice to show instead. `/flow`'s four verbs and
+ * `flow_status` each used to repeat this pair; the wording stays the caller's,
+ * since `flow_status` says both differently from `/flow`.
+ */
+export const guardFlow = (found: ReadFlow, missing: FlowMissing): FlowGuard =>
+  found.kind === "ok"
+    ? { flow: found.flow }
+    : { notice: found.kind === "none" ? missing.none : missing.corrupt(found.error) };
+
+/** The one wording for a session that belongs to no flow. */
+export const NOT_IN_FLOW = "No flow in this session: `/flow <slug>` starts one.";
+
+/** The one wording for a FLOW.json that exists and does not parse (C1). */
+export const CORRUPT_FLOW = (error: string): string =>
+  `flow: ${error}. FLOW.json is left as it is.`;
+
 // ── settings, budget and the steps' records ─────────────────────────────────
 
 /**
@@ -135,23 +164,18 @@ export const budgetOf = (planDir: string): { costCap: number; linesCap: number }
 /**
  * The flow with its current step's record ended and priced. A no-op once the
  * record is closed, so the tool and the command may both close the same step.
+ * The record is `recordOf`'s: a step has at most one open record, and it is the
+ * last one that step has.
  */
 export const closeStep = (flow: Flow, at: number, cost: number): Flow => {
-  let index = -1;
-  for (let cursor = flow.steps.length - 1; cursor >= 0; cursor -= 1) {
-    const record = flow.steps[cursor];
-    if (record.step === flow.step && record.endedAt === undefined) {
-      index = cursor;
-      break;
-    }
-  }
-  if (index < 0) return flow;
+  const record = recordOf(flow, flow.step);
+  if (!record || record.endedAt !== undefined) return flow;
   const steps = flow.steps.slice();
-  steps[index] = { ...steps[index], endedAt: at, cost } satisfies FlowStepRecord;
+  steps[flow.steps.lastIndexOf(record)] = { ...record, endedAt: at, cost } satisfies FlowStepRecord;
   return { ...flow, steps };
 };
 
-/** The step record a resume goes back to: the last one for the current step. */
+/** The step record a step's work goes on: the last one it has, open or closed. */
 export const recordOf = (flow: Flow, step: Step): FlowStepRecord | undefined => {
   for (let index = flow.steps.length - 1; index >= 0; index -= 1) {
     if (flow.steps[index].step === step) return flow.steps[index];

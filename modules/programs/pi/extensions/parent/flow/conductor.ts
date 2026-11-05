@@ -18,7 +18,6 @@ import type {
 import { gitRoots } from "../../shared/git.ts";
 import {
   type Approval,
-  DEFAULT_SETTINGS,
   type Flow,
   type FlowStepRecord,
   type FlowStatus,
@@ -41,11 +40,17 @@ import {
 import { parseHandoff } from "./handoff.ts";
 import {
   closeStep,
+  CORRUPT_FLOW,
   defaultBase,
   FLOW_ENTRY,
+  type FlowGuard,
+  type FlowMissing,
   flowOf,
+  guardFlow,
   newFlow,
+  NOT_IN_FLOW,
   planDirFor,
+  type ReadFlow,
   readFlow,
   readText,
   recordOf,
@@ -121,6 +126,20 @@ export type StartDeps = {
   now: () => number;
 };
 
+/** The two notices `/flow` shows instead of acting: no flow here, or one that does not parse (C1). */
+const missingFlow = (kind: "info" | "error", none = NOT_IN_FLOW): FlowMissing => ({
+  none: { text: none, kind },
+  corrupt: (error) => ({ text: CORRUPT_FLOW(error), kind: "error" }),
+});
+
+/** The flow a verb acts on, or nothing once the owner has been told why (one guard, in state.ts). */
+const actOn = (deps: Deps, found: ReadFlow, missing: FlowMissing): Flow | undefined => {
+  const guarded: FlowGuard = guardFlow(found, missing);
+  if ("flow" in guarded) return guarded.flow;
+  deps.ctx.ui.notify(guarded.notice.text, guarded.notice.kind);
+  return undefined;
+};
+
 // ── the command ─────────────────────────────────────────────────────────────
 
 /**
@@ -151,16 +170,9 @@ export const command = async (deps: Deps, runtime: Runtime, args: string): Promi
 };
 
 /** Where the flow is, what it has cost, and what waits on the owner. */
-const showStatus = (deps: Deps, here: ReturnType<typeof flowOf>): void => {
-  if (here.kind === "none") {
-    deps.ctx.ui.notify("No flow in this session: `/flow <slug>` starts one.", "info");
-    return;
-  }
-  if (here.kind === "corrupt") {
-    deps.ctx.ui.notify(`flow: ${here.error}. FLOW.json is left as it is.`, "error");
-    return;
-  }
-  const flow = here.flow;
+const showStatus = (deps: Deps, here: ReadFlow): void => {
+  const flow = actOn(deps, here, missingFlow("info"));
+  if (!flow) return;
   const status = statusOf(
     { runtime: {}, now: deps.now, hasRunning: deps.hasRunning, cost: deps.cost },
     deps.ctx,
@@ -172,7 +184,7 @@ const showStatus = (deps: Deps, here: ReturnType<typeof flowOf>): void => {
 };
 
 /** Starts a flow in this session: FLOW.json, the brief step, then `/skill:flow-brief` (D3). */
-const start = async (deps: Deps, here: ReturnType<typeof flowOf>, slug: string): Promise<void> => {
+const start = async (deps: Deps, here: ReadFlow, slug: string): Promise<void> => {
   if (!validSlug(slug)) {
     deps.ctx.ui.notify(
       `flow: "${slug}" is not a usable slug. Use letters, digits, dot, dash or underscore, in a form git accepts as a branch name (no leading dot or dash, no "..", no ".lock" ending).`,
@@ -188,7 +200,7 @@ const start = async (deps: Deps, here: ReturnType<typeof flowOf>, slug: string):
     return;
   }
   if (here.kind === "corrupt") {
-    deps.ctx.ui.notify(`flow: ${here.error}. FLOW.json is left as it is.`, "error");
+    deps.ctx.ui.notify(CORRUPT_FLOW(here.error), "error");
     return;
   }
   const roots = gitRoots(deps.ctx.cwd);
@@ -257,16 +269,8 @@ const start = async (deps: Deps, here: ReturnType<typeof flowOf>, slug: string):
  */
 const advance = async (deps: Deps, runtime: Runtime): Promise<void> => {
   runtime.advancing = undefined;
-  const here = flowOf(deps.ctx);
-  if (here.kind === "none") {
-    deps.ctx.ui.notify("No flow in this session: `/flow <slug>` starts one.", "error");
-    return;
-  }
-  if (here.kind === "corrupt") {
-    deps.ctx.ui.notify(`flow: ${here.error}. FLOW.json is left as it is.`, "error");
-    return;
-  }
-  const flow = here.flow;
+  const flow = actOn(deps, flowOf(deps.ctx), missingFlow("error"));
+  if (!flow) return;
   if (deps.hasRunning()) {
     deps.ctx.ui.notify(
       "flow: a subagent is still running, and the next step's session switch would abort it. Wait for it, then /flow next.",
@@ -332,11 +336,12 @@ export type PlanPick = { quick: boolean; model: string; thinking: Level };
  */
 const rowPlan = (settings: ResolvedSettings, quick: boolean): PlanPick => {
   const row = settings[quick ? "planQuick" : "plan"];
-  const fallback = DEFAULT_SETTINGS[quick ? "planQuick" : "plan"];
+  // `resolveSettings` leaves a session key with a model and a level, so the
+  // resolved row is the only source; `DEFAULT_SETTINGS` is already inside it.
   return {
     quick,
-    model: row.model ?? fallback.model ?? "",
-    thinking: row.thinking ?? fallback.thinking ?? "high",
+    model: row.model ?? "",
+    thinking: row.thinking ?? "high",
   };
 };
 
@@ -539,14 +544,9 @@ const beginResolvedStep = async (deps: Deps, flow: Flow, step: Step): Promise<vo
   const { settings, reports } = settingsOf(leafOf(deps.pi), flow);
   report(deps, reports);
   const setting = key ? settings[key] : undefined;
-  const fallback = key ? DEFAULT_SETTINGS[key] : undefined;
-  await beginStep(
-    deps,
-    flow,
-    step,
-    setting?.model ?? fallback?.model ?? "",
-    setting?.thinking ?? fallback?.thinking ?? "low",
-  );
+  // `resolveSettings` leaves a session key with a model and a level, so a step
+  // that has one needs no fallback beneath it (DEFAULT_SETTINGS is already in).
+  await beginStep(deps, flow, step, setting?.model ?? "", setting?.thinking ?? "low");
 };
 
 /**
@@ -693,6 +693,9 @@ export const settled = (
   runtime.request = undefined;
   if (!request) return;
   if (aborted) {
+    // The advance never ran, so this step must be askable again; a surviving
+    // `advancing` would answer every later flow_next in this step with a no-op.
+    runtime.advancing = undefined;
     ctx.ui.notify(
       "flow: the turn was aborted, so /flow next did not run. Type it to advance.",
       "warning",
@@ -709,12 +712,9 @@ export const settled = (
  * `/flow resume [slug]`: the pending step when its session was never created,
  * otherwise the recorded session of the current step (C1).
  */
-const resume = async (
-  deps: Deps,
-  here: ReturnType<typeof flowOf>,
-  slug?: string,
-): Promise<void> => {
-  let flow: Flow | undefined;
+const resume = async (deps: Deps, here: ReadFlow, slug?: string): Promise<void> => {
+  let found: ReadFlow = here;
+  let none = "Which flow? `/flow resume <slug>`.";
   if (slug) {
     const roots = gitRoots(deps.ctx.cwd);
     const repoMain = roots.main ?? roots.root;
@@ -722,22 +722,17 @@ const resume = async (
       deps.ctx.ui.notify(`flow needs a git checkout; ${deps.ctx.cwd} is not inside one.`, "error");
       return;
     }
-    const read = readFlow(planDirFor(repoMain, slug));
-    if (read.kind === "none") {
-      deps.ctx.ui.notify(`flow: no flow ${slug} under ${repoMain}.`, "info");
-      return;
-    }
-    if (read.kind === "corrupt") {
-      deps.ctx.ui.notify(`flow ${slug}: ${read.error}. FLOW.json is left as it is.`, "error");
-      return;
-    }
-    flow = read.flow;
-  } else if (here.kind === "ok") {
-    flow = here.flow;
-  } else {
-    deps.ctx.ui.notify("Which flow? `/flow resume <slug>`.", "info");
-    return;
+    found = readFlow(planDirFor(repoMain, slug));
+    none = `flow: no flow ${slug} under ${repoMain}.`;
   }
+  const flow = actOn(deps, found, {
+    none: { text: none, kind: "info" },
+    corrupt: (error) =>
+      slug === undefined
+        ? { text: CORRUPT_FLOW(error), kind: "error" }
+        : { text: `flow ${slug}: ${error}. FLOW.json is left as it is.`, kind: "error" },
+  });
+  if (!flow) return;
 
   if (flow.pending) {
     deps.pi.appendEntry(FLOW_ENTRY, { planDir: flow.planDir, slug: flow.slug });
