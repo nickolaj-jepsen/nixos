@@ -12,6 +12,7 @@
       arguments = ["--stdin-filepath" "{buffer_path}"];
     };
     harperDictionary = pkgs.writeText "harper-dictionary.txt" (lib.concatLines (import ../_spell-words.nix));
+    bufferFontSize = 14;
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.zed-editor = {
@@ -26,6 +27,9 @@
           restore_on_startup = "last_session";
           # A path inside an already-open project still lands in that project's window.
           cli_default_open_behavior = "new_window";
+          default_open_behavior = "new_window";
+          # Closing the last tab keeps the window; the window manager closes it.
+          when_closing_with_no_tabs = "keep_window_open";
           proxy = "";
           window_decorations = lib.mkIf pkgs.stdenv.isLinux "client";
           use_system_window_tabs = false;
@@ -48,11 +52,6 @@
             selections_menu = false;
           };
 
-          status_bar = {
-            line_endings_button = true;
-            active_encoding_button = "enabled";
-          };
-
           indent_guides = {
             background_coloring = "disabled";
           };
@@ -66,7 +65,7 @@
 
           # Font
           buffer_font_family = config.fireproof.theme.font.family;
-          buffer_font_size = 14;
+          buffer_font_size = bufferFontSize;
           buffer_line_height.custom = 1.5;
           # VSCode's workbench font: the system sans (Inter via fontconfig on NixOS).
           ui_font_family =
@@ -74,6 +73,9 @@
             then ".SystemUIFont"
             else "Inter";
           ui_font_size = 14;
+
+          # Unified diffs match how git and most review tools show a patch.
+          diff_view_style = "unified";
 
           # Editor behavior
           cursor_blink = true;
@@ -122,7 +124,10 @@
             dock = "left";
           };
           outline_panel.dock = "left";
-          collaboration_panel.dock = "left";
+          collaboration_panel = {
+            dock = "left";
+            button = false;
+          };
           git_panel = {
             status_style = "icon";
             collapse_untracked_diff = false;
@@ -142,15 +147,19 @@
 
           # Git
           git = {
-            inline_blame.enabled = true;
+            # Blame in the status bar rather than as a ghost line in the buffer.
+            inline_blame = {
+              enabled = true;
+              location = "status_bar";
+            };
             git_gutter = "tracked_files";
           };
 
           # Terminal
           terminal = {
             shell.program = "fish";
-            # Ghostty's settings type wraps every value in a list.
-            font_size = lib.head (lib.toList config.programs.ghostty.settings.font-size);
+            # Larger than Ghostty's 11: the panel is small and read at a glance.
+            font_size = 14;
             blinking = "on";
             cursor_shape = "bar";
           };
@@ -207,6 +216,8 @@
               model = "claude-sonnet-5-5";
             };
           };
+          # The agent panel defaults to 12pt; match the buffer instead.
+          agent_buffer_font_size = bufferFontSize;
 
           agent_servers = {
             "claude-acp" = {
