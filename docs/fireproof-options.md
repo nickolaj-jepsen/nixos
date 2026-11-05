@@ -342,6 +342,30 @@ true
 
 
 
+## fireproof\.desktop\.editor
+
+
+
+Which editor opens code files by default\. Both stay installed; this only picks the xdg handler\.
+
+
+
+*Type:*
+one of “zed”, “vscode”
+
+
+
+*Default:*
+
+```nix
+"zed"
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.desktop\.ivpn\.enable
 
 
@@ -2668,8 +2692,6 @@ string
 
 ## fireproof\.theme\.colors\.purpleAlt
 
-
-
 Dark purple
 
 
@@ -2699,6 +2721,8 @@ string
 
 
 ## fireproof\.theme\.colors\.red
+
+
 
 Red (errors, destructive)
 
