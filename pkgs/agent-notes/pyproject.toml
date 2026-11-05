@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-notes"
+version = "0.1.0"
+description = "Where a checkout's agent notes live, and the links into them"
+requires-python = ">=3.11"
+
+[project.scripts]
+agent-notes = "agent_notes.cli:main"
+
+[tool.setuptools]
+packages = ["agent_notes"]
