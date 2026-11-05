@@ -37,7 +37,6 @@ import {
 import {
   type Approval,
   type Flow,
-  isModelRef,
   type JudgeHandoffVerdict,
   LEVELS,
   type Mode,
@@ -67,7 +66,8 @@ const RESERVED_ROWS = 8;
 /** The keys that jump straight to a row, so a long plan does not have to be walked. */
 const JUMPS: Record<string, (row: ApprovalRow) => boolean> = {
   m: (row) => row.kind === "mode",
-  r: (row) => row.kind === "runModel",
+  r: (row) => row.kind === "setting" && row.key === "run",
+  f: (row) => row.kind === "setting" && row.key === "finalReview",
   t: (row) => row.kind === "tier",
   q: (row) => row.kind === "question",
   a: (row) => row.kind === "approve",
@@ -76,7 +76,8 @@ const JUMPS: Record<string, (row: ApprovalRow) => boolean> = {
 
 const sameRow = (left: ApprovalRow, right: ApprovalRow): boolean =>
   left.kind === right.kind &&
-  ("id" in left ? left.id === ("id" in right ? right.id : undefined) : !("id" in right));
+  ("id" in left ? left.id === ("id" in right ? right.id : undefined) : !("id" in right)) &&
+  ("key" in left ? left.key === ("key" in right ? right.key : undefined) : !("key" in right));
 
 /**
  * The page as an overlay: one scrolling document of the plan, with the rows the
@@ -280,7 +281,7 @@ export class ApprovalOverlay implements Component {
     if (this.editing) return ["enter keeps it · esc drops it"];
     return [
       "↑↓ move · ←→ change · enter edit or choose · esc cancel",
-      "m mode · r run model · t tier · q question · a approve · s send back",
+      "m mode · r run model · f final reviewer · t tier · q question · a approve · s send back",
     ];
   }
 
@@ -304,9 +305,13 @@ export class ApprovalOverlay implements Component {
       case "mode":
         this.page.mode = cycle<Mode>(MODES, this.page.mode);
         break;
-      case "runThinking":
-        this.page.runThinking = cycle(LEVELS, this.page.runThinking);
+      case "settingThinking": {
+        const current = this.page.settings[row.key].thinking;
+        const index = current === undefined ? (delta > 0 ? -1 : 0) : LEVELS.indexOf(current);
+        this.page.settings[row.key].thinking =
+          LEVELS[(index + delta + LEVELS.length) % LEVELS.length];
         break;
+      }
       case "tier":
         this.page.tiers[row.id] = this.page.tiers[row.id] === "deep" ? "flash" : "deep";
         break;
@@ -329,8 +334,11 @@ export class ApprovalOverlay implements Component {
       case "back":
         this.edit(row, "", "what the plan must change");
         return;
-      case "runModel":
-        this.edit(row, "", this.page.runModel);
+      case "setting":
+        this.edit(row, "", this.page.settings[row.key].target);
+        return;
+      case "settingDeep":
+        this.edit(row, "", this.page.settings.items.deep ?? "");
         return;
       case "question":
         this.edit(row, this.page.answers[row.id] ?? "", "your answer");
@@ -368,14 +376,11 @@ export class ApprovalOverlay implements Component {
         }
         this.finish({ kind: "back", note: value });
         return;
-      case "runModel":
-        if (value === "") break;
-        if (!isModelRef(value)) {
-          this.warning = `"${value}" is not provider/model, e.g. vm/flash`;
-          this.viewport.requestRender();
-          return;
-        }
-        this.page.runModel = value;
+      case "setting":
+        this.page.settings[row.key].target = value;
+        break;
+      case "settingDeep":
+        this.page.settings[row.key].deep = value;
         break;
       case "question":
         if (value === "") delete this.page.answers[row.id];
@@ -435,11 +440,12 @@ export const approve = async (
   flow: Flow,
   handoff: ParsedHandoff,
   verdict: JudgeHandoffVerdict,
+  read: typeof readText = readText,
 ): Promise<Approval> => {
   const settings = settingsOf(leafOf(pi), flow).settings;
   const page = initialPage(flow, handoff, verdict, settings);
   const handoffPath = join(flow.planDir, "HANDOFF.md");
-  const handoffText = readText(handoffPath);
+  const handoffText = read(handoffPath);
   // The conductor parsed this file a moment ago; if it is gone now, approving
   // would start a run on a plan nobody can read.
   if (handoffText === undefined) {
@@ -478,9 +484,24 @@ export const approve = async (
     result = await askDialogs(ctx, page);
   }
 
-  // The owner's word lands in the plan before the answer is acted on.
+  // The owner's word lands in the plan before the answer is acted on. Re-read
+  // it: writing the opening snapshot would erase a planner's concurrent edit.
+  let currentText: string | undefined;
   try {
-    const edited = rewriteTiers(handoffText, tierEdits(handoff, result.page));
+    currentText = read(handoffPath);
+  } catch (error) {
+    ctx.ui.notify(`flow: could not re-read HANDOFF.md: ${message(error)}`, "error");
+    return { kind: "cancel" };
+  }
+  if (currentText !== handoffText) {
+    ctx.ui.notify(
+      "flow: HANDOFF.md changed under the approval page; the page's edits were not applied.",
+      "error",
+    );
+    return { kind: "cancel" };
+  }
+  try {
+    const edited = rewriteTiers(currentText, tierEdits(handoff, result.page));
     const amended = appendAmendments(edited, amendmentEntries(handoff, result.page, today()));
     if (amended !== handoffText) writeFileSync(handoffPath, amended);
   } catch (error) {

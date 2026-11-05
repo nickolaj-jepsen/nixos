@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A2's scenario: a real pi opens the approval page on a real HANDOFF.md, the
-# owner changes the mode, the run model, one item's tier and Q1 on it, and
-# approves — and a second flow sends the plan back with a note.
+# owner changes the mode, the run model, the final reviewer, one item's tier
+# and Q1 on it, and approves — and a second flow sends the plan back with a note.
 #
 # What it proves beyond the unit tests: the overlay really opens inside pi and
 # takes the keys, the edits land where D13 says (FLOW.json's mode and run
@@ -84,6 +84,12 @@ scenario_keys Enter
 scenario_type 'fixture/deep'
 scenario_keys Enter
 scenario_wait 'Run model  fixture/deep' 10
+# f: the final reviewer, a role-key setting; enter edits it, enter keeps it.
+scenario_keys f
+scenario_keys Enter
+scenario_type 'reviewer'
+scenario_keys Enter
+scenario_wait 'Final review role  reviewer *($|[^-])' 10
 # t: the first item's tier row; right takes it to deep.
 scenario_keys t
 scenario_keys Right
@@ -108,6 +114,8 @@ jq -e '.step == "run"' <<<"$state" >/dev/null || fail "the flow did not move to 
 jq -e '.mode == "deviation"' <<<"$state" >/dev/null || fail "the page's mode was not written"
 jq -e '.settings.run == {"model": "fixture/deep", "thinking": "low"}' <<<"$state" >/dev/null ||
   fail "the page's run settings were not written"
+jq -e '.settings.finalReview == {"role": "reviewer", "thinking": "high"}' <<<"$state" >/dev/null ||
+  fail "the page's final reviewer was not written"
 
 # The run session really ran on the model the page chose.
 chain=$(flow_chain)

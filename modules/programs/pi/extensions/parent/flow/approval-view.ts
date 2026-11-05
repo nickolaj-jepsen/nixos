@@ -15,15 +15,20 @@ import {
   MODES,
   type ParsedHandoff,
   type ResolvedSettings,
+  ROLE_KEYS,
+  SESSION_KEYS,
+  SETTING_KEYS,
   type SettingKey,
   type Tier,
 } from "./contracts.ts";
 
+/** One editable target and level; `target` is a model or role by key. */
+export type PageSetting = { target: string; deep?: string; thinking?: Level };
+
 /** What the owner may change on the page; approving applies all of it. */
 export type PageState = {
   mode: Mode;
-  runModel: string;
-  runThinking: Level;
+  settings: Record<SettingKey, PageSetting>;
   /** Item ID → the tier the item will be built at. */
   tiers: Record<string, Tier>;
   /** Question ID → the answer the owner typed. */
@@ -33,8 +38,9 @@ export type PageState = {
 /** One focusable line: the rows the owner edits and the actions that end the page. */
 export type ApprovalRow =
   | { kind: "mode" }
-  | { kind: "runModel" }
-  | { kind: "runThinking" }
+  | { kind: "setting"; key: SettingKey }
+  | { kind: "settingDeep"; key: "items" }
+  | { kind: "settingThinking"; key: SettingKey }
   | { kind: "tier"; id: string }
   | { kind: "question"; id: string }
   | { kind: "approve" }
@@ -53,14 +59,6 @@ const MODE_MEANING: Record<Mode, string> = {
   straight: "never stops before the final report",
 };
 
-/** A step setting as one line: its model or role, then its thinking level. */
-export const settingText = (setting: ResolvedSettings[SettingKey]): string => {
-  const target =
-    setting.model ??
-    (setting.role ? `role ${setting.role}${setting.deep ? ` (deep: ${setting.deep})` : ""}` : "?");
-  return setting.thinking ? `${target} · ${setting.thinking}` : target;
-};
-
 /**
  * The page as it opens: the judge's suggestions, unless the flow or the owner
  * already fixed a value (the conductor writes both into `FLOW.json` before the
@@ -73,21 +71,43 @@ export const initialPage = (
   settings: ResolvedSettings,
 ): PageState => ({
   mode: flow.mode ?? verdict.mode,
-  runModel: settings.run.model ?? verdict.run.model,
-  runThinking: settings.run.thinking ?? verdict.run.thinking,
+  settings: Object.fromEntries(
+    SETTING_KEYS.map((key) => [
+      key,
+      {
+        target: settings[key].model ?? settings[key].role ?? "",
+        ...(settings[key].deep === undefined ? {} : { deep: settings[key].deep }),
+        ...(settings[key].thinking === undefined ? {} : { thinking: settings[key].thinking }),
+      },
+    ]),
+  ) as Record<SettingKey, PageSetting>,
   tiers: Object.fromEntries(
     handoff.items.map((item) => [item.id, verdict.tiers[item.id] ?? item.tier]),
   ),
   answers: {},
 });
 
-/** The flow after the page's edits: its mode and the run step's model and level (D13). */
+/** The flow after the page's edits: its mode and every step setting (D13). */
 export const applyPage = (flow: Flow, page: PageState): Flow => ({
   ...flow,
   mode: page.mode,
   settings: {
     ...flow.settings,
-    run: { model: page.runModel, thinking: page.runThinking },
+    ...Object.fromEntries(
+      SETTING_KEYS.map((key) => {
+        const setting = page.settings[key];
+        return [
+          key,
+          {
+            ...((SESSION_KEYS as readonly string[]).includes(key)
+              ? { model: setting.target }
+              : { role: setting.target }),
+            ...(key === "items" ? { deep: setting.deep ?? "" } : {}),
+            ...(setting.thinking === undefined ? {} : { thinking: setting.thinking }),
+          },
+        ];
+      }),
+    ),
   },
 });
 
@@ -206,23 +226,44 @@ export const approvalBlocks = (
         .map((mode) => `${mode} ${MODE_MEANING[mode]}`)
         .join("; ")}`,
     },
-    { kind: "row", row: { kind: "runModel" }, label: "Run model", value: page.runModel },
-    { kind: "row", row: { kind: "runThinking" }, label: "Run thinking", value: page.runThinking },
-    ...(
-      [
-        ["judge", "judge"],
-        ["plan", "plan"],
-        ["planQuick", "plan (quick)"],
-        ["guide", "guide"],
-        ["items", "items"],
-        ["gateReview", "gate review"],
-        ["finalReview", "final review"],
-        ["simplify", "simplify"],
-      ] as [SettingKey, string][]
-    ).map(([key, name]) => ({
-      kind: "bullet" as const,
-      text: `${name}: ${settingText(settings[key])}`,
-    })),
+    ...SETTING_KEYS.flatMap((key): ApprovalBlock[] => {
+      const name = (
+        {
+          judge: "Judge",
+          plan: "Plan",
+          planQuick: "Plan (quick)",
+          run: "Run",
+          guide: "Guide",
+          items: "Items",
+          gateReview: "Gate review",
+          finalReview: "Final review",
+          simplify: "Simplify",
+        } satisfies Record<SettingKey, string>
+      )[key];
+      const setting = page.settings[key];
+      const rows: ApprovalBlock[] = [
+        {
+          kind: "row",
+          row: { kind: "setting", key },
+          label: `${name} ${(ROLE_KEYS as readonly string[]).includes(key) ? "role" : "model"}`,
+          value: setting.target,
+        },
+      ];
+      if (key === "items")
+        rows.push({
+          kind: "row",
+          row: { kind: "settingDeep", key },
+          label: "Items deep role",
+          value: setting.deep ?? "",
+        });
+      rows.push({
+        kind: "row",
+        row: { kind: "settingThinking", key },
+        label: `${name} thinking`,
+        value: setting.thinking ?? "role default",
+      });
+      return rows;
+    }),
     { kind: "heading", text: "Work items" },
   ];
 

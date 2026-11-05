@@ -97,8 +97,10 @@ const tierLineOf = (text: string, id: string): number => {
 test("the page opens on the judge's mode, run model and tiers", () => {
   const opened = initialPage(flow(), handoff, verdict, resolved());
   assert.equal(opened.mode, "deviation");
-  assert.equal(opened.runModel, "vm/deep");
-  assert.equal(opened.runThinking, "high");
+  assert.equal(opened.settings.run.target, "vm/deep");
+  assert.equal(opened.settings.run.thinking, "high");
+  assert.equal(opened.settings.finalReview.target, "reviewer-deep");
+  assert.equal(opened.settings.items.deep, "builder-deep");
   assert.equal(opened.tiers.G0, "deep");
   // An item the judge left alone keeps what the plan says.
   assert.equal(opened.tiers.A1, "flash");
@@ -109,16 +111,25 @@ test("an owner value in FLOW.json wins over the judge's suggestion", () => {
   const own = flow({ settings: { run: { model: "vm/flash", thinking: "low" } }, mode: "straight" });
   const opened = initialPage(own, handoff, verdict, resolved(own));
   assert.equal(opened.mode, "straight");
-  assert.equal(opened.runModel, "vm/flash");
-  assert.equal(opened.runThinking, "low");
+  assert.equal(opened.settings.run.target, "vm/flash");
+  assert.equal(opened.settings.run.thinking, "low");
 });
 
-test("approving applies the mode and the run settings to FLOW.json's shape", () => {
-  const next = applyPage(flow(), page({ mode: "gated", runModel: "vm/flash", runThinking: "low" }));
+test("approving applies the mode and every step setting to FLOW.json's shape", () => {
+  const edited = page({ mode: "gated" });
+  edited.settings.run = { target: "vm/flash", thinking: "low" };
+  edited.settings.finalReview = { target: "reviewer", thinking: "medium" };
+  edited.settings.items = { target: "builder", deep: "reviewer-deep", thinking: "high" };
+  const next = applyPage(flow(), edited);
   assert.equal(next.mode, "gated");
   assert.deepEqual(next.settings.run, { model: "vm/flash", thinking: "low" });
-  // The other settings the flow carried are left alone.
-  assert.equal(next.settings.items, undefined);
+  assert.deepEqual(next.settings.finalReview, { role: "reviewer", thinking: "medium" });
+  assert.deepEqual(next.settings.items, {
+    role: "builder",
+    deep: "reviewer-deep",
+    thinking: "high",
+  });
+  assert.deepEqual(next.settings.guide, { model: "vm/flash", thinking: "low" });
 });
 
 test("only the tiers the owner moved are rewritten, and only their own line", () => {
@@ -390,20 +401,56 @@ test("m takes the mode row and the arrows cycle it", () => {
   assert.equal(drive(["m", "\r"]).page.mode, "straight");
 });
 
-test("r edits the run model, and a value that is no provider/model is refused", () => {
+test("r edits the run model as text, leaving validation to resolveSettings", () => {
   const typed = drive(["r", "\r", ..."vm/frontier".split(""), "\r"]);
-  assert.equal(typed.page.runModel, "vm/frontier");
+  assert.equal(typed.page.settings.run.target, "vm/frontier");
   assert.deepEqual(typed.results, [], "committing a model must not end the page");
 
-  const refused = drive(["r", "\r", ..."frontier".split(""), "\r"]);
-  assert.equal(refused.page.runModel, "vm/deep", "an invalid model changed the setting");
-  assert.deepEqual(refused.results, [], "an invalid model left the page");
-  assert.match(refused.render().join("\n"), /provider\/model/);
+  const invalid = drive(["r", "\r", ..."frontier".split(""), "\r"]);
+  assert.equal(invalid.page.settings.run.target, "frontier");
+  assert.deepEqual(invalid.results, [], "an invalid model left the page");
 
   // Escape in the field drops the edit and leaves the page open.
   const dropped = drive(["r", "\r", ..."vm/flash".split(""), "\u001b"]);
-  assert.equal(dropped.page.runModel, "vm/deep");
+  assert.equal(dropped.page.settings.run.target, "vm/deep");
   assert.deepEqual(dropped.results, []);
+});
+
+test("f edits the final reviewer role and its thinking row cycles", () => {
+  const typed = drive(["f", "\r", ..."reviewer".split(""), "\r"]);
+  assert.equal(typed.page.settings.finalReview.target, "reviewer");
+  assert.deepEqual(typed.results, []);
+  assert.match(typed.render().join("\n"), /Final review role {2}reviewer/);
+
+  const cycled = drive(["f", "j", "\u001b[C"]);
+  assert.equal(cycled.page.settings.finalReview.thinking, "xhigh");
+});
+
+test("a HANDOFF.md changed under the page is not overwritten", async () => {
+  const dir = scratch();
+  const path = join(dir, "HANDOFF.md");
+  const original = readFileSync(path, "utf8");
+  const notes: string[] = [];
+  let reads = 0;
+  const read = (file: string) => {
+    reads += 1;
+    return reads === 1 ? readFileSync(file, "utf8") : `${original}\n<!-- planner edit -->\n`;
+  };
+  const ctx = {
+    mode: "json",
+    ui: {
+      select: async () => "approve",
+      input: async () => undefined,
+      notify: (text: string) => notes.push(text),
+      custom: () => undefined,
+    },
+  } as unknown as ExtensionCommandContext;
+  const pi = { getSettings: () => ({}) } as unknown as ExtensionAPI;
+  const result = await approve(pi, ctx, flow({ planDir: dir }), handoff, verdict, read);
+  assert.deepEqual(result, { kind: "cancel" });
+  assert.equal(readFileSync(path, "utf8"), original, "the stale snapshot was written");
+  assert.equal(existsSync(join(dir, "FLOW.json")), false);
+  assert.match(notes.at(-1) ?? "", /changed under the approval page.*not applied/);
 });
 
 test("t cycles the first tier, and only that item's", () => {
