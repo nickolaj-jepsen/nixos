@@ -28,10 +28,14 @@
       # JS / TS / JSON / CSS / HTML
       typescript-language-server
       oxfmt
+      oxlint
       vscode-langservers-extracted
 
       # YAML
       yaml-language-server
+
+      # Terraform
+      terraform-ls
     ];
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
@@ -57,6 +61,15 @@
           "scss"
           "stylelint"
           "github-actions"
+          "sql"
+          "terraform"
+          "oxc"
+
+          # Grammar-only until a JDK is in reach: the java, kotlin and xml
+          # extensions want jdtls, kotlin-language-server and lemminx on PATH.
+          "java"
+          "kotlin"
+          "xml"
 
           # Python (matches the pyrefly + ruff setup from VSCode)
           "pyrefly"
