@@ -40,7 +40,7 @@ claude plugin install skills@nickolaj-jepsen
 - [annotate-plan](annotate-plan/): the agent writes a `PLAN.md`, you annotate it in your editor round after round until you approve, then it implements on request.
 - [handoff](handoff/): turns a finished brainstorm into a self-contained plan for another agent, with vertical-slice work items that carry owned paths and acceptance commands; `--quick` writes a short one inline with no subagents, asking only what's still open.
 - [run-handoff](run-handoff/): builds a handoff in one long-running session, one subagent and worktree per item, each re-verified before it lands on an integration branch; checks in at gates unless run with `--auto`.
-- [wt-land](wt-land/): takes finished work in a worktree to landed commits or a PR, after the repo's checks and a review gate; needs `wt`, and `gh` for the PR endings.
+- [land](land/): takes finished work to landed commits or a PR, after the repo's checks and a review gate: from a worktree, from a branch in the primary checkout, or by pushing commits made on its default branch; needs `wt`, and `gh` for the PR endings.
 - [prune-comments](prune-comments/): cuts redundant, over-long or coupled comments and docstrings (file/line references, caller lists, change narration) down to the load-bearing why; run it after generating code.
 - [prune-hard](prune-hard/): the harsh sibling of prune-comments for private code, deleting by default and keeping only the traps.
 - [prune-churn](prune-churn/): removes tests, docs and structure that must be edited whenever something else changes, ranking churn hotspots from git history.
