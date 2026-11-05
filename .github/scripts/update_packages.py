@@ -315,6 +315,7 @@ UPDATERS = {
     "claude-desktop": update_claude_desktop,
     "ha-bambulab": lambda: update_github_release("ha-bambulab", "greghesp/ha-bambulab"),
     "pi-coding-agent": update_pi_coding_agent,
+    "pele": lambda: update_npm_tarball("pele"),
     "pi-packages": update_pi_packages,
     "zwift-hass": lambda: update_github_release("zwift-hass", "snicker/zwift_hass"),
 }
