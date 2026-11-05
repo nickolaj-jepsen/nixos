@@ -87,7 +87,10 @@ Chosen on the approval page, with the judge's suggestion preselected:
 
 - `gated` stops at every gate and on every deviation.
 - `deviation` self-checks ordinary gates and stops only on a deviation.
-- `straight` never stops before the final report.
+- `straight` logs deviations and continues to the final report.
+
+A mode governs gates and deviations; the plan's explicit `## Stops` and
+`flow-run`'s safety stops apply in every mode.
 
 The deviation list, the budget rule and the safety stops are written once, in
 `flow-run`'s skill. In outline: an overturned Default that changes behaviour, a

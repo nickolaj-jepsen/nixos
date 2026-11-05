@@ -31,7 +31,7 @@ Read the mode from `flow_status`; it is not a command-line option.
 - `deviation`: self-check ordinary gates, but stop on a deviation.
 - `straight`: log deviations and continue to the final report without stopping for them.
 
-The explicit stops in HANDOFF's `## Stops` apply in every mode. So do the safety stops below. In `straight`, a blocked item remains blocked: continue other work and report it rather than inventing a way around the plan.
+A mode governs gates and deviations; the plan's explicit `## Stops` and the safety stops below apply in every mode. In `straight`, a blocked item remains blocked: continue other work and report it rather than inventing a way around the plan.
 
 ## Decisions and owner changes
 
@@ -49,10 +49,10 @@ Append only the owner's word, never your own proposal or judgment. Update `PROGR
 2. If `PROGRESS.md` exists, resume:
    - Reconcile it with the integration branch, item worktrees and commits. Where they disagree, git wins; correct `PROGRESS.md`.
    - Run the standard checks on the integration branch before dispatching anything. Repair a crashed integration first.
-   - Put any unanswered Open questions in `Blocked on you` and continue from `Now`.
+   - Put only Open questions with no Amendment answering them in `Blocked on you` and continue from `Now`.
 3. On a first run:
    - Create the integration worktree on `<branch>` from `<base>`. With `wt`, `wt new <slug> <base>` prints its path.
-   - Create `PROGRESS.md` from the template below, carrying HANDOFF's Open questions into `Blocked on you`.
+   - Create `PROGRESS.md` from the template below, carrying only Open questions with no Amendment answering them into `Blocked on you`.
    - Run Context's build and test commands once on the integration branch and record their durations.
    - Do bootstrap items and `G0` yourself when the plan has them.
 
@@ -92,7 +92,7 @@ In `straight`, record the deviation and the chosen course under `### Calls the b
 6. Integrate:
    - Confirm the item branch is based on the integration branch's current tip. If the tip moved, resume the child for a rebase, or do a trivial rebase yourself.
    - On the item tree, re-run its acceptance yourself, plus the repo's standard checks and any walking skeleton. Never take the child's word for a pass.
-   - If all pass, fast-forward the integration branch. Record the commands, results and commit. Read and delete the worktree's untracked `.handoff-report.md`, then close the worktree.
+   - If all pass, fast-forward the integration branch. Record the commands, results and commit. Read the item's report, then delete `.handoff-report.md` and every untracked artefact the item left, including `.flow-logs/` and other logs its report names. Confirm `git status --porcelain` is empty before closing the worktree.
    - If anything fails, send the output to the same child and resume it. After two send-backs, mark the item blocked with the last failure.
    - If only device or person acceptance remains open, integrate now and record that acceptance as open. Its dependents may run. Complete the open step when possible and put any fix on top.
 7. Re-check the frontier after every integration. Update `PROGRESS.md` after every item and before any long operation.
