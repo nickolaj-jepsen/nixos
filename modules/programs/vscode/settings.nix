@@ -184,45 +184,7 @@
             # Spell checking
             "cSpell.language" = "en,da";
             "cSpell.diagnosticLevel" = "Hint";
-            "cSpell.userWords" = [
-              "aonumber"
-              "aortl"
-              "billigvvs"
-              "bvvs"
-              "completvvs"
-              "costprice"
-              "currentpriceamount"
-              "customercenter"
-              "eannumber"
-              "enddate"
-              "groupid"
-              "growthbook"
-              "klaviyo"
-              "linksto"
-              "pricehub"
-              "productbox"
-              "productcard"
-              "productgroup"
-              "productid"
-              "productlist"
-              "productname"
-              "productnumber"
-              "rebatecode"
-              "salesprice"
-              "sortorder"
-              "ttag"
-              "unitcount"
-              "unitprice"
-              "vendornumber"
-              "vvskupp"
-              "vvseksperten"
-              "walley"
-              "claude"
-              "nixos"
-              "nickolaj"
-              "homelab"
-              "pkgs"
-            ];
+            "cSpell.userWords" = import ../_spell-words.nix;
 
             # JSON
             "json.schemaDownload.trustedDomains" = {

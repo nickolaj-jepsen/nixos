@@ -52,6 +52,11 @@
           "env"
           "biome"
           "css-modules-kit"
+          "astro"
+          "mdx"
+          "scss"
+          "stylelint"
+          "github-actions"
 
           # Python (matches the pyrefly + ruff setup from VSCode)
           "pyrefly"

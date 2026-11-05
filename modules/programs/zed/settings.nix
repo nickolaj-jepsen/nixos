@@ -11,6 +11,7 @@
       command = "oxfmt";
       arguments = ["--stdin-filepath" "{buffer_path}"];
     };
+    harperDictionary = pkgs.writeText "harper-dictionary.txt" (lib.concatLines (import ../_spell-words.nix));
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       programs.zed-editor = {
@@ -35,7 +36,8 @@
           icon_theme = "Seti Icon Theme";
 
           title_bar = {
-            button_layout = "platform_default";
+            # niri manages the window, like VSCode's hidden controlsStyle.
+            button_layout = "";
             show_menus = false;
             show_branch_status_icon = false;
           };
@@ -64,10 +66,23 @@
 
           # Editor behavior
           cursor_blink = true;
+          cursor_animation.enabled = true;
           scroll_beyond_last_line = "one_page";
+          sticky_scroll.enabled = true;
+          colorize_brackets = true;
           inlay_hints = {
             enabled = true;
             show_background = false;
+            # VSCode's "onUnlessPressed": hidden while Ctrl+Alt is held.
+            toggle_on_modifiers_press = {
+              control = true;
+              alt = true;
+            };
+          };
+          # Error Lens equivalent; capped at info so harper's hints stay squiggles.
+          diagnostics.inline = {
+            enabled = true;
+            max_severity = "info";
           };
           show_whitespaces = "boundary";
           format_on_save = "on";
@@ -92,6 +107,7 @@
             bold_folder_labels = false;
             git_status = true;
             hide_gitignore = false;
+            indent_size = 16;
             dock = "left";
           };
           outline_panel.dock = "left";
@@ -122,6 +138,8 @@
           # Terminal
           terminal = {
             shell.program = "fish";
+            # Ghostty's settings type wraps every value in a list.
+            font_size = lib.head (lib.toList config.programs.ghostty.settings.font-size);
             blinking = "on";
             cursor_shape = "bar";
           };
@@ -146,6 +164,8 @@
             JSON = {formatter = oxfmt;};
             JSONC = {formatter = oxfmt;};
             CSS = {formatter = oxfmt;};
+            SCSS = {formatter = oxfmt;};
+            HTML = {formatter = oxfmt;};
             YAML = {formatter = oxfmt;};
             Markdown = {formatter = oxfmt;};
           };
@@ -157,7 +177,13 @@
                 formatting.command = ["nix" "fmt" "--"];
               };
             };
+            harper-ls.settings.harper-ls = {
+              userDictPath = "${harperDictionary}";
+              diagnosticSeverity = "hint";
+            };
           };
+
+          edit_predictions.provider = "copilot";
 
           # AI — Claude Code (ACP) is the primary agent, opened via ctrl-alt-c.
           # The native agent panel falls back to Anthropic with Copilot Chat as
@@ -167,7 +193,7 @@
             default_profile = "ask";
             default_model = {
               provider = "anthropic";
-              model = "claude-sonnet-4-6";
+              model = "claude-sonnet-5-5";
             };
           };
 

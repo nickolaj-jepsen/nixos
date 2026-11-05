@@ -160,19 +160,19 @@
                 "scrollbar.track.background" = hex "bg";
                 "scrollbar.track.border" = hex "bg";
 
-                # Terminal (matches VSCode terminal colors)
+                # Terminal (matches Ghostty's palette)
                 "terminal.background" = hex "bg";
                 "terminal.foreground" = hex "fg";
                 "terminal.bright_foreground" = hex "whiteAlt";
                 "terminal.dim_foreground" = hex "muted";
                 "terminal.ansi.background" = hex "bg";
                 "terminal.ansi.black" = hex "black";
-                "terminal.ansi.red" = hex "red";
-                "terminal.ansi.green" = hex "green";
-                "terminal.ansi.yellow" = hex "yellow";
-                "terminal.ansi.blue" = hex "blue";
-                "terminal.ansi.magenta" = hex "magenta";
-                "terminal.ansi.cyan" = hex "cyan";
+                "terminal.ansi.red" = hex "redAlt";
+                "terminal.ansi.green" = hex "greenAlt";
+                "terminal.ansi.yellow" = hex "yellowAlt";
+                "terminal.ansi.blue" = hex "blueAlt";
+                "terminal.ansi.magenta" = hex "magentaAlt";
+                "terminal.ansi.cyan" = hex "cyanAlt";
                 "terminal.ansi.white" = hex "fg";
                 "terminal.ansi.bright_black" = hex "muted";
                 "terminal.ansi.bright_red" = hex "red";
