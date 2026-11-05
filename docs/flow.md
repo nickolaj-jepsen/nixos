@@ -141,7 +141,8 @@ item owns, gates, stops and the budget, and flags every acceptance marked
 Editable on the page: the mode, each step's model or role and its thinking
 level (the gate reviewer's role locks its level), each item's tier, and answers
 to open questions. Answers are appended under `## Amendments`, dated and marked
-as the owner's. Only the settings the owner changed reach `FLOW.json`, and only
+as the owner's. Only the settings the owner changed reach `FLOW.json`, along
+with the mode and the judge's run choices the page showed preselected, and only
 on approval. A value the settings check refuses keeps the page open and names
 the value. Approving starts the run; sending back returns the note to the plan
 session; cancelling leaves the flow at its plan step. Outside the TUI it writes

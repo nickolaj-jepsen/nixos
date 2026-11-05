@@ -71,9 +71,10 @@ const EVERY_MODE =
 const thinkingLocked = (key: SettingKey): boolean => DEFAULT_SETTINGS[key].thinking === undefined;
 
 /**
- * The page as it opens: the judge's suggestions, unless the flow or the owner
- * already fixed a value (the conductor writes both into `FLOW.json` before the
- * page opens, so `settings` and `mode` are the verdict as it stands).
+ * The page as it opens: the settings the flow resolved to, with the judge's
+ * handoff verdict laid over them — the mode and the run step it suggests, and
+ * any item tier it would move. Nothing of the verdict is in `FLOW.json` yet;
+ * only what the owner approves is written.
  */
 export const initialPage = (
   flow: Flow,
@@ -154,11 +155,19 @@ export const applyPage = (
 /** One item's `Tier:` line and the tier it should read after the page. */
 export type TierEdit = { line: number; tier: Tier };
 
-/** The tiers the owner moved away from what `HANDOFF.md` says (D8). */
-export const tierEdits = (handoff: ParsedHandoff, page: PageState): TierEdit[] =>
+/**
+ * The tiers the owner moved on the page (D8): compared with what the page
+ * opened on, not with the file, so a suggestion the judge made and the owner
+ * left alone is not written to `HANDOFF.md` as the owner's.
+ */
+export const tierEdits = (
+  handoff: ParsedHandoff,
+  opened: PageState,
+  page: PageState,
+): TierEdit[] =>
   handoff.items
     .filter((item) => item.tierLine > 0 && page.tiers[item.id] !== undefined)
-    .filter((item) => page.tiers[item.id] !== item.tier)
+    .filter((item) => page.tiers[item.id] !== opened.tiers[item.id])
     .map((item) => ({ line: item.tierLine, tier: page.tiers[item.id] }));
 
 /**

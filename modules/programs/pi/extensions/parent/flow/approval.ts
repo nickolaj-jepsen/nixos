@@ -519,7 +519,14 @@ export const approve = async (
     return { kind: "cancel" };
   }
   try {
-    const edited = rewriteTiers(currentText, tierEdits(handoff, result.page));
+    // Approving makes the plan what the page showed, the judge's tiers
+    // included; after a send-back or a cancel only the owner's own moves are
+    // written, so the next page still opens on the next judge's suggestion.
+    const baseline =
+      result.kind === "approve"
+        ? { ...opened, tiers: Object.fromEntries(handoff.items.map((item) => [item.id, item.tier])) }
+        : opened;
+    const edited = rewriteTiers(currentText, tierEdits(handoff, baseline, result.page));
     const amended = appendAmendments(edited, amendmentEntries(handoff, result.page, today()));
     if (amended !== handoffText) writeFileSync(handoffPath, amended);
   } catch (error) {

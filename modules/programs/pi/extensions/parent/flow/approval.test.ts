@@ -174,11 +174,12 @@ test("the page says the plan's stops apply in every mode, straight included", ()
 
 test("only the tiers the owner moved are rewritten, and only their own line", () => {
   // G0 takes the judge's deep, the owner moves A1 up, and S1 keeps what the plan says.
-  const edited = page({ tiers: { ...page().tiers, A1: "deep", S1: "flash" } });
-  const edits = tierEdits(handoff, edited);
+  const opened = initialPage(flow(), handoff, verdict, resolved());
+  const edited = page({ tiers: { ...opened.tiers, A1: "deep" } });
+  const edits = tierEdits(handoff, opened, edited);
   assert.deepEqual(
     edits.map((edit) => edit.tier),
-    ["deep", "deep"],
+    ["deep"],
   );
   const before = exampleText();
   const after = rewriteTiers(before, edits);
@@ -190,7 +191,11 @@ test("only the tiers the owner moved are rewritten, and only their own line", ()
     changed,
     edits.map((edit) => edit.line),
   );
-  assert.equal(end[tierLineOf(before, "G0") - 1], "- Tier: deep");
+  assert.equal(
+    end[tierLineOf(before, "G0") - 1],
+    "- Tier: flash",
+    "the judge's suggestion was written as the owner's move",
+  );
   assert.equal(end[tierLineOf(before, "A1") - 1], "- Tier: deep");
   assert.equal(end[tierLineOf(before, "S1") - 1], "- Tier: flash", "an unmoved tier was rewritten");
   // Everything else still parses, so the file is a plan the run can read.
@@ -618,4 +623,33 @@ test("a send-back writes no settings to FLOW.json", async () => {
   );
   assert.deepEqual(cancelled, { kind: "cancel" });
   assert.equal(existsSync(join(dir, "FLOW.json")), false, "a cancel wrote FLOW.json");
+});
+
+test("a judge's tier the owner leaves alone is written on approve, not on send-back or cancel", async () => {
+  for (const [answer, kind] of [
+    ["send back", "back"],
+    ["cancel", "cancel"],
+  ] as const) {
+    const dir = scratch();
+    const before = readFileSync(join(dir, "HANDOFF.md"), "utf8");
+    const ui = {
+      select: async () => answer,
+      input: async () => (kind === "back" ? "split it" : undefined),
+      notify: () => undefined,
+      custom: () => undefined,
+    };
+    const result = await approve(
+      { getSettings: () => ({}) } as unknown as ExtensionAPI,
+      { mode: "json", ui } as unknown as ExtensionCommandContext,
+      flow({ planDir: dir }),
+      handoff,
+      verdict,
+    );
+    assert.equal(result.kind, kind);
+    assert.equal(
+      readFileSync(join(dir, "HANDOFF.md"), "utf8"),
+      before,
+      `${kind} wrote the judge's suggestion into the plan`,
+    );
+  }
 });

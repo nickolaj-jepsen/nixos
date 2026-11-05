@@ -52,6 +52,8 @@ type Options = {
   kickoffThrows?: boolean;
   /** `pi.sendUserMessage` throws, as the same-session send does on a dead provider. */
   piSendThrows?: boolean;
+  /** The session is streaming, so a send from it cannot be trusted to have run. */
+  streaming?: boolean;
   judgeBrief?: Deps["judgeBrief"];
   judgeHandoff?: Deps["judgeHandoff"];
   approve?: Deps["approve"];
@@ -94,6 +96,7 @@ const harness = (options: Options = {}) => {
   let spawned = 0;
   let kickoffThrows = options.kickoffThrows ?? false;
   let piSendThrows = options.piSendThrows ?? false;
+  let streaming = options.streaming ?? false;
   /** What escaped a `withSession`: in pi that is `handleFatalRuntimeError`, which exits. */
   const fatal: unknown[] = [];
   const answers = [...(options.select ?? [])];
@@ -151,7 +154,7 @@ const harness = (options: Options = {}) => {
       },
       model: { provider: "fixture", id: "replay" },
       thinkingLevel: level,
-      isIdle: () => true,
+      isIdle: () => !streaming,
       waitForIdle: async () => {},
       switchSession: async (
         path: string,
@@ -281,6 +284,9 @@ const harness = (options: Options = {}) => {
     },
     setPiSendThrows: (value: boolean) => {
       piSendThrows = value;
+    },
+    setStreaming: (value: boolean) => {
+      streaming = value;
     },
     read: () => {
       const read = readFlow(dir);
@@ -1011,4 +1017,19 @@ test("a throwing same-session resend is not marked sent, so the next resume send
   assert.deepEqual(run.sent, [{ text: `/skill:flow-brief ${run.dir}`, expand: true }]);
   assert.equal(run.read().steps[0]?.kickoffSent, true);
   assert.match(run.notes.at(-1)?.text ?? "", /resent the brief kickoff/);
+});
+
+test("a resume from a streaming session is not marked sent, so an idle resume sends it", async () => {
+  const run = harness({ streaming: true });
+  await command(run.deps, run.runtime, "resume");
+
+  assert.deepEqual(run.switches, []);
+  assert.deepEqual(run.sent, [], "a streaming session must not take the kickoff");
+  assert.match(run.notes.at(-1)?.text ?? "", /a turn is still running/);
+  assert.equal(run.read().steps[0]?.kickoffSent, undefined);
+
+  run.setStreaming(false);
+  await command(run.deps, run.runtime, "resume");
+  assert.deepEqual(run.sent, [{ text: `/skill:flow-brief ${run.dir}`, expand: true }]);
+  assert.equal(run.read().steps[0]?.kickoffSent, true);
 });

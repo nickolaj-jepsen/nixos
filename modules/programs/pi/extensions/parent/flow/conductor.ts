@@ -698,6 +698,16 @@ const resume = async (
   const { planDir, slug: name, step } = flow;
   try {
     if (record.session === deps.ctx.sessionManager.getSessionFile()) {
+      // `pi.sendUserMessage` returns void and reports a failure later, so a send
+      // from a streaming turn could be marked delivered without ever running.
+      // Refuse instead: an idle session is the one case its return means anything.
+      if (kickoff && !deps.ctx.isIdle()) {
+        deps.ctx.ui.notify(
+          `flow ${name}: a turn is still running, so the ${step} kickoff was not resent. /flow resume once it settles.`,
+          "warning",
+        );
+        return;
+      }
       if (kickoff) {
         const sent = await deliverKickoff(
           (text, options) => deps.pi.sendUserMessage(text, options),
