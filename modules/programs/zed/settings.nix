@@ -110,6 +110,8 @@
             "**/.direnv"
             "**/__pycache__"
             "**/*.egg-info"
+            # Agent session scratch: reaped by age, not worth searching.
+            "**/.agents/tmp"
           ];
 
           # Panels
@@ -205,9 +207,11 @@
 
           edit_predictions.provider = "copilot";
 
-          # AI — Claude Code (ACP) is the primary agent, opened via ctrl-alt-c.
-          # The native agent panel falls back to Anthropic with Copilot Chat as
-          # an alternative model option (sign in to both via the UI once).
+          # AI — Claude Code and pi run as external agents (ACP): each owns its
+          # runtime, auth and models, and Zed brings the thread UI. Claude is
+          # opened via ctrl-alt-c. The native agent panel falls back to Anthropic
+          # with Copilot Chat as an alternative model option (sign in to both via
+          # the UI once).
           agent = {
             dock = "right";
             default_profile = "ask";
@@ -219,6 +223,9 @@
           # The agent panel defaults to 12pt; match the buffer instead.
           agent_buffer_font_size = bufferFontSize;
 
+          # Registry agents are fetched from the ACP registry and run via npx, so
+          # `node` must be on the PATH Zed is launched with. pi-acp spawns `pi`
+          # from PATH (pkgs/pi-coding-agent) and reuses ~/.pi/agent config.
           agent_servers = {
             "claude-acp" = {
               type = "registry";
@@ -226,6 +233,7 @@
                 mode = "auto";
               };
             };
+            "pi-acp".type = "registry";
           };
         };
 
@@ -234,6 +242,14 @@
             context = "Editor";
             bindings = {
               "ctrl-shift-p" = "editor::Format";
+            };
+          }
+          # The JetBrains base keymap puts double-shift on the command palette; this
+          # is JetBrains' Search Everywhere as the user reaches for it, a file search.
+          {
+            context = "Workspace";
+            bindings = {
+              "shift shift" = "file_finder::Toggle";
             };
           }
           {
