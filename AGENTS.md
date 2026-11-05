@@ -10,6 +10,7 @@ All operations use `just`; run `just` for the full list.
 ```bash
 just eval <attr> [host]  # One config value in seconds; hm.<attr> for home-manager. Try before build
 just build [host]        # Verify builds with this, not switch
+just try <app>           # One app with the new home-manager config, sandboxed; no switch, Linux only
 just switch [host]       # NEEDS EXPLICIT USER APPROVAL, same for `just boot`
 just fmt                 # ALWAYS run before finishing
 just check               # Full flake check (slow, use sparingly)

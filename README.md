@@ -14,6 +14,7 @@ just switch host user@remote # ...or push a nixos host to a remote (nixos-rebuil
 just test                    # Apply until reboot
 just build                   # Build without switching
 just diff                    # ...and diff the build against the running system
+just try zeditor             # One app against the new home-manager config, no switch
 just update                  # Update flake inputs
 just fmt                     # Format everything
 just gc                      # Collect garbage and delete old generations

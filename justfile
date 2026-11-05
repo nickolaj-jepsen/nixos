@@ -120,6 +120,18 @@ test hostname=`just _this-host` *ARGS="":
     sudo nixos-rebuild test --flake .#{{ hostname }} {{ ARGS }}
     just _failed-units
 
+# The home-manager half only, so this is the fast loop for app configs: zeditor, claude, pi, ...
+# [no-cd]: the program starts in the directory you ran just from, not the repo.
+[arg('app', pattern='[a-zA-Z0-9._+-]+')]
+[doc("Run one program with this host's home-manager config applied, sandboxed in a throwaway $HOME (no switch)")]
+[group('host')]
+[no-cd]
+[script]
+try app *ARGS="":
+    drv=$(just --justfile '{{ justfile() }}' eval 'hm.home.activationPackage.drvPath' | tr -d '"')
+    gen=$(nix-build --no-out-link "$drv")
+    exec '{{ justfile_directory() }}/scripts/try.sh' "$gen" "{{ app }}" {{ ARGS }}
+
 # Activation can succeed while units fail; surface them instead of leaving them to be found later.
 [private]
 [script]

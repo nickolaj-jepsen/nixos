@@ -69,6 +69,22 @@ An HM half evaluates both embedded (NixOS hosts) and standalone
 `osConfig`. `just check` builds `homeConfigurations.dev-ao` as the
 standalone guard, so an osConfig read fails CI.
 
+## Trying one app without switching
+
+`just try <program> [args]` builds this host's home-manager half and runs the
+program against it. The real activation script runs inside a bubblewrap overlay
+of `$HOME`, then the program starts in that same sandbox, so app configs that
+only exist after activation (zed's `settings.json`, obsidian's plugin data) are
+the new ones too. Name the binary the config installs (`zeditor`, `claude`,
+`pi`), not the package.
+
+- Only the HM half is applied. A `nixos.*` change still needs `just switch`.
+- Writes to `$HOME`, from the activation and from the program, land in a
+  throwaway overlay: the real config is untouched and the session's own state
+  (auth, projects, DBs) is read through it unchanged.
+- User units are not reloaded, so a systemd service change is not covered.
+- Linux only (bubblewrap); use `just switch` on darwin.
+
 ## Snippets
 
 - Theme: `let c = config.fireproof.theme.colors; in { background = c.bg; border = "#${c.accent}"; }`
