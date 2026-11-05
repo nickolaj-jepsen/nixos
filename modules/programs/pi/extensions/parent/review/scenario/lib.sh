@@ -72,7 +72,7 @@ scenario_init() {
   export AGENT_HUB_HIDDEN=1 PI_OFFLINE=1
 
   scenario_stop
-  rm -rf "$SCENARIO_ROOT"
+  scenario_rm "$SCENARIO_ROOT"
   mkdir -p "$SCENARIO_FIXTURE" "$SCENARIO_AGENT" "$SCENARIO_SESSIONS"
   mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$SCENARIO_HOME" "$TMPDIR"
   mkdir -p "$SCENARIO_RUNTIME"
@@ -186,11 +186,21 @@ scenario_pass() {
   SCENARIO_PASSED=1
 }
 
+# `rm -rf` answers ENOTEMPTY when a pi that is still dying writes its node
+# compile cache mid-delete. A tree under /tmp is the janitor's problem, but a
+# non-zero status from the EXIT trap would report a green run as a red one.
+scenario_rm() {
+  local dir
+  for dir in "$@"; do
+    rm -rf "$dir" 2>/dev/null || { sleep 0.2; rm -rf "$dir"; } || true
+  done
+}
+
 scenario_stop() {
   tmux -L "${SCENARIO_TMUX:-none}" kill-server 2>/dev/null || true
   # A green run leaves nothing behind; a red one keeps its tree and its pane log
   # for the report, and the janitor owns what is left in /tmp either way.
   if [ "${SCENARIO_PASSED:-0}" = 1 ] && [ -n "${SCENARIO_ROOT:-}" ]; then
-    rm -rf "$SCENARIO_ROOT"
+    scenario_rm "$SCENARIO_ROOT"
   fi
 }
