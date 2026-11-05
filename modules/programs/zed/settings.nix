@@ -23,6 +23,8 @@
             metrics = false;
           };
           restore_on_startup = "last_session";
+          # A path inside an already-open project still lands in that project's window.
+          cli_default_open_behavior = "new_window";
           proxy = "";
           window_decorations = lib.mkIf pkgs.stdenv.isLinux "client";
           use_system_window_tabs = false;

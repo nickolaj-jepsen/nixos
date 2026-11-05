@@ -94,7 +94,7 @@ zed)
     target=${path#/}
     exec "$exe" "ssh://$remote/${target:-~}"
   fi
-  # zed takes the position inside the path argument, and reuses a window by default.
+  # zed takes the position inside the path argument; cli_default_open_behavior picks the window.
   exec "$exe" "$path${line:+:$line}${col:+:$col}"
   ;;
 vscode)
