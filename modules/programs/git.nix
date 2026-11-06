@@ -30,6 +30,10 @@
       enableGitIntegration = true;
     };
 
+    # A named difftool only (`git difftool -t difft`): its git integration sets
+    # diff.external, which breaks anything that parses `git diff`.
+    programs.difftastic.enable = true;
+
     programs.git = {
       enable = true;
 
@@ -47,6 +51,7 @@
         merge.conflictStyle = "zdiff3";
         diff.algorithm = "histogram";
         diff.colorMoved = "default";
+        difftool.difft.cmd = "${lib.getExe pkgs.difftastic} \"$LOCAL\" \"$REMOTE\"";
         # Not pruneTags: it would delete local tags that were never pushed.
         fetch.prune = true;
         push.followTags = true;

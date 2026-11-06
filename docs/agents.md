@@ -154,8 +154,9 @@ Claude's own; pi has none.
   is the resolver, and `docs/notes.md` covers the identity, the git hook, scratch
   and the migration.
 - A skill names its files relative to that store and never repeats where notes
-  live: `agent-context.md` states the rule once, and the six skills that write
-  files (`annotate-plan`, `handoff`, `run-handoff`, `ideate`, `mine`, `onboard`)
+  live: `agent-context.md` states the rule once, and the skills that write
+  files (`annotate-plan`, `handoff`, `run-handoff`, `ideate`, `mine`, `onboard`,
+  `tour`)
   only name their own layout.
 
 ## Language servers
