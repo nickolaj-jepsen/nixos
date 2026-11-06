@@ -85,7 +85,7 @@ Use the harness's question tool (pi `ask_user_question`, Claude `AskUserQuestion
 
 - Follow `references/report.md`.
 - Cite `path` plus symbol, with short snippets copied from files you just read. Diagrams show only what was verified.
-- Write diagrams as fenced Mermaid, then run `node <skill-dir>/scripts/render.mjs <report>`. It adds a linked SVG above each block, or prints the block's line and the error. Fix any error and run it again; the report isn't finished until every diagram renders. Without Node, keep the Mermaid text and note that it wasn't rendered.
+- Write diagrams as fenced Mermaid and render them with the `mermaid` skill (Claude Code: the Skill tool; pi: read its SKILL.md). The report isn't finished until every diagram renders.
 - Check every citation: `git -C <checkout> grep -n -F <symbol> <commit> -- <path>`. Fix or remove any that miss. This catches invented references, not wrong explanations; the probes target those.
 - Stop anything you started.
 
@@ -106,6 +106,6 @@ If the user asks for a quiz, write five questions that would expose whether some
 
 - Run one fresh subagent per pick, one at a time, so they don't collide on ports or database state. Background them if the harness can. Without a subagent tool, run them inline, in order.
 - Each dive gets its own clone, `dive-<subsystem>/`.
-- Each brief gives: the rules above, the overview's path, the commit, the checkout, its clone, the approved commands, this skill's `references/` and `scripts/` paths, and the one report it writes.
+- Each brief gives: the rules above, the overview's path, the commit, the checkout, its clone, the approved commands, this skill's `references/` and `scripts/` paths, the `mermaid` skill's path, and the one report it writes.
 - A dive does stages 4 and 5 for its subsystem and never asks the user. It writes its deferred commands into its report.
 - After each dive, run the citation check on its report yourself, then tell the user in one line, with its path and how many commands it deferred.
