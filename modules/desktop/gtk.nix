@@ -5,19 +5,22 @@
     pkgs,
     ...
   }: {
-    config = lib.mkIf config.fireproof.desktop.enable {
-      environment.systemPackages = [pkgs.nautilus];
+    config = lib.mkMerge [
+      # The HM half's dconf settings need the service.
+      (lib.mkIf config.fireproof.gui.enable {programs.dconf.enable = true;})
+      (lib.mkIf config.fireproof.desktop.enable {
+        environment.systemPackages = [pkgs.nautilus];
 
-      services.gvfs.enable = true;
-      programs = {
-        dconf.enable = true;
-        nautilus-open-any-terminal.enable = true;
-        seahorse.enable = true;
-        evince.enable = true;
-      };
+        services.gvfs.enable = true;
+        programs = {
+          nautilus-open-any-terminal.enable = true;
+          seahorse.enable = true;
+          evince.enable = true;
+        };
 
-      services.gnome.sushi.enable = true;
-    };
+        services.gnome.sushi.enable = true;
+      })
+    ];
   };
   flake.modules.homeManager.gtk = {
     config,
@@ -108,7 +111,7 @@
       @define-color destructive_color @red;
     '';
   in {
-    config = lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
+    config = lib.mkIf (config.fireproof.gui.enable && pkgs.stdenv.isLinux) {
       home.pointerCursor = {
         gtk.enable = true;
         name = "Adwaita";
