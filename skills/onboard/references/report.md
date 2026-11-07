@@ -6,8 +6,10 @@ Each report has an evidence file beside it, `<report name>-evidence.md`, linked 
 
 Rules shared by both reports:
 
+- **Terms:** define each project term in plain words at its first use, and never cite a decision or rule ID (such as P3 or D4) without saying what it decided.
+- **How you know:** never mention probes, the clone or its logs. State what is true; the evidence file says how you found it.
 - **Similar projects:** 2–4 well-known projects, one or two lines each: what this one shares with each, and what it does differently. Each says its source: **stated** (the project's own docs name it) or **researched** (a cited page about the other project). Prefer stated. Something you remember can start a search but is never a source on its own.
-- **Getting started:** the steps from a fresh clone to a first visible result, each one run in the clone. For a library, a minimal code sample that you ran, with its output. Leave out anything you didn't run.
+- **Getting started:** the steps from a fresh clone to a first visible result, each one run in the clone. For a library, a minimal code sample that you ran, shown in full with its output, not as a pointer to where it came from. Leave out anything you didn't run.
 - **Walkthroughs:** one per traced action, as 5–8 numbered steps. Each step is one sentence on what happens and why it matters for the feature, then `path` plus symbol. One sequence diagram. No predictions, probe output, commit logs or call chains.
 - **Invariants and boundaries:** what must stay true and what happens when a dependency fails, with a "tested by" column filled from reading the tests (`path` plus test name, or "none").
 - **Where the docs are wrong:** what the project's docs, comments, READMEs or config say that isn't true, and what actually happens. Never your own predictions, test quality, or failures caused by this machine.

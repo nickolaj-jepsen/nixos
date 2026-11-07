@@ -91,6 +91,7 @@ Use the harness's question tool (pi `ask_user_question`, Claude `AskUserQuestion
 - Cite `path` plus symbol, with short snippets copied from files you just read. Diagrams show only what was verified.
 - Write diagrams as fenced Mermaid and render them with the `mermaid` skill (Claude Code: the Skill tool; pi: read its SKILL.md). The report isn't finished until every diagram renders.
 - Check every citation: `git -C <checkout> grep -n -F <symbol> <commit> -- <path>`. Fix or remove any that miss. This catches invented references, not wrong explanations; the probes target those.
+- Run `grep -n -i -E 'probe|/tmp/onboard' <report>`. It must print nothing: rewrite each hit as the fact it showed, and move how you found it to the evidence file.
 - Stop anything you started.
 
 ## 6. End message
