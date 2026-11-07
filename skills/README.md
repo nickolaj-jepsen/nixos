@@ -46,7 +46,7 @@ claude plugin install skills@nickolaj-jepsen
 - [prune-comments](prune-comments/): cuts redundant, over-long or coupled comments and docstrings (file/line references, caller lists, change narration) down to the load-bearing why; run it after generating code.
 - [prune-hard](prune-hard/): the harsh sibling of prune-comments for private code, deleting by default and keeping only the traps.
 - [prune-churn](prune-churn/): removes tests, docs and structure that must be edited whenever something else changes, ranking churn hotspots from git history.
-- [avoid-ai-tropes](avoid-ai-tropes/): a catalog of AI writing tells to check human-facing prose against and rewrite, sourced from [tropes.fyi](https://tropes.fyi) by [ossama.is](https://ossama.is).
+- [avoid-ai-tropes](avoid-ai-tropes/): checks human-facing prose against a catalog of AI writing tells and rewrites what matches, sourced from [tropes.fyi](https://tropes.fyi) by [ossama.is](https://ossama.is); run it by name.
 - [pi-plugin-dev](pi-plugin-dev/): builds and debugs pi extensions by observation, with tmux-driven TUI sessions, screenshots, session digests and a replay provider.
 - [dms-plugin-dev](dms-plugin-dev/): runs a DankMaterialShell plugin in real DMS inside an isolated headless sway, and drives it with keys, a pointer, screenshots and its QML log
 - [memory-sync](memory-sync/): syncs one repo's memories both ways between pi's memory store and Claude Code's auto-memory in one approval, never deleting; runs in pi.
