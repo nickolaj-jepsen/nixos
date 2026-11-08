@@ -45,12 +45,6 @@
             show_branch_status_icon = false;
           };
 
-          toolbar = {
-            code_actions = false;
-            quick_actions = false;
-            selections_menu = false;
-          };
-
           indent_guides = {
             background_coloring = "disabled";
           };
@@ -81,15 +75,8 @@
           scroll_beyond_last_line = "one_page";
           sticky_scroll.enabled = true;
           colorize_brackets = true;
-          inlay_hints = {
-            enabled = true;
-            show_background = false;
-            # VSCode's "onUnlessPressed": hidden while Ctrl+Alt is held.
-            toggle_on_modifiers_press = {
-              control = true;
-              alt = true;
-            };
-          };
+          inlay_hints.enabled = false;
+
           # Error Lens equivalent; capped at info so harper's hints stay squiggles.
           diagnostics.inline = {
             enabled = true;
@@ -222,10 +209,6 @@
           agent = {
             dock = "right";
             default_profile = "ask";
-            default_model = {
-              provider = "anthropic";
-              model = "claude-sonnet-5-5";
-            };
           };
           # The agent panel defaults to 12pt; match the buffer instead.
           agent_buffer_font_size = bufferFontSize;
@@ -257,14 +240,6 @@
             context = "Workspace";
             bindings = {
               "shift shift" = "file_finder::Toggle";
-            };
-          }
-          {
-            bindings = {
-              "ctrl-alt-c" = [
-                "agent::NewExternalAgentThread"
-                {agent = {custom = {name = "claude-acp";};};}
-              ];
             };
           }
         ];
