@@ -868,6 +868,87 @@ class Local(Base):
         self.assertEqual(Path(self.main, "a.txt").read_text(), "both\n")
 
 
+class Submodules(Base):
+    """A repository with an upstream at vendor/s, checked out and built in the primary checkout."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.git("config", "--global", "user.email", "test@example.com")
+        self.git("config", "--global", "user.name", "Test")
+        self.upstream = os.path.join(self.root, "upstream")
+        os.makedirs(self.upstream)
+        self.git("init", "-q", "-b", "main", cwd=self.upstream)
+        self.write(".gitignore", "build/\nother/\n", cwd=self.upstream)
+        self.commit("upstream base", cwd=self.upstream)
+        self.git("-c", "protocol.file.allow=always", "submodule", "add", "-q", self.upstream, "vendor/s")
+        self.write(".worktreeinclude", "vendor/s/build/\n")
+        self.commit("add submodule")
+        self.sub = os.path.join(self.main, "vendor/s")
+        for folder in ("build", "other"):
+            os.makedirs(os.path.join(self.sub, folder))
+            self.write(f"{folder}/out", "built\n", cwd=self.sub)
+
+    def test_new_populates_from_the_primary_checkout_without_the_network(self) -> None:
+        shutil.move(self.upstream, self.upstream + ".gone")
+        path = self.new("a")
+        self.assertTrue((path / "vendor/s/.gitignore").exists())
+        self.assertEqual((path / "vendor/s/build/out").read_text(), "built\n")
+        self.assertFalse((path / "vendor/s/other").exists(), "only listed paths are copied")
+        self.assertEqual(self.git("remote", "get-url", "origin", cwd=str(path / "vendor/s")).strip(), self.upstream)
+        self.assertEqual(self.git("status", "--porcelain", cwd=str(path)), "")
+
+    def test_new_copies_no_build_output_from_another_commit(self) -> None:
+        self.write("next", "next\n", cwd=self.sub)
+        self.commit("primary moved on", cwd=self.sub)
+        result = self.wt("new", "a")
+        path = Path(result.stdout.strip())
+        self.assertTrue((path / "vendor/s/.gitignore").exists())
+        self.assertFalse((path / "vendor/s/build").exists())
+        self.assertIn("not copied", result.stderr)
+
+    def test_new_leaves_a_submodule_the_primary_checkout_lacks(self) -> None:
+        self.git("submodule", "deinit", "-q", "--force", "vendor/s")
+        path = self.new("a")
+        self.assertEqual(list((path / "vendor/s").iterdir()), [])
+
+    def test_close_refuses_uncommitted_submodule_changes(self) -> None:
+        path = self.new("a")
+        self.write("work", "work\n", cwd=str(path / "vendor/s"))
+        result = self.wt("close", "a", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("uncommitted changes in submodule vendor/s", result.stderr)
+        self.assertTrue((path / "vendor/s/work").exists())
+
+    def test_close_refuses_commits_only_the_submodule_copy_holds(self) -> None:
+        path = self.new("a")
+        checkout = str(path / "vendor/s")
+        self.write("work", "work\n", cwd=checkout)
+        self.commit("local", cwd=checkout)
+        result = self.wt("close", "a", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("exist nowhere else", result.stderr)
+        self.assertTrue(path.exists())
+
+    def test_close_removes_an_untouched_submodule(self) -> None:
+        path = self.new("a")
+        self.wt("close", "a")
+        self.assertFalse(path.exists())
+        self.assertFalse(self.has_branch("a"))
+
+    def test_landing_over_a_moved_pin_leaves_no_wip_commit(self) -> None:
+        path = self.feature("a")
+        self.write("next", "next\n", cwd=self.upstream)
+        self.commit("upstream next", cwd=self.upstream)
+        self.git("pull", "-q", "origin", "main", cwd=self.sub)
+        self.commit("bump submodule")
+        pin = self.git("rev-parse", "HEAD:vendor/s").strip()
+        self.wt("land", "a")
+        self.assertFalse(path.exists())
+        self.assertFalse(self.has_branch("a"))
+        self.assertEqual(self.git("rev-parse", "HEAD:vendor/s").strip(), pin)
+        self.assertEqual(self.subject(), "a")
+
+
 class GitHub(Base):
     """The same repository with an origin remote and a fake `gh` first on PATH."""
 

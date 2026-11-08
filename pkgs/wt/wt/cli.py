@@ -46,7 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
         "else <default>. A name that is already open just prints its path. Reopening checks out\n"
         "the branch the worktree was closed on and turns a wip commit at its tip back into\n"
         "uncommitted changes. Gitignored paths listed in the primary checkout's .worktreeinclude\n"
-        "are copied in.",
+        "are copied in. Submodules the primary checkout has are cloned from it, and listed paths\n"
+        "inside them copied when both are on the same commit.",
     )
     new.add_argument("name", help="worktree and branch name; slashes become dashes in the folder name")
     new.add_argument("base", nargs="?", help="ref a new branch starts from")
@@ -113,9 +114,10 @@ def build_parser() -> argparse.ArgumentParser:
         "Commit any uncommitted changes as a wip commit, remove the folder, and delete the branch\n"
         "when all its commits are in <default>.",
         "A kept branch reopens with `wt new <name>`, wip commit undone. Refuses mid-rebase, merge\n"
-        "or conflict, and while a process works inside; --when-free instead waits in the\n"
-        "background until the folder is empty (an hour at most), which is what session-exit\n"
-        "hooks run. Gitignored files (.env, build output, result links) go with the folder;\n"
+        "or conflict, with unsaved work in a submodule, and while a process works inside;\n"
+        "--when-free instead waits in the background until the folder is empty (an hour at\n"
+        "most), which is what session-exit hooks run. Gitignored files (.env, build output,\n"
+        "result links) go with the folder;\n"
         "`wt new` copies the paths in the primary checkout's .worktreeinclude back in.",
     )
     close.add_argument("target", nargs="?", help="worktree name, path, or . (default) for the current one")

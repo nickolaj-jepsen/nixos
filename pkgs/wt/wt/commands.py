@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import time
+from pathlib import Path
 from typing import NoReturn, Optional
 
 from .gh import has_origin, pr_merged, stack_layers
-from .git import ProbeError, die, git, git_ok, info, inspect, is_within, normpath, run
+from .git import ProbeError, die, git, git_ok, info, inspect, is_within, normpath, probe, run
 from .procs import busy_pids, describe_pid
 from .repo import Located, Repo, RepoLock, current_repo, repos_under_root, stale_worktrees
 from .worktrees import (
@@ -48,24 +50,95 @@ WHEN_FREE_POLL = 1.0
 # new
 
 
-def copy_worktreeinclude(repo: Repo, dest: str) -> None:
-    """Copy the primary checkout's gitignored paths listed in `.worktreeinclude` into `dest`."""
-    include = os.path.join(repo.main, ".worktreeinclude")
-    if not os.path.isfile(include):
-        return
-    proc = run(
-        ["git", "-C", repo.main, "ls-files", "-z", "--others", "--ignored", "--directory", f"--exclude-from={include}"],
-        check=False,
-    )
+def _copy_ignored(source: str, dest: str, excludes: list[str]) -> None:
+    """Copy into `dest` the paths of checkout `source` that `excludes` selects and git ignores."""
+    proc = run(["git", "-C", source, "ls-files", "-z", "--others", "--ignored", "--directory", *excludes], check=False)
     for rel in proc.stdout.split("\0"):
         rel = rel.rstrip("/")
-        if not rel or run(["git", "-C", repo.main, "check-ignore", "-q", "--", rel], check=False).returncode != 0:
+        if not rel or run(["git", "-C", source, "check-ignore", "-q", "--", rel], check=False).returncode != 0:
             continue
         target = os.path.join(dest, rel)
         if os.path.lexists(target):
             continue
         os.makedirs(os.path.dirname(target), exist_ok=True)
-        run(["cp", "-a", "--", os.path.join(repo.main, rel), target], check=False)
+        run(["cp", "-a", "--", os.path.join(source, rel), target], check=False)
+
+
+def copy_worktreeinclude(repo: Repo, dest: str) -> None:
+    """Copy the primary checkout's gitignored paths listed in `.worktreeinclude` into `dest`."""
+    include = os.path.join(repo.main, ".worktreeinclude")
+    if os.path.isfile(include):
+        _copy_ignored(repo.main, dest, [f"--exclude-from={include}"])
+
+
+def submodules(checkout: str) -> dict[str, str]:
+    """Path to name of the submodules `.gitmodules` declares in `checkout`; none without the file."""
+    pattern = r"^submodule\..*\.path$"
+    proc = run(["git", "-C", checkout, "config", "--file", ".gitmodules", "--null", "--get-regexp", pattern], check=False)
+    found: dict[str, str] = {}
+    for record in proc.stdout.split("\0"):
+        key, _, path = record.partition("\n")
+        if path:
+            found[path] = key[len("submodule.") : -len(".path")]
+    return found
+
+
+def _populated(checkout: str, sub: str) -> bool:
+    return os.path.exists(os.path.join(checkout, sub, ".git"))
+
+
+def _patterns_inside(include: str, sub: str) -> list[str]:
+    """The lines of the `include` file as they read from inside submodule `sub`.
+
+    The file reads as if submodules were plain folders: a bare `node_modules/` applies at any depth
+    in them too, and `<sub>/dist/` names one folder in `sub`, so it loses that prefix.
+    """
+    if not os.path.isfile(include):
+        return []
+    patterns: list[str] = []
+    for line in Path(include).read_text().splitlines():
+        negated = line.startswith("!")
+        body = line[1:] if negated else line
+        if not body.strip() or body.startswith("#"):
+            continue
+        if "/" in body.rstrip("/") and not body.startswith("**/"):
+            body = body.lstrip("/")
+            if not body.startswith(f"{sub}/"):
+                continue
+            body = "/" + body[len(sub) + 1 :]
+        patterns.append(("!" if negated else "") + body)
+    return patterns
+
+
+def populate_submodules(repo: Repo, dest: str) -> None:
+    """Check out in `dest` the submodules the primary checkout has, with the ignored paths it lists in them.
+
+    They clone from the primary checkout's copy, so a new worktree needs no network; origin then goes
+    back to the real URL. Build output only fits the commit it was built from, so it is copied only
+    when both sit on the same one.
+    """
+    for sub, name in submodules(dest).items():
+        if not _populated(repo.main, sub):
+            continue
+        source = os.path.join(repo.main, sub)
+        target = os.path.join(dest, sub)
+        cloned = run(
+            ["git", "-C", dest, "-c", "protocol.file.allow=always", "-c", f"submodule.{name}.url={source}",
+             "submodule", "update", "--quiet", "--init", "--", sub],
+            check=False,
+        )
+        url = git(repo.main, "config", f"submodule.{name}.url", check=False).strip()
+        if url and _populated(dest, sub):
+            run(["git", "-C", target, "remote", "set-url", "origin", url], check=False)
+        if cloned.returncode != 0:
+            info(f"{sub} is pinned to a commit the primary checkout lacks; run 'git submodule update --init' in {dest}")
+            continue
+        if git(source, "rev-parse", "HEAD", check=False).strip() != git(target, "rev-parse", "HEAD", check=False).strip():
+            info(f"{sub} is on another commit than in the primary checkout, so its ignored paths were not copied")
+            continue
+        excludes = _patterns_inside(os.path.join(repo.main, ".worktreeinclude"), sub)
+        if excludes:
+            _copy_ignored(source, target, [f"--exclude={pattern}" for pattern in excludes])
 
 
 def refresh_origin_default(repo: Repo) -> None:
@@ -153,6 +226,7 @@ def cmd_new(args: argparse.Namespace) -> None:
             run(["git", "-C", repo.main, "worktree", "add", "--quiet", "--no-track", "-b", branch, path, base])
         set_record(repo, name, branch)
         copy_worktreeinclude(repo, path)
+        populate_submodules(repo, path)
         print(path)
 
 
@@ -177,6 +251,36 @@ def _commit_wip(path: str, name: str) -> None:
         die(f"could not commit the uncommitted changes in {path}; nothing was removed: {proc.stderr.strip()}")
 
 
+def _submodule_work(repo: Repo, path: str, sub: str) -> Optional[str]:
+    """What removing the folder would lose from submodule `sub`, whose repository goes with the worktree.
+
+    A commit is safe when a remote-tracking ref or the primary checkout's copy has it; the pinned
+    commit is often on no ref at all, since the clone took it from a detached HEAD.
+    """
+    checkout = os.path.join(path, sub)
+    if probe(checkout, "status", "--porcelain", "--untracked-files=all").strip():
+        return "uncommitted changes"
+    local = probe(checkout, "rev-list", "HEAD", "--branches", "--not", "--remotes").split()
+    if not local or not _populated(repo.main, sub):
+        return None
+    source = os.path.join(repo.main, sub)
+    known = run(["git", "-C", source, "cat-file", "--batch-check"], input_text="\n".join(local) + "\n", check=False)
+    return "commits that exist nowhere else" if " missing" in known.stdout else None
+
+
+def _empty_submodules(path: str) -> None:
+    """Empty the submodule folders of a worktree about to go; `_check_closable` found no work in them.
+
+    A rebase that moves a pin leaves the old commit checked out, which git reads as a change and a
+    wip commit would record, undoing the pin. Git does not compare an empty folder.
+    """
+    for sub in submodules(path):
+        if _populated(path, sub):
+            folder = os.path.join(path, sub)
+            shutil.rmtree(folder)
+            os.mkdir(folder)
+
+
 def _check_closable(repo: Repo, entry: Entry) -> None:
     """Refuse what closing would lose or bury; the folder is untouched when this dies."""
     path = entry.path or ""
@@ -189,6 +293,11 @@ def _check_closable(repo: Repo, entry: Entry) -> None:
     conflicts = inspect(context, lambda: conflicted(path))
     if conflicts:
         die(f"'{entry.name}' has unresolved conflicts; resolve them in {path}, then close")
+    for sub in submodules(path):
+        if _populated(path, sub):
+            work = inspect(context, lambda: _submodule_work(repo, path, sub))
+            if work:
+                die(f"'{entry.name}' has {work} in submodule {sub}, which closing deletes; save or discard it there first")
     if not entry.branch:
         if inspect(context, lambda: dirty(path)):
             die(f"'{entry.name}' is detached with uncommitted changes; put them on a branch first")
@@ -268,6 +377,7 @@ def close_entry(repo: Repo, entry: Entry) -> None:
     _check_closable(repo, entry)
     # Read before the folder goes: `gh stack` answers for the checkout it runs in.
     stacked = [b for b in stack_layers(path) if b != entry.branch] if has_origin(repo) else []
+    _empty_submodules(path)
     if inspect(f"'{entry.name}'", lambda: dirty(path)):
         _commit_wip(path, entry.name)
         info(f"committed the uncommitted changes in '{entry.name}' as a wip commit")
@@ -367,6 +477,7 @@ def cmd_drop(args: argparse.Namespace) -> None:
             if busy:
                 die(f"'{entry.name}' is in use by {describe_pid(busy[0])}; close that first")
             _check_closable(repo, entry)
+            _empty_submodules(path)
             if inspect(f"'{entry.name}'", lambda: dirty(path)):
                 _commit_wip(path, entry.name)
             run(["git", "-C", repo.main, "worktree", "remove", "--force", path])
