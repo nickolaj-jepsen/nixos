@@ -177,8 +177,31 @@ async function close($: EngineInterface) {
   await edit($, (was) => ({ ...was, isOpen: false, editing: null, stash: null }));
 }
 
+/** A slash command's own record in the transcript, which is not the person moving past the round. */
+const isCommandRecord = (text: string) => /^\s*<(command-|local-command-)/.test(text);
+
+/**
+ * The round a resumed session came back to. `turn.complete` fired in the process before
+ * this one, so the last reply is read from the transcript; one the person has spoken
+ * after is left alone.
+ */
+async function recover($: EngineInterface) {
+  if (await read($, current)) return;
+  const messages = await $.session.messages();
+  if (!Array.isArray(messages)) return;
+  for (const message of [...messages].reverse()) {
+    if (message.role === "assistant") {
+      const held = message.text ? offer(null, message.text) : null;
+      if (held) await update($, current, (c) => c ?? over(null, held));
+      return;
+    }
+    if (!isCommandRecord(message.text)) return;
+  }
+}
+
 /** `/answer`: opens the form, or folds it when it is already up. */
 async function toggle($: EngineInterface) {
+  await recover($).catch((error) => complain($, error));
   const c = await read($, current);
   if (!c) {
     $.ui.toast("Nothing to answer: the last turn asked no questions.");
@@ -246,7 +269,9 @@ export const register: Register = (on) => {
         immediate: true,
       })
       .catch((error) => complain($, `/answer not registered: ${String(error)}`));
-    return next(e);
+    const started = await next(e);
+    await recover($).catch((error) => complain($, error));
+    return started;
   });
 
   // Only a new round replaces the form; the person's send is what drops it. A turn a

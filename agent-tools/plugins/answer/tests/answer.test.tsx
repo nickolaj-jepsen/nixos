@@ -360,6 +360,22 @@ test("a new round replaces the one before it, answers and all", async ($, on) =>
   expect(await hint($)).toContain("0 of 2");
 });
 
+test("a resumed session gets the round its last reply ended on, unless the person spoke after it", async ($, on) => {
+  world(on);
+  let said: { role: "user" | "assistant"; text: string; toolUses: [] }[] = [
+    { role: "user", text: "grill me", toolUses: [] },
+    { role: "assistant", text: GRILLING, toolUses: [] },
+    { role: "user", text: "<command-name>/answer</command-name>", toolUses: [] },
+  ];
+  on("session.messages", () => ({ value: said }));
+  await start($);
+  expect(await hint($)).toContain("Answer 3 questions");
+  await $.prompt.submit({ text: "never mind", wait: false, origin: { kind: "composer" } });
+  said = [...said, { role: "user", text: "never mind", toolUses: [] }];
+  await $.command.run(RUN);
+  expect(await hint($)).toBeUndefined();
+});
+
 test("nothing runs or is read outside the session: the form needs no hub", async ($, on) => {
   world(on);
   const reached: string[] = [];
