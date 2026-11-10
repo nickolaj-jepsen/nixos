@@ -26,20 +26,15 @@ const PR =
   '{"url":"https://github.com/me/repo/pull/12","number":12,"state":"OPEN","isDraft":false}';
 
 const HOME = "/home/me";
-const NOTES = `${HOME}/.local/share/agents`;
+/** Where the checkout's `.agents/store` link lands. */
+const STORE = `${HOME}/.local/share/agents/store/repo-1a2b3c4d`;
 const OPENER = "/etc/profiles/per-user/me/bin/agent-note-open";
-const HUB = "/etc/profiles/per-user/me/bin/agent-hub";
 const NOW = Date.UTC(2026, 9, 31, 12);
 const HOUR = 3_600_000;
-const SESSION = "11111111-2222-3333-4444-555555555555";
-
-type Listed = { path: string; name: string; group: string; hours: number };
 
 type Notes = {
-  /** What `agent-hub notes` lists, in its order; undefined when the hub is down. */
-  listed?: Listed[];
-  /** Whether a bar takes `agent-hub show`. */
-  bar?: boolean;
+  /** The store's files, by path below it, each with its age in hours; undefined for no store. */
+  files?: Record<string, number>;
   /** What `command -v` finds, by name or absolute path. */
   installed?: string[];
 };
@@ -48,8 +43,8 @@ type World = {
   /** Every argv the mod ran that was not a read-only question. */
   launched: string[][];
   copied: string[];
-  /** The arguments of each `agent-hub show`. */
-  shown: string[][];
+  /** Every argv the mod ran at all. */
+  ran: string[][];
 };
 
 const ok = (stdout: string, exitCode = 0, stderr = "") => ({
@@ -66,11 +61,11 @@ function world(
     tools = ["tuicr", "ghostty"],
   } = {},
 ): World {
-  const w: World = { launched: [], copied: [], shown: [] };
-  const installed = notes.installed ?? [OPENER, HUB];
+  const w: World = { launched: [], copied: [], ran: [] };
+  const installed = notes.installed ?? [OPENER];
+  const files = Object.entries(notes.files ?? {});
   on("env.get", (_, e) => ({ value: ({ HOME, USER: "me" } as Record<string, string>)[e.name] }));
   on("clock.now", () => ({ value: NOW }));
-  on("session.id", () => ({ value: SESSION }));
   on("ui.open", () => ({ value: { isPlaced: true } }));
   on("ui.close", () => ({ value: undefined }));
   on("ui.panes", () => ({ value: [] }));
@@ -81,9 +76,29 @@ function world(
   });
   on("session.cwd", () => ({ value: "/repo" }));
   on("fs.exists", () => ({ value: false }));
+  on("fs.stat", (_, e) => {
+    if (e.path !== "/repo/.agents/store" || !notes.files) throw new Error(`ENOENT: ${e.path}`);
+    return { value: { kind: "dir", size: 0, mtimeMs: 0, isLink: true, realPath: STORE } };
+  });
+  on("fs.list", (_, e) => {
+    const below = e.path === STORE ? "" : `${e.path.slice(STORE.length + 1)}/`;
+    const entries = new Map<string, { kind: "file" | "dir"; mtimeMs: number }>();
+    for (const [file, hours] of files) {
+      if (!file.startsWith(below)) continue;
+      const [name = "", ...rest] = file.slice(below.length).split("/");
+      entries.set(
+        name,
+        rest.length ? { kind: "dir", mtimeMs: 0 } : { kind: "file", mtimeMs: NOW - hours * HOUR },
+      );
+    }
+    return {
+      value: [...entries].map(([name, entry]) => ({ name, size: 0, isLink: false, ...entry })),
+    };
+  });
   on("process.run", (_, e) => {
     const argv = [...e.argv];
     const line = argv.join(" ");
+    w.ran.push(argv);
     if (argv[0] === "uname") return ok(mac ? "Darwin\n" : "Linux\n");
     if (argv[0] === "gh")
       return pr === null ? ok("", 1, "no pull requests found for branch") : ok(pr);
@@ -98,22 +113,11 @@ function world(
       if (line.endsWith("branch.feat/x.remote")) return ok("origin\n");
       if (line.includes("symbolic-ref")) return ok("origin/main\n");
       if (line.endsWith("rev-parse --git-dir")) return ok(".git\n");
+      if (line.endsWith("rev-parse --show-toplevel")) return ok("/repo\n");
       return ok("", 1);
     }
-    if (argv[0] === HUB && argv[1] === "show") {
-      w.shown.push(argv.slice(2));
-      return ok("", notes.bar ? 0 : 1);
-    }
-    if (argv[0] === HUB && argv[1] === "notes") {
-      if (!notes.listed) return ok("", 1);
-      return ok(
-        notes.listed
-          .map(({ hours, ...note }) => `${JSON.stringify({ ...note, at: NOW - hours * HOUR })}\n`)
-          .join(""),
-      );
-    }
     // `command -v` over a command's candidates.
-    if (argv[0] === "sh" && (argv.includes("agent-note-open") || argv.includes("agent-hub"))) {
+    if (argv[0] === "sh" && argv.includes("agent-note-open")) {
       const hit = argv.slice(4).find((c) => installed.includes(c));
       if (!hit) return ok("", 1);
       return ok(`${hit.includes("/") ? hit : `/run/current-system/sw/bin/${hit}`}\n`);
@@ -219,93 +223,75 @@ async function paneText($: Engine) {
   return texts.map((t) => t.text).join(" ");
 }
 
-const NOTE = {
-  path: `${NOTES}/nixos/findings.md`,
-  name: "nixos/findings.md",
-  group: "written",
-  hours: 1,
-};
+const NOTE = `${STORE}/plans/hub/PLAN.md`;
 
-test("/open plan goes to the bar's reader, naming this session, and opens no pane", async ($, on) => {
-  const w = world(on, { notes: { bar: true, listed: [NOTE] } });
-  await start($, on);
-  await openPlan($);
-  expect(w.shown).toEqual([["--session-id", SESSION]]);
-  expect(await shownRows($)).toEqual([]);
-});
-
-test("with no bar, /open plan lists what the hub lists, in its order", async ($, on) => {
-  world(on, {
+test("/open plan lists the store's Markdown, newest first, and asks no hub", async ($, on) => {
+  const w = world(on, {
     notes: {
-      listed: [
-        NOTE,
-        { path: `${NOTES}/nixos/HANDOFF.md`, name: "nixos/HANDOFF.md", group: "read", hours: 3 },
-        { path: `${NOTES}/nixos/old.md`, name: "nixos/old.md", group: "project", hours: 48 },
-      ],
+      files: {
+        "research/old/REPORT.md": 48,
+        "plans/hub/PLAN.md": 1,
+        "plans/hub/HANDOFF.md": 3,
+        "plans/hub/shot.png": 1,
+        "plans/hub/history/PLAN.prev.md": 2,
+        "plans/hub/files/output.md": 2,
+        ".cache/index.md": 1,
+      },
     },
   });
   await start($, on);
   await openPlan($);
   expect(await shownRows($)).toEqual([
-    "nixos/findings.md 1h",
-    "nixos/HANDOFF.md 3h read",
-    "nixos/old.md 2d project",
+    "plans/hub/PLAN.md 1h",
+    "plans/hub/HANDOFF.md 3h",
+    "research/old/REPORT.md 2d",
   ]);
+  expect(w.ran.filter((argv) => argv.some((arg) => arg.includes("agent-hub")))).toEqual([]);
 });
 
-test("with no notes, /open plan says so and guesses nothing", async ($, on) => {
-  world(on, { notes: { listed: [] } });
+test("with an empty store, /open plan says so", async ($, on) => {
+  world(on, { notes: { files: {} } });
   await start($, on);
   await openPlan($);
   expect(await paneText($)).toContain("No notes yet.");
 });
 
-test("without the hub running, /open plan says what is missing", async ($, on) => {
+test("without a store, /open plan says there are no notes", async ($, on) => {
   world(on);
   await start($, on);
   await openPlan($);
-  expect(await paneText($)).toContain("agent-hub isn't running");
+  expect(await paneText($)).toContain("No notes yet.");
 });
 
 test("pressing a note hands its path to the opener", async ($, on) => {
-  const w = world(on, { notes: { listed: [NOTE] } });
+  const w = world(on, { notes: { files: { "plans/hub/PLAN.md": 1 } } });
   await start($, on);
   await openPlan($);
   const pane = await $.ui.mount({ ...PANE, surface: "terminal" });
-  await pane.press({ key: NOTE.path });
+  await pane.press({ key: NOTE });
   await pane.unmount();
-  expect(w.launched).toEqual([[OPENER, NOTE.path]]);
+  expect(w.launched).toEqual([[OPENER, NOTE]]);
 });
 
 test("without the opener installed, a note opens in VS Code", async ($, on) => {
-  const w = world(on, { notes: { listed: [NOTE], installed: ["code", HUB] } });
+  const w = world(on, { notes: { files: { "plans/hub/PLAN.md": 1 }, installed: ["code"] } });
   await start($, on);
   await openPlan($);
   const pane = await $.ui.mount({ ...PANE, surface: "terminal" });
-  await pane.press({ key: NOTE.path });
+  await pane.press({ key: NOTE });
   await pane.unmount();
-  expect(w.launched).toEqual([["/run/current-system/sw/bin/code", "--reuse-window", NOTE.path]]);
+  expect(w.launched).toEqual([["/run/current-system/sw/bin/code", "--reuse-window", NOTE]]);
 });
 
-test("the folder menu's Notes row goes to the reader where there is one", async ($, on) => {
-  const w = world(on, { notes: { bar: true, listed: [NOTE] } });
-  await start($, on);
-  await $.command.run({ ...RUN, command: "open" });
-  const pane = await $.ui.mount({ ...PANE, surface: "terminal" });
-  await pane.press({ key: "notes" });
-  await pane.unmount();
-  expect(w.shown).toEqual([["--session-id", SESSION]]);
-});
-
-test("the folder menu's Notes row switches the pane to the notes elsewhere", async ($, on) => {
-  const w = world(on, { notes: { listed: [NOTE] } });
+test("the folder menu's Notes row switches the pane to the notes", async ($, on) => {
+  const w = world(on, { notes: { files: { "plans/hub/PLAN.md": 1 } } });
   await start($, on);
   await $.command.run({ ...RUN, command: "open" });
   const pane = await $.ui.mount({ ...PANE, surface: "terminal" });
   await pane.press({ key: "notes" });
   await pane.unmount();
   expect(w.launched).toEqual([]);
-  expect(await shownRows($)).toEqual(["nixos/findings.md 1h"]);
+  expect(await shownRows($)).toEqual(["plans/hub/PLAN.md 1h"]);
 });
 
 test("bare /open still shows the folder menu", async ($, on) => {

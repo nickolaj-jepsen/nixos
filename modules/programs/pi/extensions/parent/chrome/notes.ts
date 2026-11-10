@@ -1,61 +1,51 @@
 /**
- * What agent-hub can't read for itself about notes: the record of a write,
- * which a nested call's transcript may not name, and how to open one when the
- * bar has no reader. The hub says which notes a session has (`Hub.notes`).
+ * The checkout's notes, for `/open plan`: the Markdown under its store
+ * (`.agents/store`), and the opener that hands one to the editor.
  * Runtime imports stay Node built-ins, so `node --experimental-strip-types`
  * loads this outside pi.
  */
-import { accessSync, constants, statSync } from "node:fs";
+import { accessSync, constants, lstatSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
-import { basename, delimiter, isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { writtenPath } from "../../shared/tools.ts";
+import { delimiter, dirname, join } from "node:path";
 
-export const NOTES_ROOT = join(homedir(), ".local", "share", "agents");
+/** `name` is the path below the store. */
+export type Note = { path: string; name: string; at: number };
 
-/** Custom session entry naming a note this session wrote. */
-export const NOTE_ENTRY = "agent-note";
-export type NoteEntry = { path: string };
-
-/** Markdown under `root`, minus superseded copies (`history/`, annotate-plan's `PLAN.prev.md`) and dot dirs. */
-const isNote = (path: string, root: string) => {
-  const rel = relative(root, path);
-  if (!rel || rel.startsWith("..") || isAbsolute(rel)) return false;
-  const parts = rel.split(sep);
-  return (
-    path.endsWith(".md") &&
-    basename(path) !== "PLAN.prev.md" &&
-    !parts.slice(0, -1).some((part) => part === "history" || part.startsWith("."))
-  );
-};
-
-const expandPath = (path: string) => {
-  const bare = path.startsWith("@") ? path.slice(1) : path;
-  return bare === "~" || bare.startsWith("~/") ? join(homedir(), bare.slice(1)) : bare;
-};
-
-/** The note a successful write or edit touched, as an absolute path; undefined for any other call. */
-export const writtenNote = (
-  event: { toolName: string; input: unknown; isError: boolean },
-  cwd: string,
-  root = NOTES_ROOT,
-) => {
-  if (event.isError) return undefined;
-  const path = writtenPath(event.toolName, event.input);
-  if (path === undefined) return undefined;
-  const absolute = resolve(cwd, expandPath(path));
-  return isNote(absolute, root) ? absolute : undefined;
-};
-
-/** Paths of the `NOTE_ENTRY` records on a branch, oldest first. */
-export const recordedNotes = (entries: readonly SessionEntry[]) => {
-  const paths = new Set<string>();
-  for (const entry of entries) {
-    if (entry.type !== "custom" || entry.customType !== NOTE_ENTRY) continue;
-    const path = (entry.data as Partial<NoteEntry> | undefined)?.path;
-    if (typeof path === "string") paths.add(path);
+/**
+ * The store of the checkout `cwd` is in, by its real path. Throws when the
+ * nearest link dangles, as it does until something writes a note; undefined
+ * when no directory above has one.
+ */
+const storeOf = (cwd: string) => {
+  for (let dir = cwd; ; dir = dirname(dir)) {
+    const link = join(dir, ".agents", "store");
+    if (lstatSync(link, { throwIfNoEntry: false })) return realpathSync(link);
+    if (dir === dirname(dir)) return undefined;
   }
-  return paths;
+};
+
+const notesUnder = (dir: string, below = ""): Note[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry): Note[] => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      // Superseded copies, the artefacts a note names, and dot dirs are not notes.
+      const skipped =
+        entry.name === "history" || entry.name === "files" || entry.name.startsWith(".");
+      return skipped ? [] : notesUnder(path, `${below}${entry.name}/`);
+    }
+    return entry.isFile() && entry.name.endsWith(".md")
+      ? [{ path, name: below + entry.name, at: statSync(path).mtimeMs }]
+      : [];
+  });
+
+/** The Markdown notes of the checkout's store, newest first. */
+export const storeNotes = (cwd: string): Note[] => {
+  try {
+    const store = storeOf(cwd);
+    return store ? notesUnder(store).sort((a, b) => b.at - a.at) : [];
+  } catch {
+    return [];
+  }
 };
 
 const OPENER = "agent-note-open";
@@ -81,7 +71,7 @@ export const openerCandidates = (env: NodeJS.ProcessEnv = process.env) => [
   join(env.HOME ?? homedir(), ".nix-profile", "bin", OPENER),
 ];
 
-/** The command that shows a note: the opener, else undefined, so a caller can fall back. */
+/** The command that opens a note: the opener, else undefined, so a caller can fall back. */
 export const noteOpener = (
   path: string,
   env: NodeJS.ProcessEnv = process.env,

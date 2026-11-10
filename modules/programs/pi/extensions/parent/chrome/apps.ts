@@ -165,7 +165,7 @@ export const openReview = async (cwd: string): Promise<void> => {
   await start(target.command, target.args);
 };
 
-/** Shows a note in the notes viewer, else in the preferred editor; false when neither is installed. */
+/** Opens a note through the opener, else in the preferred editor; false when neither is installed. */
 export const openNote = async (path: string): Promise<boolean> => {
   const target = noteOpener(path) ?? editorLaunch(path);
   if (!target) return false;

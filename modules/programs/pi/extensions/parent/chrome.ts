@@ -10,7 +10,6 @@ import { PromptEditor, type Painters } from "./chrome/editor.ts";
 import { createFooter } from "./chrome/footer.ts";
 import { createGit } from "./chrome/git.ts";
 import { measurementLevels } from "./chrome/measurements.ts";
-import { NOTE_ENTRY, type NoteEntry, recordedNotes, writtenNote } from "./chrome/notes.ts";
 import { createState } from "./chrome/state.ts";
 import { createTitle } from "./chrome/title.ts";
 import { createReview } from "./review.ts";
@@ -38,16 +37,16 @@ export default function (
       ctx.ui.notify(`review: ${error instanceof Error ? error.message : String(error)}`, "error");
     });
   });
-  const actions = createActions(pi, state, git, hub);
+  const actions = createActions(pi, state, git);
   const openArgs = [
-    { value: "plan", label: "plan", description: "this session's notes" },
+    { value: "plan", label: "plan", description: "this checkout's notes" },
     { value: "diff", label: "diff", description: "review the changes in tuicr" },
   ];
   // The footer's two menus, reachable without a mouse: the same popovers, so the
   // keys and a click cannot drift apart.
   pi.registerCommand("open", {
     description:
-      "Open this folder in an editor, file manager or terminal, or copy its path; /open plan opens this session's notes, /open diff reviews the changes in tuicr",
+      "Open this folder in an editor, file manager or terminal, or copy its path; /open plan opens one of this checkout's notes, /open diff reviews the changes in tuicr",
     getArgumentCompletions: (prefix) => {
       const hits = openArgs.filter((a) => a.value.startsWith(prefix));
       return hits.length ? hits : null;
@@ -76,16 +75,6 @@ export default function (
       }
       await (args.trim() === "plan" ? actions.notes(ctx) : actions.folder(ctx));
     },
-  });
-  // Recorded as each write lands, for the hub to read: a codemode-nested write over 8 KiB keeps no path in the transcript.
-  pi.on("tool_result", (event, ctx) => {
-    const path = writtenNote(event, ctx.cwd);
-    if (!path || recordedNotes(ctx.sessionManager.getBranch()).has(path)) return;
-    try {
-      pi.appendEntry<NoteEntry>(NOTE_ENTRY, { path });
-    } catch {
-      // No session to write to (shutting down); the note goes unrecorded.
-    }
   });
   pi.registerCommand("git", {
     description: "Open this branch, repository or pull request in the browser",

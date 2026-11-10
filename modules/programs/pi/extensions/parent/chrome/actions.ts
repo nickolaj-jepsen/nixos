@@ -3,7 +3,6 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import type { Hub } from "../lib/hub.ts";
 import type { Git } from "./git.ts";
 import type { Menu } from "./menu.ts";
 import { createMenuPopper } from "./menu.ts";
@@ -45,7 +44,7 @@ const dismissOverlay =
     (focus as { handleInput?(data: string): void }).handleInput?.("\x1b");
   };
 
-export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git, hub: Hub) => {
+export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git) => {
   const openModels = command(state, pi, "/models");
   const closeOverlay = dismissOverlay(state);
   const menus = createMenuPopper();
@@ -78,7 +77,7 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git, hu
    * the work continues rather than acting on the first click: the footer sits one
    * row under the shell prompt, and a stray click there used to start an editor.
    */
-  const folder = ((ctx, at) => show(ctx, () => folderMenu(ctx.cwd, hub), at)) as Action;
+  const folder = ((ctx, at) => show(ctx, () => folderMenu(ctx.cwd), at)) as Action;
 
   const gitLinks = ((ctx, at) => {
     const snapshot = git.snapshot();
@@ -97,7 +96,7 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git, hu
 
   return {
     folder,
-    notes: ((ctx) => openNotes(ctx, hub)) as Action,
+    notes: ((ctx) => openNotes(ctx)) as Action,
     git: gitLinks,
     // The picker is this repo's own (/models: labels, cost, context). A click while
     // it or any other dialog holds focus closes that instead of stacking the

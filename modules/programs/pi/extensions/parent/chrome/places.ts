@@ -1,5 +1,5 @@
 /**
- * The folder menu: this checkout in the apps this desktop runs, the session's
+ * The folder menu: this checkout in the apps this desktop runs, the checkout's
  * notes, and its path on the clipboard. `ctx.cwd` is the target, not the
  * repository root, so a session started in a package opens the package; Sublime
  * Merge widens it to the repository on its own. The path itself stays out of the
@@ -11,7 +11,6 @@
  * than a shortcut that did nothing.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Hub } from "../lib/hub.ts";
 import { formatAge } from "../lib/format.ts";
 import {
   appLabel,
@@ -23,18 +22,11 @@ import {
   preferredEditor,
 } from "./apps.ts";
 import type { Menu } from "./menu.ts";
+import { storeNotes } from "./notes.ts";
 
-/**
- * Puts the session's notes up in the bar's reader. Where there is no bar (over
- * ssh, on a Mac) it opens the one note, or asks which of several.
- */
-export const openNotes = async (ctx: ExtensionContext, hub: Hub) => {
-  if (await hub.showNotes()) return;
-  const notes = await hub.notes();
-  if (!notes) {
-    ctx.ui.notify("chrome: agent-hub isn't running, and it is what knows the notes", "warning");
-    return;
-  }
+/** Opens one of the checkout's notes in the editor: the only one, or the one picked, newest first. */
+export const openNotes = async (ctx: ExtensionContext) => {
+  const notes = storeNotes(ctx.cwd);
   let path = notes[0]?.path;
   if (!path) {
     ctx.ui.notify("chrome: no notes yet", "info");
@@ -46,11 +38,10 @@ export const openNotes = async (ctx: ExtensionContext, hub: Hub) => {
     if (picked === undefined) return;
     path = notes[labels.indexOf(picked)].path;
   }
-  if (!(await openNote(path)))
-    ctx.ui.notify(`chrome: no note viewer or editor; ${path}`, "warning");
+  if (!(await openNote(path))) ctx.ui.notify(`chrome: no editor; ${path}`, "warning");
 };
 
-export const folderMenu = (cwd: string, hub: Hub): Menu => {
+export const folderMenu = (cwd: string): Menu => {
   const editor = preferredEditor();
   return {
     title: "Open folder",
@@ -66,9 +57,7 @@ export const folderMenu = (cwd: string, hub: Hub): Menu => {
       {
         id: "notes",
         label: "Notes",
-        description: hub.read()?.notes ? `${hub.read()?.notes} this session` : undefined,
-        unavailable: hub.connected() ? undefined : "agent-hub isn't running",
-        run: (ctx) => openNotes(ctx, hub),
+        run: (ctx) => openNotes(ctx),
       },
       {
         id: "copy",

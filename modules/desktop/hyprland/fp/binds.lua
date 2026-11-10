@@ -51,7 +51,6 @@ end
 if fp.bin.agent_hub then
     for _, b in ipairs({
         { "SHIFT + B", "focus-next", "Focus the Next Agent That Wants You" },
-        { "ALT + B", "show --toggle", "Toggle the Focused Agent's Notes" },
         { "CTRL + B", "toggle", "Dismiss or Bring Back the Focused Agent's Turn" },
     }) do
         hl.bind(mod .. " + " .. b[1], hl.dsp.exec_cmd(fp.bin.agent_hub .. " " .. b[2]), { description = b[3] })

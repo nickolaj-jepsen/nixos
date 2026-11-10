@@ -191,6 +191,10 @@ Claude's own; pi has none.
   files (`annotate-plan`, `handoff`, `run-handoff`, `ideate`, `mine`, `onboard`,
   `tour`)
   only name their own layout.
+- `/open plan` lists that store's Markdown, newest first, skipping `history/`,
+  `files/` and dot directories, and opens the picked note in the editor. Each
+  agent has its own small listing (pi `parent/chrome/notes.ts`, `git-menu`'s
+  `hooks/notes.ts`); neither asks agent-hub.
 
 ## Language servers
 

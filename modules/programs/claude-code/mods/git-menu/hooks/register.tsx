@@ -19,7 +19,7 @@ import {
   type PrAnswer,
   type Status,
 } from "./menus";
-import { HUB, notesMenu, OPENER, parseNotes } from "./notes";
+import { holdsNotes, type Note, notesMenu, OPENER, STORE } from "./notes";
 import {
   batchMarker,
   batchText,
@@ -47,8 +47,6 @@ const TITLES: Record<MenuKind, string> = { git: "Git", folder: "Open folder", no
 const HINTS = "1-9 or Enter picks · Esc closes";
 const GIT_TIMEOUT_MS = 3000;
 const GH_TIMEOUT_MS = 5000;
-// The first read of a long session's notes takes seconds; a person waits, not a turn.
-const NOTES_TIMEOUT_MS = 15_000;
 // Starts a GUI app without holding $.process.run, which waits for the output to close.
 const DETACH = [
   "sh",
@@ -236,33 +234,36 @@ async function locate($: EngineInterface, name: string, also: string[] = []) {
   return probe?.exitCode === 0 ? probe.stdout.trim().split("\n")[0] : undefined;
 }
 
-/** Puts this session's notes up in the bar's reader; false where there is no bar. */
-async function showInReader($: EngineInterface) {
-  const hub = await locate($, HUB);
-  if (!hub) return false;
-  const r = await run($, [hub, "show", "--session-id", await $.session.id()]);
-  return r?.exitCode === 0;
+/** The Markdown under `dir`, a store directory by its real path; `below` is the path so far. */
+async function notesUnder($: EngineInterface, dir: string, below = ""): Promise<Note[]> {
+  const entries = await $.fs.list(dir).catch(() => []);
+  const found = await Promise.all(
+    entries.map(async (entry): Promise<Note[]> => {
+      const name = `${below}${entry.name}`;
+      if (entry.kind === "dir")
+        return holdsNotes(entry.name) ? notesUnder($, `${dir}/${entry.name}`, `${name}/`) : [];
+      return entry.kind === "file" && entry.name.endsWith(".md")
+        ? [{ path: `${dir}/${entry.name}`, name, at: entry.mtimeMs }]
+        : [];
+    }),
+  );
+  return found.flat();
 }
 
-async function buildNotes($: EngineInterface): Promise<Menu> {
+async function buildNotes($: EngineInterface, cwd: string): Promise<Menu> {
   const editor = preferredEditor(await $.env.get("FIREPROOF_EDITOR"));
-  const [hub, found, now] = await Promise.all([
-    locate($, HUB),
+  const [root, found, now] = await Promise.all([
+    git($, cwd, ["rev-parse", "--show-toplevel"]),
     locate($, OPENER, editorCandidates(editor)),
     $.clock.now(),
   ]);
-  const listed = hub
-    ? await run($, [hub, "notes", "--session-id", await $.session.id(), "--json"], NOTES_TIMEOUT_MS)
-    : undefined;
+  // The store is a link out of the checkout; a listing does not follow one.
+  const store = await $.fs
+    .stat(`${root || cwd}/${STORE}`, { resolve: true })
+    .catch(() => undefined);
+  const notes = store?.realPath ? await notesUnder($, store.realPath) : [];
   // `code` lands in the focused window only when told; zed does that on its own.
-  const opener =
-    found &&
-    (found.endsWith(`/${OPENER}`)
-      ? [found]
-      : found.endsWith("/code")
-        ? [found, "--reuse-window"]
-        : [found]);
-  const notes = listed?.exitCode === 0 ? parseNotes(listed.stdout) : undefined;
+  const opener = found && (found.endsWith("/code") ? [found, "--reuse-window"] : [found]);
   return notesMenu({ notes, opener, now });
 }
 
@@ -528,7 +529,7 @@ async function show($: EngineInterface, kind: MenuKind) {
       ? await buildGit($, cwd)
       : kind === "folder"
         ? await buildFolder($, cwd)
-        : await buildNotes($);
+        : await buildNotes($, cwd);
   // A close or another menu while git answered wins over this one.
   await update($, menu, (m) => (m?.kind === kind && m.rows === null ? built : m));
   const shown = await read($, menu);
@@ -543,10 +544,7 @@ async function press($: EngineInterface, row: Row, surface: RenderSurface) {
     return;
   }
   const action = row.action;
-  if (action.kind === "menu") {
-    if (action.menu === "notes" && (await showInReader($))) return close($);
-    return show($, action.menu);
-  }
+  if (action.kind === "menu") return show($, action.menu);
   if (action.kind === "copy") {
     const r = await $.ui.copy({ text: action.text, surface });
     $.ui.toast(r.isCopied ? `Copied the ${action.what}` : `Couldn't copy: ${r.reason}`);
@@ -565,7 +563,7 @@ export const register: Register = (on) => {
       ["git", "Open the git menu: the repository, branch and pull request on the forge", undefined],
       [
         "open",
-        "Open the folder menu: this checkout in an editor, file manager or terminal; `plan` reads this session's notes, `diff` reviews the changes in tuicr",
+        "Open the folder menu: this checkout in an editor, file manager or terminal; `plan` opens one of this checkout's notes, `diff` reviews the changes in tuicr",
         "[plan|diff]",
       ],
       // Not `review` or `tuicr`: Claude Code has the first for its built-in code
@@ -594,9 +592,8 @@ export const register: Register = (on) => {
   on("command.run", { command: "open" }, async ($, e) => {
     if (e.args.trim() === "diff") return openDiff($, await $.session.cwd());
     if (e.args.trim() === "plan") {
-      if (await showInReader($)) return { text: "Opened this session's notes in the reader." };
       await show($, "notes");
-      return { text: "Opened this session's notes." };
+      return { text: "Opened this checkout's notes." };
     }
     await show($, "folder");
     return { text: "Opened the folder menu." };

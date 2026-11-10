@@ -104,7 +104,7 @@ in {
             niri = lib.getExe pkgs.niri-unstable;
             # What resumes an ended session from the popout, spawned through niri as Mod+Return is.
             terminal = ["ghostty" "--working-directory={cwd}" "-e"];
-            # Which editor the folder menu leads with and notes open in, as fireproof.desktop.editor.
+            # Which editor the folder menu leads with, as fireproof.desktop.editor.
             editor = fp.desktop.editor;
             # Looks up a branch's pull request for the popout's git menu.
             gh = lib.getExe pkgs.gh;

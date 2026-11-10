@@ -33,8 +33,8 @@ Code update can break one.
 - **git-menu**: `/git` opens the checkout's repository, branch, commit or pull
   request on GitHub, GitLab or Codeberg, links the compare page for a new pull
   request, and copies the branch, SHA or PR URL; `/open` hands the checkout to
-  VS Code, Sublime Merge, the file manager or Ghostty, `/open plan` reads this
-  session's notes, and `/open diff` opens
+  VS Code, Sublime Merge, the file manager or Ghostty, `/open plan` lists the
+  checkout's notes (`.agents/store`) for the editor, and `/open diff` opens
   [tuicr](https://github.com/agavra/tuicr) on the changes in a new Ghostty
   window and tells the model how to read your comments back. `/rv` (`/review`
   is Claude Code's own code review) offers the same review scopes as rows,
@@ -43,8 +43,8 @@ Code update can break one.
   the prompt as one numbered batch above any draft; the send that carries the
   batch empties it. What it has drafted is kept per checkout in
   `<agent dir>/review-state/`, so a second send does not repeat it. Rows that
-  can't run say why. Needs `git`, `gh` for the pull request, `agent-hub` for
-  `/open plan`, and `tuicr` and Ghostty for `/open diff` and `/rv`.
+  can't run say why. Needs `git`, `gh` for the pull request, and `tuicr` and Ghostty
+  for `/open diff` and `/rv`.
 - **answer** (in `agent-tools/plugins/answer`, with the pi half's shared core):
   when a turn ends on a round of questions or a numbered pick
   list, a row in the band above the prompt offers a form for it, drawn there

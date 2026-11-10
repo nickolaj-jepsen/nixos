@@ -16,10 +16,7 @@
       };
     agent-note-open = makeScript {
       path = ./agent-note-open.bash;
-      runtimeInputs =
-        [pkgs.coreutils]
-        ++ lib.optional config.fireproof.dev.agent-hub.enable pkgs.agent-hub
-        ++ lib.optional config.fireproof.dev.enable editor-open;
+      runtimeInputs = [pkgs.coreutils] ++ lib.optional config.fireproof.dev.enable editor-open;
     };
     # The editor the desktop hands a path to, in its own argv: see editor-open.bash. It reads
     # PATH, so a host with no GUI editor opens nvim rather than pulling a GUI in.

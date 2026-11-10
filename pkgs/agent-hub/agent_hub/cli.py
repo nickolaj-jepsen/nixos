@@ -12,7 +12,7 @@ from pathlib import Path
 from . import worklog
 from .claude import SAID_MAX, claude_label, permission_ask
 from .common import (
-    NOTES_TIMEOUT, folded, hub_message, hub_request, hub_state, label_line, load_config, log_path, nearest, now_ms, resume_command, socket_path,
+    folded, hub_message, hub_request, hub_state, label_line, load_config, log_path, nearest, now_ms, resume_command, socket_path,
 )
 
 # The hook's input doesn't say where a prompt came from. Claude Code opens a peer's with a line of
@@ -24,9 +24,6 @@ PEER_HEAD = 200
 def peer_prompt(prompt):
     """Whether a UserPromptSubmit's prompt is another session's message, not the person's."""
     return bool(PEER_PROMPT.search(str(prompt or "")[:PEER_HEAD]))
-
-
-# The first read of a long session can take seconds; nothing waits on this but a person.
 
 
 def status_row(rows, session_id=None, pid=None):
@@ -45,8 +42,8 @@ def status_row(rows, session_id=None, pid=None):
 
 
 def cmd_status(args):
-    """Prints this session's row as `state<TAB>reason<TAB>label`, with `<TAB>path` of the note
-    it wrote last if any (`--json` for the row itself), and nothing at all when the hub is down or does not know the session:
+    """Prints this session's row as `state<TAB>reason<TAB>label` (`--json` for the row itself),
+    and nothing at all when the hub is down or does not know the session:
     this feeds status lines, which must never fail or print an error of their own.
     Naming no session, prints every row and how many are hidden (`--json` for the state)."""
     state = hub_state()
@@ -59,8 +56,7 @@ def cmd_status(args):
     if args.json:
         print(json.dumps(row))
     else:
-        note = (row.get("note") or {}).get("path")
-        print("\t".join([*(folded(row.get(key) or "") for key in ("state", "reason", "label")), *([note] if note else [])]))
+        print("\t".join(folded(row.get(key) or "") for key in ("state", "reason", "label")))
 
 
 def print_state(state, as_json):
@@ -74,35 +70,6 @@ def print_state(state, as_json):
         print("\t".join([*(folded(str(row.get(key) or "")) for key in ("state", "name", "cwd", "reason")), *stopped]))
     if state.get("hidden"):
         print(f"hidden\t{state['hidden']}")
-
-
-def named_session(args):
-    """The hub's id for the session `--session-id` and `--pid` name, by what `status` finds, else the id itself."""
-    if args.pid is None:
-        return args.session_id
-    row = status_row((hub_state() or {}).get("sessions") or [], args.session_id, args.pid)
-    return row["id"] if row else args.session_id
-
-
-def cmd_notes(args):
-    """Prints what a session wrote, then read, then the rest of its project's notes, as
-    `group<TAB>path` (`--json` for each as a line). Fails when the hub is down: it is what knows."""
-    sid = named_session(args)
-    reply = hub_request({"op": "notes", "request": 1, **({"session": sid} if sid else {})}, NOTES_TIMEOUT)
-    if reply is None or "notes" not in reply:
-        sys.exit(1)
-    for note in reply["notes"]:
-        print(json.dumps(note) if args.json else f"{note['group']}\t{note['path']}")
-
-
-def cmd_show(args):
-    """Puts the reader up at this desktop's bar. Fails when no bar took it, so a caller can fall back."""
-    sid = named_session(args)
-    path = os.path.abspath(args.path) if args.path else None
-    reply = hub_request({"op": "show", "request": 1, "toggle": args.toggle, **({"session": sid} if sid else {}),
-                         **({"pid": args.pid} if args.pid else {}), **({"path": path} if path else {})})
-    if not (reply or {}).get("shown"):
-        sys.exit(1)
 
 
 def cmd_recent(args):
@@ -343,17 +310,6 @@ def main(argv=None):
     status.add_argument("--json", action="store_true", help="print the hub's row instead of state, reason and label")
     status.set_defaults(func=cmd_status)
     commands.add_parser("toggle", help="dismiss or bring back the focused session's finished turn").set_defaults(func=cmd_toggle)
-    notes = commands.add_parser("notes", help="list the notes a session wrote or read, then the rest of its project's")
-    notes.add_argument("--session-id", help="the session's registry id")
-    notes.add_argument("--pid", type=int, help="the agent's pid, or a pid under it")
-    notes.add_argument("--json", action="store_true", help="print each note as a JSON line")
-    notes.set_defaults(func=cmd_notes)
-    show = commands.add_parser("show", help="open the bar's note reader; fails when there is no bar")
-    show.add_argument("path", nargs="?", help="the note to open (default: the session's latest)")
-    show.add_argument("--session-id", help="the session's registry id (default: by --pid, else the focused window's)")
-    show.add_argument("--pid", type=int, help="the agent's pid, or a pid under it")
-    show.add_argument("--toggle", action="store_true", help="close the reader if it is open")
-    show.set_defaults(func=cmd_show)
     args = parser.parse_args(argv)
     args.func(args)
 

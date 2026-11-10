@@ -6,11 +6,9 @@
  * It draws the rows the hub pushes over this session's own connection, so
  * opening it costs no process and it follows a dismissal as it lands. Enter goes
  * to a live session (its window here, or its tmux pane on the host it is on) or
- * resumes one that ended; `x` puts a finished turn away and `o` opens the
- * session's notes in the bar's reader, listing them here when no bar took them.
- * j/k move, q and Esc close.
+ * resumes one that ended; `x` puts a finished turn away. j/k move, q and Esc
+ * close.
  */
-import { execFile } from "node:child_process";
 import path from "node:path";
 import type {
   ExtensionAPI,
@@ -125,8 +123,6 @@ type Ops = {
   focus: (id: string) => boolean;
   resume: (id: string) => boolean;
   dismiss: (id: string, turn?: number) => boolean;
-  /** Puts the session's notes up in the bar's reader; false when none took them. */
-  notes: (id: string) => Promise<boolean>;
 };
 
 export class SessionsOverlay implements Component {
@@ -243,16 +239,6 @@ export class SessionsOverlay implements Component {
     this.tui.requestRender();
   }
 
-  private openNotes(items: Item[]) {
-    const item = items[this.index(items)];
-    if (!item || item.state === "fold") return;
-    this.notice = "";
-    void this.ops.notes(item.id).then((taken) => {
-      if (taken) this.done();
-      this.tui.requestRender();
-    });
-  }
-
   handleInput(data: string) {
     const items = this.items();
     this.notice = "";
@@ -264,7 +250,6 @@ export class SessionsOverlay implements Component {
     if (matchesKey(data, Key.up) || data === "k") return this.move(items, -1);
     if (matchesKey(data, Key.enter)) return this.act(items);
     if (data === "x") return this.dismiss(items);
-    if (data === "o") return this.openNotes(items);
     this.tui.requestRender();
   }
 
@@ -321,7 +306,7 @@ export class SessionsOverlay implements Component {
     this.scroll = Math.max(0, Math.min(this.scroll, Math.max(0, body.length - listRoom)));
     const shown = body.slice(this.scroll, this.scroll + listRoom);
 
-    const hints = theme.fg("dim", " j/k move · enter go · x dismiss · o notes · q close ");
+    const hints = theme.fg("dim", " j/k move · enter go · x dismiss · q close ");
     return frame(theme, width, {
       title: " Sessions ",
       hints,
@@ -385,19 +370,7 @@ export class SessionsOverlay implements Component {
   }
 }
 
-const DESCRIPTION = "Every session the hub has: go to one, put a finished one away, read its notes";
-
-/** The notes of another session, as the CLI lists them, for a bar that did not take them. */
-function listNotes(session: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      "agent-hub",
-      ["notes", "--session-id", session],
-      { encoding: "utf8", timeout: 15_000 },
-      (error, stdout) => (error ? reject(error) : resolve(stdout)),
-    );
-  });
-}
+const DESCRIPTION = "Every session the hub has: go to one, or put a finished one away";
 
 export default function (pi: ExtensionAPI, services: Services) {
   const hub: Hub = services.hub;
@@ -413,23 +386,6 @@ export default function (pi: ExtensionAPI, services: Services) {
       focus: (id) => hub.focus(id),
       resume: (id) => hub.resume(id),
       dismiss: (id, turn) => hub.dismiss(id, turn),
-      notes: async (id) => {
-        if (await hub.show(id)) return true;
-        // No bar took the reader, or this session is hidden from it: the list stands in.
-        try {
-          const list = (await listNotes(id)).trim().split("\n").filter(Boolean);
-          ctx.ui.notify(
-            list.length > 0 ? `notes:\n${list.slice(0, 10).join("\n")}` : "sessions: no notes yet",
-            "info",
-          );
-        } catch {
-          ctx.ui.notify(
-            "sessions: no bar took the reader, and agent-hub could not list them",
-            "warning",
-          );
-        }
-        return false;
-      },
     };
     let overlay: SessionsOverlay | undefined;
     // A push while it is open moves the rows under the selection.

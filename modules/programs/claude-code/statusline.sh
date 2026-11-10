@@ -276,16 +276,15 @@ path_git+=$git_full
 
 # The hub's own row for this session: its verdict on the turn, which can outlast
 # the TUI's (a question in the last words, a turn that failed) and is what the
-# bar shows, the label it gave the work, and the note it wrote last, a link that
-# opens in the reader. Empty unless the daemon is up and knows this session.
+# bar shows, and the label it gave the work. Empty unless the daemon is up and
+# knows this session.
 hub=""
 label=""
-note=""
 if [ -n "$session" ] && command -v agent-hub >/dev/null 2>&1; then
   args=(status --session-id "$session")
   # After /clear the id in the input can trail the registry's; the pid cannot.
   if [ -n "${CLAUDE_PID:-}" ]; then args+=(--pid "$CLAUDE_PID"); fi
-  # `state<TAB>reason<TAB>label[<TAB>note path]`, each already one line.
+  # `state<TAB>reason<TAB>label`, each already one line.
   line=$(timeout 1 agent-hub "${args[@]}" 2>/dev/null | head -n 1) || line=""
   state=${line%%$'\t'*}
   why=""
@@ -293,11 +292,6 @@ if [ -n "$session" ] && command -v agent-hub >/dev/null 2>&1; then
     rest=${line#*$'\t'}
     why=${rest%%$'\t'*}
     label=${rest#*$'\t'}
-    if [[ "$label" == *$'\t'* ]]; then
-      note_path=${label#*$'\t'}
-      label=${label%%$'\t'*}
-      note="$dim"$'\uf15c'" "$'\e]8;;file://'"${note_path// /%20}"$'\e\\'"${note_path##*/}"$'\e]8;;\e\\'"$reset"
-    fi
   fi
   if [ ${#label} -gt 40 ]; then label="${label:0:40}…"; fi
   case "$state" in
@@ -331,7 +325,6 @@ jq -r \
   --arg profile "$profile" \
   --arg hub "$hub" \
   --arg label "$label" \
-  --arg note "$note" \
   --arg dim "$dim" \
   --arg warn "$warn" \
   --arg reset "$reset" \
@@ -356,7 +349,6 @@ jq -r \
     [
       (if $profile == "work" then "\($warn)work\($reset)" else empty end),
       (if $label != "" then $label else empty end),
-      (if $note != "" then $note else empty end),
       .model.display_name,
       (.effort.level // empty),
       (if .fast_mode then "fast" else empty end),

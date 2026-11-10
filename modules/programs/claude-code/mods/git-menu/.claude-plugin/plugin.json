@@ -1,7 +1,7 @@
 {
   "name": "git-menu",
   "version": "0.1.0",
-  "description": "The checkout's git and folder menus from /git and /open, and /rv for a tuicr review: forge links, copies, desktop apps, reviews and this session's notes, in agent-hub's reader",
+  "description": "The checkout's git and folder menus from /git and /open, and /rv for a tuicr review: forge links, copies, desktop apps, reviews and the checkout's notes",
   "author": {
     "name": "Nickolaj Jepsen"
   },

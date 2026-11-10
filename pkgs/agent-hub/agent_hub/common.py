@@ -22,10 +22,6 @@ def state_dir():
     return Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "agent-hub"
 
 
-# A first read of a long transcript takes seconds.
-NOTES_TIMEOUT = 15
-
-
 def load_config():
     """The daemon's config. Only a desktop names `niri`; without it the hub runs
     headless, for the agents' own TUIs."""

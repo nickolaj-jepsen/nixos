@@ -5,9 +5,6 @@ import asyncio
 import hashlib
 import os
 import subprocess
-from pathlib import Path
-
-from . import notes
 
 # A peer idle this briefly over uncommitted changes is likely between prompts of one task.
 RECENT_IDLE_MS = 10 * 60_000
@@ -102,27 +99,11 @@ class Git:
 
     async def project(self, cwd):
         """The main checkout's folder name, which every worktree of a repository shares, or the
-        directory's own name outside git. It labels a session; `store_project` names its notes."""
+        directory's own name outside git. It labels a session."""
         if not cwd:
             return None
         common = await asyncio.to_thread(self._run, cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
         return os.path.basename(os.path.dirname(common) if common and common.endswith("/.git") else common or cwd)
-
-    async def store_project(self, cwd):
-        """The store directory of a session's checkout, read from the link the checkout exposes.
-
-        agent-notes owns the id's formula, so the hub only follows the link; a checkout
-        whose link is missing falls back to a single store directory named after it.
-        """
-        name = await self.project(cwd)
-        if not name or not cwd:
-            return None
-        root = await self.root(cwd)
-        link = os.path.join(root, ".agents", "store") if root else ""
-        if link and os.path.islink(link):
-            return os.path.basename(os.path.realpath(link))
-        found = sorted(Path(notes.store_root()).glob(f"{name}-*"))
-        return found[0].name if len(found) == 1 else name
 
     async def context(self, cwd, digest):
         """Names the repo and branch in `digest`, unless it already does."""

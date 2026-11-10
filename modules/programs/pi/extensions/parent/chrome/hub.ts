@@ -5,10 +5,8 @@
  * behind them, since that is what there is to read; the words of the others say it all.
  *
  * Nothing is drawn for the state while the hub has no row or the row is idle:
- * those are the sessions the bar shows no dot for either. A note the session
- * wrote shows whatever its state, since `/open plan` is where to read it.
+ * those are the sessions the bar shows no dot for either.
  */
-import { basename } from "node:path";
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import type { Hub } from "../lib/hub.ts";
 import type { HubState } from "../lib/protocol.gen.ts";
@@ -31,14 +29,11 @@ const REASON_MAX = 40;
 
 export const hubParts = (hub: Hub): Part[] => {
   const row = hub.read();
-  const note: Part[] = row?.note
-    ? [{ id: "hub-note", text: `\uf15c ${basename(row.note.path)}`, color: "dim" }]
-    : [];
   const look = row && LOOKS[row.state];
-  if (!row || !look) return note;
+  if (!row || !look) return [];
   const word = `${look.glyph} ${look.text}`;
   const reason = look.reason ? oneLine(row.reason) : "";
-  if (!reason) return [{ id: "hub", text: word, color: look.color }, ...note];
+  if (!reason) return [{ id: "hub", text: word, color: look.color }];
   const shown = reason.length > REASON_MAX ? `${reason.slice(0, REASON_MAX)}…` : reason;
   return [
     {
@@ -48,6 +43,5 @@ export const hubParts = (hub: Hub): Part[] => {
       // The state is what carries; the reason is there to read, not to shout.
       styled: (theme: Theme) => theme.fg(look.color, word) + theme.fg("dim", `: ${shown}`),
     },
-    ...note,
   ];
 };

@@ -13,9 +13,8 @@
  * hub on another protocol version refuses the attach, and the session says so
  * once and stays off it. A host without the hub leaves the row undefined.
  *
- * The same connection subscribes, so the session can read every row the hub has
- * (never as a `bar`, which is a surface that can open a reader), go to, resume or
- * dismiss another session's row, and put its notes up in the bar's reader.
+ * The same connection subscribes, so the session can read every row the hub has,
+ * and go to, resume or dismiss another session's row.
  */
 import { connect, type Socket } from "node:net";
 import { homedir } from "node:os";
@@ -25,7 +24,6 @@ import type { Dialogs } from "./dialogs.ts";
 import {
   type HubIdentity,
   type HubMessage,
-  type HubNote,
   type HubOp,
   type HubRow,
   PROTOCOL_VERSION,
@@ -47,9 +45,6 @@ type Status = "busy" | "idle" | "waiting";
 
 // A daemon that is down now may be up later; asking again is one failed connect.
 const RETRY_MS = 5000;
-// The first read of a long session's notes takes seconds; a person waits, not a turn.
-const NOTES_TIMEOUT_MS = 15_000;
-const SHOW_TIMEOUT_MS = 1000;
 
 // As the daemon's `socket_path`: the runtime dir, or the state dir where there is none (macOS).
 const socketPath = () => {
@@ -234,7 +229,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
         ...transcript(ctx),
       });
       // The whole hub's rows arrive as one `state` after this, and every publish updates it.
-      // Not `bar`: that asks the hub to hand this connection readers, which this one can't open.
       write({ op: "subscribe" });
     });
     current.on("data", (chunk: Buffer) => {
@@ -256,21 +250,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     current.on("error", lost);
     current.on("close", lost);
   };
-
-  /**
-   * Puts the bar's reader up: on `session`'s notes, at `path` when one is named,
-   * else this session's latest. False when no bar took them.
-   */
-  const showReader = (session?: string, path?: string) =>
-    ask(
-      (request) => ({
-        op: "show",
-        request,
-        ...(session === undefined ? {} : { session }),
-        ...(path === undefined ? {} : { path }),
-      }),
-      SHOW_TIMEOUT_MS,
-    ).then((reply) => reply?.shown === true);
 
   /** The bar's status follows what the run is doing, unless the session is waiting on something. */
   const settleStatus = () => setStatus(waitingFor() ? "waiting" : base);
@@ -370,13 +349,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
         timeoutMs,
       ).then((reply) => reply?.peers);
     },
-    /** Puts this session's notes up in the bar's reader; false when there is no bar to show them. */
-    showNotes: () => showReader(),
-    /** The same for another session's notes, at `path` when one is named. */
-    show: (session?: string, path?: string) => showReader(session, path),
-    /** What this session wrote, read, and the rest of its project's; undefined with no hub. */
-    notes: (): Promise<HubNote[] | undefined> =>
-      ask((request) => ({ op: "notes", request }), NOTES_TIMEOUT_MS).then((reply) => reply?.notes),
     /**
      * Goes to another session: its window on this host, else its tmux pane or
      * Remote Control page over there. False when there is no hub to go through.

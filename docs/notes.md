@@ -35,7 +35,7 @@ ${XDG_STATE_HOME:-~/.local/state}/agents/tmp/<repo-id>/<pid>/   scratch, reaped
   renaming the main checkout strands its store under the old id. Move the store
   directory to the new id, or let the next write start a fresh one.
 - `files/` holds what a note names: captured output, images, a generated
-  devshell. Agent-hub does not list Markdown in there as a note, so a generated
+  devshell. `/open plan` does not list Markdown in there as a note, so a generated
   report never looks like something a session wrote.
 - `history/` holds superseded copies, such as `annotate-plan`'s
   `history/PLAN.prev.md`. It is not listed either.
@@ -120,8 +120,9 @@ under the data root, and reports before touching anything:
   rewritten by an agent updates in place.
 - `.agents/tmp` is in Zed's `file_scan_exclusions`: scratch is not worth the
   project search.
-- agent-hub can also show a note in its reader; Ghostty opens a clicked
-  `.agents/store` or store path there, and an editor otherwise.
+- `/open plan` in pi and Claude Code lists the store's notes, newest first, and
+  opens the picked one in the editor. Ghostty opens a clicked `.agents/store` or
+  store path there too. Both go through `agent-note-open` (`modules/scripts`).
 
 ## Traps
 

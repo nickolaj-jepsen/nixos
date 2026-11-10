@@ -34,9 +34,6 @@ IDENTITY = {"label?": "str|null", "summary?": "str|null", "tags?": ["str"], "cal
 
 TURN = {"at": "int", "state": "str", "did": "str"}
 
-# One note of a session's, for the reader: why it is listed, and what it is called in a list.
-NOTE = {"path": "str", "name": "str", "group": "written|read|project", "at": "int"}
-
 # What a permission prompt asks, in full. `complete` is false when `body` had to be cut,
 # and then nothing may allow it from the bar: you can't approve what you can't read.
 ASK = {"tool": "str", "about": "str", "kind": "command|diff|text", "body": "str", "complete": "bool"}
@@ -99,9 +96,6 @@ ROW = {
     "trail?": [{"at": "int", "text": "str"}],
     # A model's estimate for a command that has run long: minutes left when it was made.
     "estimate?": {"left": "int|null", "note": "str", "at": "int", "after?": "int"},
-    # How many notes it wrote or read, and the one it wrote last; `new` if during this turn.
-    "notes?": "int",
-    "note?": {"path": "str", "name": "str", "at": "int", "new?": "bool"},
 }
 
 RECENT = {
@@ -128,8 +122,8 @@ TASK = {"type": "str", "description?": "str|null"}
 
 OPS = {
     # The bar and the CLI.
-    # `local`: this host's own sessions, leaving out what it links in. `bar`: it can show `show`.
-    "subscribe": {"version?": "int", "local?": "bool", "bar?": "bool"},
+    # `local`: this host's own sessions, leaving out what it links in.
+    "subscribe": {"version?": "int", "local?": "bool"},
     "focus": {"session": "str"},
     "focus-next": {},
     "dismiss": {"session": "str", "turn?": "int"},
@@ -147,15 +141,7 @@ OPS = {
     # Asks for a row's folder or git menu, answered with `menu`, twice when a lookup follows.
     "menu": {"request": "int", "session": "str", "which": "folder|git"},
     # Does what a menu row says.
-    "run": {"session": "str", "kind": "url|copy|app|note", "value": "str"},
-    # Lists a session's notes, answered in `reply.notes`; `path` alone lists that note's project.
-    "notes": {"request": "int", "session?": "str", "path?": "str"},
-    # One note, answered in `reply.note`: HTML to the bar, its text to another hub. Sent the
-    # `at` it last answered, a note that hasn't moved answers `unchanged`.
-    "note": {"request": "int", "path": "str", "session?": "str", "at?": "int"},
-    # Puts the reader up at the bar, on this session, and answers whether a bar took it. With no
-    # session it means the one the pid is under, else the focused window's.
-    "show": {"request?": "int", "session?": "str", "pid?": "int", "path?": "str", "toggle?": "bool"},
+    "run": {"session": "str", "kind": "url|copy|app", "value": "str"},
     # What this host's git says of a session, for a viewer's git menu; answered in `reply.facts`.
     "git-facts": {"request": "int", "session": "str"},
     "demo": {"sessions": ["any"]},
@@ -207,10 +193,8 @@ TYPES = {
     "judge": {"request": "int", "system": "str", "prompt": "str", "maxTokens": "int", "source": "str"},
     "cancel": {"request": "int"},
     # `decision` answers a held `permission`; without one the prompt closed some other way.
-    "reply": {"request": "int", "peers?": "str", "decision?": "allow|deny", "facts?": "any", "notes?": [NOTE],
-              "note?": "any", "shown?": "bool"},
+    "reply": {"request": "int", "peers?": "str", "decision?": "allow|deny", "facts?": "any"},
     "menu": {"request": "int", "menu": "any"},
-    "show": {"session": "str|null", "path": "str|null", "toggle": "bool"},
     "notice": {"text": "str"},
     "refused": {"text": "str"},
     # Carries `request` when the message it rejects had one, so a client can fail that call now
@@ -291,7 +275,6 @@ def typescript():
         f"export type HubIdentity = {_ts(IDENTITY)};",
         f"export type HubTurn = {_ts(TURN)};",
         f"export type HubRow = {_ts(ROW)};",
-        f"export type HubNote = {_ts(NOTE)};",
         "export type HubOp =",
         *(f"  | ({{ op: {json.dumps(op)} }} & {_ts(spec, '  ')})" for op, spec in OPS.items()),
         ";",

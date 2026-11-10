@@ -149,7 +149,6 @@ if [[ -z $path ]]; then
   exit 1
 fi
 
-# The reader can't jump to a line, so a note link with `:line` still goes to the editor.
 # A note, whether named by its store path or through the link in a checkout.
 if [[ -f $path && -z $line ]]; then
   case "$path" in
