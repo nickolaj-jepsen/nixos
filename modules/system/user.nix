@@ -1,5 +1,9 @@
 {
-  flake.modules.nixos.user = {config, ...}: let
+  flake.modules.nixos.user = {
+    config,
+    lib,
+    ...
+  }: let
     inherit (config.fireproof) username;
     inherit (config.age) secrets;
   in {
@@ -8,7 +12,8 @@
     users.users.${username} = {
       isNormalUser = true;
       extraGroups = ["wheel"];
-      hashedPasswordFile = secrets.hashed-user-password.path;
+      # mkDefault keeps the secret lookup lazy, so hyprland-vm can override it with no secrets declared.
+      hashedPasswordFile = lib.mkDefault secrets.hashed-user-password.path;
     };
   };
 }

@@ -222,6 +222,8 @@ in {
   config.flake.hostAliases = hostAliases;
   # From the raw cards: every host's authorized_keys needs this list, so no single host's eval can supply it.
   config.flake.trustedHosts = lib.filter (name: lib.any (shared: shared.fireproof.trusted or false) (collect (hostDir name)).shared) discovered;
+  # For NixOS systems that aren't hosts, e.g. the hyprland-vm package.
+  config.flake.mkNixos = mkNixos;
   # Exported so checks.disko-templates can hold the templates to the same card shape.
   config.flake.hostCardKeys = cardKeys;
 
