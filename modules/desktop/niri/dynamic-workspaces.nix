@@ -8,53 +8,7 @@
     # Project workspaces: both the spawn programs and ghostty-here's dir lookup
     # come from here, so a bare terminal opens where the workspace points. The
     # editor is `editor-open`, which knows the argv zed and vscode each want.
-    projects = {
-      n = {
-        name = "nix";
-        path = "/home/nickolaj/nixos";
-      };
-      s = {
-        name = "shop";
-        path = "/home/nickolaj/dev/devenv-tilt/projects/vvsshop";
-      };
-      f = {
-        name = "flex";
-        path = "/home/nickolaj/dev/devenv-tilt/projects/neoflex";
-      };
-      u = {
-        name = "imagine";
-        path = "/home/nickolaj/dev/devenv-tilt/projects/imagine";
-      };
-      i = {
-        name = "insight";
-        path = "/home/nickolaj/dev/devenv-tilt/projects/insight";
-      };
-      p = {
-        name = "producthub";
-        path = "/home/nickolaj/dev/devenv-tilt/projects/producthub";
-      };
-      l = {
-        name = "python-libs";
-        path = "/home/nickolaj/dev/devenv-tilt/projects/python-libs";
-      };
-      d = {
-        name = "devenv";
-        path = "/home/nickolaj/dev/devenv-tilt";
-      };
-    };
-
-    mkRemoteWorkspace = {
-      name,
-      host,
-      path,
-      shell ? "fish",
-    }: {
-      inherit name;
-      programs = [
-        "editor-open --remote ${host} ${path}"
-        "ghostty -e ssh -t ${host} 'cd ${path} && exec ${shell} -l'"
-      ];
-    };
+    workspaces = import ../_workspaces.nix;
   in {
     imports = [
       inputs.niri-dynamic-workspaces.homeModules.default
@@ -87,21 +41,7 @@
                 name = "diff";
               };
             }
-            // lib.mapAttrs (_: p: {
-              inherit (p) name;
-              programs = [
-                "editor-open ${p.path}"
-                "ghostty --working-directory=${p.path}"
-              ];
-            })
-            projects
-            // {
-              y = mkRemoteWorkspace {
-                name = "scw-tf";
-                host = "dev.ao";
-                path = "/home/nij/dev/scw-tf";
-              };
-            };
+            // lib.mapAttrs (_: w: {inherit (w) name programs;}) workspaces;
 
           template = {
             dev = {
@@ -138,7 +78,7 @@
       # with whitespace in it would break the lookup.
       xdg.configFile."ghostty-here/dirs".text =
         lib.concatStringsSep "\n"
-        (lib.mapAttrsToList (key: p: "${key} ${p.path}") projects)
+        (lib.mapAttrsToList (key: w: "${key} ${w.path}") (lib.filterAttrs (_: w: w ? path) workspaces))
         + "\n";
     };
   };
