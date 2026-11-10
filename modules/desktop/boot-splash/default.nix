@@ -41,10 +41,12 @@
       // rgb "muted" c.muted
     );
 
+    # Plymouth chroots into the real root once it is mounted and the script loads images on
+    # first use, so ImageDir has to exist on both sides. NixOS points a path inside the theme
+    # dir at an initrd-only copy; the sprites' own store path is in both (initrd storePaths).
     theme = pkgs.runCommand "plymouth-theme-fireproof" {} ''
       dir=$out/share/plymouth/themes/fireproof
       mkdir -p $dir
-      cp ${sprites}/*.png $dir/
       cat ${sprites}/data.script ${script} > $dir/fireproof.script
       cat > $dir/fireproof.plymouth <<EOF
       [Plymouth Theme]
@@ -52,7 +54,7 @@
       ModuleName=script
 
       [script]
-      ImageDir=$dir
+      ImageDir=${sprites}
       ScriptFile=$dir/fireproof.script
       EOF
     '';
@@ -94,6 +96,7 @@
         themePackages = [theme];
         font = "${font.package}/share/fonts/truetype/NerdFonts/Hack/HackNerdFontMono-Regular.ttf";
       };
+      boot.initrd.systemd.storePaths = [sprites];
 
       boot.consoleLogLevel = 3;
       boot.kernelParams =

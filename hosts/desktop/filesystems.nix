@@ -43,7 +43,39 @@
 
     # Agents dump scratch into /tmp; the limit keeps them from filling /. The limit lives in the
     # filesystem (squota, enabled at mkfs); this keeps it at the configured value.
-    boot.tmp.cleanOnBoot = true;
+    #
+    # cleanOnBoot deletes inside systemd-tmpfiles-setup, which holds sysinit.target (and so the
+    # greeter) for as long as it takes: 17 s and 53 s were seen. Renaming is instant, so last
+    # boot's contents are set aside before tmpfiles runs and deleted once the system is up.
+    systemd.services.tmp-set-aside = {
+      description = "Set last boot's /tmp aside";
+      wantedBy = ["sysinit.target"];
+      before = ["systemd-tmpfiles-setup.service"];
+      unitConfig = {
+        DefaultDependencies = false;
+        RequiresMountsFor = "/tmp";
+      };
+      path = [pkgs.coreutils pkgs.findutils];
+      serviceConfig.Type = "oneshot";
+      script = ''
+        # Only at boot: a switch starts this unit too, and /tmp is then in use.
+        systemctl is-active --quiet systemd-tmpfiles-setup.service && exit 0
+        mkdir -p /tmp/.reap
+        find /tmp -mindepth 1 -maxdepth 1 ! -name .reap \
+          -exec mv -t "$(mktemp -d -p /tmp/.reap)" {} +
+      '';
+    };
+    systemd.services.tmp-reap = {
+      description = "Delete last boot's /tmp";
+      wantedBy = ["multi-user.target"];
+      after = ["tmp-set-aside.service"];
+      serviceConfig = {
+        Type = "exec";
+        ExecStart = "${pkgs.coreutils}/bin/rm -rf /tmp/.reap";
+        Nice = 19;
+        IOSchedulingClass = "idle";
+      };
+    };
     systemd.services.tmp-quota = {
       description = "Limit /tmp to 40G";
       wantedBy = ["multi-user.target"];

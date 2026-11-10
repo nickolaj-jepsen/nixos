@@ -363,7 +363,8 @@ fun draw_seg(st, x0, y0, A)
   if (state == "accept") k = round(8 * smooth(1.65, 1.9, st));
   if (state == "down") k = round(8 * (1 - smooth(0.3, 0.6, st)));
   pair_show("mg", "magic", 0, k, x0, y0, 3, A);
-  if (state == "accept" && st > 1.65) cursor_show(MAGIC_HEX, k, x0, y0, A);
+  if (state == "accept" && st > 1.65) # then the cursor beats until the handoff
+    cursor_show(MAGIC_HEX, k, x0, y0, A * (1 - 0.65 * smooth(1.9, 2.3, st) * (1 - clamp01(heart(st - 2.3)))));
   if (state == "down" && st < 1.05) {
     if (st < 0.7) cursor_show(MAGIC_HEX, k, x0, y0, A); else cursor_show(0, k, x0, y0, A);
   }
