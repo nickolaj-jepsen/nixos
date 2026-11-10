@@ -177,13 +177,20 @@ async function close($: EngineInterface) {
   await edit($, (was) => ({ ...was, isOpen: false, editing: null, stash: null }));
 }
 
-/** A slash command's own record in the transcript, which is not the person moving past the round. */
-const isCommandRecord = (text: string) => /^\s*<(command-|local-command-)/.test(text);
+/**
+ * A user message the person didn't write: a slash command's record, another session's
+ * message or a background task's news. The transcript's messages carry no origin, so
+ * this goes by the wrapper each arrives in.
+ */
+const isNotPerson = (text: string) =>
+  /^\s*<(command-|local-command-|task-notification)/.test(text) ||
+  text.includes("<cross-session-message ");
 
 /**
  * The round a resumed session came back to. `turn.complete` fired in the process before
- * this one, so the last reply is read from the transcript; one the person has spoken
- * after is left alone.
+ * this one, so the round is read from the transcript: the newest reply that holds one,
+ * past any turn something other than the person started, as a live session keeps a round
+ * through those. One the person has spoken after is left alone.
  */
 async function recover($: EngineInterface) {
   if (await read($, current)) return;
@@ -192,10 +199,11 @@ async function recover($: EngineInterface) {
   for (const message of [...messages].reverse()) {
     if (message.role === "assistant") {
       const held = message.text ? offer(null, message.text) : null;
-      if (held) await update($, current, (c) => c ?? over(null, held));
+      if (!held) continue;
+      await update($, current, (c) => c ?? over(null, held));
       return;
     }
-    if (!isCommandRecord(message.text)) return;
+    if (!message.toolResults?.length && !isNotPerson(message.text)) return;
   }
 }
 

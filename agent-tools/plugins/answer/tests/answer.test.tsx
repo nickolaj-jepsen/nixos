@@ -366,6 +366,12 @@ test("a resumed session gets the round its last reply ended on, unless the perso
     { role: "user", text: "grill me", toolUses: [] },
     { role: "assistant", text: GRILLING, toolUses: [] },
     { role: "user", text: "<command-name>/answer</command-name>", toolUses: [] },
+    {
+      role: "user",
+      text: 'Another Claude session sent a message: <cross-session-message from="x">Heads up.</cross-session-message>',
+      toolUses: [],
+    },
+    { role: "assistant", text: "Noted.", toolUses: [] },
   ];
   on("session.messages", () => ({ value: said }));
   await start($);
