@@ -96,6 +96,9 @@
             "**/.direnv"
             "**/__pycache__"
             "**/*.egg-info"
+            "**/*.js.map"
+            "**/*.mjs.map"
+            "**/*.cjs.map"
             # Build outputs point into /nix/store, which is never worth indexing.
             "**/result"
             "**/result-*"
