@@ -19,7 +19,7 @@ Paths in the table that don't start with `skills/` or `pkgs/` are under
 | Third-party pi package   | `pkgs/pi-packages/`        | `settings.packages`           | —                               | `UPDATERS` bump              |
 | Pi itself                | `pkgs/pi-coding-agent/`    | the `pi` wrapper              | —                               | `UPDATERS` bump              |
 | Pi settings, MCP servers | pi leaf `settings`, `mcp`  | the `pi` wrapper, at launch   | —                               | —                            |
-| Claude Code mod          | `claude-code/mods/<name>/` | `CLAUDE_CODE_PLUGIN_DIRS`     | `claude plugin validate`/`test` | `just dev-setup`, `tsc -p`   |
+| Claude Code mod          | `claude-code/mods/<name>/` | `CLAUDE_CODE_PLUGIN_DIRS`     | `claude plugin validate`/`test` | `claude-dev`, `tsc -p`       |
 | Two-harness plugin       | `agent-tools/plugins/`     | both rows above               | `pkgs.agent-tools`, then both   | `npm test` in `agent-tools/` |
 | Language server          | `agent-lsp.nix`            | `fireproof.agents.lspServers` | —                               | —                            |
 
@@ -68,8 +68,9 @@ Paths in the table that don't start with `skills/` or `pkgs/` are under
   (`npm install --package-lock-only`; read via `importNpmLock`, no hash to
   bump).
 - Dev loop: `just dev-setup` links `node_modules` into the folder for editor
-  types; then this runs the tree without a rebuild:
-  `pi -ne -e builtin:codemode -e builtin:mcp -e modules/programs/pi/extensions/core -e modules/programs/pi/extensions/parent`.
+  types; then `pi-dev`, from any directory, runs the checkout's `core` and
+  `parent` in place of the installed ones without a rebuild
+  (`fireproof.agents.checkout` says where the checkout is).
 - `pkgs/pi-packages/` is one npm tree whose `package.json` holds the roster
   and the exact pins. The pi leaf lists each `$out/node_modules/<name>` as a
   local path in `settings.packages`, so pi loads them without running npm.
@@ -93,6 +94,12 @@ Paths in the table that don't start with `skills/` or `pkgs/` are under
   settings `env`.
 - A new mod also gets an entry in `.claude-plugin/marketplace.json` and
   `modules/programs/claude-code/mods/README.md` to be publicly installable.
+- Dev loop: `claude-dev`, from any directory, loads every mod from the checkout
+  in place of the store copies, and a save reloads it with no switch. Only a
+  change on the nix side (keybindings, settings, `userConfig` values) needs one.
+- A change to what a mod draws or to its keys is seen before it is handed back:
+  load the `claude-mod-dev` skill, which drives such a session in tmux and lists
+  the engine's limits. A green `just build` says nothing about layout or focus.
 
 ## agent-tools
 

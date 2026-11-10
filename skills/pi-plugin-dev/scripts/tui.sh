@@ -52,7 +52,10 @@ start)
     die "session already running for $PWD, run: tui.sh stop"
   fi
   mkdir -p "$out/sessions"
-  pi_cmd="pi --session-dir $(printf '%q' "$out/sessions")"
+  # pi-dev runs the extensions from their checkout in place of the installed ones.
+  bin=pi
+  command -v pi-dev >/dev/null 2>&1 && bin=pi-dev
+  pi_cmd="$bin --session-dir $(printf '%q' "$out/sessions")"
   for arg in "$@"; do
     pi_cmd+=" $(printf '%q' "$arg")"
   done

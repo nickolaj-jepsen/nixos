@@ -196,12 +196,21 @@ in {
       ${lib.optionalString pkgs.stdenv.isLinux ''${lib.getExe' pkgs.util-linux "renice"} --priority 10 -p $$ >/dev/null 2>&1 || true''}
       exec ${lib.getExe pi} "$@"
     '';
+    # The checkout's extensions in place of the installed ones, with no rebuild.
+    piDev = pkgs.writeShellApplication {
+      name = "pi-dev";
+      text = ''
+        extensions="${config.fireproof.agents.checkout}/modules/programs/pi/extensions"
+        [ -d "$extensions/parent" ] || { echo "pi-dev: no extensions under $extensions" >&2; exit 1; }
+        exec pi -ne -e builtin:codemode -e builtin:mcp -e "$extensions/core" -e "$extensions/parent" "$@"
+      '';
+    };
   in {
     config = lib.mkIf config.fireproof.dev.pi.enable {
       home.file.".pi/agent/APPEND_SYSTEM.md".text = rules;
       home.file.".pi/agent/themes/fireproof.json".source = theme;
 
-      home.packages = [wrapper spellChecker];
+      home.packages = [wrapper spellChecker piDev];
 
       # Literal path: the wrapper single-quotes it, so a secretsDir spelling stays unexpanded.
       age.secrets.exa-api-key = {

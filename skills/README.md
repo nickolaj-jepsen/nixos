@@ -48,6 +48,7 @@ claude plugin install skills@nickolaj-jepsen
 - [prune-churn](prune-churn/): removes tests, docs and structure that must be edited whenever something else changes, ranking churn hotspots from git history.
 - [avoid-ai-tropes](avoid-ai-tropes/): checks human-facing prose against a catalog of AI writing tells and rewrites what matches, sourced from [tropes.fyi](https://tropes.fyi) by [ossama.is](https://ossama.is); run it by name.
 - [pi-plugin-dev](pi-plugin-dev/): builds and debugs pi extensions by observation, with tmux-driven TUI sessions, screenshots, session digests and a replay provider.
+- [claude-mod-dev](claude-mod-dev/): runs a Claude Code mod in a real session in tmux and drives it with keys, captures at several widths, screenshots and the engine's debug log, with the engine limits that tests don't show.
 - [dms-plugin-dev](dms-plugin-dev/): runs a DankMaterialShell plugin in real DMS inside an isolated headless sway, and drives it with keys, a pointer, screenshots and its QML log
 - [memory-sync](memory-sync/): syncs one repo's memories both ways between pi's memory store and Claude Code's auto-memory in one approval, never deleting; runs in pi.
 - [pricerunner](pricerunner/): searches, filters and compares Danish prices on PriceRunner.dk through its unofficial frontend API, including shop offers, price history and deals.

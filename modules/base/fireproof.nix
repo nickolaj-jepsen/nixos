@@ -104,6 +104,12 @@ let
         description = "Agent skill directories by skill name, installed for every coding agent.";
       };
 
+      agents.checkout = lib.mkOption {
+        type = lib.types.str;
+        default = "$HOME/nixos";
+        description = "Where this flake is checked out. `claude-dev` and `pi-dev` load the mods and extensions from it; the shell expands it.";
+      };
+
       # Same registry pattern for language servers; each agent leaf maps them to its own schema.
       agents.lspServers = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {

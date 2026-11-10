@@ -207,6 +207,21 @@
       '';
     };
 
+    # The checkout's mods in place of the store copies, so a save reloads them without
+    # a switch. An emptied CLAUDE_CODE_PLUGIN_DIRS beats the one in settings' env.
+    claudeDev = pkgs.writeShellApplication {
+      name = "claude-dev";
+      text = ''
+        checkout="${config.fireproof.agents.checkout}"
+        args=()
+        for manifest in "$checkout"/modules/programs/claude-code/mods/*/.claude-plugin/plugin.json "$checkout"/agent-tools/plugins/*/.claude-plugin/plugin.json; do
+          [ -f "$manifest" ] && args+=(--plugin-dir "''${manifest%/.claude-plugin/plugin.json}")
+        done
+        [ ''${#args[@]} -gt 0 ] || { echo "claude-dev: no mods under $checkout" >&2; exit 1; }
+        CLAUDE_CODE_PLUGIN_DIRS="" exec claude "''${args[@]}" "$@"
+      '';
+    };
+
     # Every config surface home-manager generates under ~/.claude, derived from the
     # options rather than hand-listed: a surface added below (agents, rules, hooks,
     # output-styles) would otherwise silently never reach the work profile.
@@ -254,7 +269,7 @@
       [ -e ${lib.escapeShellArg personalDictionary} ] || run touch ${lib.escapeShellArg personalDictionary}
     '';
 
-    home.packages = [spellChecker] ++ lib.optional cfg.work.enable claudeWorkWrapper;
+    home.packages = [spellChecker claudeDev] ++ lib.optional cfg.work.enable claudeWorkWrapper;
 
     # agent-context.md is shared with pi and Copilot; the section after it is Claude's alone.
     programs.claude-code.context = builtins.readFile ../agent-context.md;
