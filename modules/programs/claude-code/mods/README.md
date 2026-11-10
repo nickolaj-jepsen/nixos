@@ -36,15 +36,9 @@ Code update can break one.
   VS Code, Sublime Merge, the file manager or Ghostty, `/open plan` lists the
   checkout's notes (`.agents/store`) for the editor, and `/open diff` opens
   [tuicr](https://github.com/agavra/tuicr) on the changes in a new Ghostty
-  window and tells the model how to read your comments back. `/rv` (`/review`
-  is Claude Code's own code review) offers the same review scopes as rows,
-  pins the one you pick and opens tuicr in the same kind of window, and on
-  your next send drafts the comments you left into
-  the prompt as one numbered batch above any draft; the send that carries the
-  batch empties it. What it has drafted is kept per checkout in
-  `<agent dir>/review-state/`, so a second send does not repeat it. Rows that
-  can't run say why. Needs `git`, `gh` for the pull request, and `tuicr` and Ghostty
-  for `/open diff` and `/rv`.
+  window and tells the model how to read your comments back. Rows that
+  can't run say why. Needs `git`, `gh` for the pull request, and `tuicr` and
+  Ghostty for `/open diff`.
 - **answer** (in `agent-tools/plugins/answer`, with the pi half's shared core):
   when a turn ends on a round of questions or a numbered pick
   list, a row in the band above the prompt offers a form for it, drawn there

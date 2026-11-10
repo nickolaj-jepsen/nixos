@@ -69,11 +69,7 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
   /** Set once a hub on another version turns the session away; it is not asked again. */
   let refused = false;
   let status: Status = "idle";
-  /**
-   * What the run itself is doing. `status` is this plus whatever the session is
-   * waiting on: a standing label (the review, D10) clears at idle, and sending
-   * "busy" then would claim a turn that is not running.
-   */
+  /** What the run itself is doing; `status` is this unless a dialog is open. */
   let base: Status = "idle";
   let since = Date.now();
   let attachInfo: () => AttachInfo = () => ({ record: {} });
@@ -93,12 +89,8 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     for (const listener of rowsListeners) listener();
   };
 
-  /**
-   * What the session waits on: an open dialog, else a label a feature holds past
-   * the run that opened it (the review, D10). The hub hears about both from the
-   * same `dialog` op, so a review-length wait needs no protocol of its own (U9).
-   */
-  const waitingFor = () => dialogs.current() ?? dialogs.standing();
+  /** The dialog the session waits on, if one is open. */
+  const waitingFor = () => dialogs.current();
 
   const write = (message: HubOp) => {
     if (!socket || !attached) return false;

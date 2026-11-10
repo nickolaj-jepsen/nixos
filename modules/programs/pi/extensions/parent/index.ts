@@ -17,8 +17,6 @@ import gutter from "./gutter.ts";
 import modelLabels from "./model-labels.ts";
 import questions from "./questions.ts";
 import notify from "./notify.ts";
-import prompts from "./prompts.ts";
-import rewind from "./rewind.ts";
 import { createServices, type Services } from "./services.ts";
 import sessions from "./sessions.ts";
 import spellfix from "./spellfix.ts";
@@ -40,8 +38,6 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["model-labels", modelLabels],
   ["questions", questions],
   ["notify", notify],
-  ["prompts", prompts],
-  ["rewind", rewind],
   ["sessions", sessions],
   ["spellfix", spellfix],
   ["stash", stash],

@@ -12,30 +12,19 @@ import { createGit } from "./chrome/git.ts";
 import { measurementLevels } from "./chrome/measurements.ts";
 import { createState } from "./chrome/state.ts";
 import { createTitle } from "./chrome/title.ts";
-import { createReview } from "./review.ts";
 import type { Services } from "./services.ts";
 
 // pi's root types omit EditorFactory, so it comes from the one API that takes it.
 type EditorFactory = NonNullable<Parameters<ExtensionUIContext["setEditorComponent"]>[0]>;
 
-export default function (
-  pi: ExtensionAPI,
-  { identity, userWait, editorHooks, hub, dialogs }: Services,
-) {
+export default function (pi: ExtensionAPI, { identity, userWait, editorHooks, hub }: Services) {
   const state = createState();
   const git = createGit(state);
-  const review = createReview(pi, state, { dialogs, hub });
   // Registered before the modules, so their handlers already see the session. pi
   // builds a fresh runtime, and so a fresh instance of this, for every session.
   pi.on("session_start", (_event, ctx) => {
     state.ctx = ctx;
     state.live = ctx.mode === "tui" && ctx.hasUI;
-    // Whatever an earlier session recorded is read back before this one asks tuicr.
-    // Not awaited: the editor must come up while tuicr is read, and a rejection
-    // escaping this handler would take the session down rather than notify.
-    void review.ingest(ctx).catch((error) => {
-      ctx.ui.notify(`review: ${error instanceof Error ? error.message : String(error)}`, "error");
-    });
   });
   const actions = createActions(pi, state, git);
   const openArgs = [
@@ -82,17 +71,10 @@ export default function (
       await actions.git(ctx);
     },
   });
-  pi.registerCommand("rv", {
-    description:
-      "Review this repository's changes in tuicr without leaving this terminal; /rv inbox lists the comments, /rv send puts them in the prompt, and any other argument goes to tuicr",
-    handler: async (args, ctx) => {
-      await review.dispatch(args, ctx);
-    },
-  });
   identity.onChange(() => state.tui?.requestRender());
   createTitle(pi, state, identity, userWait);
   const border = createBorder(state, identity);
-  const footer = createFooter(pi, state, actions, git, hub, review);
+  const footer = createFooter(pi, state, actions, git, hub);
   const painters: Painters = {
     top: (width, hidden, color, status) =>
       border.drawTop(
@@ -123,12 +105,10 @@ export default function (
   pi.on("session_start", (_event, ctx) => {
     if (state.live && ctx.ui.getEditorComponent() !== factory) ctx.ui.setEditorComponent(factory);
   });
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", () => {
     // Until pi swaps it out, the editor draws plainly rather than through a dead ctx.
     state.live = false;
     state.tui = undefined;
     state.editor = undefined;
-    // The review dies with its session (U7); the clean path out is here.
-    await review.shutdown();
   });
 }

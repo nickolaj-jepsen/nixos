@@ -6,11 +6,22 @@
  * - ctrl+s on an empty editor: restore the stash.
  * - submitting a prompt restores the stash into the emptied editor.
  *
- * The stash is saved in the repository's prompt file (lib/prompt-store.ts), so
- * it outlives /new, /clear, /resume, /fork, /reload and the process itself.
+ * The stash is saved in one file per repository, keyed by its main checkout so a
+ * worktree shares it, and so outlives /new, /clear, /resume, /fork, /reload and
+ * the process itself.
  */
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { held, type Held, readPrompts, updatePrompts } from "./lib/prompt-store.ts";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import {
+  getAgentDir,
+  type ExtensionAPI,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
+import { gitRoots } from "../shared/git.ts";
+
+/** The parked prompt, and when it was parked. */
+type Held = { text: string; at: string };
 
 const WIDGET_KEY = "stash";
 const PREVIEW_CHARS = 60;
@@ -23,9 +34,48 @@ const preview = (text: string) => {
 // A print, JSON or RPC run has no editor; its prompt must not consume the stash.
 const hasEditor = (ctx: ExtensionContext) => ctx.mode === "tui" && ctx.hasUI;
 
+const real = (path: string) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+};
+
+const fileFor = (cwd: string) => {
+  // Outside git the directory stands for itself.
+  const root = gitRoots(cwd).main ?? real(cwd);
+  // A hash rather than a name: a checkout's path can outrun the filename limit.
+  const key = createHash("sha256").update(root).digest("hex").slice(0, 16);
+  return join(getAgentDir(), "prompt-stash", `${key}.json`);
+};
+
+const readStash = (path: string): Held | undefined => {
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<Held>;
+    return typeof parsed.text === "string" && typeof parsed.at === "string"
+      ? { text: parsed.text, at: parsed.at }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const writeStash = (path: string, stash: Held | undefined) => {
+  try {
+    if (!stash) return rmSync(path, { force: true });
+    mkdirSync(dirname(path), { recursive: true });
+    const tmp = `${path}.${process.pid}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify(stash, null, 2)}\n`);
+    renameSync(tmp, path);
+  } catch {
+    // A stash that is not saved still works for this session.
+  }
+};
+
 export default function (pi: ExtensionAPI) {
   let stash: Held | undefined;
-  let cwd: string | undefined;
+  let file: string | undefined;
 
   // A widget rather than setStatus so the preview keeps its own line.
   const show = (ctx: ExtensionContext) => {
@@ -38,19 +88,15 @@ export default function (pi: ExtensionAPI) {
   };
 
   const park = (text: string | undefined) => {
-    if (!cwd) return;
-    stash = text === undefined ? undefined : held(text);
-    const parked = stash;
-    updatePrompts(cwd, (prompts) => {
-      if (parked) prompts.stash = parked;
-      else delete prompts.stash;
-    });
+    if (!file) return;
+    stash = text === undefined ? undefined : { text, at: new Date().toISOString() };
+    writeStash(file, stash);
   };
 
   pi.on("session_start", (_event, ctx) => {
     if (!hasEditor(ctx)) return;
-    cwd = ctx.sessionManager.getCwd();
-    stash = readPrompts(cwd).stash;
+    file = fileFor(ctx.sessionManager.getCwd());
+    stash = readStash(file);
     show(ctx);
   });
 
