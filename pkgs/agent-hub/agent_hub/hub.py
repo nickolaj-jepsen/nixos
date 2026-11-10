@@ -20,7 +20,7 @@ from . import formstore, judge, links, menus, model, notes, peers, pi, protocol,
 from .common import (
     LINE_MAX, NOTES_TIMEOUT, alive, folded, label_line, log_path, nearest, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
 )
-from .desktop import Niri
+from .desktop import Desktop
 from .progress import Tail
 from .readings import Readings
 from .registry import RegistrySource
@@ -70,7 +70,7 @@ class Conn:
 class Hub:
     def __init__(self, cfg):
         self.source = RegistrySource(Path(cfg["registry"]).expanduser(), self.changed, poll=bool(cfg.get("poll")))
-        self.niri = Niri(cfg.get("niri"), self.changed)
+        self.desktop = Desktop(cfg.get("niri"), self.changed)
         self.git = peers.Git(cfg.get("git"))
         self.terminal = cfg.get("terminal")
         # fireproof.desktop.editor: the folder menu's first row and what notes open in.
@@ -153,7 +153,7 @@ class Hub:
         server = await asyncio.start_unix_server(self._serve, path=str(path), limit=LINE_MAX)
         path.chmod(0o600)
         self.source.start()
-        tasks = [server.serve_forever(), self.niri.run(), self._watch_activity(), *(link.run() for link in self.links.values())]
+        tasks = [server.serve_forever(), self.desktop.run(), self._watch_activity(), *(link.run() for link in self.links.values())]
         async with server:
             await asyncio.gather(*tasks)
 
@@ -258,8 +258,8 @@ class Hub:
                     self._retire(session)
             elif now - session.seen > UNSEEN_MS:
                 self._retire(session)
-        if self.niri.focused != self._read_focus:
-            self._read_focus = self.niri.focused
+        if self.desktop.focused != self._read_focus:
+            self._read_focus = self.desktop.focused
             self._read_focused(self.visible().values())
         self.publish()
 
@@ -277,11 +277,11 @@ class Hub:
 
     def _read_focused(self, sessions):
         """A `done` turn whose window has focus has been read; one that asks or failed still wants you."""
-        focused, now = self.niri.focused, now_ms()
+        focused, now = self.desktop.focused, now_ms()
         if focused is None:
             return
         for session in sessions:
-            if session.state(now) == "done" and self.niri.window_of(session.pid) == focused:
+            if session.state(now) == "done" and self.desktop.window_of(session.pid) == focused:
                 session.dismiss()
 
     def _retire(self, session):
@@ -487,9 +487,9 @@ class Hub:
         """Does what a menu row says, through niri as Mod+Return is, for the desktop's environment."""
         kind, value = message["kind"], message["value"]
         if kind == "url" and value.startswith("https://"):
-            await self.niri.spawn(["xdg-open", value])
+            await self.desktop.spawn(["xdg-open", value])
         elif kind == "copy":
-            await self.niri.spawn(["wl-copy", "--", value])
+            await self.desktop.spawn(["wl-copy", "--", value])
         elif kind == "app" and value in APP_COMMANDS:
             await self._open_app(message["session"], value)
         elif kind == "note":
@@ -504,15 +504,15 @@ class Hub:
             if host:
                 await self._terminal(None, ["ssh", "-t", host, f'cd {shlex.quote(cwd)} && exec "$SHELL" -l'])
             else:
-                await self.niri.spawn(["ghostty", f"--working-directory={cwd}"])
+                await self.desktop.spawn(["ghostty", f"--working-directory={cwd}"])
             return
         command = next(c for c in APP_COMMANDS[app] if shutil.which(c, path=self.app_path))
         if host:
             # Only an editor and Ghostty reach another host; the menu blocks the rest.
             if app in menus.EDITORS:
-                await self.niri.spawn([command, *menus.EDITORS[app]["remote"](host, cwd)])
+                await self.desktop.spawn([command, *menus.EDITORS[app]["remote"](host, cwd)])
         else:
-            await self.niri.spawn([command, cwd])
+            await self.desktop.spawn([command, cwd])
 
     # Notes.
 
@@ -573,8 +573,8 @@ class Hub:
         if not sid and message.get("pid"):
             row = nearest(message["pid"], {r["pid"]: r for r in rows if r.get("pid")})
             sid = row["id"] if row else None
-        if not sid and self.niri.focused is not None:
-            sid = next((r["id"] for r in rows if r["window"] == self.niri.focused), None)
+        if not sid and self.desktop.focused is not None:
+            sid = next((r["id"] for r in rows if r["window"] == self.desktop.focused), None)
         path = message.get("path")
         readable = not path or self._note_host(sid) is not None or notes.is_note(path, self.notes.roots)
         bars = [other for other in self.conns if other.bar] if readable else []
@@ -591,9 +591,9 @@ class Hub:
         command = next(c for c in editor["commands"] if shutil.which(c, path=self.app_path))
         host = links.split_id(sid)[0]
         if host in self.links:
-            await self.niri.spawn([command, *editor["remote"](host, path)])
+            await self.desktop.spawn([command, *editor["remote"](host, path)])
         elif notes.is_note(path, self.notes.roots):
-            await self.niri.spawn([command, *editor["local"](path)])
+            await self.desktop.spawn([command, *editor["local"](path)])
 
     def _form_reply(self, conn, message, changed=True, **reply):
         """Publishes what a form op left, so every subscribed surface sees the new view in its next
@@ -615,7 +615,7 @@ class Hub:
         return model.ordered(rows)
 
     def _row_of(self, session, now):
-        row = session.row(now, self.niri.window_of(session.pid))
+        row = session.row(now, self.desktop.window_of(session.pid))
         form = formstore.view_of(self.forms, session.id)
         if form:
             row["answer"] = form
@@ -690,7 +690,7 @@ class Hub:
         now = now_ms()
         rows = self.rows(now)
         shown = [row for row in rows if not row.get("hidden")]
-        due = self.alerts.update(shown, now, self.niri.focused, keep=self.sessions)
+        due = self.alerts.update(shown, now, self.desktop.focused, keep=self.sessions)
         self._journal(rows)
         local = self.state(rows)
         state, link_due = self._with_links(local, now)
@@ -761,14 +761,14 @@ class Hub:
         if not row:
             return
         if row["window"] is not None:
-            await self.niri.focus(row["window"])
+            await self.desktop.focus(row["window"])
             return
         if not row.get("host"):
             return
         if row.get("tmux"):
             await self._terminal(None, ["ssh", "-t", row["host"], "tmux", "attach", "-t", row["tmux"]])
         elif row.get("bridge"):
-            await self.niri.spawn(["xdg-open", f"https://claude.ai/code/{row['bridge']}"])
+            await self.desktop.spawn(["xdg-open", f"https://claude.ai/code/{row['bridge']}"])
         else:
             return
         self._alerts_of(sid).opened.add(sid)
@@ -777,7 +777,7 @@ class Hub:
         """Opens `argv` in the configured terminal, through niri so it gets the desktop's environment."""
         if self.terminal:
             cwd = cwd or str(Path.home())
-            await self.niri.spawn([arg.replace("{cwd}", cwd) for arg in self.terminal] + argv)
+            await self.desktop.spawn([arg.replace("{cwd}", cwd) for arg in self.terminal] + argv)
 
     async def _focus_next(self):
         if not self._last:
@@ -785,16 +785,16 @@ class Hub:
         targets = [r for r in self._last["sessions"] if r["state"] in protocol.ATTENTION and r["window"] is not None]
         if not targets:
             return
-        at = next((i for i, r in enumerate(targets) if r["window"] == self.niri.focused), None)
-        await self.niri.focus(targets[0 if at is None else (at + 1) % len(targets)]["window"])
+        at = next((i for i, r in enumerate(targets) if r["window"] == self.desktop.focused), None)
+        await self.desktop.focus(targets[0 if at is None else (at + 1) % len(targets)]["window"])
 
     def _toggle(self):
         """Dismisses the finished turn of the session under the focused window, or brings back the one you dismissed."""
-        if not self._last or self.niri.focused is None:
+        if not self._last or self.desktop.focused is None:
             return
         for row in self._last["sessions"]:
             session = self.sessions.get(row["id"])
-            if row["window"] != self.niri.focused or session is None or session.turn is None:
+            if row["window"] != self.desktop.focused or session is None or session.turn is None:
                 continue
             if row["state"] in model.DISMISSABLE:
                 session.dismiss()

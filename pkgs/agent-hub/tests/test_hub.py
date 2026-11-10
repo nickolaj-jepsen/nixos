@@ -2000,6 +2000,89 @@ class NiriTest(HubTest):
         self.assertEqual(self.streamed_socket(proc), str(socket))
 
 
+class FakeHyprland:
+    """Hyprland's two sockets in the hub's runtime dir: requests answered from `clients`
+    and `active`, dispatches kept in `requests`, and an event stream to write to."""
+
+    def __init__(self, runtime):
+        self.dir = runtime / "hypr" / "signature"
+        self.dir.mkdir(parents=True)
+        self.clients, self.active, self.requests, self.streams = [], {}, [], []
+        self.servers = [self.serve(".socket.sock", self.answer), self.serve(".socket2.sock", self.streams.append)]
+
+    def serve(self, name, handle):
+        server = socket.socket(socket.AF_UNIX)
+        server.bind(str(self.dir / name))
+        server.listen()
+
+        def accept():
+            while True:
+                try:
+                    handle(server.accept()[0])
+                except OSError:
+                    return
+
+        threading.Thread(target=accept, daemon=True).start()
+        return server
+
+    def answer(self, conn):
+        with conn:
+            message = conn.recv(65536).decode()
+            if message == "j/clients":
+                conn.sendall(json.dumps(self.clients).encode())
+            elif message == "j/activewindow":
+                conn.sendall(json.dumps(self.active).encode())
+            # The hub's probe connects and says nothing.
+            elif message:
+                self.requests.append(message)
+                conn.sendall(b"ok")
+
+    def event(self, line):
+        for stream in self.streams:
+            stream.sendall((line + "\n").encode())
+
+    def stop(self):
+        for name in (".socket.sock", ".socket2.sock"):
+            (self.dir / name).unlink(missing_ok=True)
+        for stream in self.streams:
+            stream.shutdown(socket.SHUT_RDWR)
+            stream.close()
+        self.streams.clear()
+
+
+class HyprlandTest(HubTest):
+    """niri and Hyprland sessions share one config, so the hub takes a Hyprland that answers
+    and niri otherwise."""
+
+    def setUp(self):
+        super().setUp()
+        self.hyprland = FakeHyprland(self.hub.tmp / "run")
+        self.addCleanup(self.hyprland.stop)
+        self.proc = self.hub.process()
+        self.hyprland.clients = [{"address": "0x1f", "pid": self.proc.pid}]
+        self.hub.restart()
+        self.bar = self.hub.subscribe()
+        self.hub.write_session(self.proc.pid, self.sid, status="waiting")
+        self.bar.wait(has_session(self.sid, lambda s: s["window"] == 0x1F))
+
+    def test_focuses_a_window_by_its_address(self):
+        self.hub.command("focus-next")
+        eventually(lambda: self.hyprland.requests)
+        self.assertEqual(self.hyprland.requests, ['/dispatch hl.dsp.focus({ window = "address:0x1f" })'])
+
+    def test_a_window_opened_later_is_mapped(self):
+        other, sid = self.hub.process(), str(uuid.uuid4())
+        self.hyprland.clients.append({"address": "0x2a", "pid": other.pid})
+        self.hyprland.event("openwindow>>2a,1,com.mitchellh.ghostty,fish")
+        self.hub.write_session(other.pid, sid)
+        self.bar.wait(has_session(sid, lambda s: s["window"] == 0x2A))
+
+    def test_niri_takes_over_once_hyprland_is_gone(self):
+        self.hyprland.stop()
+        self.hub.niri({"WindowsChanged": {"windows": [{"id": 7, "pid": self.proc.pid, "is_focused": False}]}})
+        self.bar.wait(has_session(self.sid, lambda s: s["window"] == 7))
+
+
 class OrderTest(HubTest):
     def setUp(self):
         super().setUp()

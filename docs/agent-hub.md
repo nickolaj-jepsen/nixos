@@ -491,8 +491,10 @@ daemon starts.
   - `model` holds the session rules, pure and tested as data.
   - `readings` says when a model is asked, and `judge` holds the prompt, the gate
     and the parsing.
-  - `hub` is the shell that wires them to the socket, the registry and niri.
-- Window focus comes from niri's event stream.
+  - `hub` is the shell that wires them to the socket, the registry and the compositor.
+- Window focus comes from the compositor's event stream (`desktop`): a Hyprland whose
+  socket answers, else niri. It is chosen per connection, since both sessions share one
+  config, and a Hyprland window's id is its address as a number.
 - The order of the `state` message is the one the popout lists and `focus-next`
   walks.
 - Each row carries `reason`: why it is in its state, which the popout, the TUIs and
