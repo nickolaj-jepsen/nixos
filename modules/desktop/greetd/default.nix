@@ -72,6 +72,11 @@
         cp $configPath $out
       '';
 
+    # Temporary, while niri and Hyprland run side by side: the greeter always shows, since its
+    # session picker is how one is chosen. Dropping fireproof.desktop.hyprland restores the
+    # silent sign-in.
+    pickSession = config.fireproof.desktop.hyprland.enable;
+
     # What programs.dms-greeter would set as default_session.command, which autologin.py
     # runs only when PAM can't sign in silently.
     greeter = pkgs.writeShellScript "dms-greeter-session" ''
@@ -101,13 +106,17 @@
           # TPM unlock caches none, so those hosts (and mismatched passwords) still get a prompt.
           # With autologin PAM always signs in silently, so the greeter only catches IPC failures.
           # programs.dms-greeter's own autologin would skip PAM auth and leave the keyring locked.
-          default_session.command = lib.escapeShellArgs [
-            (lib.getExe autologin)
-            config.fireproof.username
-            (lib.getExe' config.programs.niri.package "niri-session")
-            "--"
-            greeter
-          ];
+          default_session.command =
+            if pickSession
+            then "${greeter}"
+            else
+              lib.escapeShellArgs [
+                (lib.getExe autologin)
+                config.fireproof.username
+                (lib.getExe' config.programs.niri.package "niri-session")
+                "--"
+                greeter
+              ];
         };
       };
 

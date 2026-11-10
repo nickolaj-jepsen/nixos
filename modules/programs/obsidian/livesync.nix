@@ -84,7 +84,7 @@
       '';
     };
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf config.fireproof.desktop.obsidian-livesync.enable {
       # Per-device CouchDB login; the homelab provisions the same file as this device's user.
       age.secrets.obsidian-livesync-password = {
         rekeyFile = ../../../secrets/obsidian + "/${hostname}.age";
