@@ -444,13 +444,48 @@
         };
         # Local skills win over claude.ai's copies: skills uploaded to the account
         # sync in as anthropic-skills:<name>, so a same-named one is switched off.
-        skillOverrides = lib.genAttrs (map (name: "anthropic-skills:${name}") (lib.attrNames ccfg.skills)) (_: "off");
+        # The rest trim the synced skills to the ones used from Claude Code.
+        skillOverrides = let
+          synced = state: names: lib.genAttrs (map (name: "anthropic-skills:${name}") names) (_: state);
+        in
+          synced "off" (lib.attrNames ccfg.skills)
+          // synced "off" [
+            "built-in-browser"
+            "computer-use"
+            "dk-car-search"
+            "dk-house-search"
+            "google-workspace"
+            "import-memory"
+            "morning"
+          ]
+          // synced "name-only" [
+            "docx"
+            "pdf"
+            "pptx"
+            "xlsx"
+          ];
+        # claude.ai connectors never called from Claude Code; each one lists its
+        # tool names, and some their instructions, in every session.
+        deniedMcpServers = map (name: {serverName = "claude.ai ${name}";}) [
+          "Booking.com"
+          "Excalidraw"
+          "Figma"
+          "flightpowers"
+          "Google Calendar"
+          "Google Drive"
+          "home-assistant"
+          "Kiwi.com"
+          "lastminute.com"
+          "Sentry"
+          "Trivago"
+        ];
         enabledPlugins =
           {
             "cc-plugin-you-should-know@builtin" = true;
             # This repo's own marketplace, synced back from the claude.ai account;
             # every skill in it is already installed locally.
             "skills@synced" = false;
+            "cowork-plugin-management@synced" = false;
           }
           // lib.optionalAttrs cfg.work.enable {
             "ao-skills@ao-agent-skills" = true;
