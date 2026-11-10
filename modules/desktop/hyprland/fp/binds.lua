@@ -41,7 +41,8 @@ for _, b in ipairs({
     { "ALT + L", "lock lock", "Lock Screen" },
     { "CTRL + N", "notifications toggleDoNotDisturb", "Toggle Do Not Disturb" },
     { "SHIFT + P", "color-picker toggle", "Toggle Color Picker" },
-    -- DMS's own bind cheatsheet; Hyprland has none built in.
+    -- DMS's own overview and bind cheatsheet; Hyprland has neither built in.
+    { "A", "hypr toggleOverview", "Toggle Overview" },
     { "slash", "hypr toggleBinds", "Show Keybinds" },
 }) do
     hl.bind(mod .. " + " .. b[1], dms(b[2]), { description = b[3] })

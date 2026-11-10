@@ -7,9 +7,6 @@
     # Passphrase-only LUKS (no TPM slot), so the boot prompt already needs a human.
     fireproof.desktop.autologin.enable = true;
     fireproof.desktop.boot-splash.enable = true;
-    # Temporary: trying Hyprland beside niri. It brings the greeter back to pick the session, so
-    # autologin is off until this line goes.
-    fireproof.desktop.hyprland.enable = true;
     fireproof.desktop.bambu-studio.enable = true;
     fireproof.desktop.jellyfin-media-player.enable = true;
     fireproof.desktop.ivpn.enable = true;

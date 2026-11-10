@@ -5,4 +5,3 @@
 require("fp.look")
 require("fp.pointer")
 require("fp.binds")
-require("fp.overview")

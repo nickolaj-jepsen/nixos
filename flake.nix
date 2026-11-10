@@ -128,9 +128,5 @@
     # Python library for the Zwift Home Assistant integration, tracked at HEAD.
     zwift-client.url = "github:nickolaj-jepsen/zwift-client";
     zwift-client.flake = false;
-
-    # niri's overview as a Hyprland plugin, tracked at HEAD.
-    hyprland-scroll-overview.url = "github:yayuuu/hyprland-scroll-overview";
-    hyprland-scroll-overview.flake = false;
   };
 }
