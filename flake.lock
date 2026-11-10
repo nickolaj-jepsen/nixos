@@ -464,6 +464,22 @@
         "type": "github"
       }
     },
+    "hyprland-scroll-overview": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793850365,
+        "narHash": "sha256-0mBYt+dkLeXonsVLKs8mfsNbMQ1Zqvzf0r8VOteXni4=",
+        "owner": "yayuuu",
+        "repo": "hyprland-scroll-overview",
+        "rev": "3eb62e3e0093d54cbdcf4f58c831b5b53b3b1ff2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "yayuuu",
+        "repo": "hyprland-scroll-overview",
+        "type": "github"
+      }
+    },
     "import-tree": {
       "locked": {
         "lastModified": 1788467110,
@@ -900,6 +916,7 @@
         "home-manager": "home-manager",
         "homebrew-cask": "homebrew-cask",
         "homebrew-core": "homebrew-core",
+        "hyprland-scroll-overview": "hyprland-scroll-overview",
         "import-tree": "import-tree",
         "niri": "niri",
         "niri-dynamic-workspaces": "niri-dynamic-workspaces",

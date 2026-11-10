@@ -50,6 +50,8 @@ hl.config({
         fullscreen_on_one_column = false,
         wrap_focus = false,
         wrap_swapcol = false,
+        -- niri's focus-follows-mouse max-scroll-amount "0%": hovering never scrolls the strip.
+        follow_min_visible = 1.0,
     },
     group = {
         -- A new window opens beside a tabbed column, not as another tab in it.
@@ -71,8 +73,15 @@ hl.config({
         follow_mouse = 1,
         mouse_refocus = false,
     },
+    -- niri without warp-mouse-to-focus: a focus bind leaves the pointer where it is. Taking
+    -- it along to another monitor is fp.pointer's job.
+    cursor = {
+        no_warps = true,
+    },
     binds = {
         window_direction_monitor_fallback = true,
+        -- Every wheel notch counts, as in niri; the default drops those within 300 ms.
+        scroll_event_delay = 0,
     },
     misc = {
         middle_click_paste = false,

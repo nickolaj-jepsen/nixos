@@ -7,6 +7,8 @@ local mod, ghostty, sh_quote = util.mod, util.ghostty, util.sh_quote
 
 local M = {}
 
+local keys = {}
+
 -- Static workspaces Mod+q..t, kept alive on the primary output like niri's "01".."05".
 local static = { "q", "w", "e", "r", "t" }
 local static_names = { q = "browser", r = "music", t = "diff" }
@@ -75,38 +77,44 @@ function M.project(key)
     if not p then
         return
     end
-    local sel = "name:" .. p.name
-    local fresh = hl.get_workspace(sel) == nil
-    hl.dispatch(hl.dsp.focus({ workspace = sel }))
+    local fresh = hl.get_workspace(p.id) == nil
+    hl.dispatch(hl.dsp.focus({ workspace = p.id }))
     if fresh then
-        spawn_in_order(p.programs, sel)
+        spawn_in_order(p.programs, tostring(p.id))
     end
 end
 
 function M.move_to_project(key)
     local p = fp.workspaces[key]
     if p then
-        hl.dispatch(hl.dsp.window.move({ workspace = "name:" .. p.name, follow = false }))
+        hl.dispatch(hl.dsp.window.move({ workspace = p.id, follow = false }))
     end
 end
 
 function M.close_project(key)
     local p = fp.workspaces[key]
-    if not p or not hl.get_workspace("name:" .. p.name) then
+    if not p or not hl.get_workspace(p.id) then
         return
     end
-    for _, w in ipairs(hl.get_workspace_windows("name:" .. p.name)) do
+    for _, w in ipairs(hl.get_workspace_windows(p.id)) do
         hl.dispatch(hl.dsp.window.close({ window = w }))
     end
 end
 
 -- A key-per-project submap stands in for the overlay; a notification lists the keys meanwhile.
 local hints = {}
-local keys = {}
 for key in pairs(fp.workspaces) do
     keys[#keys + 1] = key
 end
 table.sort(keys)
+
+-- A numbered workspace carrying the project's name: a named-only one has no id, which leaves it
+-- out of the bar's and the overview's ordering.
+for i, key in ipairs(keys) do
+    local p = fp.workspaces[key]
+    p.id = columns.first_project_id + i - 1
+    hl.workspace_rule({ workspace = tostring(p.id), default_name = p.name })
+end
 
 local function project_submap(name, title, action)
     local lines = { title }

@@ -2,7 +2,7 @@
 
 local M = {}
 
-M.default_width = 0.5
+M.default_width = 0.4
 
 -- A tiled window's scrolling column ({ index, width, windows }); nil when floating.
 local function column(w)
@@ -65,6 +65,11 @@ function M.move_column_to_workspace(workspace)
     end
 end
 
+-- Workspace ids: 1-5 static, a monitor's first one right after, then the projects, then the
+-- ones made by walking past the end. Sorting by id gives niri's top-to-bottom order.
+M.first_project_id = 11
+local first_dynamic_id = 51
+
 -- niri's focus-workspace-down/up: along the monitor's own workspaces without wrapping, with an
 -- empty one always waiting below the last.
 function M.focus_workspace(delta)
@@ -72,26 +77,25 @@ function M.focus_workspace(delta)
     if not (current and current.monitor) then
         return
     end
-    local strip = {}
+    local strip, highest = {}, first_dynamic_id - 1
     for _, ws in ipairs(hl.get_workspaces()) do
-        if not ws.special and ws.monitor and ws.monitor.id == current.monitor.id then
-            strip[#strip + 1] = ws
+        if not ws.special and ws.id then
+            highest = math.max(highest, ws.id)
+            if ws.monitor and ws.monitor.id == current.monitor.id then
+                strip[#strip + 1] = ws
+            end
         end
     end
-    -- Numbered ones in order, then the named project workspaces, whose ids are negative.
-    local function rank(ws)
-        return ws.id > 0 and ws.id or 1e9 - ws.id
-    end
     table.sort(strip, function(a, b)
-        return rank(a) < rank(b)
+        return a.id < b.id
     end)
     for i, ws in ipairs(strip) do
         if ws.id == current.id then
             local target = strip[i + delta]
             if target then
-                hl.dispatch(hl.dsp.focus({ workspace = target.id > 0 and target.id or "name:" .. target.name }))
-            elseif delta > 0 and not current.is_empty then
-                hl.dispatch(hl.dsp.focus({ workspace = "emptym" }))
+                hl.dispatch(hl.dsp.focus({ workspace = target.id }))
+            elseif delta > 0 and ws.windows > 0 then
+                hl.dispatch(hl.dsp.focus({ workspace = highest + 1 }))
             end
             return
         end

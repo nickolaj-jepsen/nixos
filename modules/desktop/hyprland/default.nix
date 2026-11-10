@@ -129,6 +129,7 @@
           shell_cwd = lib.getExe shellCwd;
         }
         // lib.optionalAttrs config.fireproof.dev.agent-hub.enable {agent_hub = lib.getExe pkgs.agent-hub;};
+      plugins.scrolloverview = "${pkgs.hyprland-scroll-overview}/lib/libscrolloverview.so";
     };
   in {
     config = lib.mkIf (config.fireproof.desktop.hyprland.enable && pkgs.stdenv.isLinux) {
