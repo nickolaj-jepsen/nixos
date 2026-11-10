@@ -37,3 +37,4 @@ Always defer to the repo's existing tooling, but if you have a choice, prefer th
 - Work in the checkout you are in, on its current branch (main included). Unless your work would conflict with the user's or another agent's current work, then use a worktree (using `wt`). Make sure to clean up worktrees and branches you create.
 - The worktree tools (if existent) are integrated with `wt`, so use them rather than `wt` directly.
 - Avoid merge commits. If you need to merge, rebase instead.
+- Use fixup commits to apply fixes to previous commits in a branch, rebase before merging
