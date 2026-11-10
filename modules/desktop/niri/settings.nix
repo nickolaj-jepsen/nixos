@@ -113,6 +113,17 @@
             ];
             draw-border-with-background = false;
           }
+          # A markdown file opened on its own (no project) gets a reading
+          # width; project windows are titled "<project> — <file>".
+          {
+            matches = [
+              {
+                app-id = "^dev\\.zed\\.Zed$";
+                title = "^[^—]+\\.(md|markdown)$";
+              }
+            ];
+            default-column-width.fixed = 864;
+          }
           # On-demand VRR opt-ins. Keep desktop apps out: every flip allocates a
           # buffer, and that fails in a retry storm when llama-server has VRAM full.
           {
