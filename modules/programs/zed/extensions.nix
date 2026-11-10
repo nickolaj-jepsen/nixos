@@ -54,7 +54,6 @@
           "fish"
           "dockerfile"
           "env"
-          "biome"
           "css-modules-kit"
           "astro"
           "mdx"
