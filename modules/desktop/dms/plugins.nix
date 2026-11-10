@@ -4,7 +4,13 @@
     lib,
     pkgs,
     ...
-  }: {
+  }: let
+    # With the Hyprland session on, a wrapper opens the picker of whichever session is running.
+    projects = action: niriAction:
+      if config.fireproof.desktop.hyprland.enable
+      then "project-workspaces ${action}"
+      else "niri-dynamic-workspaces ${niriAction}";
+  in {
     imports = [
       inputs.dms-plugin-registry.nixosModules.default
     ];
@@ -27,9 +33,9 @@
                 icon = "space_dashboard";
                 displayText = "";
                 displayCommand = "";
-                clickCommand = "niri-dynamic-workspaces switch";
-                middleClickCommand = "niri-dynamic-workspaces move-window";
-                rightClickCommand = "niri-dynamic-workspaces delete";
+                clickCommand = projects "switch" "switch";
+                middleClickCommand = projects "move" "move-window";
+                rightClickCommand = projects "close" "delete";
                 updateInterval = 0;
                 showIcon = true;
                 showText = false;

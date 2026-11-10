@@ -81,6 +81,23 @@
       '';
     };
 
+    # The bar's project button, in whichever session is running (modules/desktop/dms/plugins.nix).
+    projectWorkspaces = pkgs.writeShellApplication {
+      name = "project-workspaces";
+      runtimeInputs = [hyprland];
+      text = ''
+        declare -A niri=([switch]=switch [move]=move-window [close]=delete)
+        if [[ -z ''${niri[''${1-}]-} ]]; then
+          echo "usage: project-workspaces switch|move|close" >&2
+          exit 2
+        fi
+        if [[ -n ''${HYPRLAND_INSTANCE_SIGNATURE-} ]]; then
+          exec hyprctl dispatch "hl.dsp.submap(\"fp-$1\")"
+        fi
+        exec niri-dynamic-workspaces "''${niri[$1]}"
+      '';
+    };
+
     fp = {
       colors = {inherit (c) bg fg ui accent black;};
       primary = fpLib.primaryMonitorName config.fireproof.monitors;
@@ -124,14 +141,23 @@
         configType = "lua";
         # niri-session imports the whole login environment; match it.
         systemd.variables = ["--all"];
-        extraConfig = "local fp = ${lib.generators.toLua {} fp}\n\n" + builtins.readFile ./config.lua;
+        extraConfig = builtins.readFile ./config.lua;
       };
 
-      # HM writes this only when it owns the package; it lets lua-language-server check config.lua.
+      # config.lua's modules, which Hyprland's `require` finds beside it.
+      xdg.configFile."hypr/fp" = {
+        source = ./fp;
+        recursive = true;
+      };
+      xdg.configFile."hypr/fp/data.lua".text = "return ${lib.generators.toLua {} fp}\n";
+
+      # HM writes this only when it owns the package; it lets lua-language-server check the Lua.
       xdg.configFile."hypr/.luarc.json".text = builtins.toJSON {
         workspace.library = ["${hyprland}/share/hypr/stubs"];
-        diagnostics.globals = ["hl" "fp" "fp_api"];
+        diagnostics.globals = ["hl"];
       };
+
+      home.packages = [projectWorkspaces];
     };
   };
 }
