@@ -95,10 +95,11 @@
 
     # Validated and tested against the claude-code that runs it, so a bump that
     # breaks its API (or drops the keybinding action spellfix borrows) fails the build.
-    mkMod = name:
+    mkMod = name: mkModFrom name ./mods/${name};
+    mkModFrom = name: src:
       pkgs.stdenvNoCC.mkDerivation {
         name = "claude-code-${name}";
-        src = ./mods/${name};
+        inherit src;
         nativeBuildInputs = [ccfg.package];
         buildPhase = ''
           runHook preBuild
@@ -119,9 +120,15 @@
     # card redesign only hides it, with a toast (mods/linear-issue).
     linearIssue = mkMod "linear-issue";
     gitMenu = mkMod "git-menu";
-    answer = (mkMod "answer").overrideAttrs {
-      preBuild = ''
-        PYTHONPATH=${../../../pkgs/agent-hub} ${pkgs.python3.interpreter} tests/views.py --check
+    # A plugin of agent-tools: a thin hooks module over its `claude/` half and the
+    # harness-free `core/` pi loads too, whose own tests ran in pkgs.agent-tools.
+    answer = (mkModFrom "answer" "${pkgs.agent-tools}/plugins/answer").overrideAttrs {
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out
+        cp -r .claude-plugin hooks types core claude $out/
+        rm $out/core/*.spec.ts
+        runHook postInstall
       '';
     };
 
@@ -136,7 +143,7 @@
         }
         {
           # A mod can't take the keyboard, so this hands it to the band, where answer's form
-          # is (mods/answer): its row first, and Enter opens it.
+          # is (agent-tools/plugins/answer): its row first, and Enter opens it.
           context = "Chat";
           bindings."alt+a" = "abovePrompt:focus";
         }

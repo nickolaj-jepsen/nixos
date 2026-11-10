@@ -9,9 +9,6 @@
  * resumes one that ended; `x` puts a finished turn away and `o` opens the
  * session's notes in the bar's reader, listing them here when no bar took them.
  * j/k move, q and Esc close.
- *
- * It answers no form. One that wants an answer shows in the detail and is
- * stepped in its own TUI or at the bar, never from another session's overlay.
  */
 import { execFile } from "node:child_process";
 import path from "node:path";
@@ -56,7 +53,6 @@ type Item = {
   reason: string;
   /** Whether the hub can go to it: its window here, or a pane over there. */
   reachable: boolean;
-  form?: NonNullable<HubRow["answer"]>;
   /** What resumes an ended session, as the hub would run it. */
   resume?: string;
   /** How many it hides, for the fold. */
@@ -110,7 +106,6 @@ const live = (row: HubRow): Item => ({
   reason: reasonOf(row),
   // As the hub's own `focus` goes: a window here, else a pane or a page over there.
   reachable: row.window !== null || Boolean(row.host && (row.tmux || row.bridge)),
-  form: row.answer,
 });
 
 const ended = (row: Ended): Item => ({
@@ -385,15 +380,6 @@ export class SessionsOverlay implements Component {
           truncateToWidth(item.reason, frameWidth(this.tui.terminal.columns), "…", true),
         ),
       );
-    if (item.form) {
-      const form = item.form;
-      const state = form.isReview
-        ? `review of ${form.count}, ${form.answered} answered`
-        : `${form.answered}/${form.count} answered`;
-      lines.push(theme.fg("accent", `form · ${form.title}`) + theme.fg("dim", ` · ${state}`));
-      // D6: this overlay reads a form, it never answers one.
-      lines.push(theme.fg("dim", "stepped in its own TUI, or at the bar: not from here"));
-    }
     if (item.resume) lines.push(theme.fg("dim", `resume: ${item.resume}`));
     return lines;
   }

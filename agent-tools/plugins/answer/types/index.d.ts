@@ -1,4 +1,6 @@
-/** A person's step through the draft (`forms.apply` in agent-hub). */
+// The mod's state contract. Claude Code wants it self-contained, so it restates the shapes
+// `core/forms.ts` owns; the module assigns the core's values to these, so `tsc` flags a drift.
+
 export type Action =
   | { do: "pick" | "toggle"; entry: number }
   | { do: "write" | "note"; text: string }
@@ -35,7 +37,7 @@ export type Item = {
   written: string;
 };
 
-/** What `agent-hub answer` prints: all there is to draw (`FORM_VIEW` in its protocol). */
+/** All there is to draw of the draft (`view` in the core). */
 export type View = {
   id: string;
   kind: "round" | "picks";
@@ -50,17 +52,39 @@ export type View = {
   /** Said last, about the whole round. */
   note: string;
   reply: string;
-  pending: boolean;
 };
 
-/** A reply another surface left for this session's prompt. */
-export type Delivery = { text: string; submit: boolean };
+export type Answer =
+  | { kind: "option"; index: number }
+  | { kind: "options"; indices: number[] }
+  | { kind: "accept" }
+  | { kind: "text"; text: string };
+
+/** The form and the answers so far, as the core parses and steps them. */
+export type Held = {
+  form: {
+    kind: "round" | "picks";
+    items: {
+      label: string;
+      title: string;
+      body: string;
+      options: { key: string; text: string; detail: string }[];
+      recommended?: string;
+      recommendedOption?: number;
+      recommendedOptions?: number[];
+    }[];
+  };
+  draft: { answers: (Answer | null)[]; notes: string[]; note: string; step: number };
+};
 
 /** The field being typed in: the shown item's write-in, or a note. */
 export type Editing = "write" | "note" | null;
 
 /** The last turn's form, while it can still be answered. */
 export type Current = {
+  /** The session's own, kept nowhere else. */
+  held: Held;
+  /** What `held` draws as. */
   view: View;
   editing: Editing;
   /** Whether picks toggle on the shown item; null follows its answer. */

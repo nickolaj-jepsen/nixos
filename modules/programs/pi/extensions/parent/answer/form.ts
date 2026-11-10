@@ -2,10 +2,9 @@
  * The answer form, drawn in the editor's place: one item per screen and a
  * review, every row and key chip clickable. A pick records the answer and asks
  * for a note under it; Enter there, empty or not, goes on to the next item
- * unanswered, and `m` lets several options be one answer. The
- * draft and every step through it are `agent-hub answer`'s, so every surface
- * answers alike; this file only draws its view and maps keys and clicks onto
- * those steps.
+ * unanswered, and `m` lets several options be one answer. The draft and every
+ * step through it are the core's (`lib/answer`), which Claude Code's mod shares;
+ * this file only draws its view and maps keys and clicks onto those steps.
  */
 import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import {
@@ -22,14 +21,14 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-import type { HubFormView } from "../lib/protocol.gen.ts";
+import type { Action, View } from "../lib/answer/forms.ts";
 
 export type FormResult = { fill: boolean };
 
-/** One step of the draft (`forms.apply` in agent-hub). */
-export type FormAction = { do: string; entry?: number; step?: number; text?: string };
+/** One step of the draft (`apply` in the core). */
+export type FormAction = Action;
 
-type Item = NonNullable<HubFormView["item"]>;
+type Item = NonNullable<View["item"]>;
 
 type Act =
   | { kind: "entry"; index: number }
@@ -64,8 +63,8 @@ export class AnswerForm implements Component, Focusable {
   constructor(
     private readonly tui: TUI,
     private readonly theme: Theme,
-    private view: HubFormView,
-    private readonly stepper: (action: FormAction) => Promise<HubFormView | null>,
+    private view: View,
+    private readonly stepper: (action: FormAction) => Promise<View | null>,
     private readonly done: (result: FormResult) => void,
   ) {
     this.resetCursor();
@@ -90,8 +89,8 @@ export class AnswerForm implements Component, Focusable {
     this.cursor = this.view.item?.start ?? 0;
   }
 
-  /** What another surface, or this one, made of the form. Another form, or none, ends this one. */
-  refresh(view: HubFormView | null): void {
+  /** What a step made of the form. Another form, or none, ends this one. */
+  refresh(view: View | null): void {
     if (!view || view.id !== this.view.id) {
       this.done({ fill: false });
       return;

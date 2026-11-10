@@ -15,10 +15,7 @@
  *
  * The same connection subscribes, so the session can read every row the hub has
  * (never as a `bar`, which is a surface that can open a reader), go to, resume or
- * dismiss another session's row, and put its notes up in the bar's reader; and it
- * writes an answer form through the hub's form ops rather than a process per step:
- * each one goes through `formstore` and is published, so the file stays the one
- * truth and the next push carries the view.
+ * dismiss another session's row, and put its notes up in the bar's reader.
  */
 import { connect, type Socket } from "node:net";
 import { homedir } from "node:os";
@@ -26,8 +23,6 @@ import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Dialogs } from "./dialogs.ts";
 import {
-  type HubDelivery,
-  type HubFormView,
   type HubIdentity,
   type HubMessage,
   type HubNote,
@@ -35,9 +30,6 @@ import {
   type HubRow,
   PROTOCOL_VERSION,
 } from "./protocol.gen.ts";
-
-/** One step of a session's answer form, as `forms.apply` takes it. */
-export type FormAction = { do: string; entry?: number; step?: number; text?: string };
 
 /** A model call the hub wants run; `signal` aborts when the hub cancels it. */
 export type JudgeRequest = {
@@ -58,9 +50,6 @@ const RETRY_MS = 5000;
 // The first read of a long session's notes takes seconds; a person waits, not a turn.
 const NOTES_TIMEOUT_MS = 15_000;
 const SHOW_TIMEOUT_MS = 1000;
-// A form op is a file write and a publish: a second without a reply means a daemon
-// that doesn't know the op, which is the caller's cue to take the CLI instead.
-const FORM_TIMEOUT_MS = 1000;
 
 // As the daemon's `socket_path`: the runtime dir, or the state dir where there is none (macOS).
 const socketPath = () => {
@@ -84,8 +73,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
   let attached = false;
   /** Set once a hub on another version turns the session away; it is not asked again. */
   let refused = false;
-  /** False once the hub says it does not know the form ops: an older daemon, and the CLI does them. */
-  let formOps = true;
   let status: Status = "idle";
   /**
    * What the run itself is doing. `status` is this plus whatever the session is
@@ -142,13 +129,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     });
   };
 
-  /** A form op, naming this session; undefined when the CLI should do it instead. */
-  const formAsk = (build: (request: number, session: string) => HubOp) => {
-    const session = ctx?.sessionManager.getSessionId();
-    if (session === undefined || !formOps) return Promise.resolve(undefined);
-    return ask((request) => build(request, session), FORM_TIMEOUT_MS);
-  };
-
   const setStatus = (next: Status) => {
     if (next !== status) since = Date.now();
     status = next;
@@ -189,14 +169,11 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       replies.get(message.request)?.(message);
       replies.delete(message.request);
     } else if (message.type === "error") {
-      // A write the hub refused, an op it doesn't know among them: fail it now, not at its
-      // timeout, so the caller can take the CLI instead.
+      // A write the hub refused, an op it doesn't know among them: fail it now, not at its timeout.
       if (message.request !== undefined) {
         replies.get(message.request)?.(undefined);
         replies.delete(message.request);
       }
-      // An older daemon: every form op would fail the same way, so stop asking for them.
-      if (/^unknown op 'form-/.test(message.error)) formOps = false;
     } else if (message.type === "notice" && live && ctx) {
       ctx.ui.notify(message.text, "warning");
     } else if (message.type === "refused") {
@@ -241,7 +218,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       const { record, name } = attachInfo();
       const waiting = waitingFor();
       attached = true;
-      formOps = true;
       write({
         op: "attach",
         version: PROTOCOL_VERSION,
@@ -339,8 +315,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     identity: () => identity,
     /** Whether the session is attached right now. */
     connected: () => attached,
-    /** Whether this hub takes the form ops; false for a daemon older than them. */
-    formsOverSocket: () => formOps,
     /** Registers `listener` for every change of this session's row; returns the unsubscribe. */
     onChange(listener: () => void) {
       listeners.add(listener);
@@ -419,29 +393,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
       settleStatus();
       if (ctx) write({ op: "turn-end", pending, error, ...transcript(ctx) });
     },
-    /**
-     * Opens the form the turn ending on `text` asks for: the view, null when it asks
-     * nothing, or undefined when no hub answered and the caller should use the CLI.
-     */
-    formOffer: (text: string) =>
-      formAsk((request, session) => ({ op: "form-offer", request, session, text })).then((reply) =>
-        reply ? { view: reply.view ?? null } : undefined,
-      ),
-    /** One step of `form`; the same "no hub answered" as `formOffer` when undefined. */
-    formStep: (form: string, action: FormAction) =>
-      formAsk((request, session) => ({ op: "form-step", request, session, form, action })).then(
-        (reply) => (reply ? { view: reply.view ?? null } : undefined),
-      ),
-    /** The form as it stands, and a reply left for this TUI, handed over at most once. */
-    formSync: () =>
-      formAsk((request, session) => ({ op: "form-sync", request, session })).then((reply) =>
-        reply ? { view: reply.view ?? null, delivery: reply.delivery ?? null } : undefined,
-      ),
-    /** Forgets the session's form, as the person speaking does; false when no hub took it. */
-    formDrop: () =>
-      formAsk((request, session) => ({ op: "form-drop", request, session })).then(
-        (reply) => reply !== undefined,
-      ),
     named(name: string | undefined) {
       write({ op: "named", name: name ?? null });
     },

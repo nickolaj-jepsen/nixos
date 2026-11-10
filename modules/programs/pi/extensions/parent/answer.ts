@@ -4,34 +4,24 @@
  * editor's place, and its review writes the reply into the editor, above any
  * draft, to send.
  *
- * The form itself is `agent-hub answer`'s, which works with the hub down, so
- * the draft is shared with Claude Code's mod and the hub's panel. With the hub
- * attached the draft is stepped over this session's socket and the hub pushes
- * the resulting view, so nothing is spawned per keystroke; a session with no hub
- * falls back to `agent-hub answer` and to following the form's file.
+ * The form is the core's (`lib/answer`), the one Claude Code's mod runs. The
+ * draft is this session's own: in memory, and on the session branch so a
+ * reload or a resumed session has its round and answers back.
  *
  * The answers outlive closing the form; any input sent drops them.
  */
-import { execFile } from "node:child_process";
-import { stat } from "node:fs/promises";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { contentText } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { AnswerForm, type FormAction, type FormResult } from "./answer/form.ts";
-import type { FormAction as HubFormAction, Hub } from "./lib/hub.ts";
-import type { HubDelivery, HubFormView } from "./lib/protocol.gen.ts";
-import type { Services } from "./services.ts";
+import { type Held, offer, step as stepForm, type View, viewOf } from "./lib/answer/forms.ts";
 
 const WIDGET_KEY = "answer";
 const SHORTCUT = "alt+a";
-// How often the form's file is read while the hub is not there to push it.
-const POLL_MS = 1000;
-// While attached the pushed row drives the widget, so the socket is only asked this
-// often for a reply another surface left for this prompt.
-const SAFETY_POLL_MS = 10_000;
+const ENTRY = "answer-form";
 
-type Delivery = { text: string; submit: boolean };
-type Synced = { view: HubFormView | null; delivery: HubDelivery | null };
+/** What the branch keeps: the form as it stood, or null once the person spoke past it. */
+type Saved = { held: Held | null };
 
 const hasEditor = (ctx: ExtensionContext) => ctx.mode === "tui" && ctx.hasUI;
 
@@ -48,172 +38,67 @@ function lastAssistantText(messages: AgentMessage[]): string {
 /** The reply above what the person had typed, never over it. */
 const placeReply = (draft: string, text: string) => (draft.trim() ? `${text}\n\n${draft}` : text);
 
-/** Everything the widget draws of a view, so a push that says the same costs no redraw. */
-const signature = (view: HubFormView | null) =>
-  view ? `${view.id}|${view.step}|${view.answered}|${view.pending}|${view.reply}` : "";
+/** Everything the widget draws of a view, so a step that changes none of it costs no redraw. */
+const signature = (view: View | null) => (view ? `${view.id}|${view.answered}` : "");
 
-function run(session: string, args: string[], stdin?: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = execFile(
-      "agent-hub",
-      ["answer", ...args, "--session", session],
-      { encoding: "utf8", timeout: 5000 },
-      (error, stdout) => (error ? reject(error) : resolve(stdout)),
-    );
-    child.stdin?.end(stdin ?? "");
-  });
+/** A record another version wrote, or a corrupt one, is skipped rather than believed. */
+const isSaved = (data: unknown): data is Saved => {
+  if (typeof data !== "object" || data === null || !("held" in data)) return false;
+  const { held } = data as { held: unknown };
+  if (held === null) return true;
+  const { form, draft } = held as { form?: { items?: unknown }; draft?: { answers?: unknown } };
+  return (
+    Array.isArray(form?.items) &&
+    Array.isArray(draft?.answers) &&
+    form.items.length === draft.answers.length
+  );
+};
+
+/** The form the branch last held, so a fork or a resumed session starts from its own. */
+function restored(ctx: ExtensionContext): Held | null {
+  const branch = ctx.sessionManager.getBranch();
+  for (let i = branch.length - 1; i >= 0; i--) {
+    const entry = branch[i];
+    if (entry?.type !== "custom" || entry.customType !== ENTRY) continue;
+    if (isSaved(entry.data)) return entry.data.held;
+  }
+  return null;
 }
 
-export default function (pi: ExtensionAPI, services: Services) {
-  const hub: Hub = services.hub;
-  let current: HubFormView | undefined;
-  /** What the widget last drew, so a push that says the same costs no redraw. */
+export default function (pi: ExtensionAPI) {
+  let held: Held | null = null;
+  /** What the widget last drew. */
   let shown = "";
   let lastText = "";
   let form: AnswerForm | undefined;
-  let latest: ExtensionContext | undefined;
-  let ticking: ReturnType<typeof setInterval> | undefined;
-  let tick = 0;
-  let watched = { session: "", path: "", mtime: 0 };
-  let isPolling = false;
-  /** A reply taken while the form holds the editor, which can't show it; taken up when it closes. */
-  let waiting: Delivery | undefined;
 
-  const sessionOf = (ctx: ExtensionContext) => ctx.sessionManager.getSessionId();
-
-  const viewFrom = async (ctx: ExtensionContext, args: string[], stdin?: string) =>
-    JSON.parse(await run(sessionOf(ctx), args, stdin)) as HubFormView | null;
-
-  const show = (ctx: ExtensionContext, view: HubFormView | null, force = false) => {
-    const next = signature(view);
-    if (next === shown && !force) return;
-    shown = next;
-    current = view ?? undefined;
+  const draw = (ctx: ExtensionContext) => {
+    const view = viewOf(held);
     form?.refresh(view);
-    if (!current) return ctx.ui.setWidget(WIDGET_KEY, undefined);
+    const next = signature(view);
+    if (next === shown) return;
+    shown = next;
+    if (!view) return ctx.ui.setWidget(WIDGET_KEY, undefined);
     const t = ctx.ui.theme;
-    const { answered, title } = current;
+    const { answered, title } = view;
     ctx.ui.setWidget(WIDGET_KEY, [
       t.fg("accent", title) +
         t.fg("dim", `${answered ? ` · ${answered} answered` : ""} · ${SHORTCUT} or /answer`),
     ]);
   };
 
-  /** A reply left at another surface: into the editor, or sent as you sending it. */
-  const take = (ctx: ExtensionContext, delivery: Delivery) => {
-    if (delivery.submit) return pi.sendUserMessage(delivery.text, { deliverAs: "followUp" });
-    if (form) {
-      waiting = delivery;
-      return;
-    }
-    ctx.ui.setEditorText(placeReply(ctx.ui.getEditorText(), delivery.text));
+  /** Holds `next`, on the branch too when it changed. */
+  const hold = (ctx: ExtensionContext, next: Held | null) => {
+    if (next !== held) pi.appendEntry<Saved>(ENTRY, { held: next });
+    held = next;
+    draw(ctx);
   };
-
-  // One verb, over the socket when the hub is attached and through the CLI when it is
-  // not. An unanswered call while attached is not proof the hub did nothing: it may have
-  // written and lost the reply, so a verb that cannot be applied twice is read back
-  // rather than replayed.
-
-  const offer = async (ctx: ExtensionContext) => {
-    const reply = (await hub.formOffer(lastText)) ?? (await hub.formOffer(lastText));
-    return reply ? reply.view : viewFrom(ctx, ["offer"], lastText);
-  };
-
-  const stepForm = async (ctx: ExtensionContext, id: string, action: FormAction) => {
-    const reply = await hub.formStep(id, action as HubFormAction);
-    if (reply) return reply.view;
-    // A step writes text against the current item, so a second one lands on the next item: read
-    // the form back instead of replaying it — but only when the op actually reached the hub.
-    if (hub.connected() && hub.formsOverSocket()) return viewFrom(ctx, ["show"]);
-    return viewFrom(ctx, ["step", "--form", id, JSON.stringify(action)]);
-  };
-
-  const syncForm = async (ctx: ExtensionContext): Promise<Synced> => {
-    // Sync takes the delivery out of the file before it replies, so a second ask cannot recover
-    // one whose reply was lost; it only covers a request that never reached the hub.
-    const reply = (await hub.formSync()) ?? (await hub.formSync());
-    if (reply) return reply;
-    const synced = (await viewFrom(ctx, ["sync"])) as Synced | null;
-    if (!synced) throw new Error("no sync");
-    return synced;
-  };
-
-  const dropForm = async (ctx: ExtensionContext) => {
-    // Dropping twice leaves the same nothing.
-    if (await hub.formDrop()) return;
-    if (await hub.formDrop()) return;
-    await run(sessionOf(ctx), ["drop"]);
-  };
-
-  /** The hub said a reply waits for this prompt: the file has it, and only once. */
-  const takeDelivery = async (ctx: ExtensionContext) => {
-    const { view, delivery } = await syncForm(ctx);
-    if (!delivery) return;
-    take(ctx, delivery);
-    // Forced: the editor changed, and a widget that says the same thing draws nothing.
-    show(ctx, view, true);
-  };
-
-  /** With no hub: the file another surface writes is the only news there is. */
-  const pollFile = async (ctx: ExtensionContext) => {
-    const session = sessionOf(ctx);
-    if (session !== watched.session) {
-      watched = { session, path: (await run(session, ["path"])).trim(), mtime: 0 };
-    }
-    const mtime = await stat(watched.path).then(
-      (s) => s.mtimeMs,
-      () => 0,
-    );
-    if (mtime === watched.mtime) return;
-    watched.mtime = mtime;
-    const { view, delivery } = await syncForm(ctx);
-    // What another surface did to the form shows here, delivery or not.
-    show(ctx, view);
-    if (delivery) take(ctx, delivery);
-  };
-
-  const poll = async () => {
-    const ctx = latest;
-    if (!ctx || isPolling) return;
-    isPolling = true;
-    try {
-      // Attached to a hub that takes the form ops, the view arrives pushed, and the socket is
-      // cheap: this only catches a delivery whose push was missed. A daemon too old for them
-      // leaves the file as the only news, as it is with no hub at all.
-      if (hub.connected() && hub.formsOverSocket()) {
-        if (++tick % (SAFETY_POLL_MS / POLL_MS) === 0) await takeDelivery(ctx);
-      } else await pollFile(ctx);
-    } catch {
-      // No agent-hub here, or it failed: the session goes on without a form.
-    } finally {
-      isPolling = false;
-    }
-  };
-
-  hub.onChange(() => {
-    const ctx = latest;
-    // Losing the hub clears its row; the form is still the file's, and the poll has it.
-    if (!ctx || !hub.connected()) return;
-    const view = hub.read()?.answer ?? null;
-    show(ctx, view);
-    if (view?.pending) void takeDelivery(ctx).catch(() => undefined);
-  });
 
   pi.on("session_start", (_event, ctx) => {
     if (!hasEditor(ctx)) return;
-    latest = ctx;
-    tick = 0;
-    clearInterval(ticking);
-    ticking = setInterval(() => void poll(), POLL_MS);
-    ticking.unref();
-  });
-
-  pi.on("session_shutdown", () => {
-    clearInterval(ticking);
-    latest = undefined;
-    // A reply parked for a form that was open can't be shown once the session is gone; the
-    // file has already handed it over, so it is dropped rather than kept for the next one.
-    waiting = undefined;
+    held = restored(ctx);
+    shown = "";
+    draw(ctx);
   });
 
   pi.on("agent_end", (event) => {
@@ -221,32 +106,27 @@ export default function (pi: ExtensionAPI, services: Services) {
   });
 
   // A turn that asks nothing leaves the form: a background task's turn ends on that task's news.
-  pi.on("agent_settled", async (event, ctx) => {
+  pi.on("agent_settled", (event, ctx) => {
     if (!hasEditor(ctx) || event.aborted) return;
-    await offer(ctx).then(
-      (view) => show(ctx, view),
-      () => undefined,
-    );
+    hold(ctx, offer(held, lastText));
   });
 
   // Anything sent answers the round, or moves past it.
   pi.on("input", (_event, ctx) => {
-    if (!current) return;
-    show(ctx, null);
-    void dropForm(ctx).catch(() => undefined);
+    if (held) hold(ctx, null);
   });
 
   const open = async (ctx: ExtensionContext) => {
     if (!hasEditor(ctx) || form) return;
-    if (!current) {
+    const opened = viewOf(held);
+    if (!opened) {
       ctx.ui.notify("Nothing to answer: the last turn asked no questions.", "info");
       return;
     }
-    const opened = current;
+    // Aimed at the form that was opened, so a round that arrived meanwhile is left as it is.
     const step = async (action: FormAction) => {
-      const view = await stepForm(ctx, opened.id, action).catch(() => undefined);
-      if (view !== undefined) show(ctx, view);
-      return view ?? null;
+      if (held) hold(ctx, stepForm(held, action, opened.id));
+      return viewOf(held);
     };
     let result: FormResult;
     try {
@@ -260,17 +140,10 @@ export default function (pi: ExtensionAPI, services: Services) {
     } finally {
       form = undefined;
     }
-    // Taking the form's own reply answers a delivery that waited for the form to close.
-    const taken = waiting;
-    waiting = undefined;
     // A turn that ended while the form was up has replaced what it answered.
-    if (current?.id === opened.id && result.fill && current.reply) {
-      ctx.ui.setEditorText(placeReply(ctx.ui.getEditorText(), current.reply));
-    } else if (taken) {
-      take(ctx, taken);
-      // The editor holds a reply the TUI has to be told to draw.
-      show(ctx, current ?? null, true);
-    }
+    const now = viewOf(held);
+    if (now?.id === opened.id && result.fill && now.reply)
+      ctx.ui.setEditorText(placeReply(ctx.ui.getEditorText(), now.reply));
   };
 
   pi.registerShortcut(SHORTCUT, {

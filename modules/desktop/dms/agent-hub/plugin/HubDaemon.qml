@@ -111,24 +111,6 @@ Item {
         });
     }
 
-    function formStep(sessionId, form, action) {
-        socket.send({
-            "op": "form-step",
-            "session": sessionId,
-            "form": form,
-            "action": action
-        });
-    }
-
-    function formDeliver(sessionId, form, submit) {
-        socket.send({
-            "op": "form-deliver",
-            "session": sessionId,
-            "form": form,
-            "submit": submit
-        });
-    }
-
     function openMenu(sessionId, which) {
         root.menu = null;
         root.menuRequest += 1;
@@ -192,7 +174,7 @@ Item {
             if (linkUp)
                 send({
                     "op": "subscribe",
-                    "version": 3,
+                    "version": 4,
                     "bar": true
                 });
             else {

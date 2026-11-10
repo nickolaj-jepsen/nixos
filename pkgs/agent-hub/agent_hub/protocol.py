@@ -16,7 +16,7 @@ be left out.
 import json
 import sys
 
-VERSION = 3
+VERSION = 4
 # The custom message type claude-peers.ts puts a peer's message in a pi session as.
 PEER_MESSAGE = "claude-peer-message"
 
@@ -41,28 +41,6 @@ NOTE = {"path": "str", "name": "str", "group": "written|read|project", "at": "in
 # and then nothing may allow it from the bar: you can't approve what you can't read.
 ASK = {"tool": "str", "about": "str", "kind": "command|diff|text", "body": "str", "complete": "bool"}
 
-# What a surface draws of a session's answer form (`forms.view`).
-FORM_ENTRY = {"kind": "option|accept|write", "text": "str", "detail": "str", "isRecommended": "bool", "isChosen": "bool"}
-FORM_ITEM = {"label": "str", "title": "str", "body": "str", "entries": [FORM_ENTRY], "start": "int", "recommended": "str", "canSeveral": "bool", "isSeveral": "bool", "canAccept": "bool", "note": "str", "written": "str"}
-FORM_VIEW = {
-    "id": "str",
-    "kind": "round|picks",
-    "title": "str",
-    "count": "int",
-    "answered": "int",
-    "step": "int",
-    "isReview": "bool",
-    # The item shown; null on the review.
-    "item": Nullable(FORM_ITEM),
-    "review": [{"label": "str", "shown": "str", "isAnswered": "bool", "note": "str"}],
-    "note": "str",
-    "reply": "str",
-    # A reply was left for the session's TUI, which has yet to take it.
-    "pending": "bool",
-}
-
-# What a TUI takes from the store in its session's file, into its prompt or as what you send.
-DELIVERY = {"text": "str", "submit": "bool", "at": "int"}
 
 ROW = {
     "id": "str",
@@ -103,8 +81,6 @@ ROW = {
     "readings?": "str",
     # The prompt a hook is holding open, which `answer` can settle by this `id`.
     "permission?": {"id": "int", **ASK},
-    # The form the last turn asks to be answered with. This host's own: a link never carries it.
-    "answer?": FORM_VIEW,
     # The repository, the same from any of its worktrees; the directory's own name outside git.
     "project?": "str",
     "branch?": "str",
@@ -168,18 +144,6 @@ OPS = {
     "resume": {"session": "str"},
     # Settles the prompt `ask` names, and only that one.
     "answer": {"session": "str", "ask": "int", "allow": "bool"},
-    # A turn ended on `text`: opens the round or pick list it ends on, answered with its view.
-    "form-offer": {"request": "int", "session": "str", "text": "str"},
-    # One step of a session's answer form, when `form` is still the one showing (`forms.apply`).
-    "form-step": {"request?": "int", "session": "str", "form": "str", "action": {"do": "str", "entry?": "int", "step?": "int", "text?": "str"}},
-    # Leaves the form's reply for the session's TUI: in its prompt, or with `submit` sent.
-    "form-deliver": {"request?": "int", "session": "str", "form": "str", "submit": "bool"},
-    # What the session's TUI asks when the file moved: the view now, and a delivery at most once.
-    "form-sync": {"request": "int", "session": "str"},
-    # The person spoke: their own message answers the round, or moves past it.
-    "form-drop": {"request": "int", "session": "str"},
-    # `agent-hub answer` changed a form's file.
-    "form-changed": {"session": "str"},
     # Asks for a row's folder or git menu, answered with `menu`, twice when a lookup follows.
     "menu": {"request": "int", "session": "str", "which": "folder|git"},
     # Does what a menu row says.
@@ -244,7 +208,7 @@ TYPES = {
     "cancel": {"request": "int"},
     # `decision` answers a held `permission`; without one the prompt closed some other way.
     "reply": {"request": "int", "peers?": "str", "decision?": "allow|deny", "facts?": "any", "notes?": [NOTE],
-              "note?": "any", "shown?": "bool", "view?": Nullable(FORM_VIEW), "delivery?": Nullable(DELIVERY)},
+              "note?": "any", "shown?": "bool"},
     "menu": {"request": "int", "menu": "any"},
     "show": {"session": "str|null", "path": "str|null", "toggle": "bool"},
     "notice": {"text": "str"},
@@ -326,8 +290,6 @@ def typescript():
         "export type HubState = HubRow[\"state\"];",
         f"export type HubIdentity = {_ts(IDENTITY)};",
         f"export type HubTurn = {_ts(TURN)};",
-        f"export type HubFormView = {_ts(FORM_VIEW)};",
-        f"export type HubDelivery = {_ts(DELIVERY)};",
         f"export type HubRow = {_ts(ROW)};",
         f"export type HubNote = {_ts(NOTE)};",
         "export type HubOp =",

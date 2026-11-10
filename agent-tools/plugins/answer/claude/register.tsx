@@ -1,7 +1,8 @@
 import { atom, read, update } from "claude-code";
 import type { EngineInterface, Register } from "claude-code";
 
-import type { Action, Current, Delivery, Entry, Item, View } from "../types";
+import { offer, step as stepForm, view as viewOf } from "../core/forms";
+import type { Action, Current, Entry, Held, Item, View } from "../types";
 
 // The two fields, each drawn while it is being typed in.
 const WRITE = "write";
@@ -10,10 +11,6 @@ const NOTE = "note";
 const keyOf = (field: typeof WRITE | typeof NOTE) => `${field}-field`;
 // What the row says focuses the band; the binding itself is in keybindings.json.
 const CHORD = "alt+a";
-// How soon something another surface did to the form shows here.
-const POLL_MS = 1000;
-// A hub that can't be run isn't asked again every second for the session's life.
-const MAX_BACKOFF_POLLS = 300;
 // A row kept free for wraps guessed short.
 const SLACK_ROWS = 1;
 // How tall the open form stands whatever it shows, so a question doesn't jump as the last
@@ -24,7 +21,7 @@ const PANEL_ROWS = 20;
 const RESERVED_ROWS = 1;
 
 // Change the tag when Current changes shape: a reload keeps what the old code stored.
-const current = atom({ plugin: "answer", key: "current" } as const, null, { shape: "current-8" });
+const current = atom({ plugin: "answer", key: "current" } as const, null, { shape: "current-9" });
 
 /** Origins that are the person speaking; a task's notification or a peer's message isn't. */
 const PERSON = new Set<string>(["composer", "bridge", "sdk", "slack-ping"]);
@@ -46,28 +43,16 @@ const CLICK_MS = 500;
 const rowsOf = (text: string, columns: number) =>
   text.split("\n").reduce((n, line) => n + Math.max(1, Math.ceil(line.length / columns)), 0);
 
-/** Runs `agent-hub answer`, which works with the hub down; the draft lives in its file. */
-async function hub($: EngineInterface, args: string[], stdin?: string): Promise<string> {
-  const session = await $.session.id();
-  const run = await $.process.run(["agent-hub", "answer", ...args, "--session", session], {
-    ...(stdin === undefined ? {} : { stdin }),
-    timeoutMs: 5000,
-  });
-  if (run.exitCode !== 0) throw new Error(run.stderr.trim() || `exit ${run.exitCode}`);
-  return run.stdout;
-}
-
-const hubView = async ($: EngineInterface, args: string[], stdin?: string) =>
-  JSON.parse(await hub($, args, stdin)) as View | null;
-
 const complain = ($: EngineInterface, error: unknown) =>
   $.ui.log(`answer: ${String(error)}`, { to: "debug" });
 
-/** The view over what was shown: the same item keeps its field and mode, the same form stays open. */
-const over = (c: Current | null, view: View): Current => {
+/** What is held over what was shown: the same item keeps its field and mode, the same form stays open. */
+const over = (c: Current | null, held: Held): Current => {
+  const view = viewOf(held.form, held.draft);
   const isSameForm = c?.view.id === view.id;
   const isSameItem = isSameForm && c?.view.step === view.step;
   return {
+    held,
     view,
     editing: isSameItem ? (c?.editing ?? null) : null,
     several: isSameItem ? (c?.several ?? null) : null,
@@ -76,9 +61,6 @@ const over = (c: Current | null, view: View): Current => {
     filled: isSameForm ? (c?.filled ?? null) : null,
   };
 };
-
-const show = ($: EngineInterface, view: View | null) =>
-  update($, current, (c) => (view ? over(c, view) : null));
 
 const edit = ($: EngineInterface, fn: (c: Current) => Current) =>
   update($, current, (c) => (c ? fn(c) : c));
@@ -93,19 +75,15 @@ const focus = async ($: EngineInterface, key: string) =>
 /** The ring's place on what is shown: the answer or the recommendation, or the review's button. */
 const home = (view: View) => (view.item ? `e${view.item.start}` : "fill");
 
-/** One step of the draft, and what it now shows; null when it couldn't be taken, with a toast. */
+/** One step of the draft, and what it now shows; null with no form to step. */
 async function step($: EngineInterface, action: Action): Promise<View | null> {
-  const c = await read($, current);
-  if (!c) return null;
   typed = null;
-  try {
-    const view = await hubView($, ["step", "--form", c.view.id, JSON.stringify(action)]);
-    await update($, current, (was) => (view ? { ...over(was, view), editing: null } : null));
-    return view;
-  } catch (error) {
-    $.ui.toast(`The answer form can't step: ${String(error)}`);
-    return null;
-  }
+  // Aimed at the form that was showing, so a round that arrived meanwhile is left as it is.
+  const shown = (await read($, current))?.view.id;
+  const now = await update($, current, (was) =>
+    was ? { ...over(was, stepForm(was.held, action, shown)), editing: null } : was,
+  );
+  return now?.view ?? null;
 }
 
 /** Takes a step and puts the ring where the new screen starts. */
@@ -225,58 +203,6 @@ async function fill($: EngineInterface, text: string): Promise<boolean> {
   return isFilled;
 }
 
-/** A reply left at another surface: into the prompt, or sent as you sending it. */
-async function take($: EngineInterface, delivery: Delivery) {
-  if (delivery.submit) {
-    await close($);
-    await $.prompt.submit({ text: delivery.text });
-  } else if (!(await fill($, delivery.text))) {
-    $.ui.toast("The answer couldn't go in the prompt: a dialog is open.");
-  }
-}
-
-/** Follows the form's file, so what another surface does shows here and its replies arrive. */
-function watch($: EngineInterface) {
-  let watched = { session: "", path: "", mtime: 0 };
-  let isBusy = false;
-  let wait = 0;
-  let failures = 0;
-  return $.clock.every(POLL_MS, async () => {
-    if (isBusy) return;
-    if (wait > 0) {
-      wait--;
-      return;
-    }
-    isBusy = true;
-    try {
-      const session = await $.session.id();
-      if (session !== watched.session) {
-        const path = (await hub($, ["path"])).trim();
-        watched = { session, path, mtime: 0 };
-      }
-      const mtime = await $.fs.stat(watched.path).then(
-        (s) => s.mtimeMs,
-        () => 0,
-      );
-      if (mtime === watched.mtime) return;
-      watched.mtime = mtime;
-      const { view, delivery } = JSON.parse(await hub($, ["sync"])) as {
-        view: View | null;
-        delivery: Delivery | null;
-      };
-      await show($, view);
-      if (delivery) await take($, delivery);
-      failures = 0;
-    } catch (error) {
-      complain($, error);
-      failures++;
-      wait = Math.min(2 ** failures, MAX_BACKOFF_POLLS);
-    } finally {
-      isBusy = false;
-    }
-  });
-}
-
 /**
  * How tall the form stands on an item, and as much of its body as that leaves once the
  * title, entries and keys are drawn: a digit only answers an entry on screen, so the body
@@ -312,8 +238,6 @@ function layOut(item: Item, maxRows: number, columns: number) {
 }
 
 export const register: Register = (on) => {
-  let ticking: { cancel: () => void } | undefined;
-
   on("session.start", async ($, e, next) => {
     await $.command
       .register({
@@ -322,8 +246,6 @@ export const register: Register = (on) => {
         immediate: true,
       })
       .catch((error) => complain($, `/answer not registered: ${String(error)}`));
-    ticking?.cancel();
-    ticking = watch($);
     return next(e);
   });
 
@@ -331,10 +253,10 @@ export const register: Register = (on) => {
   // background task woke ends on that task's news while the round still waits.
   on("turn.complete", async ($, e, next) => {
     if (e.agentId === undefined && e.reason === "answer")
-      await hubView($, ["offer"], e.answer).then(
-        (view) => show($, view),
-        (error) => complain($, error),
-      );
+      await update($, current, (c) => {
+        const held = offer(c?.held ?? null, e.answer);
+        return held ? over(c, held) : null;
+      }).catch((error) => complain($, error));
     return next(e);
   });
 
@@ -343,7 +265,6 @@ export const register: Register = (on) => {
     const c = PERSON.has(e.origin.kind) ? await read($, current) : null;
     if (!c) return next(e);
     await update($, current, () => null);
-    await hub($, ["drop"]).catch((error) => complain($, error));
     const sent = await next(e);
     // A draft set aside for the open form outlives the message sent past it.
     const draft = c.stash === null ? "" : ownDraft(c.stash, c.filled);

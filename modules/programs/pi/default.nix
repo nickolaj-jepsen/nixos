@@ -11,10 +11,12 @@
       npmDeps = pkgs.importNpmLock {npmRoot = ./extensions;};
       inherit (pkgs.importNpmLock) npmConfigHook;
       nativeBuildInputs = [pkgs.typescript];
-      # parent/lib/spellfix is a symlink to the Claude Code mod; it dangles in the store.
+      # parent/lib/spellfix is a symlink to the Claude Code mod and parent/lib/answer one to
+      # the form's core in agent-tools; both dangle in the store.
       # The hub's protocol types come from its Python definition, the one the hub validates against.
       postPatch = ''
-        rm parent/lib/spellfix
+        rm parent/lib/spellfix parent/lib/answer
+        install -Dm644 ${pkgs.agent-tools}/plugins/answer/core/forms.ts parent/lib/answer/forms.ts
         install -Dm644 ${../claude-code/mods/spellfix/hooks/core.ts} parent/lib/spellfix/hooks/core.ts
         install -Dm644 ${../claude-code/mods/spellfix/types/index.d.ts} parent/lib/spellfix/types/index.d.ts
         ${pkgs.python3.interpreter} ${../../../pkgs/agent-hub/agent_hub/protocol.py} --typescript > parent/lib/protocol.gen.ts

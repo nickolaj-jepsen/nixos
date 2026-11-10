@@ -10,6 +10,7 @@ claude plugin marketplace add nickolaj-jepsen/nixos
 claude plugin install spellfix@nickolaj-jepsen
 claude plugin install linear-issue@nickolaj-jepsen
 claude plugin install git-menu@nickolaj-jepsen
+claude plugin install answer@nickolaj-jepsen
 ```
 
 My nix build validates and tests each mod against the Claude Code version it
@@ -44,7 +45,8 @@ Code update can break one.
   `<agent dir>/review-state/`, so a second send does not repeat it. Rows that
   can't run say why. Needs `git`, `gh` for the pull request, `agent-hub` for
   `/open plan`, and `tuicr` and Ghostty for `/open diff` and `/rv`.
-- **answer**: when a turn ends on a round of questions or a numbered pick
+- **answer** (in `agent-tools/plugins/answer`, with the pi half's shared core):
+  when a turn ends on a round of questions or a numbered pick
   list, a row in the band above the prompt offers a form for it, drawn there
   too (a pane would dock beside the transcript on a wide terminal). A rule
   parts it from the chat and carries every question's label: which are
@@ -77,7 +79,5 @@ Code update can break one.
   entries; and `escape` on `abovePrompt:previous` in `AbovePromptInput`
   steps out of a field onto the form instead of out to the prompt.
   `/answer` or a click opens it too, but leaves the keys with the prompt,
-  where only the digits reach it. The parser and the draft are `agent-hub
-answer`'s (`pkgs/agent-hub`), which also backs the pi half and the hub's
-  panel, so this mod needs `agent-hub` on PATH and isn't in the marketplace.
-  The hub's daemon doesn't have to be running.
+  where only the digits reach it. It needs nothing installed: the parser and
+  the draft are its own, kept in the session.

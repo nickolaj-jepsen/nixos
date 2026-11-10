@@ -16,7 +16,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import formstore, judge, links, menus, model, notes, peers, pi, protocol, render, worklog
+from . import judge, links, menus, model, notes, peers, pi, protocol, render, worklog
 from .common import (
     LINE_MAX, NOTES_TIMEOUT, alive, folded, label_line, log_path, nearest, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
 )
@@ -80,7 +80,6 @@ class Hub:
         self.app_path = os.pathsep.join(cfg["appPath"]) if cfg.get("appPath") else None
         self.state_file = Path(cfg["state"]).expanduser()
         self.log_file = log_path(cfg)
-        self.forms = formstore.root_of(cfg)
         self.scanning = set()
         self.readings = Readings(self, cfg.get("claude"))
         # Session id → its transcript as far as it has been followed.
@@ -149,7 +148,6 @@ class Hub:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         path.unlink(missing_ok=True)
         worklog.prune(self.log_file, now_ms())
-        formstore.prune(self.forms, now_ms())
         server = await asyncio.start_unix_server(self._serve, path=str(path), limit=LINE_MAX)
         path.chmod(0o600)
         self.source.start()
@@ -595,15 +593,6 @@ class Hub:
         elif notes.is_note(path, self.notes.roots):
             await self.desktop.spawn([command, *editor["local"](path)])
 
-    def _form_reply(self, conn, message, changed=True, **reply):
-        """Publishes what a form op left, so every subscribed surface sees the new view in its next
-        push, then answers the connection that asked for a reply. `changed` is false for an op
-        that read without writing, so a client's poll does not turn into a publish."""
-        if changed:
-            self.publish()
-        if message.get("request") is not None:
-            conn.send({"type": "reply", "request": message["request"], **reply})
-
     # Publishing.
 
     def rows(self, now):
@@ -611,14 +600,11 @@ class Hub:
         self._name_peers(rows)
         for conn in self.conns:
             for sid, entry in conn.demo.items():
-                rows.append(demo_row(sid, entry, self.forms))
+                rows.append(demo_row(sid, entry))
         return model.ordered(rows)
 
     def _row_of(self, session, now):
         row = session.row(now, self.desktop.window_of(session.pid))
-        form = formstore.view_of(self.forms, session.id)
-        if form:
-            row["answer"] = form
         stopped = self.readings.stopped(session)
         if stopped:
             row["readings"] = stopped
@@ -1088,23 +1074,6 @@ class Hub:
             self._permission(conn, message)
         elif op == "answer":
             self._answer(message["session"], message["ask"], message["allow"], viewer=not conn.local)
-        elif op == "form-offer":
-            self._form_reply(conn, message, view=formstore.offer(self.forms, message["session"], message["text"]))
-        elif op == "form-step":
-            self._form_reply(conn, message, view=formstore.step(self.forms, message["session"], message["action"], message["form"]))
-        elif op == "form-deliver":
-            self._form_reply(conn, message, view=formstore.deliver(self.forms, message["session"], message["submit"], message["form"]))
-        elif op == "form-sync":
-            synced = formstore.sync(self.forms, message["session"])
-            # Taking the delivery is the only thing sync writes; a poll must not republish the hub.
-            self._form_reply(
-                conn, message, changed=synced["delivery"] is not None, view=synced["view"], delivery=synced["delivery"]
-            )
-        elif op == "form-drop":
-            formstore.drop(self.forms, message["session"])
-            self._form_reply(conn, message, view=None)
-        elif op == "form-changed":
-            self.publish()
         elif op == "menu":
             # Not waited on: gh can take seconds, and this connection is the bar's.
             self._spawn(self._menu(conn, message))
@@ -1181,7 +1150,7 @@ def verdict_fields(outcome):
             "word": outcome.get("word") or "", "prompt": judge.VERSION}
 
 
-def demo_row(sid, entry, forms_root):
+def demo_row(sid, entry):
     """A fake session for `agent-hub demo`, from a registry-shaped entry."""
     t = entry.get("statusUpdatedAt") or 0
     session = model.Session(id=sid, agent=agent_of(entry), cwd=entry.get("cwd") or "", derived=entry.get("name") or "",
@@ -1198,7 +1167,4 @@ def demo_row(sid, entry, forms_root):
     row = session.row(now_ms())
     # What only a real session could say, for looking at the popout's pane. `id` 0 answers nothing.
     row.update({key: entry[key] for key in DEMO_DETAILS if key in entry})
-    form = formstore.view_of(forms_root, sid)
-    if form:
-        row["answer"] = form
     return row

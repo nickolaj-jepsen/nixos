@@ -6,8 +6,9 @@ one is called, the step it is on, and how its last turn ended.
 - Each agent's TUI shows the hub's row for its own session.
 - On a niri desktop the DMS bar shows a dot per session that wants you and a ring
   per working one, and is a quick way to them.
-- The popout can allow or deny a Claude Code permission prompt, and answer a form a
-  turn ended on. Anything else you answer in the agent's own terminal.
+- The popout can allow or deny a Claude Code permission prompt. Anything else you
+  answer in the agent's own terminal, where a round of questions gets a form the hub
+  has no part in (`agent-tools/plugins/answer`, `docs/agents.md`).
 - A session's notes open in a reader at the screen's edge, which stays up while you
   type in that terminal.
 - Elsewhere (a server, the Mac) the hub runs headless: no windows, and it polls
@@ -68,45 +69,6 @@ never approve something other than what the pane showed.
   doesn't count, and a new `waiting` stamp closes the prompt showing.
 - pi's permission package has no way to answer a prompt from outside, so pi sessions
   keep Open and Dismiss.
-
-### Answering a form
-
-When a turn ends on a round of questions or a pick list, `agent_hub/forms.py` makes a
-form of it. Every surface draws the same `forms.view` and steps the same draft: the pane
-here, Claude Code's mod (`mods/answer`) and pi's `parent/answer.ts`.
-
-- The draft is a file, `~/.local/state/agent-hub/forms/<session>.json`
-  (`agent_hub/formstore.py`), not the daemon's. `agent-hub answer` reads and writes it
-  itself, so a form works with the hub down, and shows on the bar when the hub is back.
-- A TUI attached to the hub answers over the connection it already has (`form-offer`,
-  `form-step`, `form-deliver`, `form-sync`, `form-drop` in `protocol.py`) and draws the
-  view the hub pushes back, so stepping a form spawns no process. Each op calls the same
-  `formstore` functions the CLI does and publishes after a write, so the file stays the
-  one truth and the bar sees the new view in its next push.
-- With no hub, or a daemon too old to know those ops, pi takes `agent-hub answer` and
-  follows the file's mtime once a second, which is what keeps the form working with the
-  daemon stopped. Attached, that poll slows to a safety check for a reply left for it.
-- Claude Code's mod has no socket of its own and follows the file's mtime once a second,
-  so what you pick in one surface shows in the others.
-- On the review, `i` puts the reply in the session's prompt and goes there. `y` sends it
-  from the pane. Both stay off for half a second after the pane changes, as Allow does.
-- A reply is left in the file for the session's TUI to take, at most once, and one nobody
-  takes within 30 s is dropped: a session resumed tomorrow must not send today's reply.
-- A send reaches Claude as a plugin's prompt (`$.prompt.submit`), not as if typed.
-- A reply can start anything, so forms stay on their host: `clean_row` drops `answer` and
-  `attach_filter` passes no form op.
-- The file outlives the session for a week, so a resumed session gets its round back.
-- A form shows on any state but `working` and `asking`, also where the gate said `done`.
-
-`agent-hub answer` is the way in for anything else:
-
-```bash
-agent-hub answer show                                # every open form
-agent-hub answer show --session ID                   # one, as the JSON a surface draws
-agent-hub answer step --session ID '{"do":"pick","entry":1}'
-agent-hub answer deliver --session ID [--send]       # needs the session's TUI to take it
-agent-hub answer parse < text                        # exit 1 when it asks nothing
-```
 
 ## Notes
 
@@ -182,16 +144,11 @@ Qt's Markdown mode, `RichText` and `StyledText` all fetch an image a document na
   - `r` copies a `needs reply`'s likely answer and opens its window. Nothing is sent:
     you paste it, edit it and press Enter. A message through the peer socket would arrive
     labelled as another session's request, and typing blind could land in the wrong prompt.
-    A row with a form doesn't show that guess, so there `r` only belongs to the form.
   - `x` dismisses a finished one, or hides an open prompt until the next prompt.
   - `u` brings back the last dismissal, until that session starts a new turn. The
     stack lives in the hub the bar talks to, in memory.
   - `w` logs its verdict as wrong, for tuning the gate.
   - `j`/`k` move, and `g`/`G` jump to the ends.
-  - On a form, `1`-`9` answer and ask for a note; Enter there goes on to the next
-    question unanswered. `n` notes without answering, `m` lets several options be one
-    answer, and `b`/`h`, `f`/`l`, `s` and `r` go back, forward, skip and to the review,
-    where `i` fills and `y` sends. `j`/`k` stay the popout's own.
 - `Mod+Shift+B` (`agent-hub focus-next`) jumps straight to the next session
   that wants you, cycling on repeat.
 - `Mod+Ctrl+B` (`agent-hub toggle`) dismisses the finished turn of the session
@@ -539,8 +496,7 @@ daemon starts.
 - A switch doesn't reload the bar plugin: run `systemctl --user restart dms` to see
   a QML change.
 - `agent-hub demo` puts fake sessions in every state on the bar until Ctrl-C, with
-  what the popout's pane shows of each. Its prompts can't be answered. Its form can be
-  stepped through, though nothing takes the reply.
+  what the popout's pane shows of each. Its prompts can't be answered.
 - `journalctl --user -u agent-hub` shows the daemon's log; on the Mac it is
   `~/Library/Logs/agent-hub.log`. It has one line per state change: the session,
   its old and new state, what settled it (`words`, `model`, `error`, or `read` and

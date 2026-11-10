@@ -5,7 +5,7 @@
 
 cd "$(dirname "$0")/.."
 
-mods=(modules/programs/claude-code/mods/*/.claude-plugin)
+mods=(modules/programs/claude-code/mods/*/.claude-plugin agent-tools/plugins/*/.claude-plugin)
 args=()
 for m in "${mods[@]}"; do
     rm -rf "$m/types"

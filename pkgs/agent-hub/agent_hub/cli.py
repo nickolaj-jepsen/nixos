@@ -225,62 +225,6 @@ def print_group(group):
         print(f"  {stamp}  {word:<11} {folded(text)}")
 
 
-def form_changed(session):
-    """Tells a running daemon the file moved; the file is what counts, so no daemon is no matter."""
-    if os.environ.get("AGENT_HUB") != "off":
-        hub_message({"op": "form-changed", "session": session})
-
-
-def print_json(value):
-    print(json.dumps(value))
-
-
-def cmd_answer(args):
-    """The answer form, for every surface and with or without the daemon: each verb reads and
-    writes the session's file (`formstore`) itself."""
-    # Imported here: the hook and `status` run on every prompt and status-line refresh.
-    from . import forms, formstore
-
-    root = formstore.root_of(load_config())
-    verb, session = args.verb, getattr(args, "session", None)
-    try:
-        if session is not None:
-            formstore.path_of(root, session)
-        if verb == "parse":
-            form = forms.parse(sys.stdin.read())
-            print_json(form)
-            if form is None:
-                sys.exit(1)
-        elif verb == "path":
-            print(formstore.path_of(root, session))
-        elif verb == "show" and session is None:
-            for owner, view in formstore.listing(root):
-                print_json({"session": owner, **view}) if args.json else print(
-                    f"{owner}\t{view['title']}\t{view['answered']} answered\t{folded(view['reply'])}")
-        elif verb == "show":
-            print_json(formstore.view_of(root, session))
-        elif verb == "offer":
-            print_json(formstore.offer(root, session, sys.stdin.read()))
-            form_changed(session)
-        elif verb == "step":
-            print_json(formstore.step(root, session, json.loads(args.action), args.form))
-            form_changed(session)
-        elif verb == "deliver":
-            view = formstore.deliver(root, session, args.send, args.form)
-            print_json(view)
-            form_changed(session)
-            if view is None:
-                sys.exit("agent-hub: nothing to deliver: no such form, or nothing answered yet")
-        elif verb == "sync":
-            print_json(formstore.sync(root, session))
-            form_changed(session)
-        elif verb == "drop":
-            formstore.drop(root, session)
-            form_changed(session)
-    except ValueError as error:
-        sys.exit(f"agent-hub: {error}")
-
-
 def cmd_focus_next(_args):
     hub_message({"op": "focus-next"})
 
@@ -308,15 +252,6 @@ def demo_sessions():
             "turnState": "blocked", "ask": "keep the old fixture, or regenerate it?", "askKind": "asked", "reply": "Regenerate it",
             "prompt": "Clean up the test fixtures.",
             "said": "The old fixture still passes, but it pins a format nothing else writes any more.\n\nKeep the old fixture, or regenerate it?"}),
-        ("demo-form", "cli", "idle", "grilling the plan", {"project": "sjusk",
-            "turnState": "blocked", "ask": "What should happen to --quick?", "prompt": "Grill me on the plan.", "reply": "yes",
-            "said": "The bar and the funnel are independent, so this round asks both.\n\n"
-                    "**Q1. Should every focus default to the same bar?**\n\n"
-                    "- **A.** Yes, one default for every kind.\n- **B.** Default by kind.\n\n"
-                    "> **Recommended:** A. A per-kind table is one more thing to keep in sync.\n\n---\n\n"
-                    "**Q2. Lower the per-generator target to 5–6 ideas?**\n\n"
-                    "> **Recommended:** Yes. Four generators still give 20–24.\n\n---\n\n"
-                    "**Q3. What should happen to `--quick`?**\n\n- **A.** Drop it.\n- **B.** Keep it as an alias."}),
         ("demo-fail", "pi", "idle", "nightly bot", {"project": "nixos", "turnState": "failed", "summary": "The update bot still fails on the darwin eval.", "readings": "failing"}),
         ("demo-done", "pi", "idle", "footer popup width", {"project": "pi-mono", "turnState": "done", "summary": "Fixed the footer popup width on narrow terminals."}),
         ("demo-busy1", "cli", "busy", "devenv-tilt-68", {"project": "devenv-tilt"}),
@@ -343,24 +278,15 @@ def cmd_attach(args):
 
 
 def cmd_demo(_args):
-    from . import formstore
-
     sock = socket.socket(socket.AF_UNIX)
     sock.connect(str(socket_path()))
     sessions = demo_sessions()
-    root = formstore.root_of(load_config())
-    # In the store as a real one is, so the pane can be stepped through; nothing takes its reply.
-    for entry in sessions:
-        if "**Q1." in (entry.get("said") or ""):
-            formstore.offer(root, entry["sessionId"], entry["said"])
     sock.sendall((json.dumps({"op": "demo", "sessions": sessions}) + "\n").encode())
     print("Demo sessions are on the bar until you press Ctrl-C.", flush=True)
     try:
         sock.recv(1)
     except KeyboardInterrupt:
         pass
-    for entry in sessions:
-        formstore.drop(root, entry["sessionId"])
 
 
 def cmd_label(_args):
@@ -410,27 +336,6 @@ def main(argv=None):
     recent = commands.add_parser("recent", help="list the sessions that ended, with the command that resumes each")
     recent.add_argument("--json", action="store_true", help="print each session as a JSON line")
     recent.set_defaults(func=cmd_recent)
-    answer = commands.add_parser("answer", help="the answer form a session's last turn ended on; works with the hub down")
-    answer.set_defaults(func=cmd_answer)
-    verbs = answer.add_subparsers(dest="verb", required=True)
-    verbs.add_parser("parse", help="print the form the text on stdin ends on; exit 1 when it asks nothing")
-    show = verbs.add_parser("show", help="print a session's form as JSON, or list every open one")
-    show.add_argument("--session")
-    show.add_argument("--json", action="store_true", help="list as JSON lines")
-    for name, text in (("offer", "a turn ended on the text on stdin: open its form, and print the view"),
-                       ("sync", "print {view, delivery}, handing over a reply left for this session once"),
-                       ("drop", "forget the session's form: the person spoke"),
-                       ("path", "print the file to watch for changes")):
-        verbs.add_parser(name, help=text).add_argument("--session", required=True)
-    step = verbs.add_parser("step", help="apply one action, and print the view")
-    step.add_argument("--session", required=True)
-    step.add_argument("--form", help="only if this is still the form showing")
-    step.add_argument("action", help="""JSON: {"do":"pick","entry":0} (or toggle), {"do":"write","text":"…"}, {"do":"note","text":"…"}, """
-                                     """{"do":"go","step":1}, or do accept, next, back, forward, skip or review""")
-    deliver = verbs.add_parser("deliver", help="leave the reply for the session's TUI: in its prompt, or with --send sent")
-    deliver.add_argument("--session", required=True)
-    deliver.add_argument("--form", help="only if this is still the form showing")
-    deliver.add_argument("--send", action="store_true")
     commands.add_parser("focus-next", help="focus the next session that wants you").set_defaults(func=cmd_focus_next)
     status = commands.add_parser("status", help="print one session's state, as its own agent TUI shows it, or every session's")
     status.add_argument("--session-id", help="the session's registry id")

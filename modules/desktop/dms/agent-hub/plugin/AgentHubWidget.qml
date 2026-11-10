@@ -4,9 +4,7 @@
 // selected one, which is whatever you last hovered or moved to. Nothing moves under the
 // pointer. Keys act on the selection: Enter opens it (or resumes an ended one in a new
 // terminal), p reads its notes, x dismisses, w logs its verdict as wrong, u undoes the last
-// dismissal, a and d answer its prompt, j/k move, g/G jump to the ends. A session's answer form
-// takes 1-9, b, f, s, r and n, and on its review y sends and i puts the reply in the session's
-// prompt.
+// dismissal, a and d answer its prompt, j/k move, g/G jump to the ends.
 import QtQuick
 import QtQuick.Effects
 import Quickshell
@@ -65,11 +63,9 @@ PluginComponent {
     }
     readonly property var selected: rows[selectedIndex] ?? null
     readonly property var permission: selected?.permission ?? null
-    // The form its last turn asks to be answered with, while it is waiting to be.
-    readonly property var answerForm: selected && selected.state !== "working" && selected.state !== "asking" ? selected.answer ?? null : null
 
     // What the pane shows: a new one keeps Allow and Deny off long enough to read what they'd answer.
-    readonly property string paneKey: (selected?.id ?? "") + ":" + (permission?.id ?? "") + ":" + (answerForm?.id ?? "")
+    readonly property string paneKey: (selected?.id ?? "") + ":" + (permission?.id ?? "")
     property bool armed: true
     onPaneKeyChanged: {
         disarm();
@@ -461,15 +457,6 @@ PluginComponent {
         const next = rows[selectedIndex + 1];
         if (next && waits(next))
             selectedId = next.id;
-    }
-
-    // Puts the reply in the session's prompt and goes there, or sends it from here.
-    function deliverForm(submit) {
-        if (!answerForm || !armed)
-            return;
-        hub.formDeliver(selected.id, answerForm.id, submit);
-        if (!submit)
-            focusSession(selected);
     }
 
     // What it opens with. Set before it shows, so nothing changes on screen as it does.
@@ -1366,14 +1353,9 @@ PluginComponent {
                     event.accepted = true;
                     return;
                 }
-                if (root.answerForm && answerFormLoader.item?.handleKey(event)) {
-                    root.legendShown = true;
-                    event.accepted = true;
-                    return;
-                }
                 if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                     root.focusSession(root.selected);
-                else if (event.key === Qt.Key_R && !root.answerForm)
+                else if (event.key === Qt.Key_R)
                     root.useReply(root.selected);
                 else if (event.key === Qt.Key_P)
                     root.readNotes(root.selected);
@@ -1679,32 +1661,15 @@ PluginComponent {
                                 }
                             }
 
-                            // Its own form, in place of the words the form was made from.
-                            Loader {
-                                id: answerFormLoader
-
-                                width: parent.width
-                                active: root.answerForm !== null
-                                visible: active
-                                sourceComponent: AnswerForm {
-                                    width: answerFormLoader.width
-                                    form: root.answerForm
-                                    armed: root.armed
-                                    onStep: action => root.hub.formStep(root.selected.id, root.answerForm.id, action)
-                                    onDeliver: submit => root.deliverForm(submit)
-                                    onFieldLeft: pop.forceActiveFocus()
-                                }
-                            }
-
                             // The agent's own closing words, and what you'd most likely say back.
                             PaneText {
-                                visible: pane.session?.state === "needs-reply" && root.answerForm === null
+                                visible: pane.session?.state === "needs-reply"
                                 text: pane.session?.said || pane.session?.reason || ""
                                 font.pixelSize: Theme.fontSizeMedium
                             }
 
                             IconLine {
-                                visible: pane.session?.state === "needs-reply" && !!pane.session?.reply && root.answerForm === null
+                                visible: pane.session?.state === "needs-reply" && !!pane.session?.reply
                                 icon: "auto_awesome"
                                 text: pane.session?.reply ?? ""
                                 tip: "What you would probably say"
@@ -1959,8 +1924,7 @@ PluginComponent {
                             spacing: Theme.spacingS
 
                             PaneButton {
-                                // A form hides the model's guess at a reply, so it can't be copied unseen.
-                                visible: pane.session?.state === "needs-reply" && !!pane.session?.reply && root.answerForm === null
+                                visible: pane.session?.state === "needs-reply" && !!pane.session?.reply
                                 label: "Copy reply"
                                 shortcut: "r"
                                 onClicked: root.useReply(pane.session)

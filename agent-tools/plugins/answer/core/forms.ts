@@ -695,7 +695,8 @@ export function offer(held: Held | null, text: string): Held | null {
 /** One action on what is held, when `id` (if given) still names the form showing. */
 export function step(held: Held, action: Action, id?: string): Held {
   if (id !== undefined && id !== formId(held.form)) return held;
-  return { ...held, draft: apply(held.form, held.draft, action) };
+  const draft = apply(held.form, held.draft, action);
+  return draft === held.draft ? held : { ...held, draft };
 }
 
 export const viewOf = (held: Held | null): View | null =>
