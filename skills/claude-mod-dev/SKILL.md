@@ -8,20 +8,20 @@ compatibility: Requires tmux and nix, and Claude Code signed in. Uses `claude-de
 
 Load `plugin-authoring` too: it holds the API, this skill the loop.
 
-`scripts/tui.sh` drives a session under your own sign-in. Nothing is copied: it is `claude` in tmux, in a directory of its own so the transcript stays out of the checkout's history.
+`scripts/tui.sh` drives a session under your own sign-in. Nothing is copied: it is `claude` in tmux, in a directory of its own so the transcript stays out of the checkout's history. It starts with no MCP servers (`--strict-mcp-config`), so the session can't reach the person's connectors; the permission mode is the profile's own. `start --full` gives it the profile as it is, for a mod that needs a connector; say so when you use it.
 
 ## Tools
 
-| Command                                                 | Does                                                                 |
-| ------------------------------------------------------- | -------------------------------------------------------------------- |
-| `tui.sh start [--cols N --lines N --cwd DIR] [-- args]` | New session in tmux; waits for the prompt and prints the run dir     |
-| `tui.sh wait <regex> [secs]`                            | Block until the pane matches, default 20s                            |
-| `tui.sh cap [-e]`                                       | Pane text to stdout, also saved; `-e` keeps ANSI                     |
-| `tui.sh type <text>` / `tui.sh keys <key...>`           | Literal text / named keys (`Enter`, `Tab`, `Escape`, `M-a`, `Down`)  |
-| `tui.sh resize <cols> <lines>`                          | Re-lay out at another width                                          |
-| `tui.sh shot [file]`                                    | Color PNG of the current pane                                        |
-| `tui.sh log [regex] [n]`                                | The debug log's last lines about the loaded folders, or your pattern |
-| `tui.sh stop`                                           | Kill the session                                                     |
+| Command                                                        | Does                                                                 |
+| -------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `tui.sh start [--cols N --lines N --cwd DIR --full] [-- args]` | New session in tmux; waits for the prompt and prints the run dir     |
+| `tui.sh wait <regex> [secs]`                                   | Block until the pane matches, default 20s                            |
+| `tui.sh cap [-e]`                                              | Pane text to stdout, also saved; `-e` keeps ANSI                     |
+| `tui.sh type <text>` / `tui.sh keys <key...>`                  | Literal text / named keys (`Enter`, `Tab`, `Escape`, `M-a`, `Down`)  |
+| `tui.sh resize <cols> <lines>`                                 | Re-lay out at another width                                          |
+| `tui.sh shot [file]`                                           | Color PNG of the current pane                                        |
+| `tui.sh log [regex] [n]`                                       | The debug log's last lines about the loaded folders, or your pattern |
+| `tui.sh stop`                                                  | Kill the session                                                     |
 
 `start` runs `claude-dev` where it exists: every mod from its checkout, none of the installed copies. Elsewhere it runs `claude`, so name the folder yourself and drop the installed copy of the same mod:
 
@@ -64,7 +64,7 @@ Most mods open from a command and need no turn. One that reacts to what the mode
 ```bash
 $T start -- --model haiku
 printf '%s\n' '**Q1. Use SQLite?**' '' '- **A.** SQLite' '- **B.** Postgres' >"$run/cwd/turn.md"   # $run: what start printed
-$T type 'Read turn.md and reply with its contents verbatim, nothing before or after.' && $T keys Enter
+$T type 'Read turn.md with the Read tool and reply with its contents verbatim, nothing before or after.' && $T keys Enter
 $T wait 'Worked for' 120
 ```
 
@@ -94,7 +94,7 @@ Seen in earlier sessions (2.1.308 to 2.1.316), not re-checked; confirm with the 
 
 ## Limits
 
-- The session is real: it uses your subscription, connects your MCP servers and runs under your permission mode. Keep prompts to the canned turn above.
+- The session is real: it is the person's account and uses their subscription. The built-in browser MCP still loads, and the session acts under the profile's permission mode. Keep prompts to the canned turn above.
 - Clicks aren't driven. A click target is checked by its key, or by the person.
 - `cap` shows text and layout, not color; `shot` rasterizes Nerd Font glyphs as boxes on some fonts.
 - The built-in cards (`You should know`) can't be made to appear on demand.

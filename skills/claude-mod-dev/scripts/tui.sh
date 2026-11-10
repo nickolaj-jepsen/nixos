@@ -43,6 +43,9 @@ start)
   cols=120
   lines=36
   cwd=""
+  # The session is the person's own account, and a mod test doesn't need their
+  # connectors, so it gets no MCP servers; --full gives it the profile as it is.
+  narrow=(--strict-mcp-config)
   while [ $# -gt 0 ]; do
     case "$1" in
     --cols)
@@ -56,6 +59,10 @@ start)
     --cwd)
       cwd="$(realpath "$2")"
       shift 2
+      ;;
+    --full)
+      narrow=()
+      shift
       ;;
     --) shift && break ;;
     *) break ;;
@@ -75,7 +82,7 @@ start)
   bin=claude
   command -v claude-dev >/dev/null 2>&1 && bin=claude-dev
   claude_cmd="$bin --debug-file $(printf '%q' "$out/debug.log")"
-  for arg in "$@"; do
+  for arg in "${narrow[@]}" "$@"; do
     claude_cmd+=" $(printf '%q' "$arg")"
   done
   # AGENT_HUB_HIDDEN: a test session stays off the agent hub's bar.
