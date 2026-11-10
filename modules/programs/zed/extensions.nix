@@ -36,6 +36,9 @@
 
       # Terraform
       terraform-ls
+
+      # Lua
+      lua-language-server
     ];
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
@@ -63,6 +66,7 @@
           "sql"
           "terraform"
           "oxc"
+          "lua"
 
           # Grammar-only until a JDK is in reach: the java, kotlin and xml
           # extensions want jdtls, kotlin-language-server and lemminx on PATH.

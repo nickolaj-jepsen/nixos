@@ -202,7 +202,8 @@
             };
           };
 
-          edit_predictions.provider = "copilot";
+          # No inline suggestions while typing.
+          edit_predictions.provider = "none";
 
           # AI — Claude Code and pi run as external agents (ACP): each owns its
           # runtime, auth and models, and Zed brings the thread UI. Claude is
