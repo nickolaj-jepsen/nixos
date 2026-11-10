@@ -18,10 +18,12 @@ START = re.compile(r"^(?:#{1,6}\s+)?(\*\*)?(Q)?([0-9]{1,3})[.:)](\*\*)?(?:\s+|$)
 # `- **A.** …`, `- **A. …**`, `A) …`, `**B.** …`.
 OPTION = re.compile(r"^(\s*)(?:[-*+]\s+)?(?:\*\*)?([A-H])[.)](?:\*\*)?\s+(.+)$")
 RECOMMENDED = re.compile(r"^\s*(?:>\s*)?\**(?:Recommended|(?:My )?recommendation)\**\s*:\s*\**\s*(.*)$", re.I)
-OWN_RECOMMENDATION = re.compile(r"\((?:my )?recommend(?:ed|ation)\b[^)]*\)", re.I)
+OWN_RECOMMENDATION = re.compile(r"\((?:(?:my )?recommend(?:ed|ation)|my pick)\b[^)]*\)", re.I)
 # A letter, then punctuation or the end: "A. The format", "B, because", "**C**"; never "A small".
 LEADING_LETTER = re.compile(r"^(?:option\s+)?\**([A-H])\**(?=$|[\s]*[.,:;)]|\s+[—–-]\s)", re.I)
-RECOMMEND_IN_TEXT = re.compile(r"\b(?:recommend(?:ed)?:?|lean (?:toward|towards))\s+\**(?:option\s+)?([A-H])\b")
+# Several letters leading a recommendation: "A, B and D now", "A through C", "**A** and **C**."
+LEADING_LETTERS = re.compile(r"^\**([A-H])\**((?:\s*(?:,\s*and|,|and|&|\+|through|to|–|-)\s*\**[A-H]\**(?![A-Za-z]))+)")
+RECOMMEND_IN_TEXT = re.compile(r"\b(?:recommend(?:ed)?:?|lean (?:toward|towards)|(?:I'd|I would) (?:go with|pick))\s+\**(?:option\s+)?([A-H])\b")
 ROUTES = (
     (re.compile(r"/grill-me\b|\bgrill(?:ing)? (?:it )?first\b", re.I), "/grill-me"),
     (re.compile(r"/brainstorm\b|\bbrainstorm(?:ing)? (?:it )?first\b", re.I), "/brainstorm"),
@@ -100,6 +102,18 @@ def _block_of(lines, start, following):
     return block
 
 
+def _leading_letters(recommended, count):
+    """The options a recommendation opens on when it names several, a range read as all of it."""
+    match = LEADING_LETTERS.match(recommended)
+    if not match:
+        return []
+    letters = [ord(letter) - 65 for letter in re.findall(r"(?<![A-Za-z])[A-H](?![A-Za-z])", match.group(0))]
+    if re.search(r"through|\bto\b|–|-", match.group(2)) and len(letters) == 2:
+        letters = list(range(letters[0], letters[1] + 1))
+    picked = sorted(set(letters))
+    return picked if picked and picked[-1] < count else []
+
+
 def _parse_item(start, block):
     body = [start["rest"]] if start["rest"] else []
     options = []
@@ -152,7 +166,10 @@ def _parse_item(start, block):
         in_text = None if leading else RECOMMEND_IN_TEXT.search(body_text)
         letter = (leading or in_text).group(1) if (leading or in_text) else None
         index = ord(letter.upper()) - 65 if letter else (own_pick if own_pick is not None else -1)
-        if 0 <= index < len(choices):
+        several = _leading_letters(recommended or "", len(choices))
+        if len(several) > 1:
+            item["recommendedOptions"] = several
+        elif 0 <= index < len(choices):
             item["recommendedOption"] = index
     return item
 
@@ -223,14 +240,23 @@ def go(form, draft, step):
 
 
 def _can_accept(item):
-    return "recommended" in item or "recommendedOption" in item
+    return "recommended" in item or "recommendedOption" in item or "recommendedOptions" in item
+
+
+def _accepted(item):
+    """The answer that takes an item's recommendation: its options when it names any, else a yes."""
+    if "recommendedOptions" in item:
+        return {"kind": "options", "indices": item["recommendedOptions"]}
+    if "recommendedOption" in item:
+        return {"kind": "option", "index": item["recommendedOption"]}
+    return {"kind": "accept"}
 
 
 def entries(item):
-    """What the form offers for one item: its options, its recommendation when that names no
-    option, and a write-in."""
+    """What the form offers for one item: its options, or with none a yes to its recommendation,
+    and a write-in. Beside options a recommendation is only said, never an entry of its own."""
     rows = [{"kind": "option", "index": index} for index in range(len(item["options"]))]
-    if "recommended" in item and "recommendedOption" not in item:
+    if "recommended" in item and not rows:
         rows.append({"kind": "accept"})
     rows.append({"kind": "write"})
     return rows
@@ -245,6 +271,8 @@ def _is_chosen(item, answer, entry):
         return answer["kind"] == "accept"
     if answer["kind"] == "option":
         return answer["index"] == entry["index"]
+    if answer["kind"] == "options":
+        return entry["index"] in answer["indices"]
     return answer["kind"] == "accept" and item.get("recommendedOption") == entry["index"]
 
 
@@ -274,6 +302,8 @@ def _record(form, draft, value):
         return draft
     if value["kind"] == "option" and not 0 <= value["index"] < len(item["options"]):
         return draft
+    if value["kind"] == "options" and not value["indices"]:
+        return _clear(form, draft)
     if value["kind"] == "text":
         if not value["text"].strip():
             return _clear(form, draft)
@@ -281,6 +311,31 @@ def _record(form, draft, value):
     answers = list(draft["answers"])
     answers[draft["step"]] = value
     return {**draft, "answers": answers}
+
+
+def _can_take_several(form, item):
+    return form["kind"] == "round" and len(item["options"]) >= 2
+
+
+def _toggle(form, draft, index):
+    """Adds an option to the shown item's answer, or takes it out; a single pick starts the set."""
+    if is_review(form, draft):
+        return draft
+    item = form["items"][draft["step"]]
+    if not _can_take_several(form, item) or not 0 <= index < len(item["options"]):
+        return draft
+    answer = draft["answers"][draft["step"]]
+    held = set(answer["indices"] if answer and answer["kind"] == "options"
+               else [answer["index"]] if answer and answer["kind"] == "option" else [])
+    return _record(form, draft, {"kind": "options", "indices": sorted(held ^ {index})})
+
+
+def _onward(form, draft):
+    """After an answer: the next item still unanswered, looking on and then from the top, or
+    the review when every item has one."""
+    count = len(form["items"])
+    order = [*range(draft["step"] + 1, count), *range(draft["step"])]
+    return go(form, draft, next((i for i in order if not draft["answers"][i]), count))
 
 
 def _set_note(form, draft, text):
@@ -297,24 +352,33 @@ def apply(form, draft, action):
     """The draft after one thing a person did at any surface; what can't apply changes nothing.
 
     `action["do"]` is `pick` (`entry`, an index into the shown item's entries; a write-in has
-    nothing to record until `write`), `write` (`text`, then on), `note` (`text`, then on, unless
-    on the review), `go` (`step`), `back`, `forward`, `skip` or `review`. Raises ValueError for
-    another word."""
+    nothing to record until `write`),
+    `toggle` (`entry`, one of several options), `write` (`text`, then on likewise), `note`
+    (`text`), `accept` (the item's recommendation, whatever it names), `next` (on to the next
+    item unanswered), `go` (`step`), `back`, `forward`, `skip` or `review`. Raises ValueError for another word."""
     step = draft["step"]
     what = action.get("do")
-    if what == "pick":
+    if what in ("pick", "toggle"):
         if is_review(form, draft):
             return draft
         rows = entries(form["items"][step])
         index = action.get("entry", -1)
         if not 0 <= index < len(rows) or rows[index]["kind"] == "write":
             return draft
+        if what == "toggle":
+            return _toggle(form, draft, index) if rows[index]["kind"] == "option" else draft
         return _record(form, draft, rows[index])
     if what == "write":
-        return go(form, _record(form, draft, {"kind": "text", "text": action.get("text") or ""}), step + 1)
+        written = _record(form, draft, {"kind": "text", "text": action.get("text") or ""})
+        return _onward(form, written) if written["answers"][step] else written
     if what == "note":
-        noted = _set_note(form, draft, action.get("text") or "")
-        return noted if is_review(form, draft) else go(form, noted, step + 1)
+        return _set_note(form, draft, action.get("text") or "")
+    if what == "accept":
+        if is_review(form, draft) or not _can_accept(form["items"][step]):
+            return draft
+        return _record(form, draft, _accepted(form["items"][step]))
+    if what == "next":
+        return draft if is_review(form, draft) else _onward(form, draft)
     if what == "go":
         return go(form, draft, action.get("step", step))
     if what == "back":
@@ -331,19 +395,27 @@ def apply(form, draft, action):
 def _is_recommended(item, answer):
     if not answer:
         return False
+    if answer["kind"] == "options":
+        return answer["indices"] == item.get("recommendedOptions", [item.get("recommendedOption")])
     return answer["kind"] == "accept" or (answer["kind"] == "option" and answer["index"] == item.get("recommendedOption"))
 
 
 def _said(item, answer):
-    """What the reply says for one answer: "yes", a letter or route, or the text."""
+    """What the reply says for one answer: "yes", a letter or several, a route, or the text."""
     if answer["kind"] == "text":
         return answer["text"]
+    if answer["kind"] == "options":
+        return ", ".join(item["options"][index]["key"] for index in answer["indices"])
     index = answer["index"] if answer["kind"] == "option" else item.get("recommendedOption")
     return item["options"][index]["key"] if index is not None else "yes"
 
 
-def _with_note(text, note):
-    return f"{text} — {note}" if note else text
+NO_ANSWER = "no answer yet"
+
+
+def _noted(line, note):
+    """A reply line and, under it, the note it carries."""
+    return [line, f"    Note: {note}"] if note else [line]
 
 
 def _round_reply(form, draft):
@@ -355,9 +427,9 @@ def _round_reply(form, draft):
     for item, answer, note in zip(form["items"], draft["answers"], draft["notes"]):
         if answer:
             what = "yes" if answer["kind"] == "accept" else _said(item, answer)
-            lines.append(f"{item['label']}: {_with_note(what, note)}")
+            lines += _noted(f"{item['label']}: {what}", note)
         elif note:
-            lines.append(f"{item['label']}: {note}")
+            lines += _noted(f"{item['label']}: {NO_ANSWER}", note)
     return lines
 
 
@@ -367,17 +439,17 @@ def _picks_reply(form, draft):
         label = item["label"]
         if not answer:
             if note:
-                rest.append(f"{label}: {note}")
+                rest += _noted(f"{label}: {NO_ANSWER}", note)
             continue
         what = _said(item, answer)
         if what == "build" and not note:
             builds.append(label)
         elif what == "build":
-            rest.append(_with_note(f"do {label}", note))
+            rest += _noted(f"do {label}", note)
         elif answer["kind"] == "text":
-            rest.append(f"{label}: {_with_note(answer['text'], note)}")
+            rest += _noted(f"{label}: {answer['text']}", note)
         else:
-            rest.append(_with_note(f"{label} → {what}", note))
+            rest += _noted(f"{label} → {what}", note)
     return ([f"do {', '.join(builds)}"] if builds else []) + rest
 
 
@@ -385,7 +457,7 @@ def reply(form, draft):
     """The reply as the person would type it; "" when nothing was answered."""
     lines = _round_reply(form, draft) if form["kind"] == "round" else _picks_reply(form, draft)
     if draft["note"]:
-        lines.append(draft["note"])
+        lines.append(f"Overall: {draft['note']}")
     return "\n".join(lines)
 
 
@@ -404,6 +476,8 @@ def _shown(item, answer):
         return "skipped"
     if answer["kind"] == "text":
         return f'"{answer["text"]}"'
+    if answer["kind"] == "options":
+        return f"{_said(item, answer)}: {'; '.join(item['options'][index]['text'] for index in answer['indices'])}"
     index = answer["index"] if answer["kind"] == "option" else item.get("recommendedOption")
     return "yes" if index is None else f"{_said(item, answer)}: {item['options'][index]['text']}"
 
@@ -420,6 +494,7 @@ def _item_view(form, draft):
         return None
     item = form["items"][draft["step"]]
     answer = draft["answers"][draft["step"]]
+    recommended = item.get("recommendedOptions", [item.get("recommendedOption")])
     return {
         "label": item["label"],
         "title": item["title"],
@@ -428,10 +503,16 @@ def _item_view(form, draft):
             "kind": entry["kind"],
             "text": _entry_text(form, item, entry),
             "detail": item["options"][entry["index"]]["detail"] if entry["kind"] == "option" else "",
-            "isRecommended": entry["kind"] == "option" and entry["index"] == item.get("recommendedOption"),
+            "isRecommended": entry["kind"] == "option" and entry["index"] in recommended,
             "isChosen": _is_chosen(item, answer, entry),
         } for entry in entries(item)],
         "start": _start_entry(item, answer),
+        # What it recommends among its options and why; with no options that is the accept entry.
+        "recommended": item.get("recommended", "") if item["options"] else "",
+        "canSeveral": _can_take_several(form, item),
+        # Its answer is several, or with none yet its recommendation is.
+        "isSeveral": answer["kind"] == "options" if answer else "recommendedOptions" in item,
+        "canAccept": _can_accept(item),
         "note": draft["notes"][draft["step"]],
         "written": answer["text"] if answer and answer["kind"] == "text" else "",
     }

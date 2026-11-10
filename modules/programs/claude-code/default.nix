@@ -125,27 +125,33 @@
       '';
     };
 
-    # ctrl+q presses spellfix's band button and alt+a answer's, each borrowing an
-    # action; a single modified key reaches a plugin Button only from the Global context.
+    # ctrl+q presses spellfix's band button, borrowing an action; a single modified key
+    # reaches a plugin Button only from the Global context.
     keybindings = {
       "$schema" = "https://www.schemastore.org/claude-code-keybindings.json";
       bindings = [
         {
           context = "Global";
+          bindings."ctrl+q" = "app:toggleDiffNoiseFilter";
+        }
+        {
+          # A mod can't take the keyboard, so this hands it to the band, where answer's form
+          # is (mods/answer): its row first, and Enter opens it.
+          context = "Chat";
+          bindings."alt+a" = "abovePrompt:focus";
+        }
+        {
+          context = "AbovePrompt";
           bindings = {
-            "ctrl+q" = "app:toggleDiffNoiseFilter";
-            "alt+a" = "app:cycleDiffBase";
+            "j" = "abovePrompt:next";
+            "k" = "abovePrompt:previous";
           };
         }
         {
-          # Unbound, ←/→ fall through a focused pane to the prompt and open the agents view.
-          # A plain key never presses a plugin Button, so answer reads these as the scroll
-          # they raise (mods/answer, `ui.scroll`) and turns them into back and forward.
-          context = "Pane";
-          bindings = {
-            "left" = "pane:top";
-            "right" = "pane:bottom";
-          };
+          # Escape in a band field steps back onto the form, not out to the prompt; a
+          # second one, from a button, leaves.
+          context = "AbovePromptInput";
+          bindings."escape" = "abovePrompt:previous";
         }
       ];
     };
@@ -422,7 +428,9 @@
         env = {
           CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
           # Not programs.claude-code.plugins: the env block also reaches desktop-app sessions.
-          CLAUDE_CODE_PLUGIN_DIRS = "${spellfix}:${linearIssue}:${gitMenu}:${answer}";
+          # answer first: its open form has the band to itself, which only hides the rows of
+          # mods whose hooks sit beneath its own.
+          CLAUDE_CODE_PLUGIN_DIRS = "${answer}:${spellfix}:${linearIssue}:${gitMenu}";
           # hunspell's personal dictionary for the underline's checker too.
           WORDLIST = personalDictionary;
         };

@@ -20,6 +20,9 @@ Column {
     // What the field is typing into: the shown item's write-in, or a note.
     property string editing: ""
     readonly property var item: form?.item ?? null
+    // Whether picks toggle on the shown item: as set here, else as its answer already is.
+    property var severalSet: null
+    readonly property bool several: severalSet ?? item?.isSeveral ?? false
 
     // Keys the popout hands over: true when the form used it.
     function handleKey(event) {
@@ -38,11 +41,14 @@ Column {
         }
         const words = item ? {
             "b": "back",
+            "h": "back",
             "f": "forward",
+            "l": "forward",
             "s": "skip",
             "r": "review"
         } : {
-            "b": "back"
+            "b": "back",
+            "h": "back"
         };
         if (words[event.text]) {
             go({
@@ -50,8 +56,12 @@ Column {
             });
             return true;
         }
-        if (!item && event.text === "n") {
+        if (event.text === "n") {
             edit("note");
+            return true;
+        }
+        if (item?.canSeveral && event.text === "m") {
+            severalSet = !several;
             return true;
         }
         if (!item && armed && form.reply && (event.text === "y" || event.text === "i")) {
@@ -66,7 +76,7 @@ Column {
         root.step(action);
     }
 
-    // A pick is kept and its note field opens; a write-in opens its own.
+    // A pick is the answer, then its note; one of several stays; a write-in opens its field.
     function pick(index) {
         const entry = item?.entries[index];
         if (!entry)
@@ -76,10 +86,11 @@ Column {
             return;
         }
         root.step({
-            "do": "pick",
+            "do": several ? "toggle" : "pick",
             "entry": index
         });
-        edit("note");
+        if (!several)
+            edit("note");
     }
 
     function edit(what) {
@@ -90,11 +101,17 @@ Column {
 
     function commit() {
         const what = editing;
+        // A note on an answered question is the last word on it: on to the next one unanswered.
+        const goesOn = what === "note" && (item?.entries ?? []).some(entry => entry.isChosen);
         editing = "";
         root.step({
             "do": what,
             "text": field.text
         });
+        if (goesOn)
+            root.step({
+                "do": "next"
+            });
     }
 
     width: parent?.width ?? 0
@@ -102,8 +119,10 @@ Column {
 
     onFormChanged: {
         // Another surface moved it, or another round replaced it: the field no longer applies.
-        if (editing && lastStep !== `${form?.id}:${form?.step}`)
+        if (lastStep !== `${form?.id}:${form?.step}`) {
             editing = "";
+            severalSet = null;
+        }
         lastStep = `${form?.id}:${form?.step}`;
     }
     property string lastStep: ""
@@ -147,18 +166,43 @@ Column {
 
             readonly property bool isEntry: !!root.item
             readonly property bool isOn: isEntry && modelData.isChosen
+            readonly property bool isWriteIn: isEntry && modelData.kind === "write"
+            // The write-in stands apart from what the question offered.
+            readonly property real gap: isWriteIn && index > 0 ? Theme.spacingM : 0
 
             width: root.width
-            height: entryColumn.implicitHeight + Theme.spacingXS * 2
-            radius: Theme.cornerRadius
-            color: isOn ? Theme.withAlpha(Theme.success, 0.18) : Theme.withAlpha(Theme.surfaceText, 0.05)
+            height: entryColumn.implicitHeight + Theme.spacingXS * 2 + gap
+            color: "transparent"
+
+            Rectangle {
+                y: entryRow.gap
+                width: parent.width
+                height: parent.height - entryRow.gap
+                radius: Theme.cornerRadius
+                color: entryRow.isOn ? Theme.withAlpha(Theme.success, 0.18) : Theme.withAlpha(Theme.surfaceText, 0.05)
+                // Dim until it holds an answer.
+                opacity: entryRow.isWriteIn && !root.item?.written ? 0.6 : 1
+
+                StateLayer {
+                    onClicked: {
+                        if (entryRow.isEntry)
+                            root.pick(entryRow.index);
+                        else
+                            root.go({
+                                "do": "go",
+                                "step": entryRow.index
+                            });
+                    }
+                }
+            }
 
             Column {
                 id: entryColumn
 
                 x: Theme.spacingS
-                y: Theme.spacingXS
+                y: Theme.spacingXS + entryRow.gap
                 width: parent.width - Theme.spacingS * 2
+                opacity: entryRow.isWriteIn && !root.item?.written ? 0.6 : 1
 
                 StyledText {
                     width: parent.width
@@ -173,6 +217,8 @@ Column {
                             return `${key}${entryRow.modelData.label}  ${entryRow.modelData.shown}${note}`;
                         }
                         const rec = entryRow.modelData.isRecommended ? "  (recommended)" : "";
+                        if (root.several && entryRow.modelData.kind === "option")
+                            return `${key}${entryRow.isOn ? "[x]" : "[ ]"} ${entryRow.modelData.text}${rec}`;
                         return `${key}${entryRow.modelData.text}${rec}${entryRow.isOn ? "  ✓" : ""}`;
                     }
                 }
@@ -188,19 +234,17 @@ Column {
                     text: entryRow.isEntry ? entryRow.modelData.detail : ""
                 }
             }
-
-            StateLayer {
-                onClicked: {
-                    if (entryRow.isEntry)
-                        root.pick(entryRow.index);
-                    else
-                        root.go({
-                            "do": "go",
-                            "step": entryRow.index
-                        });
-                }
-            }
         }
+    }
+
+    StyledText {
+        width: parent.width
+        visible: !!root.item?.recommended
+        text: `Recommended: ${root.item?.recommended ?? ""}`
+        wrapMode: Text.Wrap
+        textFormat: Text.PlainText
+        font.pixelSize: Theme.fontSizeSmall
+        color: Theme.surfaceVariantText
     }
 
     StyledText {
@@ -263,7 +307,7 @@ Column {
             anchors.verticalCenter: parent.verticalCenter
             x: Theme.spacingS
             visible: !field.text
-            text: root.editing === "write" ? "Your answer, Enter to save" : root.item ? "A note, or Enter to go on" : "A note on the whole round, Enter to keep"
+            text: root.editing === "write" ? "Your answer, Enter to save" : root.item ? "A note on this answer, or Enter to go on" : "A note on the whole round, Enter to keep"
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.surfaceVariantText
         }
@@ -329,8 +373,17 @@ Column {
                 {
                     "label": "r review",
                     "do": "review"
+                },
+                {
+                    "label": "n note",
+                    "do": "note"
                 }
-            ] : [
+            ].concat(root.item.canSeveral ? [
+                {
+                    "label": root.several ? "m one" : "m several",
+                    "do": "several"
+                }
+            ] : []) : [
                 {
                     "label": "b back",
                     "do": "back"
@@ -378,6 +431,8 @@ Column {
                         const what = navButton.modelData.do;
                         if (what === "note")
                             root.edit("note");
+                        else if (what === "several")
+                            root.severalSet = !root.several;
                         else if (navButton.delivers)
                             root.deliver(what === "send");
                         else

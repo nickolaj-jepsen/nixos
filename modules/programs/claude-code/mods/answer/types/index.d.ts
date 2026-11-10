@@ -1,9 +1,9 @@
 /** A person's step through the draft (`forms.apply` in agent-hub). */
 export type Action =
-  | { do: "pick"; entry: number }
+  | { do: "pick" | "toggle"; entry: number }
   | { do: "write" | "note"; text: string }
   | { do: "go"; step: number }
-  | { do: "back" | "forward" | "skip" | "review" };
+  | { do: "accept" | "next" | "back" | "forward" | "skip" | "review" };
 
 export type Entry = {
   kind: "option" | "accept" | "write";
@@ -23,6 +23,13 @@ export type Item = {
   entries: Entry[];
   /** The entry the cursor starts on. */
   start: number;
+  /** What it recommends among its options and why, "" with none. */
+  recommended: string;
+  /** Whether several of its options can be one answer, and whether its answer is several. */
+  canSeveral: boolean;
+  isSeveral: boolean;
+  /** Whether it recommends something a yes can take. */
+  canAccept: boolean;
   note: string;
   /** The write-in answer, "" for none. */
   written: string;
@@ -49,11 +56,22 @@ export type View = {
 /** A reply another surface left for this session's prompt. */
 export type Delivery = { text: string; submit: boolean };
 
-/** What the form is typing into: the shown item's free-text answer, or a note. */
-export type Editing = "text" | "note" | null;
+/** The field being typed in: the shown item's write-in, or a note. */
+export type Editing = "write" | "note" | null;
 
 /** The last turn's form, while it can still be answered. */
-export type Current = { view: View; editing: Editing };
+export type Current = {
+  view: View;
+  editing: Editing;
+  /** Whether picks toggle on the shown item; null follows its answer. */
+  several: boolean | null;
+  /** Drawn as the form, not its one row. */
+  isOpen: boolean;
+  /** The prompt's text, set aside while the form is open; null with none. */
+  stash: string | null;
+  /** The reply the last fill put in the prompt, so the next one takes its place. */
+  filled: string | null;
+};
 
 declare module "claude-code" {
   interface PluginState {

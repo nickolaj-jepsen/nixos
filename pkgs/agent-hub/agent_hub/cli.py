@@ -425,8 +425,8 @@ def main(argv=None):
     step = verbs.add_parser("step", help="apply one action, and print the view")
     step.add_argument("--session", required=True)
     step.add_argument("--form", help="only if this is still the form showing")
-    step.add_argument("action", help="""JSON: {"do":"pick","entry":0}, {"do":"write","text":"…"}, {"do":"note","text":"…"}, """
-                                     """{"do":"go","step":1}, or do back, forward, skip or review""")
+    step.add_argument("action", help="""JSON: {"do":"pick","entry":0} (or toggle), {"do":"write","text":"…"}, {"do":"note","text":"…"}, """
+                                     """{"do":"go","step":1}, or do accept, next, back, forward, skip or review""")
     deliver = verbs.add_parser("deliver", help="leave the reply for the session's TUI: in its prompt, or with --send sent")
     deliver.add_argument("--session", required=True)
     deliver.add_argument("--form", help="only if this is still the form showing")

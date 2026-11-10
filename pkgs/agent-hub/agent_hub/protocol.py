@@ -43,7 +43,7 @@ ASK = {"tool": "str", "about": "str", "kind": "command|diff|text", "body": "str"
 
 # What a surface draws of a session's answer form (`forms.view`).
 FORM_ENTRY = {"kind": "option|accept|write", "text": "str", "detail": "str", "isRecommended": "bool", "isChosen": "bool"}
-FORM_ITEM = {"label": "str", "title": "str", "body": "str", "entries": [FORM_ENTRY], "start": "int", "note": "str", "written": "str"}
+FORM_ITEM = {"label": "str", "title": "str", "body": "str", "entries": [FORM_ENTRY], "start": "int", "recommended": "str", "canSeveral": "bool", "isSeveral": "bool", "canAccept": "bool", "note": "str", "written": "str"}
 FORM_VIEW = {
     "id": "str",
     "kind": "round|picks",

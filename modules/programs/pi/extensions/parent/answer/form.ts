@@ -1,7 +1,8 @@
 /**
  * The answer form, drawn in the editor's place: one item per screen and a
- * review, every row and key chip clickable. A pick records the answer and
- * opens a note field; Enter there, empty or not, goes on to the next item. The
+ * review, every row and key chip clickable. A pick records the answer and asks
+ * for a note under it; Enter there, empty or not, goes on to the next item
+ * unanswered, and `m` lets several options be one answer. The
  * draft and every step through it are `agent-hub answer`'s, so every surface
  * answers alike; this file only draws its view and maps keys and clicks onto
  * those steps.
@@ -32,7 +33,7 @@ type Item = NonNullable<HubFormView["item"]>;
 
 type Act =
   | { kind: "entry"; index: number }
-  | { kind: "note" | "back" | "forward" | "skip" | "review" | "fill" }
+  | { kind: "note" | "several" | "back" | "forward" | "skip" | "review" | "fill" }
   | { kind: "goto"; index: number };
 
 /** A drawn row: a whole-row target, or chips hit by column. */
@@ -46,6 +47,8 @@ export class AnswerForm implements Component, Focusable {
   /** The highlighted entry on an item's screen. */
   private cursor = 0;
   private editing: "text" | "note" | undefined;
+  /** Whether picks toggle on the shown item; unset follows its answer. */
+  private several: boolean | undefined;
   private readonly input = new Input({ prompt: "› ", placeholder: "" });
   /** First body row shown when the item is taller than the frame. */
   private offset = 0;
@@ -79,6 +82,10 @@ export class AnswerForm implements Component, Focusable {
 
   invalidate(): void {}
 
+  private get isSeveral(): boolean {
+    return this.several ?? this.view.item?.isSeveral ?? false;
+  }
+
   private resetCursor(): void {
     this.cursor = this.view.item?.start ?? 0;
   }
@@ -93,6 +100,7 @@ export class AnswerForm implements Component, Focusable {
     this.view = view;
     if (moved) {
       this.offset = 0;
+      this.several = undefined;
       this.resetCursor();
       this.stopEditing();
     }
@@ -130,12 +138,14 @@ export class AnswerForm implements Component, Focusable {
     this.tui.requestRender();
   }
 
-  /** Enter in a field: the write-in or the note is kept, and the form goes on. */
+  /** Enter in a field: a write-in is the answer; a note is kept, and an answered item goes on. */
   private commit(): void {
     const text = this.input.getValue();
-    const action = this.editing === "text" ? "write" : "note";
+    const isNote = this.editing === "note";
+    const isAnswered = this.view.item?.entries.some((entry) => entry.isChosen) ?? false;
     this.stopEditing();
-    this.step({ do: action, text });
+    if (!isNote) this.step({ do: "write", text });
+    else this.step({ do: "note", text }, isAnswered ? () => this.step({ do: "next" }) : undefined);
   }
 
   private act(act: Act): void {
@@ -144,12 +154,18 @@ export class AnswerForm implements Component, Focusable {
         const entry = this.view.item?.entries[act.index];
         if (!entry) return;
         this.cursor = act.index;
-        // A pick is kept and its note field opens; a write-in opens its own.
+        // A pick is the answer, then its note; one of several stays; a write-in opens its field.
         if (entry.kind === "write") return this.startEditing("text");
+        if (this.isSeveral) return this.step({ do: "toggle", entry: act.index });
         return this.step({ do: "pick", entry: act.index }, () => this.startEditing("note"));
       }
       case "note":
         return this.startEditing("note");
+      case "several":
+        if (!this.view.item?.canSeveral) return;
+        this.several = !this.isSeveral;
+        this.tui.requestRender();
+        return;
       case "back":
       case "forward":
       case "skip":
@@ -192,8 +208,9 @@ export class AnswerForm implements Component, Focusable {
     }
     const review = this.view.isReview;
     const count = review ? this.view.count : (this.view.item?.entries.length ?? 0);
-    if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
-      this.cursor = (this.cursor + (matchesKey(data, Key.down) ? 1 : -1) + count) % count;
+    const down = matchesKey(data, Key.down) || data === "j";
+    if (down || matchesKey(data, Key.up) || data === "k") {
+      this.cursor = (this.cursor + (down ? 1 : -1) + count) % count;
       this.tui.requestRender();
       return;
     }
@@ -207,8 +224,17 @@ export class AnswerForm implements Component, Focusable {
       return;
     }
     const keys: Record<string, Act["kind"]> = review
-      ? { n: "note", b: "back" }
-      : { b: "back", f: "forward", s: "skip", r: "review" };
+      ? { n: "note", b: "back", h: "back" }
+      : {
+          b: "back",
+          h: "back",
+          f: "forward",
+          l: "forward",
+          s: "skip",
+          r: "review",
+          n: "note",
+          m: "several",
+        };
     const kind =
       keys[data] ??
       (matchesKey(data, Key.left) || matchesKey(data, Key.shift("tab"))
@@ -276,11 +302,26 @@ export class AnswerForm implements Component, Focusable {
       const md = new Markdown(item.body, 0, 0, getMarkdownTheme()).render(Math.max(8, width));
       rows.push(...md.map((text) => ({ text })), { text: "" });
     }
+    // A note sits under the answer it is about; with none yet, under the entries.
+    const chosen = item.entries.findIndex((entry) => entry.isChosen);
+    const last = item.entries.length - 2;
+    const noteAt = chosen >= 0 && chosen <= last ? chosen : last;
+    const note =
+      this.editing === "note"
+        ? [this.field("   note", width)]
+        : item.note
+          ? this.wrapped(`${t.fg("dim", "Note:")} ${item.note}`, width, undefined, "   ")
+          : [];
     item.entries.forEach((entry, k) => {
       const isCursor = k === this.cursor && !this.editing;
-      const mark = entry.isChosen ? t.fg("success", " ✓") : "";
+      const isBox = this.isSeveral && entry.kind === "option";
+      const mark = entry.isChosen && !isBox ? t.fg("success", " ✓") : "";
       const rec = entry.isRecommended ? t.fg("dim", " (recommended)") : "";
-      const lines = wrapTextWithAnsi(entry.text, Math.max(8, width - 4));
+      const box = isBox ? (entry.isChosen ? "[x] " : "[ ] ") : "";
+      // The write-in stands apart from what the question offered, dim until it holds an answer.
+      const isWaiting = entry.kind === "write" && !item.written;
+      if (entry.kind === "write" && k > 0) rows.push({ text: "" });
+      const lines = wrapTextWithAnsi(box + entry.text, Math.max(8, width - 4));
       lines.forEach((line, i) => {
         const pointer = isCursor ? t.fg("accent", "›") : " ";
         const head = i === 0 ? `${pointer}${t.fg("accent", String(k + 1))} ` : "   ";
@@ -289,18 +330,24 @@ export class AnswerForm implements Component, Focusable {
           ? t.fg("accent", line)
           : entry.isChosen
             ? t.fg("success", line)
-            : line;
+            : isWaiting
+              ? t.fg("dim", line)
+              : line;
         rows.push({ text: `${head}${body}${tail}`, act: { kind: "entry", index: k } });
       });
       if (entry.detail)
         rows.push(...this.wrapped(entry.detail, width, (s) => t.fg("dim", s), "   "));
+      if (k === noteAt) rows.push(...note);
     });
+    if (noteAt < 0) rows.push(...note);
     rows.push({ text: "" });
+    if (item.recommended)
+      rows.push(...this.wrapped(`${t.fg("dim", "Recommended:")} ${item.recommended}`, width), {
+        text: "",
+      });
     if (item.written && this.editing !== "text")
       rows.push(...this.wrapped(`${t.fg("dim", "Your answer:")} ${item.written}`, width));
     if (this.editing === "text") rows.push(this.field("answer", width));
-    if (this.editing === "note") rows.push(this.field("note", width));
-    else if (item.note) rows.push(...this.wrapped(`${t.fg("dim", "Note:")} ${item.note}`, width));
     return rows;
   }
 
@@ -319,8 +366,11 @@ export class AnswerForm implements Component, Focusable {
     else if (this.view.note)
       rows.push(...this.wrapped(`${t.fg("dim", "Note:")} ${this.view.note}`, width));
     rows.push({ text: t.fg("dim", "The reply:") });
+    // A note's line keeps its indent under the answer it rides on.
     for (const line of (this.view.reply || t.fg("dim", "(nothing answered yet)")).split("\n"))
-      rows.push(...this.wrapped(line, width, undefined, "  "));
+      rows.push(
+        ...this.wrapped(line.trimStart(), width, undefined, `  ${/^ */.exec(line)?.[0] ?? ""}`),
+      );
     return rows;
   }
 
@@ -343,6 +393,16 @@ export class AnswerForm implements Component, Focusable {
           ["f", "forward", { kind: "forward" }],
           ["s", "skip", { kind: "skip" }],
           ["r", "review", { kind: "review" }],
+          ["n", "note", { kind: "note" }],
+          ...(item?.canSeveral
+            ? [
+                ["m", this.isSeveral ? "one" : "several", { kind: "several" }] as [
+                  string,
+                  string,
+                  Act,
+                ],
+              ]
+            : []),
         ]);
 
     // The actions stay put; a tall item scrolls above them.
@@ -360,7 +420,9 @@ export class AnswerForm implements Component, Focusable {
       ? "enter goes on · esc leaves the field"
       : review
         ? "1-9 revisits · esc closes, answers kept"
-        : "1-9 or enter answers · esc closes, answers kept";
+        : this.isSeveral
+          ? "1-9 toggles, f goes on · esc closes, answers kept"
+          : "1-9 or enter answers · hjkl moves · esc closes, answers kept";
     const hint = ` ${this.maxOffset ? "shift+↑↓ scrolls · " : ""}${keys} `;
     const topFill = Math.max(0, inner - 1 - visibleWidth(title));
     const bottomFill = Math.max(0, inner - 1 - visibleWidth(hint));

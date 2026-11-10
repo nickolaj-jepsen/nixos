@@ -45,17 +45,39 @@ Code update can break one.
   can't run say why. Needs `git`, `gh` for the pull request, `agent-hub` for
   `/open plan`, and `tuicr` and Ghostty for `/open diff` and `/rv`.
 - **answer**: when a turn ends on a round of questions or a numbered pick
-  list, a band row offers a form for it in a pane: one question per screen,
-  its options plus "Write your own answer" as numbered entries. A number,
-  Enter or a click picks one and opens a note field; Enter there, empty or
-  not, goes on. `b`, `f`, `s` and `r` go back, forward, skip and to the
-  review, which writes the reply you would have typed (`Q1: yes`, `Q2: B`,
-  `do 1, 3`) into the prompt, above any draft, for you to send. A turn a
-  background task wakes leaves the form and its answers alone; only your own
-  send drops them. ←/→ go back and forward too, once bound to `pane:top` and
-  `pane:bottom` in the `Pane` context (Home and End then do the same). Open it with
-  `/answer` or the band's button; for a key, bind `app:cycleDiffBase` in the
-  `Global` context of `~/.claude/keybindings.json` (I use `alt+a`). The parser
-  and the draft are `agent-hub answer`'s (`pkgs/agent-hub`), which also backs
-  the pi half and the hub's panel, so this mod needs `agent-hub` on PATH and
-  isn't in the marketplace. The hub's daemon doesn't have to be running.
+  list, a row in the band above the prompt offers a form for it, drawn there
+  too (a pane would dock beside the transcript on a wide terminal). A rule
+  parts it from the chat and carries every question's label: which are
+  answered, which is shown, and a click to go to one. Under it is one
+  question per screen, its options as numbered entries and a last one to
+  write your own answer in, which becomes a field when picked. A number, Enter or a click answers and asks for a note
+  right under the answer; Enter there, empty or not, goes on to the next
+  question unanswered, or to the review. `y` takes the recommendation,
+  whatever it names, and `m` lets several options be one answer
+  (`Q3: A, C`); a recommendation that names several starts that way. A
+  recommendation beside lettered options shows under them with its reason.
+  `h`, `l`, `s` and `r` go back, on, skip and to the review, which writes
+  the reply you would have typed into the prompt, above any draft, for you
+  to send: one line per answer, a note indented under its own. The mouse
+  works alone: an option's detail lines pick it too, and a button that
+  leaves a question saves what a field holds. The band shares its half of
+  the screen with the prompt box. An open form stands 20 rows tall whatever
+  it shows, its keys on the last row, taller only for a question that needs
+  it; it has the band to itself (what the mods beneath draw there waits,
+  so list this mod first in `CLAUDE_CODE_PLUGIN_DIRS`) and cuts a long
+  question body to the rows left after the entries. A draft of several
+  lines that leaves it short of that height is set aside while it is open
+  and handed back when it folds. A second fill takes the first one's
+  place. A turn a background task wakes leaves the form and its answers
+  alone; only your own send drops them. A mod can't take the keyboard, so
+  three bindings in `~/.claude/keybindings.json` make it usable from the
+  keys: `abovePrompt:focus` in the `Chat` context (I use `alt+a`) lands on
+  the row, where Enter opens the form; `j`/`k` on
+  `abovePrompt:next`/`abovePrompt:previous` in `AbovePrompt` move between
+  entries; and `escape` on `abovePrompt:previous` in `AbovePromptInput`
+  steps out of a field onto the form instead of out to the prompt.
+  `/answer` or a click opens it too, but leaves the keys with the prompt,
+  where only the digits reach it. The parser and the draft are `agent-hub
+answer`'s (`pkgs/agent-hub`), which also backs the pi half and the hub's
+  panel, so this mod needs `agent-hub` on PATH and isn't in the marketplace.
+  The hub's daemon doesn't have to be running.

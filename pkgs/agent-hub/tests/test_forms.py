@@ -170,8 +170,8 @@ def shape(form):
     return " ".join([form["kind"], *map(one, form["items"])])
 
 
-def steps(form, *actions):
-    draft = forms.new_draft(form)
+def steps(form, *actions, start=None):
+    draft = start or forms.new_draft(form)
     for action in actions:
         draft = forms.apply(form, draft, action)
     return draft
@@ -179,6 +179,10 @@ def steps(form, *actions):
 
 def pick(entry):
     return {"do": "pick", "entry": entry}
+
+
+def toggle(entry):
+    return {"do": "toggle", "entry": entry}
 
 
 FORWARD = {"do": "forward"}
@@ -254,21 +258,72 @@ class StepTest(unittest.TestCase):
         draft = steps(form, pick(0), FORWARD, pick(0), FORWARD)
         self.assertEqual(forms.reply(form, draft), "yes")
         noted = forms.apply(form, draft, {"do": "note", "text": "also look at subtraction"})
-        self.assertEqual(forms.reply(form, noted), "Q19: yes\nQ25: yes\nalso look at subtraction")
+        self.assertEqual(forms.reply(form, noted), "Q19: yes\nQ25: yes\nOverall: also look at subtraction")
 
     def test_a_skipped_question_stays_out_of_the_reply_and_a_note_rides_on_its_answer(self):
         form = forms.parse(GRILLING_ROUND)
         # Picking the recommended letter is still the recommendation.
-        draft = steps(form, pick(0), {"do": "note", "text": "but keep the flag"}, {"do": "skip"}, pick(1))
-        self.assertEqual(forms.reply(form, draft), "Q1: A — but keep the flag\nQ3: B")
+        draft = steps(form, pick(0), {"do": "note", "text": "but keep the flag"}, FORWARD, {"do": "skip"}, pick(1))
+        self.assertEqual(forms.reply(form, draft), "Q1: A\n    Note: but keep the flag\nQ3: B")
+        # A note with no answer says so, so it can't read as a write-in.
+        alone = steps(form, {"do": "note", "text": "depends on Q3"})
+        self.assertEqual(forms.reply(form, alone), "Q1: no answer yet\n    Note: depends on Q3")
         self.assertEqual(forms.reply(form, forms.new_draft(form)), "")
 
     def test_picks_group_the_builds_and_route_the_rest(self):
         form = forms.parse(IDEATE_SUMMARY)
         draft = steps(form, pick(0), FORWARD, pick(0), FORWARD, pick(1), FORWARD)
         self.assertEqual(forms.reply(form, draft), "do 1, 2\n3 → /grill-me")
-        other = steps(form, pick(0), {"do": "note", "text": "measure first"}, {"do": "write", "text": "merge with 3"})
-        self.assertEqual(forms.reply(form, other), "do 1 — measure first\n2: merge with 3")
+        other = steps(form, pick(0), {"do": "note", "text": "measure first"}, FORWARD, {"do": "write", "text": "merge with 3"})
+        self.assertEqual(forms.reply(form, other), "do 1\n    Note: measure first\n2: merge with 3")
+
+    def test_going_on_finds_the_next_item_unanswered_and_then_the_review(self):
+        form = forms.parse(GRILLING_ROUND)
+        answer = lambda entry: [pick(entry), {"do": "next"}]
+        draft = steps(form, FORWARD, *answer(0))
+        self.assertEqual(draft["step"], 2)
+        # Nothing is left after Q3, so it looks from the top; with nothing there either, the review.
+        draft = forms.apply(form, draft, {"do": "write", "text": "keep"})
+        self.assertEqual(draft["step"], 0)
+        self.assertTrue(forms.is_review(form, steps(form, *answer(1), start=draft)))
+        # A pick that stayed for its note goes on the same way; the review has nowhere to go.
+        self.assertEqual(steps(form, pick(0), {"do": "next"})["step"], 1)
+        self.assertTrue(forms.is_review(form, steps(form, {"do": "review"}, {"do": "next"})))
+        # An empty write-in clears and stays.
+        self.assertEqual(steps(form, {"do": "write", "text": " "})["step"], 0)
+
+    def test_several_options_toggle_into_one_answer(self):
+        form = forms.parse(GRILLING_ROUND)
+        draft = steps(form, pick(2), toggle(0))
+        self.assertEqual(draft["step"], 0)
+        view = forms.view(form, draft)
+        self.assertEqual([e["isChosen"] for e in view["item"]["entries"]], [True, False, True, False])
+        self.assertTrue(view["item"]["isSeveral"])
+        self.assertEqual(forms.reply(form, draft), "Q1: A, C")
+        self.assertTrue(view["review"][0]["shown"].startswith("A, C: "))
+        self.assertEqual(forms.reply(form, steps(form, toggle(0), toggle(0))), "")
+        # A write-in, or a pick list's routes, are not for toggling.
+        self.assertEqual(steps(form, toggle(3)), forms.new_draft(form))
+        picks = forms.parse(IDEATE_SUMMARY)
+        self.assertEqual(steps(picks, FORWARD, toggle(0)), steps(picks, FORWARD))
+
+    def test_a_recommendation_naming_several_letters_is_accepted_as_all_of_them(self):
+        options = "".join(f"- **{letter}.** Item {letter}.\n" for letter in "ABCDEF")
+        for said, keys in (("A, B and D now; C is cosmetic and E can wait.", "A, B, D"),
+                           ("A through C now; F goes to later.", "A, B, C"),
+                           ("**A** and **C**.", "A, C")):
+            form = forms.parse(f"**Q1. Which go in?**\n\n{options}\n> **Recommended:** {said}\n")
+            item = forms.view(form, forms.new_draft(form))["item"]
+            self.assertTrue(item["isSeveral"] and item["canAccept"])
+            self.assertEqual("".join(e["text"][0] for e in item["entries"] if e["isRecommended"]), keys.replace(", ", ""))
+            self.assertEqual(forms.reply(form, steps(form, toggle(0))), "Q1: A")
+            self.assertEqual(forms.reply(form, steps(form, {"do": "accept"})), "yes")
+            self.assertEqual(forms.reply(form, steps(form, {"do": "accept"}, toggle(5))), f"Q1: {keys}, F")
+        # One letter is still one pick, and a sentence that starts on "A" names none.
+        single = forms.parse(GRILLING_ROUND)
+        self.assertEqual(forms.reply(single, steps(single, {"do": "accept"}))[:5], "Q1: A")
+        self.assertFalse(forms.view(single, forms.new_draft(single))["item"]["isSeveral"])
+        self.assertEqual(steps(single, FORWARD, FORWARD, {"do": "accept"}), steps(single, FORWARD, FORWARD))
 
     def test_what_cannot_apply_changes_nothing_and_an_unknown_word_is_refused(self):
         form = forms.parse(GRILLING_ROUND)
@@ -294,11 +349,32 @@ class ViewTest(unittest.TestCase):
         self.assertEqual(forms.view(form, forms.new_draft(form))["item"]["start"], 0)
         second = forms.view(form, steps(form, FORWARD))["item"]
         self.assertEqual(second["entries"][0]["text"][:4], "Yes:")
-        review = forms.view(form, steps(form, pick(1), FORWARD, FORWARD, {"do": "write", "text": "keep"}))
+        review = forms.view(form, steps(form, pick(1), FORWARD, FORWARD, {"do": "write", "text": "keep"}, {"do": "review"}))
         self.assertIsNone(review["item"])
         self.assertTrue(review["isReview"])
         self.assertEqual([r["isAnswered"] for r in review["review"]], [True, False, True])
         self.assertEqual(review["review"][2]["shown"], '"keep"')
+
+    def test_shows_why_an_option_is_recommended(self):
+        form = forms.parse(GRILLING_ROUND)
+        first = forms.view(form, forms.new_draft(form))["item"]
+        self.assertTrue(first["recommended"].startswith("A. "))
+        # With no options the recommendation is the accept entry, not said twice.
+        second = forms.view(form, steps(form, FORWARD))["item"]
+        self.assertEqual(second["recommended"], "")
+
+    def test_a_recommendation_beside_options_is_said_and_never_an_entry(self):
+        text = "**Q1. Which go in?**\n\n- **A.** Log.\n- **B.** Cooldown.\n- **C.** Canary.\n\n> **Recommended:** A and B now, C later.\n"
+        item = forms.view(*(lambda form: (form, forms.new_draft(form)))(forms.parse(text)))["item"]
+        self.assertEqual([e["kind"] for e in item["entries"]], ["option", "option", "option", "write"])
+        self.assertEqual(item["recommended"], "A and B now, C later.")
+        self.assertTrue(item["canSeveral"])
+
+    def test_reads_a_pick_said_in_passing(self):
+        options = "- **A.** Flatten it.\n- **B.** Keep the grouping.\n"
+        for text in (f"**Q1. Which?**\n\nI'd go with A, since B buys nothing.\n\n{options}",
+                     "**Q1. Which?**\n\n- **A.** Flatten it (my pick, and the smaller change).\n- **B.** Keep it.\n"):
+            self.assertEqual(forms.parse(text)["items"][0]["recommendedOption"], 0)
 
     def test_is_what_the_protocol_says_it_is(self):
         form = forms.parse(GRILLING_ROUND)

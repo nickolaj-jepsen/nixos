@@ -188,8 +188,10 @@ Qt's Markdown mode, `RichText` and `StyledText` all fetch an image a document na
     stack lives in the hub the bar talks to, in memory.
   - `w` logs its verdict as wrong, for tuning the gate.
   - `j`/`k` move, and `g`/`G` jump to the ends.
-  - On a form, `1`-`9` answer, and `b`, `f`, `s` and `r` go back, forward, skip and to
-    the review, where `n` adds a note, `i` fills and `y` sends.
+  - On a form, `1`-`9` answer and ask for a note; Enter there goes on to the next
+    question unanswered. `n` notes without answering, `m` lets several options be one
+    answer, and `b`/`h`, `f`/`l`, `s` and `r` go back, forward, skip and to the review,
+    where `i` fills and `y` sends. `j`/`k` stay the popout's own.
 - `Mod+Shift+B` (`agent-hub focus-next`) jumps straight to the next session
   that wants you, cycling on repeat.
 - `Mod+Ctrl+B` (`agent-hub toggle`) dismisses the finished turn of the session
