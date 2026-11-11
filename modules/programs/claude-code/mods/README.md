@@ -55,13 +55,23 @@ Code update can break one.
   `h`, `l`, `s` and `r` go back, on, skip and to the review, which writes
   the reply you would have typed into the prompt, above any draft, for you
   to send: one line per answer, a note indented under its own. The mouse
-  works alone: an option's detail lines pick it too, and a button that
-  leaves a question saves what a field holds. The band shares its half of
-  the screen with the prompt box. An open form stands 20 rows tall whatever
-  it shows, its keys on the last row, taller only for a question that needs
-  it; it has the band to itself (what the mods beneath draw there waits,
+  works alone: an option's detail lines pick it too, a double click on an
+  answer goes on to the next question, and a button that leaves a question
+  saves what a field holds. (The terminal takes the second click as a word
+  to select, which is how the mod sees it: one on the same word as your last
+  selection goes unseen, and the word lands on the clipboard.) The band
+  shares its half of the screen with the prompt box. An open form stands as
+  tall as its tallest question on every one of them, its keys on the last
+  row; it has the band to itself (what the mods beneath draw there waits,
   so list this mod first in `CLAUDE_CODE_PLUGIN_DIRS`) and cuts a long
-  question body to the rows left after the entries. A draft of several
+  question body to the rows left after the entries. With the
+  `scrollTranscript` option on (`pluginConfigs.answer.options`, off by
+  default) the body is left out of the form and the transcript scrolls to
+  it. The engine scrolls to a row's top and never into one, so each
+  question past the first is then a transcript row of its own under the
+  message, which draws only up to them, and the turn's closing line
+  (`Worked for 3s`) moves under the last; a resumed session gets those
+  rows again at the transcript's end. A draft of several
   lines that leaves it short of that height is set aside while it is open
   and handed back when it folds. A second fill takes the first one's
   place. A turn a background task wakes leaves the form and its answers

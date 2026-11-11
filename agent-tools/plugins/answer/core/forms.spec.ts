@@ -12,6 +12,7 @@ import {
   newDraft,
   offer,
   parse,
+  startLines,
   reply,
   step,
   view,
@@ -271,6 +272,15 @@ describe("parse", () => {
     expect(shape(parse(GRILLING_ROUND.replaceAll("\n", "\r\n")))).toBe(
       shape(parse(GRILLING_ROUND)),
     );
+  });
+});
+
+describe("startLines", () => {
+  test("names the line each of the form's items starts on", () => {
+    const lines = GRILLING_ROUND.split("\n");
+    const starts = startLines(GRILLING_ROUND);
+    expect(starts.map((line) => lines[line]?.slice(0, 6))).toEqual(["**Q1. ", "**Q2. ", "**Q3. "]);
+    expect(starts).toHaveLength(parse(GRILLING_ROUND)?.items.length ?? 0);
   });
 });
 

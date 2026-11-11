@@ -5,5 +5,13 @@
   "author": {
     "name": "Nickolaj Jepsen"
   },
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "scrollTranscript": {
+      "type": "boolean",
+      "title": "Scroll the transcript",
+      "description": "Leave a question's body out of the form and scroll the transcript to it instead: each question past the first becomes a transcript row of its own under the message",
+      "default": false
+    }
+  }
 }

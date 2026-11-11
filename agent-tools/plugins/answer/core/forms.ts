@@ -335,6 +335,15 @@ export function parse(text: string): Form | null {
   return asks ? { kind: "round", items } : null;
 }
 
+/**
+ * The line each item of the form `parse` finds in `text` starts on, so a harness can cut
+ * the message into its questions.
+ */
+export function startLines(text: string): number[] {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  return lastRun(findStarts(lines)).map((start) => start.line);
+}
+
 /** JSON with its keys in order, so the same form always reads the same. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
