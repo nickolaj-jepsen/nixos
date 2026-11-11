@@ -6,12 +6,12 @@
 unstable.buildHomeAssistantComponent rec {
   owner = "greghesp";
   domain = "bambu_lab";
-  version = "v2.2.26";
+  version = "v2.3.0";
   src = fetchFromGitHub {
     inherit owner;
     repo = "ha-bambulab";
     rev = version;
-    hash = "sha256-9KsIzem7BjImUW+BTnAUYJ7CnU5bFpet7D2HhmOwTbA=";
+    hash = "sha256-FqN+CKS17fv3f3AoqUxEGhjLXvTIWRcDPmrOHWLEpiI=";
   };
   dependencies = with unstable.home-assistant.python3Packages; [beautifulsoup4];
 }
