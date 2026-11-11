@@ -123,9 +123,9 @@
     # no local branch reports that instead of disappearing.
     branchAt = pkgs.writeShellApplication {
       name = "sm-branch-at";
-      runtimeInputs = [pkgs.git pkgs.wt pkgs.unstable.gh];
+      runtimeInputs = [pkgs.git pkgs.unstable.gh];
       text = ''
-        # sm-branch-at <commit> <name|land|push|browse|pr>
+        # sm-branch-at <commit> <name|push|browse|pr>
         commit=''${1:?commit}
         verb=''${2:?verb}
 
@@ -145,7 +145,6 @@
 
         case $verb in
           name) printf '%s\n' "$branch" ;;
-          land) exec wt land "$branch" ;;
           push) exec git push --force-with-lease origin "$branch" ;;
           browse) exec gh browse --branch "$branch" ;;
           pr) exec gh pr create --fill --head "$branch" ;;
@@ -199,8 +198,8 @@
         "$select_branch"
       ])
       (run "Git: Range Diff against Branch…" ["range-diff" "$select_branch...HEAD"])
-      (run "Worktree: Land This Worktree" ["sm-land"])
-      (run "Worktree: Close This Worktree" ["sm-close"])
+      (run "Worktree: Merge This Worktree" ["sm-merge"])
+      (run "Worktree: Remove This Worktree" ["sm-remove"])
       (run "Stack: Submit (auto titles)" ["sm-submit"])
       (run "Stack: Sync" ["sm-sync"])
       (run "Stack: View" ["sm-view"])
@@ -219,7 +218,6 @@
     # Menu entries append below the shipped ones; context menus run commands
     # directly, so these use aliases rather than selectors.
     branchMenu = [
-      (run "Land $branch with wt" ["sm-land" "$branch"])
       (run "Push $branch (force with lease)" ["push" "--force-with-lease" "origin" "$branch"])
       (run "Open $branch on GitHub" ["sm-browse-branch" "$branch"])
       (run "Create PR for $branch (fill)" ["sm-pr-create" "$branch"])
@@ -233,7 +231,6 @@
       {
         caption = "Branch at This Commit";
         children = [
-          (run "Land with wt" ["sm-branch-at" "$commit" "land"])
           (run "Push (force-with-lease)" ["sm-branch-at" "$commit" "push"])
           (run "Open on GitHub" ["sm-branch-at" "$commit" "browse"])
           (run "Create PR (fill)" ["sm-branch-at" "$commit" "pr"])
@@ -245,8 +242,8 @@
 
     worktreeMenu = [
       (openMenu "Open Worktree In" "$worktree_path")
-      (run "Land $worktree_name with wt" ["sm-land" "$worktree_name"])
-      (run "Close $worktree_name with wt (keeps its work on the branch)" ["sm-close" "$worktree_name"])
+      (run "Merge $worktree_name into the default branch" ["sm-merge" "$worktree_path"])
+      (run "Remove $worktree_name (refuses uncommitted changes)" ["sm-remove" "$worktree_path"])
       (agentMenu "$worktree_path" "Review the changes in worktree $worktree_name and report bugs, risky changes and missing tests.")
     ];
 
@@ -256,7 +253,7 @@
       {
         keys = ["primary+alt+l"];
         command = "git";
-        args.argv = ["sm-land"];
+        args.argv = ["sm-merge"];
       }
       {
         keys = ["primary+alt+s"];

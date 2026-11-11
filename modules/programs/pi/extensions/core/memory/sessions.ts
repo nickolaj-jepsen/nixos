@@ -8,7 +8,7 @@
  * only says what was said, so a match there ranks above a message.
  *
  * Default scope is the current repo — its main checkout plus every worktree,
- * including ones `wt close` already removed — because a discarded PoC is still
+ * including ones `wt remove` already removed — because a discarded PoC is still
  * honest history even when its conclusions are not worth remembering.
  */
 import { open, readdir, readFile, stat } from "node:fs/promises";

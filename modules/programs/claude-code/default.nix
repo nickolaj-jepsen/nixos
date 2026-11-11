@@ -64,25 +64,16 @@
       text = builtins.readFile ./skill-guard.sh;
     };
 
-    # Claude Code's own worktrees (EnterWorktree, `claude -w`, agent isolation)
-    # are made by `wt new` and closed by `wt close`, and a session that ends in a
-    # worktree closes it. Without the remove half Claude falls back to
-    # `git worktree remove --force`, which would discard uncommitted work.
-    worktreeHooks = pkgs.writeShellApplication {
-      name = "claude-worktree-hooks";
-      runtimeInputs = [pkgs.jq pkgs.coreutils];
-      text = builtins.readFile ./worktree-hooks.sh;
-    };
-    worktreeLifecycle = [
-      {
-        hooks = [
-          {
-            type = "command";
-            command = lib.getExe worktreeHooks;
-          }
-        ];
-      }
-    ];
+    # worktrunk's plugin, from the source of the `wt` on PATH so the two match:
+    # EnterWorktree, `claude -w` and agent isolation create through `wt switch
+    # --create` and remove through `wt remove`, which leaves a dirty worktree be.
+    # It also sets the activity markers `wt list` shows. Its
+    # worktrunk skill reaches both agents through fireproof.agents.skills instead.
+    worktrunkPlugin = pkgs.runCommand "worktrunk-claude-plugin" {} ''
+      cp -r ${pkgs.unstable.worktrunk.src}/plugins/worktrunk $out
+      chmod -R u+w $out
+      rm -r $out/skills/worktrunk
+    '';
 
     # claude-code resolves the checker off PATH by bare name, so it has to be a
     # real package rather than a store path like the LSP servers. hunspell
@@ -327,10 +318,8 @@
             # SessionStart names the profile the hub's readings of this session run as.
             SessionStart = direnvHooks ++ lib.optionals hub hubAsync;
             CwdChanged = direnvHooks;
-            WorktreeCreate = worktreeLifecycle;
-            WorktreeRemove = worktreeLifecycle;
             # Claude is exiting: an async hook can die before it reaches the hub.
-            SessionEnd = worktreeLifecycle ++ lib.optionals hub (hubHook {timeout = 2;});
+            SessionEnd = lib.optionals hub (hubHook {timeout = 2;});
             PreToolUse = [
               {
                 matcher = "Skill";
@@ -440,7 +429,7 @@
           # Not programs.claude-code.plugins: the env block also reaches desktop-app sessions.
           # answer first: its open form has the band to itself, which only hides the rows of
           # mods whose hooks sit beneath its own.
-          CLAUDE_CODE_PLUGIN_DIRS = "${answer}:${spellfix}:${linearIssue}:${gitMenu}";
+          CLAUDE_CODE_PLUGIN_DIRS = "${answer}:${spellfix}:${linearIssue}:${gitMenu}:${worktrunkPlugin}";
           # hunspell's personal dictionary for the underline's checker too.
           WORDLIST = personalDictionary;
         };

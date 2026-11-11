@@ -120,10 +120,11 @@ Skills, pi, Claude Code mods and agent language servers: `docs/agents.md`.
 - A package not in nixpkgs (or replacing one) is `pkgs/<name>/package.nix`, a
   plain `callPackage` file (`unstable` and `inputs` are in scope too).
   - It becomes `pkgs.<name>` on every host and `nix build .#<name>`.
-  - `wt` is the multi-file example: a `pyproject.toml`, its `wt/` package and
-    `tests/`, built with `buildPythonApplication`. `unittestCheckHook` runs
-    `tests/` on every `nix build .#wt`; run them directly with
-    `PYTHONPATH=pkgs/wt python3 pkgs/wt/tests/test_cli.py`.
+  - `agent-notes` is the multi-file example: a `pyproject.toml`, its
+    `agent_notes/` package and `tests/`, built with `buildPythonApplication`.
+    `unittestCheckHook` runs `tests/` on every `nix build .#agent-notes`; run
+    them directly with `PYTHONPATH=pkgs/agent-notes python3 -m unittest discover
+-s pkgs/agent-notes/tests`.
   - Keep its pins updated. A source that tracks a branch is a `flake = false`
     input, bumped like any input. One that tracks releases gets an updater in
     `UPDATERS` in `.github/scripts/update_packages.py` (finds the latest

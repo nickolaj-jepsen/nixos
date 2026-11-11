@@ -162,11 +162,11 @@ check_build_dirs() {
 }
 
 check_worktrees() {
-  local root=${WT_WORKTREE_ROOT:-$HOME/worktrees} count
+  local root=$HOME/worktrees count
   count=$(find "$root" -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l)
   emit worktrees "$(bytes "$root")" "worktrees" "$count open; biggest repos: $(top "$root")" \
-    "wt clean                          # those whose work is in the default branch" \
-    "wt list                           # then wt close <name>"
+    "wt step prune                     # those whose work is in the default branch" \
+    "wt list                           # then wt remove <branch>"
 }
 
 check_journal() {

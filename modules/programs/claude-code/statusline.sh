@@ -249,7 +249,7 @@ git_segment() {
   fi
   git_glyph="${color}${glyph}${reset}${tail}"
   git_full=$git_glyph
-  # `wt` names a worktree's folder after its branch, so the name shows only when the path doesn't say it.
+  # worktrunk names a worktree's folder after its branch, so the name shows only when the path doesn't say it.
   if [ -n "$name" ] && [ "$name" != "${dir##*/}" ]; then
     git_full="${color}${glyph}${reset} ${dim}${name}${reset}${tail}"
   fi

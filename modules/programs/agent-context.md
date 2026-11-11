@@ -29,12 +29,15 @@ Always defer to the repo's existing tooling, but if you have a choice, prefer th
   - `git` for version control
   - `gh` for GitHub operations
   - `gh stack` for stacked prs
-  - `wt` for worktree management (custom tool)
+  - `wt` (worktrunk) for worktree management: `wt switch -c <branch>`, `wt list`, `wt merge`, `wt remove`, `wt step prune`
 - other:
   - `ds` for managing the devenv in Digital-Udvikling repos (custom tool)
   - `nix` + flakes for reproducible builds and environments
 
 - Work in the checkout you are in, on its current branch (main included). Unless your work would conflict with the user's or another agent's current work, then use a worktree (using `wt`). Make sure to clean up worktrees and branches you create.
 - The worktree tools (if existent) are integrated with `wt`, so use them rather than `wt` directly.
+- `wt switch --create` branches off local `main`; fetch first and pass `--base` for whichever of `main` and `origin/main` is furthest along.
+- A new worktree holds no gitignored files (`.env`, `node_modules`, build output). When it needs them, `wt step copy-ignored --require-include` copies the ones the primary checkout's `.worktreeinclude` lists.
+- `wt remove` refuses a worktree with uncommitted changes; commit or discard them first.
 - Avoid merge commits. If you need to merge, rebase instead.
 - Use fixup commits to apply fixes to previous commits in a branch, rebase before merging

@@ -25,6 +25,30 @@
       sha256 = src.outputHash;
     }}/skills/gh-stack";
 
+    # Git worktrees for parallel agents (worktrunk.dev). Shell integration is in
+    # the fish leaf, the Claude Code plugin in the claude-code leaf. Existing
+    # worktrees keep the ~/worktrees/<repo>/<branch> layout, and a merge
+    # rebases and fast-forwards what is committed, without squashing or
+    # committing stray changes. No LLM runs: that needs a [commit.generation]
+    # command, and the skipped prompt would offer to set one up (and write this
+    # read-only file).
+    home.packages = [pkgs.unstable.worktrunk];
+    xdg.configFile."worktrunk/config.toml".text = ''
+      worktree-path = "~/worktrees/{{ repo }}/{{ branch | sanitize }}"
+      skip-shell-integration-prompt = true
+      skip-commit-generation-prompt = true
+
+      [merge]
+      squash = false
+      commit = false
+    '';
+    fireproof.agents.skills.worktrunk = let
+      inherit (pkgs.unstable.worktrunk) src;
+    in "${builtins.fetchTarball {
+      inherit (src) url;
+      sha256 = src.outputHash;
+    }}/skills/worktrunk";
+
     programs.delta = {
       enable = true;
       enableGitIntegration = true;
@@ -75,11 +99,12 @@
           fixup = "!git log -n 50 --pretty=format:'%h %s' --no-merges | ${lib.getExe pkgs.fzf} | cut -c -7 | xargs -o git commit --fixup";
           # Wrappers for non-git tools, because Sublime Merge's custom commands can
           # only run `git` argv (see modules/programs/sublime-merge.nix). Absolute
-          # paths: the GUI process has no shell PATH of its own. `sm-land` and
-          # `sm-close` default to the worktree the command runs in; closing waits
-          # in the background until the git process Sublime Merge started has left it.
-          sm-land = "!${lib.getExe pkgs.wt} land \"\${1:-.}\"";
-          sm-close = "!${lib.getExe pkgs.wt} close --when-free \"\${1:-.}\"";
+          # paths: the GUI process has no shell PATH of its own. `sm-merge` lands a
+          # worktree by path (`wt merge` takes no source branch), `sm-remove` takes a
+          # path or branch; both default to the worktree the command runs in. A
+          # function, since git appends an alias's arguments to its command line.
+          sm-merge = "!f() { ${lib.getExe pkgs.unstable.worktrunk} -C \"\${1:-.}\" merge --no-commit; }; f";
+          sm-remove = "!f() { ${lib.getExe pkgs.unstable.worktrunk} remove \"\${1:-@}\"; }; f";
           sm-submit = "!${lib.getExe pkgs.unstable.gh} stack submit --auto";
           sm-sync = "!${lib.getExe pkgs.unstable.gh} stack sync";
           sm-view = "!${lib.getExe pkgs.unstable.gh} stack view";
@@ -90,8 +115,8 @@
           sm-fmt = "!${lib.getExe pkgs.unstable.just} fmt";
         };
       };
-      # pi's background tasks write their output into the checkout, and untracked
-      # files there would ride into the wip commit `wt close` makes of a worktree.
+      # pi's background tasks write their output into the checkout, where untracked
+      # files would make a worktree dirty, which `wt remove` refuses.
       # The agent-notes links are root-anchored, so a nested `.agents/` does not match.
       ignores = ["**/.claude/settings.local.json" "**/.pi/tasks/" "/.agents/store" "/.agents/tmp"];
       includes = [
