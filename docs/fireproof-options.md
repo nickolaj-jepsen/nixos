@@ -1679,30 +1679,6 @@ string
 
 
 
-## fireproof\.janitor\.enable
-
-
-
-Reclaim what agents and dev tools leave behind
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.monitors
 
 
@@ -2676,6 +2652,8 @@ string
 
 ## fireproof\.theme\.colors\.orange
 
+
+
 Orange (warnings)
 
 
@@ -2705,8 +2683,6 @@ string
 
 
 ## fireproof\.theme\.colors\.orangeAlt
-
-
 
 Dark orange
 
@@ -3125,54 +3101,6 @@ string
 
 *Declared by:*
  - [modules/base/theme\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/theme.nix)
-
-
-
-## fireproof\.transcripts\.enable
-
-
-
-Replace secrets in agent transcripts in place
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.transcripts\.schedule
-
-
-
-OnCalendar for the weekly transcript sweep\.
-
-
-
-*Type:*
-string
-
-
-
-*Default:*
-
-```nix
-"Sun 03:00"
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
 
 
 
