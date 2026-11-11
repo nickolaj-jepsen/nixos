@@ -71,7 +71,11 @@ Code update can break one.
   question past the first is then a transcript row of its own under the
   message, which draws only up to them, and the turn's closing line
   (`Worked for 3s`) moves under the last; a resumed session gets those
-  rows again at the transcript's end. A draft of several
+  rows again at the transcript's end. Off the
+  terminal (the desktop app, VS Code, mobile) the same form draws with the
+  surface's own controls: no rules of dashes, a close control on the strip,
+  the next step as the primary button, an option's detail on its own line,
+  and the whole body whatever the band's rows. A draft of several
   lines that leaves it short of that height is set aside while it is open
   and handed back when it folds. A second fill takes the first one's
   place. A turn a background task wakes leaves the form and its answers

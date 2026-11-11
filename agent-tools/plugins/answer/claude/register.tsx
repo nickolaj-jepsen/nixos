@@ -463,6 +463,10 @@ export const register: Register = (on, options) => {
     const els = $.ui.resolve(e);
     const { Box, Text, Button, Markdown } = els;
     const { view, editing } = c;
+    // The desktop app and the others that draw real controls in a proportional font: no
+    // rules of dashes, no heights in rows, and room for a question's whole body.
+    const isNative = e.surface !== "terminal";
+    const gap = isNative ? "md" : 1;
 
     if (!c.isOpen)
       return (
@@ -471,7 +475,7 @@ export const register: Register = (on, options) => {
           <Button key="answer" plain autoFocus onPress={() => open($)}>
             {view.title}
             <Text dimColor>
-              {` · ${view.answered} of ${view.count} · ${CHORD} then Enter, or /answer`}
+              {` · ${view.answered} of ${view.count} · ${isNative ? "click to answer" : `${CHORD} then Enter, or /answer`}`}
             </Text>
           </Button>
         </Box>
@@ -509,31 +513,34 @@ export const register: Register = (on, options) => {
       </Text>
     );
     type Key = [hotkey: string, label: string, press: () => unknown, isLit?: boolean];
-    // Plain, so each shows its key; dim but for the one worth pressing next.
+    // On the terminal plain, so each shows its key, and dim but for the one worth pressing
+    // next; a native surface marks that one as its primary button instead.
     const keys = (shown: Key[]) => (
-      <Box columnGap={3} flexWrap="wrap">
+      <Box columnGap={isNative ? "sm" : 3} flexWrap="wrap">
         {shown.map(([hotkey, label, press, isLit]) => (
           <Button
             key={label}
-            plain
-            dimColor={!isLit}
+            plain={isNative ? undefined : true}
+            dimColor={!isNative && !isLit}
+            variant={isNative && isLit ? "primary" : undefined}
             hotkey={hotkey}
-            label={label}
+            label={isNative ? `${label.charAt(0).toUpperCase()}${label.slice(1)}` : label}
             onPress={() => press()}
           />
         ))}
       </Box>
     );
     const back = () => leave($, (shown) => ({ do: "go", step: shown - 1 }));
-    const fold: Key = ["q", "quit", () => close($)];
+    // A native surface has its own close control, drawn on the strip.
+    const fold: Key[] = isNative ? [] : [["q", "quit", () => close($)]];
     const unanswered = view.review.filter((row) => !row.isAnswered).map((row) => row.label);
     const panelRows = Math.min(e.props.maxRows - RESERVED_ROWS, heightOf(c, columns));
     // The rule that parts the form from the chat, and on it every question: which are
     // answered, which is shown, and a click to go to one.
     const stops = view.review.reduce((n, row) => n + row.label.length + 5, 0);
     const divider = (
-      <Box columnGap={3} flexWrap="wrap">
-        <Text dimColor>──</Text>
+      <Box columnGap={isNative ? "sm" : 3} flexWrap="wrap">
+        {isNative ? null : <Text dimColor>──</Text>}
         {view.review.map((row, i) => (
           <Button
             key={`q${i}`}
@@ -554,9 +561,13 @@ export const register: Register = (on, options) => {
           label="review"
           onPress={() => leave($, () => ({ do: "review" }))}
         />
-        <Text dimColor>
-          {"─".repeat(Math.max(0, columns - stops - "──   r: review   ".length - 1))}
-        </Text>
+        {isNative ? (
+          <Button key="quit" role="dismiss" hotkey="q" label="Close" onPress={() => close($)} />
+        ) : (
+          <Text dimColor>
+            {"─".repeat(Math.max(0, columns - stops - "──   r: review   ".length - 1))}
+          </Text>
+        )}
       </Box>
     );
 
@@ -576,12 +587,18 @@ export const register: Register = (on, options) => {
         ) + (unanswered.length ? rowsOf(missing, columns) : 0);
       const fixedRows = 1 + listRows + 1 + (editing === NOTE ? 2 : 0) + 1 + (columns < 70 ? 2 : 1);
       const hasRoomForReply =
+        isNative ||
         fixedRows + 2 + rowsOf(reply, columns) + SLACK_ROWS <= e.props.maxRows - RESERVED_ROWS;
       return (
-        <Box flexDirection="column" minHeight={panelRows} justifyContent="space-between">
-          <Box flexDirection="column">
+        <Box
+          flexDirection="column"
+          rowGap={isNative ? gap : undefined}
+          minHeight={isNative ? undefined : panelRows}
+          justifyContent="space-between"
+        >
+          <Box flexDirection="column" rowGap={isNative ? gap : undefined}>
             {divider}
-            <Box flexDirection="column" rowGap={1}>
+            <Box flexDirection="column" rowGap={gap}>
               <Box flexDirection="column">
                 {view.review.map((row, i) => (
                   <Box key={`row${i}`} flexDirection="column">
@@ -631,14 +648,16 @@ export const register: Register = (on, options) => {
               />
             </Box>
           </Box>
-          {keys([["h", "back", back], ["n", "note", () => ask($, NOTE)], fold])}
+          {keys([["h", "back", back], ["n", "note", () => ask($, NOTE)], ...fold])}
         </Box>
       );
     }
 
     const { item } = view;
     const several = isSeveral(c);
-    const laid = fitBody(item, panelRows, columns);
+    const laid = isNative
+      ? { body: bodyOf(item), isCut: false }
+      : fitBody(item, panelRows, columns);
     const forward = () => leave($, (shown) => ({ do: "go", step: shown + 1 }));
     // The write-in is always last.
     const writeIn = item.entries.length - 1;
@@ -665,7 +684,8 @@ export const register: Register = (on, options) => {
           </Button>
         </Box>
       ) : null;
-    const option = (row: Entry, k: number) => (
+    const marks = isNative ? ["☑ ", "☐ "] : ["[x] ", "[ ] "];
+    const entry = (row: Entry, k: number) => (
       <Button
         key={`e${k}`}
         plain
@@ -675,21 +695,40 @@ export const register: Register = (on, options) => {
         autoFocus={!editing && k === item.start ? true : undefined}
         onPress={() => choose($, row, k)}
       >
-        {several && row.kind === "option" ? (row.isChosen ? "[x] " : "[ ] ") : ""}
+        {several && row.kind === "option" ? (row.isChosen ? marks[0] : marks[1]) : ""}
         {row.kind === "write" ? `✎ ${item.written || row.text}` : row.text}
         {row.isRecommended ? <Text dimColor> (recommended)</Text> : null}
         {row.isChosen && !(several && row.kind === "option") ? (
           <Text color="success"> ✓</Text>
         ) : null}
         {/* Inside the button, so a click on any of the option's lines picks it. */}
-        {row.detail ? <Text dimColor>{`\n   ${row.detail.replace(/\n/g, "\n   ")}`}</Text> : null}
+        {row.detail && !isNative ? (
+          <Text dimColor>{`\n   ${row.detail.replace(/\n/g, "\n   ")}`}</Text>
+        ) : null}
       </Button>
     );
+    // A native button holds one line, so there the detail is its own text under it.
+    const option = (row: Entry, k: number) =>
+      isNative && row.detail ? (
+        <Box key={`option${k}`} flexDirection="column">
+          {entry(row, k)}
+          <Box paddingLeft={4}>
+            <Text dimColor>{row.detail}</Text>
+          </Box>
+        </Box>
+      ) : (
+        entry(row, k)
+      );
     return (
-      <Box flexDirection="column" minHeight={panelRows} justifyContent="space-between">
-        <Box flexDirection="column">
+      <Box
+        flexDirection="column"
+        rowGap={isNative ? gap : undefined}
+        minHeight={isNative ? undefined : panelRows}
+        justifyContent="space-between"
+      >
+        <Box flexDirection="column" rowGap={isNative ? gap : undefined}>
           {divider}
-          <Box flexDirection="column" rowGap={1}>
+          <Box flexDirection="column" rowGap={gap}>
             <Box flexDirection="column">
               <Text weight="semibold">{item.title}</Text>
               {laid.body ? <Markdown key="body" text={laid.body} /> : null}
@@ -737,7 +776,7 @@ export const register: Register = (on, options) => {
                 ] as Key,
               ]
             : []),
-          fold,
+          ...fold,
         ])}
       </Box>
     );

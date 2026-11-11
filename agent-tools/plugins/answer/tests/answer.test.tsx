@@ -445,6 +445,30 @@ test("a second click on an answer goes on to the next question; a lone click wai
   await drawn.unmount();
 });
 
+test("off the terminal the form draws native controls: no rules, a close control, the whole body", async ($, on) => {
+  world(on);
+  await start($);
+  await ends($, `${LONG}\n  It is cheap to keep.`);
+  await $.command.run(RUN);
+  // A band this short cuts the body on the terminal.
+  const drawn = await $.ui.mount({
+    ...BAND,
+    props: { ...BAND.props, maxRows: 16 },
+    surface: "desktop",
+  });
+  expect(await drawn.find({ type: "Text", text: /─/ })).toBeUndefined();
+  expect(await drawn.find({ type: "Text", text: /^… more above$/ })).toBeUndefined();
+  expect(await drawn.find({ type: "Markdown", text: /Line 12 of what it hangs on/ })).toBeDefined();
+  expect((await drawn.find({ key: "quit" }))?.props.role).toBe("dismiss");
+  expect((await drawn.find({ key: "next" }))?.props.label).toBe("Next");
+  // An option's detail is its own line under the button, not part of its label.
+  expect((await drawn.find({ key: "e1" }))?.text).not.toContain("It is cheap to keep.");
+  expect(await drawn.find({ type: "Text", text: /^It is cheap to keep\.$/ })).toBeDefined();
+  await drawn.press({ key: "quit" });
+  expect((await drawn.find({ key: "answer" }))?.text).toContain("click to answer");
+  await drawn.unmount();
+});
+
 test("a pick list routes each item to its own next step", async ($, on) => {
   const w = world(on);
   await start($);
