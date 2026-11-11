@@ -1,15 +1,9 @@
 /**
- * What the naming calls read: the prompts you actually sent. A session label and
- * a worktree branch name the same work, so both are prompted with this and both
- * answer in a handful of words.
+ * The prompts you actually sent: the session label is the first one cut to a
+ * name, and guardian reads the latest.
  */
 import { contentText } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-
-// deepseek spends 60-70 tokens thinking before it answers, and a smaller cap
-// comes back as `length` with no text at all.
-export const NAME_MAX_TOKENS = 256;
-export const NAME_TIMEOUT_MS = 12_000;
 
 // Bare acknowledgements only. A word count cannot tell "sounds good, but make
 // it async" from "sounds good", and dropping that sentence silently freezes the

@@ -16,7 +16,7 @@ be left out.
 import json
 import sys
 
-VERSION = 4
+VERSION = 5
 # The custom message type claude-peers.ts puts a peer's message in a pi session as.
 PEER_MESSAGE = "claude-peer-message"
 
@@ -26,11 +26,9 @@ class Nullable:
         self.spec = spec
 
 
-# The order the bar lists states in; the first four want you.
-STATES = ("asking", "needs-reply", "failed", "done", "working", "idle")
-ATTENTION = STATES[:4]
-
-IDENTITY = {"label?": "str|null", "summary?": "str|null", "tags?": ["str"], "calls?": "int|null"}
+# The order the bar lists states in; the first three want you.
+STATES = ("asking", "failed", "done", "working", "idle")
+ATTENTION = STATES[:3]
 
 TURN = {"at": "int", "state": "str", "did": "str"}
 
@@ -43,7 +41,6 @@ ROW = {
     "id": "str",
     "agent": "str",
     "name": "str",
-    "label": "str",
     "cwd": "str",
     "pid": "int|null",
     "state": "|".join(STATES),
@@ -52,8 +49,6 @@ ROW = {
     "doing": "str",
     "summary": "str",
     "waitingFor": "str",
-    "ask": "str",
-    "reply": "str",
     "window": "int|null",
     # The latest finished turns, newest last.
     "history": [TURN],
@@ -70,12 +65,8 @@ ROW = {
     "bridge?": "str",
     # What you last asked it, kept only while the hub runs.
     "prompt?": "str",
-    # The closing words of a turn that needs a reply, as the agent wrote them.
+    # The closing words of a finished turn, as the agent wrote them.
     "said?": "str",
-    # How its turn ended, of those that call you: one of `judge.ENDINGS`.
-    "askKind?": "str",
-    # Why its model is no longer asked, so its row stops updating: failing or capped.
-    "readings?": "str",
     # The prompt a hook is holding open, which `answer` can settle by this `id`.
     "permission?": {"id": "int", **ASK},
     # The repository, the same from any of its worktrees; the directory's own name outside git.
@@ -94,14 +85,12 @@ ROW = {
     "nowAt?": "int",
     "counts?": {"edits": "int", "commands": "int", "failed": "int"},
     "trail?": [{"at": "int", "text": "str"}],
-    # A model's estimate for a command that has run long: minutes left when it was made.
-    "estimate?": {"left": "int|null", "note": "str", "at": "int", "after?": "int"},
 }
 
 RECENT = {
     "id": "str",
     "agent": "str",
-    "label": "str",
+    "name": "str",
     "summary": "str",
     "cwd": "str",
     "project": "str",
@@ -131,7 +120,6 @@ OPS = {
     "undo": {},
     # Brings back one session's, as another hub's `undo` asks.
     "undismiss": {"session": "str", "turn?": "int"},
-    "wrong": {"session": "str"},
     # The popout opened: you have seen what pulses.
     "seen": {},
     "toggle": {},
@@ -155,7 +143,6 @@ OPS = {
         "since": "int",
         "waitingFor": "str|null",
         "name": "str|null",
-        "record": IDENTITY,
         "hidden?": "bool",
         "tmux?": "str|null",
         **TRANSCRIPT,
@@ -166,8 +153,6 @@ OPS = {
     "permission": {"request": "int", "session": "str", "text": "str", "ask": ASK, "pid?": "int|null", "cwd?": "str|null",
                    "configDir?": "str|null", "hidden?": "bool", "tmux?": "str|null"},
     "named": {"name": "str|null"},
-    # No text: the call failed.
-    "judged": {"request": "int", "text?": "str"},
     # Both agents; Claude's hooks name their session and say who runs it.
     "session-start": {"session": "str", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null", "hidden?": "bool",
                       "tmux?": "str|null", **TRANSCRIPT},
@@ -181,7 +166,6 @@ OPS = {
     "turn-end": {"session?": "str", "pending?": "int", "error?": "bool", "said?": "str|null", "tasks?": [TASK],
                  "failure?": "str", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null", "hidden?": "bool",
                  "tmux?": "str|null", **TRANSCRIPT},
-    "relabel": {},
 }
 
 TYPES = {
@@ -189,9 +173,7 @@ TYPES = {
     "state": {"sessions": [ROW], "recent": [RECENT], "hidden?": "int", "links?": [LINK]},
     # `attach` says it is alive between states.
     "beat": {},
-    "row": {"row": Nullable(ROW), "identity": IDENTITY},
-    "judge": {"request": "int", "system": "str", "prompt": "str", "maxTokens": "int", "source": "str"},
-    "cancel": {"request": "int"},
+    "row": {"row": Nullable(ROW)},
     # `decision` answers a held `permission`; without one the prompt closed some other way.
     "reply": {"request": "int", "peers?": "str", "decision?": "allow|deny", "facts?": "any"},
     "menu": {"request": "int", "menu": "any"},
@@ -272,7 +254,6 @@ def typescript():
         f"export const PROTOCOL_VERSION = {VERSION};",
         f"export const PEER_MESSAGE_TYPE = {json.dumps(PEER_MESSAGE)};",
         "export type HubState = HubRow[\"state\"];",
-        f"export type HubIdentity = {_ts(IDENTITY)};",
         f"export type HubTurn = {_ts(TURN)};",
         f"export type HubRow = {_ts(ROW)};",
         "export type HubOp =",

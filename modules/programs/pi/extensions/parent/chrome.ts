@@ -91,8 +91,6 @@ export default function (pi: ExtensionAPI, { identity, userWait, editorHooks, hu
           thinkingOpen: !pi.getSettings().hideThinkingBlock,
         }),
       ),
-    hint: border.hint,
-    takeHint: border.takeHint,
   };
   const factory: EditorFactory = (tui, theme, keybindings) => {
     const editor = new PromptEditor(tui, theme, keybindings, state, painters, editorHooks);

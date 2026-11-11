@@ -1,7 +1,8 @@
 """How far a running turn has got, read off its transcript as it grows, with no model call.
 
 `Progress` is pure: fed one transcript entry at a time, it keeps the agent's own narration
-(the trail), the tools running now and the turn's counts. `Tail` follows the file. All of it
+(the trail), its latest words, the tools running now, the turn's counts and the title Claude
+Code gives the session. `Tail` follows the file. All of it
 stays in the daemon's memory: narration is the agent's words, so it stays off the state file and
 the work log, and comes back from the transcript after a restart.
 """
@@ -11,9 +12,8 @@ import os
 import re
 from datetime import datetime
 
-from .claude import EDITS, blocks, command_line, edit_target, peer_message, prompt_text, queued_text, shown_path
+from .claude import EDITS, SAID_MAX, blocks, command_line, edit_target, peer_message, prompt_text, queued_text, shown_path
 from .common import folded
-from .pi import SHELL_TOOLS, WRITE_TOOLS, mid_turn
 from .protocol import PEER_MESSAGE
 
 TRAIL_MAX = 12
@@ -21,14 +21,20 @@ STEP_CHARS = 160
 # What the row's own step line holds; the pane shows the rest.
 DOING_CHARS = 80
 LINE_CHARS = 80
+TITLE_CHARS = 80
 # A restart mid-turn reads this much of the end, not a transcript that can run to tens of megabytes.
 START_BYTES = 2 << 20
 MARKDOWN = re.compile(r"[*`#>]+")
 NOTIFIED = re.compile(r"<tool-use-id>([^<:]+)")
-OUTPUT_FILE = re.compile(r"written to: (\S+\.output)")
-# A command this old gets a reading of how long it has left, and another this often.
-ESTIMATE_AFTER_MS = 30 * 60_000
-ESTIMATE_EVERY_MS = 30 * 60_000
+# pi's tools.
+SHELL_TOOLS = ("bash", "bg_run")
+WRITE_TOOLS = ("edit", "write")
+
+
+def mid_turn(message):
+    """Whether pi carries on after `message`, the last one so far: it is waiting on a tool,
+    so a peer's message arriving now is steered into its turn rather than starting one."""
+    return bool(message) and (message.get("role") == "toolResult" or message.get("stopReason") == "toolUse")
 
 
 def stamp(value, fallback):
@@ -71,23 +77,32 @@ class Progress:
     def __init__(self, agent="claude", cwd=None):
         self.agent, self.cwd = agent, cwd
         self.jobs = {}
-        # Commands that finished, for the work log: `{line, ms, estimate?}`.
-        self.finished = []
         self.last_message = None
+        # Claude Code's own name for the session: `/rename`'s, else the one it generated.
+        self.title = ""
+        self.custom = False
         self.new_turn()
 
     def new_turn(self):
         """A new turn: what ran in the last one is over, but its background jobs aren't."""
         self.steps, self.running = [], {}
         self.edits = self.commands = self.failed = 0
+        # What the agent said since its last tool call: its closing words, once the turn ends.
+        self.words = []
+
+    @property
+    def said(self):
+        return "\n".join(self.words).strip()[-SAID_MAX:]
 
     def _say(self, text, at):
+        self.words.append(str(text or ""))
         line = first_line(text)
         if line:
             self.steps = [*self.steps, {"at": at, "text": line}][-TRAIL_MAX:]
 
     def _call(self, call_id, line, at, edit=False, command=False):
-        self.running[call_id] = {"line": line, "at": at, "shell": bool(command)}
+        self.words = []
+        self.running[call_id] = {"line": line, "at": at}
         self.edits += edit
         self.commands += command
 
@@ -97,11 +112,15 @@ class Progress:
     def _feed_claude(self, entry, now):
         if entry.get("isSidechain"):
             return
+        if entry.get("type") == "custom-title" and isinstance(entry.get("customTitle"), str):
+            self.title, self.custom = folded(entry["customTitle"])[:TITLE_CHARS], True
+        elif entry.get("type") == "ai-title" and isinstance(entry.get("aiTitle"), str) and not self.custom:
+            self.title = folded(entry["aiTitle"])[:TITLE_CHARS]
         at = stamp(entry.get("timestamp"), now)
         if peer_message(entry) or prompt_text(entry) is not None:
             self.new_turn()
             return
-        self._notified(queued_text(entry), at)
+        self._notified(queued_text(entry))
         for block in blocks(entry):
             kind = block.get("type")
             if entry.get("type") == "assistant" and kind == "text":
@@ -114,30 +133,20 @@ class Progress:
             elif kind == "tool_result":
                 self._result(block.get("tool_use_id"), block, entry.get("toolUseResult"), at)
             elif kind == "text":
-                self._notified(block.get("text"), at)
+                self._notified(block.get("text"))
 
     def _result(self, call_id, block, result, at):
         call = self.running.pop(call_id, None)
         self.failed += bool(block.get("is_error"))
         # A background job's tool call returns at once, and the job goes on.
         if call and isinstance(result, dict) and (result.get("backgroundTaskId") or result.get("isAsync")):
-            output = OUTPUT_FILE.search(json.dumps(block.get("content")))
-            self.jobs[call_id] = {**call, "at": at, "task": result.get("backgroundTaskId") or result.get("agentId"),
-                                  "output": output.group(1) if output else None}
-        elif call:
-            self._finish(call, at)
+            self.jobs[call_id] = {**call, "at": at, "task": result.get("backgroundTaskId") or result.get("agentId")}
 
-    def _finish(self, call, at):
-        if call.get("shell"):
-            self.finished.append({"line": call["line"], "ms": at - call["at"], "estimate": call.get("estimate")})
-
-    def _notified(self, text, at):
+    def _notified(self, text):
         """A background job reporting back, which names the tool call that started it."""
         if text and str(text).lstrip().startswith("<task-notification>"):
             for call_id in NOTIFIED.findall(text):
-                job = self.jobs.pop(call_id, None)
-                if job:
-                    self._finish(job, at)
+                self.jobs.pop(call_id, None)
 
     def _feed_pi(self, entry, now):
         at = stamp(entry.get("timestamp"), now)
@@ -153,10 +162,8 @@ class Progress:
         if role == "user":
             self.new_turn()
         elif role == "toolResult":
-            call = self.running.pop(message.get("toolCallId"), None)
+            self.running.pop(message.get("toolCallId"), None)
             self.failed += bool(message.get("isError"))
-            if call:
-                self._finish(call, at)
         elif role == "assistant":
             content = message.get("content")
             for block in content if isinstance(content, list) else []:
@@ -182,29 +189,12 @@ class Progress:
             oldest = min(running, key=lambda call: call["at"])
             fields["now"] = oldest["line"] + (f" +{len(running) - 1}" if len(running) > 1 else "")
             fields["nowAt"] = oldest["at"]
-            if oldest.get("estimate"):
-                fields["estimate"] = oldest["estimate"]
         if self.edits or self.commands or self.failed:
             fields["counts"] = {"edits": self.edits, "commands": self.commands, "failed": self.failed}
         if self.steps:
             fields["trail"] = list(self.steps)
             fields["step"] = self.steps[-1]["text"][:DOING_CHARS]
         return fields
-
-
-    def due_estimates(self, now, jobs=False):
-        """The commands that have run long enough to be worth a reading, marked as asked. `jobs`
-        takes background jobs too, as for `view`. Only commands: a subagent has no end to read."""
-        calls = [*self.running.values(), *(self.jobs.values() if jobs else ())]
-        due = [call for call in calls if call.get("shell") and now - call["at"] >= ESTIMATE_AFTER_MS
-               and now - call.get("asked", 0) >= ESTIMATE_EVERY_MS]
-        for call in due:
-            call["asked"] = now
-        return due
-
-    def drain_finished(self):
-        finished, self.finished = self.finished, []
-        return finished
 
 
 class Tail:
@@ -223,7 +213,6 @@ class Tail:
                 return False
             if size < self.offset:
                 self.offset = 0
-            catching_up = self.offset == 0
             with open(self.path, "rb") as transcript:
                 if self.offset == 0 and size > START_BYTES:
                     # The first of it is the rest of a line cut in two.
@@ -248,7 +237,4 @@ class Tail:
                     self.progress.feed(entry, now)
             except (ValueError, AttributeError, TypeError):
                 continue
-        # What ended before this tail began was logged by the daemon that saw it end.
-        if catching_up:
-            self.progress.drain_finished()
         return self.progress.view() != before

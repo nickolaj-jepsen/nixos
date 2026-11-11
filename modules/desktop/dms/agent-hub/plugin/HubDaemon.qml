@@ -50,13 +50,6 @@ Item {
         });
     }
 
-    function wrong(sessionId) {
-        socket.send({
-            "op": "wrong",
-            "session": sessionId
-        });
-    }
-
     function seen() {
         socket.send({
             "op": "seen"
@@ -128,7 +121,7 @@ Item {
             if (linkUp)
                 send({
                     "op": "subscribe",
-                    "version": 4
+                    "version": 5
                 });
             else {
                 root.sessions = [];

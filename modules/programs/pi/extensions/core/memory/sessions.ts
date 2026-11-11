@@ -3,7 +3,7 @@
  * prompt: they are cited when asked for, never injected, so an old conversation
  * cannot quietly become a fact.
  *
- * A session's label and summary, which parent/identity.ts keeps current, are
+ * A session's label and summary, which older sessions carry on their branch, are
  * searched too: they say what a whole session was about where any one message
  * only says what was said, so a match there ranks above a message.
  *

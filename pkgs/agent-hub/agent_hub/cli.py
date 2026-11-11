@@ -42,7 +42,7 @@ def status_row(rows, session_id=None, pid=None):
 
 
 def cmd_status(args):
-    """Prints this session's row as `state<TAB>reason<TAB>label` (`--json` for the row itself),
+    """Prints this session's row as `state<TAB>reason<TAB>name` (`--json` for the row itself),
     and nothing at all when the hub is down or does not know the session:
     this feeds status lines, which must never fail or print an error of their own.
     Naming no session, prints every row and how many are hidden (`--json` for the state)."""
@@ -56,7 +56,7 @@ def cmd_status(args):
     if args.json:
         print(json.dumps(row))
     else:
-        print("\t".join(folded(row.get(key) or "") for key in ("state", "reason", "label")))
+        print("\t".join(folded(row.get(key) or "") for key in ("state", "reason", "name")))
 
 
 def print_state(state, as_json):
@@ -66,19 +66,18 @@ def print_state(state, as_json):
         print(json.dumps(state))
         return
     for row in state.get("sessions") or []:
-        stopped = [f"readings stopped: {row['readings']}"] if row.get("readings") else []
-        print("\t".join([*(folded(str(row.get(key) or "")) for key in ("state", "name", "cwd", "reason")), *stopped]))
+        print("\t".join(folded(str(row.get(key) or "")) for key in ("state", "name", "cwd", "reason")))
     if state.get("hidden"):
         print(f"hidden\t{state['hidden']}")
 
 
 def cmd_recent(args):
-    """Lists the sessions that ended, newest first: `label<TAB>resume command`."""
+    """Lists the sessions that ended, newest first: `name<TAB>resume command`."""
     state = hub_state()
     if state is None:
         sys.exit("agent-hub: the hub is not running")
     for item in state.get("recent") or []:
-        print(json.dumps(item) if args.json else f"{item['label']}\t{item['resume']}")
+        print(json.dumps(item) if args.json else f"{item['name']}\t{item['resume']}")
 
 
 def hook_session(event):
@@ -156,7 +155,7 @@ def cmd_hook(_args):
 
 
 def cmd_log(args):
-    """Prints the work log since `--since`, grouped by session: its label and resume
+    """Prints the work log since `--since`, grouped by session: its name and resume
     command, then one line per turn."""
     since = worklog.since_ms(args.since)
     groups = worklog.by_session(worklog.read(log_path(load_config()), since))
@@ -178,18 +177,14 @@ def cmd_find(args):
 def print_group(group):
     last = group[-1]
     resume = resume_command(last.get("agent"), last.get("session") or "", last.get("cwd"), last.get("configDir"))
-    print(f"{last.get('label') or '(unnamed)'}\t{resume}")
+    print(f"{worklog.name_of(last) or '(unnamed)'}\t{resume}")
     for line in group:
-        if "next" in line or "job" in line:
+        # Before the gate went, the log also held lines about prompts, jobs and verdicts.
+        if not line.get("state") or any(key in line for key in ("wrong", "unopened", "answered")):
             continue
         stamp = datetime.fromtimestamp((line.get("at") or 0) / 1000).strftime("%a %H:%M")
-        text = line.get("did") or ""
-        if line.get("ask"):
-            text = f"{text} [asks: {line['ask']}]".strip()
-        answered = {"allow": "allowed ", "deny": "denied "}.get(line.get("answered"), "")
-        flag = "wrong " if line.get("wrong") else "unopened " if line.get("unopened") else "peer " if line.get("peer") else answered
-        word = flag + (line.get("state") or "done")
-        print(f"  {stamp}  {word:<11} {folded(text)}")
+        word = ("peer " if line.get("peer") else "") + line["state"]
+        print(f"  {stamp}  {word:<11} {folded(line.get('did') or '')}")
 
 
 def cmd_focus_next(_args):
@@ -215,17 +210,16 @@ def demo_sessions():
             "history": [{"at": t - 720_000, "state": "done", "did": "Fixed the failing auth tests"}],
             "permission": {"id": 0, "tool": "Bash", "about": "Rebase onto main and remove the build folder", "kind": "command", "complete": True,
                            "body": "cd ~/dev/app && git fetch origin\ngit rebase origin/main && rm -rf build/"}}),
-        ("demo-ask", "pi", "idle", "fixture cleanup", {"project": "pocketnix",
-            "turnState": "blocked", "ask": "keep the old fixture, or regenerate it?", "askKind": "asked", "reply": "Regenerate it",
+        ("demo-ask", "pi", "idle", "fixture cleanup", {"project": "pocketnix", "turnState": "done",
             "prompt": "Clean up the test fixtures.",
             "said": "The old fixture still passes, but it pins a format nothing else writes any more.\n\nKeep the old fixture, or regenerate it?"}),
-        ("demo-fail", "pi", "idle", "nightly bot", {"project": "nixos", "turnState": "failed", "summary": "The update bot still fails on the darwin eval.", "readings": "failing"}),
-        ("demo-done", "pi", "idle", "footer popup width", {"project": "pi-mono", "turnState": "done", "summary": "Fixed the footer popup width on narrow terminals."}),
+        ("demo-fail", "pi", "idle", "nightly bot", {"project": "nixos", "turnState": "failed", "summary": "API error: overloaded"}),
+        ("demo-done", "pi", "idle", "footer popup width", {"project": "pi-mono", "turnState": "done",
+            "said": "Fixed the footer popup width on narrow terminals."}),
         ("demo-busy1", "cli", "busy", "devenv-tilt-68", {"project": "devenv-tilt"}),
         ("demo-busy2", "pi", "busy", "flaky ci retries", {"project": "retry-lab",
             "doing": "Rerunning the retry test under load.", "branch": "retries", "activity": t - 30_000,
             "now": "just test retries", "nowAt": t - 2_400_000, "counts": {"edits": 4, "commands": 7, "failed": 1},
-            "estimate": {"left": 20, "note": "31/40 built", "at": t - 300_000},
             "trail": [{"at": t - 1_500_000, "text": "Reading the retry code."}, {"at": t - 1_200_000, "text": "Wrote a test that fails the same way."},
                       {"at": t - 720_000, "text": "Rerunning the retry test under load."}]}),
         ("demo-idle1", "cli", "idle", "dotfiles-2a", {"project": "dotfiles"}),
@@ -256,21 +250,6 @@ def cmd_demo(_args):
         pass
 
 
-def cmd_label(_args):
-    from .bench import label
-
-    try:
-        label(load_config())
-    except KeyboardInterrupt:
-        print()
-
-
-def cmd_eval(args):
-    from .bench import evaluate
-
-    evaluate(load_config(), args.words_only)
-
-
 def cmd_daemon(_args):
     # Imported here: the hook and `status` run on every prompt and status-line refresh.
     import asyncio
@@ -293,10 +272,6 @@ def main(argv=None):
     log.add_argument("--since", default="1d", help="1d, 3h, 2w, today, yesterday or a date (default 1d)")
     log.add_argument("--json", action="store_true", help="print the log's own JSON lines")
     log.set_defaults(func=cmd_log)
-    commands.add_parser("label", help="say whether past turns should have called you, for `eval`").set_defaults(func=cmd_label)
-    evaluate = commands.add_parser("eval", help="replay the gate over your labels and print how it did")
-    evaluate.add_argument("--words-only", action="store_true", help="the regex alone, with no model calls")
-    evaluate.set_defaults(func=cmd_eval)
     find = commands.add_parser("find", help="find sessions by what they were called or did, with how to resume them")
     find.add_argument("words", nargs="+")
     find.set_defaults(func=cmd_find)
@@ -307,7 +282,7 @@ def main(argv=None):
     status = commands.add_parser("status", help="print one session's state, as its own agent TUI shows it, or every session's")
     status.add_argument("--session-id", help="the session's registry id")
     status.add_argument("--pid", type=int, help="the agent's pid, or a pid under it")
-    status.add_argument("--json", action="store_true", help="print the hub's row instead of state, reason and label")
+    status.add_argument("--json", action="store_true", help="print the hub's row instead of state, reason and name")
     status.set_defaults(func=cmd_status)
     commands.add_parser("toggle", help="dismiss or bring back the focused session's finished turn").set_defaults(func=cmd_toggle)
     args = parser.parse_args(argv)

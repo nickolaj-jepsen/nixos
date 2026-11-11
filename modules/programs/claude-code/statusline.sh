@@ -274,42 +274,33 @@ path_git=$path
 if [ -n "$path" ] && [ -n "$git_full" ]; then path_git+=" "; fi
 path_git+=$git_full
 
-# The hub's own row for this session: its verdict on the turn, which can outlast
-# the TUI's (a question in the last words, a turn that failed) and is what the
-# bar shows, and the label it gave the work. Empty unless the daemon is up and
-# knows this session.
+# The hub's own row for this session: how the turn ended, which can outlast the
+# TUI's (a turn that failed) and is what the bar shows. Empty unless the daemon is
+# up and knows this session.
 hub=""
-label=""
 if [ -n "$session" ] && command -v agent-hub >/dev/null 2>&1; then
   args=(status --session-id "$session")
   # After /clear the id in the input can trail the registry's; the pid cannot.
   if [ -n "${CLAUDE_PID:-}" ]; then args+=(--pid "$CLAUDE_PID"); fi
-  # `state<TAB>reason<TAB>label`, each already one line.
+  # `state<TAB>reason<TAB>name`, each already one line.
   line=$(timeout 1 agent-hub "${args[@]}" 2>/dev/null | head -n 1) || line=""
   state=${line%%$'\t'*}
   why=""
   if [[ "$line" == *$'\t'*$'\t'* ]]; then
     rest=${line#*$'\t'}
     why=${rest%%$'\t'*}
-    label=${rest#*$'\t'}
   fi
-  if [ ${#label} -gt 40 ]; then label="${label:0:40}…"; fi
   case "$state" in
     asking) hub="${red}"$'\uf024'" asking${reset}" ;;
-    needs-reply) hub="${warn}"$'\uf024'" needs reply${reset}" ;;
     failed) hub="${red}"$'\uf00d'" failed${reset}" ;;
     done) hub="${green}"$'\uf00c'" done${reset}" ;;
     working) hub="${dim}"$'\uf017'" working${reset}" ;;
   esac
-  # The ask or the failure is the part worth reading; a done turn's summary is not.
-  if [ -n "$hub" ] && [ -n "$why" ]; then
-    case "$state" in
-      needs-reply|failed)
-        shown=${why:0:40}
-        if [ "$shown" != "$why" ]; then shown+="…"; fi
-        hub+="${dim}: ${shown}${reset}"
-        ;;
-    esac
+  # The failure is the part worth reading; a done turn's summary is not.
+  if [ "$state" = failed ] && [ -n "$why" ]; then
+    shown=${why:0:40}
+    if [ "$shown" != "$why" ]; then shown+="…"; fi
+    hub+="${dim}: ${shown}${reset}"
   fi
 fi
 
@@ -324,7 +315,6 @@ if [ "$cols" -gt 4 ]; then target=$((cols - 4)); else target=0; fi
 jq -r \
   --arg profile "$profile" \
   --arg hub "$hub" \
-  --arg label "$label" \
   --arg dim "$dim" \
   --arg warn "$warn" \
   --arg reset "$reset" \
@@ -348,7 +338,6 @@ jq -r \
         end;
     [
       (if $profile == "work" then "\($warn)work\($reset)" else empty end),
-      (if $label != "" then $label else empty end),
       .model.display_name,
       (.effort.level // empty),
       (if .fast_mode then "fast" else empty end),

@@ -1,12 +1,9 @@
 /**
- * This session's connection to agent-hub, the daemon that names and judges
- * every live agent session (pkgs/agent-hub; `agent_hub/protocol.py` defines every
- * message, and the build generates `protocol.gen.ts` from it). The session
- * attaches for its life: it reports its turns and dialogs with where its session
- * file and leaf are, which the hub reads for itself, runs the model calls the hub
- * asks for with pi's own side model, and gets back its row, which is what every
- * surface shows about it: the state, why, the label, the step in flight, the ask
- * and a drafted reply.
+ * This session's connection to agent-hub, the daemon that knows every live
+ * agent session (pkgs/agent-hub; `agent_hub/protocol.py` defines every message,
+ * and the build generates `protocol.gen.ts` from it). The session attaches for
+ * its life: it reports its turns and dialogs with where its session file and leaf
+ * are, and gets back its row, which is what every surface shows about it.
  *
  * Opened at session_start in the TUI and reopened when the daemon restarts or
  * comes up later; each (re)attach re-sends what the session already knows. A
@@ -21,25 +18,10 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Dialogs } from "./dialogs.ts";
-import {
-  type HubIdentity,
-  type HubMessage,
-  type HubOp,
-  type HubRow,
-  PROTOCOL_VERSION,
-} from "./protocol.gen.ts";
+import { type HubMessage, type HubOp, type HubRow, PROTOCOL_VERSION } from "./protocol.gen.ts";
 
-/** A model call the hub wants run; `signal` aborts when the hub cancels it. */
-export type JudgeRequest = {
-  system: string;
-  prompt: string;
-  maxTokens: number;
-  source: string;
-  signal: AbortSignal;
-};
-
-/** What an attach re-sends: the persisted identity and the person's own name, if any. */
-export type AttachInfo = { record: HubIdentity; name?: string };
+/** What an attach re-sends: the person's own name for the session, if any. */
+export type AttachInfo = { name?: string };
 
 type Status = "busy" | "idle" | "waiting";
 
@@ -61,7 +43,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
   const rowsListeners = new Set<() => void>();
   let row: HubRow | undefined;
   let state: Extract<HubMessage, { type: "state" }> | undefined;
-  let identity: HubIdentity | undefined;
   let ctx: ExtensionContext | undefined;
   let live = false;
   let socket: Socket | undefined;
@@ -72,14 +53,12 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
   /** What the run itself is doing; `status` is this unless a dialog is open. */
   let base: Status = "idle";
   let since = Date.now();
-  let attachInfo: () => AttachInfo = () => ({ record: {} });
-  let judge: ((request: JudgeRequest) => Promise<string | undefined>) | undefined;
+  let attachInfo: () => AttachInfo = () => ({});
   let requests = 0;
   const replies = new Map<
     number,
     (reply: Extract<HubMessage, { type: "reply" }> | undefined) => void
   >();
-  const judging = new Map<number, AbortController>();
 
   const notify = () => {
     for (const listener of listeners) listener();
@@ -121,37 +100,20 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     status = next;
   };
 
-  /** Ends what the connection had in flight: replies come back empty, model calls abort. */
+  /** Ends what the connection had in flight: replies come back empty. */
   const settle = () => {
     for (const resolve of replies.values()) resolve(undefined);
     replies.clear();
-    for (const controller of judging.values()) controller.abort();
-    judging.clear();
-  };
-
-  const onJudge = async ({ request, ...call }: Extract<HubMessage, { type: "judge" }>) => {
-    const controller = new AbortController();
-    judging.set(request, controller);
-    const text = judge
-      ? await judge({ ...call, signal: controller.signal }).catch(() => undefined)
-      : undefined;
-    judging.delete(request);
-    write(text === undefined ? { op: "judged", request } : { op: "judged", request, text });
   };
 
   const onMessage = (message: HubMessage) => {
     if (message.type === "row") {
       row = message.row ?? undefined;
-      identity = message.identity;
       notify();
     } else if (message.type === "state") {
       state = message;
       // Only what draws other sessions cares: the session's own row did not move.
       notifyRows();
-    } else if (message.type === "judge") {
-      void onJudge(message);
-    } else if (message.type === "cancel") {
-      judging.get(message.request)?.abort();
     } else if (message.type === "reply") {
       replies.get(message.request)?.(message);
       replies.delete(message.request);
@@ -202,7 +164,7 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
 
     current.on("connect", () => {
       if (!ctx) return;
-      const { record, name } = attachInfo();
+      const { name } = attachInfo();
       const waiting = waitingFor();
       attached = true;
       write({
@@ -215,7 +177,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
         since,
         waitingFor: waiting ?? null,
         name: name ?? null,
-        record,
         ...(process.env.AGENT_HUB_HIDDEN === "1" ? { hidden: true } : {}),
         tmux: process.env.TMUX_PANE ?? null,
         ...transcript(ctx),
@@ -272,7 +233,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     socket = undefined;
     row = undefined;
     state = undefined;
-    identity = undefined;
   });
 
   return {
@@ -282,8 +242,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     rows: () => state?.sessions ?? [],
     /** The sessions that ended, newest first, as far as the hub still lists them. */
     recent: () => state?.recent ?? [],
-    /** What the hub last said the session is called. */
-    identity: () => identity,
     /** Whether the session is attached right now. */
     connected: () => attached,
     /** Registers `listener` for every change of this session's row; returns the unsubscribe. */
@@ -306,10 +264,6 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     /** What each (re)attach re-sends. */
     attachWith(info: () => AttachInfo) {
       attachInfo = info;
-    },
-    /** Runs the hub's model calls; an undefined answer reports the call as failed. */
-    judgeWith(run: (request: JudgeRequest) => Promise<string | undefined>) {
-      judge = run;
     },
     /**
      * A turn starts on `prompt`, which is not on the branch yet; `fromPerson` is
@@ -351,17 +305,18 @@ export const createHub = (pi: ExtensionAPI, dialogs: Dialogs) => {
     /** Puts away a session's finished turn, or that turn alone when it is named. */
     dismiss: (session: string, turn?: number) =>
       write({ op: "dismiss", session, ...(turn === undefined ? {} : { turn }) }),
-    /** The turn settled; `pending` background jobs still run for it, `error` if the run failed. */
-    turnEnd(pending: number, error: boolean) {
+    /**
+     * The turn settled; `pending` background jobs still run for it, `error` if the run
+     * failed, and `said` is its closing words.
+     */
+    turnEnd(pending: number, error: boolean, said: string) {
       base = "idle";
       settleStatus();
-      if (ctx) write({ op: "turn-end", pending, error, ...transcript(ctx) });
+      if (ctx) write({ op: "turn-end", pending, error, said, ...transcript(ctx) });
     },
     named(name: string | undefined) {
       write({ op: "named", name: name ?? null });
     },
-    /** Asks for a reading now; false when the hub is not there to ask. */
-    relabel: () => write({ op: "relabel" }),
   };
 };
 

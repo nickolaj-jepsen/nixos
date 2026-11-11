@@ -1,9 +1,9 @@
-"""The hub: every live pi and Claude Code session, what it is called, what it is on and
-how its last turn ended, for the bar and for each agent's own TUI.
+"""The hub: every live pi and Claude Code session, what it is on and how its last turn
+ended, for the bar and for each agent's own TUI.
 
 `agent-hub daemon` serves `protocol` on its socket (`common.socket_path`). This module is
 the shell around `model`: it turns the registry, pi's connection and Claude's hooks into
-changes of a `Session`, runs `readings`, and publishes rows. Sessions come from the
+changes of a `Session`, and publishes rows. Sessions come from the
 registry (Claude Code's, which pi writes into too) and from pi's attach; Claude's hooks
 can name one before the registry has it, and it is kept while its pid lives.
 """
@@ -16,13 +16,12 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import judge, links, menus, model, peers, pi, protocol, worklog
+from . import links, menus, model, peers, protocol, worklog
 from .common import (
     LINE_MAX, alive, folded, label_line, log_path, now_ms, peer_uid, resume_argv, resume_command, socket_path, write_atomic,
 )
 from .desktop import Desktop
 from .progress import Tail
-from .readings import Readings
 from .registry import RegistrySource
 
 RECENT_MAX = 100
@@ -33,9 +32,7 @@ PROMPT_MAX = 500
 # How often a working session's transcript is looked at, and how often its row is sent regardless.
 PROGRESS_S = 2
 ACTIVITY_S = 15
-# A command shorter than this says nothing about how long one takes.
-JOB_LOG_MS = 60_000
-DEMO_DETAILS = ("prompt", "permission", "project", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail", "askKind", "estimate", "answer", "readings")
+DEMO_DETAILS = ("prompt", "permission", "project", "branch", "changed", "peers", "activity", "jobs", "history", "now", "nowAt", "counts", "trail")
 # The command behind a folder menu's app, the first one found. The editors' commands come
 # from menus.EDITORS, which also knows the argv that opens a path in each.
 APP_COMMANDS = {**{name: spec["commands"] for name, spec in menus.EDITORS.items()}, "smerge": ("smerge",), "files": ("nautilus", "xdg-open"), "ghostty": ("ghostty",)}
@@ -55,9 +52,6 @@ class Conn:
         self.demo = {}
         # The session this connection is attached for.
         self.session = None
-        # Judge requests out, request → the future its answer lands on.
-        self.calls = {}
-        self.next_call = 0
         self.pushed = None
 
     def send(self, payload):
@@ -78,7 +72,6 @@ class Hub:
         self.app_path = os.pathsep.join(cfg["appPath"]) if cfg.get("appPath") else None
         self.state_file = Path(cfg["state"]).expanduser()
         self.log_file = log_path(cfg)
-        self.readings = Readings(self, cfg.get("claude"))
         # Session id → its transcript as far as it has been followed.
         self.tails = {}
         self.conns = set()
@@ -169,19 +162,28 @@ class Hub:
         now, moved = now_ms(), False
         for session in self.visible().values():
             turn = session.turn
-            if not session.transcript or turn is None or not (turn.open or (turn.outcome or {}).get("jobs")):
-                continue
-            tail = self.tails.get(session.id)
-            if tail is None or tail.path != session.transcript:
-                tail = self.tails[session.id] = Tail(session.transcript, session.agent, session.cwd)
-            moved = tail.advance(now) or moved
-            for finished in tail.progress.drain_finished():
-                if finished["ms"] >= JOB_LOG_MS:
-                    worklog.append(self.log_file, worklog.job_line(self._log_fields(session), finished, now))
-            if session.state(now) == "working":
-                for call in tail.progress.due_estimates(now, jobs=not turn.open):
-                    self._spawn(self.readings.estimate(session, call, self.log_file))
+            if turn is not None and (turn.open or (turn.outcome or {}).get("jobs")):
+                moved = self._tail(session, now) or moved
         return moved
+
+    def _tail(self, session, now):
+        """Reads on in a session's transcript; returns whether its progress moved."""
+        if not session.transcript:
+            return False
+        tail = self.tails.get(session.id)
+        if tail is None or tail.path != session.transcript:
+            tail = self.tails[session.id] = Tail(session.transcript, session.agent, session.cwd)
+        moved = tail.advance(now)
+        if tail.progress.title and tail.progress.title != session.title:
+            session.title, moved = tail.progress.title, True
+        return moved
+
+    def _said(self, session, said):
+        """The closing words: the agent's own, else the end of its transcript, which can lag. The
+        transcript is read on either way, for a title written after the last look."""
+        self._tail(session, now_ms())
+        tail = self.tails.get(session.id)
+        return said or (tail.progress.said if tail else "")
 
     # Sessions.
 
@@ -226,9 +228,8 @@ class Hub:
                 moved = session.observe(entry.get("status"), entry.get("waitingFor"), at, registry=True)
                 if moved == "busy":
                     asyncio.get_running_loop().call_later(model.REGISTRY_GRACE_MS / 1000, self.changed)
-                if moved == "started" or session.registry_turn(now) is not None:
-                    self.readings.cancel(sid)
-                # pi's ending is read once it attaches: its own model does the reading.
+                session.registry_turn(now)
+                # pi's ending is settled once it attaches.
                 if session.agent != "pi":
                     self._recover(session)
                 self._settle_holds(session)
@@ -255,16 +256,14 @@ class Hub:
         self.publish()
 
     def _recover(self, session):
-        """A turn the last daemon left open or unread: one its agent has since finished
-        gets read, since its ending went unheard. The first word after a restart settles it."""
+        """A turn the last daemon left open: one its agent has since finished ends, by its
+        transcript, since its ending went unheard. The first word after a restart settles it."""
         turn = session.turn
         if turn is None or not turn.restored:
             return
         turn.restored = False
         if session.status == "idle":
-            n = session.end_turn(now_ms())
-            if n is not None:
-                self.readings.settle(session, n, {})
+            self._end_turn(session, model.ending(self._said(session, "")))
 
     def _read_focused(self, sessions):
         """A `done` turn whose window has focus has been read; one that asks or failed still wants you."""
@@ -276,57 +275,27 @@ class Hub:
                 session.dismiss()
 
     def _retire(self, session):
-        """A session that ended goes to the recent list, when it was ever named."""
+        """A session that ended goes to the recent list, when it ever finished a turn."""
         self._release_all(session)
         del self.sessions[session.id]
         self.tails.pop(session.id, None)
-        self.readings.forget(session.id)
-        if not session.label:
+        if not session.history:
             return
         # What it is called, not the turn it was on or the process it ran in.
         item = {k: v for k, v in session.saved().items() if k not in ("turn", "pid", "dismissed")}
-        item["project"], item["endedAt"] = session.project, now_ms()
+        item["name"], item["project"], item["endedAt"] = session.shown_name(), session.project, now_ms()
         self.recent = [item] + [r for r in self.recent if r["id"] != session.id]
         del self.recent[RECENT_MAX:]
 
-    def turn_read(self, session, n, outcome):
-        """How turn `n` ended, as `readings` made it out; None when there was nothing to read."""
-        if outcome is None:
-            session.reading(n, False)
-        elif session.read(n, outcome, now_ms()):
-            worklog.append(self.log_file, {**session.history[-1], **self._log_fields(session), **verdict_fields(outcome), "turn": n})
+    def _end_turn(self, session, outcome):
+        """The open turn ends as `outcome` says, unless it already has an ending."""
+        if session.end_turn(now_ms(), outcome):
+            worklog.append(self.log_file, {**session.history[-1], **self._log_fields(session), "turn": session.turn.n})
             self._read_focused([session])
-        self.publish()
-
-    def aside_read(self, session, aside, outcome):
-        """How a peer's turn ended, as `readings` made it out. It is always in the work log."""
-        now = now_ms()
-        reached = session.read_aside(aside, outcome, now)
-        if reached is None:
-            return
-        worklog.append(self.log_file, {
-            "at": aside.ended, "state": model.FINISHED.get(outcome["state"], "done"), "did": outcome.get("summary") or "",
-            **self._log_fields(session), **verdict_fields(outcome), "peer": True,
-            # What reached the row is a turn of its own, which your next prompt's line names.
-            **({"turn": session.turn.n} if reached else {}),
-        })
-        self.publish()
 
     def _log_fields(self, session):
-        return {"session": session.id, "agent": session.agent, "cwd": session.cwd, "configDir": session.config_dir, "label": session.label}
-
-    def _log_next(self, session, before, prompt, now):
-        """What your prompt says of the turn before it, unless that one is still going or still
-        being read: no verdict yet doesn't mean it was cut short."""
-        if before is None or before.open or before.reading:
-            return
-        worklog.append(self.log_file, {"at": now, **self._log_fields(session), "turn": before.n, "delay": now - before.ended,
-                                       **worklog.next_prompt(before.outcome, prompt)})
-
-    def notice(self, sid, text):
-        conn = self.attached.get(sid)
-        if conn is not None:
-            conn.send({"type": "notice", "text": text})
+        return {"session": session.id, "agent": session.agent, "cwd": session.cwd, "configDir": session.config_dir,
+                "name": session.shown_name()}
 
     async def _peers(self, session, worktree_tool):
         """The note on the other sessions in this one's working tree, "" for none."""
@@ -405,8 +374,6 @@ class Hub:
         session = self.sessions.get(sid)
         if host not in self.links and not (session and session.holds):
             return
-        if viewer:
-            self._log_verdict(row, session, answered=decision)
         if host in self.links:
             self.links[host].send({"op": "answer", "session": own, "ask": ask, "allow": allow})
             return
@@ -514,9 +481,6 @@ class Hub:
 
     def _row_of(self, session, now):
         row = session.row(now, self.desktop.window_of(session.pid))
-        stopped = self.readings.stopped(session)
-        if stopped:
-            row["readings"] = stopped
         if row["state"] == "working" and session.transcript:
             try:
                 row["activity"] = int(os.stat(session.transcript).st_mtime * 1000)
@@ -526,8 +490,8 @@ class Hub:
         return row
 
     def _with_progress(self, session, row):
-        """What the transcript says of a running turn, or of the jobs one ended to wait on. The
-        agent's latest narration is fresher than the step a model named as the turn started."""
+        """What the transcript says of a running turn, or of the jobs one ended to wait on: the
+        agent's latest narration is the step it is on."""
         tail, turn = self.tails.get(session.id), session.turn
         if tail is None or turn is None or not (turn.open or (turn.outcome or {}).get("jobs")):
             return
@@ -552,8 +516,8 @@ class Hub:
 
     def state(self, rows):
         """The `state` message: the rows the bar shows, what ended, and how many are hidden."""
-        recent = [{"id": r["id"], "agent": r.get("agent") or "claude", "label": r.get("label") or "",
-                   "summary": r.get("summary") or "", "cwd": r.get("cwd") or "", "project": r.get("project") or "", "endedAt": r.get("endedAt") or 0,
+        recent = [{"id": r["id"], "agent": r.get("agent") or "claude", "name": r.get("name") or r.get("label") or "",
+                   "summary": ((r.get("history") or [{}])[-1]).get("did") or "", "cwd": r.get("cwd") or "", "project": r.get("project") or "", "endedAt": r.get("endedAt") or 0,
                    "resume": resume_command(r.get("agent"), r["id"], r.get("cwd"), r.get("config_dir")),
                    "history": r.get("history") or []} for r in self.recent]
         shown = [row for row in rows if not row.get("hidden")]
@@ -598,7 +562,7 @@ class Hub:
         rows = {row["id"]: row for row in rows}
         for sid, conn in self.attached.items():
             session = self.sessions.get(sid)
-            push = {"type": "row", "row": rows.get(sid), "identity": session.identity() if session else {}}
+            push = {"type": "row", "row": rows.get(sid)}
             if push != conn.pushed:
                 conn.pushed = push
                 conn.send(push)
@@ -612,8 +576,7 @@ class Hub:
             self._alert_timer = asyncio.get_running_loop().call_later(due / 1000, self.publish)
 
     def _journal(self, rows):
-        """One line per state change: session, states, what settled it and how much it read.
-        Never the words: a homelab journal ships to Grafana Cloud. Asks stay in the work log.
+        """One line per state change. Never the words: a homelab journal ships to Grafana Cloud.
         A turn gone straight to idle says why: `read` (focus put away its ending) or `interrupted`."""
         states = {row["id"]: row["state"] for row in rows}
         for sid, state in states.items():
@@ -622,16 +585,10 @@ class Hub:
                 continue
             session = self.sessions.get(sid)
             turn = session.turn if session else None
-            outcome = (turn.outcome if turn else None) or {}
-            finished = state in model.DISMISSABLE
-            if finished:
-                source = outcome.get("source", "?")
-            elif state == "idle" and old == "working" and turn is not None and not turn.open:
-                source = "read" if outcome else "interrupted"
-            else:
-                source = "status"
-            chars = outcome.get("chars", 0) if finished or source == "read" else 0
-            print(f"agent-hub: {sid[:8]} {old or 'new'} -> {state} ({source}, {chars} chars)", file=sys.stderr, flush=True)
+            why = ""
+            if state == "idle" and old == "working" and turn is not None and not turn.open:
+                why = " (read)" if turn.outcome else " (interrupted)"
+            print(f"agent-hub: {sid[:8]} {old or 'new'} -> {state}{why}", file=sys.stderr, flush=True)
         self._logged = states
 
     def _spawn(self, coro):
@@ -702,7 +659,7 @@ class Hub:
     def _dismiss(self, sid, turn, viewer=True):
         """Puts away a finished turn or an open prompt: here, or on the host it belongs to. Naming
         a turn, only that one. `viewer` is you at this hub's bar, not another hub passing it on:
-        only yours can be undone here, and says anything about the verdict."""
+        only yours can be undone here."""
         row, session = self._row(sid), self.sessions.get(sid)
         if not (row and row["state"] in protocol.ATTENTION) or (turn is not None and row.get("turn") != turn):
             return
@@ -713,8 +670,6 @@ class Hub:
             return
         if viewer:
             self.dismissals = [*self.dismissals, {"session": sid, "turn": row.get("turn"), "key": model.alert_key(row)}][-UNDO_MAX:]
-            if row["state"] == "needs-reply" and sid not in self._alerts_of(sid).opened:
-                self._log_verdict(row, session, unopened=True)
         if host not in self.links:
             self.publish()
 
@@ -743,20 +698,6 @@ class Hub:
         self.alerts.expect(sid, model.alert_key(session.row(now_ms())))
         self.publish()
         return True
-
-    def _log_verdict(self, row, session, **flag):
-        """A line in the work log about a verdict, for tuning the gate; `flag` says what you did."""
-        worklog.append(self.log_file, {
-            "at": now_ms(), "session": row["id"], "agent": row["agent"], "cwd": row["cwd"],
-            "configDir": session.config_dir if session else None,
-            "label": row["label"], "state": row["state"], "turn": row.get("turn"), **flag,
-        })
-
-    def _wrong(self, sid):
-        """You flagged this verdict as wrong."""
-        row = self._row(sid)
-        if row:
-            self._log_verdict(row, self.sessions.get(sid), did=row["summary"], ask=row["ask"], wrong=True)
 
     async def _resume(self, sid):
         """Resumes an ended session in a new terminal, over ssh when it ended on another host."""
@@ -803,9 +744,6 @@ class Hub:
         finally:
             self.conns.discard(conn)
             writer.close()
-            for future in conn.calls.values():
-                if not future.done():
-                    future.set_result(None)
             self._forget_holds(conn)
             if conn.session is not None:
                 self._detach(conn)
@@ -835,12 +773,6 @@ class Hub:
         session.tmux = message.get("tmux") or ""
         name = message["name"]
         session.name = name.strip() if isinstance(name, str) else ""
-        # pi's branch is the authority on its own record.
-        record = message["record"]
-        session.label = record.get("label") or session.label
-        session.summary = record.get("summary") or session.summary
-        session.tags = record.get("tags") or session.tags
-        session.calls = max(session.calls, record.get("calls") or 0)
         status = message["status"] if message["status"] in ("busy", "idle", "waiting") else "idle"
         if status == "waiting" and message["waitingFor"]:
             session.wait(label_line(message["waitingFor"]), now)
@@ -889,22 +821,15 @@ class Hub:
         now = now_ms()
         if message.get("transcript"):
             session.transcript, session.leaf = message["transcript"], message.get("leaf")
-        # A turn only the registry heard of stands in for this one: what came before is the turn it replaced.
-        before = session.replaced if session.turn is not None and session.turn.open and session.turn.by == "registry" else session.turn
         if message.get("peer"):
             session.start_aside(now)
-        elif session.start_turn(now) is not None:
-            self.readings.cancel(session.id)
+        elif session.start_turn(now) is not None and session.id in self.tails:
             # The prompt reaches the transcript a moment later, and the last turn's trail is over now.
-            if session.id in self.tails:
-                self.tails[session.id].progress.new_turn()
+            self.tails[session.id].progress.new_turn()
         session.observe("busy", None, now)
         prompt = message.get("prompt") or ""
         if message.get("fromPerson", True) and prompt.strip() and not prompt.lstrip().startswith("<"):
             session.prompt = folded(prompt)[:PROMPT_MAX]
-            self._log_next(session, before, prompt, now)
-        if message.get("fromPerson", True) and prompt.strip() and not pi.is_acknowledgement(prompt):
-            self._spawn(self.readings.label(session, prompt))
         self.publish()
         note = await self._peers(session, message.get("worktreeTool", conn.session is None))
         if conn.session is not None:
@@ -922,24 +847,26 @@ class Hub:
         now = now_ms()
         if message.get("transcript"):
             session.transcript, session.leaf = message["transcript"], message.get("leaf")
+        outcome = model.ending(self._said(session, message.get("said")), message.get("tasks") or (),
+                               message.get("pending"), message.get("error"), message.get("failure") or "")
         if session.aside is not None:
-            session.end_aside(now)
+            reached = session.end_aside(outcome, now)
             session.observe("idle", None, now)
             self._release_all(session)
-            self.readings.settle_aside(session, message)
+            worklog.append(self.log_file, {"at": now, "state": outcome["state"], "did": outcome["summary"],
+                                           **self._log_fields(session), "peer": True,
+                                           # What reached the row is a turn of its own.
+                                           **({"turn": session.turn.n} if reached else {})})
             self.publish()
             return
         # An ending with no turn open to end: the agent carried on unannounced, as Claude does
         # when a background job reports back, or the hub restarted mid-turn.
         if session.turn is None or (not session.turn.open and session.turn.outcome is not None):
             session.start_turn(now)
-        n = session.end_turn(now)
+        self._end_turn(session, outcome)
         session.observe("idle", None, now)
         self._release_all(session)
         self._spawn(self._ask_git(session))
-        if n is not None:
-            # Read before idle: the bar shows the reading, never a gap before it.
-            self.readings.settle(session, n, message)
         self.publish()
 
     async def _dispatch(self, conn, message):
@@ -987,14 +914,6 @@ class Hub:
             if session is not None:
                 session.name = (message["name"] or "").strip()
                 self.publish()
-        elif op == "relabel":
-            session = self._own(conn, message)
-            if session is not None:
-                self._spawn(self.readings.label(session, manual=True))
-        elif op == "judged":
-            future = conn.calls.get(message["request"])
-            if future is not None and not future.done():
-                future.set_result(message.get("text"))
         elif op == "session-start":
             session = self._own(conn, message)
             session.ending = False
@@ -1016,8 +935,6 @@ class Hub:
             self._undo()
         elif op == "undismiss":
             self._undismiss(message["session"], message.get("turn"))
-        elif op == "wrong":
-            self._wrong(message["session"])
         elif op == "seen":
             self.alerts.seen()
             for alerts in self.link_alerts.values():
@@ -1035,28 +952,23 @@ class Hub:
             self.publish()
 
 
-def verdict_fields(outcome):
-    """What a work log line says of a verdict, and what it was made of."""
-    return {"ask": outcome.get("ask") or "", "askKind": outcome.get("kind") or "", "reply": outcome.get("reply") or "",
-            "candidate": bool(outcome.get("candidate")),
-            "word": outcome.get("word") or "", "prompt": judge.VERSION}
-
-
 def demo_row(sid, entry):
     """A fake session for `agent-hub demo`, from a registry-shaped entry."""
     t = entry.get("statusUpdatedAt") or 0
     session = model.Session(id=sid, agent=agent_of(entry), cwd=entry.get("cwd") or "", derived=entry.get("name") or "",
-                            label=entry.get("label") or "", status_at=t)
+                            status_at=t)
     status = entry.get("status")
     if status == "waiting":
         session.wait(entry.get("waitingFor") or "", t)
     elif status == "busy":
-        session.turn = model.Turn(n=1, started=t, doing=entry.get("doing") or "")
+        session.turn = model.Turn(n=1, started=t)
     elif entry.get("turnState"):
         session.turn = model.Turn(n=1, started=t, ended=t, outcome={
-            "state": entry["turnState"], "ask": entry.get("ask") or "", "reply": entry.get("reply") or "",
-            "summary": entry.get("summary") or "", "jobs": 0, "said": entry.get("said") or ""})
+            **model.ending(entry.get("said") or "", error=entry["turnState"] == "failed"),
+            **({"summary": entry["summary"]} if entry.get("summary") else {})})
     row = session.row(now_ms())
+    if entry.get("doing"):
+        row["doing"] = row["reason"] = entry["doing"]
     # What only a real session could say, for looking at the popout's pane. `id` 0 answers nothing.
     row.update({key: entry[key] for key in DEMO_DETAILS if key in entry})
     return row

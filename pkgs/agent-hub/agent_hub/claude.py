@@ -1,4 +1,4 @@
-"""Reading Claude Code: a turn's digest from its transcript, and what a tool call does."""
+"""Reading Claude Code: its transcript's entries, and what a tool call does."""
 
 import json
 import re
@@ -7,21 +7,10 @@ from pathlib import Path
 from .common import folded, label_line, shown_block
 
 SAID_MAX = 20_000
-RECENT_PROMPTS = 4
-PROMPT_CHARS = 300
-MAX_FILES = 6
-MAX_COMMANDS = 5
 COMMAND_CHARS = 48
 EDITS = ("Edit", "MultiEdit", "Write", "NotebookEdit")
-# A command that checks work. Rough: `agent-hub eval` says how often it would mislead.
-CHECK = re.compile(r"\b(test|tests|pytest|unittest|just (build|check|eval|test)|nix (build|flake check)|cargo|npm|pnpm|tsc|ruff|mypy|lint|make)\b")
 # Says where a command runs, not what it is, and a long path would use up all of its line.
 LEADING_CD = re.compile(r"""^\s*(?:cd\s+(?:"[^"]*"|'[^']*'|\S+)\s*(?:&&|;)\s*)+""")
-# `claude -p` as a judge: no session file, no tools, no MCP, no hooks of its own.
-JUDGE_ARGS = [
-    "-p", "--model", "haiku", "--no-session-persistence", "--strict-mcp-config", "--tools", "",
-    "--disable-slash-commands", "--settings", json.dumps({"disableAllHooks": True}),
-]
 
 
 def blocks(entry):
@@ -63,109 +52,8 @@ def command_line(command):
     return folded(LEADING_CD.sub("", line) or line)[:COMMAND_CHARS]
 
 
-def touched(files, path):
-    """`files` with `path` moved to the end, the latest touched last."""
-    return [f for f in files if f != path] + [path]
-
-
-# Read over all of a turn's commands, as a landing is rarely among the last few it keeps.
-# worktrunk's `wt merge` fast-forwards the default branch; `gh pr create` only opens a PR.
-LANDS = re.compile(r"\bwt merge\b|\bgh pr merge\b|\bgit (-C \S+ )?push\b[^|;&\n]*(?<![\w/-])(main|master)(?![\w/-])")
-COMMITS = re.compile(r"\bgit (-C \S+ )?(commit|merge)\b")
-
-
-def assemble(requests, files, commands, failed, said):
-    """A digest from what a transcript reader collected: `commands` as (call id, line shown, the
-    whole command), `failed` as call id → whether its result was an error."""
-    outcomes = {True: " (failed)", False: " (ok)"}
-    ran = [whole for call, _, whole in commands if not failed.get(call)]
-    return {
-        "landed": any(LANDS.search(whole) for whole in ran),
-        "committed": any(COMMITS.search(whole) for whole in ran),
-        "requests": requests,
-        "files": files[-MAX_FILES:],
-        "commands": [line + outcomes.get(failed.get(call), "") for call, line, _ in commands[-MAX_COMMANDS:]],
-        "said": said[-SAID_MAX:],
-    }
-
-
 def edit_target(args):
     return args.get("file_path") or args.get("notebook_path")
-
-
-def turns(path, cwd=None):
-    """Every turn of a Claude Code transcript (see `judge`), oldest first, or None when it
-    can't be read. Each is a digest with `id` (its last entry), `at` (that entry's stamp,
-    a string), `peer` and `unchecked` (None without an edit, else whether no command checked
-    the work after the last one), and `files` and `commands` are that turn's alone."""
-    found, requests = [], []
-    turn = None
-
-    def begin(peer):
-        nonlocal turn
-        turn = {"requests": requests[-RECENT_PROMPTS:], "files": [], "commands": [], "failed": {}, "text": [],
-                "id": None, "at": None, "peer": peer, "unchecked": None, "branch": None}
-        found.append(turn)
-
-    try:
-        with open(path, encoding="utf-8", errors="replace") as lines:
-            for line in lines:
-                try:
-                    entry = json.loads(line)
-                except ValueError:
-                    continue
-                if not isinstance(entry, dict) or entry.get("isSidechain"):
-                    continue
-                if peer_message(entry):
-                    begin(True)
-                    continue
-                said = prompt_text(entry)
-                if said is not None:
-                    # A slash command's own lines and an interrupt's marker are not the person's words.
-                    if not said.lstrip().startswith(("<", "[Request interrupted")):
-                        requests.append(folded(said)[:PROMPT_CHARS])
-                    begin(False)
-                    continue
-                if turn is None:
-                    continue
-                for block in blocks(entry):
-                    kind = block.get("type")
-                    if kind == "tool_result":
-                        turn["failed"][block.get("tool_use_id")] = bool(block.get("is_error"))
-                    elif entry.get("type") != "assistant":
-                        continue
-                    elif kind == "tool_use":
-                        turn["text"] = []
-                        name, args = block.get("name"), block.get("input") or {}
-                        if name in EDITS and edit_target(args):
-                            turn["files"] = touched(turn["files"], shown_path(edit_target(args), cwd))
-                            turn["unchecked"] = True
-                        elif name == "Bash" and args.get("command"):
-                            turn["commands"].append((block.get("id"), command_line(args["command"]), args["command"]))
-                            if turn["unchecked"] and CHECK.search(str(args["command"])):
-                                turn["unchecked"] = False
-                    elif kind == "text":
-                        turn["text"].append(block.get("text") or "")
-                if entry.get("type") == "assistant":
-                    turn["id"], turn["at"] = entry.get("uuid"), entry.get("timestamp")
-                    turn["branch"] = entry.get("gitBranch") or turn["branch"]
-    except OSError:
-        return None
-    return [{**assemble(t["requests"], t["files"], t["commands"], t["failed"], "\n".join(t["text"]).strip()),
-             "id": t["id"], "at": t["at"], "peer": t["peer"], "unchecked": t["unchecked"], "on_branch": t["branch"]} for t in found]
-
-
-def digest(path, cwd=None, prompt=None):
-    """The digest of a Claude Code transcript's latest turn (see `judge`), or None when it
-    can't be read. `prompt` is one the transcript doesn't have yet, as at UserPromptSubmit:
-    the turn before it is then the latest, which still says what the work is."""
-    found = turns(path, cwd)
-    if found is None:
-        return None
-    latest = found[-1] if found else assemble([], [], [], {}, "")
-    if prompt and not prompt.lstrip().startswith("<"):
-        latest = {**latest, "requests": [*latest["requests"], folded(prompt)[:PROMPT_CHARS]][-RECENT_PROMPTS:]}
-    return latest
 
 
 def shown_path(path, cwd):

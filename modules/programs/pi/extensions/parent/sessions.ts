@@ -61,7 +61,6 @@ type Ended = ReturnType<Hub["recent"]>[number];
 
 const STATE_WORD: Record<HubState | "ended", string> = {
   asking: "waiting",
-  "needs-reply": "waiting",
   failed: "failed",
   done: "finished",
   working: "working",
@@ -71,7 +70,6 @@ const STATE_WORD: Record<HubState | "ended", string> = {
 
 const STATE_TONE: Record<HubState | "ended", ThemeColor> = {
   asking: "warning",
-  "needs-reply": "warning",
   failed: "error",
   done: "success",
   working: "muted",
@@ -81,7 +79,7 @@ const STATE_TONE: Record<HubState | "ended", ThemeColor> = {
 
 /** The heading a row goes under, in the popout's words. */
 const sectionOf = (state: HubState): string => {
-  if (state === "asking" || state === "needs-reply") return "Waiting on you";
+  if (state === "asking") return "Waiting on you";
   if (state === "failed" || state === "done") return "Finished";
   return state === "working" ? "Working" : "Idle";
 };
@@ -90,8 +88,7 @@ const folderName = (cwd: string) => path.basename(cwd) || cwd;
 const displayName = (name: string, cwd: string, agent: string) => name || folderName(cwd) || agent;
 
 /** What a row is about, in the one line the detail has for it. */
-const reasonOf = (row: HubRow) =>
-  row.ask || row.waitingFor || row.summary || row.reason || row.doing || row.label || "";
+const reasonOf = (row: HubRow) => row.waitingFor || row.summary || row.reason || row.doing || "";
 
 const live = (row: HubRow): Item => ({
   id: row.id,
@@ -108,7 +105,7 @@ const live = (row: HubRow): Item => ({
 
 const ended = (row: Ended): Item => ({
   id: row.id,
-  name: displayName(row.label, row.cwd, row.agent),
+  name: displayName(row.name, row.cwd, row.agent),
   repo: row.project || folderName(row.cwd),
   host: row.host,
   state: "ended",

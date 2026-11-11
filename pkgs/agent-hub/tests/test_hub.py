@@ -15,7 +15,7 @@ import unittest
 import uuid
 from pathlib import Path
 
-from agent_hub import claude, judge, links, menus, protocol
+from agent_hub import claude, links, menus, protocol
 from agent_hub.common import parent_pid
 
 PACKAGE = Path(__file__).resolve().parent.parent
@@ -37,21 +37,6 @@ elif "spawn" in args:
     with open({log!r} + ".spawn", "a") as log:
         log.write(json.dumps(args[args.index("--") + 1:]) + "\\n")
 """
-
-# Answers with the classification in its answer file, or fails without one; logs the profile it ran as.
-FAKE_CLAUDE = """#!{python}
-import os, sys
-prompt = sys.stdin.read()
-with open({log!r}, "a") as log:
-    log.write(os.environ.get("CLAUDE_CONFIG_DIR", "-") + "\\n")
-with open({log!r} + ".prompts", "a") as log:
-    log.write(prompt + "\\n---\\n")
-try:
-    print(open({answer!r}).read())
-except OSError:
-    sys.exit(1)
-"""
-
 
 class Client:
     def __init__(self, path):
@@ -107,17 +92,10 @@ class Hub:
             FAKE_NIRI.format(python=sys.executable, fifo=str(fifo), log=str(self.focus_log), sockets=str(self.socket_log))
         )
         niri.chmod(0o755)
-        # The fake claude logs each call's profile, and its prompt to `claude.prompts`.
-        self.claude_log = self.tmp / "claude.log"
-        self.claude_answer = self.tmp / "claude.answer"
-        claude = self.tmp / "claude"
-        claude.write_text(FAKE_CLAUDE.format(python=sys.executable, log=str(self.claude_log), answer=str(self.claude_answer)))
-        claude.chmod(0o755)
         config = self.tmp / "config.json"
         desktop = {"niri": str(niri), "terminal": ["ghostty", "--working-directory={cwd}", "-e"]}
         config.write_text(json.dumps({
             "registry": str(self.registry),
-            "claude": str(claude),
             "git": shutil.which("git"),
             "state": str(self.tmp / "state.json"),
             **({"poll": True} if headless else desktop),
@@ -250,26 +228,20 @@ def lacks_session(session_id):
     return lambda m: m["type"] == "state" and session(m, session_id) is None
 
 
-# A judge request Pi leaves unanswered, as a model still thinking would.
-HOLD = object()
-
-
 class Pi:
-    """A pi session attached to the hub, which answers every reading it is asked for
-    with `answer` (None fails it, HOLD never answers), as pi's own side model would. Its
-    turns go to a session file the way pi writes them, which is what the hub reads."""
+    """A pi session attached to the hub. Its turns go to a session file the way pi writes
+    them, which is what the hub reads when pi leaves out its closing words."""
 
-    def __init__(self, hub, sid, pid, answer="", cwd="/repo", **attach):
+    def __init__(self, hub, sid, pid, cwd="/repo", **attach):
         self.client = hub.connect()
-        self.answer = answer
-        self.judged, self.pushed, self.notices, self.replies, self.cancelled, self.refused = [], [], [], {}, [], []
+        self.pushed, self.replies, self.refused = [], {}, []
         self.requests = 0
         self.file = hub.tmp / f"pi-{sid}.jsonl"
         self.entries = [{"type": "session", "version": 3, "id": sid, "cwd": cwd}]
         self.changed = threading.Condition()
         threading.Thread(target=self._read, daemon=True).start()
         message = {"version": protocol.VERSION, "session": sid, "pid": pid, "cwd": cwd, "status": "idle",
-                   "since": int(time.time() * 1000), "waitingFor": None, "name": None, "record": {},
+                   "since": int(time.time() * 1000), "waitingFor": None, "name": None,
                    "transcript": str(self.file), "leaf": None, **attach}
         self.client.send(op="attach", **message)
 
@@ -280,22 +252,14 @@ class Pi:
             except (OSError, ConnectionError, TimeoutError, ValueError):
                 return
             with self.changed:
-                kind, answer = message.get("type"), self.answer
-                if kind == "judge":
-                    self.judged.append(message)
-                elif kind == "row":
+                kind = message.get("type")
+                if kind == "row":
                     self.pushed.append(message)
                 elif kind == "reply":
                     self.replies[message["request"]] = message
-                elif kind == "notice":
-                    self.notices.append(message["text"])
-                elif kind == "cancel":
-                    self.cancelled.append(message["request"])
                 elif kind == "refused":
                     self.refused.append(message["text"])
                 self.changed.notify_all()
-            if kind == "judge" and answer is not HOLD:
-                self.client.send(op="judged", request=message["request"], **({} if answer is None else {"text": answer}))
 
     def wait(self, predicate):
         with self.changed:
@@ -322,11 +286,10 @@ class Pi:
         self.wait(lambda: request in self.replies)
         return self.replies[request]["peers"]
 
-    def end(self, answer=None, said="Done.", pending=0, error=False):
-        if answer is not None:
-            self.answer = answer
+    def end(self, said="Done.", pending=0, error=False, tell=True):
+        """Ends the turn on `said`, which pi sends along unless `tell` is false."""
         self._append({"role": "assistant", "content": [{"type": "text", "text": said}]})
-        self.client.send(op="turn-end", pending=pending, error=error, transcript=str(self.file))
+        self.client.send(op="turn-end", pending=pending, error=error, transcript=str(self.file), **({"said": said} if tell else {}))
 
     def close(self):
         """Hangs up as pi does when its session ends; a shutdown, since the reader thread holds the socket."""
@@ -421,11 +384,11 @@ class HeadlessTest(unittest.TestCase):
         self.hub.write_session(proc.pid, "s1", status="busy")
         bar = self.hub.subscribe()
         bar.wait(has_session("s1"))
-        self.assertEqual(self.hub.command("status", "--session-id", "s1").stdout, "working\t\t\n")
+        self.assertEqual(self.hub.command("status", "--session-id", "s1").stdout, "working\t\tdemo\n")
 
 
 class TurnTest(HubTest):
-    """How a pi turn ends, as pi's own model read it, and what looking at it does."""
+    """How a pi turn ends, by pi's own word, and what looking at it does."""
 
     def setUp(self):
         super().setUp()
@@ -436,22 +399,19 @@ class TurnTest(HubTest):
             {"id": 8, "pid": 1, "is_focused": True},
         ]}})
         self.bar = self.hub.subscribe()
-        self.pi = Pi(self.hub, self.sid, self.proc.pid, answer="label: fixture work")
+        self.pi = Pi(self.hub, self.sid, self.proc.pid)
         self.bar.wait(has_session(self.sid, lambda s: s["window"] == self.window))
         self.pi.start()
-        # The turn-start reading names it; later answers are the turn's own.
-        self.pi.row(lambda push: push["identity"]["label"] == "fixture work")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
         self.canaries = 0
 
-    def finish(self, answer):
-        """Ends the turn with closing words that fit the verdict, and returns its row."""
-        word = answer.split("state: ")[1].split()[0]
-        self.pi.end(answer, said="Keep the fixture?" if word == "blocked" else "Done.")
-        expected = {"blocked": "needs-reply", "done": "done"}[word]
-        return session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == expected)), self.sid)
+    def finish(self, said="Done.", **end):
+        """Ends the turn on `said`, and returns its row once it is done."""
+        self.pi.end(said, **end)
+        return session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done")), self.sid)
 
     def fail(self):
-        self.pi.end("state: done", error=True)
+        self.pi.end(error=True)
         return session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed")), self.sid)
 
     def focused_row(self, window):
@@ -462,74 +422,45 @@ class TurnTest(HubTest):
         self.hub.write_session(canary.pid, "canary", status="busy", name=f"canary {self.canaries}")
         return session(self.bar.wait(has_session("canary")), self.sid)
 
-    def test_pi_turn_ends_as_its_own_model_read_it(self):
-        row = self.finish("label: fixture work\nstate: blocked\nask: keep the fixture?\nreply: yes keep it")
-        self.assertEqual((row["ask"], row["reply"]), ("keep the fixture?", "yes keep it"))
-        self.pi.start()
-        row = self.finish("state: done\ndid: Kept the old fixture.")
-        self.assertEqual(row["reason"], "Kept the old fixture.")
+    def test_a_pi_turn_ends_done_with_its_closing_words(self):
+        row = self.finish("Kept the old fixture. It still passes.\n\nShall I drop the new one?")
+        self.assertEqual((row["reason"], row["said"]), ("Kept the old fixture.", "Kept the old fixture. It still passes.\n\nShall I drop the new one?"))
+        self.assertNotIn("ask", row)
 
-    def test_a_turn_that_ended_on_an_error_failed_whatever_the_model_says(self):
+    def test_a_pi_turn_that_leaves_out_its_words_is_read_off_its_session_file(self):
+        row = self.finish("Rebased onto main.", tell=False)
+        self.assertEqual(row["said"], "Rebased onto main.")
+
+    def test_a_turn_that_ended_on_an_error_failed(self):
         self.fail()
 
-    def test_the_model_cannot_call_a_turn_failed(self):
-        self.pi.end("state: failed\ndid: The fixture still breaks the build.")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["reason"] == "The fixture still breaks the build."))
-
-    def test_the_model_cannot_raise_a_turn_with_no_question_or_request(self):
-        self.pi.end("state: blocked\nask: keep the fixture?", said="Regenerated the fixture.")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["ask"] == ""))
-
-    def test_the_model_can_demote_a_candidate(self):
-        self.pi.end("state: done\ndid: Pointed at the next step.", said="Want to run just switch now?")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["reason"] == "Pointed at the next step."))
-
-    def test_request_words_make_a_candidate_without_a_question_mark(self):
-        self.pi.answer = None
-        self.pi.end(said="Tests pass.\n\nLet me know which branch to use.")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Let me know which branch to use."))
-
-    def test_a_turn_is_read_by_pi_with_the_one_prompt(self):
-        self.finish("state: done")
-        ask = self.pi.judged[-1]
-        self.assertEqual(ask["source"], "session ask")
-        self.assertEqual(ask["system"], judge.SYSTEM)
-        self.assertIn("assistant said: Done.", ask["prompt"])
-
-    def test_a_turn_whose_reading_fails_ends_by_its_words(self):
-        self.pi.answer = None
-        self.pi.end(said="Rebased. Want me to push?")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push?"))
-
     def test_a_turn_waiting_on_its_jobs_stays_working(self):
-        self.pi.end("state: waiting", pending=1, said="The build runs; I'll be notified when it finishes.")
+        self.pi.end(pending=1, said="The build runs; I'll be notified when it finishes.")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["doing"] == "waiting on 1 background job"))
+
+    def test_a_job_the_closing_words_dont_wait_on_is_done(self):
+        self.finish("The preview server is up.", pending=1)
 
     def test_a_finished_turn_whose_window_has_focus_is_read_and_the_next_one_announces(self):
         self.hub.niri({"WindowFocusChanged": {"id": self.window}})
-        self.pi.end("state: done")
+        self.pi.end()
         # Looking at it reads the ending, so the row goes idle without a dismissal.
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
         self.pi.start()
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
 
     def test_a_finished_turn_under_another_window_stays_until_it_is_read(self):
-        self.finish("state: done")
+        self.finish()
         self.hub.niri({"WindowFocusChanged": {"id": 8}})
         self.hub.niri({"WindowFocusChanged": {"id": self.window}})
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
 
     def test_dismissed_turn_is_idle_until_the_next_one_finishes(self):
-        self.finish("state: done")
+        self.finish()
         self.bar.send(op="dismiss", session=self.sid)
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
         self.pi.start()
-        self.finish("state: done")
-
-    def test_a_turn_that_asks_still_wants_you_when_its_window_is_focused(self):
-        self.finish("state: blocked\nask: keep the fixture?")
-        row = self.focused_row(self.window)
-        self.assertEqual((row["state"], row["ask"]), ("needs-reply", "keep the fixture?"))
+        self.finish()
 
     def test_a_failed_turn_still_wants_you_when_its_window_is_focused(self):
         self.fail()
@@ -545,104 +476,50 @@ class TurnTest(HubTest):
 
     def test_toggle_brings_back_a_done_turn_that_focus_read(self):
         self.hub.niri({"WindowFocusChanged": {"id": self.window}})
-        self.pi.end("state: done")
+        self.pi.end()
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
         self.bar.send(op="toggle")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
         self.assertEqual(self.focused_row(self.window)["state"], "done")
 
-    def test_a_new_turn_cancels_the_reading_of_the_last_ones_ending(self):
-        self.pi.answer = HOLD
-        self.pi.end()
-        self.pi.wait(lambda: any(j["source"] == "session ask" for j in self.pi.judged))
-        held = [j for j in self.pi.judged if j["source"] == "session ask"][-1]["request"]
-        self.pi.answer = "label: fixture work"
-        self.pi.start(prompt="ok")
-        self.pi.wait(lambda: held in self.pi.cancelled)
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["doing"] != "reading the turn"))
-
     def test_each_ending_goes_to_the_rows_history_and_the_work_log(self):
-        self.finish("state: blocked\nask: keep the fixture?\ndid: Regenerated the fixture.")
+        self.finish("Regenerated the fixture.\n\nKeep the old one?")
         self.pi.start()
-        row = self.finish("state: done\ndid: Kept the old fixture.")
+        row = self.finish("Kept the old fixture.")
         self.assertEqual([(h["state"], h["did"]) for h in row["history"]],
-                         [("needs-reply", "Regenerated the fixture."), ("done", "Kept the old fixture.")])
+                         [("done", "Regenerated the fixture."), ("done", "Kept the old fixture.")])
         out = self.hub.command("log", "--since", "1h").stdout.splitlines()
-        self.assertEqual(out[0], f"fixture work\tcd /repo && pi --session {self.sid[:8]}")
-        self.assertRegex(out[1], r"needs-reply +Regenerated the fixture\. \[asks: keep the fixture\?\]$")
+        self.assertEqual(out[0], f"repo\tcd /repo && pi --session {self.sid[:8]}")
+        self.assertRegex(out[1], r"done +Regenerated the fixture\.$")
         self.assertRegex(out[2], r"done +Kept the old fixture\.$")
         self.assertEqual(self.hub.command("find", "old", "FIXTURE").stdout.splitlines(), out)
         self.assertEqual(self.hub.command("find", "darwin").stdout, "")
-
-    def test_a_verdict_logs_what_it_was_made_of(self):
-        self.finish("state: blocked\nask: keep the fixture?\nreply: keep it\ndid: Asked.")
         line = logged(self.hub.tmp / "log.jsonl")[-1]
-        self.assertEqual((line["candidate"], line["word"], line["reply"], line["turn"]), (True, "blocked", "keep it", 1))
-        self.assertEqual(line["prompt"], judge.VERSION)
-
-    def test_your_next_prompt_is_logged_as_what_it_was_never_its_words(self):
-        self.finish("state: blocked\nask: keep the fixture?\nreply: keep it\ndid: Asked.")
-        self.pi.start("keep it please")
-        log = self.hub.tmp / "log.jsonl"
-        eventually(lambda: "next" in logged(log)[-1])
-        line = logged(log)[-1]
-        self.assertEqual((line["next"], line["words"], line["turn"]), ("answered", 3, 1))
-        self.assertGreater(line["replyMatch"], 0.5)
-        self.assertGreaterEqual(line["delay"], 0)
-        self.assertNotIn("keep it please", log.read_text())
-        # It is no turn of its own, in the log's own telling.
-        self.assertEqual(self.hub.command("log", "--since", "1h").stdout.count("\n"), 2)
-
-    def test_a_prompt_while_the_turn_is_being_read_doesnt_call_it_interrupted(self):
-        asked = len(self.pi.judged)
-        self.pi.end(HOLD, said="Keep the fixture?")
-        self.pi.wait(lambda: len(self.pi.judged) > asked)
-        self.pi.start("keep it please")
-        log = self.hub.tmp / "log.jsonl"
-        self.assertFalse(log.exists() and any("next" in json.loads(line) for line in log.read_text().splitlines()))
-
-    def test_a_verdict_flagged_wrong_goes_to_the_work_log(self):
-        self.finish("state: blocked\nask: keep the fixture?\ndid: Regenerated the fixture.")
-        self.bar.send(op="wrong", session=self.sid)
-        eventually(lambda: "wrong needs-reply" in self.hub.command("log", "--since", "1h").stdout)
-        self.assertEqual(self.hub.command("status", "--session-id", self.sid).stdout.split("\t")[0], "needs-reply")
-
-    def test_a_needs_reply_dismissed_unopened_is_logged_as_a_weak_sign(self):
-        self.finish("state: blocked\nask: keep the fixture?")
-        self.bar.send(op="dismiss", session=self.sid)
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
-        self.assertIn("unopened needs-reply", self.hub.command("log", "--since", "1h").stdout)
-
-    def test_a_needs_reply_you_went_to_is_not_logged_when_dismissed(self):
-        self.finish("state: blocked\nask: keep the fixture?")
-        self.focused_row(self.window)
-        self.bar.send(op="dismiss", session=self.sid)
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
-        self.assertNotIn("unopened", self.hub.command("log", "--since", "1h").stdout)
+        self.assertEqual((line["name"], line["turn"]), ("repo", 2))
 
     def test_undo_brings_back_the_last_dismissal_without_a_pulse(self):
-        self.finish("state: blocked\nask: keep the fixture?")
+        self.fail()
         self.bar.send(op="dismiss", session=self.sid)
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
         self.bar.send(op="undo")
-        row = session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply")), self.sid)
+        row = session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed")), self.sid)
         self.assertFalse(row["pulse"])
 
     def test_undo_brings_back_a_prompt_that_had_hidden_a_finished_turn(self):
-        self.finish("state: blocked\nask: keep the fixture?")
+        self.finish()
         self.hub.connect().send(op="dialog", session=self.sid, text="Bash: rm -rf build")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "asking"))
         self.bar.send(op="dismiss", session=self.sid)
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
         self.bar.send(op="undo")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "asking"))
 
     def test_undo_drops_a_dismissal_once_the_session_started_a_new_turn(self):
-        self.finish("state: blocked\nask: keep the fixture?")
+        self.finish()
         self.bar.send(op="dismiss", session=self.sid)
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
         self.pi.start()
-        self.finish("state: done")
+        self.finish()
         self.hub.niri({"WindowFocusChanged": {"id": self.window}})
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
         self.bar.send(op="undo")
@@ -695,86 +572,44 @@ class ClaudeTurnTest(HubTest):
                  "background_tasks": list(tasks), **(payload or {})}
         self.hub.command("hook", stdin=json.dumps(event), **env)
 
-    def test_turn_that_ends_on_a_question_needs_a_reply(self):
+    def test_a_turn_that_ends_on_a_question_is_done_with_its_words(self):
         self.stop([prompt("rebase it"), said("Rebased onto main.\n\nWant me to push?")])
-        state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push?"))
-        self.assertEqual(session(state, self.sid)["summary"], "Rebased onto main.")
-
-    def test_a_session_whose_model_keeps_failing_says_so(self):
-        for turn in range(3):
-            self.hub.write_session(self.proc.pid, self.sid, status="busy")
-            self.stop([prompt(f"do {turn}"), said(f"Did {turn}.")])
-            self.hub.write_session(self.proc.pid, self.sid, status="idle")
-            self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["summary"] == f"Did {turn}."))
-        self.bar.wait(has_session(self.sid, lambda s: s.get("readings") == "failing"))
-
-    def test_a_turn_is_read_before_it_shows_and_is_working_meanwhile(self):
-        # A guess read off the turn's words would show `done` first, then the model's verdict
-        # overrules it, announcing one turn end twice.
-        self.hub.claude_answer.write_text("state: blocked\nask: keep the old fixture?\ndid: Regenerated the fixture.\n")
-        bar = self.hub.subscribe()
-        self.stop([prompt("regenerate the fixture"), *ran(), said("Regenerated; the build is green. Keep the old one?")])
-        states = []
-        while True:
-            message = bar.recv()
-            if message["type"] != "state" or (row := session(message, self.sid)) is None:
-                continue
-            states.append(row["state"])
-            if row["state"] == "needs-reply":
-                break
-        self.assertEqual(states[-2:], ["working", "needs-reply"])
+        state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+        row = session(state, self.sid)
+        self.assertEqual((row["summary"], row["said"]), ("Rebased onto main.", "Rebased onto main.\n\nWant me to push?"))
 
     def test_turn_is_the_registered_sessions_after_a_clear_left_the_hook_an_old_id(self):
         self.stop([prompt("rebase it"), said("Want me to push?")], session_id="before-clear", CLAUDE_PID=str(self.proc.pid))
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
 
-    def test_agent_work_in_flight_is_working_unread_until_it_reports(self):
-        self.hub.claude_answer.write_text("state: done\n")
+    def test_agent_work_in_flight_is_working_until_it_reports(self):
         job = [prompt("build it"), *ran(), said("The review runs in the background.")]
         self.stop(job, tasks=[{"type": "subagent", "status": "running", "description": "Review the hub"}])
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["doing"] == "Review the hub"))
-        self.assertFalse(self.hub.claude_log.exists())
         self.stop([*job, said("Reviewed.")])
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
 
-    def test_a_question_beats_agent_work_in_flight(self):
+    def test_agent_work_in_flight_keeps_it_working_even_after_a_question(self):
         self.stop([prompt("build it"), said("Want me to push meanwhile?")], tasks=[{"type": "workflow", "description": "Review"}])
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push meanwhile?"))
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["doing"] == "Review"))
 
-    def test_a_shell_task_goes_to_the_model_which_can_say_it_waits_on_it(self):
-        self.hub.claude_answer.write_text("state: waiting\ndid: Started the build.\n")
-        self.stop([prompt("build it"), *ran(), said("The build runs.")], tasks=[{"type": "shell", "description": "nix build"}])
+    def test_a_shell_task_its_closing_words_wait_on_keeps_it_working(self):
+        self.stop([prompt("build it"), *ran(), said("The build runs; I'll be notified when it finishes.")],
+                  tasks=[{"type": "shell", "description": "nix build"}])
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working" and s["doing"] == "nix build"))
 
-    def test_a_server_left_running_is_done_by_the_models_word(self):
-        self.hub.claude_answer.write_text("state: done\nask:\ndid: Started the preview server.\n")
-        self.stop([prompt("show me the site"), *ran(), said("Started it.")], tasks=[{"type": "shell", "description": "preview"}])
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["summary"] == "Started the preview server."))
-
-    def test_a_shell_task_without_the_models_word_is_done_unless_it_says_it_waits(self):
+    def test_a_shell_task_is_done_unless_its_closing_words_say_it_waits(self):
         self.stop([prompt("show me the site"), *ran(), said("The preview is up at http://localhost:4321.")],
                   tasks=[{"type": "shell", "description": "preview"}])
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
 
     def test_the_closing_words_of_the_stop_beat_a_transcript_that_lags(self):
         self.stop([prompt("rebase it"), *ran()], payload={"last_assistant_message": "Rebased.\n\nWant me to push?"})
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push?"))
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["said"] == "Rebased.\n\nWant me to push?"))
 
     def test_a_turn_that_died_on_an_api_error_failed_with_it_as_the_reason(self):
         self.stop([prompt("rebase it")], name="StopFailure", payload={"error": "rate_limit", "last_assistant_message": "API Error: Rate limit reached"})
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed" and s["reason"] == "API Error: Rate limit reached"))
-        self.assertFalse(self.hub.claude_log.exists())
-
-    def test_every_turn_is_put_to_claude_as_the_sessions_profile(self):
-        self.hub.claude_answer.write_text("state: done\nask: empty\ndid: Answered.\n")
-        self.stop([prompt("what is 2+2?"), said("4")], CLAUDE_CONFIG_DIR="/profiles/work")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["summary"] == "Answered."))
-        self.assertEqual(self.hub.claude_log.read_text().split(), ["/profiles/work"])
-
-    def test_an_offer_the_model_leaves_alone_needs_a_reply_and_stays_when_its_reading_fails(self):
-        self.hub.claude_answer.write_text("state: blocked\nask: commit this?\ndid: Fixed it.\n")
-        self.stop([prompt("fix it"), said("Fixed. Want me to commit?")])
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "commit this?"))
 
     def test_a_running_turn_shows_what_its_transcript_says(self):
         entries = [prompt("build it"), said("Building it now."),
@@ -799,46 +634,22 @@ class ClaudeTurnTest(HubTest):
         state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
         self.assertNotIn("now", session(state, self.sid))
 
-    def test_a_long_command_gets_an_estimate_logged_against_what_it_took(self):
-        self.hub.claude_answer.write_text("left: 20\nnote: 31/40 built\n")
-        self.settled()
-        started = time.time() - 40 * 60
-        stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(started))
-        use = {"type": "assistant", "timestamp": stamp, "message": {"role": "assistant", "content": [
-            {"type": "tool_use", "id": "t", "name": "Bash", "input": {"command": "just build --secret"}}]}}
-        path = self.hub.write_transcript(self.sid, [prompt("build it"), use])
-        self.hub.command("hook", stdin=json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": self.sid, "prompt": "build it",
-                                                   "transcript_path": str(path)}))
-        state = self.bar.wait(has_session(self.sid, lambda s: s.get("estimate", {}).get("left") == 20))
-        self.assertEqual(session(state, self.sid)["estimate"]["note"], "31/40 built")
-        self.assertIn("running for: 40 minutes", (self.hub.tmp / "claude.log.prompts").read_text())
-        now = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
-        done = {"type": "user", "timestamp": now, "toolUseResult": {}, "message": {"role": "user", "content": [
-            {"type": "tool_result", "tool_use_id": "t"}]}}
-        with open(path, "a") as out:
-            out.write(json.dumps(done) + "\n")
-        log = self.hub.tmp / "log.jsonl"
-        eventually(lambda: any("job" in line for line in logged(log)))
-        line = next(line for line in logged(log) if "job" in line)
-        self.assertEqual((line["job"], line["left"]), ("just build", 20))
-        self.assertNotIn("--secret", log.read_text())
-
-    def peer_turn(self, closing, standing=True):
+    def peer_turn(self, closing, name="Stop"):
         """A peer's message wakes the session, as Claude reports it, and its turn ends on `closing`."""
         entries = [prompt("<cross-session-message from=\"uds:/x\" from-name=\"other\">\nhi\n</cross-session-message>")]
         event = {"hook_event_name": "UserPromptSubmit", "session_id": self.sid, "prompt": entries[0]["message"]["content"],
                  "transcript_path": str(self.hub.write_transcript(self.sid, entries))}
         self.hub.command("hook", stdin=json.dumps(event))
-        self.stop([*entries, said(closing)], payload={"last_assistant_message": closing})
+        self.stop([*entries, said(closing)], name=name, payload={"last_assistant_message": closing})
 
-    def test_a_peers_message_leaves_your_open_question_and_your_prompt(self):
+    def test_a_peers_message_leaves_your_finished_turn_and_your_prompt(self):
         self.stop([prompt("rebase it"), said("Want me to push?")])
-        before = session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply")), self.sid)
+        before = session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done")), self.sid)
         self.peer_turn("No action needed from me.")
         log = self.hub.tmp / "log.jsonl"
         eventually(lambda: any(line.get("peer") for line in logged(log)))
         after = self.settled()
-        self.assertEqual((after["state"], after["ask"], after["since"]), ("needs-reply", "Want me to push?", before["since"]))
+        self.assertEqual((after["state"], after["said"], after["since"]), ("done", "Want me to push?", before["since"]))
         self.assertNotIn("prompt", after)
 
     def test_a_peers_turn_is_in_the_log_as_one(self):
@@ -851,18 +662,13 @@ class ClaudeTurnTest(HubTest):
         self.assertEqual((line["state"], line["did"]), ("done", "Replied to the other session."))
         self.assertEqual(self.settled()["summary"], "Rebased.")
 
-    def test_a_peers_turn_that_asks_you_something_shows_and_keeps_the_name(self):
-        self.hub.claude_answer.write_text("label: something else\nstate: blocked\nask: may I push?\ndid: Asked.\n")
+    def test_a_peers_turn_that_failed_shows_as_a_turn_of_its_own(self):
         self.stop([prompt("rebase it"), said("Rebased.")], payload={"last_assistant_message": "Rebased."})
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
-        label = self.settled()["label"]
-        self.hub.claude_answer.write_text("label: another thing\nstate: blocked\nask: may I push?\ndid: Asked.\n")
-        self.peer_turn("The other session is done. May I push?")
-        state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "may I push?"))
-        self.assertEqual(session(state, self.sid)["label"], label)
-        self.assertIn("answered another agent session", (self.hub.tmp / "claude.log.prompts").read_text())
+        self.peer_turn("API Error: overloaded", name="StopFailure")
+        state = self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed" and s["reason"] == "API Error: overloaded"))
         line = next(line for line in logged(self.hub.tmp / "log.jsonl") if line.get("peer"))
-        self.assertEqual(line["turn"], session(state, self.sid)["turn"])
+        self.assertEqual((line["state"], line["turn"]), ("failed", session(state, self.sid)["turn"]))
 
     def test_a_prompt_that_only_quotes_the_tag_is_yours(self):
         text = "x" * 300 + ' <cross-session-message from="a">'
@@ -873,9 +679,9 @@ class ClaudeTurnTest(HubTest):
 
     def test_a_turn_only_the_registry_heard_of_starts_after_its_grace(self):
         self.stop([prompt("rebase it"), said("Want me to push?")])
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
         self.hub.write_session(self.proc.pid, self.sid, status="busy")
-        self.assertEqual(self.settled()["state"], "needs-reply")
+        self.assertEqual(self.settled()["state"], "done")
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
 
     def running(self):
@@ -899,7 +705,7 @@ class ClaudeTurnTest(HubTest):
         self.hub.start()
         bar = self.hub.connect()
         bar.send(op="subscribe")
-        bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and s["ask"] == "Want me to push?"))
+        bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["said"] == "Want me to push?"))
 
     def test_a_turn_still_running_across_a_restart_stays_working_until_its_stop(self):
         self.running()
@@ -912,11 +718,11 @@ class ClaudeTurnTest(HubTest):
 
     def test_finished_turn_survives_a_restart(self):
         self.stop([prompt("rebase it"), said("Want me to push?")])
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
         self.hub.restart()
         bar = self.hub.connect()
         bar.send(op="subscribe")
-        bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["said"] == "Want me to push?"))
 
     def test_dialog_that_only_shows_something_leaves_the_turn_alone(self):
         self.stop([prompt("fix the build"), said("The build fails on darwin still.")])
@@ -935,15 +741,24 @@ class ClaudeTurnTest(HubTest):
 
 
 class PiTest(HubTest):
-    """An attached pi session: its own status, name and identity, and what the hub asks of it."""
+    """An attached pi session: its own status and name."""
 
     def setUp(self):
         super().setUp()
         self.proc = self.hub.process()
         self.bar = self.hub.subscribe()
 
-    def attach(self, answer="label: retry flakes", **attach):
-        return Pi(self.hub, self.sid, self.proc.pid, answer=answer, **attach)
+    def attach(self, **attach):
+        return Pi(self.hub, self.sid, self.proc.pid, **attach)
+
+    def finished(self, **attach):
+        """A pi session that finished a turn and hung up; waits for it to be on the recent list."""
+        pi = self.attach(**attach)
+        pi.start()
+        pi.end()
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
+        pi.close()
+        return self.bar.wait(lambda m: m["type"] == "state" and m["recent"])
 
     def test_attached_session_shows_without_a_registry_entry_and_drops_when_it_hangs_up(self):
         pi = self.attach()
@@ -951,34 +766,18 @@ class PiTest(HubTest):
         pi.close()
         self.bar.wait(lacks_session(self.sid))
 
-    def test_turn_start_names_the_work_and_the_step_and_pushes_them_to_pi(self):
-        pi = self.attach(answer="label: Retry Flakes!\ndoing: rerunning the retry test\ntags: test, ci")
-        pi.start()
-        row = self.bar.wait(has_session(self.sid, lambda s: s["label"] == "Retry Flakes" and s["doing"]))
-        self.assertEqual((session(row, self.sid)["name"], session(row, self.sid)["reason"]),
-                         ("Retry Flakes", "rerunning the retry test"))
-        push = pi.row(lambda p: p["identity"]["tags"] == ["test", "ci"])
-        self.assertEqual(push["identity"]["label"], "Retry Flakes")
-        self.assertEqual(pi.judged[0]["source"], "session label")
-
-    def test_a_turn_not_worth_naming_asks_nothing(self):
-        pi = self.attach()
-        pi.start(prompt="ok thanks")
-        pi.start(prompt="a steer", from_person=False)
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
-        self.assertEqual(pi.judged, [])
-
-    def test_the_persons_own_name_outranks_the_label(self):
+    def test_the_persons_own_name_names_it_and_else_its_folder(self):
         pi = self.attach(name="my name")
-        pi.start()
-        pi.row(lambda p: p["identity"]["label"] == "retry flakes")
-        self.assertEqual(session(self.bar.wait(has_session(self.sid)), self.sid)["name"], "my name")
+        self.bar.wait(has_session(self.sid, lambda s: s["name"] == "my name"))
         pi.client.send(op="named", name=None)
-        self.bar.wait(has_session(self.sid, lambda s: s["name"] == "retry flakes"))
+        state = self.bar.wait(has_session(self.sid, lambda s: s["name"] == "repo"))
+        self.assertNotIn("label", session(state, self.sid))
 
-    def test_record_on_attach_is_the_identity_until_a_reading_changes_it(self):
-        self.attach(record={"label": "kept label", "summary": "From the branch.", "calls": 3})
-        self.bar.wait(has_session(self.sid, lambda s: s["label"] == "kept label"))
+    def test_its_own_row_is_pushed_to_it(self):
+        pi = self.attach()
+        pi.start()
+        push = pi.row(lambda p: p["row"]["state"] == "working")
+        self.assertEqual(set(push), {"type", "row"})
 
     def test_dialog_asks_with_its_label_until_it_closes(self):
         pi = self.attach()
@@ -988,50 +787,41 @@ class PiTest(HubTest):
         pi.client.send(op="dialog", text=None)
         self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
 
-    def test_relabel_that_fails_is_reported_to_pi(self):
-        pi = self.attach(answer=None)
-        pi.start(prompt="ok")
-        pi.client.send(op="relabel")
-        pi.wait(lambda: pi.notices)
-        self.assertEqual(pi.notices, ["identity: relabel failed"])
+    def test_a_session_that_never_finished_a_turn_is_not_kept(self):
+        pi = self.attach()
+        pi.start()
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "working"))
+        pi.close()
+        state = self.bar.wait(lacks_session(self.sid))
+        self.assertEqual(state["recent"], [])
 
     def test_a_session_that_ended_keeps_its_repository(self):
         repo = git_repo(self.hub.tmp / "repo")
         pi = self.attach(cwd=str(repo))
         pi.start()
-        pi.row(lambda p: p["identity"]["label"] == "retry flakes")
         self.bar.wait(has_session(self.sid, lambda s: s.get("project") == "repo"))
+        pi.end()
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
         pi.close()
         state = self.bar.wait(lambda m: m["type"] == "state" and m["recent"])
         self.assertEqual(state["recent"][0]["project"], "repo")
 
     def test_session_that_ended_is_recent_with_the_command_that_resumes_it(self):
-        pi = self.attach(cwd="/home/me/repo")
-        pi.start()
-        pi.row(lambda p: p["identity"]["label"] == "retry flakes")
-        pi.close()
-        state = self.bar.wait(lambda m: m["type"] == "state" and m["recent"])
+        state = self.finished(cwd="/home/me/repo")
+        self.assertEqual((state["recent"][0]["name"], state["recent"][0]["summary"]), ("repo", "Done."))
         self.assertEqual(state["recent"][0]["resume"], f"cd /home/me/repo && pi --session {self.sid[:8]}")
-        self.assertEqual(self.hub.command("recent").stdout, f"retry flakes\tcd /home/me/repo && pi --session {self.sid[:8]}\n")
+        self.assertEqual(self.hub.command("recent").stdout, f"repo\tcd /home/me/repo && pi --session {self.sid[:8]}\n")
 
     def test_resume_opens_a_terminal_on_the_command_through_niri(self):
-        pi = self.attach(cwd="/home/me/repo")
-        pi.start()
-        pi.row(lambda p: p["identity"]["label"] == "retry flakes")
-        pi.close()
-        self.bar.wait(lambda m: m["type"] == "state" and m["recent"])
+        self.finished(cwd="/home/me/repo")
         self.bar.send(op="resume", session=self.sid)
         spawned = logged(Path(str(self.hub.focus_log) + ".spawn"))
         self.assertEqual(spawned, [["ghostty", "--working-directory=/home/me/repo", "-e", "pi", "--session", self.sid[:8]]])
 
-    def test_resumed_session_takes_its_label_back_off_the_recent_list(self):
-        pi = self.attach()
-        pi.start()
-        pi.row(lambda p: p["identity"]["label"] == "retry flakes")
-        pi.close()
-        self.bar.wait(lambda m: m["type"] == "state" and m["recent"])
-        self.attach(answer="")
-        state = self.bar.wait(has_session(self.sid, lambda s: s["label"] == "retry flakes"))
+    def test_a_resumed_session_leaves_the_recent_list_with_its_history(self):
+        self.finished()
+        self.attach()
+        state = self.bar.wait(has_session(self.sid, lambda s: [h["did"] for h in s["history"]] == ["Done."]))
         self.assertEqual(state["recent"], [])
 
 
@@ -1042,26 +832,32 @@ class AlertTest(HubTest):
         super().setUp()
         self.proc = self.hub.process()
         self.bar = self.hub.subscribe()
-        self.pi = Pi(self.hub, self.sid, self.proc.pid, answer="state: blocked\nask: keep it?")
+        self.pi = Pi(self.hub, self.sid, self.proc.pid)
         self.bar.wait(has_session(self.sid))
 
-    def asks(self):
+    def fails(self):
         self.pi.start()
-        self.pi.end(said="Keep it?")
-        return self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        self.pi.end(error=True)
+        return self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed"))
 
-    def test_an_ask_pulses_until_the_popout_opens(self):
-        self.assertTrue(session(self.asks(), self.sid)["pulse"])
+    def test_a_failure_pulses_until_the_popout_opens(self):
+        self.assertTrue(session(self.fails(), self.sid)["pulse"])
         self.bar.send(op="seen")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and not s["pulse"]))
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "failed" and not s["pulse"]))
 
-    def test_a_known_ask_does_not_pulse_again_after_a_restart(self):
-        self.asks()
+    def test_a_done_turn_pulses_once(self):
+        self.pi.start()
+        self.pi.end()
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and s["pulse"]))
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done" and not s["pulse"]))
+
+    def test_a_known_failure_does_not_pulse_again_after_a_restart(self):
+        self.fails()
         self.hub.restart()
         bar = self.hub.connect()
         bar.send(op="subscribe")
-        pi = Pi(self.hub, self.sid, self.proc.pid, answer="")
-        bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply" and not s["pulse"]))
+        pi = Pi(self.hub, self.sid, self.proc.pid)
+        bar.wait(has_session(self.sid, lambda s: s["state"] == "failed" and not s["pulse"]))
         pi.close()
 
 
@@ -1080,20 +876,18 @@ class HiddenTest(HubTest):
         event = {"hook_event_name": name, "session_id": self.sid, "transcript_path": str(self.transcript), "prompt": "go"}
         self.hub.command("hook", stdin=json.dumps(event), **env)
 
-    def test_a_hidden_session_leaves_the_bar_is_counted_and_is_never_read(self):
+    def test_a_hidden_session_leaves_the_bar_and_is_counted(self):
         self.hook("SessionStart", AGENT_HUB_HIDDEN="1")
         state = self.bar.wait(lacks_session(self.sid))
         self.assertEqual(state["hidden"], 1)
         self.hook("Stop", AGENT_HUB_HIDDEN="1")
         self.assertEqual(self.hub.command("status").stdout, "hidden\t1\n")
-        self.assertFalse(self.hub.claude_log.exists())
 
     def test_a_hidden_pi_keeps_its_own_row_in_its_own_tui(self):
         proc = self.hub.process()
-        pi = Pi(self.hub, "spawned", proc.pid, answer="label: nope", hidden=True)
+        pi = Pi(self.hub, "spawned", proc.pid, hidden=True)
         pi.row(lambda push: push["row"]["id"] == "spawned")
         pi.start()
-        self.assertEqual(pi.judged, [])
         self.assertIsNone(session(self.bar.wait(lambda m: m["type"] == "state" and m["hidden"] == 1), "spawned"))
 
     def test_off_means_the_hooks_do_nothing(self):
@@ -1165,21 +959,17 @@ class PermissionTest(HubTest):
         self.assertEqual({k: permission[k] for k in ("tool", "about", "kind", "body", "complete")},
                          {"tool": "Bash", "about": "Clean and build", "kind": "command", "body": self.COMMAND, "complete": True})
 
-    def test_allowing_tells_claude_and_logs_the_answer_but_never_the_call(self):
+    def test_allowing_tells_claude(self):
         hook, permission = self.asks()
         self.bar.send(op="answer", session=self.sid, ask=permission["id"], allow=True)
         self.assertEqual(json.loads(self.released(hook))["hookSpecificOutput"], {"hookEventName": "PermissionRequest", "decision": {"behavior": "allow"}})
         self.bar.wait(has_session(self.sid, lambda s: s["state"] != "asking"))
-        log = self.hub.command("log", "--since", "1h").stdout
-        self.assertIn("allowed asking", log)
-        self.assertNotIn("rm -rf", log.replace(self.sid, ""))
 
     def test_denying_tells_claude_it_came_from_here(self):
         hook, permission = self.asks()
         self.bar.send(op="answer", session=self.sid, ask=permission["id"], allow=False)
         decision = json.loads(self.released(hook))["hookSpecificOutput"]["decision"]
         self.assertEqual((decision["behavior"], decision["message"]), ("deny", "Denied from the agent hub."))
-        self.assertIn("denied asking", self.hub.command("log", "--since", "1h").stdout)
 
     def test_an_answer_to_another_prompt_does_nothing(self):
         hook, permission = self.asks()
@@ -1238,7 +1028,6 @@ class PermissionTest(HubTest):
         hook, permission = self.asks()
         self.bar.send(op="answer", session=self.sid, ask=permission["id"], allow=False)
         self.assertEqual(json.loads(self.released(hook))["hookSpecificOutput"]["decision"]["behavior"], "deny")
-        self.assertNotIn("demo", self.hub.command("log", "--since", "1h").stdout)
 
     def test_a_hub_going_away_lets_the_hook_go(self):
         hook, _ = self.asks()
@@ -1277,11 +1066,11 @@ class RowDetailTest(HubTest):
         self.hub.write_session(self.proc.pid, self.sid, status="idle")
         self.bar.wait(has_session(self.sid))
 
-    def test_a_turn_that_needs_a_reply_keeps_the_agents_own_closing_words(self):
+    def test_a_finished_turn_keeps_the_agents_own_closing_words(self):
         words = "Rebased onto main.\n\nWant me to push?"
         transcript = self.hub.write_transcript(self.sid, [prompt("rebase it"), said(words)])
         self.hook("Stop", transcript_path=str(transcript), last_assistant_message=words)
-        row = session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply")), self.sid)
+        row = session(self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done")), self.sid)
         self.assertEqual(row["said"], words)
 
     def test_your_last_prompt_shows_but_is_never_saved(self):
@@ -1454,18 +1243,19 @@ class LinkTest(unittest.TestCase):
         self.bar = self.near.subscribe()
         self.proc = self.far.process()
         self.far_bar = self.far.subscribe()
-        self.pi = Pi(self.far, self.sid, self.proc.pid, answer="label: far work\nstate: blocked\nask: keep it?", cwd="/far/repo")
+        self.pi = Pi(self.far, self.sid, self.proc.pid, cwd="/far/repo")
         self.rid = f"far:{self.sid}"
         self.bar.wait(has_session(self.rid))
 
     def asks(self):
+        """The far session's turn fails, which wants you until you put it away."""
         self.pi.start()
-        self.pi.end(said="Keep it?")
-        return self.bar.wait(has_session(self.rid, lambda s: s["state"] == "needs-reply"))
+        self.pi.end(said="The build broke.", error=True)
+        return self.bar.wait(has_session(self.rid, lambda s: s["state"] == "failed"))
 
     def test_a_session_on_another_host_shows_stamped_by_the_viewer(self):
         row = session(self.asks(), self.rid)
-        self.assertEqual((row["host"], row["pid"], row["window"], row["ask"], row["reply"]), ("far", None, None, "keep it?", ""))
+        self.assertEqual((row["host"], row["pid"], row["window"], row["said"]), ("far", None, None, "The build broke."))
         self.assertTrue(row["pulse"])
 
     def test_the_link_goes_through_its_own_ssh_config_and_says_it_is_up(self):
@@ -1485,15 +1275,8 @@ class LinkTest(unittest.TestCase):
         self.bar.wait(has_session(self.rid, lambda s: s["state"] == "idle"))
         self.far_bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
         self.bar.send(op="undo")
-        row = session(self.bar.wait(has_session(self.rid, lambda s: s["state"] == "needs-reply")), self.rid)
+        row = session(self.bar.wait(has_session(self.rid, lambda s: s["state"] == "failed")), self.rid)
         self.assertFalse(row["pulse"])
-
-    def test_a_dismissal_is_logged_by_the_viewer_not_the_host_it_runs_on(self):
-        self.asks()
-        self.bar.send(op="dismiss", session=self.rid)
-        self.far_bar.wait(has_session(self.sid, lambda s: s["state"] == "idle"))
-        self.assertIn("unopened needs-reply", self.near.command("log", "--since", "1h").stdout)
-        self.assertNotIn("unopened", self.far.command("log", "--since", "1h").stdout)
 
     def far_prompt(self):
         """A Claude session on the far host with a prompt open; (its hook, its row at the viewer)."""
@@ -1503,14 +1286,12 @@ class LinkTest(unittest.TestCase):
         rid = f"far:{sid}"
         return hook, rid, session(self.bar.wait(has_session(rid, lambda s: "permission" in s)), rid)
 
-    def test_a_viewer_answers_a_prompt_on_the_other_host_and_logs_it_there_only(self):
+    def test_a_viewer_answers_a_prompt_on_the_other_host(self):
         hook, rid, row = self.far_prompt()
         self.assertEqual(row["permission"]["body"], "make")
         self.bar.send(op="answer", session=rid, ask=row["permission"]["id"], allow=True)
         out, _ = hook.communicate(timeout=TIMEOUT)
         self.assertEqual(json.loads(out)["hookSpecificOutput"]["decision"], {"behavior": "allow"})
-        self.assertIn("allowed asking", self.near.command("log", "--since", "1h").stdout)
-        self.assertNotIn("allowed", self.far.command("log", "--since", "1h").stdout)
 
     def test_the_folder_menu_opens_what_can_go_over_ssh_and_says_where_the_rest_is(self):
         self.asks()
@@ -1544,19 +1325,19 @@ class LinkTest(unittest.TestCase):
     def test_a_known_turn_stays_quiet_after_the_link_drops_and_a_new_one_pulses(self):
         self.asks()
         self.bar.send(op="seen")
-        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "needs-reply" and not s["pulse"]))
+        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "failed" and not s["pulse"]))
         self.far.restart()
         self.bar.wait(lambda m: m["type"] == "state" and m["links"][0]["status"] != "up")
-        self.pi = Pi(self.far, self.sid, self.proc.pid, answer="state: blocked\nask: keep it?", cwd="/far/repo")
-        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "needs-reply" and not s["pulse"]), timeout=30)
+        self.pi = Pi(self.far, self.sid, self.proc.pid, cwd="/far/repo")
+        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "failed" and not s["pulse"]), timeout=30)
         self.pi.start()
-        self.pi.end(said="Keep it?")
-        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "needs-reply" and s["pulse"]), timeout=10)
+        self.pi.end(error=True)
+        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "failed" and s["pulse"]), timeout=10)
 
     def test_enter_on_a_session_in_tmux_opens_a_terminal_on_it(self):
         self.pi.close()
         self.bar.wait(lacks_session(self.rid))
-        Pi(self.far, self.sid, self.proc.pid, answer="", tmux="%12")
+        Pi(self.far, self.sid, self.proc.pid, tmux="%12")
         self.bar.wait(has_session(self.rid, lambda s: s.get("tmux") == "%12"))
         self.bar.send(op="focus", session=self.rid)
         spawned = logged(Path(str(self.near.focus_log) + ".spawn"))
@@ -1564,7 +1345,8 @@ class LinkTest(unittest.TestCase):
 
     def test_an_ended_session_resumes_over_ssh(self):
         self.pi.start()
-        self.pi.row(lambda p: p["identity"]["label"] == "far work")
+        self.pi.end()
+        self.bar.wait(has_session(self.rid, lambda s: s["state"] == "done"))
         self.pi.close()
         state = self.bar.wait(lambda m: m["type"] == "state" and m["recent"])
         self.assertEqual(state["recent"][0]["resume"], f"ssh -t far 'cd /far/repo && pi --session {self.sid[:8]}'")
@@ -1745,7 +1527,7 @@ class PeersTest(HubTest):
 
 
 class ClaudeIdentityTest(HubTest):
-    """A Claude Code session named by `claude -p` as its own profile, from its hooks."""
+    """A Claude Code session's name and profile, from its registry entry and its hooks."""
 
     def setUp(self):
         super().setUp()
@@ -1754,55 +1536,49 @@ class ClaudeIdentityTest(HubTest):
         self.hub.write_session(self.proc.pid, self.sid, status="busy", name="repo-12", nameSource="derived")
         self.bar.wait(has_session(self.sid))
         self.transcript = self.hub.write_transcript(self.sid, [prompt("fix the build"), *ran(), said("Fixed.")])
-        self.hub.claude_answer.write_text("label: fix the darwin build\ndoing: reading the overlay\n")
 
-    def hook(self, name, **env):
-        event = {"hook_event_name": name, "session_id": self.sid, "cwd": "/repo", "transcript_path": str(self.transcript),
-                 "prompt": "and the eval", "source": "startup"}
+    def hook(self, name, session_id=None, **env):
+        event = {"hook_event_name": name, "session_id": session_id or self.sid, "cwd": "/repo",
+                 "transcript_path": str(self.transcript), "prompt": "and the eval", "source": "startup"}
         return self.hub.command("hook", stdin=json.dumps(event), **env).stdout
 
-    def test_prompt_names_the_session_from_its_transcript_and_the_new_prompt(self):
-        self.hook("UserPromptSubmit")
-        self.bar.wait(has_session(self.sid, lambda s: s["name"] == "fix the darwin build" and s["doing"] == "reading the overlay"))
-        asked = (self.hub.claude_log.with_suffix(".log.prompts")).read_text()
-        self.assertIn("- fix the build\n- and the eval", asked)
+    def test_the_registrys_name_names_it_and_one_the_person_chose_says_so(self):
+        self.bar.wait(has_session(self.sid, lambda s: s["name"] == "repo-12"))
+        self.hub.write_session(self.proc.pid, self.sid, status="busy", name="mine", nameSource="user")
+        self.bar.wait(has_session(self.sid, lambda s: s["name"] == "mine"))
 
-    def test_session_start_names_the_profile_its_readings_run_as(self):
-        self.hook("SessionStart", CLAUDE_CONFIG_DIR="/profiles/.claude-work")
-        self.hook("UserPromptSubmit")
-        self.bar.wait(has_session(self.sid, lambda s: s["label"] == "fix the darwin build"))
-        self.assertEqual(self.hub.claude_log.read_text().split(), ["/profiles/.claude-work"])
+    def test_claudes_own_title_beats_the_registrys_name_but_not_one_the_person_chose(self):
+        self.transcript = self.hub.write_transcript(self.sid, [prompt("fix the build"), {"type": "ai-title", "aiTitle": "Build fix"},
+                                                               said("Fixed.")])
+        self.hook("Stop")
+        self.bar.wait(has_session(self.sid, lambda s: s["name"] == "Build fix"))
+        self.hub.write_session(self.proc.pid, self.sid, status="idle", name="mine", nameSource="user")
+        self.bar.wait(has_session(self.sid, lambda s: s["name"] == "mine"))
 
-    def test_ended_session_resumes_under_its_profile_and_takes_its_label_back(self):
+    def test_ended_session_resumes_under_its_profile(self):
         self.hook("SessionStart", CLAUDE_CONFIG_DIR="/profiles/.claude-work")
-        self.hook("UserPromptSubmit")
-        self.bar.wait(has_session(self.sid, lambda s: s["label"] == "fix the darwin build"))
+        self.hook("Stop")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
         self.proc.kill()
         self.proc.wait()
         state = self.bar.wait(lambda m: m["type"] == "state" and m["recent"])
-        self.assertEqual(state["recent"][0]["resume"], f"cd /repo && claude-work --resume {self.sid}")
+        self.assertEqual((state["recent"][0]["name"], state["recent"][0]["resume"]), ("repo-12", f"cd /repo && claude-work --resume {self.sid}"))
         again = self.hub.process()
         self.hook("SessionStart", CLAUDE_CONFIG_DIR="/profiles/.claude-work")
         self.hub.write_session(again.pid, self.sid, status="idle", name="repo-12", nameSource="derived")
-        state = self.bar.wait(has_session(self.sid, lambda s: s["name"] == "fix the darwin build"))
+        state = self.bar.wait(has_session(self.sid, lambda s: s["history"]))
         self.assertEqual(state["recent"], [])
 
     def test_a_session_its_hooks_named_before_the_registry_lives_until_its_session_end(self):
         live = self.hub.process()
-        event = {"hook_event_name": "UserPromptSubmit", "session_id": "early", "cwd": "/repo",
-                 "transcript_path": str(self.transcript), "prompt": "and the eval"}
-        self.hub.command("hook", stdin=json.dumps(event), CLAUDE_PID=str(live.pid))
+        self.hook("UserPromptSubmit", session_id="early", CLAUDE_PID=str(live.pid))
+        self.hook("Stop", session_id="early", CLAUDE_PID=str(live.pid))
         state_file = self.hub.tmp / "state.json"
-        eventually(lambda: state_file.exists() and "fix the darwin build" in state_file.read_text())
+        eventually(lambda: state_file.exists() and '"did": "Fixed."' in state_file.read_text())
         self.hub.command("hook", stdin=json.dumps({"hook_event_name": "SessionEnd", "session_id": "early",
                                                    "reason": "prompt_input_exit"}), CLAUDE_PID=str(live.pid))
         state = self.bar.wait(lambda m: m["type"] == "state" and m["recent"])
-        self.assertEqual([(r["id"], r["label"]) for r in state["recent"]], [("early", "fix the darwin build")])
-
-    def test_a_name_the_person_chose_outranks_the_label(self):
-        self.hub.write_session(self.proc.pid, self.sid, status="busy", name="mine", nameSource="user")
-        self.hook("UserPromptSubmit")
-        self.bar.wait(has_session(self.sid, lambda s: s["label"] == "fix the darwin build" and s["name"] == "mine"))
+        self.assertEqual([(r["id"], r["name"]) for r in state["recent"]], [("early", "repo")])
 
 
 class WaitingTest(HubTest):
@@ -1998,7 +1774,7 @@ class OrderTest(HubTest):
         for name in ("done", "busy"):
             self.hub.write_session(self.procs[name].pid, name, status="busy")
         self.bar.wait(has_session("done", lambda s: s["window"] is not None))
-        self.done = Pi(self.hub, "done", self.procs["done"].pid, answer="state: done")
+        self.done = Pi(self.hub, "done", self.procs["done"].pid)
         self.done.start(prompt="ok")
         self.done.end()
         self.hub.write_session(self.procs["new"].pid, "new", status="waiting", since=now - 1_000)
@@ -2048,21 +1824,20 @@ class StatusTest(HubTest):
         super().setUp()
         self.proc = self.hub.process()
         self.bar = self.hub.subscribe()
-        self.pi = Pi(self.hub, self.sid, self.proc.pid, answer="label: fixture work\nstate: blocked\nask: keep the fixture?")
+        self.pi = Pi(self.hub, self.sid, self.proc.pid, name="fixture work")
         self.pi.start()
-        self.pi.row(lambda push: push["identity"]["label"] == "fixture work")
-        self.pi.end(said="Keep the fixture?")
-        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "needs-reply"))
+        self.pi.end(said="Kept the old fixture. It still passes.")
+        self.bar.wait(has_session(self.sid, lambda s: s["state"] == "done"))
 
     def status(self, *args):
         return self.hub.command("status", *args).stdout
 
-    def test_prints_the_state_the_reason_and_the_label_for_its_own_session(self):
-        self.assertEqual(self.status("--session-id", self.sid), "needs-reply\tkeep the fixture?\tfixture work\n")
+    def test_prints_the_state_the_reason_and_the_name_for_its_own_session(self):
+        self.assertEqual(self.status("--session-id", self.sid), "done\tKept the old fixture.\tfixture work\n")
 
     def test_falls_back_to_the_pid_of_a_session_whose_id_the_caller_lost(self):
         self.assertEqual(self.status("--session-id", "before-a-clear", "--pid", str(self.proc.pid)),
-                         "needs-reply\tkeep the fixture?\tfixture work\n")
+                         "done\tKept the old fixture.\tfixture work\n")
 
     # macOS walks parents with `ps`, which is setuid, so a darwin Nix build isn't allowed to run it.
     @unittest.skipIf(parent_pid(os.getpid()) is None, "can't read a process's parent here")
@@ -2073,14 +1848,15 @@ class StatusTest(HubTest):
         self.hub.processes.append(parent)
         child = int(parent.stdout.readline())
         self.addCleanup(os.kill, child, signal.SIGKILL)
-        pi = Pi(self.hub, "parent", parent.pid, answer="label: the parent")
+        pi = Pi(self.hub, "parent", parent.pid, name="the parent")
         pi.start()
-        pi.wait(lambda: any(p["identity"]["label"] == "the parent" for p in pi.pushed))
+        pi.row(lambda push: push["row"]["state"] == "working")
         self.assertEqual(self.status("--pid", str(child)), "working\t\tthe parent\n")
 
     def test_json_is_the_hubs_row(self):
         row = json.loads(self.status("--json", "--session-id", self.sid))
-        self.assertEqual((row["state"], row["ask"], row["label"]), ("needs-reply", "keep the fixture?", "fixture work"))
+        self.assertEqual((row["state"], row["said"], row["name"]), ("done", "Kept the old fixture. It still passes.", "fixture work"))
+        self.assertNotIn("label", row)
 
     def test_prints_nothing_for_a_session_the_hub_does_not_know(self):
         self.assertEqual(self.status("--session-id", "nobody"), "")

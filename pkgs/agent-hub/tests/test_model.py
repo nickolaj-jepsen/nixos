@@ -2,39 +2,53 @@
 
 import unittest
 
-from agent_hub.model import ASK_GRACE_MS, ONCE_MS, REGISTRY_GRACE_MS, Alerts, Session, ordered
+from agent_hub.model import ASK_GRACE_MS, ONCE_MS, REGISTRY_GRACE_MS, Alerts, Session, ending, ordered
 
-DONE = {"state": "done", "ask": "", "reply": "", "summary": "Fixed the footer.", "jobs": 0}
-BLOCKED = {"state": "blocked", "ask": "keep the fixture?", "reply": "yes", "summary": "Asked.", "jobs": 0}
+DONE = ending("Fixed the footer. It was too wide.")
+FAILED = ending(failure="API error: overloaded")
 
 
 def finished(outcome=DONE, now=100):
     session = Session(id="s")
-    n = session.start_turn(now)
-    session.end_turn(now + 10)
-    session.read(n, outcome, now + 20)
+    session.start_turn(now)
+    session.end_turn(now + 10, outcome)
     return session
+
+
+class EndingTest(unittest.TestCase):
+    def test_a_turn_is_done_with_its_first_sentence_and_its_words(self):
+        outcome = ending("**Fixed** the footer. It was too wide.\n\nWant the header too?")
+        self.assertEqual((outcome["state"], outcome["summary"], outcome["jobs"]), ("done", "Fixed the footer.", 0))
+        self.assertTrue(outcome["said"].endswith("Want the header too?"))
+
+    def test_the_agents_error_fails_it(self):
+        self.assertEqual(ending("Partial.", error=True)["state"], "failed")
+        self.assertEqual((FAILED["state"], FAILED["summary"]), ("failed", "API error: overloaded"))
+
+    def test_agent_work_in_flight_is_waited_on(self):
+        outcome = ending("Started them.", tasks=[{"type": "subagent", "description": "Explore the hub"}, {"type": "shell"}])
+        self.assertEqual((outcome["jobs"], outcome["doing"]), (2, "Explore the hub +1"))
+
+    def test_a_shell_job_counts_only_when_the_words_wait_on_it(self):
+        server = [{"type": "shell", "description": "npm run dev"}]
+        self.assertEqual(ending("The dev server is up on :3000.", tasks=server)["jobs"], 0)
+        self.assertEqual(ending("I'll wait for the build to finish.", tasks=server)["jobs"], 1)
+        self.assertEqual(ending("Waiting on the build.", pending=2)["jobs"], 2)
 
 
 class TurnTest(unittest.TestCase):
     def test_a_turn_works_then_shows_how_it_ended(self):
         session = Session(id="s")
-        n = session.start_turn(0)
+        session.start_turn(0)
         self.assertEqual(session.state(1), "working")
-        self.assertEqual(session.end_turn(10), n)
-        session.reading(n, True)
-        self.assertEqual(session.row(11)["doing"], "reading the turn")
-        session.read(n, BLOCKED, 12)
+        self.assertTrue(session.end_turn(10, DONE))
         row = session.row(13)
-        self.assertEqual((row["state"], row["ask"], row["reply"], row["since"]), ("needs-reply", "keep the fixture?", "yes", 10))
+        self.assertEqual((row["state"], row["summary"], row["since"]), ("done", "Fixed the footer.", 10))
+        self.assertEqual(row["said"], DONE["said"])
 
-    def test_a_reading_that_lands_after_the_next_turn_started_is_dropped(self):
-        session = Session(id="s")
-        n = session.start_turn(0)
-        session.end_turn(10)
-        session.start_turn(20)
-        self.assertFalse(session.read(n, DONE, 30))
-        self.assertEqual(session.state(31), "working")
+    def test_a_failed_turn_says_why(self):
+        row = finished(FAILED).row(200)
+        self.assertEqual((row["state"], row["reason"]), ("failed", "API error: overloaded"))
 
     def test_waiting_on_background_jobs_keeps_it_working(self):
         session = finished({**DONE, "jobs": 2})
@@ -43,9 +57,8 @@ class TurnTest(unittest.TestCase):
     def test_history_keeps_the_last_three_endings(self):
         session = Session(id="s")
         for i in range(5):
-            n = session.start_turn(i * 100)
-            session.end_turn(i * 100 + 10)
-            session.read(n, {**DONE, "summary": f"turn {i}"}, i * 100 + 20)
+            session.start_turn(i * 100)
+            session.end_turn(i * 100 + 10, {**DONE, "summary": f"turn {i}"})
         self.assertEqual([h["did"] for h in session.row(1000)["history"]], ["turn 2", "turn 3", "turn 4"])
 
     def test_waiting_on_jobs_names_the_work_when_the_agent_did(self):
@@ -66,19 +79,19 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(session.state(11), "idle")
 
     def test_registry_busy_leaves_the_last_ending_until_the_agent_had_its_chance(self):
-        session = finished(BLOCKED)
+        session = finished(DONE)
         self.assertEqual(session.observe("busy", None, 200, registry=True), "busy")
         self.assertIsNone(session.registry_turn(200 + REGISTRY_GRACE_MS - 1))
-        self.assertEqual(session.state(200 + REGISTRY_GRACE_MS - 1), "needs-reply")
+        self.assertEqual(session.state(200 + REGISTRY_GRACE_MS - 1), "done")
         self.assertEqual(session.registry_turn(200 + REGISTRY_GRACE_MS), 2)
         self.assertEqual(session.state(200 + REGISTRY_GRACE_MS), "working")
 
     def test_registry_going_idle_within_the_grace_starts_nothing(self):
-        session = finished(BLOCKED)
+        session = finished(DONE)
         session.observe("busy", None, 200, registry=True)
         session.observe("idle", None, 300, registry=True)
         self.assertIsNone(session.registry_turn(200 + REGISTRY_GRACE_MS))
-        self.assertEqual(session.state(200 + REGISTRY_GRACE_MS), "needs-reply")
+        self.assertEqual(session.state(200 + REGISTRY_GRACE_MS), "done")
 
     def test_hook_adopts_the_turn_the_registry_started(self):
         session = Session(id="s")
@@ -87,29 +100,32 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(session.turn.n, 1)
 
     def test_hook_within_the_grace_is_the_only_start(self):
-        session = finished(BLOCKED)
+        session = finished(DONE)
         session.observe("busy", None, 200, registry=True)
         self.assertEqual(session.start_turn(205), 2)
         self.assertIsNone(session.registry_turn(200 + REGISTRY_GRACE_MS))
         self.assertEqual(session.turn.n, 2)
 
     def test_nothing_standing_needs_no_grace(self):
-        session = finished(BLOCKED)
+        session = finished(DONE)
         session.dismiss()
         self.assertEqual(session.observe("busy", None, 200, registry=True), "started")
 
-    def test_stop_after_the_registry_went_idle_still_reads_the_turn(self):
+    def test_stop_after_the_registry_went_idle_still_ends_the_turn(self):
         session = Session(id="s")
         session.start_turn(0)
         session.observe("busy", None, 1, registry=True)
         session.observe("idle", None, 10, registry=True)
-        self.assertEqual(session.end_turn(12), 1)
+        self.assertEqual(session.state(11), "idle")
+        self.assertTrue(session.end_turn(12, DONE))
+        self.assertEqual(session.row(13)["since"], 10)
+        self.assertFalse(session.end_turn(14, DONE))
 
     def test_registry_still_busy_after_stop_starts_nothing(self):
         session = Session(id="s")
         session.observe("busy", None, 0, registry=True)
         session.start_turn(1)
-        session.end_turn(10)
+        session.end_turn(10, DONE)
         session.observe("idle", None, 10)
         # The entry rescanned unchanged, its stamp still the turn's start.
         self.assertIsNone(session.observe("busy", None, 0, registry=True))
@@ -138,18 +154,16 @@ class AsideTest(unittest.TestCase):
 
     def aside(self, session, outcome, at=300):
         session.start_aside(at)
-        aside = session.aside
-        session.end_aside(at + 10)
-        return session.read_aside(aside, outcome, at + 20)
+        return session.end_aside(outcome, at + 10)
 
-    def test_a_peers_turn_leaves_a_standing_ask_and_its_age(self):
-        session = finished(BLOCKED)
+    def test_a_peers_turn_leaves_a_standing_ending_and_its_age(self):
+        session = finished(DONE)
         before = session.row(200)
         session.start_aside(300)
         during = session.row(301)
-        self.assertEqual((during["state"], during["ask"], during["since"]), ("needs-reply", before["ask"], before["since"]))
-        session.end_aside(310)
-        self.assertEqual(session.state(311), "needs-reply")
+        self.assertEqual((during["state"], during["since"]), ("done", before["since"]))
+        self.assertIs(session.end_aside(DONE, 310), False)
+        self.assertEqual(session.row(311), before)
 
     def test_a_session_with_nothing_standing_works_while_a_peer_is_answered(self):
         session = Session(id="s")
@@ -160,40 +174,21 @@ class AsideTest(unittest.TestCase):
 
     def test_a_peers_turn_that_only_finished_changes_nothing(self):
         session = finished(DONE)
-        before = session.row(200)
-        self.assertIs(self.aside(session, {**DONE, "summary": "Replied."}), False)
-        self.assertEqual(session.row(200), before)
-
-    def test_a_peers_turn_that_asks_you_something_reaches_the_row(self):
-        session = finished(DONE)
-        self.assertIs(self.aside(session, {**BLOCKED, "ask": "ship it?"}), True)
-        row = session.row(400)
-        self.assertEqual((row["state"], row["ask"], row["since"]), ("needs-reply", "ship it?", 310))
-
-    def test_a_peers_ask_never_replaces_one_already_standing(self):
-        session = finished(BLOCKED)
-        self.assertIs(self.aside(session, {**BLOCKED, "ask": "ship it?"}), False)
-        self.assertEqual(session.row(400)["ask"], "keep the fixture?")
-
-    def test_a_peers_ask_replaces_one_you_dismissed(self):
-        session = finished(BLOCKED)
         session.dismiss()
-        self.assertIs(self.aside(session, {**BLOCKED, "ask": "ship it?"}), True)
-        self.assertEqual(session.row(400)["ask"], "ship it?")
+        self.assertIs(self.aside(session, ending("Replied.")), False)
+        self.assertEqual(session.state(400), "idle")
+
+    def test_a_peers_turn_that_failed_reaches_the_row(self):
+        session = finished(DONE)
+        self.assertIs(self.aside(session, FAILED), True)
+        row = session.row(400)
+        self.assertEqual((row["state"], row["since"], row["turn"]), ("failed", 310, 2))
 
     def test_a_message_mid_turn_is_part_of_that_turn(self):
         session = Session(id="s")
         session.start_turn(0)
         session.start_aside(5)
         self.assertIsNone(session.aside)
-
-    def test_your_prompt_ends_the_aside_and_a_late_reading_is_dropped(self):
-        session = finished(DONE)
-        session.start_aside(300)
-        aside = session.aside
-        session.start_turn(310)
-        self.assertIsNone(session.read_aside(aside, BLOCKED, 320))
-        self.assertEqual(session.state(321), "working")
 
     def test_the_registry_going_idle_keeps_it_for_the_stop_that_may_follow(self):
         session = finished(DONE)
@@ -216,25 +211,6 @@ class AsideTest(unittest.TestCase):
         session.start_aside(300 + REGISTRY_GRACE_MS + 1)
         self.assertEqual((session.turn.n, session.state(300 + REGISTRY_GRACE_MS + 2)), (1, "done"))
 
-    def test_a_turn_given_back_mid_reading_doesnt_wait_on_a_reading_that_was_cancelled(self):
-        session = Session(id="s")
-        n = session.start_turn(0)
-        session.end_turn(10)
-        session.reading(n, True)
-        session.observe("busy", None, 300, registry=True)
-        session.registry_turn(300 + REGISTRY_GRACE_MS)
-        self.assertIs(self.aside(session, DONE, at=300 + REGISTRY_GRACE_MS + 1), False)
-        self.assertEqual(session.state(3000), "idle")
-
-    def test_a_peers_ask_leaves_your_turn_while_it_is_being_read(self):
-        session = Session(id="s")
-        n = session.start_turn(0)
-        session.end_turn(10)
-        session.reading(n, True)
-        self.assertIs(self.aside(session, BLOCKED), False)
-        self.assertTrue(session.read(n, {**DONE, "summary": "Yours."}, 400))
-        self.assertEqual(session.row(401)["summary"], "Yours.")
-
     def test_a_session_with_only_an_aside_survives_saving(self):
         session = Session(id="s")
         session.start_aside(300)
@@ -246,46 +222,48 @@ class DismissTest(unittest.TestCase):
         session = finished()
         self.assertTrue(session.dismiss())
         self.assertEqual(session.state(200), "idle")
-        n = session.start_turn(300)
-        session.end_turn(310)
-        session.read(n, DONE, 320)
+        session.start_turn(300)
+        session.end_turn(310, DONE)
         self.assertEqual(session.state(330), "done")
 
-    def test_nothing_to_dismiss_while_unread(self):
+    def test_nothing_to_dismiss_while_it_runs(self):
         session = Session(id="s")
         session.start_turn(0)
         self.assertFalse(session.dismiss())
 
 
 class RowTest(unittest.TestCase):
-    def test_persons_name_beats_the_label_which_beats_the_derived_name(self):
-        session = Session(id="s", cwd="/home/x/repo", derived="repo-12")
+    def test_persons_name_beats_the_derived_name_which_beats_the_folder(self):
+        session = Session(id="s", cwd="/home/x/repo")
+        self.assertEqual(session.row(0)["name"], "repo")
+        session.derived = "repo-12"
         self.assertEqual(session.row(0)["name"], "repo-12")
-        session.label = "retry flakes"
-        self.assertEqual(session.row(0)["name"], "retry flakes")
         session.name = "mine"
         self.assertEqual(session.row(0)["name"], "mine")
 
     def test_saved_session_loads_as_it_was(self):
-        session = finished(BLOCKED)
-        session.label = "fixture cleanup"
+        session = finished(DONE)
+        session.name = "fixture cleanup"
         again = Session.load(session.saved(), 999)
         self.assertEqual(again.row(1000), session.row(1000))
 
-    def test_a_turn_a_restart_caught_comes_back_to_be_read(self):
+    def test_a_turn_a_restart_caught_open_comes_back_to_be_ended(self):
         session = Session(id="s")
-        n = session.start_turn(0)
+        session.start_turn(0)
         again = Session.load(session.saved(), 999)
         self.assertTrue(again.turn.restored and again.turn.open)
-        session.end_turn(10)
-        session.reading(n, True)
-        again = Session.load(session.saved(), 999)
-        self.assertTrue(again.turn.restored)
-        self.assertEqual(again.state(1000), "idle")
-        self.assertEqual(again.end_turn(1000), n)
+        self.assertTrue(again.end_turn(1000, DONE))
 
-    def test_a_turn_with_its_ending_read_comes_back_settled(self):
+    def test_a_turn_with_its_ending_comes_back_settled(self):
         self.assertFalse(Session.load(finished().saved(), 999).turn.restored)
+
+    def test_an_ending_saved_before_the_gate_went_loads_as_done(self):
+        saved = finished().saved()
+        saved["label"] = "old label"
+        saved["turn"].update(outcome={"state": "blocked", "ask": "ship it?", "summary": "Asked.", "jobs": 0}, reading=False, doing="")
+        saved["history"] = [{"at": 110, "state": "needs-reply", "did": "Asked."}]
+        again = Session.load(saved, 999)
+        self.assertEqual((again.state(1000), again.history[0]["state"]), ("done", "done"))
 
     def test_order_puts_the_longest_waiting_attention_first_then_the_latest(self):
         rows = [{"state": s, "since": t} for s, t in
@@ -294,7 +272,7 @@ class RowTest(unittest.TestCase):
                          [("asking", 3), ("asking", 8), ("failed", 1), ("done", 9), ("working", 7), ("idle", 6), ("idle", 5)])
 
 
-def row(state="needs-reply", since=100, window=None, rid="s"):
+def row(state="failed", since=100, window=None, rid="s"):
     return {"id": rid, "state": state, "since": since, "window": window}
 
 
@@ -309,7 +287,7 @@ class AlertsTest(unittest.TestCase):
         self.assertFalse(self.pulse(alerts, 200))
         self.assertTrue(self.pulse(alerts, 300, since=250))
 
-    def test_an_ask_pulses_until_you_look_or_open_the_popout(self):
+    def test_a_failure_pulses_until_you_look_or_open_the_popout(self):
         alerts = Alerts({})
         self.assertTrue(self.pulse(alerts, 200))
         self.assertTrue(self.pulse(alerts, 100_000))

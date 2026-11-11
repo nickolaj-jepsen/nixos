@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_hub.progress import ESTIMATE_AFTER_MS, ESTIMATE_EVERY_MS, START_BYTES, Progress, Tail, first_line
+from agent_hub.progress import START_BYTES, Progress, Tail, first_line
 
 AT = "2026-11-03T00:00:00.000Z"
 AT_MS = 1793664000000
@@ -76,13 +76,12 @@ class ClaudeProgressTest(unittest.TestCase):
         progress.feed(prompt("<task-notification>\n<tool-use-id>j</tool-use-id>\n</task-notification>"), 1)
         self.assertNotIn("now", progress.view(jobs=True))
 
-    def test_a_job_reporting_back_into_a_running_turn_is_over_and_says_what_it_took(self):
+    def test_a_job_reporting_back_into_a_running_turn_is_over(self):
         progress = fed(prompt(), call("j", "Bash", command="nix build", run_in_background=True), result("j", backgroundTaskId="t1"))
         report = "<task-notification>\n<task-id>t1</task-id>\n<tool-use-id>j</tool-use-id>\n</task-notification>"
         progress.feed({"type": "attachment", "timestamp": "2026-11-03T00:40:00.000Z",
                        "attachment": {"type": "queued_command", "commandMode": "task-notification", "prompt": report}}, 1)
         self.assertNotIn("now", progress.view(jobs=True))
-        self.assertEqual([(f["line"], f["ms"]) for f in progress.drain_finished()], [("nix build", 40 * 60_000)])
 
     def test_something_else_queued_into_a_running_turn_leaves_it_going(self):
         progress = fed(prompt(), call("c", "Bash", command="just build"))
@@ -102,48 +101,22 @@ class ClaudeProgressTest(unittest.TestCase):
         side = {**said("Inside the subagent."), "isSidechain": True}
         self.assertEqual(fed(prompt(), side).view(), {})
 
+    def test_its_closing_words_are_what_it_said_after_its_last_tool(self):
+        progress = fed(prompt(), said("Looking."), call("c", "Bash", command="ls"), result("c"), said("Done."), said("Want more?"))
+        self.assertEqual(progress.said, "Done.\nWant more?")
+        progress.feed(prompt("next"), 1)
+        self.assertEqual(progress.said, "")
+
+    def test_its_title_is_claudes_own_and_a_rename_outlasts_the_next_generated_one(self):
+        progress = fed(prompt(), {"type": "ai-title", "aiTitle": "Footer width"}, prompt("next"))
+        self.assertEqual(progress.title, "Footer width")
+        progress.feed({"type": "custom-title", "customTitle": "mine"}, 1)
+        progress.feed({"type": "ai-title", "aiTitle": "Footer width"}, 1)
+        self.assertEqual(progress.title, "mine")
+
     def test_a_trail_keeps_its_latest(self):
         view = fed(prompt(), *[said(f"step {n}") for n in range(20)]).view()
         self.assertEqual(view["trail"][0]["text"], "step 8")
-
-
-class EstimateTest(unittest.TestCase):
-    LATER = AT_MS + ESTIMATE_AFTER_MS
-
-    def test_a_command_gets_its_reading_once_it_has_run_long_enough(self):
-        progress = fed(prompt(), call("c", "Bash", command="just build"))
-        self.assertEqual(progress.due_estimates(self.LATER - 1), [])
-        self.assertEqual([c["line"] for c in progress.due_estimates(self.LATER)], ["just build"])
-
-    def test_it_is_asked_again_only_after_a_while(self):
-        progress = fed(prompt(), call("c", "Bash", command="just build"))
-        progress.due_estimates(self.LATER)
-        self.assertEqual(progress.due_estimates(self.LATER + 1), [])
-        self.assertEqual(len(progress.due_estimates(self.LATER + ESTIMATE_EVERY_MS)), 1)
-
-    def test_a_subagent_gets_none(self):
-        self.assertEqual(fed(prompt(), call("c", "Agent", description="x")).due_estimates(self.LATER), [])
-
-    def test_a_job_gets_one_only_while_a_turn_waits_on_it(self):
-        content = "Output is being written to: /tmp/x/tasks/abc.output. You will be notified"
-        job = result("j", backgroundTaskId="t1")
-        job["message"]["content"][0]["content"] = content
-        progress = fed(prompt(), call("j", "Bash", command="nix build", run_in_background=True), job)
-        self.assertEqual(progress.due_estimates(self.LATER), [])
-        self.assertEqual([c["output"] for c in progress.due_estimates(self.LATER, jobs=True)], ["/tmp/x/tasks/abc.output"])
-
-    def test_the_row_shows_an_estimate_with_what_it_is_for(self):
-        progress = fed(prompt(), call("c", "Bash", command="just build"))
-        progress.due_estimates(self.LATER)[0]["estimate"] = {"left": 5, "note": "", "at": self.LATER, "after": 1}
-        self.assertEqual(progress.view()["estimate"]["left"], 5)
-
-    def test_a_finished_command_says_what_it_took_and_what_was_estimated(self):
-        progress = fed(prompt(), call("c", "Bash", command="just build"))
-        progress.due_estimates(self.LATER)[0]["estimate"] = {"left": 5, "note": "", "at": self.LATER, "after": 1}
-        progress.feed({**result("c"), "timestamp": "2026-11-03T00:40:00.000Z"}, 1)
-        finished = progress.drain_finished()
-        self.assertEqual((finished[0]["line"], finished[0]["ms"], finished[0]["estimate"]["left"]), ("just build", 40 * 60_000, 5))
-        self.assertEqual(progress.drain_finished(), [])
 
 
 class PiProgressTest(unittest.TestCase):
@@ -211,15 +184,6 @@ class TailTest(unittest.TestCase):
         tail = Tail(str(self.path))
         tail.advance(1)
         self.assertEqual([s["text"] for s in tail.progress.view()["trail"]], ["Lately."])
-
-    def test_only_what_ends_after_it_began_following_counts_as_finished(self):
-        self.write(prompt(), call("old", "Bash", command="long ago"), result("old"), call("c", "Bash", command="still going"))
-        tail = Tail(str(self.path))
-        tail.advance(1)
-        self.assertEqual(tail.progress.drain_finished(), [])
-        self.write(result("c"))
-        tail.advance(1)
-        self.assertEqual([f["line"] for f in tail.progress.drain_finished()], ["still going"])
 
     def test_an_odd_line_costs_only_itself(self):
         odd_tool = {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "x", "name": "Bash", "input": "odd"}]}}

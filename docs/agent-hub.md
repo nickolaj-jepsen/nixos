@@ -1,7 +1,8 @@
 # agent-hub
 
 A daemon that knows every live pi and Claude Code session on its host: what each
-one is called, the step it is on, and how its last turn ended.
+one is on, and how its last turn ended. It calls no model: every state is the agent's
+own word, through its hooks, its extension or its registry entry, and so is every name.
 
 - Each agent's TUI shows the hub's row for its own session.
 - On a niri desktop the DMS bar shows a dot per session that wants you and a ring
@@ -21,22 +22,16 @@ it is: Waiting on you, Finished, Working, then Idle on slim lines, with the last
 that ended behind a fold. A row has its name on the left and its repository, the same
 from any worktree, on the right; a name that repeats it is cut down to the rest. The
 right shows the selected one: what it wants permission for or its closing words as
-written, the answer you'd likely give, your last prompt, its last turns, and one row of
-icons for where it is. A session not waiting on you has your prompt first.
+written, your last prompt, its last turns, and one row of icons for where it is. A session not waiting on you has your prompt first.
 
 - A working row says what is running and for how long. The pane adds the agent's
   narration so far and this turn's tally of edits, commands and failures. There is no
   percentage and no `stuck` state: nothing knows the total, and a long build looks
   exactly like a hang, so it shows the time and leaves that to you.
-- A command still running after 30 minutes gets a side-model reading, repeated every 30
-  minutes, shown as `est. 20m left`. It sees the command, its past times and, for a
-  background job, the end of its output. A foreground command's output can't be seen, so
-  its estimate is weak. The work log keeps each estimate beside what the command took,
-  and `agent-hub eval` says how far off they run.
 - A row is selected by hovering it (after 120 ms, and only when the pointer itself
   moved) or with the keys, which share the one selection. The pane stops following
   once the pointer is inside it.
-- Hovering a row swaps its age for buttons: dismiss and flag as wrong.
+- Hovering a row swaps its age for a dismiss button.
 - Clicking a row opens it. A click on the Ended heading opens that until the popout
   closes.
 - The folder and branch icons open menus: the editor `fireproof.desktop.editor` names,
@@ -71,13 +66,9 @@ never approve something other than what the pane showed.
 - `Mod+B` opens the popout with the first row selected.
   - `Enter` opens its window, or resumes an ended one in a new terminal.
   - `a` and `d` allow or deny the prompt it holds.
-  - `r` copies a `needs reply`'s likely answer and opens its window. Nothing is sent:
-    you paste it, edit it and press Enter. A message through the peer socket would arrive
-    labelled as another session's request, and typing blind could land in the wrong prompt.
   - `x` dismisses a finished one, or hides an open prompt until the next prompt.
   - `u` brings back the last dismissal, until that session starts a new turn. The
     stack lives in the hub the bar talks to, in memory.
-  - `w` logs its verdict as wrong, for tuning the gate.
   - `j`/`k` move, and `g`/`G` jump to the ends.
 - `Mod+Shift+B` (`agent-hub focus-next`) jumps straight to the next session
   that wants you, cycling on repeat.
@@ -90,8 +81,8 @@ The bar shows no popups. Terminal bells stay, as they are the agent's own.
 
 - A session's dot bursts when it comes to want you, then breathes until the popout
   opens or you focus its window. A `done` bursts once.
-- An ask also peeks out of the pill for 4 s, saying who, and a click on it goes to
-  that session. A vertical bar has no room for the peek.
+- A permission prompt also peeks out of the pill for 4 s, saying who, and a click on it
+  goes to that session. A vertical bar has no room for the peek.
 - Nothing pulses when you are looking at that window, for a dialog answered within
   a second, or on a restart for turns the hub already knew.
 - The hub computes the pulse (`Alerts` in `agent_hub/model.py`) and keeps what it has
@@ -100,7 +91,7 @@ The bar shows no popups. Terminal bells stay, as they are the agent's own.
 
 ## Other hosts
 
-There is no server. Each host's hub owns and judges its own sessions, and a viewer
+There is no server. Each host's hub owns its own sessions, and a viewer
 pipes the rows in with `ssh <host> agent-hub attach`, over a Unix socket on the far
 end, with no TCP port of its own.
 
@@ -145,119 +136,63 @@ end, with no TCP port of its own.
 - `AGENT_HUB_HIDDEN=1` in a session's environment hides it in every state, with no
   way to reveal it. Hooks and pi report it from their own environment. Set it for
   anything an agent starts to test with; `skills/pi-plugin-dev/scripts/tui.sh` does.
-- A hidden session gets no pulse, no `focus-next`, no model reading and no place in
+- A hidden session gets no pulse, no `focus-next` and no place in
   another session's peers note, but keeps its own row in its own TUI.
 - `agent-hub status` with no arguments lists every session and counts the hidden
   ones, since an agent could set it on purpose.
 - `AGENT_HUB=off` turns the hub off for a session: its hooks do nothing and pi never
   attaches. It then works as if there were no hub.
 
-## Naming and judging
+## How a turn ends
 
-The hub reads every session the same way, whichever agent runs it. One prompt
-and one parser (`agent_hub/judge.py`) serve both agents.
+Every turn that ends is your turn: the hub doesn't read the closing words to guess
+whether they ask something. A question shows as `done`, and the popout shows its words.
+No other tool for watching agents judges this either (cmux, herdr, paseo, Rex, Orca),
+and Claude's own question form is a dialog, which is `asking`.
 
-- At a turn's start a model names the work (`label`), the step in flight
-  (`doing`), a sentence about the session and its tags.
-- At a turn's end the same prompt also asks how it ended, what it did, what it
-  asks of you, what kind of help that is, and the reply you would likely type.
-- A `needs reply` row carries that kind as a tag: `decide`, `info`, `approve` or
-  `do something`. It is a label only, and changes no state, order or alert.
-- The model reads a digest, not the transcript: the latest requests, the files
-  touched and commands run in the latest turn, jobs still out, and its closing words.
-- A prompt that only agrees ("ok", "thanks") is not worth naming the work again.
-
-Who runs the call differs:
-
-- **pi** attaches to the hub for the session's life (`parent/lib/hub.ts`). The
-  hub reads its session file along the current branch (`agent_hub/pi.py`) and
-  asks pi to run the call, so it goes through pi's own side model and its usage ledger
-  (`session label`, `session ask`).
+- **pi** attaches to the hub for the session's life (`parent/lib/hub.ts`) and reports
+  its turns, dialogs and closing words.
 - **Claude Code** reaches the hub through `agent-hub hook` (set in
-  `modules/programs/claude-code/default.nix`). The hub runs `claude -p --model
-haiku` as the session's own profile (`CLAUDE_CONFIG_DIR`, which `SessionStart`
-  reports), so a `claude-work` transcript stays on the work account. A named
-  session is renamed at most every ten minutes.
-
-### The gate
-
-The model names how each turn ended, and a table says which endings call you, so the alerts
-can be tuned without touching the model or the labels (`ENDINGS` in `agent_hub/judge.py`).
-
-- The model reads every turn, writes its summary and names its ending: asked, ready to land,
-  landed with only a push or deploy left, landed with work left, suggesting questions,
-  suggesting building, can't continue, needs your hands, waiting on its jobs, or finished.
-- Code, not the model, works out whether a turn landed, from its commands: worktrunk's
-  `wt merge`, a merged pull request, a push to `main`, or a commit made on it. Opening a PR
-  doesn't count.
-- A `?` or request words ("tell me when", "your call") anywhere in the closing message
-  make a candidate, since a list of questions can end on something else. A candidate calls
-  you unless the model is sure of an ending that doesn't, so one wrong ending can't silence a
-  real ask.
-- If the model fails, the candidate stays `needs-reply`.
+  `modules/programs/claude-code/default.nix`).
 - `failed` comes only from the agent's own error: Claude's `StopFailure`, or pi's
-  error stop. The model can't call a turn failed.
-- Three failures in a row, or 500 readings, and the session is not asked again. Its pane
-  and `agent-hub status` then say so, with no pulse, or a broken model would look like a run
-  of real asks with no labels.
-- A name you chose (`/name` in pi, `/rename` in Claude Code) outranks the label.
-  Until then pi's session name follows it, so `/resume` lists it.
+  error stop.
+- A row's summary is the first sentence of its closing words, or the failure.
+- A row is named by the name you chose (`/name` in pi, `/rename` in Claude Code), else
+  the agent's own title for the session, else the registry's (`nixos-59`), else the
+  folder.
+  - Claude Code titles its sessions itself, the title `/resume` lists, and writes it into
+    the transcript (`ai-title`), where the hub reads it.
+  - pi has no titles of its own, so a session with no name gets one after its first
+    turn, from one side call (`session title`, `parent/identity.ts`). It is the
+    session's name from then on, so `/resume` lists it and `/name` replaces it.
 
 ### What the hub trusts
 
 - A turn starts and ends on the agent's own word: pi's messages, Claude's
   `UserPromptSubmit` and `Stop` hooks.
-- Claude's `Stop` carries the closing words and the tasks still in flight. The
-  hub trusts those over the transcript, which can lag at `Stop`. The transcript
-  supplies the rest of the digest, and is the fallback.
-- Subagent, workflow, teammate, monitor and cloud tasks in flight mean `working`,
-  with no model call. A `shell` task goes to the model, since it can't be told
-  from a dev server left running. A question in the closing words beats both.
+- Claude's `Stop` and pi's turn end carry the closing words, and Claude's the tasks
+  still in flight. The hub trusts those over the transcript, which can lag at `Stop`,
+  and reads the transcript's end only when they are missing.
+- Subagent, workflow, teammate, monitor and cloud tasks in flight mean `working`. A
+  `shell` task only does when the closing words say they wait on it ("waiting for",
+  "I'll check back"), since it can't be told from a dev server left running.
 - The registry only stands in where that word never comes: a session going busy
-  with no turn open starts one, and one going idle mid-turn ends it unread (Esc
-  fires no `Stop`). It can say busy before the hook does, so over a standing ending
+  with no turn open starts one, and one going idle mid-turn ends it as interrupted
+  (Esc fires no `Stop`). It can say busy before the hook does, so over a standing ending
   it waits two seconds for the agent's word.
 - A peer's message wakes a session without you, and Claude reports that as a prompt
   and a `Stop`. That turn is an aside (`Session.aside`) and leaves the row's state,
   age and your last prompt alone. It shows as `working` only with nothing standing.
-  - It doesn't rename the session, but still gets the peers note.
+  - It still gets the peers note.
   - It is always in the work log, as `peer done`.
-  - Only an ending that wants you reaches the row, never over a `needs-reply` already
-    there. The model is told the turn answered another session.
+  - Only a failure reaches the row, and never over your own turn while it runs.
   - Claude's hook input doesn't say where a prompt came from, so `cli.py` looks for
     the `<cross-session-message` tag at its head. pi knows its own message type.
-- A new turn cancels the reading of the last one's ending, and a reading that
-  lands late is dropped. `agent_hub/model.py` holds these rules,
-  `agent_hub/readings.py` the calls.
-
-### Measuring it
-
-`agent-hub label` shows you past turn endings, with the hub's verdict hidden, and asks
-whether the bar should have called you and whether the model's `did` line is accurate.
-`agent-hub eval` replays the current gate over your answers. The targets are 95% recall
-and 80% precision: a missed ask leaves an agent idle until you happen to look, while a
-false alarm costs a glance.
-
-- The sample mixes turns the regex flagged with turns it passed over, from every agent and
-  profile, with a few from each session (sizes in `agent_hub/bench.py`). Only the unflagged
-  ones can show an ask the regex missed, since the model can't raise a verdict. It is small
-  enough to give a rough figure, and `eval` prints the interval to say how rough.
-- Only sessions you started can be sampled: not subagents, a pi session's children or
-  headless runs. Marking a prompt as bad drops any other that slips through, session and all.
-- `~/.local/state/agent-hub/labels.jsonl` holds ids and answers, never transcript text.
-  You can stop at any key and carry on later.
-- Model calls run as the session's own profile, about one per turn. `eval --words-only`
-  makes none.
-- A replay knows less than the live gate did: not the jobs still out, nor the repo and
-  branch.
-- `eval` names the prompt's version, so compare runs of it before and after a change to
-  the prompt or the rule. It also says how often an "unverified" marker (edits with no
-  check after them) would fire, which no row shows until that proves quiet on healthy
-  turns.
+- `agent_hub/model.py` holds these rules.
 
 ## States
 
-In the order the popout lists them. The first four want you.
+In the order the popout lists them. The first three want you.
 
 - **asking**: a dialog is open that wants an answer.
   - Its entry in the session registry (`~/.claude/sessions`) says
@@ -269,43 +204,37 @@ In the order the popout lists them. The first four want you.
   - Claude also says `waiting` for modals that only show something (the history
     view, `/config`). Those carry `waitingFor: "dialog open"` and leave the
     session in the state it was in.
-- **needs reply**: the gate kept the turn's ask.
 - **failed**: the agent's own error.
-- **done**: the turn finished.
-- **working**: busy, a turn that ended only to wait for its own background work,
-  or a finished turn the hub is still reading.
+- **done**: the turn finished, and you haven't looked yet.
+- **working**: busy, or a turn that ended only to wait for its own background work.
 - **idle**: fresh, or dismissed. A dismissed prompt shows as what the session would
   otherwise be, `working` mid-turn.
 
 ### How long a state lasts
 
 - Focusing the window of a `done` session reads it, as `x` does.
-- `needs-reply` and `failed` stay until you answer, dismiss them, or their next
-  turn starts.
+- `failed` stays until you dismiss it or its next turn starts.
 - Turns, dismissals and what each session is called live in
   `~/.local/state/agent-hub/state.json`, so a daemon restart keeps them.
-- A turn a restart caught open or unread is read if its agent has since gone idle,
-  since its ending went unheard. One still running carries on.
-- pi also keeps its record on the session's branch and hands it back when it
-  attaches.
+- A turn a restart caught open ends, by its transcript, if its agent has since gone
+  idle, since its ending went unheard. One still running carries on.
 
 ## In the agent's own TUI
 
 Each agent's TUI repeats the row the hub has for _that session_, not an overview
 of the others.
 
-- It shows the state as a word and, for `needs reply` and `failed`, the ask or the
-  failure behind it, truncated. `idle` draws nothing. Both also show the label.
+- It shows the state as a word and, for `failed`, the failure behind it, truncated.
+  `idle` draws nothing.
 - Claude Code's status line (`modules/programs/claude-code/statusline.sh`) asks
   `agent-hub status --session-id …` on each refresh. It prints nothing when the
   daemon is down, and `agent-hub` joins that script's PATH only on hosts with the
   hub enabled.
-- pi gets its row pushed over the connection it is attached on: the footer paints
-  the state (`parent/chrome/hub.ts`), the editor border the label, the step or the
-  ask, and the input line the drafted reply (`parent/identity.ts`). It reattaches
-  when the daemon restarts or starts later.
-- The row can outlast the turn: it can still say the turn asked something, failed,
-  or is being read after the TUI looks idle again.
+- pi gets its row pushed over the connection it is attached on, and the footer paints
+  the state (`parent/chrome/hub.ts`). Its label is the session's name, else its first
+  request (`parent/identity.ts`). It reattaches when the daemon restarts or starts later.
+- The row can outlast the turn: it can still say the turn failed after the TUI looks
+  idle again.
 - `agent-hub status` takes `--session-id` or `--pid` (either finds the row; a pid
   under the agent's finds it too), and `--json` for the whole row as the bar sees
   it.
@@ -326,7 +255,7 @@ Before each turn the hub tells a session about the others in its git working tre
 
 ## Ended sessions
 
-- A session the hub named is kept when it ends, with the command that resumes it
+- A session that finished a turn is kept when it ends, with the command that resumes it
   (`claude-work --resume …` for a work session).
 - `agent-hub recent` lists them, newest first, and the popout shows the latest.
 - Resuming one from the popout opens the `terminal` from the hub's config through
@@ -335,30 +264,17 @@ Before each turn the hub tells a session about the others in its git working tre
 
 ## Work log
 
-Every turn the hub reads an ending for is a line in
-`~/.local/state/agent-hub/log.jsonl`: when, which session and agent, its label, how
-the turn ended, what it did and what it asked. Lines older than 90 days go when the
-daemon starts.
+Every turn that ends is a line in `~/.local/state/agent-hub/log.jsonl`: when, which
+session and agent, its name, how the turn ended and the first sentence of its closing
+words. Lines older than 90 days go when the daemon starts.
 
 - `agent-hub log` prints the last day (`--since 3h`, `yesterday`, `2w` or a date)
   grouped by session, each with the command that resumes it; `--json` prints the
   lines themselves.
-- `agent-hub find WORDS…` lists the sessions whose labels, did-lines or asks hold
-  every word, with their resume commands.
-- A verdict you flagged with `w` shows there as `wrong <state>`. A `needs-reply` you
-  dismissed without going to it shows as `unopened needs-reply`, a weaker sign, since
-  you may only not care. A prompt you answered in the popout shows as `allowed asking`
-  or `denied asking`, on the host you answered from, and never says what it asked. All
-  of these name the session and turn.
-- Each ending also records what its verdict was made of: whether the closing words
-  held an ask, the model's word, a hash of the prompt and rules, and the reply it
-  predicted.
-- Your next prompt adds a line of what can be derived from it, never its words: how it
-  reads (`answered`, `corrected`, `interrupted`, `moved-on`), its length, the delay, and
-  how close it came to the predicted reply. The delay is context, not a target: a slow
-  answer usually means you were busy elsewhere.
-- A command that ran for over a minute adds a line with its first two words and how long
-  it took, never its arguments. Past times build up from here, for later estimates.
+- `agent-hub find WORDS…` lists the sessions whose names or did-lines hold every word,
+  with their resume commands.
+- Lines from before the gate went name a session by its model label, and the log
+  skips their verdict, prompt and job lines.
 - Each row carries its last three endings (`history`), which the popout shows
   under the selected session, ended ones included.
 - Both commands read the file directly, so they work without the daemon.
@@ -367,9 +283,7 @@ daemon starts.
 
 - The daemon is `agent-hub daemon` (`pkgs/agent-hub/agent_hub/`), a user service.
   - `protocol` defines every message and the row.
-  - `model` holds the session rules, pure and tested as data.
-  - `readings` says when a model is asked, and `judge` holds the prompt, the gate
-    and the parsing.
+  - `model` holds the session rules and how a turn ends, pure and tested as data.
   - `hub` is the shell that wires them to the socket, the registry and the compositor.
 - Window focus comes from the compositor's event stream (`desktop`): a Hyprland whose
   socket answers, else niri. It is chosen per connection, since both sessions share one
@@ -382,8 +296,8 @@ daemon starts.
   Branch and changed files are asked of git when a session is first seen, when a prompt
   opens, when a turn ends and when the popout opens.
 - `agent_hub/progress.py` follows a working session's transcript every two seconds: the
-  tools running, their tally and the agent's narration. No model is called and nothing
-  prompts the agent, so the step line is only as true as what the agent says it is doing.
+  tools running, their tally, the agent's narration and its latest words. Nothing prompts
+  the agent, so the step line is only as true as what the agent says it is doing.
   Narration stays in memory like your prompt, and after a restart it comes back from the
   end of the transcript. A row names a foreground tool or a background job as they run,
   and a working row's last activity is when its transcript last moved.
@@ -418,10 +332,8 @@ daemon starts.
 - `agent-hub demo` puts fake sessions in every state on the bar until Ctrl-C, with
   what the popout's pane shows of each. Its prompts can't be answered.
 - `journalctl --user -u agent-hub` shows the daemon's log; on the Mac it is
-  `~/Library/Logs/agent-hub.log`. It has one line per state change: the session,
-  its old and new state, what settled it (`words`, `model`, `error`, or `read` and
-  `interrupted` for a turn gone straight to idle) and how many characters it read.
-  Never the words themselves, as homelab's journal ships to
-  Grafana Cloud; asks stay in the work log.
+  `~/Library/Logs/agent-hub.log`. It has one line per state change: the session and
+  its old and new state, with `read` or `interrupted` for a turn gone straight to idle.
+  Never the words themselves, as homelab's journal ships to Grafana Cloud.
 - The protocol tests run in every `nix build .#agent-hub`, and `--rebuild -L` runs them
   again.

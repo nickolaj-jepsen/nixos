@@ -1,9 +1,9 @@
 // Bar pill: a dot per session that wants you, in the hub's order, then a ring per working
-// one. Something new bursts, an ask also peeks its name, and it breathes until you look.
+// one. Something new bursts, a prompt also peeks its name, and it breathes until you look.
 // Popout: every session on the left, by what it is, and on the right everything about the
 // selected one, which is whatever you last hovered or moved to. Nothing moves under the
 // pointer. Keys act on the selection: Enter opens it (or resumes an ended one in a new
-// terminal), x dismisses, w logs its verdict as wrong, u undoes the last dismissal, a and d
+// terminal), x dismisses, u undoes the last dismissal, a and d
 // answer its prompt, j/k move, g/G jump to the ends.
 import QtQuick
 import QtQuick.Effects
@@ -25,7 +25,7 @@ PluginComponent {
     readonly property var endedRows: (hub?.recent ?? []).slice(0, maxRecent).map(r => ({
                 "id": r.id,
                 "agent": r.agent,
-                "name": r.label,
+                "name": r.name,
                 "cwd": r.cwd,
                 "project": r.project,
                 "reason": r.summary,
@@ -49,11 +49,9 @@ PluginComponent {
     readonly property int staleSeconds: 900
     // A working session silent this long has its last activity turn amber: a hint, not a verdict.
     readonly property int quietSeconds: 300
-    readonly property var pillGroups: [["asking", "needs-reply"], ["failed"], ["done"], ["working"]]
+    readonly property var pillGroups: [["asking"], ["failed"], ["done"], ["working"]]
 
     property string selectedId: ""
-    // The row `w` flagged last, until the popout next opens: the only sign the key worked.
-    property string flaggedId: ""
     property bool endedOpen: false
     property real nowMs: Date.now()
 
@@ -168,7 +166,7 @@ PluginComponent {
     onSessionsChanged: announce()
     Component.onCompleted: announce()
 
-    // Bursts what started pulsing since the last state, and peeks the first new ask.
+    // Bursts what started pulsing since the last state, and peeks the first new prompt.
     function announce() {
         if (!(hub?.linkUp ?? false)) {
             announced = null;
@@ -186,7 +184,7 @@ PluginComponent {
         burst.restart();
         const ask = fresh.find(waits);
         if (ask) {
-            peekText = [repoBeside(ask), shortName(ask)].filter(part => part).join(" · ") + (ask.state === "asking" ? " wants permission" : " asks");
+            peekText = [repoBeside(ask), shortName(ask)].filter(part => part).join(" · ") + " wants permission";
             peekId = ask.id;
             peekOpen = true;
             peekTimer.restart();
@@ -237,7 +235,7 @@ PluginComponent {
     }
 
     function waits(session) {
-        return session.state === "asking" || session.state === "needs-reply";
+        return session.state === "asking";
     }
 
     function wantsYou(session) {
@@ -245,7 +243,7 @@ PluginComponent {
     }
 
     function finished(session) {
-        return ["needs-reply", "failed", "done"].includes(session.state);
+        return session.state === "failed" || session.state === "done";
     }
 
     // The heading a row goes under; what ended sits under its own fold.
@@ -270,7 +268,6 @@ PluginComponent {
     function tone(session) {
         return {
             "asking": Theme.warning,
-            "needs-reply": Theme.warning,
             "failed": Theme.error,
             "done": Theme.success
         }[session.state] ?? Theme.surfaceVariantText;
@@ -285,7 +282,6 @@ PluginComponent {
     function stateWords(session) {
         const word = {
             "asking": "waiting",
-            "needs-reply": "waiting",
             "failed": "failed",
             "done": "finished",
             "working": "working",
@@ -328,26 +324,7 @@ PluginComponent {
     }
 
     function nowLine(session) {
-        if (!session.now)
-            return "";
-        const line = session.now + " · " + elapsed(session.nowAt);
-        const guess = estimateWords(session);
-        return guess ? line + " · " + guess : line;
-    }
-
-    // A model's guess at a long command, always worded as one, counted down from when it was made.
-    function estimateWords(session) {
-        const estimate = session.estimate;
-        if (!estimate)
-            return "";
-        const parts = [];
-        if (estimate.left !== null) {
-            const left = Math.ceil(estimate.left - (nowMs - estimate.at) / 60000);
-            parts.push(left > 0 ? "est. " + left + "m left" : "past its estimate");
-        }
-        if (estimate.note)
-            parts.push(estimate.note);
-        return parts.join(", ");
+        return session.now ? session.now + " · " + elapsed(session.nowAt) : "";
     }
 
     // This turn's tally, leaving out what hasn't happened.
@@ -371,7 +348,7 @@ PluginComponent {
                 }));
     }
 
-    // A row's second line: what is running, its ask or step, or else its folder when the name doesn't already say it.
+    // A row's second line: what is running, its step, or how its turn ended.
     function rowLine(session) {
         if (session.state === "working" && session.now)
             return nowLine(session);
@@ -420,13 +397,6 @@ PluginComponent {
         return !!session.host && session.state !== "ended" && !session.tmux && !session.bridge;
     }
 
-    function flagWrong(session) {
-        if (session && finished(session)) {
-            hub.wrong(session.id);
-            flaggedId = session.id;
-        }
-    }
-
     function focusSession(session) {
         if (!session || session.fold)
             return;
@@ -435,17 +405,6 @@ PluginComponent {
         else
             hub.focusSession(session.id);
         closePopout();
-    }
-
-    // Copies the likely reply and goes to the window. It never sends: you edit it and press Enter.
-    function useReply(session) {
-        if (session?.state !== "needs-reply" || !session.reply)
-            return;
-        hub.run(session.id, {
-            "kind": "copy",
-            "value": session.reply
-        });
-        focusSession(session);
     }
 
     // Only while the pane has shown this prompt long enough to be read, and only all of it.
@@ -464,7 +423,6 @@ PluginComponent {
         nowMs = Date.now();
         hub?.closeMenu();
         selectedId = "";
-        flaggedId = "";
         endedOpen = false;
         undoName = "";
         noteText = "";
@@ -1025,7 +983,7 @@ PluginComponent {
                         OneLine {
                             id: nameText
                             anchors.verticalCenter: parent.verticalCenter
-                            width: Math.min(implicitWidth, parent.width - hostChip.width - kindChip.width - 12)
+                            width: Math.min(implicitWidth, parent.width - hostChip.width - 6)
                             text: root.shortName(row.session)
                             font.pixelSize: row.slim ? Theme.fontSizeSmall + 1 : Theme.fontSizeMedium
                             font.weight: root.waits(row.session) ? Font.DemiBold : row.slim ? Font.Normal : Font.Medium
@@ -1045,25 +1003,6 @@ PluginComponent {
                                 id: hostLabel
                                 anchors.centerIn: parent
                                 text: row.session.host ?? ""
-                                font.pixelSize: Theme.fontSizeSmall - 1
-                            }
-                        }
-
-                        // What it wants of you, for a row that needs a reply.
-                        Rectangle {
-                            id: kindChip
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: row.session.state === "needs-reply" && !!row.session.askKind
-                            width: visible ? kindLabel.implicitWidth + 10 : 0
-                            height: kindLabel.implicitHeight + 2
-                            radius: 4
-                            color: Theme.withAlpha(Theme.warning, 0.15)
-
-                            OneLine {
-                                id: kindLabel
-                                anchors.centerIn: parent
-                                text: (row.session.askKind ?? "").replace(/-/g, " ")
-                                color: Theme.warning
                                 font.pixelSize: Theme.fontSizeSmall - 1
                             }
                         }
@@ -1120,19 +1059,11 @@ PluginComponent {
                 Row {
                     id: rowActions
 
-                    readonly property int visibleCount: (flagButton.visible ? 1 : 0) + (dismissButton.visible ? 1 : 0)
+                    readonly property int visibleCount: dismissButton.visible ? 1 : 0
 
                     anchors.right: parent.right
                     visible: rowHover.hovered
                     spacing: 2
-
-                    IconButton {
-                        id: flagButton
-                        visible: root.finished(row.session)
-                        icon: "flag"
-                        tip: "Flag as a wrong call"
-                        onClicked: root.flagWrong(row.session)
-                    }
 
                     IconButton {
                         id: dismissButton
@@ -1347,12 +1278,8 @@ PluginComponent {
                 }
                 if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                     root.focusSession(root.selected);
-                else if (event.key === Qt.Key_R)
-                    root.useReply(root.selected);
                 else if (event.key === Qt.Key_X)
                     root.dismiss(root.selected);
-                else if (event.key === Qt.Key_W)
-                    root.flagWrong(root.selected);
                 else if (event.key === Qt.Key_U)
                     root.undo();
                 else if (event.key === Qt.Key_A)
@@ -1618,18 +1545,11 @@ PluginComponent {
                                 }
                             }
 
-                            // The agent's own closing words, and what you'd most likely say back.
+                            // A finished turn's closing words, as the agent wrote them.
                             PaneText {
-                                visible: pane.session?.state === "needs-reply"
-                                text: pane.session?.said || pane.session?.reason || ""
+                                visible: !!pane.session && root.finished(pane.session) && !!pane.session.said
+                                text: pane.session?.said ?? ""
                                 font.pixelSize: Theme.fontSizeMedium
-                            }
-
-                            IconLine {
-                                visible: pane.session?.state === "needs-reply" && !!pane.session?.reply
-                                icon: "auto_awesome"
-                                text: pane.session?.reply ?? ""
-                                tip: "What you would probably say"
                             }
 
                             // Below, as what a waiting session wants of you is the first thing to read.
@@ -1640,9 +1560,9 @@ PluginComponent {
                                 tip: "What you last asked"
                             }
 
-                            // A working session's trail has this line as its last.
+                            // A working session's trail has this line as its last; a done turn's closing words say more.
                             PaneText {
-                                visible: !!pane.session && !root.waits(pane.session) && text !== "" && root.trailLines(pane.session).length === 0
+                                visible: !!pane.session && !root.waits(pane.session) && !(pane.session.state === "done" && pane.session.said) && text !== "" && root.trailLines(pane.session).length === 0
                                 text: pane.session?.reason ?? ""
                                 font.pixelSize: Theme.fontSizeMedium
                             }
@@ -1755,8 +1675,6 @@ PluginComponent {
                                     return "Dismissed " + root.undoName;
                                 if (root.noteText)
                                     return root.noteText;
-                                if (pane.session && root.flaggedId === pane.session.id)
-                                    return "Logged as a wrong call";
                                 if (pane.session && root.unreachable(pane.session))
                                     return "No way to open it from here";
                                 return "";
@@ -1800,14 +1718,6 @@ PluginComponent {
                         visible: pane.session !== null
                         opacity: root.paneOpacity
                         spacing: 4
-
-                        MetaChip {
-                            visible: !!pane.session?.readings
-                            icon: "warning"
-                            label: "no readings"
-                            tip: pane.session?.readings === "capped" ? "This session has reached its limit of model readings, so its row won't update or call you on its own" : "The model keeps failing for this session, so its row won't update, and only the words of a turn can call you"
-                            tint: Theme.warning
-                        }
 
                         MetaChip {
                             visible: !!pane.session?.branch
@@ -1872,25 +1782,10 @@ PluginComponent {
                             spacing: Theme.spacingS
 
                             PaneButton {
-                                visible: pane.session?.state === "needs-reply" && !!pane.session?.reply
-                                label: "Copy reply"
-                                shortcut: "r"
-                                onClicked: root.useReply(pane.session)
-                            }
-
-                            PaneButton {
                                 visible: !!pane.session && root.wantsYou(pane.session)
                                 label: "Dismiss"
                                 shortcut: "x"
                                 onClicked: root.dismiss(pane.session)
-                            }
-
-                            PaneButton {
-                                visible: !!pane.session && root.finished(pane.session)
-                                label: "Wrong call"
-                                kind: "quiet"
-                                shortcut: "w"
-                                onClicked: root.flagWrong(pane.session)
                             }
                         }
 

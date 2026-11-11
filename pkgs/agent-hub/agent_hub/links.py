@@ -1,4 +1,4 @@
-"""Other hosts' hubs, piped in over ssh. No server: each hub owns and judges its own sessions,
+"""Other hosts' hubs, piped in over ssh. No server: each hub owns its own sessions,
 and a viewer runs `agent-hub attach` on the other end, which bridges stdin and stdout to that
 host's socket. What comes back is untrusted (`clean_row`, `clean_recent`): a viewer stamps the
 host itself and builds every command and URL locally.
@@ -85,14 +85,6 @@ def clean_trail(steps):
     return [{"at": whole(step.get("at")), "text": text(step.get("text"), 200)} for step in steps[-TRAIL_MAX:] if isinstance(step, dict)]
 
 
-def clean_estimate(value):
-    if not isinstance(value, dict) or not whole(value.get("at")):
-        return None
-    left = value.get("left")
-    return {"left": left if isinstance(left, int) and not isinstance(left, bool) else None,
-            "note": text(value.get("note"), 80), "at": value["at"]}
-
-
 def clean_permission(value):
     """A held prompt from another host: text only, and whatever had to be cut can't be allowed."""
     if not isinstance(value, dict) or not whole(value.get("id")):
@@ -119,7 +111,6 @@ def clean_row(host, row):
         "host": host,
         "agent": "pi" if row.get("agent") == "pi" else "claude",
         "name": text(row.get("name"), 120),
-        "label": text(row.get("label"), 120),
         "cwd": text(row.get("cwd")),
         "pid": None,
         "state": row["state"],
@@ -128,8 +119,6 @@ def clean_row(host, row):
         "doing": text(row.get("doing")),
         "summary": text(row.get("summary")),
         "waitingFor": text(row.get("waitingFor")),
-        "ask": text(row.get("ask")),
-        "reply": text(row.get("reply")),
         "window": None,
         "history": clean_history(row.get("history")),
         "turn": whole(row.get("turn")),
@@ -141,8 +130,6 @@ def clean_row(host, row):
     details = {
         "prompt": text(row.get("prompt")),
         "said": shown_block(row.get("said"), BLOCK_MAX)[0],
-        "askKind": text(row.get("askKind"), 20),
-        "readings": text(row.get("readings"), 20),
         "permission": clean_permission(row.get("permission")),
         "project": text(row.get("project"), 200),
         "branch": text(row.get("branch"), 200),
@@ -154,7 +141,6 @@ def clean_row(host, row):
         "nowAt": whole(row.get("nowAt")),
         "counts": clean_counts(row.get("counts")),
         "trail": clean_trail(row.get("trail")),
-        "estimate": clean_estimate(row.get("estimate")),
     }
     cleaned.update({key: value for key, value in details.items() if value})
     return cleaned
@@ -169,7 +155,7 @@ def clean_recent(host, item):
         "id": remote_id(host, sid),
         "host": host,
         "agent": agent,
-        "label": text(item.get("label"), 120),
+        "name": text(item.get("name"), 120),
         "summary": text(item.get("summary")),
         "cwd": cwd,
         "project": text(item.get("project"), 200),

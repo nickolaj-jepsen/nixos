@@ -23,7 +23,7 @@ export type ChromeState = {
    * dialog holds its slot.
    */
   borderDrawn: boolean;
-  /** Group of the clickable thing under the pointer; footer parts and the `label` on the top border. */
+  /** Group of the clickable thing under the pointer; footer parts and the top border's measurements. */
   hover: string | undefined;
   /** Moves the hover; it lapses on its own because pi never reports the pointer leaving. */
   setHover(group: string | undefined): void;

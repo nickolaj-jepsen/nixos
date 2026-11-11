@@ -94,9 +94,7 @@ in {
       {
         home.packages = [pkgs.agent-hub];
         xdg.configFile."agent-hub/config.json".text = builtins.toJSON ({
-            # The bare package, without the wrapper's plugin dirs, for the readings.
-            claude = lib.getExe config.programs.claude-code.package;
-            # A user unit has no login PATH: working trees and branches for the readings.
+            # A user unit has no login PATH: working trees and branches for the rows.
             git = lib.getExe pkgs.git;
           }
           // lib.optionalAttrs desktop {

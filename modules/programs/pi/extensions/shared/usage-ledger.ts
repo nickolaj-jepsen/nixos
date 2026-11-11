@@ -2,7 +2,7 @@
  * Session spend, entry by entry. Pi's own accounting covers assistant messages,
  * tool-result `usage`, usage entries (cache warming), compaction and branch
  * summaries. What it cannot see lives here as custom entries: model calls an
- * extension makes on the side (spellfix, session labels), which never become
+ * extension makes on the side (spellfix, guardian), which never become
  * messages, and subagents' spend, which lives in their own session files.
  *
  * `entryItems` is the one definition of what an entry costs and what it is

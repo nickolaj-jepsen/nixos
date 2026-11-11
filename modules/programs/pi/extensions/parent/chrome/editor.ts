@@ -1,11 +1,9 @@
 import { CustomEditor, type KeybindingsManager } from "@earendil-works/pi-coding-agent";
 import {
   type EditorTheme,
-  matchesKey,
   type TUI,
   type TuiMouseEvent,
   type TuiMouseEventResult,
-  visibleWidth,
 } from "@earendil-works/pi-tui";
 import type { EditorHooks, PromptDraft } from "../lib/editor-hooks.ts";
 import { click, hoverAt, type Region } from "./layout.ts";
@@ -23,22 +21,11 @@ export type Painters = {
     border: Border,
     status: BorderStatus | undefined,
   ) => { line: string; regions: Region[] };
-  /**
-   * The suggestion for the prompt's line: `room` is what the row has left after
-   * the cursor and `empty` is whether the editor holds anything. The painter owns
-   * the text, the editor owns placing it after the cursor.
-   */
-  hint: (room: number, empty: boolean) => string | undefined;
-  /** The text to insert when that suggestion is accepted, taken at most once. */
-  takeHint: () => string | undefined;
 };
 
-// One clear column between a suggestion and the edge of the box.
-const EDGE = 1;
-
 /**
- * pi's editor with chrome's top border, the decorators' styling and the drafted
- * reply after the cursor. It draws plainly once its session has ended.
+ * pi's editor with chrome's top border and the decorators' styling. It draws
+ * plainly once its session has ended.
  */
 export class PromptEditor extends CustomEditor implements PromptDraft {
   private status: BorderStatus | undefined;
@@ -76,29 +63,10 @@ export class PromptEditor extends CustomEditor implements PromptDraft {
     if (!this.chrome.live) return lines;
     // Line 0 is the border, whose label is no prompt text to spellcheck.
     for (let i = 1; i < lines.length; i++) lines[i] = this.hooks.decorateLine(lines[i]!);
-    // The suggestion belongs on the line you are about to type on, right after
-    // the cursor, so the box keeps its height. With the editor empty the cursor
-    // ends that row, so its padding is what the ghost spends.
-    const typed = lines[1]?.replace(/ +$/, "");
-    if (typed === undefined) return lines;
-    const hint = this.painters.hint(width - visibleWidth(typed) - EDGE, this.getText() === "");
-    if (hint) {
-      const pad = width - visibleWidth(typed) - visibleWidth(hint);
-      lines[1] = typed + hint + " ".repeat(Math.max(0, pad));
-    }
     return lines;
   }
 
   override handleInput(data: string): void {
-    // Tab is pi's autocomplete, but an empty editor has nothing to complete:
-    // that keystroke means "use the suggestion" instead.
-    if (matchesKey(data, "tab") && this.getText() === "") {
-      const draft = this.painters.takeHint();
-      if (draft !== undefined) {
-        this.setText(draft);
-        return;
-      }
-    }
     super.handleInput(data);
     this.hooks.edited(this);
   }

@@ -388,9 +388,8 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
       pidDomain: pidDomain(),
       messagingSocketPath: socketPath,
       name: displayName(),
-      nameSource: named && !identity.isAutoName(named) ? "user" : "derived",
+      nameSource: named ? "user" : "derived",
       nameSince: Date.now(),
-      summary: identity.summary(),
     };
     await publish({ status: "idle" });
   }
@@ -420,16 +419,6 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
       delete process.env.CLAUDE_CODE_MESSAGING_SOCKET;
   }
 
-  /** Keeps the registry's summary and step current, so peers can tell what this session is on. */
-  function onIdentity() {
-    if (!entry) return;
-    // The step is a plan for the turn in flight; a settled turn has none.
-    const doing = identity.working() ? identity.detail() : undefined;
-    const summary = identity.summary() ?? entry.summary;
-    if (summary === entry.summary && doing === entry.doing) return;
-    void publish({ summary, doing });
-  }
-
   /** The entry says `waiting` while a permission dialog is open, with its label. */
   function onDialogs() {
     if (!entry) return;
@@ -441,8 +430,6 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
       void publish(entry.status === "waiting" ? { waitingFor } : { status: "waiting", waitingFor });
   }
 
-  // identity repaints on every hub change, so this hears those too.
-  identity.onChange(onIdentity);
   dialogs.onChange(onDialogs);
 
   pi.on("session_start", async (_event, c) => {
@@ -468,7 +455,7 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
   pi.on("session_info_changed", async (event) => {
     await publish({
       name: displayName(),
-      nameSource: event.name && !identity.isAutoName(event.name) ? "user" : "derived",
+      nameSource: event.name ? "user" : "derived",
       nameSince: Date.now(),
     });
   });
@@ -478,7 +465,7 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
   pi.on("agent_settled", async (_event, c) => {
     ctx = c;
     if (!entry) return;
-    await publish({ status: "idle", doing: undefined, waitingFor: undefined });
+    await publish({ status: "idle", waitingFor: undefined });
     const now = Date.now();
     const due = [...idleSubscribers.values()];
     idleSubscribers.clear();
@@ -522,7 +509,7 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
           content: [{ type: "text", text: `${self}No other sessions are reachable.` }],
           details: undefined,
         };
-      const rows = peers.map((p) => `- ${peerLine(p, "  ")}`);
+      const rows = peers.map((p) => `- ${peerLine(p)}`);
       return {
         content: [
           { type: "text", text: `${self}Other sessions (${peers.length}):\n${rows.join("\n")}` },
@@ -633,27 +620,15 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
     handler: async (_args, c) => {
       const peers = await listPeersWarned();
       const self = entry ? `This session: ${ownLabel()}` : "This session has no inbox";
-      const rows = peers.map((p) => `  ${peerLine(p, "    ")}`);
+      const rows = peers.map((p) => `  ${peerLine(p)}`);
       c.ui.notify([self, `Other sessions (${peers.length}):`, ...rows].join("\n"), "info");
     },
   });
 }
 
-/** One peer for a listing, what it is doing on a second line indented by `indent`. */
-function peerLine(peer: Peer, indent: string): string {
-  const about = aboutLine(peer);
-  return `${peer.name} [${shortId(peer)}] · ${harness(peer)} · ${activityLabel(peer)} · ${peer.cwd}${
-    about ? `\n${indent}${about}` : ""
-  }`;
-}
-
-/** What a pi peer says it is doing; Claude Code entries carry neither field. */
-function aboutLine(peer: Peer): string | undefined {
-  const summary = typeof peer.summary === "string" ? peer.summary : undefined;
-  const doing =
-    peer.status === "busy" && typeof peer.doing === "string" && peer.doing ? peer.doing : undefined;
-  if (!summary && !doing) return undefined;
-  return [summary, doing ? `now: ${doing}` : undefined].filter(Boolean).join(" · ");
+/** One peer for a listing. */
+function peerLine(peer: Peer): string {
+  return `${peer.name} [${shortId(peer)}] · ${harness(peer)} · ${activityLabel(peer)} · ${peer.cwd}`;
 }
 
 // Past the 1h prompt-cache lifetime, a wake-up re-reads the whole conversation.

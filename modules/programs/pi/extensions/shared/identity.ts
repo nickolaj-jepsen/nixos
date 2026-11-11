@@ -1,6 +1,6 @@
 /**
- * The session identity record parent/identity.ts persists on the branch.
- * Readers in either package parse it through here, never by the field names.
+ * The identity record agent-hub's label reading used to persist on a session's
+ * branch. Nothing writes it any more; memory still searches the old ones.
  */
 
 /** Session entries the identity feature appends; the last one on a branch is current. */
@@ -8,12 +8,12 @@ export const IDENTITY_ENTRY = "identity_label";
 
 /** One persisted identity record; any field may be missing in an old one. */
 export type IdentityRecord = {
-  /** The label agent-hub's reading wrote; absent until the first one landed. */
+  /** The label agent-hub's reading wrote. */
   text?: string;
   calls?: number;
   summary?: string;
   tags?: string[];
-  /** The session name identity wrote; any other name is the user's `/name`. */
+  /** The session name identity wrote from the label. */
   autoName?: string;
 };
 
