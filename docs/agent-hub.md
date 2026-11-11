@@ -187,9 +187,9 @@ can be tuned without touching the model or the labels (`ENDINGS` in `agent_hub/j
 - The model reads every turn, writes its summary and names its ending: asked, ready to land,
   landed with only a push or deploy left, landed with work left, suggesting questions,
   suggesting building, can't continue, needs your hands, waiting on its jobs, or finished.
-- Code, not the model, works out whether a turn landed, from its commands: `wt land` (but
-  not `--pr`/`--draft`, which only open a PR), a merged pull request, a push to `main`, or a
-  commit made on it.
+- Code, not the model, works out whether a turn landed, from its commands: worktrunk's
+  `wt merge`, a merged pull request, a push to `main`, or a commit made on it. Opening a PR
+  doesn't count.
 - A `?` or request words ("tell me when", "your call") anywhere in the closing message
   make a candidate, since a list of questions can end on something else. A candidate calls
   you unless the model is sure of an ending that doesn't, so one wrong ending can't silence a
@@ -332,7 +332,6 @@ Before each turn the hub tells a session about the others in its git working tre
 - Resuming one from the popout opens the `terminal` from the hub's config through
   niri, so it gets the desktop's environment as `Mod+Return` does.
 - A resumed session takes its name back.
-- `wt` asks the hub too: a worktree in use names the agent session in it.
 
 ## Work log
 

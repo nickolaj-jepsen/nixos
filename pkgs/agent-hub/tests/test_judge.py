@@ -82,7 +82,7 @@ class LandedTest(unittest.TestCase):
         return {**claude.assemble([], [], commands, {str(n): failed for n in range(len(lines))}, ""), **rest}
 
     def test_a_landing_counts_whatever_the_branch(self):
-        for line in ("wt land", "wt land --green x", "gh pr merge 12 --squash", "git push origin main",
+        for line in ("wt merge", "wt merge --no-remove x", "gh pr merge 12 --squash", "git push origin main",
                      "git -C /r push origin master"):
             self.assertTrue(judge.landed(self.digest(line)), line)
 
@@ -95,10 +95,10 @@ class LandedTest(unittest.TestCase):
     def test_a_push_elsewhere_or_a_failed_one_doesnt(self):
         self.assertFalse(judge.landed(self.digest("git push origin feature")))
         self.assertFalse(judge.landed(self.digest("git push origin feature/main-fix")))
-        self.assertFalse(judge.landed(self.digest("wt land", failed=True)))
+        self.assertFalse(judge.landed(self.digest("wt merge", failed=True)))
 
     def test_opening_a_pr_doesnt(self):
-        for line in ("wt land --pr x", "wt land --draft --title y", "wt land --pr --branch feat/z"):
+        for line in ("gh pr create --fill", "gh pr create --draft --title y", "git push -u origin feat/z"):
             self.assertFalse(judge.landed(self.digest(line)), line)
 
     def test_a_command_counts_past_what_the_row_shows(self):
@@ -107,10 +107,10 @@ class LandedTest(unittest.TestCase):
         self.assertTrue(judge.landed(self.digest("git add x\ngit commit -m y", branch="main")))
 
     def test_a_landing_early_in_a_long_turn_still_counts(self):
-        self.assertTrue(judge.landed(self.digest("wt land", *[f"echo {n}" for n in range(20)])))
+        self.assertTrue(judge.landed(self.digest("wt merge", *[f"echo {n}" for n in range(20)])))
 
     def test_the_model_is_told(self):
-        self.assertIn("landed: yes", judge.render(self.digest("wt land"), {}, True))
+        self.assertIn("landed: yes", judge.render(self.digest("wt merge"), {}, True))
         self.assertIn("landed: no", judge.render(self.digest("ls"), {}, True))
 
 
