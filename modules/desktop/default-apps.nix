@@ -29,16 +29,45 @@
     assoc = app: types: lib.genAttrs types (_: app);
 
     browser = "firefox.desktop";
-    image = "org.gnome.Loupe.desktop";
+    # Sushi's quick preview; Loupe is still under "Open With".
+    image = "sushi.desktop";
     media = "io.github.celluloid_player.Celluloid.desktop";
-    text = "org.gnome.TextEditor.desktop";
+    # Zed only exists with dev; text/plain is the fallback for every unlisted text type.
+    text =
+      if config.fireproof.dev.enable
+      then code
+      else "org.gnome.TextEditor.desktop";
     # Both editors stay installed; fireproof.desktop.editor picks the xdg handler.
     editors = {
       zed = "dev.zed.Zed.desktop";
       vscode = "code.desktop";
     };
     code = editors.${config.fireproof.desktop.editor};
-    archive = "org.gnome.FileRoller.desktop";
+    archiver = "org.gnome.FileRoller.desktop";
+
+    # Mounts a zip or tar through gvfs's archive backend and opens it in Nautilus as a folder;
+    # gvfs wants the file URI escaped twice. 7z and rar fail its seek, so they stay on File Roller.
+    browseArchive = pkgs.writeShellApplication {
+      name = "browse-archive";
+      runtimeInputs = [pkgs.glib pkgs.jq pkgs.nautilus];
+      text = ''
+        uri=$(gio info -a standard::name "$1" | sed -n 's/^uri: //p')
+        location="archive://$(jq -rn --arg u "$uri" '$u | @uri | @uri')/"
+        gio mount "$location" 2>/dev/null || true
+        exec nautilus --new-window "$location"
+      '';
+    };
+    browsable = [
+      "application/zip"
+      "application/x-zip"
+      "application/x-zip-compressed"
+      "application/x-tar"
+      "application/x-gtar"
+      "application/x-compressed-tar"
+      "application/x-bzip2-compressed-tar"
+      "application/x-xz-compressed-tar"
+      "application/x-zstd-compressed-tar"
+    ];
   in {
     # The same choice for the folder menus in pi, Claude Code and agent-hub, which read it from
     # the session's environment; not gated on Linux, so a Mac's menus follow it too.
@@ -47,6 +76,21 @@
         home.sessionVariables.FIREPROOF_EDITOR = config.fireproof.desktop.editor;
       })
       (lib.mkIf (config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
+        xdg.desktopEntries.sushi = {
+          name = "Quick Preview";
+          exec = "${lib.getExe' pkgs.sushi "sushi"} %f";
+          icon = "org.gnome.NautilusPreviewer";
+          noDisplay = true;
+        };
+
+        xdg.desktopEntries.browse-archive = {
+          name = "Browse Archive";
+          exec = "${lib.getExe browseArchive} %u";
+          icon = "package-x-generic";
+          mimeType = browsable;
+          noDisplay = true;
+        };
+
         xdg.mimeApps = {
           enable = true;
           defaultApplications = lib.mkMerge [
@@ -58,6 +102,9 @@
               "x-scheme-handler/about"
               "x-scheme-handler/unknown"
               "x-scheme-handler/mailto"
+              "application/rss+xml"
+              "application/rdf+xml"
+              "application/xhtml_xml"
             ])
             (assoc image [
               "image/png"
@@ -69,6 +116,23 @@
               "image/tiff"
               "image/avif"
               "image/heif"
+              "image/apng"
+              "image/jp2"
+              "image/jxl"
+              "image/qoi"
+              "image/x-qoi"
+              "image/svg+xml-compressed"
+              "image/vnd.microsoft.icon"
+              "image/x-dds"
+              "image/x-exr"
+              "image/x-portable-anymap"
+              "image/x-portable-bitmap"
+              "image/x-portable-graymap"
+              "image/x-portable-pixmap"
+              "image/x-tga"
+              "image/x-win-bitmap"
+              "image/x-xbitmap"
+              "image/x-xpixmap"
             ])
             {"application/pdf" = "org.gnome.Evince.desktop";}
             (assoc media [
@@ -92,6 +156,13 @@
               "text/markdown"
               "application/json"
               "application/x-yaml"
+              "application/xml"
+              "text/x-c"
+              "text/x-chdr"
+              "text/x-c++src"
+              "text/x-c++hdr"
+              "text/x-makefile"
+              "text/x-tex"
             ])
             (lib.mkIf config.fireproof.dev.enable (assoc code [
               "text/x-python"
@@ -102,12 +173,12 @@
               "application/javascript"
             ]))
             {"inode/directory" = "org.gnome.Nautilus.desktop";}
-            (assoc archive [
-              "application/zip"
-              "application/x-tar"
+            (assoc "browse-archive.desktop" browsable)
+            (assoc archiver [
               "application/gzip"
               "application/x-7z-compressed"
               "application/x-rar"
+              "application/vnd.rar"
               "application/x-bzip2"
               "application/x-xz"
               "application/zstd"

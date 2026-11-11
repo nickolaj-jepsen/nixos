@@ -88,6 +88,9 @@
 
           "browser.quitShortcut.disabled" = true;
 
+          # Open file dialogs through the portal (Nautilus's picker on niri) instead of in-process GTK3
+          "widget.use-xdg-desktop-portal.file-picker" = 1;
+
           # Enable userChrome.css
           "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
         };

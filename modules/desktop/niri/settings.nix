@@ -124,6 +124,10 @@
             ];
             default-column-width.fixed = 864;
           }
+          {
+            matches = [{app-id = "^org\\.gnome\\.NautilusPreviewer$";}];
+            open-floating = true;
+          }
           # On-demand VRR opt-ins. Keep desktop apps out: every flip allocates a
           # buffer, and that fails in a retry storm when llama-server has VRAM full.
           {
