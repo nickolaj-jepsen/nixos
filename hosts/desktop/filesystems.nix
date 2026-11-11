@@ -94,7 +94,7 @@
         "models" = "0755";
         ".local/share/Steam" = "0700";
         ".local/share/pnpm" = "0755";
-        # Agent scratch is reaped by the janitor; a snapshot would pin what it frees.
+        # Agent scratch is aged out by tmpfiles; a snapshot would pin what it frees.
         ".local/state/agents/tmp" = "0700";
         "vms" = "0755";
       }

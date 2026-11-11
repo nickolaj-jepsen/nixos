@@ -3,33 +3,50 @@
     # mkDefault: a generation costs ~60 MB of ESP, so 10 overflows a 512 MB ESP; those hosts cap it lower.
     boot.loader.systemd-boot.configurationLimit = lib.mkDefault 10;
 
-    nix.gc = {
-      automatic = true;
-      dates = "weekly";
-      options = "--delete-older-than 7d";
+    # `nh clean all` expires every profile, users' home-manager ones included, drops
+    # `result` links older than the window (never `.direnv`), then collects.
+    programs.nh = {
+      enable = true;
+      clean = {
+        enable = true;
+        dates = "weekly";
+        extraArgs = "--keep-since 7d";
+      };
     };
 
     nix.optimise.automatic = true;
 
-    # nixpkgs already idles nix-optimise, but not nix-gc.
-    systemd.services.nix-gc.serviceConfig = {
+    # nixpkgs already idles nix-optimise, but not nh-clean.
+    systemd.services.nh-clean.serviceConfig = {
       CPUSchedulingPolicy = "idle";
       IOSchedulingClass = "idle";
     };
   };
 
-  # Root's nix-gc never expires the user's home-manager profile, so its generations
-  # pinned every old closure; expire them on the same 7 days and let nix-gc collect.
   flake.modules.homeManager.gc = {
+    config,
     lib,
     pkgs,
     ...
   }: {
-    services.home-manager.autoExpire = lib.mkIf pkgs.stdenv.isLinux {
-      enable = true;
-      frequency = "weekly";
-      timestamp = "-7 days";
-    };
+    config = lib.mkMerge [
+      # A standalone host has no NixOS nh-clean, so it cleans its own profiles and roots.
+      (lib.mkIf (!config.submoduleSupport.enable && pkgs.stdenv.isLinux) {
+        programs.nh = {
+          enable = true;
+          clean = {
+            enable = true;
+            dates = "weekly";
+            extraArgs = "--keep-since 7d";
+          };
+        };
+      })
+      # Nothing cleans build dirs or tool caches on a timer: `disk-report` lists
+      # what is big, with the command that clears each, and kondo picks build dirs.
+      (lib.mkIf config.fireproof.dev.enable {
+        home.packages = [pkgs.kondo] ++ lib.optional pkgs.stdenv.isLinux pkgs.disk-report;
+      })
+    ];
   };
 
   # darwin: Determinate Nix collects garbage itself (nix.nix), but generations stay

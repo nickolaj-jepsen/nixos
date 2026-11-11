@@ -10,11 +10,11 @@
     ccfg = config.programs.claude-code;
     hmLib = config.lib;
     homeDir = config.home.homeDirectory;
-    janitor = config.fireproof.janitor.enable;
+    scratch = config.fireproof.dev.enable;
 
-    # Agent temp is the session's own directory in the repository's scratch root,
-    # named after the wrapper's pid (exec keeps it), so a session that is gone can
-    # be proven gone. Falls back to the ambient TMPDIR when it cannot be created.
+    # Agent temp is the session's own directory in the repository's scratch root
+    # (docs/notes.md), aged out by agent-notes' tmpfiles rule. Falls back to the
+    # ambient TMPDIR when it cannot be created.
     tmpDir = ''
       if TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$"); then export TMPDIR; fi
     '';
@@ -173,7 +173,7 @@
     # home-manager wrapper always prepends --plugin-dir.
     claudeEntry = pkgs.writeShellScript "claude" ''
       ${agentNice}
-      ${lib.optionalString janitor tmpDir}
+      ${lib.optionalString scratch tmpDir}
       if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
       exec -a "$0" ${ccfg.finalPackage}/bin/claude "$@"
     '';
@@ -200,7 +200,7 @@
       runtimeInputs = [config.programs.claude-code.finalPackage];
       text = ''
         ${agentNice}
-        ${lib.optionalString janitor tmpDir}
+        ${lib.optionalString scratch tmpDir}
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
         exec claude ${lib.escapeShellArgs workMcpArgs} "$@"
@@ -331,29 +331,17 @@
             WorktreeRemove = worktreeLifecycle;
             # Claude is exiting: an async hook can die before it reaches the hub.
             SessionEnd = worktreeLifecycle ++ lib.optionals hub (hubHook {timeout = 2;});
-            PreToolUse =
-              # Nudge, never block: the janitor evicts dead sessions, so a live
-              # one holding the space is the one that has to give some back.
-              lib.optional janitor {
-                matcher = "Bash";
+            PreToolUse = [
+              {
+                matcher = "Skill";
                 hooks = [
                   {
                     type = "command";
-                    command = "${lib.getExe pkgs.janitor} warn";
+                    command = lib.getExe skillGuard;
                   }
                 ];
               }
-              ++ [
-                {
-                  matcher = "Skill";
-                  hooks = [
-                    {
-                      type = "command";
-                      command = lib.getExe skillGuard;
-                    }
-                  ];
-                }
-              ];
+            ];
           }
           # PermissionRequest shows the hub the prompt and waits for an answer from the bar, racing
           # the terminal's dialog, for as long as a prompt can stay open;

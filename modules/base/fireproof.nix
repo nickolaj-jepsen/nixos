@@ -133,21 +133,6 @@ let
         description = "Language servers by name, configured for every coding agent that speaks LSP.";
       };
 
-      # docs/janitor.md: temp roots, finished jobs, merged
-      # branches, finished worktrees and the rebuildable build dirs nobody opened.
-      janitor.enable = cascade config.fireproof.dev.enable "Reclaim what agents and dev tools leave behind";
-
-      # Credentials an agent printed land in its transcript and stay there; the
-      # sweep replaces them and keeps the transcript.
-      transcripts = {
-        enable = cascade config.fireproof.dev.enable "Replace secrets in agent transcripts in place";
-        schedule = lib.mkOption {
-          type = lib.types.str;
-          default = "Sun 03:00";
-          description = "OnCalendar for the weekly transcript sweep.";
-        };
-      };
-
       # Cross-platform GUI app packaging: docs/hosts.md "Cross-platform apps".
 
       dev = {

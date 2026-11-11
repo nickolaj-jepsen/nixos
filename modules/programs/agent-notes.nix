@@ -12,6 +12,13 @@
   }: {
     config = lib.mkIf config.fireproof.dev.enable {
       home.packages = [pkgs.agent-notes];
+
+      # Session scratch (`tmp/<repo>/<pid>`) untouched for 3 days goes on the daily
+      # systemd-tmpfiles-clean run. The `<repo>` level is the glob, so it survives
+      # and a checkout's `.agents/tmp` link never dangles.
+      systemd.user.tmpfiles.rules = lib.mkIf pkgs.stdenv.isLinux [
+        "e %h/.local/state/agents/tmp/* - - - 3d"
+      ];
     };
   };
 }

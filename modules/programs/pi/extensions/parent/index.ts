@@ -4,7 +4,6 @@
  * they import, and what they share goes through `Services`.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import janitor from "./janitor.ts";
 import aliases from "./aliases.ts";
 import answer from "./answer.ts";
 import bg from "./bg.ts";
@@ -25,7 +24,6 @@ import subagentUsage from "./subagent-usage.ts";
 import worktree from "./worktree.ts";
 
 const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
-  ["janitor", janitor],
   ["aliases", aliases],
   ["answer", answer],
   ["bg", bg],

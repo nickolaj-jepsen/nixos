@@ -81,12 +81,11 @@ ran it.
 - The `pi`, `claude` and `claude-work` wrappers export
   `TMPDIR=$(agent-notes tmp "$PPID")`, so an agent's temp files sit beside its
   notes under the repository it is working in.
-- The directory is named after the session's pid, which `exec` keeps, so a
-  missing `/proc/<pid>` proves the session gone.
-- The janitor's tmp pass sweeps `<state>/agents/tmp/<repo>/<pid>`, one level below
-  the repository directories, which it never removes: a checkout's `.agents/tmp`
-  link must never dangle. Dead sessions go after three days or under disk
-  pressure; a live pid is never touched.
+- A user tmpfiles rule in `modules/programs/agent-notes.nix` ages out
+  everything under `<state>/agents/tmp/<repo>/` untouched for three days, on the
+  daily `systemd-tmpfiles-clean` run (Linux only). The repository directories
+  themselves stay, so a checkout's `.agents/tmp` link never dangles. A session
+  idle that long loses its old files too: there is no liveness check.
 - On hosts that snapshot `/home`, `.local/state/agents/tmp` is a nested subvolume
   so scratch does not pin snapshots (`hosts/desktop/filesystems.nix`).
 

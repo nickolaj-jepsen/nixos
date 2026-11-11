@@ -185,9 +185,9 @@ in {
       '';
     wrapper = pkgs.writeShellScriptBin "pi" ''
       ${lib.concatLines (lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}") env)}
-      # Agent temp is this session's directory in the repository's scratch root,
-      # named after this pid (exec keeps it), so the janitor can prove a session gone.
-      ${lib.optionalString config.fireproof.janitor.enable ''TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
+      # Agent temp is this session's directory in the repository's scratch root
+      # (docs/notes.md), aged out by agent-notes' tmpfiles rule.
+      ${lib.optionalString config.fireproof.dev.enable ''TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
       dir="''${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
       mkdir -p "$dir"
       ${merge "settings.json" settings}
