@@ -26,9 +26,14 @@
     lib,
     pkgs,
     ...
-  }: {
+  }: let
+    # nixpkgs' cargo setup hook now forces a system libgit2, which the package doesn't provide.
+    lan-mouse = pkgs.unstable.lan-mouse.overrideAttrs (old: {
+      buildInputs = (old.buildInputs or []) ++ [pkgs.unstable.libgit2];
+    });
+  in {
     config = lib.mkIf (config.fireproof.desktop.lan-mouse.enable && pkgs.stdenv.isLinux) {
-      home.packages = [pkgs.unstable.lan-mouse];
+      home.packages = [lan-mouse];
 
       systemd.user.services.lan-mouse = {
         Unit = {
@@ -37,7 +42,7 @@
           PartOf = ["graphical-session.target"];
         };
         Service = {
-          ExecStart = "${lib.getExe pkgs.unstable.lan-mouse} daemon";
+          ExecStart = "${lib.getExe lan-mouse} daemon";
           Restart = "on-failure";
           RestartSec = 5;
         };

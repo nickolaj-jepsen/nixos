@@ -15,9 +15,14 @@
       mix = i: (channel c.bg i * 80 + channel c.${name} i * 20) / 100;
       pad = n: lib.fixedWidthString 2 "0" (lib.toHexString n);
     in "#${lib.concatMapStrings (i: pad (mix i)) [0 2 4]}";
+    # nixpkgs' cargo setup hook now forces system onig and libgit2, which the package doesn't provide.
+    tuicr = pkgs.unstable.tuicr.overrideAttrs (old: {
+      nativeBuildInputs = (old.nativeBuildInputs or []) ++ [pkgs.unstable.pkg-config];
+      buildInputs = (old.buildInputs or []) ++ (with pkgs.unstable; [oniguruma libgit2]);
+    });
   in {
     config = lib.mkIf config.fireproof.dev.enable {
-      home.packages = [pkgs.unstable.tuicr];
+      home.packages = [tuicr];
 
       # Same tarball trick as gh-stack in git.nix: the skill matches the installed version.
       fireproof.agents.skills.tuicr = let
