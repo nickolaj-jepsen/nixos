@@ -18,6 +18,20 @@
     };
   };
 
+  # Root's nix-gc never expires the user's home-manager profile, so its generations
+  # pinned every old closure; expire them on the same 7 days and let nix-gc collect.
+  flake.modules.homeManager.gc = {
+    lib,
+    pkgs,
+    ...
+  }: {
+    services.home-manager.autoExpire = lib.mkIf pkgs.stdenv.isLinux {
+      enable = true;
+      frequency = "weekly";
+      timestamp = "-7 days";
+    };
+  };
+
   # darwin: Determinate Nix collects garbage itself (nix.nix), but generations stay
   # GC roots until expired, so expire them here and leave the collecting to it.
   # Embedded HM keeps no profile of its own; its generations ride in the system's.
