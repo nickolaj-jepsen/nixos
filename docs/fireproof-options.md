@@ -1,4 +1,28 @@
+## fireproof\.agents\.checkout
+
+Where this flake is checked out\. ` claude-dev ` and ` pi-dev ` load the mods and extensions from it; the shell expands it\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"$HOME/nixos"
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.agents\.lspServers
+
+
 
 Language servers by name, configured for every coding agent that speaks LSP\.
 
@@ -366,6 +390,38 @@ one of “zed”, “vscode”
 
 
 
+## fireproof\.desktop\.hyprland\.enable
+
+
+
+Whether to enable a Hyprland session (scrolling layout, Lua config) beside niri\. Temporary, until one of the two is chosen: while it is on the greeter always shows, to pick the session\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.desktop\.ivpn\.enable
 
 
@@ -484,6 +540,30 @@ false
 
 
 *Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.desktop\.obsidian-livesync\.enable
+
+
+
+Sync Obsidian vaults with the homelab’s CouchDB (needs its per-device secret)
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
 
 ```nix
 true
@@ -2596,8 +2676,6 @@ string
 
 ## fireproof\.theme\.colors\.orange
 
-
-
 Orange (warnings)
 
 
@@ -2691,6 +2769,8 @@ string
 
 
 ## fireproof\.theme\.colors\.purpleAlt
+
+
 
 Dark purple
 
