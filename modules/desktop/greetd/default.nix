@@ -80,7 +80,7 @@
     # What programs.dms-greeter would set as default_session.command, which autologin.py
     # runs only when PAM can't sign in silently.
     greeter = pkgs.writeShellScript "dms-greeter-session" ''
-      export PATH=$PATH:${lib.makeBinPath [dmsGreeter.quickshell.package dmsGreeter.compositor.package pkgs.glib]}
+      export PATH=$PATH:${lib.makeBinPath [dmsGreeter.compositor.package pkgs.glib]}
       exec ${lib.getExe dmsGreeter.package} --cache-dir /var/lib/dms-greeter --command niri \
         -C ${greeterNiriConfig}
     '';
@@ -96,7 +96,6 @@
           package = config.programs.niri.package;
         };
         configHome = user.home;
-        quickshell.package = pkgs.unstable.quickshell; # dms needs quickshell >= 0.3.0
       };
 
       services.greetd = {

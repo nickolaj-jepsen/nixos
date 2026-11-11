@@ -42,8 +42,7 @@
         enable = true;
 
         # Lock-screen wallpaper blur is a hardcoded Theme constant with no setting.
-        # The wallpaper maps in one frame once loaded; fade it in over niri's matching background
-        # instead, keeping the render loop awake (renderActive) while it runs.
+        # The wallpaper maps in one frame once loaded; fade it in over niri's matching background instead.
         package = inputs.dank-material-shell.packages.${pkgs.stdenv.hostPlatform.system}.dms-shell.overrideAttrs (old: {
           postInstall =
             (old.postInstall or "")
@@ -53,8 +52,7 @@
               substituteInPlace $out/share/quickshell/dms/Modules/WallpaperBackground.qml \
                 --replace-fail "id: root" "id: root
                           opacity: contentReady ? 1 : 0
-                          Behavior on opacity { NumberAnimation { id: fadeIn; duration: 400; easing.type: Easing.OutCubic } }" \
-                --replace-fail "renderActive: backdropBusy ||" "renderActive: fadeIn.running || backdropBusy ||"
+                          Behavior on opacity { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }"
             '';
         });
 
@@ -62,7 +60,6 @@
         # DMS VPN only drives NetworkManager connections.
         enableVPN = config.fireproof.hardware.wifi;
         enableCalendarEvents = false;
-        quickshell.package = pkgs.unstable.quickshell; # dms 1.5-beta needs quickshell >= 0.3.0 for `pragma AppId`
 
         systemd.enable = true;
 

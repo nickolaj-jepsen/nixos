@@ -15,7 +15,7 @@ scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root=/tmp/dms-sandbox
 base="$root/$(printf '%s' "$PWD" | sha1sum | cut -c1-8)"
 run_dir="$base/run"
-qs_log="$base/qs.log"
+dms_log="$base/dms.log"
 
 die() {
   printf '%s\n' "$*" >&2
@@ -79,10 +79,12 @@ up() {
     esac
   done
 
-  local qs dms_dir sway grim wtype python plugin enabled=""
-  qs="$(readlink -f "$(command -v qs)")" || die "no qs on PATH"
-  dms_dir="${DMS_SHELL_DIR:-$(dirname "$(dirname "$(readlink -f "$(command -v dms)")")")/share/quickshell/dms}"
+  local dms dms_dir qs sway grim wtype python plugin enabled=""
+  dms="$(readlink -f "$(command -v dms)")" || die "no dms on PATH"
+  dms_dir="${DMS_SHELL_DIR:-$(dirname "$(dirname "$dms")")/share/quickshell/dms}"
   [ -d "$dms_dir" ] || die "no DMS at $dms_dir, set DMS_SHELL_DIR"
+  # dms's embedded Qt runtime renders black without a GPU, so the UI runs on upstream quickshell.
+  qs="$(store_path nixpkgs#quickshell)/bin"
   sway="$(store_path nixpkgs#sway)/bin/sway"
   grim="$(store_path nixpkgs#grim)/bin/grim"
   wtype="$(store_path nixpkgs#wtype)/bin/wtype"
@@ -90,6 +92,8 @@ up() {
   bindings "$python"
 
   stop_all
+  # dms unpacks its embedded Qt runtime read-only under ~/.cache/dms/qtbase.
+  chmod -R u+w "$base" 2>/dev/null || true
   rm -rf "$base"
   mkdir -p "$base/home/.config/dms/plugins" "$base/home/.cache/dms" "$base/home/.local/state/dms" "$run_dir"
   chmod 700 "$run_dir"
@@ -115,7 +119,8 @@ up() {
       "$base/home/.config" "$base/home/.local/state" "$base/home/.cache" "$base/home/.local/share"
     printf 'export DBUS_SESSION_BUS_ADDRESS=unix:path=%q\n' "$base/no-bus"
     printf 'unset LD_LIBRARY_PATH NIRI_SOCKET SWAYSOCK DISPLAY WAYLAND_DISPLAY CLAUDE_PID CLAUDE_CONFIG_DIR HYPRLAND_INSTANCE_SIGNATURE\n'
-    printf 'QS=%q DMS_DIR=%q GRIM=%q WTYPE=%q\n' "$qs" "$dms_dir" "$grim" "$wtype"
+    printf 'export PATH=%q\n' "$qs:$PATH"
+    printf 'DMS=%q DMS_DIR=%q GRIM=%q WTYPE=%q\n' "$dms" "$dms_dir" "$grim" "$wtype"
   } >"$base/env"
   enter
 
@@ -136,9 +141,9 @@ up() {
   # Stays connected, so the seat keeps a keyboard between the short-lived `key` runs.
   background "$base/keyboard.log" "$wtype" -s 86400000
 
-  background "$qs_log" "$QS" -p "$DMS_DIR"
+  background "$dms_log" "$DMS" run --qs-child -c "$DMS_DIR"
   for tries in $(seq 1 60); do
-    grep -q 'Daemon plugin loaded\|DankBar: Plugin loaded' "$qs_log" 2>/dev/null && break
+    grep -q 'Daemon plugin loaded\|DankBar: Plugin loaded' "$dms_log" 2>/dev/null && break
     sleep 0.5
   done
   sleep 2
@@ -188,11 +193,11 @@ shot)
   ;;
 ipc)
   enter
-  "$QS" ipc -p "$DMS_DIR" call "$@"
+  "$DMS" ipc call "$@"
   ;;
 log)
-  [ -f "$qs_log" ] || die "no sandbox for $PWD, run: sandbox.sh up"
-  grep -iE "${1:-.}" "$qs_log" | cut -c1-240 || true
+  [ -f "$dms_log" ] || die "no sandbox for $PWD, run: sandbox.sh up"
+  grep -iE "${1:-.}" "$dms_log" | cut -c1-240 || true
   ;;
 *) die "usage: sandbox.sh up|down|status|run|bg|key|move|click|wheel|shot|ipc|log [args]" ;;
 esac
