@@ -171,8 +171,8 @@ Who runs the call differs:
 
 - **pi** attaches to the hub for the session's life (`parent/lib/hub.ts`). The
   hub reads its session file along the current branch (`agent_hub/pi.py`) and
-  asks pi to run the call, so it goes through pi's own side model and shows in
-  `/cost` (`session label`, `session ask`).
+  asks pi to run the call, so it goes through pi's own side model and its usage ledger
+  (`session label`, `session ask`).
 - **Claude Code** reaches the hub through `agent-hub hook` (set in
   `modules/programs/claude-code/default.nix`). The hub runs `claude -p --model
 haiku` as the session's own profile (`CLAUDE_CONFIG_DIR`, which `SessionStart`

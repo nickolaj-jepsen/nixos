@@ -68,7 +68,7 @@ const contextText = (tokens: number | undefined): string => {
 /**
  * List price per million tokens, blended 3:1 input:output, which is roughly an
  * agent turn's mix. A subscription bills at list too, so this compares what a
- * pool costs to spend, not money actually paid; `/cost` has the latter.
+ * pool costs to spend, not money actually paid.
  */
 const blended = (model: Model<any>): number | undefined => {
   const input = model.cost?.input;

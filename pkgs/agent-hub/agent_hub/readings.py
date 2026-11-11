@@ -238,7 +238,7 @@ class Readings:
         request = conn.next_call
         future = asyncio.get_running_loop().create_future()
         conn.calls[request] = future
-        # The settle half runs once per turn, so pi's /cost shows it on its own.
+        # The settle half runs once per turn, so pi's usage ledger files it on its own.
         conn.send({"type": "judge", "request": request, "system": system, "prompt": prompt, "maxTokens": max_tokens,
                    "source": source or ("session ask" if moment == "settle" else "session label")})
         try:

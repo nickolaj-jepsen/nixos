@@ -112,13 +112,11 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git) =>
     tools: ((ctx) => ctx.ui.setToolsExpanded(!ctx.ui.getToolsExpanded())) as Action,
     thinking: appAction(state, "app.thinking.toggle", "alt+t"),
     agents: command(state, pi, "/subagents:sessions"),
-    cost: command(state, pi, "/cost"),
     memory: command(state, pi, "/memory"),
     // A full window is where the session tree earns its keep, so the context pill
     // opens it. pi's own handler, not the slash command: /tree is a built-in that
     // only the interactive input path runs, while sendUserMessage would hand the
-    // text to the model as a prompt. /cost above is an extension command, which is
-    // why that one can go through the command path.
+    // text to the model as a prompt.
     tree: appAction(state, "app.session.tree", "alt+shift+t"),
   };
 };

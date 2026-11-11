@@ -7,7 +7,7 @@ import { recordSideCall } from "./usage-ledger.ts";
 export const SIDE_MODEL = "vm/flash";
 
 export type SideCall = {
-  /** The ledger's name for the call, as /cost lists it. */
+  /** The ledger's name for the call. */
   source: string;
   system: string;
   prompt: string;

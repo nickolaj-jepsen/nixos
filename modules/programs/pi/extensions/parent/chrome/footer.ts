@@ -77,14 +77,14 @@ export const createFooter = (
     };
   };
 
-  /** What the editor's top border shows: the context, then the meters; the cost opens /cost. */
+  /** What the editor's top border shows: the context, then the meters. */
   const measurements = (): Measurements => {
     const ctx = state.ctx;
     if (!ctx) return { context: undefined, meters: [] };
     const model = routed(ctx)?.model ?? ctx.model;
     const { cost, speed } = meterTexts(ctx, model);
     const meters = [
-      cost === undefined ? undefined : { id: "cost", text: cost, action: actions.cost },
+      cost === undefined ? undefined : { id: "cost", text: cost },
       speed === undefined ? undefined : { id: "speed", text: speed },
     ].filter((meter): meter is Meter => meter !== undefined);
     return { context: stats.contextFor(ctx, model), meters };
@@ -230,10 +230,7 @@ export const createFooter = (
           styled: (t) => t.fg("dim", path.parent) + t.fg("text", path.name),
           action: actions.folder,
         },
-        cost:
-          costText && !bordered
-            ? { id: "cost", text: costText, color: "dim", action: actions.cost }
-            : undefined,
+        cost: costText && !bordered ? { id: "cost", text: costText, color: "dim" } : undefined,
         speed: speedText && !bordered ? { id: "speed", text: speedText, color: "dim" } : undefined,
         git: (mode) => {
           const part = git.view(mode);

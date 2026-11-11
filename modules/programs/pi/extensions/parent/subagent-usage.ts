@@ -1,5 +1,5 @@
 /**
- * Files a subagent's spend where `/cost` and the editor border read it.
+ * Files a subagent's spend where the editor border reads it.
  *
  * The agent package shows each child's token total in the widget and in its
  * completion notice, but it does not hand the parent a pi `Usage`, so a child's
@@ -116,7 +116,7 @@ const readTranscript = (file: string): Parts | undefined => {
     return undefined;
   }
   const groups = new Map<string, Parts[number]>();
-  // Compaction and branch summaries name no model; file them on the reply before them, as /cost does.
+  // Compaction and branch summaries name no model; file them on the reply before them.
   let last = { provider: "", model: "" };
   for (const entry of parseSessionEntries(text)) {
     if (entry.type === "session") continue;

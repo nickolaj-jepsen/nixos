@@ -11,7 +11,6 @@ import browserGate from "./browser-gate.ts";
 import chrome from "./chrome.ts";
 import claudePeers from "./claude-peers.ts";
 import condense from "./condense.ts";
-import cost from "./cost.ts";
 import gutter from "./gutter.ts";
 import modelLabels from "./model-labels.ts";
 import questions from "./questions.ts";
@@ -30,7 +29,6 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["chrome", chrome],
   ["claude-peers", claudePeers],
   ["condense", condense],
-  ["cost", cost],
   ["gutter", gutter],
   ["model-labels", modelLabels],
   ["questions", questions],

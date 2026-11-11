@@ -186,7 +186,7 @@ export const entryItems = (entry: SessionEntry): Item[] => {
           .filter((part) => isSpend(part.usage))
           .map((part) => ({
             kind: "child" as const,
-            // A row per agent type, so /cost says what each delegation bought.
+            // A row per agent type.
             name: data.agent || "unnamed",
             provider: part.provider || undefined,
             model: part.model || undefined,
