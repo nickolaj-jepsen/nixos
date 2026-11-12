@@ -112,6 +112,7 @@ prompt to itself.
 ### Plan, build and ship
 
 - [handoff](skills/handoff/): writes a finished plan up as a self-contained handoff for another agent.
+- [dispatch](skills/dispatch/): writes a small task's requirements, direction and references with minimal recon, not an implementation plan.
 - [run-handoff](skills/run-handoff/): builds a handoff with one subagent and worktree per item, re-verifying each.
 - [land](skills/land/): takes finished work to landed commits or a PR, after checks and a review gate.
 

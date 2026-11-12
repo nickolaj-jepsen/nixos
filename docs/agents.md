@@ -115,7 +115,7 @@ traps it sets and the demo recordings.
   and the migration.
 - A skill names its files relative to that store and never repeats where notes
   live: `agent-context.md` states the rule once, and the skills that write
-  files (`handoff`, `run-handoff`, `ideate`, `mine`, `onboard`, `tour`)
+  files (`handoff`, `dispatch`, `run-handoff`, `ideate`, `mine`, `onboard`, `tour`)
   only name their own layout.
 - `/open plan` lists that store's Markdown, newest first, skipping `history/`,
   `files/` and dot directories, and opens the picked note in the editor. Each
