@@ -3,6 +3,8 @@ name: mine
 description: Improve a skill, tool, CLI or hook from how it actually went in your past Claude Code and pi sessions. Findings are routed to /brainstorm, /grill-me or building them.
 disable-model-invocation: true
 argument-hint: "<target>"
+metadata:
+  status: in-progress
 ---
 
 This skill finds what to change in a target and why, from how it went in past sessions.

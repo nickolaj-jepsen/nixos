@@ -3,6 +3,8 @@ name: retro
 description: Improve how agents work, using one Claude Code or pi session as evidence. Finds the detours and mistakes and what caused them (assumptions, documentation, code, prompts, skills, tools, instructions), then applies the fixes you pick. Quality first, then time, then cost. Run it on demand after real work.
 disable-model-invocation: true
 argument-hint: "[session-id] [focus]"
+metadata:
+  status: in-progress
 ---
 
 This skill reviews how one session went, so that later sessions go better.

@@ -3,6 +3,8 @@ name: brainstorm
 description: Find an approach for a goal that has none yet; stops once you pick one.
 disable-model-invocation: true
 argument-hint: "[goal]"
+metadata:
+  status: in-progress
 ---
 
 The arguments name the goal to find an approach for; none means what the conversation is about. This skill finds the approach and starts nothing else: no detailed design, no code.
@@ -13,4 +15,4 @@ The arguments name the goal to find an approach for; none means what the convers
 
    Present several through the question tool: one option per approach, its name as the label, its main trade-off as the description, and a preview of at most about 12 lines with the sketch, pros and cons, plus a snippet or layout where it helps. Put the recommended approach first, labelled "(Recommended)"; the tool's free-text row is how the user combines or rejects them. Without a question tool, write a markdown section per approach followed by your recommendation.
 
-4. **Stop.** Restate the chosen approach in a few lines, then one line naming the next steps: `/grill-me`, `/annotate-plan`, `/handoff`, or just build it.
+4. **Stop.** Restate the chosen approach in a few lines, then one line naming the next steps: `/grill-me`, `/handoff`, or just build it.

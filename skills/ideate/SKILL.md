@@ -3,6 +3,8 @@ name: ideate
 description: Generate grounded, ranked ideas for improving a repo or one area of it (features, refactors, performance, tooling), each routed to /brainstorm, /grill-me or building it.
 disable-model-invocation: true
 argument-hint: "[focus] [--big|--quick] [--no-web]"
+metadata:
+  status: in-progress
 ---
 
 This skill finds ideas worth doing and ranks them.

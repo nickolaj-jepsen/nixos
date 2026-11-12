@@ -37,8 +37,8 @@ ${XDG_STATE_HOME:-~/.local/state}/agents/tmp/<repo-id>/<pid>/   scratch, reaped
 - `files/` holds what a note names: captured output, images, a generated
   devshell. `/open plan` does not list Markdown in there as a note, so a generated
   report never looks like something a session wrote.
-- `history/` holds superseded copies, such as `annotate-plan`'s
-  `history/PLAN.prev.md`. It is not listed either.
+- `history/` holds superseded copies, such as `run-handoff`'s archived
+  `plans/history/<slug>/`. It is not listed either.
 
 ## The commands
 
