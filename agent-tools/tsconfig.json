@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "types": []
   },
-  "include": ["plugins/*/core/**/*.ts"]
+  "include": ["plugins/*/core/**/*.ts", "plugins/*/pi/**/*.ts"]
 }

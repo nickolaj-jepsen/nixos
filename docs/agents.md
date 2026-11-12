@@ -10,18 +10,19 @@ and subagent roles are in `docs/models.md`; desktop toasts and the bar are in
 Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
 `modules/programs/`.
 
-| Thing                    | Lives in                     | Registered by                 | Build check                     | Dev loop                     |
-| ------------------------ | ---------------------------- | ----------------------------- | ------------------------------- | ---------------------------- |
-| Own skill                | `agent-tools/skills/<name>/` | `agent-skills.nix`            | —                               | frontmatter check            |
-| Third-party skill        | upstream source              | its feature leaf              | —                               | —                            |
-| Private skill            | a Claude Code marketplace    | `claude-code/default.nix`     | —                               | —                            |
-| Pi extension             | `pi/extensions/`             | `settings.packages`           | `tsc --noEmit`                  | `just dev-setup`, `pi -ne …` |
-| Third-party pi package   | `pkgs/pi-packages/`          | `settings.packages`           | —                               | `UPDATERS` bump              |
-| Pi itself                | `pkgs/pi-coding-agent/`      | the `pi` wrapper              | —                               | `UPDATERS` bump              |
-| Pi settings, MCP servers | pi leaf `settings`, `mcp`    | the `pi` wrapper, at launch   | —                               | —                            |
-| Claude Code mod          | `claude-code/mods/<name>/`   | `CLAUDE_CODE_PLUGIN_DIRS`     | `claude plugin validate`/`test` | `claude-dev`, `tsc -p`       |
-| Two-harness plugin       | `agent-tools/plugins/`       | both rows above               | `pkgs.agent-tools`, then both   | `npm test` in `agent-tools/` |
-| Language server          | `agent-lsp.nix`              | `fireproof.agents.lspServers` | —                               | —                            |
+| Thing                    | Lives in                         | Registered by                 | Build check                     | Dev loop                     |
+| ------------------------ | -------------------------------- | ----------------------------- | ------------------------------- | ---------------------------- |
+| Own skill                | `agent-tools/skills/<name>/`     | `agent-skills.nix`            | —                               | frontmatter check            |
+| Third-party skill        | upstream source                  | its feature leaf              | —                               | —                            |
+| Private skill            | a Claude Code marketplace        | `claude-code/default.nix`     | —                               | —                            |
+| Pi extension             | `pi/extensions/`                 | `settings.packages`           | `tsc --noEmit`                  | `just dev-setup`, `pi -ne …` |
+| A plugin's pi half       | `agent-tools/plugins/<name>/pi/` | the plugin's `package.json`   | `pkgs/agent-tools`              | `just dev-setup`, `pi -ne …` |
+| Third-party pi package   | `pkgs/pi-packages/`              | `settings.packages`           | —                               | `UPDATERS` bump              |
+| Pi itself                | `pkgs/pi-coding-agent/`          | the `pi` wrapper              | —                               | `UPDATERS` bump              |
+| Pi settings, MCP servers | pi leaf `settings`, `mcp`        | the `pi` wrapper, at launch   | —                               | —                            |
+| Claude Code mod          | `claude-code/mods/<name>/`       | `CLAUDE_CODE_PLUGIN_DIRS`     | `claude plugin validate`/`test` | `claude-dev`, `tsc -p`       |
+| Two-harness plugin       | `agent-tools/plugins/`           | both rows above               | `pkgs.agent-tools`, then both   | `npm test` in `agent-tools/` |
+| Language server          | `agent-lsp.nix`                  | `fireproof.agents.lspServers` | —                               | —                            |
 
 ## Skills
 
@@ -59,8 +60,13 @@ Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
     names, the footer's tallies) is declared once in `shared/` with its
     parser.
   - A helper only one package needs lives in that package.
+  - A plugin's pi half (`agent-tools/plugins/<name>/pi/`) is a package of its own: the
+    plugin's `package.json` names it under `pi`, the leaf lists its folder in
+    `settings.packages` for the session you started only, and it imports the plugin's
+    `core/` directly. It gets no copy under `parent/lib/`.
 - The build runs `tsc --noEmit` over `core/`, `parent/` and `shared/` against
-  the pi that ships, so a type error fails `just build`. That resolves
+  the pi that ships, so a type error fails `just build`; `pkgs/agent-tools` links the
+  same pi to type-check the plugins' `pi/` halves. That resolves
   `@earendil-works/pi-ai` to its published types, which no longer carry
   TypeBox's re-exports (pi's runtime width adds them back), so extension code
   imports `Type` from `typebox`, the copy pi aliases to the one it loads.

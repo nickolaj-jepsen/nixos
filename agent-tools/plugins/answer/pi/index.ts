@@ -4,8 +4,8 @@
  * editor's place, and its review writes the reply into the editor, above any
  * draft, to send.
  *
- * The form is the core's (`lib/answer`), the one Claude Code's mod runs. The
- * draft is this session's own: in memory, and on the session branch so a
+ * The form is the core's (`../core/forms.ts`), the one Claude Code's mod runs.
+ * The draft is this session's own: in memory, and on the session branch so a
  * reload or a resumed session has its round and answers back.
  *
  * The answers outlive closing the form; any input sent drops them.
@@ -13,8 +13,8 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { contentText } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { AnswerForm, type FormAction, type FormResult } from "./answer/form.ts";
-import { type Held, offer, step as stepForm, type View, viewOf } from "./lib/answer/forms.ts";
+import { type Held, offer, step as stepForm, type View, view, viewOf } from "../core/forms.ts";
+import { AnswerForm, type FormAction, type FormResult } from "./form.ts";
 
 const WIDGET_KEY = "answer";
 const SHORTCUT = "alt+a";
@@ -28,7 +28,7 @@ const hasEditor = (ctx: ExtensionContext) => ctx.mode === "tui" && ctx.hasUI;
 function lastAssistantText(messages: AgentMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
-    if (m.role !== "assistant") continue;
+    if (m?.role !== "assistant") continue;
     const text = contentText(m.content, "\n").trim();
     if (text) return text;
   }
@@ -118,8 +118,9 @@ export default function (pi: ExtensionAPI) {
 
   const open = async (ctx: ExtensionContext) => {
     if (!hasEditor(ctx) || form) return;
-    const opened = viewOf(held);
-    if (!opened) {
+    const answering = held;
+    const opened = answering && view(answering.form, answering.draft);
+    if (!answering || !opened) {
       ctx.ui.notify("Nothing to answer: the last turn asked no questions.", "info");
       return;
     }
@@ -128,11 +129,15 @@ export default function (pi: ExtensionAPI) {
       if (held) hold(ctx, stepForm(held, action, opened.id));
       return viewOf(held);
     };
+    // Every question's screen, so the form stands as tall as its tallest on all of them.
+    const steps = answering.form.items.map((_, at) =>
+      view(answering.form, { ...answering.draft, step: at }),
+    );
     let result: FormResult;
     try {
       result = await ctx.ui.custom<FormResult>(
         (tui, theme, _keybindings, done) => {
-          form = new AnswerForm(tui, theme, opened, step, done);
+          form = new AnswerForm(tui, theme, opened, step, done, steps);
           return form;
         },
         { overlay: false },

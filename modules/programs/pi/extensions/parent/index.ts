@@ -5,7 +5,6 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import aliases from "./aliases.ts";
-import answer from "./answer.ts";
 import bg from "./bg.ts";
 import browserGate from "./browser-gate.ts";
 import chrome from "./chrome.ts";
@@ -24,7 +23,6 @@ import worktree from "./worktree.ts";
 
 const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["aliases", aliases],
-  ["answer", answer],
   ["bg", bg],
   ["browser-gate", browserGate],
   ["chrome", chrome],

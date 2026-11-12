@@ -76,7 +76,9 @@ writes your reply into the prompt.
   own controls.
 - Answers last the session: a turn a background task starts keeps them, your own
   send drops them.
-- pi has the same form, from the same parser (`core/forms.ts`).
+- pi has the same form from the same parser (`core/forms.ts`), as its own pi package
+  (`pi/`): the same keys, a double click goes on to the next question, and the form
+  stands as tall as its tallest question so stepping moves nothing.
 
 Keys, in `~/.claude/keybindings.json` (a mod can't take the keyboard itself):
 
@@ -168,7 +170,7 @@ Unfinished, and not ready for anyone else to use. Their frontmatter says `status
 ### Layout
 
 Laid out to be split into a repository of its own. Each `plugins/<name>/` is a
-Claude Code plugin, built by `mkToolMod`:
+Claude Code plugin, built by `mkToolMod`, and, when pi shares it, a pi package too:
 
 - `core/`: harness-free TypeScript shared with pi, in a single file with no imports
   and no Node or DOM APIs.
@@ -176,11 +178,17 @@ Claude Code plugin, built by `mkToolMod`:
     `pkgs/agent-tools`.
   - `claude plugin test` runs only `*.test.ts(x)`, so the two never overlap.
 - `claude/`: the mod, which `hooks/hooks.json` points at.
-- Plugin root: only `hooks/`, `.claude-plugin/` and `types/`.
-- The pi half is in `modules/programs/pi/extensions/parent/`, reading the core
-  through `parent/lib/<name>`, a symlink the pi leaf replaces with a copy at build
-  time.
+- `pi/`: the pi half, which the plugin's own `package.json` names under `pi`, so the
+  folder is a pi package as it stands and imports `../core` directly. The pi leaf
+  lists it in `settings.packages` for the session you started, never for children.
+- Plugin root: only `hooks/`, `.claude-plugin/`, `types/` and that `package.json`.
+  The mod's install copies its own halves only, so `pi/` never reaches a Claude Code
+  install.
 - No plugin imports the agent-hub client. One that needs the hub isn't a plugin.
+
+A plugin's pi half type-checks against the pi that ships, not an npm copy of it:
+`pkgs/agent-tools` links that pi into its `node_modules` before `tsc`, and
+`just dev-setup` makes the same links for an editor.
 
 ### Traps
 
@@ -192,6 +200,12 @@ None of these show up in `tsc`:
   `core/` owns, so `tsc -p` flags drift.
 - vitest takes the nearest `tsconfig.json`, and the plugin's one needs types only
   `just dev-setup` lays. `core/tsconfig.json` is there to be nearer.
+- A pi half's imports resolve to the pi that runs only through the links
+  `pkgs/agent-tools` and `just dev-setup` make; `npm install` in `agent-tools/`
+  prunes them, so re-run `just dev-setup` when `npm run typecheck` starts failing to
+  find `@earendil-works/*`.
+- Don't add pi's packages to `agent-tools/package.json`: a physical copy drifts from
+  the pi that loads the half, and the links are what keep the two in step.
 
 ### Demos
 

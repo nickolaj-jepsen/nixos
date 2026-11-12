@@ -2,9 +2,10 @@
  * The answer form, drawn in the editor's place: one item per screen and a
  * review, every row and key chip clickable. A pick records the answer and asks
  * for a note under it; Enter there, empty or not, goes on to the next item
- * unanswered, and `m` lets several options be one answer. The draft and every
- * step through it are the core's (`lib/answer`), which Claude Code's mod shares;
- * this file only draws its view and maps keys and clicks onto those steps.
+ * unanswered, and `m` lets several options be one answer. A double click on an
+ * answer goes on the next one too. The draft and every step through it are the
+ * core's (`../core/forms.ts`), which Claude Code's mod shares; this file only
+ * draws its view and maps keys and clicks onto those steps.
  */
 import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import {
@@ -21,7 +22,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-import type { Action, View } from "../lib/answer/forms.ts";
+import type { Action, View } from "../core/forms.ts";
 
 export type FormResult = { fill: boolean };
 
@@ -39,6 +40,8 @@ type Act =
 type Row = { text: string; act?: Act; cells?: { start: number; end: number; act: Act }[] };
 
 const MIN_WIDTH = 30;
+/** Body rows the form keeps even where the terminal is tiny. */
+const MIN_ROOM = 4;
 /** Rows kept for the transcript and footer around the frame. */
 const RESERVED_ROWS = 8;
 
@@ -59,6 +62,8 @@ export class AnswerForm implements Component, Focusable {
   /** Keys that came while a step ran, so a quick typist's note isn't lost to it. */
   private queued: string[] = [];
   private isStepping = false;
+  /** The body rows the form stands at, measured once at its width: its tallest question's. */
+  private measured: { width: number; rows: number } | undefined;
 
   constructor(
     private readonly tui: TUI,
@@ -66,6 +71,8 @@ export class AnswerForm implements Component, Focusable {
     private view: View,
     private readonly stepper: (action: FormAction) => Promise<View | null>,
     private readonly done: (result: FormResult) => void,
+    /** Every question's screen, for the height the form stands at. */
+    private readonly steps: View[] = [],
   ) {
     this.resetCursor();
   }
@@ -265,8 +272,22 @@ export class AnswerForm implements Component, Focusable {
     }
     if (event.type === "press") return { handled: true, focus: true };
     if (event.type !== "click" || event.button !== "left") return { handled: true };
-    if (!this.isStepping) this.act(act);
+    if (this.isStepping) return { handled: true };
+    // A double click on an answer goes on to the next question, as Enter in its note does.
+    if (event.clickCount === 2) this.goOn(act);
+    else this.act(act);
     return { handled: true };
+  }
+
+  /** A second click on an answer: the pick, then on, instead of stopping for its note. */
+  private goOn(act: Act): void {
+    if (act.kind !== "entry") return this.act(act);
+    const entry = this.view.item?.entries[act.index];
+    // Only an answer: a chip, a note or the review's row go where one click goes.
+    if (!entry || entry.kind === "write" || this.isSeveral) return this.act(act);
+    this.cursor = act.index;
+    this.stopEditing();
+    this.step({ do: "pick", entry: act.index }, () => this.step({ do: "next" }));
   }
 
   /** `k label` chips on one row, each its own click target. */
@@ -292,6 +313,23 @@ export class AnswerForm implements Component, Focusable {
     return {
       text: `${this.theme.fg("dim", label)} ${this.input.render(width - label.length - 1)[0] ?? ""}`,
     };
+  }
+
+  /**
+   * The body rows the form gets: its tallest question's, so going from one to the next moves
+   * nothing, and never more than the terminal leaves.
+   */
+  private roomAt(width: number): number {
+    if (this.measured?.width !== width) {
+      const rows = this.steps.reduce((n, step) => {
+        const measured = step.item ? this.itemRows(step.item, width).length : 0;
+        return Math.max(n, measured);
+      }, 0);
+      this.measured = { width, rows };
+    }
+    const fits = Math.max(MIN_ROOM, this.tui.terminal.rows - RESERVED_ROWS - 4);
+    // With no other question to measure, what fits is what it stands at.
+    return Math.min(fits, Math.max(MIN_ROOM, this.measured.rows || fits));
   }
 
   private itemRows(item: Item, width: number): Row[] {
@@ -405,10 +443,12 @@ export class AnswerForm implements Component, Focusable {
         ]);
 
     // The actions stay put; a tall item scrolls above them.
-    const room = Math.max(4, this.tui.terminal.rows - RESERVED_ROWS - 4);
+    const room = this.roomAt(textWidth);
     this.maxOffset = Math.max(0, body.length - room);
     this.offset = Math.min(this.offset, this.maxOffset);
     const shown = body.slice(this.offset, this.offset + room);
+    // Padded to that height, so a short question doesn't shrink the frame under the prompt.
+    while (shown.length < room) shown.push({ text: "" });
     const rows = [...shown, { text: "" }, actions];
 
     const border = (s: string) => t.fg("borderMuted", s);

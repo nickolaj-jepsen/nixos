@@ -11,12 +11,10 @@
       npmDeps = pkgs.importNpmLock {npmRoot = ./extensions;};
       inherit (pkgs.importNpmLock) npmConfigHook;
       nativeBuildInputs = [pkgs.typescript];
-      # parent/lib/spellfix is a symlink to the Claude Code mod and parent/lib/answer one to
-      # the form's core in agent-tools; both dangle in the store.
+      # parent/lib/spellfix is a symlink to the Claude Code mod and dangles in the store.
       # The hub's protocol types come from its Python definition, the one the hub validates against.
       postPatch = ''
-        rm parent/lib/spellfix parent/lib/answer
-        install -Dm644 ${pkgs.agent-tools}/plugins/answer/core/forms.ts parent/lib/answer/forms.ts
+        rm parent/lib/spellfix
         install -Dm644 ${../claude-code/mods/spellfix/hooks/core.ts} parent/lib/spellfix/hooks/core.ts
         install -Dm644 ${../claude-code/mods/spellfix/types/index.d.ts} parent/lib/spellfix/types/index.d.ts
         ${pkgs.python3.interpreter} ${../../../pkgs/agent-hub/agent_hub/protocol.py} --typescript > parent/lib/protocol.gen.ts
@@ -96,6 +94,8 @@ in {
     packagePath = name: "${piPackages}/node_modules/${name}";
     extensions = mkExtensions pkgs pi piPackages;
     parentPath = "${extensions}/parent";
+    # A plugin of agent-tools whose pi half is its own package (agent-tools/README.md).
+    answerPath = "${pkgs.agent-tools}/plugins/answer";
     # worktrunk's activity markers (🤖/💬 in `wt list`), from the source of the `wt`
     # on PATH. parent/worktree.ts moves a session between worktrees through `wt`.
     worktrunkMarkers = pkgs.runCommand "pi-worktrunk-markers" {} ''
@@ -120,7 +120,7 @@ in {
     # A child's exit would clear the marker of the session that spawned it.
     childExcludedPackages =
       map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages)
-      ++ [parentPath "${worktrunkMarkers}"];
+      ++ [parentPath answerPath "${worktrunkMarkers}"];
     # agent-context.md is shared by every agent; keep it agent-agnostic. Children
     # read these rules too and hold no agent tools, so no delegation how-to here.
     rules = builtins.readFile ../agent-context.md;
@@ -171,7 +171,7 @@ in {
       # system prompt's section order.
       packages =
         map packagePath thirdPartyPackages
-        ++ [parentPath "${extensions}/core" "${worktrunkMarkers}"];
+        ++ [parentPath answerPath "${extensions}/core" "${worktrunkMarkers}"];
       # Empty on purpose: arrays replace wholesale, reverting `pi config` toggles.
       extensions = [];
     };
@@ -209,8 +209,9 @@ in {
       name = "pi-dev";
       text = ''
         extensions="${config.fireproof.agents.checkout}/modules/programs/pi/extensions"
+        answer="${config.fireproof.agents.checkout}/agent-tools/plugins/answer"
         [ -d "$extensions/parent" ] || { echo "pi-dev: no extensions under $extensions" >&2; exit 1; }
-        exec pi -ne -e builtin:codemode -e builtin:mcp -e "$extensions/core" -e "$extensions/parent" "$@"
+        exec pi -ne -e builtin:codemode -e builtin:mcp -e "$extensions/core" -e "$extensions/parent" -e "$answer" "$@"
       '';
     };
   in {

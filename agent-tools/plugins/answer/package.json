@@ -1,0 +1,20 @@
+{
+  "name": "@nickolaj-jepsen/answer",
+  "version": "0.1.0",
+  "description": "Answer the question round or pick list a turn ended on from a form: number keys or clicks, then the reply is written into the prompt",
+  "keywords": [
+    "pi-package"
+  ],
+  "type": "module",
+  "peerDependencies": {
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./pi/index.ts"
+    ]
+  }
+}
