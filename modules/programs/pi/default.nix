@@ -147,9 +147,9 @@ in {
           "anthropic/claude-opus-5-5"
           "anthropic/claude-sonnet-5-5"
           "kimi-coding/k3.1-pro"
-          "opencode-go/*"
-          # `**`: the ids hold a slash (qwen/…), which a glob `*` doesn't cross.
-          "tensorx/**"
+          # The one paid Go hand-pick; `*` holds because no free id has a slash.
+          "opencode-go/deepseek-v4.1-flash"
+          "opencode-go/*-free"
         ]
         ++ lib.optional config.fireproof.dev.llm.enable "local/*";
       # pi's defaults (reserve 16k, keep 20k) overrun a 32k window.

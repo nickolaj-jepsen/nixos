@@ -83,15 +83,17 @@ the pickers' All tab.
 - `vm/*` for the tiers.
 - Opus and Sonnet on the credit.
 - `kimi-coding/k3.1-pro` for work Claude declines.
-- `opencode-go/*` for Go experiments.
-- `tensorx/**` plus `local/*` for sensitive work.
+- `opencode-go/deepseek-v4.1-flash` for hand-picked Go work, and
+  `opencode-go/*-free` for free Go experiments.
+- `local/*` for sensitive work on this host.
 
 ## Sensitive and declined work
 
 - `vm/deep` contains Opus, and a Claude refusal looks like a finished turn, so
   it cannot be the escape hatch for work a Claude model declines.
 - That work goes to `kimi-coding/k3.1-pro` by hand.
-- Data-sensitive work goes to local or TensorX.
+- Data-sensitive work goes to local or TensorX. TensorX is not in
+  `enabledModels`, so it is picked from the All tab.
 - Dedicated cyber tiers are deferred.
 
 ## Guardian
