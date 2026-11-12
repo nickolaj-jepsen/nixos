@@ -124,6 +124,18 @@
             ];
             default-column-width.fixed = 864;
           }
+          # zed-scratch's note (Mod+N): floats centered, at the reading width above.
+          {
+            matches = [
+              {
+                app-id = "^dev\\.zed\\.Zed$";
+                title = "^scratch\\.md$";
+              }
+            ];
+            open-floating = true;
+            open-focused = true;
+            default-window-height.proportion = 0.6;
+          }
           {
             matches = [{app-id = "^org\\.gnome\\.NautilusPreviewer$";}];
             open-floating = true;

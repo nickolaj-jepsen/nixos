@@ -51,7 +51,18 @@
           allow-when-locked = true;
           action.spawn = ["dms" "ipc" "mpris" "stop"];
         };
-        "Mod+N" = {
+        # A scratch note: zed where there is one, else the DMS notepad.
+        "Mod+N" =
+          if config.fireproof.dev.enable
+          then {
+            action.spawn = ["zed-scratch"];
+            hotkey-overlay.title = "Toggle Scratch Note (zed)";
+          }
+          else {
+            action.spawn = ["dms" "ipc" "notepad" "toggle"];
+            hotkey-overlay.title = "Toggle Notepad";
+          };
+        "Mod+Shift+N" = {
           action.spawn = ["dms" "ipc" "notifications" "toggle"];
           hotkey-overlay.title = "Toggle Notification Center";
         };
@@ -89,10 +100,6 @@
         "Mod+Ctrl+B" = lib.mkIf config.fireproof.dev.agent-hub.enable {
           action.spawn = [(lib.getExe pkgs.agent-hub) "toggle"];
           hotkey-overlay.title = "Dismiss or Bring Back the Focused Agent's Turn";
-        };
-        "Mod+Shift+N" = {
-          action.spawn = ["dms" "ipc" "notepad" "toggle"];
-          hotkey-overlay.title = "Toggle Notepad";
         };
         "Mod+Shift+Comma" = {
           action.spawn = ["dms" "ipc" "settings" "focusOrToggle"];
