@@ -135,7 +135,7 @@ end, with no TCP port of its own.
 
 - `AGENT_HUB_HIDDEN=1` in a session's environment hides it in every state, with no
   way to reveal it. Hooks and pi report it from their own environment. Set it for
-  anything an agent starts to test with; `skills/pi-plugin-dev/scripts/tui.sh` does.
+  anything an agent starts to test with; `agent-tools/skills/pi-plugin-dev/scripts/tui.sh` does.
 - A hidden session gets no pulse, no `focus-next` and no place in
   another session's peers note, but keeps its own row in its own TUI.
 - `agent-hub status` with no arguments lists every session and counts the hidden

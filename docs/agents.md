@@ -7,29 +7,30 @@ and subagent roles are in `docs/models.md`; desktop toasts and the bar are in
 
 ## Where things go
 
-Paths in the table that don't start with `skills/` or `pkgs/` are under
+Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
 `modules/programs/`.
 
-| Thing                    | Lives in                   | Registered by                 | Build check                     | Dev loop                     |
-| ------------------------ | -------------------------- | ----------------------------- | ------------------------------- | ---------------------------- |
-| Own skill                | `skills/<name>/`           | `agent-skills.nix`            | —                               | frontmatter check            |
-| Third-party skill        | upstream source            | its feature leaf              | —                               | —                            |
-| Private skill            | a Claude Code marketplace  | `claude-code/default.nix`     | —                               | —                            |
-| Pi extension             | `pi/extensions/`           | `settings.packages`           | `tsc --noEmit`                  | `just dev-setup`, `pi -ne …` |
-| Third-party pi package   | `pkgs/pi-packages/`        | `settings.packages`           | —                               | `UPDATERS` bump              |
-| Pi itself                | `pkgs/pi-coding-agent/`    | the `pi` wrapper              | —                               | `UPDATERS` bump              |
-| Pi settings, MCP servers | pi leaf `settings`, `mcp`  | the `pi` wrapper, at launch   | —                               | —                            |
-| Claude Code mod          | `claude-code/mods/<name>/` | `CLAUDE_CODE_PLUGIN_DIRS`     | `claude plugin validate`/`test` | `claude-dev`, `tsc -p`       |
-| Two-harness plugin       | `agent-tools/plugins/`     | both rows above               | `pkgs.agent-tools`, then both   | `npm test` in `agent-tools/` |
-| Language server          | `agent-lsp.nix`            | `fireproof.agents.lspServers` | —                               | —                            |
+| Thing                    | Lives in                     | Registered by                 | Build check                     | Dev loop                     |
+| ------------------------ | ---------------------------- | ----------------------------- | ------------------------------- | ---------------------------- |
+| Own skill                | `agent-tools/skills/<name>/` | `agent-skills.nix`            | —                               | frontmatter check            |
+| Third-party skill        | upstream source              | its feature leaf              | —                               | —                            |
+| Private skill            | a Claude Code marketplace    | `claude-code/default.nix`     | —                               | —                            |
+| Pi extension             | `pi/extensions/`             | `settings.packages`           | `tsc --noEmit`                  | `just dev-setup`, `pi -ne …` |
+| Third-party pi package   | `pkgs/pi-packages/`          | `settings.packages`           | —                               | `UPDATERS` bump              |
+| Pi itself                | `pkgs/pi-coding-agent/`      | the `pi` wrapper              | —                               | `UPDATERS` bump              |
+| Pi settings, MCP servers | pi leaf `settings`, `mcp`    | the `pi` wrapper, at launch   | —                               | —                            |
+| Claude Code mod          | `claude-code/mods/<name>/`   | `CLAUDE_CODE_PLUGIN_DIRS`     | `claude plugin validate`/`test` | `claude-dev`, `tsc -p`       |
+| Two-harness plugin       | `agent-tools/plugins/`       | both rows above               | `pkgs.agent-tools`, then both   | `npm test` in `agent-tools/` |
+| Language server          | `agent-lsp.nix`              | `fireproof.agents.lspServers` | —                               | —                            |
 
 ## Skills
 
 - Own and third-party skills reach the agents through the
   `fireproof.agents.skills` registry (`attrsOf path`, merged across leaves).
-- Own skills are `skills/<name>/SKILL.md` at the repo root, registered
+- Own skills are `agent-tools/skills/<name>/SKILL.md`, registered
   automatically by `modules/programs/agent-skills.nix`. They are publicly
-  installable; see `skills/README.md`.
+  installable and listed in `agent-tools/README.md`'s Skills section; a new
+  one gets a line there.
 - A third-party skill is registered by its feature leaf from the upstream
   source, e.g. `modules/programs/git.nix` sets
   `fireproof.agents.skills.gh-stack = "${pkgs.unstable.gh-stack.src}/skills/gh-stack"`.
@@ -129,10 +130,11 @@ traps it sets and the demo recordings.
 
 ## Traps
 
-- `.claude-plugin/marketplace.json` discovers `skills/` by default; don't add
-  a `skills` list there.
+- The `skills` plugin in `.claude-plugin/marketplace.json` has source
+  `./agent-tools` and discovers its `skills/` by default; don't add a `skills`
+  list there.
 - No build check reads skill content. To check frontmatter, copy (don't
-  symlink) `skills/` into `<dir>/skills/` and run
+  symlink) `agent-tools/skills/` into `<dir>/skills/` and run
   `claude plugin validate --strict --json <dir>`; an empty `contents` is
   clean.
 - Never add an npm package the pi leaf links in from pi itself or from

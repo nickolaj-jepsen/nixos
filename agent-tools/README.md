@@ -1,7 +1,9 @@
 # agent-tools
 
 Plugins for [Claude Code](https://claude.com/claude-code), some shared with the
-[pi](https://github.com/earendil-works/pi) coding agent.
+[pi](https://github.com/earendil-works/pi) coding agent, and agent skills for any
+agent that reads them. On my own machines home-manager installs these same folders,
+so what's published here is what I run.
 
 - [Install](#install)
 - [Plugins](#plugins): [linear-issue](#linear-issue), [answer](#answer)
@@ -14,6 +16,15 @@ Plugins for [Claude Code](https://claude.com/claude-code), some shared with the
 claude plugin marketplace add nickolaj-jepsen/nixos
 claude plugin install linear-issue@nickolaj-jepsen
 claude plugin install answer@nickolaj-jepsen
+```
+
+The skills, all of them or one by its subpath, with [`npx skills`](https://github.com/vercel-labs/skills)
+or as one Claude Code plugin:
+
+```bash
+npx skills add nickolaj-jepsen/nixos
+npx skills add https://github.com/nickolaj-jepsen/nixos/tree/main/agent-tools/skills/land
+claude plugin install skills@nickolaj-jepsen
 ```
 
 My nix build tests each plugin against the Claude Code version it ships with. A
@@ -99,7 +110,58 @@ prompt to itself.
 
 ## Skills
 
-None here yet. My standalone skills are in [`skills/`](../skills/README.md).
+### Plan, build and ship
+
+- [handoff](skills/handoff/): writes a finished plan up as a self-contained handoff for another agent.
+- [run-handoff](skills/run-handoff/): builds a handoff with one subagent and worktree per item, re-verifying each.
+- [land](skills/land/): takes finished work to landed commits or a PR, after checks and a review gate.
+
+### Understand and decide
+
+- [onboard](skills/onboard/): teaches you an unfamiliar project by running it and tracing one real action.
+- [compare](skills/compare/): recommends one of several candidates, with researched and verified evidence.
+
+### Clean up
+
+- [prune-comments](skills/prune-comments/): cuts comments and docstrings down to the load-bearing why.
+- [prune-churn](skills/prune-churn/): removes tests, docs and structure that must change whenever something else does.
+
+### Harnesses
+
+Run the real thing and drive it by observation.
+
+- [pi-plugin-dev](skills/pi-plugin-dev/): runs and drives a pi extension in tmux.
+- [claude-mod-dev](skills/claude-mod-dev/): runs and drives a Claude Code mod in tmux.
+- [dms-plugin-dev](skills/dms-plugin-dev/): runs and drives a DankMaterialShell plugin in a headless sway.
+
+### Utilities
+
+- [mermaid](skills/mermaid/): renders the Mermaid diagrams in a markdown file to SVGs.
+- [pricerunner](skills/pricerunner/): searches and compares Danish prices on PriceRunner.dk.
+
+### Modified public skills
+
+My variants of public skills. Prefer the originals.
+
+- [grilling](skills/grilling/): interviews you about a plan in rounds; other skills call it.
+- [grill-me](skills/grill-me/): the `/grill-me` entry point to `grilling`.
+
+Both are reworked from the latest version of [Matt Pocock's `grill-me`](https://github.com/mattpocock/skills).
+
+- [avoid-ai-tropes](skills/avoid-ai-tropes/): finds AI writing tells in prose and rewrites them.
+
+Its catalog comes from [tropes.fyi](https://tropes.fyi) by [ossama.is](https://ossama.is).
+
+### In progress
+
+Unfinished; not recommended yet. Marked `status: in-progress` in their frontmatter.
+
+- [brainstorm](skills/brainstorm/): finds an approach for a goal that has none yet.
+- [ideate](skills/ideate/): ranked, verified improvement ideas for a repo or one area of it.
+- [tour](skills/tour/): walks you through a PR or a stack of them, one PR at a time.
+- [retro](skills/retro/): finds what went wrong in one agent session and fixes the cause.
+- [mine](skills/mine/): improves a skill, tool or hook from how its past runs went.
+- [windows-vm](skills/windows-vm/): drives a libvirt Windows guest with screenshots, keys and PowerShell.
 
 ## Development
 

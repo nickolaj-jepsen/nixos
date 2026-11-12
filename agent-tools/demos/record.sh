@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Re-records a demo GIF, demos/<name>.gif: demos/<name>.sh drives a live Claude Code session
-# (skills/claude-mod-dev's tui.sh, so the checkout's mods) while asciinema records it, and agg
+# (agent-tools/skills/claude-mod-dev's tui.sh, so the checkout's mods) while asciinema records it, and agg
 # renders the recording. A demo, not a test: a run that goes another way (the model answered
 # differently, nothing showed up in time) fails and keeps the old GIF; run it again.
 #
@@ -24,7 +24,7 @@ steps="$here/$name.sh"
   echo "no demo steps for $name: $steps" >&2
   exit 1
 }
-T="$(realpath "$here/../../skills/claude-mod-dev/scripts/tui.sh")"
+T="$(realpath "$here/../skills/claude-mod-dev/scripts/tui.sh")"
 
 COLS=150
 SPEED=1.8

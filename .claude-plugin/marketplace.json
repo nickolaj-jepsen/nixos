@@ -11,7 +11,7 @@
     {
       "name": "skills",
       "description": "Agent skills from nickolaj-jepsen/nixos",
-      "source": "./",
+      "source": "./agent-tools",
       "strict": false
     },
     {
