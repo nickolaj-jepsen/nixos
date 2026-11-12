@@ -6,7 +6,7 @@ agent that reads them. On my own machines home-manager installs these same folde
 so what's published here is what I run.
 
 - [Install](#install)
-- [Plugins](#plugins): [linear-issue](#linear-issue), [answer](#answer)
+- [Plugins](#plugins)
 - [Skills](#skills)
 - [Development](#development)
 
@@ -97,7 +97,6 @@ Keys, in `~/.claude/keybindings.json` (a mod can't take the keyboard itself):
 ```
 
 - `alt+a` lands on the offer row, and `Enter` opens the form.
-- `j` / `k` move between entries.
 - `Esc` in a field steps back onto the form instead of out to the prompt.
 
 Options (`claude plugin configure answer`):
@@ -128,11 +127,11 @@ prompt to itself.
 
 ### Harnesses
 
-Run the real thing and drive it by observation.
+Each starts the real program and drives it with keys, screenshots and logs.
 
-- [pi-plugin-dev](skills/pi-plugin-dev/): runs and drives a pi extension in tmux.
-- [claude-mod-dev](skills/claude-mod-dev/): runs and drives a Claude Code mod in tmux.
-- [dms-plugin-dev](skills/dms-plugin-dev/): runs and drives a DankMaterialShell plugin in a headless sway.
+- [pi-plugin-dev](skills/pi-plugin-dev/): pi extensions, in a tmux session.
+- [claude-mod-dev](skills/claude-mod-dev/): Claude Code mods, in a tmux session.
+- [dms-plugin-dev](skills/dms-plugin-dev/): DankMaterialShell plugins, in a headless sway.
 
 ### Utilities
 
@@ -154,7 +153,7 @@ Its catalog comes from [tropes.fyi](https://tropes.fyi) by [ossama.is](https://o
 
 ### In progress
 
-Unfinished; not recommended yet. Marked `status: in-progress` in their frontmatter.
+Unfinished, and not ready for anyone else to use. Their frontmatter says `status: in-progress`.
 
 - [brainstorm](skills/brainstorm/): finds an approach for a goal that has none yet.
 - [ideate](skills/ideate/): ranked, verified improvement ideas for a repo or one area of it.
@@ -168,24 +167,19 @@ Unfinished; not recommended yet. Marked `status: in-progress` in their frontmatt
 ### Layout
 
 Laid out to be split into a repository of its own. Each `plugins/<name>/` is a
-Claude Code plugin, built by `mkToolMod` in `modules/programs/claude-code/default.nix`:
+Claude Code plugin, built by `mkToolMod`:
 
-- `core/`: harness-free TypeScript shared with pi. One file, no imports, no Node, no
-  DOM.
+- `core/`: harness-free TypeScript shared with pi, in a single file with no imports
+  and no Node or DOM APIs.
   - Tests are `core/*.spec.ts`, run by vitest (`npm test`) and by
     `pkgs/agent-tools`.
   - `claude plugin test` runs only `*.test.ts(x)`, so the two never overlap.
-- `claude/`: the mod. `hooks/hooks.json` names `../claude/register.tsx`.
+- `claude/`: the mod, which `hooks/hooks.json` points at.
 - Plugin root: only `hooks/`, `.claude-plugin/` and `types/`.
 - The pi half is in `modules/programs/pi/extensions/parent/`, reading the core
   through `parent/lib/<name>`, a symlink the pi leaf replaces with a copy at build
   time.
 - No plugin imports the agent-hub client. One that needs the hub isn't a plugin.
-
-| Plugin         | `core/` | pi half |
-| -------------- | ------- | ------- |
-| `answer`       | yes     | yes     |
-| `linear-issue` | no      | no      |
 
 ### Traps
 
@@ -204,16 +198,15 @@ Each plugin's GIFs are recorded from a live Claude Code session. Re-record after
 changing what a plugin draws or its keys:
 
 ```bash
-just demo linear-issue       # /linear: draft, edit the title, hide, reopen
-just demo linear-issue-ysk   # the You should know card's Linear issue button
+just demo linear-issue   # or any other demos/<name>.sh
 ```
 
-- `demos/record.sh` drives the session with `skills/claude-mod-dev`'s driver
-  (loading the checkout's plugins), records it with asciinema and renders the GIF
-  with agg at 1.8× speed.
+- `demos/record.sh` drives the session with `skills/claude-mod-dev`'s driver,
+  loading the checkout's plugins, and records the GIF with asciinema and agg.
 - `demos/<name>.sh` holds the steps, and may fill the session's folder first.
-- Demos, not tests: a run that goes another way keeps the old GIF. Run it again;
-  `linear-issue-ysk` often takes a few, since the card is the side agent's call.
+- A run that goes another way keeps the old GIF, so run it again.
+  `linear-issue-ysk` often takes a few tries, since the side agent decides whether
+  the card shows.
 - Runs use your account (`linear-issue-ysk` on Haiku). A plugin needing a connector
   gets your full profile.
 - Nothing is filed: Linear's write tools stay unapproved, and a run whose log shows
