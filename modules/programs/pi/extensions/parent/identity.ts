@@ -16,7 +16,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { firstRequest, oneLine, stripRequest } from "../shared/naming.ts";
 import { sideCall } from "../shared/side-call.ts";
-import { ENTER_WORKTREE } from "../shared/tools.ts";
 import { PEER_MESSAGE_TYPE } from "./claude-peers/protocol.ts";
 import type { Hub } from "./lib/hub.ts";
 import type { UserWait } from "./lib/user-wait.ts";
@@ -163,7 +162,7 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait, hub: Hub, j
       event.messageType === "user" ? event.prompt : contentText(event.message.content, "\n"),
       event.messageType === "user",
       event.messageType === "custom" && event.message.customType === PEER_MESSAGE_TYPE,
-      pi.getActiveTools().includes(ENTER_WORKTREE),
+      pi.getActiveTools().includes("enter_worktree"),
       PEERS_TIMEOUT_MS,
     );
   });

@@ -19,7 +19,6 @@ import sessions from "./sessions.ts";
 import spellfix from "./spellfix.ts";
 import stash from "./stash.ts";
 import subagentUsage from "./subagent-usage.ts";
-import worktree from "./worktree.ts";
 
 const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["aliases", aliases],
@@ -36,7 +35,6 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["spellfix", spellfix],
   ["stash", stash],
   ["subagent-usage", subagentUsage],
-  ["worktree", worktree],
 ];
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));

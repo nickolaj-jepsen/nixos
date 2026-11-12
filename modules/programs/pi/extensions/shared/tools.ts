@@ -1,9 +1,6 @@
 /** `bg_run` (parent/bg.ts): a shell command detached from the turn, so every shell gate checks it too. */
 export const BG_RUN = "bg_run";
 
-/** `enter_worktree` (parent/worktree.ts): moves the session into a worktree of its own. */
-export const ENTER_WORKTREE = "enter_worktree";
-
 /** Tools whose `command` runs in a shell. */
 export const SHELL_TOOLS: ReadonlySet<string> = new Set(["bash", BG_RUN]);
 

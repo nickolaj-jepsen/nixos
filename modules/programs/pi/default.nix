@@ -97,7 +97,7 @@ in {
     # A plugin of agent-tools whose pi half is its own package (agent-tools/README.md).
     answerPath = "${pkgs.agent-tools}/plugins/answer";
     # worktrunk's activity markers (🤖/💬 in `wt list`), from the source of the `wt`
-    # on PATH. parent/worktree.ts moves a session between worktrees through `wt`.
+    # on PATH. pi has no worktree hooks, so agents run `wt switch`/`wt remove` themselves.
     worktrunkMarkers = pkgs.runCommand "pi-worktrunk-markers" {} ''
       mkdir $out
       cp ${pkgs.unstable.worktrunk.src}/dev/pi-extension.ts $out/worktrunk.ts
