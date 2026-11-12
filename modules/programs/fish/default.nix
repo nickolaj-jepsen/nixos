@@ -49,7 +49,7 @@
         man.generateCaches = false;
 
         # Rich argument completions for kubectl/gh/docker/git/systemctl; composes
-        # with the bespoke ds and wt completions (carapace defers to existing fish
+        # with the bespoke ds/wt completions (carapace defers to existing fish
         # completions).
         carapace = {
           enable = true;
@@ -70,8 +70,7 @@
 
           interactiveShellInit = ''
             ${builtins.readFile ./k8s.fish}
-            # worktrunk's wrapper, so `wt switch` can cd this shell.
-            source ${pkgs.runCommand "wt-fish-init" {} "HOME=$TMPDIR ${pkgs.unstable.worktrunk}/bin/wt config shell init fish > $out"}
+            ${builtins.readFile ./wt.fish}
 
             # fzf.fish: reuse the delta diff highlighter.
             # Leave Ctrl-R to fish's native history (--history= disables fzf.fish's

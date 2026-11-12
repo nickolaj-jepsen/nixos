@@ -96,13 +96,6 @@ in {
     parentPath = "${extensions}/parent";
     # A plugin of agent-tools whose pi half is its own package (agent-tools/README.md).
     answerPath = "${pkgs.agent-tools}/plugins/answer";
-    # worktrunk's activity markers (🤖/💬 in `wt list`), from the source of the `wt`
-    # on PATH. pi has no worktree hooks, so agents run `wt switch`/`wt remove` themselves.
-    worktrunkMarkers = pkgs.runCommand "pi-worktrunk-markers" {} ''
-      mkdir $out
-      cp ${pkgs.unstable.worktrunk.src}/dev/pi-extension.ts $out/worktrunk.ts
-      echo '{"name": "worktrunk-markers", "private": true, "pi": {"extensions": ["./worktrunk.ts"]}}' > $out/package.json
-    '';
     # One role pi's reader can't parse stops pi-subagents from loading at all.
     agentRoles = pkgs.runCommand "pi-agent-roles" {nativeBuildInputs = [pkgs.nodejs];} ''
       for role in ${./agents}/*.md; do
@@ -117,10 +110,9 @@ in {
       cp -r ${./agents} $out
     '';
     # Children keep core/ (only its router registers vm/*) and the permission system.
-    # A child's exit would clear the marker of the session that spawned it.
     childExcludedPackages =
       map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages)
-      ++ [parentPath answerPath "${worktrunkMarkers}"];
+      ++ [parentPath answerPath];
     # agent-context.md is shared by every agent; keep it agent-agnostic. Children
     # read these rules too and hold no agent tools, so no delegation how-to here.
     rules = builtins.readFile ../agent-context.md;
@@ -171,7 +163,7 @@ in {
       # system prompt's section order.
       packages =
         map packagePath thirdPartyPackages
-        ++ [parentPath answerPath "${extensions}/core" "${worktrunkMarkers}"];
+        ++ [parentPath answerPath "${extensions}/core"];
       # Empty on purpose: arrays replace wholesale, reverting `pi config` toggles.
       extensions = [];
     };

@@ -365,7 +365,7 @@ export const createGit = (chrome: ChromeState) => {
 
     const spans: { text: string; color: ThemeColor; attached?: boolean }[] = [];
     spans.push({ text: glyph, color: stateColor });
-    // worktrunk names a worktree's folder after its branch, so the name only earns
+    // `wt` names a worktree's folder and its branch alike, so the name only earns
     // its columns when it says something the path does not.
     if (mode === "full" && name && name !== basename(activeCwd)) {
       spans.push({ text: name, color: "muted" });

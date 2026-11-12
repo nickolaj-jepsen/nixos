@@ -122,6 +122,7 @@
             coreutils
           ];
         })
+        pkgs.wt
       ]
       ++ lib.optional config.fireproof.dev.enable agent-note-open
       # Every dev host: a remote shell without a GUI editor opens nvim.

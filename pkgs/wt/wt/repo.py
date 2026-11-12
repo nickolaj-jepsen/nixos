@@ -1,0 +1,285 @@
+"""Repository identity, working-tree layout, discovery and the repo-wide lock."""
+
+from __future__ import annotations
+
+import fcntl
+import hashlib
+import os
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+from .git import ProbeError, die, normpath, probe, run
+
+LOCK_WAIT_SECONDS = float(os.environ.get("WT_LOCK_WAIT_SECONDS") or 10.0)
+
+
+class RepoError(Exception):
+    """A repository is there but git cannot say enough about it to list or enter it."""
+
+
+def worktree_root() -> str:
+    return normpath(os.environ.get("WT_WORKTREE_ROOT") or os.path.expanduser("~/worktrees"))
+
+
+@dataclass
+class Repo:
+    common: str
+    main: str
+    key: str
+    default: str
+    directory: str
+
+    @property
+    def marker(self) -> str:
+        return os.path.join(self.directory, ".wt-repo")
+
+    @property
+    def lock_path(self) -> str:
+        return os.path.join(self.common, "wt.lock")
+
+
+@dataclass
+class Located:
+    """A repository found under the worktree root: its `repo`, or the error that stopped identification."""
+
+    name: str
+    repo: Optional[Repo] = None
+    error: Optional[str] = None
+
+
+def discover_common(cwd: str) -> Optional[str]:
+    proc = run(
+        ["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    common = proc.stdout.strip()
+    return normpath(common) if common else None
+
+
+def default_branch(common: str) -> str:
+    proc = run(
+        ["git", "--git-dir", common, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
+        check=False,
+    )
+    if proc.returncode == 0 and proc.stdout.strip():
+        ref = proc.stdout.strip()
+        return ref[len("refs/remotes/origin/") :] if ref.startswith("refs/remotes/origin/") else ref
+    for branch in ("main", "master"):
+        if run(
+            ["git", "--git-dir", common, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"],
+            check=False,
+        ).returncode == 0:
+            return branch
+    raise RepoError("could not determine default branch (no origin/HEAD, no main, no master)")
+
+
+def registered_worktrees(common: str) -> list[dict]:
+    """Worktrees git has registered; raises ProbeError when git cannot list them."""
+    out = probe(None, "--git-dir", common, "worktree", "list", "--porcelain")
+    items: list[dict] = []
+    current: Optional[dict] = None
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            current = {"path": normpath(line[len("worktree ") :]), "branch": "", "head": "", "locked": False}
+            items.append(current)
+        elif current is None:
+            continue
+        elif line.startswith("HEAD "):
+            # The commit this checkout had, which is all a detached registration still knows.
+            current["head"] = line[len("HEAD ") :].strip()
+        elif line.startswith("branch "):
+            ref = line[len("branch ") :]
+            current["branch"] = ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
+        elif line == "detached":
+            current["branch"] = ""
+        elif line.startswith("locked"):
+            current["locked"] = True
+    return items
+
+
+def stale_worktrees(common: str) -> list[dict]:
+    """Registrations whose folder is gone; git keeps them until `worktree prune`.
+
+    They still show up in `registered_worktrees`, and a stale registration blocks both a new
+    checkout at its path and a branch deletion for its branch.
+    """
+    return [item for item in registered_worktrees(common) if not os.path.isdir(item["path"])]
+
+
+def repo_from_common(common: str, *, create: bool = True) -> Repo:
+    """The repository at `common`; raises RepoError instead of exiting when git cannot identify it."""
+    try:
+        registered = registered_worktrees(common)
+    except ProbeError as error:
+        raise RepoError(str(error)) from None
+    if not registered:
+        raise RepoError(f"no worktrees registered for {common}")
+    main = registered[0]["path"]
+    key = os.path.basename(os.path.dirname(common))
+    return Repo(
+        common=common,
+        main=main,
+        key=key,
+        default=default_branch(common),
+        directory=worktree_directory(common, key, create=create),
+    )
+
+
+def current_repo(cwd: Optional[str] = None, *, create: bool = True) -> Repo:
+    common = discover_common(cwd or os.getcwd())
+    if not common:
+        die("not inside a git repository")
+    try:
+        return repo_from_common(common, create=create)
+    except RepoError as error:
+        die(str(error))
+
+
+def _owner_of_dir(directory: str) -> Optional[str]:
+    """The repo common dir claiming `directory`, or None when it holds no git worktree."""
+    found: Optional[str] = None
+    try:
+        entries = sorted(os.scandir(directory), key=lambda e: e.name)
+    except OSError:
+        return None
+    for entry in entries:
+        if not entry.is_dir(follow_symlinks=False):
+            continue
+        dotgit = os.path.join(entry.path, ".git")
+        if not os.path.exists(dotgit):
+            continue
+        common = discover_common(entry.path)
+        if common is None:
+            continue
+        if found is None:
+            found = common
+        elif found != common:
+            # Two repositories in one directory is not ours to resolve.
+            return common
+    return found
+
+
+def worktree_directory(common: str, key: str, *, create: bool = True) -> str:
+    """The folder holding this repository's worktrees.
+
+    `create=False` answers where it would be without making it: a listing reports the layout it
+    finds, and writing a marker from a read-only verb is the layout it would report next time.
+    """
+    root = worktree_root()
+    base = os.path.join(root, key)
+    if os.path.exists(base):
+        marker = os.path.join(base, ".wt-repo")
+        recorded = None
+        if os.path.exists(marker):
+            try:
+                recorded = normpath(Path(marker).read_text().strip())
+            except OSError:
+                recorded = None
+        if recorded == common:
+            return base
+        owner = recorded or _owner_of_dir(base)
+        if owner is None:
+            # Legacy plain directories belong to this repo; record the claim.
+            if create:
+                try:
+                    Path(marker).write_text(common + "\n")
+                except OSError:
+                    pass
+            return base
+        if owner != common:
+            suffix = hashlib.sha256(common.encode()).hexdigest()[:8]
+            base = os.path.join(root, f"{key}-{suffix}")
+    if not create:
+        return base
+    try:
+        os.makedirs(base, exist_ok=True)
+        marker = os.path.join(base, ".wt-repo")
+        if not os.path.exists(marker):
+            Path(marker).write_text(common + "\n")
+    except OSError:
+        pass
+    return base
+
+
+def repos_under_root() -> list[Located]:
+    """Every repository with a folder under the worktree root, each with the error that blocked it."""
+    root = worktree_root()
+    repos: list[Located] = []
+    if not os.path.isdir(root):
+        return repos
+    for entry in sorted(os.scandir(root), key=lambda e: e.name):
+        if not entry.is_dir(follow_symlinks=False):
+            continue
+        marker = os.path.join(entry.path, ".wt-repo")
+        if not os.path.exists(marker):
+            continue
+        try:
+            recorded = Path(marker).read_text().strip()
+        except OSError as error:
+            repos.append(Located(name=entry.name, error=f"could not read {marker}: {error}"))
+            continue
+        if not recorded:
+            # normpath('') is the cwd, which would pass for a repository that is not there.
+            repos.append(Located(name=entry.name, error=f"{marker} is empty"))
+            continue
+        common = normpath(recorded)
+        if not os.path.isdir(common):
+            # The checkout folders are still there, holding whatever they hold: not a clean listing.
+            repos.append(Located(name=entry.name, error=f"{marker} names {common}, which no longer exists"))
+            continue
+        try:
+            repo = repo_from_common(common, create=False)
+        except RepoError as error:
+            # Still report the repository: a listing must say what it could not read, not skip it.
+            repos.append(Located(name=entry.name, error=str(error)))
+            continue
+        repos.append(Located(name=repo.key, repo=repo))
+    return repos
+
+
+# ---------------------------------------------------------------------------
+# Locking
+
+
+class RepoLock:
+    def __init__(self, repo: Repo):
+        self.repo = repo
+        self.handle = None
+
+    def __enter__(self):
+        path = self.repo.lock_path
+        try:
+            self.handle = open(path, "a+")
+        except OSError as error:
+            die(f"could not open lock {path}: {error}")
+        deadline = time.monotonic() + LOCK_WAIT_SECONDS
+        while True:
+            try:
+                fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    self.handle.seek(0)
+                    holder = (self.handle.read() or "").strip()
+                    self.handle.close()
+                    die(
+                        "another wt is mutating this repository"
+                        + (f" (pid {holder})" if holder else "")
+                    )
+                time.sleep(0.1)
+        self.handle.seek(0)
+        self.handle.truncate()
+        self.handle.write(str(os.getpid()))
+        self.handle.flush()
+        return self
+
+    def __exit__(self, *exc):
+        if self.handle:
+            try:
+                fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                self.handle.close()
