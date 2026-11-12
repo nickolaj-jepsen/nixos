@@ -336,3 +336,7 @@ _dev-setup-pi:
 [private]
 _dev-setup-claude:
     scripts/dev-setup-claude.sh
+
+# Re-records an agent-tools demo GIF in a live Claude Code session (agent-tools/README.md).
+demo name:
+    agent-tools/demos/record.sh {{ name }}

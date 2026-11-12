@@ -106,22 +106,27 @@
           runHook postInstall
         '';
       };
+    # A plugin of agent-tools: a thin hooks module over its `claude/` half and, when
+    # pi shares it, the harness-free `core/`, whose own tests ran in pkgs.agent-tools.
+    mkToolMod = name:
+      (mkModFrom name "${pkgs.agent-tools}/plugins/${name}").overrideAttrs {
+        installPhase = ''
+          runHook preInstall
+          mkdir -p $out
+          cp -r .claude-plugin hooks types claude $out/
+          if [ -d core ]; then
+            cp -r core $out/
+            rm -f $out/core/*.spec.ts
+          fi
+          runHook postInstall
+        '';
+      };
     spellfix = mkMod "spellfix";
     # Its button is spliced into the built-in you-should-know card by label; a
-    # card redesign only hides it, with a toast (mods/linear-issue).
-    linearIssue = mkMod "linear-issue";
+    # card redesign only hides it, with a toast (agent-tools/plugins/linear-issue).
+    linearIssue = mkToolMod "linear-issue";
     gitMenu = mkMod "git-menu";
-    # A plugin of agent-tools: a thin hooks module over its `claude/` half and the
-    # harness-free `core/` pi loads too, whose own tests ran in pkgs.agent-tools.
-    answer = (mkModFrom "answer" "${pkgs.agent-tools}/plugins/answer").overrideAttrs {
-      installPhase = ''
-        runHook preInstall
-        mkdir -p $out
-        cp -r .claude-plugin hooks types core claude $out/
-        rm $out/core/*.spec.ts
-        runHook postInstall
-      '';
-    };
+    answer = mkToolMod "answer";
 
     # ctrl+q presses spellfix's band button, borrowing an action; a single modified key
     # reaches a plugin Button only from the Global context.

@@ -103,35 +103,8 @@ Paths in the table that don't start with `skills/` or `pkgs/` are under
 
 ## agent-tools
 
-`agent-tools/` at the repo root holds the plugins both harnesses share, laid out to
-be split into a repository of its own. A feature is one folder,
-`agent-tools/plugins/<name>/`, which is itself the Claude Code plugin:
-
-- `core/` is harness-free TypeScript: one file, no imports, no Node and no DOM, so
-  Claude Code's hooks environment and pi both load it as it stands. Its tests are
-  `core/*.spec.ts`, run by vitest (`npm test` in `agent-tools/`) and by
-  `pkgs/agent-tools`, which every consumer builds from. `claude plugin test` runs
-  only `*.test.ts(x)`, so the two never see each other's.
-- `claude/` is the mod. `hooks/hooks.json` names `../claude/register.tsx`, so the
-  plugin's root holds only that manifest, `.claude-plugin/` and `types/`.
-- The pi half is still in `pi/extensions/parent/`, importing the core through a
-  symlink (`parent/lib/answer`) that the pi leaf replaces with a copy at build time.
-- No plugin imports the hub client. One that needs the hub is not a plugin.
-
-`answer` is the first: `core/forms.ts` finds the question round or pick list a turn
-ended on, steps a draft through it and writes the reply. Each harness holds the draft
-in its session (the mod in `$.state`, pi on the session branch), so nothing is shared
-between surfaces and nothing outlives the session but pi's branch entry.
-
-Traps the engine sets for this layout, none of which `tsc` reports:
-
-- The hooks module can't re-export `register` from another file: the engine reads
-  `on(...)` calls from the file `hooks.json` names. Point `hooks.json` at the real
-  module instead of writing a wrapper.
-- `types/index.d.ts` must be self-contained, with no `import`. It restates the shapes
-  `core/` owns; the module assigns the core's values to them, so `tsc -p` flags a drift.
-- vitest takes the nearest `tsconfig.json`, and the plugin's extends types only
-  `just dev-setup` lays. `core/tsconfig.json` is there to be nearer.
+`agent-tools/README.md` covers the plugins both harnesses share: their layout, the
+traps it sets and the demo recordings.
 
 ## Notes
 

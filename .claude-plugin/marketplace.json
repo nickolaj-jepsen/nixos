@@ -20,7 +20,7 @@
     },
     {
       "name": "linear-issue",
-      "source": "./modules/programs/claude-code/mods/linear-issue"
+      "source": "./agent-tools/plugins/linear-issue"
     },
     {
       "name": "git-menu",

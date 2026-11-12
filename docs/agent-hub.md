@@ -9,7 +9,7 @@ own word, through its hooks, its extension or its registry entry, and so is ever
   per working one, and is a quick way to them.
 - The popout can allow or deny a Claude Code permission prompt. Anything else you
   answer in the agent's own terminal, where a round of questions gets a form the hub
-  has no part in (`agent-tools/plugins/answer`, `docs/agents.md`).
+  has no part in (`agent-tools/plugins/answer`, `agent-tools/README.md`).
 - Elsewhere (a server, the Mac) the hub runs headless: no windows, and it polls
   the registry instead of watching it.
 - Its socket is `$XDG_RUNTIME_DIR/agent-hub/hub.sock`, or

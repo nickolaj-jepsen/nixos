@@ -36,6 +36,8 @@ must be `git add`ed or flake eval ignores them.
 - `docs/modules.md` — creating/editing anything under `modules/` or `pkgs/`.
 - `docs/agents.md` — `skills/`, `modules/programs/{pi,claude-code}`,
   `pkgs/pi-*`, and the agent-skills and agent-lsp leaves.
+- `agent-tools/README.md` — anything under `agent-tools/`: its plugins' layout,
+  traps and demo recordings.
 - `docs/hosts.md` — anything under `hosts/`, adding a host, or making an app
   leaf work on darwin.
 - `docs/secrets.md` — anything under `secrets/`.

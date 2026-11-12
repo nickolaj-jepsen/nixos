@@ -8,9 +8,7 @@ published through this repo's marketplace (`.claude-plugin/marketplace.json`).
 ```bash
 claude plugin marketplace add nickolaj-jepsen/nixos
 claude plugin install spellfix@nickolaj-jepsen
-claude plugin install linear-issue@nickolaj-jepsen
 claude plugin install git-menu@nickolaj-jepsen
-claude plugin install answer@nickolaj-jepsen
 ```
 
 My nix build validates and tests each mod against the Claude Code version it
@@ -28,8 +26,6 @@ Code update can break one.
   the band button above the prompt; to open it from the keyboard, bind
   `app:toggleDiffNoiseFilter` in the `Global` context of
   `~/.claude/keybindings.json` (I use `ctrl+q`), which works on any draft.
-- **linear-issue**: drafts a Linear issue for approval from the You should know
-  card or `/linear`. Needs a Linear MCP server connected and signed in.
 - **git-menu**: `/git` opens the checkout's repository, branch, commit or pull
   request on GitHub, GitLab or Codeberg, links the compare page for a new pull
   request, and copies the branch, SHA or PR URL; `/open` hands the checkout to
@@ -39,53 +35,6 @@ Code update can break one.
   window and tells the model how to read your comments back. Rows that
   can't run say why. Needs `git`, `gh` for the pull request, and `tuicr` and
   Ghostty for `/open diff`.
-- **answer** (in `agent-tools/plugins/answer`, with the pi half's shared core):
-  when a turn ends on a round of questions or a numbered pick
-  list, a row in the band above the prompt offers a form for it, drawn there
-  too (a pane would dock beside the transcript on a wide terminal). A rule
-  parts it from the chat and carries every question's label: which are
-  answered, which is shown, and a click to go to one. Under it is one
-  question per screen, its options as numbered entries and a last one to
-  write your own answer in, which becomes a field when picked. A number, Enter or a click answers and asks for a note
-  right under the answer; Enter there, empty or not, goes on to the next
-  question unanswered, or to the review. `y` takes the recommendation,
-  whatever it names, and `m` lets several options be one answer
-  (`Q3: A, C`); a recommendation that names several starts that way. A
-  recommendation beside lettered options shows under them with its reason.
-  `h`, `l`, `s` and `r` go back, on, skip and to the review, which writes
-  the reply you would have typed into the prompt, above any draft, for you
-  to send: one line per answer, a note indented under its own. The mouse
-  works alone: an option's detail lines pick it too, a double click on an
-  answer goes on to the next question, and a button that leaves a question
-  saves what a field holds. (The terminal takes the second click as a word
-  to select, which is how the mod sees it: one on the same word as your last
-  selection goes unseen, and the word lands on the clipboard.) The band
-  shares its half of the screen with the prompt box. An open form stands as
-  tall as its tallest question on every one of them, its keys on the last
-  row; it has the band to itself (what the mods beneath draw there waits,
-  so list this mod first in `CLAUDE_CODE_PLUGIN_DIRS`) and cuts a long
-  question body to the rows left after the entries. With the
-  `scrollTranscript` option on (`pluginConfigs.answer.options`, off by
-  default) the body is left out of the form and the transcript scrolls to
-  it. The engine scrolls to a row's top and never into one, so each
-  question past the first is then a transcript row of its own under the
-  message, which draws only up to them, and the turn's closing line
-  (`Worked for 3s`) moves under the last; a resumed session gets those
-  rows again at the transcript's end. Off the
-  terminal (the desktop app, VS Code, mobile) the same form draws with the
-  surface's own controls: no rules of dashes, a close control on the strip,
-  the next step as the primary button, an option's detail on its own line,
-  and the whole body whatever the band's rows. A draft of several
-  lines that leaves it short of that height is set aside while it is open
-  and handed back when it folds. A second fill takes the first one's
-  place. A turn a background task wakes leaves the form and its answers
-  alone; only your own send drops them. A mod can't take the keyboard, so
-  three bindings in `~/.claude/keybindings.json` make it usable from the
-  keys: `abovePrompt:focus` in the `Chat` context (I use `alt+a`) lands on
-  the row, where Enter opens the form; `j`/`k` on
-  `abovePrompt:next`/`abovePrompt:previous` in `AbovePrompt` move between
-  entries; and `escape` on `abovePrompt:previous` in `AbovePromptInput`
-  steps out of a field onto the form instead of out to the prompt.
-  `/answer` or a click opens it too, but leaves the keys with the prompt,
-  where only the digits reach it. It needs nothing installed: the parser and
-  the draft are its own, kept in the session.
+
+`answer` and `linear-issue` live in [`agent-tools/`](../../../../agent-tools/README.md),
+with their own install lines and demos.
