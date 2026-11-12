@@ -195,6 +195,17 @@
           ];
         })
       ]
+      # The niri scratch note; zeditor comes from PATH, which only a dev host has.
+      ++ lib.optionals (config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux) [
+        (makeScript {
+          path = ./zed-scratch.bash;
+          runtimeInputs = with pkgs; [
+            niri-unstable # match the running compositor's IPC
+            nirius
+            coreutils
+          ];
+        })
+      ]
       # Shadows the system xdg-open (per-user profile precedes it on PATH) so Ghostty link clicks land in the editor.
       ++ lib.optionals desktopShim [
         (lib.hiPrio (pkgs.writeShellApplication {

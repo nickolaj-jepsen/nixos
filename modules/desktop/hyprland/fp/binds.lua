@@ -28,13 +28,13 @@ for _, b in ipairs({
 end
 
 for _, b in ipairs({
-    { "N", "notifications toggle", "Toggle Notification Center" },
+    { "N", "notepad toggle", "Toggle Notepad" },
     { "V", "clipboard toggle", "Toggle Clipboard Manager" },
     { "space", "spotlight toggle", "Toggle Application Launcher" },
     { "semicolon", 'spotlight toggleQuery ":"', "Toggle Emoji Picker" },
     { "P", "powermenu toggle", "Toggle Power Menu" },
     { "B", fp.dms_b, "Toggle Agent Hub / Dashboard" },
-    { "SHIFT + N", "notepad toggle", "Toggle Notepad" },
+    { "SHIFT + N", "notifications toggle", "Toggle Notification Center" },
     { "SHIFT + comma", "settings focusOrToggle", "Toggle DMS Settings" },
     { "SHIFT + Escape", "processlist focusOrToggle", "Toggle Process List" },
     { "SHIFT + I", "inhibit toggle", "Toggle Keep-Awake (Idle Inhibit)" },
