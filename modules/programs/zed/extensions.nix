@@ -47,6 +47,9 @@
         package = fpLib.mkDarwinGuiPackage pkgs pkgs.unstable.zed-editor;
         installRemoteServer = true;
 
+        # The list below is the whole set; no prompts to add more per file type.
+        userSettings.suggest_extensions = false;
+
         extensions = [
           # Languages
           "nix"
