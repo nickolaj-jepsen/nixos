@@ -469,6 +469,10 @@ in {
         recursive = true;
       };
 
+      # Its config modal saves yolo and log toggles by renaming over this file; over a
+      # store link that leaves a plain file the next activation refuses to clobber.
+      # Writable instead, reset to Nix's on activation (modules/base/writable-configs.nix).
+      fireproof.writableConfigs.pi-permissions.file = ".pi/agent/extensions/pi-permission-system/config.json";
       home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
         # Otherwise bg_run is an ordinary extension tool and skips the bash rules below.
         shellTools.bg_run.commandArgument = "command";
