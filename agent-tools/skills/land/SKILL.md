@@ -1,8 +1,8 @@
 ---
 name: land
-description: Take finished work to landed commits — shape the dirty tree into a few commits, run the repo's checks, stop at a gate for review, then land with `wt land`, locally or as a PR (draft, ready for review, or merged on green). Works from a worktree, from a branch checked out in the primary checkout, and from the primary checkout's default branch, where landing means pushing it. Use when the user asks to land, ship, finish, push, merge, or open a PR.
+description: Take finished work to landed commits — shape the dirty tree into a few commits, run the repo's checks, stop at a gate for review, then land with `wt land`, locally or as a PR (draft, ready for review, or merged on green). An ending named in the request (`local`, `pr`, `pr on green`, …) is used without asking. Works from a worktree, from a branch checked out in the primary checkout, and from the primary checkout's default branch, where landing means pushing it. Use when the user asks to land, ship, finish, push, merge, or open a PR.
 disable-model-invocation: true
-argument-hint: "[worktree-or-branch]"
+argument-hint: "[local|push|pr|draft|pr on green] [worktree-or-branch]"
 ---
 
 # land
@@ -25,6 +25,22 @@ The mode comes from where the work is checked out, never from memory.
 - No argument means the checkout holding cwd. An argument names a worktree, or the branch checked out in the primary checkout.
 - `<default>` is `wt`'s: the branch `origin/HEAD` names, else `main`, else `master`.
 
+## Ending from the request
+
+The request (the words after `/land`, or what the user asked for) can name the ending; the rest of it names the target.
+
+| Words                                                   | Ending                                                     |
+| ------------------------------------------------------- | ---------------------------------------------------------- |
+| `local`, `merge`                                        | land local (root main has nothing to land locally: say so) |
+| `push`                                                  | push main, from root main only                             |
+| `pr`                                                    | PR for review: opens it, never merges                      |
+| `draft`                                                 | draft PR                                                   |
+| `pr on green`, `green`, `automerge`, "merge when green" | PR merged on green                                         |
+
+- Only an explicit ask merges a PR: `pr` alone opens one and stops.
+- A named ending skips the gate's question: print the block and land. It still stops at the gate when checks are red, when commits not from this task would land, or when root main needs `rebase and push main`.
+- "Land it" with no ending named asks at the gate.
+
 ## Spine
 
 1. **Resolve the target and its mode** (see Modes).
@@ -32,20 +48,20 @@ The mode comes from where the work is checked out, never from memory.
 3. **Shape commits** (see Commits) when the tree is dirty. In root main they go straight onto `<default>`.
 4. **Fold fixups** if any subject starts with `fixup!` or `squash!`: `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <merge-base>`. In root main only over unpushed commits.
 5. **Run the repo's checks** (see Checks).
-6. **Gate** (see Gate). Nothing is landed before the user answers.
+6. **Gate** (see Gate), unless the request named the ending (see Ending from the request). Otherwise nothing is landed before the user answers.
 7. **End** with one `wt land` (see Endings). Whenever it names a live process in a checkout it moved (a fast-forward, a rebase, or the root switching branch), tell the session there what changed (pi `send_message`, Claude `SendMessage`).
 8. **Report** what landed, what was left behind, and what `wt land` said about the worktree or the root's branch.
 
 ## Gate
 
 - Print the block, then ask. Use the harness's question tool when it has one (pi `ask_user_question`, Claude `AskUserQuestion`); otherwise end the turn with `Reply with one of: …`.
-- Ambiguous answers ("ok", "sure") are not consent, and an earlier "just land it" does not skip the gate.
+- Ambiguous answers ("ok", "sure") are not consent, and an earlier "just land it" names no ending, so it does not skip the gate.
 
 ```
 LAND <branch> → <default>
 commits (2)
-  108be2bb fix(wt): keep the worktree after landing
-  5c1a2f30 feat(wt): name every verb's preconditions in --help
+  108be2bb fix(statusline): keep the branch name beside a worktree path
+  5c1a2f30 feat(land): name every ending's commands
 diff     8 files, +390 −66
 checks   just fmt ✓ · just build desktop ✓ · just check ✓
 base     local main 2 ahead / 0 behind origin/main
@@ -72,9 +88,10 @@ Nothing is landed until you answer.
 
 ## Commits
 
-- One commit per coherent unit, **capped at about five**; one minimum. More than that means the task should have been split: say so instead of producing a dozen commits.
+- **Split by concern, not by file:** a refactor, the feature built on it, an unrelated fix, and formatting or generated churn each get their own commit, ordered so each builds on the last. **Capped at about five**; one minimum. More than that means the task should have been split: say so instead of producing a dozen commits.
 - Stage **only paths this task touched**. Anything else goes in the block as `left: N unrelated paths, not mine`. No `git add -A`. This matters most in the primary checkout, which other sessions share.
-- Subjects ≤72 characters, matched to the last ~20 subjects or `AGENTS.md`; Conventional Commits when the repo has no visible style. Body prose only when the why isn't obvious.
+- **Style:** the repo's first (`AGENTS.md`, `CONTRIBUTING.md`, a commitlint config, the last ~20 subjects), else Conventional Commits (`type(scope): summary`). Imperative subject ≤72 characters; a body only for a why the diff doesn't show.
+- Leave out secrets, debug output and scratch files.
 - Do not rewrite existing commits. The two exceptions are folding fixups and an explicit "squash this branch".
 - Amend only while unpushed. After a push, a fix is a new commit; `wt` never force-pushes.
 - A tip commit with the trailer `Wt-Wip: 1` is what `wt close` saved from an unfinished tree; `wt land` refuses it. Reshape it into real commits (`git reset --soft HEAD~`, then commit) before the gate.
