@@ -28,7 +28,7 @@
         usePathObfuscation: true,
         deviceAndVaultName: $user,
         syncInternalFiles: false,
-        # Customization Sync; applying on a Nix host would hit the read-only store links, so only the phone pulls.
+        # Customization Sync; on a Nix host what it applies is reset at the next login (writable-configs), so only the phone pulls.
         usePluginSync: true,
         usePluginSyncV2: true,
         # PREFERRED_SETTING_SELF_HOSTED: the wizard applies it to new vaults, but a flat seed is migrated as an old one.

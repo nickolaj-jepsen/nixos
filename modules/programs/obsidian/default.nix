@@ -253,6 +253,16 @@
       home.file = lib.listToAttrs (lib.concatMap (vault:
         map (path: lib.nameValuePair "${vaultCfg.${vault}.target}/.obsidian/${path}" {force = true;}) (managedPaths vault))
       (lib.attrNames vaultCfg));
+
+      # Obsidian rewrites these on every settings toggle: writable, reset to Nix's on
+      # activation (modules/base/writable-configs.nix), as obsidian-<vault>-<file>.
+      fireproof.writableConfigs = lib.listToAttrs (lib.concatMap (vault:
+        map (file:
+          lib.nameValuePair "obsidian-${vault}-${lib.removeSuffix ".json" file}" {
+            file = "${vaultCfg.${vault}.target}/.obsidian/${file}";
+          })
+        (lib.filter (lib.hasSuffix ".json") (managedPaths vault)))
+      (lib.attrNames vaultCfg));
     };
   };
 

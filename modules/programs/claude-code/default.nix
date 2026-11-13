@@ -232,9 +232,10 @@
     # output-styles) would otherwise silently never reach the work profile.
     # `plugins` and `sessions` are shared mutable state, so they are always
     # mirrored; one session registry lets both profiles' sessions see each other
-    # as peers and reach agent-hub.
+    # as peers and reach agent-hub. settings.json and keybindings.json are not:
+    # Claude writes them, so each profile gets its own writable copy (below).
     mirroredNames =
-      ["settings.json" "CLAUDE.md" "plugins" "sessions" "keybindings.json"]
+      ["CLAUDE.md" "plugins" "sessions"]
       ++ lib.optional (ccfg.skills != {}) "skills"
       ++ lib.optional (ccfg.outputStyles != {}) "output-styles"
       ++ lib.concatMap (name: lib.optional (ccfg.${name} != {} || ccfg."${name}Dir" != null) name)
@@ -250,23 +251,28 @@
     home.file = lib.mkMerge [
       {
         ".local/bin/claude".source = claudeEntry;
-        # Claude Code watches settings.json's real parent dir. At the store root (upstream's
-        # jsonFormat.generate) every new store path made each session rescan all of /nix/store.
-        # Upstream's entry can't be disabled (HM's conflict check ignores enable), so park it aside.
-        "${ccfg.configDir}/settings.json".target = lib.mkForce "${ccfg.configDir}/.settings.upstream.json";
-        claude-settings-nested = {
-          target = "${ccfg.configDir}/settings.json";
-          source = let
-            upstream = config.home.file."${ccfg.configDir}/settings.json".source;
-          in "${pkgs.runCommand "claude-code-settings" {} "mkdir $out && cp ${upstream} $out/settings.json"}/settings.json";
-        };
-        # Replaces any hand-made file: bindings live in `keybindings` above.
-        ".claude/keybindings.json" = {
-          text = builtins.toJSON keybindings;
-          force = true;
-        };
+        # Bindings live in `keybindings` above.
+        ".claude/keybindings.json".text = builtins.toJSON keybindings;
       }
+      (lib.mkIf cfg.work.enable {
+        ".claude-work/settings.json".source = config.home.file."${ccfg.configDir}/settings.json".source;
+        ".claude-work/keybindings.json".source = config.home.file.".claude/keybindings.json".source;
+      })
       workFiles
+    ];
+
+    # Writable for /config, /model and "always allow", reset to Nix's on activation
+    # (modules/base/writable-configs.nix). A real file in ~/.claude also keeps Claude
+    # Code's watch on settings.json's parent dir off /nix/store.
+    fireproof.writableConfigs = lib.mkMerge [
+      {
+        claude-settings.file = "${ccfg.configDir}/settings.json";
+        claude-keybindings.file = ".claude/keybindings.json";
+      }
+      (lib.mkIf cfg.work.enable {
+        claude-work-settings.file = ".claude-work/settings.json";
+        claude-work-keybindings.file = ".claude-work/keybindings.json";
+      })
     ];
 
     home.activation.hunspellPersonalDictionary = lib.hm.dag.entryAfter ["writeBoundary"] ''
