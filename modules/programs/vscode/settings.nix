@@ -10,8 +10,19 @@
         "editor.defaultFormatter" = formatter;
       };
     };
+    # Where home-manager's vscode module puts the default profile.
+    userDir =
+      if pkgs.stdenv.isDarwin
+      then "${config.home.homeDirectory}/Library/Application Support/Code/User"
+      else "${config.xdg.configHome}/Code/User";
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+      # Writable for the settings UI, reset to Nix's on activation (modules/base/writable-configs.nix).
+      fireproof.writableConfigs = {
+        vscode-settings.file = "${userDir}/settings.json";
+        vscode-keybindings.file = "${userDir}/keybindings.json";
+      };
+
       programs.vscode.profiles.default = {
         enableUpdateCheck = true;
         enableExtensionUpdateCheck = true;

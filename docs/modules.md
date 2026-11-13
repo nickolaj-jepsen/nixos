@@ -85,6 +85,23 @@ the new ones too. Name the binary the config installs (`zeditor`, `claude`,
 - User units are not reloaded, so a systemd service change is not covered.
 - Linux only (bubblewrap); use `just switch` on darwin.
 
+## Configs the app writes to
+
+A generated config the app's own UI edits (zed, VSCode, DMS) goes in
+`fireproof.writableConfigs.<name>.file = "<home.file attribute name>"`
+(`modules/base/writable-configs.nix`) instead of HM's read-only symlink or an
+app module's own "mutable" merge. It is installed as a plain file, and
+activation (every switch, and every login on NixOS desktops, since HM runs as a
+user service there) resets it to exactly Nix's version. Edits made in between
+are kept: `config-reset log`, `config-reset show <name>`, and `config-reset diff`
+for the edits not reset yet. Port what is worth keeping into the Nix config.
+
+- The key is HM's: an `xdg.configFile."zed/settings.json"` entry is
+  `"${config.xdg.configHome}/zed/settings.json"`.
+- Turn off the app module's own mutable mode (zed's `mutableUserSettings`)
+  so it emits a `home.file` entry to take over.
+- The reset writes in place, so a running app's file watch sees it and reloads.
+
 ## Snippets
 
 - Theme: `let c = config.fireproof.theme.colors; in { background = c.bg; border = "#${c.accent}"; }`

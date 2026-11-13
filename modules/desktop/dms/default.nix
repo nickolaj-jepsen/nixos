@@ -100,6 +100,12 @@
         };
       };
 
+      # Writable for the settings UI, reset to Nix's on activation (modules/base/writable-configs.nix).
+      fireproof.writableConfigs = {
+        dms-settings.file = "${config.xdg.configHome}/dms/settings.json";
+        dms-plugin-settings.file = "${config.xdg.configHome}/dms/plugin_settings.json";
+      };
+
       # The shell belongs beside niri: app.slice is oomd's kill pool.
       systemd.user.services.dms.Service.Slice = "session.slice";
 

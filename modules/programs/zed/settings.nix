@@ -15,7 +15,18 @@
     bufferFontSize = 14;
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
+      # Writable for the settings UI, but reset to exactly this on activation
+      # (modules/base/writable-configs.nix). HM's own mutable mode deep-merges
+      # instead, so a key dropped here lingered in the live file.
+      fireproof.writableConfigs = {
+        zed-settings.file = "${config.xdg.configHome}/zed/settings.json";
+        zed-keymap.file = "${config.xdg.configHome}/zed/keymap.json";
+      };
+
       programs.zed-editor = {
+        mutableUserSettings = false;
+        mutableUserKeymaps = false;
+
         userSettings = {
           # General
           # nixpkgs pins the Linux build; the darwin cask updates itself (brew upgrade skips it).
