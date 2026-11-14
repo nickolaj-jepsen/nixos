@@ -1,0 +1,19 @@
+{
+  "name": "@nickolaj-jepsen/transcript-tweaks",
+  "version": "0.1.0",
+  "description": "A rule before each assistant reply, and collapsed tool results drawn as one line",
+  "keywords": [
+    "pi-package"
+  ],
+  "type": "module",
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./pi/index.ts"
+    ]
+  }
+}

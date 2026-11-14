@@ -109,6 +109,16 @@ Options (`claude plugin configure answer`):
 Load it first in `CLAUDE_CODE_PLUGIN_DIRS`: an open form takes the band above the
 prompt to itself.
 
+### transcript-tweaks
+
+pi only. Two changes to how the transcript reads; the session you started has them,
+subagents don't.
+
+- A `▌` rule in front of each assistant reply that has text.
+- A collapsed tool result is one line: status, duration, size and, for a shell
+  command, the line it ended on. `edit`, `write`, failures, streaming output and
+  expanded results keep pi's own rendering.
+
 ## Skills
 
 ### Plan, build and ship

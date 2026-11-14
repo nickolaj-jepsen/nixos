@@ -83,6 +83,7 @@ in {
     # `children` loads it in subagents too; otherwise only the session you started has it.
     piPlugins = {
       answer.children = false;
+      transcript-tweaks.children = false;
     };
     pluginNames = lib.attrNames piPlugins;
     pluginPath = name: "${pkgs.agent-tools}/plugins/${name}";

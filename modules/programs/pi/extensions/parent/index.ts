@@ -8,8 +8,6 @@ import aliases from "./aliases.ts";
 import bg from "./bg.ts";
 import chrome from "./chrome.ts";
 import claudePeers from "./claude-peers.ts";
-import condense from "./condense.ts";
-import gutter from "./gutter.ts";
 import modelLabels from "./model-labels.ts";
 import questions from "./questions.ts";
 import notify from "./notify.ts";
@@ -24,8 +22,6 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["bg", bg],
   ["chrome", chrome],
   ["claude-peers", claudePeers],
-  ["condense", condense],
-  ["gutter", gutter],
   ["model-labels", modelLabels],
   ["questions", questions],
   ["notify", notify],
