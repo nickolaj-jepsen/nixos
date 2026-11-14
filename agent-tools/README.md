@@ -161,8 +161,8 @@ Unfinished, and not ready for anyone else to use. Their frontmatter says `status
 - [brainstorm](skills/brainstorm/): finds an approach for a goal that has none yet.
 - [ideate](skills/ideate/): ranked, verified improvement ideas for a repo or one area of it.
 - [tour](skills/tour/): walks you through a PR or a stack of them, one PR at a time.
-- [retro](skills/retro/): finds what went wrong in one agent session and fixes the cause.
-- [mine](skills/mine/): improves a skill, tool or hook from how its past runs went.
+- [retro](skills/retro/): improves a skill, tool or doc from what bothered you in one agent session.
+- [mine](skills/mine/): answers a question about how your agents have been working from past sessions, and improves what's behind it.
 - [windows-vm](skills/windows-vm/): drives a libvirt Windows guest with screenshots, keys and PowerShell.
 
 ## Development

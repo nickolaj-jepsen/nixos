@@ -1,165 +1,74 @@
 ---
 name: mine
-description: Improve a skill, tool, CLI or hook from how it actually went in your past Claude Code and pi sessions. Findings are routed to /brainstorm, /grill-me or building them.
+description: Answer a question or complaint about how your agents have been working, from your past Claude Code and pi sessions, then improve the skill, tool, CLI, hook, agent instructions or harness behind it.
 disable-model-invocation: true
-argument-hint: "<target>"
+argument-hint: "<question, complaint or target>"
 metadata:
   status: in-progress
 ---
 
-This skill finds what to change in a target and why, from how it went in past sessions.
+The user has a hunch or a complaint about how their agents have been working, and the past transcripts hold the evidence: "the hub keeps announcing the wrong state", "why is it lazier in this repo?", "how well do the mod tools work?". Find out whether it's true, what causes it and what to change, then help change it.
 
-- The argument names a target: a skill, a pi extension or tool, a CLI, or a Claude Code hook or setting.
-- With no argument, ask for a target. To review one session across everything it touched, use `/retro`.
-- It writes no code unless the user picks findings to build at the end.
-- It writes exactly one file, the findings file (see The file), and ends with a chat summary.
+- The arguments are the question, in the user's words. They may name a target, a symptom, a repo or only a feeling. Say in a line what you take the question to be and which evidence you'll read, then go. Don't bend it into the nearest skill or tool when it's about something wider.
+- A bare name ("ideate") means: how has this been going, and what would improve it?
+- With no arguments, ask what to look at.
+- For one session, usually the current one, use `/retro`.
 
-## The reader
+## Evidence
 
-- `python3 <skill-dir>/scripts/sessions.py` (substitute this skill directory's absolute path) reads Claude Code, its work profile and pi transcripts, read-only.
-- `--help` lists its subcommands and flags, run windows and answer classes.
-- Each call scans every session, so it takes seconds to a minute.
+`python3 <skill-dir>/scripts/sessions.py` (substitute this skill directory's absolute path) reads Claude Code, its work profile and pi transcripts, read-only. `--help` has every flag. Each call scans every session, so it takes seconds to a minute.
+
+- `runs <matchers> [--since DATE] [--show IDS|all]`: a signal header, then one line per run of a skill, tool or command. `--show` prints runs condensed.
+- `work --path SUBSTR [--mention REGEX]`: your typed turns in the recent sessions that edited or discussed something. It shows what was decided and why, and the complaints already made.
+- `prompts [--cwd SUBSTR] [--grep REGEX] [--since DATE]`: the first prompt of every session, for questions about a repo or a kind of work that no matcher covers.
+- `session <id>`: one whole session condensed.
+
+Matchers, by what the question is about:
+
+- A skill: `--skill <name>`. A run lasts until another skill is invoked, so it often includes later work, and its error counts are pointers. `via` says whether it was typed or the model reached for it, `body` which copy ran, `ver` which commit's text.
+- A pi extension or tool: one `--tool` per tool name it registers (read its source). The header says how many sessions offered the tool and how many called it. Offered and never called is a description problem.
+- A CLI: `--cmd <binary>`, plus `--tool` for a harness tool that wraps it. `--help` calls and an error followed by a retry point at discoverability.
+- A hook, a setting or a symptom: `--text <regex>` on its distinctive output, such as a block message. A blocked call followed by a rephrased retry of the same intent is probably a false positive, and the same denial repeating suggests a missing allow rule.
+- A skill that asks questions: the header splits answers into recommended, other, custom and so on. A question nearly always answered with the recommendation is a decision to state instead of ask. One often answered custom is missing an option. One where another option often wins has the wrong recommendation.
+
+Transcripts are rarely the only evidence, and often not the fastest:
+
+- The target's own logs, source and docs. Read the docs page the repo's agent instructions point to before judging a system.
+- Its git history: when every run behind a problem predates the latest change, it may already be fixed.
+- Memories that mention it, which are corrections someone already wrote down.
+- A baseline. "Is it this repo?" or "is it this skill?" needs the same number from elsewhere before it means anything.
+- Prior art, when the user asks for it or the right approach is open.
+
+## Reading many runs
+
+With a handful of runs, read them yourself with `--show`. With more, take the most recent, keep a few from each version, and say how many you left unread. Hand batches of about eight to fresh subagents on a cheaper model (`model: "sonnet"` in Claude Code; pi's roles already lock one), and say how many you're starting.
+
+Give each one the question, its run ids, the reader command to run itself and the privacy rules below. Ask for notes in its reply and no files. Per run, what's worth asking for: the first point where it went worse than it should have, with its turn number, or "clean"; what the user did once the target's part was done; and what went wrong that wasn't the target's fault.
+
+A correction is the user redirecting, repeating themselves, rejecting an approach or interrupting. "Yes", "no" and a letter in an interview are answers.
+
+## From evidence to changes
+
+- Count. "7 of 20 runs" with their session ids is a finding, and one run is an anecdote: mention it, don't build on it. Rank by how many runs something hit and what it cost the user in corrections, interrupts and abandoned runs.
+- Look for desire paths as well as failures. A follow-up most runs share is a step the target could offer itself, and a tool-call sequence the agent works out again each time is a script to bundle.
+- Fix it where the cause is: the target's own text or scripts; the harness or an extension, through its extension points instead of patches to its built-ins; agent instructions or memory; the repo; the environment. A cause shared with other targets is not a fix to this one.
+- Prefer the cheapest change that holds, in roughly this order. Cutting or correcting the text that asked for the behaviour is nearly free. A tool or error message changed so the failure can't happen holds without anyone remembering it. A check or hook comes next, when the rule has no legitimate exceptions. New prose is last: every later session pays for it in context, and it is the first thing ignored. A rule that exists and keeps being broken needs a stronger level, and restating it louder won't help.
+- `work` shows earlier decisions. They are context, and when a change reverses one, say so.
+
+## Reply
+
+Answer the question first, in plain words, including "no, the data doesn't show that" when that's the answer. Then the findings, most consequential first, each with its count, a line of evidence and the change you'd make, and the one you'd start with. Use whatever shape fits the question, and say what you didn't read.
+
+Ask the user only what would change the conclusion, such as a run you can't interpret. Don't ask them to confirm labels or groupings.
+
+Then do what they say with it: build the picks in this session and run the repo's checks, look into the open ones, or hand a finding to another skill when they name one. Commit by the repo's own rules.
+
+Findings that won't all be handled in this session are worth a note: `findings/<target>.md` in the store of the project the target belongs to (the checkout sees the store as `.agents/store`), never committed, with each finding's evidence, change and status. When that file already exists this is a rerun: read it first, pass `--since <its date>` and update it in place.
 
 ## Privacy
 
-- Transcripts are private. Never write condensed transcript text to disk.
-- Never quote a secret, and quote a phrase rather than a passage.
-- Runs marked work profile, and memories under `~/.claude-work/`, are paraphrased, never quoted.
-- Every subagent brief repeats these rules.
+Transcripts are private.
 
-## The target
-
-Turn the target into matchers for `runs`, using the recipe for its kind. Before judging a specific system, read the docs page the repo's agent instructions point to for it.
-
-- Skill: `--skill <name>`.
-  - A run ends at the prompt that invokes another skill, so it often includes work done after the skill's own part. Its error and denial counts are therefore pointers, not verdicts.
-  - `via` says whether you asked for the skill or the model reached for it.
-  - The `body` path shows which copy ran: the repo's deployed skill, an account-synced copy, or a plugin's.
-  - `ver` is the commit that introduced that body text in the repo given by `--repo` (default: the cwd's); `~` marks a near match.
-- Question-asking skill: the header splits answers into recommended, other (another option beat the recommendation), no-rec, custom and multi. Read the overall rates first. Per question header, only when headers recur:
-  - A header almost always answered with the recommendation is a decision the skill should state rather than ask.
-  - One often answered custom is missing an option.
-  - One where another option often wins has a wrong recommendation.
-- pi extension or tool:
-  - Read the extension's source for the tool names it registers, and pass one `--tool` per name.
-  - Calls made from inside `codemode` count.
-  - The header reports how many pi sessions offered the tool and how many called it. Offered but never called is a description or existence problem.
-- CLI: `--cmd <binary>`, plus `--tool` for any harness tool that wraps it (find it in the repo). `--help` calls and an error followed by a retry are discoverability signals.
-- Hook or setting: `--text <regex>` on its distinctive output, such as its block message or script name.
-  - The header counts denials by kind, for Claude Code only. In pi, read the matched calls' results.
-  - A blocked call followed by a rephrased retry of the same intent is likely a false positive.
-  - The same denial repeating suggests a missing allow rule.
-
-## The file
-
-- The findings file is `findings/<target>.md` in the store of the project the target belongs to. `agent-notes root --ensure` gives the store's path, and the checkout sees it as `.agents/store`.
-- The findings file is the only file a run writes. Subagents return their notes in their reply and write no files.
-- Never commit it.
-- If it exists, this is a rerun. Read it first, pass `--since <its date>` so only newer runs are read, and update the counts of the findings already there.
-
-## Gather
-
-1. `runs <matchers>` gives the signal header and one line per run. Read the header before any run.
-2. Run `work --path <target's paths> [--mention <name>]`. It returns your typed turns from the ~10 most recent sessions that edited or discussed the target.
-   - These record what was decided and why, and the complaints you stated.
-   - They are context, not constraints. A finding may go against one only when that improves the end result, and then it says so with `Reverses:`.
-3. Feedback memories that mention the target are corrections someone already wrote down. Look in Claude Code's `projects/*/memory/` and pi's memory store.
-4. Read the target's own source and docs.
-5. `git log` on the target's paths gives the date of its latest change.
-
-## Read the runs
-
-- Read at most 40 runs: the most recent, keeping at least a few from each version seen. Say how many you left unread.
-- With about 8 runs or fewer, read them inline with `runs <matchers> --show all`.
-- With more, first print one line naming how many subagents you are about to start. Then hand batches of about 8 to fresh subagents on a cheaper model than yours: `model: "sonnet"` in Claude Code, while pi's subagent roles already lock a cheap one.
-- Give each subagent:
-  - the target and a few lines on what it is meant to do;
-  - its run ids;
-  - the reader command to run itself (`runs <matchers> --show <id>,<id>`). `--show` stops at 150 lines per run; `--max-lines` raises it when a run is cut before the target's part ends;
-  - the privacy rules above.
-- Never paste transcript text into a brief.
-- For every run, the subagent returns:
-  - First failure: the first point where the run went worse than it should have, in one line, with its turn number (`#n`); or "clean".
-  - Next: what the user did once the target's part was done, which is often well before the run's `[ended]` line.
-  - Not the target's fault: harness or environment problems the run hit.
-- In an interview skill, "yes", "no" and letters are answers, not corrections. A correction is the user redirecting, repeating themselves, rejecting the approach, or interrupting.
-
-## Label with the user
-
-- Group the first failures into named categories.
-- Ask one question round, using the harness's question tool when every question is a short pick (pi `ask_user_question`, Claude `AskUserQuestion`). Ask about:
-  - the runs whose note you are unsure of, each with its note and a one-line paraphrase of the moment;
-  - the category names, and any merges you propose.
-- Fold the answers in before writing.
-
-## Findings
-
-For each category:
-
-- Evidence: how many runs it hit out of all of them, the session ids, and a short quote or paraphrase. When every run behind it predates the target's latest change, mark it "possibly fixed".
-- Layer: where the fix belongs.
-  - the target's own text or scripts;
-  - the harness or an extension, through the harness's own extension points rather than patches to its built-ins;
-  - agent instructions or memory;
-  - the environment.
-
-  A cause shared with other targets is never a fix to this one.
-
-- Fix: what to change, a Size of S, M or L, and a Next: `/brainstorm` when the approach is open, `/grill-me` when it holds decisions, or build.
-
-Two more kinds of finding come from the data, not from failures:
-
-- Desire paths: a follow-up most runs share becomes a step the target offers itself. A tool-call sequence the agent works out again in most runs becomes a bundled script.
-- Signal findings: what the header's numbers say on their own, such as the readings under Question-asking skill or a tool that is offered but never called.
-
-A failure seen in one run is an anecdote, not a finding. Rank findings by the runs affected and what each failure cost: corrections, interrupts, abandoned runs.
-
-## Write
-
-Write the findings file. On a rerun, edit it in place.
-
-```markdown
-# Findings: <target>
-
-<date> · <N runs (by source), M sessions, date range> · versions seen: <…> · latest change: <sha date>
-
-## Findings
-
-### 1. <category>
-
-<What goes wrong, in 1–3 sentences.>
-
-- Evidence: <k of N runs>; <session ids>; <quote or paraphrase>
-- Layer: <layer> · Fix: <the change>
-- Size: S · Next: build · Reverses: <decision, date> (only when it does)
-- Status: <blank, or picked and where it went>
-
-## Desire paths
-
-- <what follows the runs, or what the agent keeps working out>: <k of N> → <exit or script>
-
-## Anecdotes
-
-- <one-off>: <session id>
-
-## Rejected
-
-- <title>: <one-line reason>
-```
-
-Then end with a chat summary holding only:
-
-- the findings file's path;
-- the counts ("5 findings from 34 runs");
-- one line per finding (`1. <category> · <k/N> · <S|M|L> · <build|/grill-me|/brainstorm>`), with the route last;
-- last, the top pick, in a sentence.
-
-## Pick
-
-The user replies by number or in free text.
-
-- Merge, refine or question: answer, and update the findings file when a finding's content changes.
-- Build ("do 1, 3"):
-  - If a picked finding's Next is `/brainstorm` or `/grill-me`, ask once whether to build it anyway or route it first.
-  - Then build them in this session one at a time, run the repo's checks, and mark each one done in the findings file.
-- Any other pick: restate the finding as a seed (what, evidence, fix) and name its next command. Mark it picked in the findings file.
+- Condensed transcript text never goes to disk. A findings note holds counts, session ids and a short quote or paraphrase.
+- Never quote a secret, and quote a phrase rather than a passage. Runs marked work profile, and memories under `~/.claude-work/`, are paraphrased, never quoted.
+- A subagent's brief repeats these rules and names runs by id instead of pasting transcript text.
