@@ -46,9 +46,13 @@ argument-hint: "[handoff-dir] [--auto]"
    - create a worktree `<slug>-<id>` off the integration branch's current head;
    - start a background subagent with the item brief below.
 
+   Message a running subagent by its agent ID, not its name: messages by name to a busy one get lost.
+
    Do contracts and gates yourself. Claude Code: the Agent tool runs subagents in the background and notifies you. pi: `subagent` with `run_in_background: true`, joined with `get_subagent_result`.
 
-3. **While items run,** do gate work or wait for completion notices. Don't poll.
+3. **While items run,** do gate work or wait for completion notices. Don't poll for completion, but about every 15 minutes check each in-flight worktree for commits, changed files, running processes and its report, and continue any item showing none of them.
+   - A subagent reads messages only between its own tool calls. To stop a run now, stop its processes yourself.
+   - Stopping a subagent doesn't stop what it launched. Find its parent scripts as well as their children, and select them by `/proc/<pid>/cwd` under its worktree or by exact argv. `pgrep -f <text>` also matches your own shell.
 4. **Route** each report by its status line:
    - `DONE`: integrate.
    - `DONE_WITH_CONCERNS`: read the concerns, then integrate or send back; log the call in the decision log.
@@ -59,6 +63,7 @@ argument-hint: "[handoff-dir] [--auto]"
 
 5. **Integrate.**
    - Confirm the branch sits on the integration branch's current tip. If the tip moved since, have the subagent rebase again, or rebase it yourself if trivial.
+   - Never pipe a rebase into a gate (`git rebase … | tail` hides a conflict stop). Check `git status` for a rebase in progress, and print the HEAD sha before and after the gate.
    - On that tree, re-run the item's acceptance command yourself, plus the repo's standard checks and the walking skeleton if HANDOFF has one. Never take the subagent's "it passes" as the result.
    - If it passes: fast-forward the integration branch, record the command, its result and the commit, then read and delete the worktree's `.handoff-report.md` and remove the worktree.
    - If it fails: send the failing output back to the same subagent, continuing it if the harness allows. After two send-backs, mark the item blocked with the last failing output.
@@ -69,6 +74,7 @@ argument-hint: "[handoff-dir] [--auto]"
 Long operations:
 
 - Run long commands in the background with a deadline, and send their output to files.
+- Run one full test suite at a time across all worktrees; parallel full runs overload the machine and fail with timeouts. Items run focused suites, and you run the full one at integration.
 - Grep those files for failures instead of reading whole logs.
 - You can't feel time passing, so follow HANDOFF's budgets.
 
@@ -124,13 +130,14 @@ Each item subagent's prompt contains:
 
   If a contract or a Yours decision blocks it, it finishes what it can and reports the proposed change rather than working around it.
 
+- **Commands:** long ones run in the foreground with a timeout, since a background command doesn't wake it.
 - **Done:** rebased onto the integration branch's current tip, then its acceptance command passes there, run by it, with the output reported.
 - **Report:** written to an untracked `.handoff-report.md` in its worktree.
   - First line exactly one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`.
   - Then: branch and worktree; commits; the acceptance command and result; decisions made and why; anything contradicting HANDOFF; measured timings.
   - Failures and skips stated plainly.
   - Logs stay in files and the report gives their paths.
-  - Its final message is only the status line and the report's path, since long replies get truncated.
+  - Its final message is only the status line and the report's path, since long replies get truncated. If it can't write the file, it sends the report as numbered messages of at most about 3,500 characters (`PART n/m`).
 
 ## PROGRESS.md
 
@@ -168,7 +175,7 @@ Each item subagent's prompt contains:
 
 ## Final report
 
-1. Write the handoff retro.
+1. Stop every subagent still running, idle ones included, and write the handoff retro.
 2. Report in chat:
    - what is done and verified, with acceptance results;
    - what is blocked and on what;
