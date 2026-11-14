@@ -1,7 +1,7 @@
 # agent-tools
 
-Plugins for [Claude Code](https://claude.com/claude-code), some shared with the
-[pi](https://github.com/earendil-works/pi) coding agent, and agent skills for any
+Plugins for [Claude Code](https://claude.com/claude-code), for the
+[pi](https://github.com/earendil-works/pi) coding agent, or for both, and agent skills for any
 agent that reads them. On my own machines home-manager installs these same folders,
 so what's published here is what I run.
 
@@ -170,7 +170,8 @@ Unfinished, and not ready for anyone else to use. Their frontmatter says `status
 ### Layout
 
 Laid out to be split into a repository of its own. Each `plugins/<name>/` is a
-Claude Code plugin, built by `mkToolMod`, and, when pi shares it, a pi package too:
+Claude Code plugin (built by `mkToolMod`), a pi package, or both. Only one with a
+Claude half goes in the marketplace and the Install section.
 
 - `core/`: harness-free TypeScript shared with pi, in a single file with no imports
   and no Node or DOM APIs.
@@ -179,8 +180,12 @@ Claude Code plugin, built by `mkToolMod`, and, when pi shares it, a pi package t
   - `claude plugin test` runs only `*.test.ts(x)`, so the two never overlap.
 - `claude/`: the mod, which `hooks/hooks.json` points at.
 - `pi/`: the pi half, which the plugin's own `package.json` names under `pi`, so the
-  folder is a pi package as it stands and imports `../core` directly. The pi leaf
-  lists it in `settings.packages` for the session you started, never for children.
+  folder is a pi package as it stands and imports `../core` directly. It gets a
+  `tsconfig.json` extending `tsconfig.pi.json`, which adds Node's types. The pi leaf
+  lists it in its `piPlugins`: the session you started loads it, and subagents too
+  when it sets `children = true`.
+- A pi half imports only pi, typebox, Node and its own plugin, never the pi leaf's
+  `shared/`: the two are built into different store paths.
 - Plugin root: only `hooks/`, `.claude-plugin/`, `types/` and that `package.json`.
   The mod's install copies its own halves only, so `pi/` never reaches a Claude Code
   install.

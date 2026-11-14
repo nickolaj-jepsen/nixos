@@ -347,6 +347,7 @@ _dev-setup-agent-tools:
     mkdir -p {{ justfile_directory() }}/agent-tools/node_modules/@types
     ln -sfn "$ext/@earendil-works" {{ justfile_directory() }}/agent-tools/node_modules/@earendil-works
     ln -sfn "$ext/@types/node" {{ justfile_directory() }}/agent-tools/node_modules/@types/node
+    ln -sfn "$ext/typebox" {{ justfile_directory() }}/agent-tools/node_modules/typebox
 
 # Re-records an agent-tools demo GIF in a live Claude Code session (agent-tools/README.md).
 demo name:

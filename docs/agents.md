@@ -61,9 +61,10 @@ Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
     parser.
   - A helper only one package needs lives in that package.
   - A plugin's pi half (`agent-tools/plugins/<name>/pi/`) is a package of its own: the
-    plugin's `package.json` names it under `pi`, the leaf lists its folder in
-    `settings.packages` for the session you started only, and it imports the plugin's
-    `core/` directly. It gets no copy under `parent/lib/`.
+    plugin's `package.json` names it under `pi`, the leaf's `piPlugins` lists it
+    (`children = true` loads it in subagents too, else only the session you started),
+    and it imports the plugin's `core/` directly. It gets no copy under `parent/lib/`
+    and can't import `shared/`. A plugin can be pi-only, with no Claude half.
 - The build runs `tsc --noEmit` over `core/`, `parent/` and `shared/` against
   the pi that ships, so a type error fails `just build`; `pkgs/agent-tools` links the
   same pi to type-check the plugins' `pi/` halves. That resolves

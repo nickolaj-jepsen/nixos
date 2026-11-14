@@ -79,8 +79,14 @@ in {
     packagePath = name: "${piPackages}/node_modules/${name}";
     extensions = mkExtensions pkgs pi piPackages;
     parentPath = "${extensions}/parent";
-    # A plugin of agent-tools whose pi half is its own package (agent-tools/README.md).
-    answerPath = "${pkgs.agent-tools}/plugins/answer";
+    # The agent-tools plugins with a pi half, each its own package (agent-tools/README.md).
+    # `children` loads it in subagents too; otherwise only the session you started has it.
+    piPlugins = {
+      answer.children = false;
+    };
+    pluginNames = lib.attrNames piPlugins;
+    pluginPath = name: "${pkgs.agent-tools}/plugins/${name}";
+    parentOnlyPlugins = lib.attrNames (lib.filterAttrs (_: plugin: !plugin.children) piPlugins);
     # One role pi's reader can't parse stops pi-subagents from loading at all.
     agentRoles = pkgs.runCommand "pi-agent-roles" {nativeBuildInputs = [pkgs.nodejs];} ''
       for role in ${./agents}/*.md; do
@@ -97,7 +103,8 @@ in {
     # Children keep core/ (only its router registers vm/*) and the permission system.
     childExcludedPackages =
       map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages)
-      ++ [parentPath answerPath];
+      ++ [parentPath]
+      ++ map pluginPath parentOnlyPlugins;
     # agent-context.md is shared by every agent; keep it agent-agnostic. Children
     # read these rules too and hold no agent tools, so no delegation how-to here.
     rules = builtins.readFile ../agent-context.md;
@@ -148,7 +155,9 @@ in {
       # system prompt's section order.
       packages =
         map packagePath thirdPartyPackages
-        ++ [parentPath answerPath "${extensions}/core"];
+        ++ [parentPath]
+        ++ map pluginPath pluginNames
+        ++ ["${extensions}/core"];
       # Empty on purpose: arrays replace wholesale, reverting `pi config` toggles.
       extensions = [];
     };
@@ -185,9 +194,9 @@ in {
       name = "pi-dev";
       text = ''
         extensions="${config.fireproof.agents.checkout}/modules/programs/pi/extensions"
-        answer="${config.fireproof.agents.checkout}/agent-tools/plugins/answer"
+        plugins="${config.fireproof.agents.checkout}/agent-tools/plugins"
         [ -d "$extensions/parent" ] || { echo "pi-dev: no extensions under $extensions" >&2; exit 1; }
-        exec pi -ne -e builtin:codemode -e builtin:mcp -e "$extensions/core" -e "$extensions/parent" -e "$answer" "$@"
+        exec pi -ne -e builtin:codemode -e builtin:mcp -e "$extensions/core" -e "$extensions/parent" ${lib.concatMapStringsSep " " (name: ''-e "$plugins/${name}"'') pluginNames} "$@"
       '';
     };
   in {

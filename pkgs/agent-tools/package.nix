@@ -15,6 +15,7 @@
       ../../agent-tools/package.json
       ../../agent-tools/package-lock.json
       ../../agent-tools/tsconfig.json
+      ../../agent-tools/tsconfig.pi.json
       ../../agent-tools/vitest.config.ts
       ../../agent-tools/plugins
     ];
@@ -37,6 +38,10 @@ in
       for dep in ${pi-coding-agent}/lib/node_modules/pi-monorepo/node_modules/@earendil-works/*; do
         ln -s "$dep" node_modules/@earendil-works/
       done
+      # What a pi half imports beside pi: the typebox pi aliases, and Node's types.
+      mkdir -p node_modules/@types
+      ln -s ${pi-coding-agent}/lib/node_modules/pi-monorepo/node_modules/typebox node_modules/
+      ln -s ${pi-coding-agent}/lib/node_modules/pi-monorepo/node_modules/@types/node node_modules/@types/
     '';
     checkPhase = ''
       runHook preCheck
