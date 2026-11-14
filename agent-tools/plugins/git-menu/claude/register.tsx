@@ -242,7 +242,11 @@ async function buildNotes($: EngineInterface, cwd: string): Promise<Menu> {
     .catch(() => undefined);
   const notes = store?.realPath ? await notesUnder($, store.realPath) : [];
   // `code` lands in the focused window only when told; zed does that on its own.
-  const opener = found && (found.endsWith("/code") ? [found, "--reuse-window"] : [found]);
+  const opener = found
+    ? found.endsWith("/code")
+      ? [found, "--reuse-window"]
+      : [found]
+    : undefined;
   return notesMenu({ notes, opener, now });
 }
 
