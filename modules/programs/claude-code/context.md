@@ -1,4 +1,3 @@
-
 ## Memory and context files
 
 - Save only what I state as standing: "always", "from now on", "in every repo", or a correction of how you work in general.
