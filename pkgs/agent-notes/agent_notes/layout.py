@@ -4,9 +4,9 @@ The durable store is per checkout, not per repository host: two clones of one
 project are two workbench drawers. Every worktree of a checkout shares one id,
 and a working directory outside git falls back to `global`.
 
-A checkout sees its store through two links, `<root>/.agents/store` and
-`<root>/.agents/tmp`, so an editor shows the notes beside the code while git
-only ever sees a link it may delete.
+A checkout sees its store through links in `<root>/.agents/` (`store`, `tmp`,
+`claude-memory`), so an editor shows the notes beside the code while git only
+ever sees a link it may delete.
 """
 
 import hashlib
@@ -34,6 +34,11 @@ def data_root():
 
 def store_root():
     return data_root() / "store"
+
+
+def claude_memory_root():
+    """Claude Code's auto-memory, kept beside the store rather than in it."""
+    return data_root() / "claude-memory"
 
 
 def orphan_root():
@@ -112,8 +117,9 @@ def scratch_dir(path, pid=None):
 
 
 def links(root):
-    """The two link paths a checkout root exposes: name → store and scratch targets."""
+    """The link paths a checkout root exposes: name → (link, target)."""
     return {
         "store": (Path(root) / ".agents" / "store", store_root() / repo_id(root)),
         "tmp": (Path(root) / ".agents" / "tmp", tmp_root() / repo_id(root)),
+        "claude-memory": (Path(root) / ".agents" / "claude-memory", claude_memory_root() / repo_id(root)),
     }

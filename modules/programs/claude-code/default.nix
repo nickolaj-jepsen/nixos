@@ -525,11 +525,12 @@
             "ao-skills@ao-agent-skills" = true;
           };
         permissions = {
-          # Each checkout's .agents/{store,tmp} links resolve here, which is outside
+          # Each checkout's .agents/ links resolve here, which is outside
           # the working directory and so prompts on every write through the link.
           additionalDirectories = [
             "${config.xdg.dataHome}/agents/store"
             "${config.xdg.stateHome}/agents/tmp"
+            "${config.xdg.dataHome}/agents/claude-memory"
           ];
           # Only commands that are frequent AND slow to classify earn a rule: in
           # auto mode an allow rule buys determinism, not safety. Omitted on

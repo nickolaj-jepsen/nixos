@@ -1,4 +1,4 @@
-"""Creating the two links a checkout exposes, and refusing to clobber anything."""
+"""Creating the links a checkout exposes, and refusing to clobber anything."""
 
 import os
 from pathlib import Path
@@ -19,7 +19,7 @@ def _tracked(root, relative):
 
 
 def ensure(root, create_store=False, report=None):
-    """Make `<root>/.agents/{store,tmp}` point at this checkout's store and scratch.
+    """Make the `<root>/.agents/` links point at this checkout's directories.
 
     Never replaces a real file, a real directory, a tracked path, or a symlink
     pointing somewhere else. Returns the problems it refused to fix, so `init`
@@ -35,7 +35,7 @@ def ensure(root, create_store=False, report=None):
     problems = []
     for name, (path, target) in links(root).items():
         relative = f".agents/{name}"
-        # Scratch is cheap and always has a target; the store appears with the first note.
+        # Scratch is cheap and always has a target; the others appear with their first write.
         if name == "tmp" or create_store:
             target.mkdir(parents=True, exist_ok=True)
         if _tracked(root, relative):

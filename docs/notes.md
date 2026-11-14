@@ -2,13 +2,14 @@
 
 Notes and the artifacts they name outlive the session that wrote them, so they
 live outside the checkout but visible inside it: every checkout exposes
-`.agents/store` and `.agents/tmp` as symlinks into the agents' own directories.
+`.agents/store`, `.agents/tmp` and `.agents/claude-memory` as symlinks into the
+agents' own directories.
 
 - A note is Markdown under the store; git never holds one, so no commit, stash,
   rebase or reset can lose one.
 - `git clean -xdf` removes the link and leaves the store, because the link is
   ignored and the store is not beneath it.
-- A committed `.agents/skills/` still works: only the two link paths are ignored
+- A committed `.agents/skills/` still works: only the link paths are ignored
   and only they are touched.
 - The CLI is `pkgs/agent-notes`, wired in by `modules/programs/agent-notes.nix`
   and scheduled by nothing: the git hook and the agent wrappers call it.
@@ -41,7 +42,7 @@ ${XDG_STATE_HOME:-~/.local/state}/agents/tmp/<repo-id>/<pid>/   scratch, reaped
 - `history/` holds superseded copies, such as `run-handoff`'s archived
   `plans/history/<slug>/`. It is not listed either.
 - `claude-memory/<repo-id>/` is Claude Code's auto-memory, kept beside the store
-  rather than in it. Both `claude` wrappers pass it as `autoMemoryDirectory`
+  rather than in it; a checkout sees it as `.agents/claude-memory`. Both `claude` wrappers pass it as `autoMemoryDirectory`
   (flag settings), so every worktree and the work profile share one memory per
   repository. Outside git, Claude Code keeps its per-cwd default under
   `~/.claude/projects/`.

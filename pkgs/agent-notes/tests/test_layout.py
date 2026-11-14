@@ -63,6 +63,8 @@ class LayoutTest(unittest.TestCase):
         self.assertEqual(links.ensure(self.repo), [])
         self.assertEqual(os.readlink(self.repo / ".agents/store"), str(layout.store_root() / layout.repo_id(self.repo)))
         self.assertEqual(os.readlink(self.repo / ".agents/tmp"), str(layout.tmp_root() / layout.repo_id(self.repo)))
+        self.assertEqual(os.readlink(self.repo / ".agents/claude-memory"),
+                         str(layout.claude_memory_root() / layout.repo_id(self.repo)))
         self.assertFalse((layout.store_root() / layout.repo_id(self.repo)).exists(), "the store is created by a write")
 
     def test_init_is_idempotent(self):
