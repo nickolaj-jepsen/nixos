@@ -8,11 +8,14 @@
       services.keyd = {
         enable = lib.mkDefault true;
         keyboards.mouse = {
+          # keyd prefix-matches ids (strstr), so leave off the trailing hash: it
+          # derives from the node's name and capabilities and goes stale. `m:`
+          # limits a match to pointer nodes, keeping Logitech keyboards and
+          # headsets out. Vendor-only because a G502 X reports a different
+          # product id per connection mode. `sudo keyd monitor` prints the ids.
           ids = [
-            "046d:c051:4ae65a29" # Work mouse
-            "046d:407f:ee6ee407" # Home mouse
-            "046d:c547:3a5dd700" # Home mouse (USB receiver)
-            "046d:c098:c9d1afa0" # Home mouse (USB cable)
+            "m:046d" # Logitech mice (G502 X) — never a trackpad, or keyd breaks it
+            "m:1ea7" # 2.4G wireless mouse
           ];
           settings = {
             main = {
