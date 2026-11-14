@@ -46,11 +46,14 @@ argument-hint: "[handoff-dir] [--auto]"
    - create a worktree `<slug>-<id>` off the integration branch's current head;
    - start a background subagent with the item brief below.
 
-   Message a running subagent by its agent ID, not its name: messages by name to a busy one get lost.
+   Spawn item subagents without a `name`. A named one runs as a teammate when agent teams are on, and wakes you with an idle notice every time it pauses. Message a running subagent by its agent ID.
 
    Do contracts and gates yourself. Claude Code: the Agent tool runs subagents in the background and notifies you. pi: `subagent` with `run_in_background: true`, joined with `get_subagent_result`.
 
-3. **While items run,** do gate work or wait for completion notices. Don't poll for completion, but about every 15 minutes check each in-flight worktree for commits, changed files, running processes and its report, and continue any item showing none of them.
+3. **While items run,** do gate work or end your turn and wait for completion notices. Every turn re-reads your whole context, so don't schedule recurring check-ins, crons or polls.
+   - Look at an in-flight item only when it has run past its HANDOFF budget (or twice the measured test duration if it has none) with no report. Check it once for commits, changed files and running processes, and continue it if it shows none.
+   - If every item in flight is quiet, set one wake-up for the longest remaining budget, never a recurring one.
+   - An idle notice or status ping isn't a report: end the turn without acting.
    - A subagent reads messages only between its own tool calls. To stop a run now, stop its processes yourself.
    - Stopping a subagent doesn't stop what it launched. Find its parent scripts as well as their children, and select them by `/proc/<pid>/cwd` under its worktree or by exact argv. `pgrep -f <text>` also matches your own shell.
 4. **Route** each report by its status line:
@@ -131,6 +134,7 @@ Each item subagent's prompt contains:
   If a contract or a Yours decision blocks it, it finishes what it can and reports the proposed change rather than working around it.
 
 - **Commands:** long ones run in the foreground with a timeout, since a background command doesn't wake it.
+- **Messages:** no progress updates or FYIs to the lead while it works. A question it can't answer from HANDOFF ends its run as a `NEEDS_CONTEXT` report. Its only message is the final one.
 - **Done:** rebased onto the integration branch's current tip, then its acceptance command passes there, run by it, with the output reported.
 - **Report:** written to an untracked `.handoff-report.md` in its worktree.
   - First line exactly one of `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, `BLOCKED`.
