@@ -231,7 +231,7 @@
       text = ''
         checkout="${config.fireproof.agents.checkout}"
         args=()
-        for manifest in "$checkout"/modules/programs/claude-code/mods/*/.claude-plugin/plugin.json "$checkout"/agent-tools/plugins/*/.claude-plugin/plugin.json; do
+        for manifest in "$checkout"/agent-tools/plugins/*/.claude-plugin/plugin.json; do
           [ -f "$manifest" ] && args+=(--plugin-dir "''${manifest%/.claude-plugin/plugin.json}")
         done
         [ ''${#args[@]} -gt 0 ] || { echo "claude-dev: no mods under $checkout" >&2; exit 1; }

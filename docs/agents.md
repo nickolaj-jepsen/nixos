@@ -20,7 +20,7 @@ Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
 | Third-party pi package   | `pkgs/pi-packages/`              | `settings.packages`           | —                               | `UPDATERS` bump              |
 | Pi itself                | `pkgs/pi-coding-agent/`          | the `pi` wrapper              | —                               | `UPDATERS` bump              |
 | Pi settings, MCP servers | pi leaf `settings`, `mcp`        | the `pi` wrapper, at launch   | —                               | —                            |
-| Claude Code mod          | `claude-code/mods/<name>/`       | `CLAUDE_CODE_PLUGIN_DIRS`     | `claude plugin validate`/`test` | `claude-dev`, `tsc -p`       |
+| Claude Code mod          | `agent-tools/plugins/<name>/`    | `CLAUDE_CODE_PLUGIN_DIRS`     | `claude plugin validate`/`test` | `claude-dev`, `tsc -p`       |
 | Two-harness plugin       | `agent-tools/plugins/`           | both rows above               | `pkgs.agent-tools`, then both   | `npm test` in `agent-tools/` |
 | Language server          | `agent-lsp.nix`                  | `fireproof.agents.lspServers` | —                               | —                            |
 
@@ -94,14 +94,14 @@ Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
 
 ## Claude Code mods
 
-- A mod is a plugin folder with a hooks module in
-  `modules/programs/claude-code/mods/<name>/`.
+- A mod is an agent-tools plugin with a hooks module, its code in
+  `agent-tools/plugins/<name>/claude/`, built by `mkToolMod`.
 - The claude-code leaf builds it with `claude plugin validate` and
   `claude plugin test` against the claude-code that runs it, so an API break
   fails `just build`. It loads it through `CLAUDE_CODE_PLUGIN_DIRS` in the
   settings `env`.
-- A new mod also gets an entry in `.claude-plugin/marketplace.json` and
-  `modules/programs/claude-code/mods/README.md` to be publicly installable.
+- A new mod also gets an entry in `.claude-plugin/marketplace.json` and a
+  section in `agent-tools/README.md` to be publicly installable.
 - Dev loop: `claude-dev`, from any directory, loads every mod from the checkout
   in place of the store copies, and a save reloads it with no switch. Only a
   change on the nix side (keybindings, settings, `userConfig` values) needs one.
@@ -111,8 +111,8 @@ Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
 
 ## agent-tools
 
-`agent-tools/README.md` covers the plugins both harnesses share: their layout, the
-traps it sets and the demo recordings.
+`agent-tools/README.md` covers every plugin, Claude-only, pi-only or both: their
+layout, the traps it sets and the demo recordings.
 
 ## Notes
 
