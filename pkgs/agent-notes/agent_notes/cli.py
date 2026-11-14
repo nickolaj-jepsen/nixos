@@ -30,7 +30,9 @@ def cmd_root(args):
 
 def cmd_tmp(args):
     root = _path(args.path)
-    directory = layout.tmp_root() / layout.repo_id(root) / str(args.pid or os.getppid())
+    directory = layout.tmp_root() / layout.repo_id(root)
+    if not args.repo:
+        directory /= str(args.pid or os.getppid())
     directory.mkdir(parents=True, exist_ok=True)
     print(directory)
     return 0
@@ -106,6 +108,8 @@ def main(argv=None):
             command.add_argument("--ensure", action="store_true", help="create the store and repair the links")
         if name == "tmp":
             command.add_argument("pid", nargs="?", type=int, help="the session's pid (default: the caller's parent)")
+            command.add_argument("--repo", action="store_true",
+                                 help="the repository's scratch root instead, for a harness that keys its own scratch by session")
 
     init = sub.add_parser("init", help="create or repair .agents/{store,tmp} for a checkout; quiet, never fails a git hook")
     init.add_argument("--path", help="a directory in the checkout (default: cwd)")

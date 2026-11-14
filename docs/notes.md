@@ -46,6 +46,7 @@ ${XDG_STATE_HOME:-~/.local/state}/agents/tmp/<repo-id>/<pid>/   scratch, reaped
 agent-notes root                  # the store directory for this checkout (not created)
 agent-notes root --ensure         # create it, and repair the links
 agent-notes tmp [PID]             # this session's scratch directory, created
+agent-notes tmp --repo            # the repository's scratch root, created
 agent-notes init                  # create or repair the links; quiet, never fails
 agent-notes id                    # the repo-id alone
 agent-notes status                # id, paths, and what state each link is in
@@ -78,9 +79,11 @@ ran it.
 
 ## Scratch
 
-- The `pi`, `claude` and `claude-work` wrappers export
-  `TMPDIR=$(agent-notes tmp "$PPID")`, so an agent's temp files sit beside its
-  notes under the repository it is working in.
+- The `pi` wrapper exports `TMPDIR=$(agent-notes tmp "$PPID")`, so an agent's
+  temp files sit beside its notes under the repository it is working in.
+- The `claude` and `claude-work` wrappers export `TMPDIR=$(agent-notes tmp --repo)`
+  instead: Claude Code nests its scratchpad by session id under it, so a resumed
+  session keeps its scratchpad, which a new pid would lose.
 - A user tmpfiles rule in `modules/programs/agent-notes.nix` ages out
   everything under `<state>/agents/tmp/<repo>/` untouched for three days, on the
   daily `systemd-tmpfiles-clean` run (Linux only). The repository directories

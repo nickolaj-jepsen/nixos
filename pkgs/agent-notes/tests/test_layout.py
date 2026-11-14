@@ -147,6 +147,12 @@ class CliTest(unittest.TestCase):
         self.assertTrue(directory.is_dir())
         self.assertEqual(directory.parent, self.state / "agents" / "tmp" / layout.repo_id(self.repo))
 
+    def test_tmp_repo_is_the_shared_root(self):
+        out = self.run_cli("tmp", "--repo")
+        directory = Path(out.stdout.strip())
+        self.assertEqual(directory, self.state / "agents" / "tmp" / layout.repo_id(self.repo))
+        self.assertTrue(directory.is_dir())
+
     def test_init_outside_git_does_nothing(self):
         plain = Path(self.home.name) / "scratch"
         plain.mkdir()

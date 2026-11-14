@@ -12,11 +12,12 @@
     homeDir = config.home.homeDirectory;
     scratch = config.fireproof.dev.enable;
 
-    # Agent temp is the session's own directory in the repository's scratch root
-    # (docs/notes.md), aged out by agent-notes' tmpfiles rule. Falls back to the
-    # ambient TMPDIR when it cannot be created.
+    # Agent temp is the repository's scratch root (docs/notes.md), aged out by
+    # agent-notes' tmpfiles rule. Not a per-pid directory: Claude Code keys its
+    # scratchpad by session id under TMPDIR, so a resumed session finds it again.
+    # Falls back to the ambient TMPDIR when it cannot be created.
     tmpDir = ''
-      if TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$"); then export TMPDIR; fi
+      if TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp --repo); then export TMPDIR; fi
     '';
 
     # Surfaces session state that settings.json can't pin (model, effort as
@@ -282,8 +283,8 @@
 
     home.packages = [spellChecker claudeDev] ++ lib.optional cfg.work.enable claudeWorkWrapper;
 
-    # agent-context.md is shared with pi and Copilot; the section after it is Claude's alone.
-    programs.claude-code.context = builtins.readFile ../agent-context.md;
+    # agent-context.md is shared with pi and Copilot; context.md is Claude's alone.
+    programs.claude-code.context = builtins.readFile ../agent-context.md + builtins.readFile ./context.md;
 
     programs.claude-code = {
       enable = true;
