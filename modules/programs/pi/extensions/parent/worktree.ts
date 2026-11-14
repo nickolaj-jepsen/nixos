@@ -136,8 +136,10 @@ export default function (pi: ExtensionAPI) {
   });
 
   // Quitting inside a worktree closes it; reload, /new, /resume and /fork keep the process going.
+  // WT_NO_AUTOCLOSE marks a test session another agent drives (pi-plugin-dev) in its own
+  // worktree, which that agent's tool calls only visit, so closing would remove it mid-task.
   pi.on("session_shutdown", async (event, ctx) => {
-    if (event.reason === "quit") await closeWhenFree(ctx.cwd);
+    if (event.reason === "quit" && !process.env.WT_NO_AUTOCLOSE) await closeWhenFree(ctx.cwd);
   });
 
   // Anything run between the worktree tool and the move would still act on the old checkout.

@@ -173,6 +173,10 @@ layout, the traps it sets and the demo recordings.
   logs it at debug. Check a new name by typing it in a real session.
 - agent-hub (`docs/agent-hub.md`) already sees every pi and Claude Code
   session; don't add per-agent toast hooks.
+- A Claude Code or pi session that ends inside a worktree closes it once nothing
+  runs there (`wt close --when-free`). An agent's Bash calls only visit its worktree
+  between calls, so a test session it drives there must set `WT_NO_AUTOCLOSE=1`, as
+  both skills' `tui.sh` do, or ending it removes the folder mid-task.
 - Don't name an editor in the folder menus (pi `parent/chrome/places.ts`,
   Claude Code's `git-menu`, agent-hub's `menus.py`): `fireproof.desktop.editor`
   picks it. `editor-open` (`modules/scripts`) carries the argv for shells and

@@ -64,7 +64,8 @@ start)
   [ -n "${FIXTURE:-}" ] && pi_cmd="FIXTURE=$(printf '%q' "$FIXTURE") $pi_cmd"
   # A session file is required: digest reads it.
   # AGENT_HUB_HIDDEN: a test session stays off the agent hub's bar.
-  tmux new-session -d -s "$sess" -x "$cols" -y "$lines" "AGENT_HUB_HIDDEN=1 PI_OFFLINE=1 $pi_cmd"
+  # WT_NO_AUTOCLOSE: quitting it leaves the worktree it ran in open for the caller.
+  tmux new-session -d -s "$sess" -x "$cols" -y "$lines" "AGENT_HUB_HIDDEN=1 WT_NO_AUTOCLOSE=1 PI_OFFLINE=1 $pi_cmd"
   # Return only once the TUI accepts input, so callers can drive it straight
   # away. A failure here is usually the extension, so show what the pane says.
   for _ in $(seq 75); do

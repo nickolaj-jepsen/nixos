@@ -86,7 +86,8 @@ start)
     claude_cmd+=" $(printf '%q' "$arg")"
   done
   # AGENT_HUB_HIDDEN: a test session stays off the agent hub's bar.
-  tmux new-session -d -s "$sess" -x "$cols" -y "$lines" -c "$cwd" "AGENT_HUB_HIDDEN=1 $claude_cmd"
+  # WT_NO_AUTOCLOSE: ending it leaves the worktree it ran in open for the caller.
+  tmux new-session -d -s "$sess" -x "$cols" -y "$lines" -c "$cwd" "AGENT_HUB_HIDDEN=1 WT_NO_AUTOCLOSE=1 $claude_cmd"
   # Return only once the TUI accepts input, so callers can drive it straight
   # away. A new directory asks whether to trust it first; only the driver's
   # own empty one is answered for you.

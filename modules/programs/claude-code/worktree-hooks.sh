@@ -25,6 +25,9 @@ SessionEnd)
   done
   # /clear ends a conversation, not the process: the session goes on in the same folder.
   [ "$(jq -r '.reason // empty' <<<"$input")" != clear ] || exit 0
+  # A test session another agent drives (claude-mod-dev) runs in that agent's worktree,
+  # which its Bash calls only visit, so a close here would remove it mid-task.
+  [ -z "${WT_NO_AUTOCLOSE:-}" ] || exit 0
   cwd=$(jq -r '.cwd // empty' <<<"$input")
   [ -d "$cwd" ] || exit 0
   # Only a worktree wt knows; the primary checkout and plain directories are left alone.
