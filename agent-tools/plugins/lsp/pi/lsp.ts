@@ -15,7 +15,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ExtensionAPI, ToolResultEvent } from "@earendil-works/pi-coding-agent";
-import { writtenPath } from "../shared/tools.ts";
+
+/** Tools that write a file at their `path`. */
+const WRITE_TOOLS: ReadonlySet<string> = new Set(["edit", "write"]);
+
+/** The path a file-writing tool call targets, else undefined. */
+const writtenPath = (toolName: string, input: unknown): string | undefined => {
+  if (!WRITE_TOOLS.has(toolName)) return undefined;
+  const args = input as { path?: unknown; file_path?: unknown } | undefined;
+  const path = args?.path ?? args?.file_path;
+  return typeof path === "string" ? path : undefined;
+};
 
 interface ServerConfig {
   command: string;
@@ -294,7 +304,7 @@ export default function (pi: ExtensionAPI) {
     try {
       diagnostics = await server.check(
         file,
-        config.extensionToLanguage[ext],
+        config.extensionToLanguage[ext] ?? "",
         readFileSync(file, "utf8"),
       );
     } catch {

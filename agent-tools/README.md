@@ -136,6 +136,13 @@ capped to a share of the model's context. The key is read from the file
 `PI_EXA_KEY_FILE` names (the pi leaf sets it from its age secret); with it unset the
 tools fail with that message.
 
+### lsp
+
+pi only; subagents have it too. Appends language-server errors to `edit` and `write`
+results; it declares no tools, so it costs no context until an edit breaks something.
+Servers come from the JSON file `PI_LSP_SERVERS` names (the pi leaf writes it from
+`fireproof.agents.lspServers`); with it unset or empty the plugin does nothing.
+
 ## Skills
 
 ### Plan, build and ship

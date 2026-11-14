@@ -133,7 +133,8 @@ traps it sets and the demo recordings.
 
 - `fireproof.agents.lspServers` (`command`/`args`/`extensionToLanguage`) is
   filled by `modules/programs/agent-lsp.nix`. Each agent leaf maps it to its
-  own schema.
+  own schema. pi's is the `lsp` plugin (`agent-tools/plugins/lsp/pi/`), which reads
+  it from the JSON file `PI_LSP_SERVERS` names, written by the pi leaf.
 
 ## Traps
 
