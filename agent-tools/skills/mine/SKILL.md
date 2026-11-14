@@ -57,7 +57,7 @@ A correction is the user redirecting, repeating themselves, rejecting an approac
 
 ## Reply
 
-Answer the question first, in plain words, including "no, the data doesn't show that" when that's the answer. Then the findings, most consequential first, each with its count, a line of evidence and the change you'd make, and the one you'd start with. Use whatever shape fits the question, and say what you didn't read.
+Answer the question first, in plain words, including "no, the data doesn't show that" when that's the answer. Then the findings, most consequential first, each with its count, a line of evidence and the change you'd make, and the one you'd start with. Use whatever shape fits the question, and say what you didn't read. When the findings are changes to pick from, end with one line each, `N. <finding> · <k of N> · <build|/grill-me|/brainstorm>`, with the route last: the `answer` plugin turns a reply that ends in such a list into a form to pick from.
 
 Ask the user only what would change the conclusion, such as a run you can't interpret. Don't ask them to confirm labels or groupings.
 
