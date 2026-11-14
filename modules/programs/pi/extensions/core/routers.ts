@@ -22,7 +22,7 @@ import type {
 import { exhaustedWindow, type UsageProvider, usageReader } from "../shared/ai-usage.ts";
 import { oneLine } from "../shared/naming.ts";
 import { WRITE_TOOLS } from "../shared/tools.ts";
-import { walkSpend } from "../shared/usage-ledger.ts";
+import { entrySpend } from "../shared/spend.ts";
 import {
   type ArchitectState,
   DEEP,
@@ -387,10 +387,10 @@ export default function (pi: ExtensionAPI) {
   const statusLines = (ctx: ExtensionContext): string[] => {
     const credit = usage.provider("anthropic")?.credit;
     let spent = 0;
-    walkSpend(ctx.sessionManager.getEntries(), (_entry, items) => {
-      for (const item of items)
-        if (item.provider === "anthropic") spent += item.usage.cost?.total ?? 0;
-    });
+    for (const entry of ctx.sessionManager.getEntries()) {
+      const spend = entrySpend(entry);
+      if (spend?.provider === "anthropic") spent += spend.usd;
+    }
     const creditLine = credit
       ? `$${credit.remaining.toFixed(2)} left, $${Math.max(0, credit.remaining - CREDIT_RESERVE_USD).toFixed(2)} above the $${CREDIT_RESERVE_USD} reserve; this session has spent $${spent.toFixed(2)} of it`
       : "unknown (ai-usage off or its key missing?)";

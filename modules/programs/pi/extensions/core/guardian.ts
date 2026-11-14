@@ -122,8 +122,7 @@ export default function (pi: ExtensionAPI) {
     const controller = new AbortController();
     inflight.add(controller);
     try {
-      const reply = await sideCall(pi, session, {
-        source: "guardian",
+      const reply = await sideCall(session, {
         system: SYSTEM,
         prompt,
         model,

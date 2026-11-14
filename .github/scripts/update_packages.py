@@ -311,7 +311,6 @@ def update_pi_packages() -> tuple[str, str]:
 UPDATERS = {
     "claude-code": update_claude_code,
     "bambu-studio": update_bambu_studio,
-    "chrome-devtools-mcp": lambda: update_npm_tarball("chrome-devtools-mcp"),
     "claude-desktop": update_claude_desktop,
     "ha-bambulab": lambda: update_github_release("ha-bambulab", "greghesp/ha-bambulab"),
     "pi-coding-agent": update_pi_coding_agent,

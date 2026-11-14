@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { memoizeOnSession, walkSpend } from "../../shared/usage-ledger.ts";
+import { entrySpend } from "../../shared/spend.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
@@ -25,14 +25,14 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
   // A provider that never reports cache usage would read as a permanent 0% hit rate.
   const caching = new Set<string>();
 
-  walkSpend(ctx.sessionManager.getEntries(), (entry, items) => {
-    for (const item of items) cost += item.usage.cost?.total ?? 0;
+  for (const entry of ctx.sessionManager.getEntries()) {
+    cost += entrySpend(entry)?.usd ?? 0;
     if (entry.type === "compaction" || entry.type === "branch_summary") {
       warmModel = undefined;
       cacheHit = undefined;
-      return;
+      continue;
     }
-    if (entry.type !== "message" || entry.message.role !== "assistant") return;
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
     const message = entry.message;
     const key = `${message.provider}/${message.model}`;
     const prompt = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
@@ -57,7 +57,7 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
         value: message.usage.output / (message.durationMs / 1000),
       };
     }
-  });
+  }
 
   // A speed from another model would read as the current model's.
   const speed =
@@ -66,6 +66,29 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
       : undefined;
 
   return { cost, cacheHit: warmModel && caching.has(warmModel) ? cacheHit : undefined, speed };
+};
+
+/**
+ * `compute` cached until the session moves. Every append moves the leaf, so the
+ * session and leaf ids, plus `extra` for whatever else `compute` reads, say
+ * whether a result is current. Only moving the leaf back to an earlier entry
+ * escapes that, so callers `reset` on `session_tree`. The key skips the entry
+ * count because `getEntries()` copies the session and footers call this every frame.
+ */
+const memoizeOnSession = <A extends unknown[], T>(
+  compute: (ctx: ExtensionContext, ...args: A) => T,
+  extra: (...args: A) => string = () => "",
+) => {
+  let cache: { key: string; value: T } | undefined;
+  const get = (ctx: ExtensionContext, ...args: A): T => {
+    const session = ctx.sessionManager;
+    const key = [session.getSessionId(), session.getLeafId(), extra(...args)].join("\n");
+    if (cache?.key === key) return cache.value;
+    const value = compute(ctx, ...args);
+    cache = { key, value };
+    return value;
+  };
+  return { get, reset: () => (cache = undefined) };
 };
 
 const modelKey = (model: ActiveModel | undefined) => (model ? `${model.provider}/${model.id}` : "");

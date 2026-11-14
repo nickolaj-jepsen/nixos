@@ -131,8 +131,7 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait, hub: Hub, j
     titled = true;
     const request = stripRequest(firstRequest(ctx) ?? "");
     if (!request) return;
-    const result = await sideCall(pi, ctx, {
-      source: "session title",
+    const result = await sideCall(ctx, {
       system: TITLE_SYSTEM,
       prompt: `First request:\n${request.slice(0, TITLE_READS)}\n\nReply:\n${said.slice(0, TITLE_READS)}`,
       maxTokens: 64,

@@ -14,14 +14,11 @@
  * context, and a child holds no agent tools.
  *
  * The delegation lines follow the model that answers, rechecked before every
- * run. A small-context (local) model is told not to delegate: llama-swap serves
- * one request at a time, so a child would only queue behind it. An expensive
- * one is told to hand its volume work to a cheap child, since its own tokens
- * are the scarce ones.
+ * run. An expensive one is told to hand its volume work to a cheap child, since
+ * its own tokens are the scarce ones.
  */
 import { Type } from "typebox";
 import type { ExtensionAPI, ToolInfo } from "@earendil-works/pi-coding-agent";
-import { isLeanModel } from "../shared/lean-model.ts";
 import { isExpensiveModel } from "./lib/model-tier.ts";
 import { createRouted } from "../shared/routed-model.ts";
 import { isSubagentSession } from "../shared/subagent-session.ts";
@@ -33,7 +30,6 @@ const SUBAGENT = "subagent";
 // largest in the roster, and a run that does not delegate should not pay for it.
 const HIDDEN_NAMES = [SUBAGENT, "get_subagent_result", "steer_subagent"];
 
-// Lean models get this too: it is how `/delegate` and `/workflow` run their children.
 const JOIN =
   "Pass `subagent` `run_in_background: true` and join with `get_subagent_result({ agent_id, wait: true })`; without the flag each call blocks until its agent finishes. A background launch resolves to text: take the id from its `Agent ID:` line, as `/Agent ID: (\\S+)/.exec(launched)[1]`. A few run at once and the rest queue.";
 const DELEGATING = [
@@ -41,8 +37,6 @@ const DELEGATING = [
   "A subagent's result is not shown to the user: summarise it, and check an agent's claimed edits before reporting them done.",
   "Fanning out over many items needs an explicit ask, such as `/delegate` or `/workflow`; a task that would merely benefit from parallelism is not one.",
 ];
-const LEAN =
-  "Don't delegate on this model: it serves one request at a time, so a subagent would only queue behind you. Call `subagent` only when the user explicitly asks, as `/delegate` and `/workflow` do.";
 // Every file read here is paid for again on each later turn, so volume work
 // belongs on a cheap child and judgment stays put.
 const EXPENSIVE =
@@ -62,12 +56,7 @@ const signature = (tool: ToolInfo | undefined) => {
   return `tools.${tool?.name}(${names.length > 0 ? `{ ${names.join(", ")} }` : ""})`;
 };
 
-const guidelines = (
-  tools: Map<string, ToolInfo>,
-  active: Set<string>,
-  lean: boolean,
-  expensive: boolean,
-) => {
+const guidelines = (tools: Map<string, ToolInfo>, active: Set<string>, expensive: boolean) => {
   const reachable = HIDDEN_NAMES.filter((name) => active.has(name));
   const lines: string[] = [];
   if (reachable.length > 0) {
@@ -78,7 +67,6 @@ const guidelines = (
   }
   if (!active.has(SUBAGENT)) return lines;
   lines.push(JOIN);
-  if (lean) return [...lines, LEAN];
   lines.push(...DELEGATING);
   if (expensive) lines.push(EXPENSIVE);
   return lines;
@@ -110,7 +98,7 @@ export default function (pi: ExtensionAPI) {
     const answering = routed(ctx)?.model ?? ctx.model;
     const tools = new Map(pi.getAllTools().map((tool) => [tool.name, tool]));
     event.systemPromptOptions.promptGuidelines.push(
-      ...guidelines(tools, active, isLeanModel(ctx.model), isExpensiveModel(answering)),
+      ...guidelines(tools, active, isExpensiveModel(answering)),
     );
   });
 

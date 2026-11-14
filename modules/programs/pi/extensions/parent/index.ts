@@ -6,7 +6,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import aliases from "./aliases.ts";
 import bg from "./bg.ts";
-import browserGate from "./browser-gate.ts";
 import chrome from "./chrome.ts";
 import claudePeers from "./claude-peers.ts";
 import condense from "./condense.ts";
@@ -18,13 +17,11 @@ import { createServices, type Services } from "./services.ts";
 import sessions from "./sessions.ts";
 import spellfix from "./spellfix.ts";
 import stash from "./stash.ts";
-import subagentUsage from "./subagent-usage.ts";
 import worktree from "./worktree.ts";
 
 const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["aliases", aliases],
   ["bg", bg],
-  ["browser-gate", browserGate],
   ["chrome", chrome],
   ["claude-peers", claudePeers],
   ["condense", condense],
@@ -35,7 +32,6 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["sessions", sessions],
   ["spellfix", spellfix],
   ["stash", stash],
-  ["subagent-usage", subagentUsage],
   ["worktree", worktree],
 ];
 

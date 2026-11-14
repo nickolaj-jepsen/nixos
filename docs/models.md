@@ -57,7 +57,7 @@ way they do.
   429 that no pool can cover.
 - Background requests such as compaction try the credit stage last.
 - `/vm` shows each pool's windows and blocks, the credit with this session's
-  spend from the usage ledger, and the last routes with why stages were skipped.
+  Anthropic spend, and the last routes with why stages were skipped.
 
 ## Jev
 

@@ -8,7 +8,6 @@
 import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
-import { usdUsage } from "../shared/usage-ledger.ts";
 
 const API = "https://api.exa.ai";
 // A call may spend at most this share of the window or of the free context.
@@ -22,7 +21,18 @@ const MIN_PAGE_CHARS = 1_500;
 
 // Exa's fee as tool-result usage, which pi counts in the session total even under codemode.
 const fee = (costUsd: number | undefined) =>
-  costUsd !== undefined && costUsd > 0 ? { usage: usdUsage(costUsd) } : {};
+  costUsd !== undefined && costUsd > 0
+    ? {
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: costUsd },
+        },
+      }
+    : {};
 
 type Mode = "highlights" | "text" | "summary";
 

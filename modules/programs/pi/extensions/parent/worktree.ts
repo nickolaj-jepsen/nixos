@@ -19,14 +19,10 @@ import {
   type ExtensionCommandContext,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { isLeanModel } from "../shared/lean-model.ts";
-import { SHELL_TOOLS, WRITE_TOOLS } from "../shared/tools.ts";
 
 const MOVED = "worktree-moved";
 const ENTER_WORKTREE_TOOL = "enter_worktree";
 const EXIT_WORKTREE_TOOL = "exit_worktree";
-// Tools that would still act on the old checkout between the worktree tool and the move.
-const MUTATING = new Set([...SHELL_TOOLS, ...WRITE_TOOLS]);
 
 /** Runs `wt`, resolving its stdout; a non-zero exit rejects with what it said on stderr. */
 const wt = (args: string[], cwd: string) =>
@@ -132,10 +128,10 @@ export default function (pi: ExtensionAPI) {
   };
 
   // Once, before the first request: a later tool-set change can cost a cache-invalidating
-  // re-read. The move needs a UI, and a local model's window has no room to spare.
+  // re-read. The move needs a UI.
   pi.on("session_start", (_event, ctx) => {
     const active = pi.getActiveTools();
-    if (!ctx.hasUI || isLeanModel(ctx.model) || active.includes(ENTER_WORKTREE_TOOL)) return;
+    if (!ctx.hasUI || active.includes(ENTER_WORKTREE_TOOL)) return;
     pi.setActiveTools([...active, ENTER_WORKTREE_TOOL, EXIT_WORKTREE_TOOL]);
   });
 
@@ -144,8 +140,9 @@ export default function (pi: ExtensionAPI) {
     if (event.reason === "quit") await closeWhenFree(ctx.cwd);
   });
 
-  pi.on("tool_call", (event) => {
-    if (pending && MUTATING.has(event.toolName))
+  // Anything run between the worktree tool and the move would still act on the old checkout.
+  pi.on("tool_call", () => {
+    if (pending)
       return {
         block: true,
         reason: `This session moves to ${pending.path} when the turn ends; end your turn now and continue there.`,

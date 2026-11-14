@@ -73,21 +73,6 @@ in {
     }));
     localModels = (import ../_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
     localMaxTokens = 8192;
-    hasBrowser = config.programs.chromium.enable || (pkgs.stdenv.isDarwin && config.fireproof.desktop.enable);
-    chrome-devtools = {
-      command = lib.getExe pkgs.chrome-devtools-mcp;
-      args =
-        [
-          "--no-usage-statistics"
-          "--no-performance-crux"
-          # A shared profile would make a second session fight the first.
-          "--isolated"
-          "--screenshotFormat=jpeg"
-          "--screenshotMaxWidth=1280"
-        ]
-        # Puppeteer can't find a browser on NixOS unaided; darwin's Homebrew Chrome it finds.
-        ++ lib.optional config.programs.chromium.enable "--executablePath=${lib.getExe config.programs.chromium.package}";
-    };
     # Alphabetical order loads the permission system first.
     thirdPartyPackages = piPackages.packageNames;
     # settings.packages and the children's exclusions must match string for string.
@@ -170,9 +155,8 @@ in {
     mcp = let
       # pi rejects the null/empty fields home-manager's option fills in.
       shared = lib.mapAttrs (_: lib.filterAttrs (_: v: v != null && v != {} && v != [])) config.programs.mcp.servers;
-      servers = shared // lib.optionalAttrs hasBrowser {inherit chrome-devtools;};
     in
-      lib.optionalAttrs (servers != {}) {mcpServers = servers;};
+      lib.optionalAttrs (shared != {}) {mcpServers = shared;};
     # A key or server dropped here stays in the file until removed by hand.
     # Rewrites only on a change, so running sessions don't see the file churn.
     merge = name: value:

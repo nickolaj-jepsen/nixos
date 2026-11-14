@@ -84,8 +84,6 @@ type Finding = {
   checked: boolean;
 };
 
-/** Set at load; the batch call's spend is recorded through it. */
-let api: ExtensionAPI | undefined;
 /** Words skipped in the review, forgotten once the draft is submitted or cleared. */
 const ignored = new Set<string>();
 // Auto-added words taken back with `u`; the model's "correct" leaves them flagged for this draft.
@@ -249,10 +247,8 @@ async function askModel(
   flagged: readonly Miss[],
   signal: AbortSignal,
 ): Promise<Answer | undefined> {
-  if (!api) return undefined;
   const distinct = new Set(flagged.map((m) => m.word));
-  const reply = await sideCall(api, ctx, {
-    source: "spellfix",
+  const reply = await sideCall(ctx, {
     system: CHECK,
     prompt: checkPrompt(text, flagged),
     model: MODEL,
@@ -882,7 +878,6 @@ async function undoLastAdded(ctx: ExtensionContext) {
 }
 
 export default function (pi: ExtensionAPI, { editorHooks }: Services) {
-  api = pi;
   editorHooks.add({ decorateLine: underline, onEdit });
   pi.registerShortcut("ctrl+q", {
     description: "Review spelling in the prompt draft",

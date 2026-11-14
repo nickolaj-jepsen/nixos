@@ -1,14 +1,11 @@
-/** One model call made beside the conversation, billed to the session's ledger under `source`, failed replies included. */
+/** One model call made beside the conversation. */
 import { contentText, type SimpleStreamOptions } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { recordSideCall } from "./usage-ledger.ts";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 /** The default side model: the flash ladder, so a side call falls back the way the session does. */
 export const SIDE_MODEL = "vm/flash";
 
 export type SideCall = {
-  /** The ledger's name for the call. */
-  source: string;
   system: string;
   prompt: string;
   /** "provider/model"; there is no fallback to the session's model, which can cost thirty times more. */
@@ -24,9 +21,8 @@ export type SideResult = { text: string; cost: number } | { error: string; cost:
 
 /** Asks the model once; never throws. */
 export const sideCall = async (
-  pi: ExtensionAPI,
   ctx: ExtensionContext,
-  { source, system, prompt, model = SIDE_MODEL, ...options }: SideCall,
+  { system, prompt, model = SIDE_MODEL, ...options }: SideCall,
 ): Promise<SideResult> => {
   const slash = model.indexOf("/");
   const found =
@@ -51,7 +47,6 @@ export const sideCall = async (
         },
       )
       .result();
-    recordSideCall(pi, source, response);
     const cost = response.usage?.cost?.total ?? 0;
     if (response.stopReason === "error" || response.stopReason === "aborted") {
       return { error: response.errorMessage ?? response.stopReason, cost };
