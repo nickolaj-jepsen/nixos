@@ -15,6 +15,14 @@ WorktreeRemove)
   exec wt close --when-free "$path"
   ;;
 SessionEnd)
+  # Claude Code can't verify a hook-made worktree, so it keeps every isolated
+  # subagent's, unchanged or not; closing keeps any work on the branch.
+  transcript=$(jq -r '.transcript_path // empty' <<<"$input")
+  for meta in "${transcript%.jsonl}"/subagents/*.meta.json; do
+    [ -e "$meta" ] || continue
+    tree=$(jq -r '.worktreePath // empty' "$meta")
+    if [ -n "$tree" ] && [ -d "$tree" ]; then wt close --when-free "$tree" 2>/dev/null || true; fi
+  done
   # /clear ends a conversation, not the process: the session goes on in the same folder.
   [ "$(jq -r '.reason // empty' <<<"$input")" != clear ] || exit 0
   cwd=$(jq -r '.cwd // empty' <<<"$input")
