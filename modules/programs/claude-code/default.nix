@@ -20,6 +20,16 @@
       if TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp --repo); then export TMPDIR; fi
     '';
 
+    # One auto-memory per repository, shared by worktrees and both profiles. Flag
+    # settings, since autoMemoryDirectory must be absolute and is ignored in a
+    # checked-in .claude/settings.json. `global` is agent-notes' outside-git store.
+    memoryArgs = ''
+      memory_args=()
+      if id=$(${lib.getExe pkgs.agent-notes} id 2>/dev/null) && [ "$id" != global ]; then
+        memory_args=(--settings "$(${lib.getExe pkgs.jq} -cn --arg dir "${config.xdg.dataHome}/agents/claude-memory/$id" '{autoMemoryDirectory: $dir}')")
+      fi
+    '';
+
     # Surfaces session state that settings.json can't pin (model, effort as
     # changed by /effort, fast mode), git state and the last response's
     # throughput, plus which profile is running — claude-work shares this
@@ -181,7 +191,8 @@
       ${agentNice}
       ${lib.optionalString scratch tmpDir}
       if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
-      exec -a "$0" ${ccfg.finalPackage}/bin/claude "$@"
+      ${memoryArgs}
+      exec -a "$0" ${ccfg.finalPackage}/bin/claude "''${memory_args[@]}" "$@"
     '';
 
     # Work-owned MCP servers ride in their own plugin, which only claude-work
@@ -209,7 +220,8 @@
         ${lib.optionalString scratch tmpDir}
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
-        exec claude ${lib.escapeShellArgs workMcpArgs} "$@"
+        ${memoryArgs}
+        exec claude ${lib.escapeShellArgs workMcpArgs} "''${memory_args[@]}" "$@"
       '';
     };
 

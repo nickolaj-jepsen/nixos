@@ -23,6 +23,7 @@ ${XDG_DATA_HOME:-~/.local/share}/agents/store/<repo-id>/
   findings/<target>.md
   onboard/{overview.md,<subsystem>.md,files/{assets,devshell}/}
 
+${XDG_DATA_HOME:-~/.local/share}/agents/claude-memory/<repo-id>/   Claude Code auto-memory
 ${XDG_STATE_HOME:-~/.local/state}/agents/tmp/<repo-id>/<pid>/   scratch, reaped
 ~/.local/share/agents/_orphaned/                                migration only
 ```
@@ -39,6 +40,11 @@ ${XDG_STATE_HOME:-~/.local/state}/agents/tmp/<repo-id>/<pid>/   scratch, reaped
   report never looks like something a session wrote.
 - `history/` holds superseded copies, such as `run-handoff`'s archived
   `plans/history/<slug>/`. It is not listed either.
+- `claude-memory/<repo-id>/` is Claude Code's auto-memory, kept beside the store
+  rather than in it. Both `claude` wrappers pass it as `autoMemoryDirectory`
+  (flag settings), so every worktree and the work profile share one memory per
+  repository. Outside git, Claude Code keeps its per-cwd default under
+  `~/.claude/projects/`.
 
 ## The commands
 
