@@ -127,7 +127,7 @@ traps it sets and the demo recordings.
 - `/open plan` lists that store's Markdown, newest first, skipping `history/`,
   `files/` and dot directories, and opens the picked note in the editor. Each
   agent has its own small listing (pi `parent/chrome/notes.ts`, `git-menu`'s
-  `hooks/notes.ts`); neither asks agent-hub.
+  `claude/notes.ts`); neither asks agent-hub.
 
 ## Language servers
 

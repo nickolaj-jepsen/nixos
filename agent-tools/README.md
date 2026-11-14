@@ -16,6 +16,7 @@ so what's published here is what I run.
 claude plugin marketplace add nickolaj-jepsen/nixos
 claude plugin install linear-issue@nickolaj-jepsen
 claude plugin install answer@nickolaj-jepsen
+claude plugin install git-menu@nickolaj-jepsen
 ```
 
 The skills, all of them or one by its subpath, with [`npx skills`](https://github.com/vercel-labs/skills)
@@ -58,6 +59,18 @@ Needs a Linear MCP server, connected and signed in.
 ![/linear drafts an issue, the title is rewritten, Esc hides the draft and 8 reopens it](demos/linear-issue.gif)
 
 </details>
+
+### git-menu
+
+`/git` opens the checkout's repository, branch, commit or pull
+request on GitHub, GitLab or Codeberg, links the compare page for a new pull
+request, and copies the branch, SHA or PR URL; `/open` hands the checkout to
+VS Code, Sublime Merge, the file manager or Ghostty, `/open plan` lists the
+checkout's notes (`.agents/store`) for the editor, and `/open diff` opens
+[tuicr](https://github.com/agavra/tuicr) on the changes in a new Ghostty
+window and tells the model how to read your comments back. Rows that
+can't run say why. Needs `git`, `gh` for the pull request, and `tuicr` and
+Ghostty for `/open diff`.
 
 ### answer
 

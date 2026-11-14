@@ -145,7 +145,7 @@
     # Its button is spliced into the built-in you-should-know card by label; a
     # card redesign only hides it, with a toast (agent-tools/plugins/linear-issue).
     linearIssue = mkToolMod "linear-issue";
-    gitMenu = mkMod "git-menu";
+    gitMenu = mkToolMod "git-menu";
     answer = mkToolMod "answer";
 
     # ctrl+q presses spellfix's band button, borrowing an action; a single modified key

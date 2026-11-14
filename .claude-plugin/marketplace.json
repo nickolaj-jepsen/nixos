@@ -24,7 +24,7 @@
     },
     {
       "name": "git-menu",
-      "source": "./modules/programs/claude-code/mods/git-menu"
+      "source": "./agent-tools/plugins/git-menu"
     },
     {
       "name": "answer",
