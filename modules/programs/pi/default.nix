@@ -78,18 +78,12 @@ in {
     packagePath = name: "${piPackages}/node_modules/${name}";
     extensions = mkExtensions pkgs pi piPackages;
     parentPath = "${extensions}/parent";
-    # The agent-tools plugins with a pi half, each its own package (agent-tools/README.md).
-    # `children` loads it in subagents too; otherwise only the session you started has it.
-    piPlugins = {
-      answer.children = false;
-      transcript-tweaks.children = false;
-      claude-compat.children = false;
-      exa.children = true;
-      lsp.children = true;
-    };
+    # The agent-tools plugins with a pi half, each its own package. One that doesn't set
+    # `agentTools.subagents` in its package.json loads only in the session you started.
+    piPlugins = lib.filterAttrs (_: plugin: plugin.pi) fpLib.agentToolPlugins;
     pluginNames = lib.attrNames piPlugins;
     pluginPath = name: "${pkgs.agent-tools}/plugins/${name}";
-    parentOnlyPlugins = lib.attrNames (lib.filterAttrs (_: plugin: !plugin.children) piPlugins);
+    parentOnlyPlugins = lib.attrNames (lib.filterAttrs (_: plugin: !plugin.subagents) piPlugins);
     # One role pi's reader can't parse stops pi-subagents from loading at all.
     agentRoles = pkgs.runCommand "pi-agent-roles" {nativeBuildInputs = [pkgs.nodejs];} ''
       for role in ${./agents}/*.md; do

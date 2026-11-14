@@ -9,6 +9,9 @@
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
   },
+  "agentTools": {
+    "subagents": true
+  },
   "pi": {
     "extensions": [
       "./pi/index.ts"

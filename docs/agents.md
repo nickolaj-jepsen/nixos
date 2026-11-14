@@ -61,8 +61,9 @@ Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
     parser.
   - A helper only one package needs lives in that package.
   - A plugin's pi half (`agent-tools/plugins/<name>/pi/`) is a package of its own: the
-    plugin's `package.json` names it under `pi`, the leaf's `piPlugins` lists it
-    (`children = true` loads it in subagents too, else only the session you started),
+    plugin's `package.json` names it under `pi`, the leaf finds it there
+    (`"agentTools": {"subagents": true}` loads it in subagents too, else only the
+    session you started),
     and it imports the plugin's `core/` directly. It gets no copy under `parent/lib/`
     and can't import `shared/`. A plugin can be pi-only, with no Claude half.
 - The build runs `tsc --noEmit` over `core/`, `parent/` and `shared/` against
@@ -95,13 +96,15 @@ Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
 ## Claude Code mods
 
 - A mod is an agent-tools plugin with a hooks module, its code in
-  `agent-tools/plugins/<name>/claude/`, built by `mkToolMod`.
+  `agent-tools/plugins/<name>/claude/`, built by `mkToolMod`. The leaf builds every
+  plugin folder with a `.claude-plugin/plugin.json`; only the load order of the
+  first few is set by hand (`loadFirst`).
 - The claude-code leaf builds it with `claude plugin validate` and
   `claude plugin test` against the claude-code that runs it, so an API break
   fails `just build`. It loads it through `CLAUDE_CODE_PLUGIN_DIRS` in the
   settings `env`.
-- A new mod also gets an entry in `.claude-plugin/marketplace.json` and a
-  section in `agent-tools/README.md` to be publicly installable.
+- A new mod also gets an entry in `.claude-plugin/marketplace.json`, which
+  `just build` checks against the folders, and a section in `agent-tools/README.md`.
 - Dev loop: `claude-dev`, from any directory, loads every mod from the checkout
   in place of the store copies, and a save reloads it with no switch. Only a
   change on the nix side (keybindings, settings, `userConfig` values) needs one.

@@ -140,12 +140,18 @@
           runHook postInstall
         '';
       };
-    spellfix = mkToolMod "spellfix";
-    # Its button is spliced into the built-in you-should-know card by label; a
-    # card redesign only hides it, with a toast (agent-tools/plugins/linear-issue).
-    linearIssue = mkToolMod "linear-issue";
-    gitMenu = mkToolMod "git-menu";
-    answer = mkToolMod "answer";
+    # Every agent-tools plugin with a Claude half. linear-issue's button is spliced into the
+    # built-in you-should-know card by label; a card redesign only hides it, with a toast.
+    claudePlugins = lib.attrNames (lib.filterAttrs (_: plugin: plugin.claude) fpLib.agentToolPlugins);
+    mods = lib.genAttrs claudePlugins mkToolMod;
+    # answer first: its open form has the band to itself, which only hides the rows of mods
+    # whose hooks sit beneath its own. spellfix's band button next, then the rest by name.
+    loadFirst = ["answer" "spellfix"];
+    loadOrder = loadFirst ++ lib.subtractLists loadFirst claudePlugins;
+    # The marketplace publishes each one from its folder; the skills plugin is the other entry.
+    marketplace = lib.importJSON ../../../.claude-plugin/marketplace.json;
+    published = map (p: "${p.name} ${p.source}") (builtins.filter (p: p.name != "skills") marketplace.plugins);
+    expected = map (name: "${name} ./agent-tools/plugins/${name}") claudePlugins;
 
     # ctrl+q presses spellfix's band button, borrowing an action; a single modified key
     # reaches a plugin Button only from the Global context.
@@ -259,6 +265,13 @@
       })
     mirroredNames));
   in {
+    assertions = [
+      {
+        assertion = lib.sort lib.lessThan published == lib.sort lib.lessThan expected;
+        message = "claude-code: .claude-plugin/marketplace.json lists ${toString published}; agent-tools/plugins has ${toString expected}";
+      }
+    ];
+
     # Mutes warning about installMethod by placing the wrapped binary in ~/.local/bin
     home.file = lib.mkMerge [
       {
@@ -460,9 +473,7 @@
         };
         env = {
           # Not programs.claude-code.plugins: the env block also reaches desktop-app sessions.
-          # answer first: its open form has the band to itself, which only hides the rows of
-          # mods whose hooks sit beneath its own.
-          CLAUDE_CODE_PLUGIN_DIRS = "${answer}:${spellfix}:${linearIssue}:${gitMenu}";
+          CLAUDE_CODE_PLUGIN_DIRS = lib.concatMapStringsSep ":" (name: "${mods.${name}}") loadOrder;
           # hunspell's personal dictionary for the underline's checker too.
           WORDLIST = personalDictionary;
         };

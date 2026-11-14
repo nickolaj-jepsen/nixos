@@ -46,8 +46,24 @@
       };
   in
     digit (builtins.substring i 1 hex) * 16 + digit (builtins.substring (i + 1) 1 hex);
+
+  # agent-tools' plugins as their folders describe them (agent-tools/README.md): a Claude
+  # half has `.claude-plugin/plugin.json`, a pi half a `pi` key in `package.json`, where
+  # `agentTools.subagents` loads it in subagents too. Only git-tracked folders count.
+  agentToolPlugins = let
+    root = ../agent-tools/plugins;
+    describe = name: _: let
+      dir = root + "/${name}";
+      pkg = lib.optionalAttrs (builtins.pathExists (dir + "/package.json")) (lib.importJSON (dir + "/package.json"));
+    in {
+      claude = builtins.pathExists (dir + "/.claude-plugin/plugin.json");
+      pi = pkg ? pi;
+      subagents = pkg.agentTools.subagents or false;
+    };
+  in
+    lib.mapAttrs describe (lib.filterAttrs (_: type: type == "directory") (builtins.readDir root));
 in {
-  inherit primaryMonitor primaryMonitorName secondaryMonitors hunspellLanguages;
+  inherit primaryMonitor primaryMonitorName secondaryMonitors hunspellLanguages agentToolPlugins;
 
   mkHunspell = pkgs: pkgs.hunspell.withDicts (d: map (name: d.${name}) hunspellLanguages);
   hunspellPersonalDictionary = config: "${config.xdg.configHome}/hunspell/personal.dic";

@@ -230,8 +230,11 @@ Unfinished, and not ready for anyone else to use. Their frontmatter says `status
 ### Layout
 
 Laid out to be split into a repository of its own. Each `plugins/<name>/` is a
-Claude Code plugin (built by `mkToolMod`), a pi package, or both. Only one with a
-Claude half goes in the marketplace and the Install section.
+Claude Code plugin (built by `mkToolMod`), a pi package, or both. The folder says
+which, and home-manager loads every one it finds (`agentToolPlugins` in `lib/`): a
+Claude half has `.claude-plugin/plugin.json`, a pi half a `pi` key in `package.json`.
+Only one with a Claude half goes in the marketplace and the Install section, and
+`just build` fails while `.claude-plugin/marketplace.json` disagrees with the folders.
 
 - `core/`: harness-free TypeScript shared with pi, in a single file with no imports
   and no Node or DOM APIs.
@@ -241,9 +244,9 @@ Claude half goes in the marketplace and the Install section.
 - `claude/`: the mod, which `hooks/hooks.json` points at.
 - `pi/`: the pi half, which the plugin's own `package.json` names under `pi`, so the
   folder is a pi package as it stands and imports `../core` directly. It gets a
-  `tsconfig.json` extending `tsconfig.pi.json`, which adds Node's types. The pi leaf
-  lists it in its `piPlugins`: the session you started loads it, and subagents too
-  when it sets `children = true`.
+  `tsconfig.json` extending `tsconfig.pi.json`, which adds Node's types. The session
+  you started loads it, and subagents too when its `package.json` sets
+  `"agentTools": {"subagents": true}`.
 - A pi half imports only pi, typebox, Node and its own plugin, never the pi leaf's
   `shared/`: the two are built into different store paths.
 - Plugin root: only `hooks/`, `.claude-plugin/`, `types/` and that `package.json`.
