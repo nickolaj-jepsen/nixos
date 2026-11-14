@@ -121,7 +121,7 @@ prompt to itself.
 ### Understand and decide
 
 - [onboard](skills/onboard/): teaches you an unfamiliar project by running it and tracing one real action.
-- [compare](skills/compare/): recommends one of several candidates, with researched and verified evidence.
+- [compare](skills/compare/): researches a choice or a whole category and says whether to pick, keep or build, with sourced evidence.
 
 ### Clean up
 
@@ -159,7 +159,7 @@ Its catalog comes from [tropes.fyi](https://tropes.fyi) by [ossama.is](https://o
 Unfinished, and not ready for anyone else to use. Their frontmatter says `status: in-progress`.
 
 - [brainstorm](skills/brainstorm/): finds an approach for a goal that has none yet.
-- [ideate](skills/ideate/): ranked, verified improvement ideas for a repo or one area of it.
+- [ideate](skills/ideate/): finds what is worth doing with a repo or one area of it, as ranked ideas with evidence, approaches or a sourced answer.
 - [tour](skills/tour/): walks you through a PR or a stack of them, one PR at a time.
 - [retro](skills/retro/): improves a skill, tool or doc from what bothered you in one agent session.
 - [mine](skills/mine/): answers a question about how your agents have been working from past sessions, and improves what's behind it.
