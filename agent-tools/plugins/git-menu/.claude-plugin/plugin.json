@@ -5,5 +5,5 @@
   "author": {
     "name": "Nickolaj Jepsen"
   },
-  "types": "./types/index.d.ts"
+  "types": "./claude/types.d.ts"
 }

@@ -241,22 +241,34 @@ Only one with a Claude half goes in the marketplace and the Install section, and
   - Tests are `core/*.spec.ts`, run by vitest (`npm test`) and by
     `pkgs/agent-tools`.
   - `claude plugin test` runs only `*.test.ts(x)`, so the two never overlap.
-- `claude/`: the mod, which `hooks/hooks.json` points at.
+- `claude/`: the Claude half. It holds the hooks module, its contract `types.d.ts`
+  (`plugin.json`'s `"types"`), its `*.test.tsx` for `claude plugin test`, and a
+  `tsconfig.json` over the types `just dev-setup` lays, for `tsc -p claude` and the
+  editor.
+- `.claude-plugin/plugin.json` and `hooks/hooks.json` stay at the root: Claude Code
+  reads the manifest only there, and a mod's module only from `hooks/hooks.json`'s
+  `modules` (the manifest's `hooks` field takes settings-style hooks, not modules).
 - `pi/`: the pi half, which the plugin's own `package.json` names under `pi`, so the
-  folder is a pi package as it stands and imports `../core` directly. It gets a
-  `tsconfig.json` extending `tsconfig.pi.json`, which adds Node's types. The session
+  folder is a pi package as it stands and imports `../core` directly. The session
   you started loads it, and subagents too when its `package.json` sets
   `"agentTools": {"subagents": true}`.
 - A pi half imports only pi, typebox, Node and its own plugin, never the pi leaf's
   `shared/`: the two are built into different store paths.
-- Plugin root: only `hooks/`, `.claude-plugin/`, `types/` and that `package.json`.
-  The mod's install copies its own halves only, so `pi/` never reaches a Claude Code
-  install.
+- Plugin root: only `.claude-plugin/`, `hooks/`, `claude/`, `core/`, `pi/`, that
+  `package.json` and, with a Claude half, a `tsconfig.json` that only points the
+  editor at `claude/`'s project and the cores' and pi halves'. Claude Code writes a
+  root `tsconfig.json` over its own types into a mod that has none, which would then
+  be the nearest config for `core/` and `pi/`. The mod's install copies its own halves only, so `pi/` never
+  reaches a Claude Code install.
 - No plugin imports the agent-hub client. One that needs the hub isn't a plugin.
 
-A plugin's pi half type-checks against the pi that ships, not an npm copy of it:
-`pkgs/agent-tools` links that pi into its `node_modules` before `tsc`, and
-`just dev-setup` makes the same links for an editor.
+`tsconfig.json` is a solution file over two projects, so no plugin needs a tsconfig
+for its `core/` or `pi/`: `tsconfig.core.json` holds the cores to no types at all (a
+Node import there fails), and `tsconfig.pi.json` checks the pi halves and the cores'
+specs with Node's types. `npm run typecheck` is `tsc -b`. A pi half type-checks
+against the pi that ships, not an npm copy of it: `pkgs/agent-tools` links that pi
+into its `node_modules` before `tsc`, and `just dev-setup` makes the same links for
+an editor.
 
 ### Traps
 
@@ -264,10 +276,15 @@ None of these show up in `tsc`:
 
 - The hooks module can't re-export `register`: the engine reads `on(...)` calls from
   the file `hooks.json` names. Point `hooks.json` at the real module.
-- `types/index.d.ts` must be self-contained, with no `import`. It restates the shapes
-  `core/` owns, so `tsc -p` flags drift.
-- vitest takes the nearest `tsconfig.json`, and the plugin's one needs types only
-  `just dev-setup` lays. `core/tsconfig.json` is there to be nearer.
+- `claude/types.d.ts` must be self-contained, with no `import`. It restates the shapes
+  `core/` owns, so `tsc -p claude` flags drift.
+- No symlink can stand in for a file: the engine refuses one in a plugin ("not a
+  regular file"), and an install copies only the plugin's own folder.
+- A spec imports vitest, whose types bring Node's, so specs stay out of
+  `tsconfig.core.json`; keep it that way or a core's Node import passes.
+- vitest would read the nearest `tsconfig.json`, which for a core is the plugin's,
+  over types only `just dev-setup` lays. `vitest.config.ts` passes its own
+  `tsconfigRaw` so none is read.
 - A pi half's imports resolve to the pi that runs only through the links
   `pkgs/agent-tools` and `just dev-setup` make; `npm install` in `agent-tools/`
   prunes them, so re-run `just dev-setup` when `npm run typecheck` starts failing to

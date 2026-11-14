@@ -14,7 +14,7 @@
   },
   "pi": {
     "extensions": [
-      "./pi/index.ts"
+      "./pi/lsp.ts"
     ]
   }
 }

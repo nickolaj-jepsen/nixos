@@ -15,6 +15,7 @@
       ../../agent-tools/package.json
       ../../agent-tools/package-lock.json
       ../../agent-tools/tsconfig.json
+      ../../agent-tools/tsconfig.core.json
       ../../agent-tools/tsconfig.pi.json
       ../../agent-tools/vitest.config.ts
       ../../agent-tools/plugins

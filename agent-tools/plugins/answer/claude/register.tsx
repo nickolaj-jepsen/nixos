@@ -2,7 +2,7 @@ import { atom, read, update } from "claude-code";
 import type { EngineInterface, Register } from "claude-code";
 
 import { formId, offer, parse, startLines, step as stepForm, view as viewOf } from "../core/forms";
-import type { Action, Current, Entry, Held, Item, Split, View } from "../types";
+import type { Action, Current, Entry, Held, Item, Split, View } from "./types.d.ts";
 
 // The two fields, each drawn while it is being typed in.
 const WRITE = "write";

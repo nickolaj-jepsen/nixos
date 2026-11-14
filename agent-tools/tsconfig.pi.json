@@ -1,5 +1,9 @@
 {
-  "extends": "./tsconfig.json",
-  "compilerOptions": { "types": ["node"] },
-  "include": ["plugins/*/pi/**/*.ts"]
+  "extends": "./tsconfig.core.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.pi.tsbuildinfo",
+    "types": ["node"]
+  },
+  "include": ["plugins/*/pi/**/*.ts", "plugins/*/core/**/*.ts"],
+  "exclude": []
 }

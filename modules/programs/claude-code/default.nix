@@ -104,12 +104,15 @@
     # missing personal dictionary nor saves into one, so activation touches it.
     personalDictionary = fpLib.hunspellPersonalDictionary config;
 
-    # Validated and tested against the claude-code that runs it, so a bump that
-    # breaks its API (or drops the keybinding action spellfix borrows) fails the build.
-    mkModFrom = name: src:
+    # A plugin of agent-tools: `.claude-plugin/` and `hooks/` at its root, its module in
+    # `claude/` and, when pi shares it, the harness-free `core/`, whose own tests ran in
+    # pkgs.agent-tools. Validated and tested against the claude-code that runs it, so a
+    # bump that breaks its API (or drops the keybinding action spellfix borrows) fails the
+    # build. The install leaves out tests and the editor's tsconfig.
+    mkToolMod = name:
       pkgs.stdenvNoCC.mkDerivation {
         name = "claude-code-${name}";
-        inherit src;
+        src = "${pkgs.agent-tools}/plugins/${name}";
         nativeBuildInputs = [ccfg.package];
         buildPhase = ''
           runHook preBuild
@@ -121,18 +124,8 @@
         installPhase = ''
           runHook preInstall
           mkdir -p $out
-          cp -r .claude-plugin hooks types $out/
-          runHook postInstall
-        '';
-      };
-    # A plugin of agent-tools: a thin hooks module over its `claude/` half and, when
-    # pi shares it, the harness-free `core/`, whose own tests ran in pkgs.agent-tools.
-    mkToolMod = name:
-      (mkModFrom name "${pkgs.agent-tools}/plugins/${name}").overrideAttrs {
-        installPhase = ''
-          runHook preInstall
-          mkdir -p $out
-          cp -r .claude-plugin hooks types claude $out/
+          cp -r .claude-plugin hooks claude $out/
+          rm -f $out/claude/*.test.ts $out/claude/*.test.tsx $out/claude/tsconfig.json
           if [ -d core ]; then
             cp -r core $out/
             rm -f $out/core/*.spec.ts

@@ -3,7 +3,7 @@
  * every git row is a link or a copy, so nothing here pushes, rebases or creates
  * anything; a row that cannot run keeps its place and says why in a few words.
  */
-import type { EditorApp, FolderApp, Menu, Row } from "../types";
+import type { EditorApp, FolderApp, Menu, Row } from "./types.d.ts";
 
 export type Forge = "github" | "gitlab" | "codeberg";
 

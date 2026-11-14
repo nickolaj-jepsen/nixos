@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.pi.json"
+    "typecheck": "tsc -b"
   },
   "devDependencies": {
     "typescript": "^5.9.0",

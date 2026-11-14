@@ -7,7 +7,7 @@ import type {
   RenderSurface,
 } from "claude-code";
 
-import type { FolderApp, Menu, MenuKind, Row } from "../types";
+import type { FolderApp, Menu, MenuKind, Row } from "./types.d.ts";
 import {
   chooseRemote,
   editorCandidates,

@@ -3,7 +3,7 @@
  * (`.agents/store`), newest first. The shared opener (`agent-note-open`) hands
  * each one to the editor.
  */
-import type { Menu, Row } from "../types";
+import type { Menu, Row } from "./types.d.ts";
 
 export const OPENER = "agent-note-open";
 /** The checkout's link into the note store. */

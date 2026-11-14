@@ -168,7 +168,7 @@ layout, the traps it sets and the demo recordings.
 - A mod's build can't run `tsc`: the API types exist only once an
   interactive session loads the folder. `just dev-setup` runs one to lay them
   into each mod's gitignored `.claude-plugin/types/`, for the editor and
-  `tsc -p <folder>`. Re-run it after a Claude Code upgrade.
+  `tsc -p <plugin>/claude`. Re-run it after a Claude Code upgrade.
 - A plugin command's name can be refused at runtime and neither
   `claude plugin validate` nor `claude plugin test` says so:
   `$.command.register` throws for a name a built-in (`review`, now

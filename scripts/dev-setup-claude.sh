@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bash -euo pipefail
 # Lays the Claude Code mods' API types into their gitignored .claude-plugin/types/, for
-# editor types and `tsc -p`. Only an interactive session lays them, so this runs one on a
-# throwaway pty until it has.
+# editor types and `tsc -p <plugin>/claude`. Only an interactive session lays them, so
+# this runs one on a throwaway pty until it has.
 
 cd "$(dirname "$0")/.."
 

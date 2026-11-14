@@ -1,4 +1,0 @@
-{
-  "extends": "../../../tsconfig.pi.json",
-  "include": ["."]
-}

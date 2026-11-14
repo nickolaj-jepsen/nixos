@@ -8,7 +8,7 @@ import type {
   Timer,
 } from "claude-code";
 
-import type { Picker, Report } from "../types";
+import type { Picker, Report } from "./types.d.ts";
 import {
   addInput,
   autoAdds,

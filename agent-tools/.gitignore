@@ -1,1 +1,3 @@
 node_modules/
+# Laid by Claude Code when it loads a mod from its folder (`claude --plugin-dir`).
+plugins/*/.claude-plugin/types/

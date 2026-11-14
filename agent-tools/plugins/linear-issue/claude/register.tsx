@@ -1,7 +1,7 @@
 import { atom, read, update } from "claude-code";
 import type { EngineInterface, Register, RenderElement, RenderNode } from "claude-code";
 
-import type { Duplicate, Filed, Form, Last, Option } from "../types";
+import type { Duplicate, Filed, Form, Last, Option } from "./types.d.ts";
 
 // The built-in's card has no extension point, so the button is spliced into the
 // tree it draws, found by these labels. A rename only hides the button (see warnDrift).

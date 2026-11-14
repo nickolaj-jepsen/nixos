@@ -1,0 +1,8 @@
+{
+  "extends": "../.claude-plugin/types/tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "../.claude-plugin/types/claude.tsbuildinfo"
+  },
+  "include": ["."]
+}
