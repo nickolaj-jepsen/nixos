@@ -1,0 +1,17 @@
+{
+  "name": "@nickolaj-jepsen/exa",
+  "version": "0.1.0",
+  "description": "Exa web search and page fetch tools",
+  "keywords": [
+    "pi-package"
+  ],
+  "type": "module",
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./pi/index.ts"
+    ]
+  }
+}

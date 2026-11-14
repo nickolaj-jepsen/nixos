@@ -85,6 +85,7 @@ in {
       answer.children = false;
       transcript-tweaks.children = false;
       claude-compat.children = false;
+      exa.children = true;
     };
     pluginNames = lib.attrNames piPlugins;
     pluginPath = name: "${pkgs.agent-tools}/plugins/${name}";
