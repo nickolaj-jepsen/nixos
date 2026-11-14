@@ -1,6 +1,6 @@
-import { expect, test } from "claude-code/testing";
+import { expect, test } from "vitest";
 
-import { applyEdits, wordDiff } from "../hooks/core";
+import { applyEdits, wordDiff } from "./spellfix.ts";
 
 const words = (runs: { text: string }[]) => runs.flatMap((r) => r.text.split(" ")).join(" ");
 

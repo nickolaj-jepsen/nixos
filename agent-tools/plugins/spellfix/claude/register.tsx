@@ -8,7 +8,7 @@ import type {
   Timer,
 } from "claude-code";
 
-import type { Extra, Miss, Picker, Report } from "../types";
+import type { Picker, Report } from "../types";
 import {
   addInput,
   autoAdds,
@@ -28,8 +28,8 @@ import {
   suggestInput,
   withExtras,
   withoutWords,
-} from "./core";
-import type { Verdict } from "./core";
+} from "../core/spellfix";
+import type { Extra, Miss, Verdict } from "../core/spellfix";
 
 // Borrowed: mods can't define keybinding actions, and nothing handles this one
 // while the built-in cc-plugin-diff mod is enabled. A key bound to it in

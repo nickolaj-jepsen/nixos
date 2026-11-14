@@ -106,7 +106,6 @@
 
     # Validated and tested against the claude-code that runs it, so a bump that
     # breaks its API (or drops the keybinding action spellfix borrows) fails the build.
-    mkMod = name: mkModFrom name ./mods/${name};
     mkModFrom = name: src:
       pkgs.stdenvNoCC.mkDerivation {
         name = "claude-code-${name}";
@@ -141,7 +140,7 @@
           runHook postInstall
         '';
       };
-    spellfix = mkMod "spellfix";
+    spellfix = mkToolMod "spellfix";
     # Its button is spliced into the built-in you-should-know card by label; a
     # card redesign only hides it, with a toast (agent-tools/plugins/linear-issue).
     linearIssue = mkToolMod "linear-issue";
@@ -447,7 +446,7 @@
           checker = "hunspell";
           language = lib.concatStringsSep "," dictionaries;
         };
-        # ctrl+q picks fixes for the words the underline flags (mods/spellfix).
+        # ctrl+q picks fixes for the words the underline flags (agent-tools/plugins/spellfix).
         pluginConfigs.spellfix.options = {
           hunspell = lib.getExe spellChecker;
           dictionaries = lib.concatStringsSep "," dictionaries;

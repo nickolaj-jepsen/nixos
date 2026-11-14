@@ -1,6 +1,6 @@
 /**
- * Spelling fixes for the prompt draft, on the Claude Code spellfix mod's core
- * (modules/programs/claude-code/mods/spellfix). hunspell flags the words; one
+ * Spelling fixes for the prompt draft, on the Claude Code spellfix plugin's core
+ * (agent-tools/plugins/spellfix/core). hunspell flags the words; one
  * model call answers every flagged word at once and finds real-word typos
  * hunspell cannot see (`form` for `from`).
  *
@@ -45,9 +45,8 @@ import {
   wordDiff,
   withExtras,
   withoutWords,
-} from "./lib/spellfix/hooks/core.ts";
-import type { Found, Splice, Verdict } from "./lib/spellfix/hooks/core.ts";
-import type { Extra, Miss } from "./lib/spellfix/types/index.d.ts";
+} from "./lib/spellfix/spellfix.ts";
+import type { Extra, Found, Miss, Splice, Verdict } from "./lib/spellfix/spellfix.ts";
 import { sideCall } from "../shared/side-call.ts";
 import type { PromptDraft } from "./lib/editor-hooks.ts";
 import type { Services } from "./services.ts";

@@ -1,0 +1,5 @@
+{
+  "extends": "./.claude-plugin/types/tsconfig.json",
+  "include": ["claude", "core", "types", "tests"],
+  "exclude": ["core/**/*.spec.ts"]
+}

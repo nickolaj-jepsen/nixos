@@ -1,3 +1,6 @@
+// The mod's state contract. Claude Code wants it self-contained, so it restates the shapes
+// `core/spellfix.ts` owns; the module assigns the core's values to these, so `tsc` flags a drift.
+
 export type Miss = { word: string; start: number; end: number };
 
 /** A typo Haiku found that hunspell didn't flag: a real word (`form` for `from`) or one hunspell skipped (`dense/consice`). */

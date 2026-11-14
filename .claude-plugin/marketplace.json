@@ -16,7 +16,7 @@
     },
     {
       "name": "spellfix",
-      "source": "./modules/programs/claude-code/mods/spellfix"
+      "source": "./agent-tools/plugins/spellfix"
     },
     {
       "name": "linear-issue",

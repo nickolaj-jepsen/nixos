@@ -4,8 +4,10 @@
  * Plain ES with no Node or engine API, so pi's spellfix can run the same rules
  * on the files both agents write.
  */
-// Spelled out: pi type-checks this file under NodeNext, which needs the extension.
-import type { Extra, Miss } from "../types/index.d.ts";
+export type Miss = { word: string; start: number; end: number };
+
+/** A typo Haiku found that hunspell didn't flag: a real word (`form` for `from`) or one hunspell skipped (`dense/consice`). */
+export type Extra = Miss & { fix: string };
 
 export type Verdict = { kind: "fix"; word: string } | { kind: "correct" } | { kind: "unsure" };
 

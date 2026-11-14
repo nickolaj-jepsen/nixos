@@ -17,6 +17,7 @@ claude plugin marketplace add nickolaj-jepsen/nixos
 claude plugin install linear-issue@nickolaj-jepsen
 claude plugin install answer@nickolaj-jepsen
 claude plugin install git-menu@nickolaj-jepsen
+claude plugin install spellfix@nickolaj-jepsen
 ```
 
 The skills, all of them or one by its subpath, with [`npx skills`](https://github.com/vercel-labs/skills)
@@ -71,6 +72,18 @@ checkout's notes (`.agents/store`) for the editor, and `/open diff` opens
 window and tells the model how to read your comments back. Rows that
 can't run say why. Needs `git`, `gh` for the pull request, and `tuicr` and
 Ghostty for `/open diff`.
+
+### spellfix
+
+picks fixes for misspelled words in the prompt draft with
+hunspell and Haiku. One Haiku call answers every flagged word, adds the ones
+it calls correct to the personal word list, and finds real-word typos
+hunspell can't (`form` for `from`). Needs `hunspell` and its dictionaries
+installed; set the executable, dictionaries and personal word list in the
+plugin's options (`claude plugin configure spellfix`). Its picker is
+the band button above the prompt; to open it from the keyboard, bind
+`app:toggleDiffNoiseFilter` in the `Global` context of
+`~/.claude/keybindings.json` (I use `ctrl+q`), which works on any draft.
 
 ### answer
 
