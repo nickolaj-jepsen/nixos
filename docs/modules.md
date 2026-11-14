@@ -102,6 +102,31 @@ for the edits not reset yet. Port what is worth keeping into the Nix config.
   so it emits a `home.file` entry to take over.
 - The reset writes in place, so a running app's file watch sees it and reloads.
 
+## Migrating user data
+
+A move of data the user already has (a config dir to a new home, a profile
+into `~/.config`, a store reorganised) is a script in `migrations/`, not a
+manual step per host. `modules/base/migrations.nix` runs each pending one on
+every host's next activation.
+
+- Name it `YYYY-MM-DD-<slug>.py` or `.sh`; scripts run in filename order.
+  Python runs with `python3 -I`, shell with `bash`; `PATH` is the runner's
+  `runtimeInputs`, so add a dependency there.
+- It runs before home-manager checks and links its files, so it can move an
+  old directory out of the way of a new `home.file` target.
+- It must be safe to run twice and safe to interrupt: a host with nothing to
+  move does nothing, and a rerun after a partial move finishes it.
+- Success writes `$XDG_STATE_HOME/fireproof/migrations/<name>`; it never runs
+  again there. A non-zero exit is reported and retried on the next activation,
+  which does not fail. Delete the stamp to rerun it.
+- Ship the config change that needs the new location in the same commit, so
+  no host runs one without the other. Agents may still be writing through an
+  old path during the switch; a migration that can miss such writes should
+  say so in its docstring.
+- `just try` runs the activation, migrations included, inside its overlay, so
+  it previews a migration without touching `$HOME`.
+- A migration stays until every host has switched past it. Delete it after.
+
 ## Snippets
 
 - Theme: `let c = config.fireproof.theme.colors; in { background = c.bg; border = "#${c.accent}"; }`
