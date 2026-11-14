@@ -51,7 +51,7 @@ export default function (pi: ExtensionAPI) {
     const skills = new Set(
       commands.filter((c) => c.source === "skill").map((c) => c.name.slice("skill:".length)),
     );
-    const token = [...event.text.matchAll(SKILL_TOKEN)].find((m) => skills.has(m[1]));
+    const token = [...event.text.matchAll(SKILL_TOKEN)].find((m) => skills.has(m[1] ?? ""));
     if (!token) return;
     const text =
       token.index === 0

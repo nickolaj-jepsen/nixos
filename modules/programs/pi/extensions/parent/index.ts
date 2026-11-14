@@ -4,7 +4,6 @@
  * they import, and what they share goes through `Services`.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import aliases from "./aliases.ts";
 import bg from "./bg.ts";
 import chrome from "./chrome.ts";
 import claudePeers from "./claude-peers.ts";
@@ -14,11 +13,9 @@ import notify from "./notify.ts";
 import { createServices, type Services } from "./services.ts";
 import sessions from "./sessions.ts";
 import spellfix from "./spellfix.ts";
-import stash from "./stash.ts";
 import worktree from "./worktree.ts";
 
 const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
-  ["aliases", aliases],
   ["bg", bg],
   ["chrome", chrome],
   ["claude-peers", claudePeers],
@@ -27,7 +24,6 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["notify", notify],
   ["sessions", sessions],
   ["spellfix", spellfix],
-  ["stash", stash],
   ["worktree", worktree],
 ];
 

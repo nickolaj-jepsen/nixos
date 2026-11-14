@@ -119,6 +119,16 @@ subagents don't.
   command, the line it ended on. `edit`, `write`, failures, streaming output and
   expanded results keep pi's own rendering.
 
+### claude-compat
+
+pi only, session you started only. Claude Code habits in pi.
+
+- `/clear` starts a new session, `/effort <level>` sets the thinking level.
+- `/skill-name` anywhere in a prompt runs that skill, not just `/skill:name` first.
+- `ctrl+s` stashes the draft and clears the editor; on an empty editor it restores
+  it, and sending a prompt restores it too. One file per repository, so it
+  survives `/new`, `/resume` and a restart.
+
 ## Skills
 
 ### Plan, build and ship

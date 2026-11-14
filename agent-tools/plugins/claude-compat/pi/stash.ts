@@ -10,15 +10,15 @@
  * worktree shares it, and so outlives /new, /clear, /resume, /fork, /reload and
  * the process itself.
  */
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import {
   getAgentDir,
   type ExtensionAPI,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { gitRoots } from "../shared/git.ts";
 
 /** The parked prompt, and when it was parked. */
 type Held = { text: string; at: string };
@@ -27,7 +27,7 @@ const WIDGET_KEY = "stash";
 const PREVIEW_CHARS = 60;
 
 const preview = (text: string) => {
-  const line = text.trim().split("\n")[0];
+  const line = text.trim().split("\n")[0] ?? "";
   return line.length > PREVIEW_CHARS ? `${line.slice(0, PREVIEW_CHARS)}…` : line;
 };
 
@@ -42,9 +42,36 @@ const real = (path: string) => {
   }
 };
 
+const git = (cwd: string, args: string[]) => {
+  try {
+    return execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      timeout: 5_000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return undefined;
+  }
+};
+
+/** Main checkout of `cwd`, shared by every worktree of a repository; unset outside git. */
+const gitMain = (cwd: string): string | undefined => {
+  const out = git(cwd, [
+    "rev-parse",
+    "--path-format=absolute",
+    "--show-toplevel",
+    "--git-common-dir",
+  ]);
+  const [top, common] = out?.split("\n") ?? [];
+  if (!top) return undefined;
+  // A bare common dir has no main checkout; treat the worktree as its own main.
+  return real(common && basename(common) === ".git" ? dirname(common) : top);
+};
+
 const fileFor = (cwd: string) => {
   // Outside git the directory stands for itself.
-  const root = gitRoots(cwd).main ?? real(cwd);
+  const root = gitMain(cwd) ?? real(cwd);
   // A hash rather than a name: a checkout's path can outrun the filename limit.
   const key = createHash("sha256").update(root).digest("hex").slice(0, 16);
   return join(getAgentDir(), "prompt-stash", `${key}.json`);
