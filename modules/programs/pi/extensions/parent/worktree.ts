@@ -7,8 +7,9 @@
  * pi pins a session's cwd at startup, so a move forks the conversation into a
  * new session file whose header names the target directory and switches to it:
  * pi rebuilds the whole runtime there (tools, context files, footer, git). Only
- * a command context may switch sessions, so the `enter_worktree` tool queues
- * `/wt` for when the turn has settled, and the move then re-prompts the agent.
+ * a command context may switch sessions, so the `enter_worktree` and `exit_worktree`
+ * tools queue `/wt` or `/back` for when the turn has settled, and the move then
+ * re-prompts the agent.
  */
 import { execFile } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
@@ -23,7 +24,8 @@ import { SHELL_TOOLS, WRITE_TOOLS } from "../shared/tools.ts";
 
 const MOVED = "worktree-moved";
 const ENTER_WORKTREE_TOOL = "enter_worktree";
-// Tools that would still act on the old checkout between enter_worktree and the move.
+const EXIT_WORKTREE_TOOL = "exit_worktree";
+// Tools that would still act on the old checkout between the worktree tool and the move.
 const MUTATING = new Set([...SHELL_TOOLS, ...WRITE_TOOLS]);
 
 /** Runs `wt`, resolving its stdout; a non-zero exit rejects with what it said on stderr. */
@@ -88,9 +90,9 @@ const follow = (cwd: string) => {
 };
 
 export default function (pi: ExtensionAPI) {
-  // Worktree the agent asked to move to; set by the tool, consumed once the turn settles.
-  let pending: { name: string; path: string } | undefined;
-  // Set just before the queued `/wt` runs, so the move knows to re-prompt the agent.
+  // Move the agent asked for: the command to queue and where it goes; consumed once the turn settles.
+  let pending: { command: string; path: string } | undefined;
+  // The queued command, set just before it runs, so the move knows to re-prompt the agent.
   let agentMove: string | undefined;
 
   /** Forks the conversation into `path`, switches to it, and reports the move. */
@@ -132,9 +134,9 @@ export default function (pi: ExtensionAPI) {
   // Once, before the first request: a later tool-set change can cost a cache-invalidating
   // re-read. The move needs a UI, and a local model's window has no room to spare.
   pi.on("session_start", (_event, ctx) => {
-    if (!ctx.hasUI || isLeanModel(ctx.model) || pi.getActiveTools().includes(ENTER_WORKTREE_TOOL))
-      return;
-    pi.setActiveTools([...pi.getActiveTools(), ENTER_WORKTREE_TOOL]);
+    const active = pi.getActiveTools();
+    if (!ctx.hasUI || isLeanModel(ctx.model) || active.includes(ENTER_WORKTREE_TOOL)) return;
+    pi.setActiveTools([...active, ENTER_WORKTREE_TOOL, EXIT_WORKTREE_TOOL]);
   });
 
   // Quitting inside a worktree closes it; reload, /new, /resume and /fork keep the process going.
@@ -155,15 +157,12 @@ export default function (pi: ExtensionAPI) {
     pending = undefined;
     if (!target) return;
     if (event.aborted) {
-      ctx.ui.notify(
-        `Worktree move cancelled; ${target.name} was kept. Run /wt ${target.name} to move later.`,
-        "info",
-      );
+      ctx.ui.notify(`Worktree move cancelled. Run ${target.command} to move later.`, "info");
       return;
     }
-    agentMove = target.name;
+    agentMove = target.command;
     // Deferred by pi until agent_settled finishes, then dispatched as a command.
-    pi.sendUserMessage(`/wt ${target.name}`, { expandPromptTemplates: true });
+    pi.sendUserMessage(target.command, { expandPromptTemplates: true });
   });
 
   pi.registerCommand("wt", {
@@ -174,7 +173,7 @@ export default function (pi: ExtensionAPI) {
         .filter((name) => name.startsWith(prefix))
         .map((name) => ({ value: name, label: name })),
     handler: async (args, ctx) => {
-      const resume = agentMove !== undefined && agentMove === args.trim();
+      const resume = agentMove === `/wt ${args.trim()}`;
       agentMove = undefined;
       let [target = "", base] = args.trim().split(/\s+/);
       if (!target) {
@@ -204,6 +203,8 @@ export default function (pi: ExtensionAPI) {
     description:
       "Move this session back to the repo's primary checkout, closing the worktree it leaves.",
     handler: async (_args, ctx) => {
+      const resume = agentMove === "/back";
+      agentMove = undefined;
       await ctx.waitForIdle();
       let path: string;
       try {
@@ -212,7 +213,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify(`Not in a repo wt knows: ${(error as Error).message}`, "error");
         return;
       }
-      await moveTo(path, ctx, false);
+      await moveTo(path, ctx, resume);
     },
   });
 
@@ -227,6 +228,7 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: [
       "Use enter_worktree when the user asks for a worktree, or for more than a quick edit while a peer session works in this checkout (make a quick one in place and tell that peer). Otherwise edit the checkout you are in.",
       "Move with enter_worktree (`wt list` shows existing worktrees), not `wt new`/`wt cd` in bash, which leave this session where it is.",
+      "When the work in a worktree is done (committed, and landed with `wt land` if asked), leave it with exit_worktree. `wt land` and `wt close` can't close the worktree this session is in.",
     ],
     parameters: Type.Object({
       name: Type.String({
@@ -247,12 +249,43 @@ export default function (pi: ExtensionAPI) {
       if (!ctx.hasUI) throw new Error("enter_worktree needs an interactive session");
       const path = await resolveWorktree(params.name, ctx.cwd, params.base);
       if (path === ctx.cwd) throw new Error(`Already working in ${path}`);
-      pending = { name: params.name, path };
+      pending = { command: `/wt ${params.name}`, path };
       return {
         content: [
           {
             type: "text",
             text: `Worktree ready at ${path}. This session moves there when this turn ends; stop now and you will be prompted to continue.`,
+          },
+        ],
+        details: { path },
+        terminate: true,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: EXIT_WORKTREE_TOOL,
+    label: "Exit worktree",
+    description:
+      "Move this session back to the repo's primary checkout, keeping the conversation, and close the worktree it leaves. " +
+      "Closing commits anything uncommitted as a wip commit and keeps the branch until its work is in the default branch. " +
+      "Calling it ends your turn; the session then continues in the primary checkout on its own.",
+    promptSnippet: "Leave this git worktree for the primary checkout, closing it",
+    parameters: Type.Object({}),
+    exposure: "model-only",
+    // Activated at session_start, only where the move can run.
+    defaultActive: false,
+    executionMode: "sequential",
+    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      if (!ctx.hasUI) throw new Error("exit_worktree needs an interactive session");
+      const path = await wt(["cd", "--main"], ctx.cwd);
+      if (path === ctx.cwd) throw new Error("Not in a worktree: this is the primary checkout");
+      pending = { command: "/back", path };
+      return {
+        content: [
+          {
+            type: "text",
+            text: `This session moves to ${path} when this turn ends, and the worktree closes; stop now and you will be prompted to continue.`,
           },
         ],
         details: { path },
