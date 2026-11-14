@@ -460,7 +460,6 @@
           refreshInterval = 2;
         };
         env = {
-          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
           # Not programs.claude-code.plugins: the env block also reaches desktop-app sessions.
           # answer first: its open form has the band to itself, which only hides the rows of
           # mods whose hooks sit beneath its own.
