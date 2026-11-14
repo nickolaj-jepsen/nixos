@@ -32,12 +32,14 @@ The request (the words after `/land`, or what the user asked for) can name the e
 | Words                                                   | Ending                                                     |
 | ------------------------------------------------------- | ---------------------------------------------------------- |
 | `local`, `merge`                                        | land local (root main has nothing to land locally: say so) |
+| `direct`, `commit`                                      | commit only: shape commits and run checks, no `wt land`    |
 | `push`                                                  | push main, from root main only                             |
 | `pr`                                                    | PR for review: opens it, never merges                      |
 | `draft`                                                 | draft PR                                                   |
 | `pr on green`, `green`, `automerge`, "merge when green" | PR merged on green                                         |
 
 - Only an explicit ask merges a PR: `pr` alone opens one and stops.
+- Only the word `push`, or `push main` answered at the gate, pushes `<default>`. No other word is read as a push.
 - A named ending skips the gate's question: print the block and land. It still stops at the gate when checks are red, when commits not from this task would land, or when root main needs `rebase and push main`.
 - "Land it" with no ending named asks at the gate.
 
