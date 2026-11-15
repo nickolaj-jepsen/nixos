@@ -1,41 +1,18 @@
-"""Every message on the hub's socket, defined once: the hub validates against it, and pi's
-build generates its TypeScript types from it (`python3 protocol.py --typescript`), so this
-module imports nothing but the standard library.
+"""Every message on the hub's socket, defined once; the hub validates what it takes against it.
 
-Line-delimited JSON. A message to the hub names an `op`; one from it names a `type`. An op
-that carries `request` is answered with a `reply` of the same number. A session is always
-named by its id string, `session`. Fields may be added freely; a client that has to read
-a change of meaning or shape bumps `VERSION`, and the hub answers a connection that says
-another one with `refused` and closes it; the client says so and stops reconnecting.
+Line-delimited JSON. A message to the hub names an `op`; one from it names a `type`. Nothing is
+answered: the hub sends its `state` to subscribers, and everything else is fire-and-forget. A
+session is always named by its id string, `session`. Fields may be added freely.
 
 A type is a string (`str`, `int`, `bool`, `any`, `null` or a literal word, joined with `|`), a
-list of one type, a dict of fields, or `Nullable(dict)`; a field whose key ends in `?` may
+list of one type or a dict of fields; a field whose key ends in `?` may
 be left out.
 """
-
-import json
-import sys
-
-VERSION = 5
-# The custom message type claude-peers.ts puts a peer's message in a pi session as.
-PEER_MESSAGE = "claude-peer-message"
-
-
-class Nullable:
-    def __init__(self, spec):
-        self.spec = spec
 
 
 # The order the bar lists states in; the first three want you.
 STATES = ("asking", "failed", "done", "working", "idle")
 ATTENTION = STATES[:3]
-
-TURN = {"at": "int", "state": "str", "did": "str"}
-
-# What a permission prompt asks, in full. `complete` is false when `body` had to be cut,
-# and then nothing may allow it from the bar: you can't approve what you can't read.
-ASK = {"tool": "str", "about": "str", "kind": "command|diff|text", "body": "str", "complete": "bool"}
-
 
 ROW = {
     "id": "str",
@@ -44,17 +21,15 @@ ROW = {
     "cwd": "str",
     "pid": "int|null",
     "state": "|".join(STATES),
+    # Why it is in its state: the dialog it waits on, the error that failed it, the first sentence of its last words.
     "reason": "str",
     "since": "int",
     "doing": "str",
-    "summary": "str",
     "waitingFor": "str",
     "window": "int|null",
-    # The latest finished turns, newest last.
-    "history": [TURN],
     # The bar's dot pulses: this came to want you and you haven't looked yet.
     "pulse?": "bool",
-    # An agent-spawned session: its own TUI still gets its row, the bar never does.
+    # An agent-spawned session: tracked, but the bar never shows it.
     "hidden?": "bool",
     # The turn its ending belongs to, so a late dismissal can't put away a newer one.
     "turn?": "int",
@@ -63,130 +38,47 @@ ROW = {
     # How to reach it from elsewhere: its tmux pane, and its Remote Control session.
     "tmux?": "str",
     "bridge?": "str",
-    # What you last asked it, kept only while the hub runs.
-    "prompt?": "str",
-    # The closing words of a finished turn, as the agent wrote them.
-    "said?": "str",
-    # The prompt a hook is holding open, which `answer` can settle by this `id`.
-    "permission?": {"id": "int", **ASK},
     # The repository, the same from any of its worktrees; the directory's own name outside git.
     "project?": "str",
-    "branch?": "str",
-    # How many files have uncommitted changes.
-    "changed?": "int",
-    # The other sessions in the same working tree, by name.
-    "peers?": ["str"],
-    # While working, when its transcript last moved.
-    "activity?": "int",
-    # The background work a finished turn still waits on.
-    "jobs?": ["str"],
-    # While working: what is running and since when, this turn's tally, and the agent's narration so far.
-    "now?": "str",
-    "nowAt?": "int",
-    "counts?": {"edits": "int", "commands": "int", "failed": "int"},
-    "trail?": [{"at": "int", "text": "str"}],
-}
-
-RECENT = {
-    "id": "str",
-    "agent": "str",
-    "name": "str",
-    "summary": "str",
-    "cwd": "str",
-    "project": "str",
-    "endedAt": "int",
-    "resume": "str",
-    "history": [TURN],
-    "host?": "str",
 }
 
 # A link to another host's hub: `up`, or why it isn't.
 LINK = {"host": "str", "status": "str"}
 
-# Who reads a turn: pi's session file and leaf entry, or Claude's transcript.
-TRANSCRIPT = {"transcript?": "str|null", "leaf?": "str|null"}
-
 # A background task still in flight when a Claude turn stopped.
 TASK = {"type": "str", "description?": "str|null"}
 
+# What Claude's hooks say of themselves, for the session they name.
+WHO = {"session": "str", "pid?": "int|null", "cwd?": "str|null", "hidden?": "bool", "tmux?": "str|null",
+       "transcript?": "str|null"}
+
 OPS = {
-    # The bar and the CLI.
-    # `local`: this host's own sessions, leaving out what it links in.
-    "subscribe": {"version?": "int", "local?": "bool"},
+    # The bar and the CLI. `local`: this host's own sessions, leaving out what it links in.
+    "subscribe": {"local?": "bool"},
     "focus": {"session": "str"},
     "focus-next": {},
     "dismiss": {"session": "str", "turn?": "int"},
     # Brings back the last thing dismissed at this bar.
     "undo": {},
-    # Brings back one session's, as another hub's `undo` asks.
-    "undismiss": {"session": "str", "turn?": "int"},
     # The popout opened: you have seen what pulses.
     "seen": {},
     "toggle": {},
-    "resume": {"session": "str"},
-    # Settles the prompt `ask` names, and only that one.
-    "answer": {"session": "str", "ask": "int", "allow": "bool"},
-    # Asks for a row's folder or git menu, answered with `menu`, twice when a lookup follows.
-    "menu": {"request": "int", "session": "str", "which": "folder|git"},
-    # Does what a menu row says.
-    "run": {"session": "str", "kind": "url|copy|app", "value": "str"},
-    # What this host's git says of a session, for a viewer's git menu; answered in `reply.facts`.
-    "git-facts": {"request": "int", "session": "str"},
     "demo": {"sessions": ["any"]},
-    # pi, for the life of its connection; ops after `attach` name no session.
-    "attach": {
-        "version": "int",
-        "session": "str",
-        "pid": "int",
-        "cwd": "str",
-        "status": "str",
-        "since": "int",
-        "waitingFor": "str|null",
-        "name": "str|null",
-        "hidden?": "bool",
-        "tmux?": "str|null",
-        **TRANSCRIPT,
-    },
-    # pi's own, or a Claude hook's for the session it names.
-    "dialog": {"session?": "str", "text": "str|null"},
-    # Claude's PermissionRequest hook, held open until `reply` says what became of the prompt.
-    "permission": {"request": "int", "session": "str", "text": "str", "ask": ASK, "pid?": "int|null", "cwd?": "str|null",
-                   "configDir?": "str|null", "hidden?": "bool", "tmux?": "str|null"},
-    "named": {"name": "str|null"},
-    # Both agents; Claude's hooks name their session and say who runs it.
-    "session-start": {"session": "str", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null", "hidden?": "bool",
-                      "tmux?": "str|null", **TRANSCRIPT},
-    "session-end": {"session": "str"},
-    # `peer`: another session's message woke it, so what the row stands on stays.
-    "turn-start": {"request?": "int", "session?": "str", "prompt?": "str|null", "fromPerson?": "bool", "peer?": "bool",
-                   "worktreeTool?": "bool", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null",
-                   "hidden?": "bool", "tmux?": "str|null", **TRANSCRIPT},
-    # `said` and `tasks` are the agent's own word, which a transcript can lag behind.
-    # `failure` is why the turn died, which needs no reading.
-    "turn-end": {"session?": "str", "pending?": "int", "error?": "bool", "said?": "str|null", "tasks?": [TASK],
-                 "failure?": "str", "pid?": "int|null", "cwd?": "str|null", "configDir?": "str|null", "hidden?": "bool",
-                 "tmux?": "str|null", **TRANSCRIPT},
+    # Claude's hooks, all fire-and-forget. `peer`: another session's message woke it, so what the row stands on stays.
+    "turn-start": {"peer?": "bool", **WHO},
+    # `said` and `tasks` are the agent's own word. `failure` is why the turn died, which needs no reading.
+    "turn-end": {"said?": "str|null", "tasks?": [TASK], "failure?": "str", **WHO},
 }
 
 TYPES = {
     # `hidden` counts the agent-spawned sessions left out of `sessions`.
-    "state": {"sessions": [ROW], "recent": [RECENT], "hidden?": "int", "links?": [LINK]},
+    "state": {"sessions": [ROW], "hidden?": "int", "links?": [LINK]},
     # `attach` says it is alive between states.
     "beat": {},
-    "row": {"row": Nullable(ROW)},
-    # `decision` answers a held `permission`; without one the prompt closed some other way.
-    "reply": {"request": "int", "peers?": "str", "decision?": "allow|deny", "facts?": "any"},
-    "menu": {"request": "int", "menu": "any"},
-    "notice": {"text": "str"},
-    "refused": {"text": "str"},
-    # Carries `request` when the message it rejects had one, so a client can fail that call now
-    # instead of waiting for its timeout.
-    "error": {"error": "str", "request?": "int"},
+    "error": {"error": "str"},
 }
 
-
-# Each base type and its TypeScript.
-BASE = {"str": "string", "int": "number", "bool": "boolean", "any": "unknown", "null": "null"}
+BASE = ("str", "int", "bool", "any", "null")
 
 
 def _check(value, spec, where):
@@ -195,9 +87,6 @@ def _check(value, spec, where):
             raise ValueError(f"{where} must be a list")
         for i, item in enumerate(value):
             _check(item, spec[0], f"{where}[{i}]")
-    elif isinstance(spec, Nullable):
-        if value is not None:
-            _check(value, spec.spec, where)
     elif isinstance(spec, dict):
         if not isinstance(value, dict):
             raise ValueError(f"{where} must be an object")
@@ -231,42 +120,3 @@ def validate(message):
         raise ValueError(f"unknown op {op!r}")
     _check(message, OPS[op], op)
     return message
-
-
-def _ts(spec, indent=""):
-    if isinstance(spec, list):
-        inner = _ts(spec[0], indent)
-        return f"Array<{inner}>"
-    if isinstance(spec, Nullable):
-        return f"{_ts(spec.spec, indent)} | null"
-    if isinstance(spec, dict):
-        fields = [f"{indent}  {json.dumps(key.rstrip('?')) if '-' in key else key.rstrip('?')}"
-                  f"{'?' if key.endswith('?') else ''}: {_ts(field, indent + '  ')};"
-                  for key, field in spec.items()]
-        return "{\n" + "\n".join(fields) + f"\n{indent}}}" if fields else "{}"
-    return " | ".join(BASE.get(kind) or json.dumps(kind) for kind in spec.split("|"))
-
-
-def typescript():
-    """The TypeScript types of the protocol, for pi."""
-    lines = [
-        "// Generated by pkgs/agent-hub/agent_hub/protocol.py at build time.",
-        f"export const PROTOCOL_VERSION = {VERSION};",
-        f"export const PEER_MESSAGE_TYPE = {json.dumps(PEER_MESSAGE)};",
-        "export type HubState = HubRow[\"state\"];",
-        f"export type HubTurn = {_ts(TURN)};",
-        f"export type HubRow = {_ts(ROW)};",
-        "export type HubOp =",
-        *(f"  | ({{ op: {json.dumps(op)} }} & {_ts(spec, '  ')})" for op, spec in OPS.items()),
-        ";",
-        "export type HubMessage =",
-        *(f"  | ({{ type: {json.dumps(kind)} }} & {_ts(spec, '  ')})" for kind, spec in TYPES.items()),
-        ";",
-    ]
-    return "\n".join(lines) + "\n"
-
-
-if __name__ == "__main__":
-    if sys.argv[1:] != ["--typescript"]:
-        sys.exit("usage: protocol.py --typescript")
-    sys.stdout.write(typescript())

@@ -19,10 +19,8 @@ class EndingTest(unittest.TestCase):
     def test_a_turn_is_done_with_its_first_sentence_and_its_words(self):
         outcome = ending("**Fixed** the footer. It was too wide.\n\nWant the header too?")
         self.assertEqual((outcome["state"], outcome["summary"], outcome["jobs"]), ("done", "Fixed the footer.", 0))
-        self.assertTrue(outcome["said"].endswith("Want the header too?"))
 
     def test_the_agents_error_fails_it(self):
-        self.assertEqual(ending("Partial.", error=True)["state"], "failed")
         self.assertEqual((FAILED["state"], FAILED["summary"]), ("failed", "API error: overloaded"))
 
     def test_agent_work_in_flight_is_waited_on(self):
@@ -33,7 +31,7 @@ class EndingTest(unittest.TestCase):
         server = [{"type": "shell", "description": "npm run dev"}]
         self.assertEqual(ending("The dev server is up on :3000.", tasks=server)["jobs"], 0)
         self.assertEqual(ending("I'll wait for the build to finish.", tasks=server)["jobs"], 1)
-        self.assertEqual(ending("Waiting on the build.", pending=2)["jobs"], 2)
+        self.assertEqual(ending("Waiting on the build.", tasks=[{"type": "shell"}, {"type": "shell"}])["jobs"], 2)
 
 
 class TurnTest(unittest.TestCase):
@@ -43,8 +41,7 @@ class TurnTest(unittest.TestCase):
         self.assertEqual(session.state(1), "working")
         self.assertTrue(session.end_turn(10, DONE))
         row = session.row(13)
-        self.assertEqual((row["state"], row["summary"], row["since"]), ("done", "Fixed the footer.", 10))
-        self.assertEqual(row["said"], DONE["said"])
+        self.assertEqual((row["state"], row["reason"], row["since"]), ("done", "Fixed the footer.", 10))
 
     def test_a_failed_turn_says_why(self):
         row = finished(FAILED).row(200)
@@ -53,13 +50,6 @@ class TurnTest(unittest.TestCase):
     def test_waiting_on_background_jobs_keeps_it_working(self):
         session = finished({**DONE, "jobs": 2})
         self.assertEqual(session.row(200)["doing"], "waiting on 2 background jobs")
-
-    def test_history_keeps_the_last_three_endings(self):
-        session = Session(id="s")
-        for i in range(5):
-            session.start_turn(i * 100)
-            session.end_turn(i * 100 + 10, {**DONE, "summary": f"turn {i}"})
-        self.assertEqual([h["did"] for h in session.row(1000)["history"]], ["turn 2", "turn 3", "turn 4"])
 
     def test_waiting_on_jobs_names_the_work_when_the_agent_did(self):
         session = finished({**DONE, "jobs": 1, "doing": "Explore the hub"})
@@ -211,12 +201,6 @@ class AsideTest(unittest.TestCase):
         session.start_aside(300 + REGISTRY_GRACE_MS + 1)
         self.assertEqual((session.turn.n, session.state(300 + REGISTRY_GRACE_MS + 2)), (1, "done"))
 
-    def test_a_session_with_only_an_aside_survives_saving(self):
-        session = Session(id="s")
-        session.start_aside(300)
-        self.assertNotIn("aside", session.saved())
-
-
 class DismissTest(unittest.TestCase):
     def test_dismissed_turn_is_idle_until_the_next_one_ends(self):
         session = finished()
@@ -241,29 +225,11 @@ class RowTest(unittest.TestCase):
         session.name = "mine"
         self.assertEqual(session.row(0)["name"], "mine")
 
-    def test_saved_session_loads_as_it_was(self):
-        session = finished(DONE)
-        session.name = "fixture cleanup"
-        again = Session.load(session.saved(), 999)
-        self.assertEqual(again.row(1000), session.row(1000))
-
-    def test_a_turn_a_restart_caught_open_comes_back_to_be_ended(self):
-        session = Session(id="s")
-        session.start_turn(0)
-        again = Session.load(session.saved(), 999)
-        self.assertTrue(again.turn.restored and again.turn.open)
-        self.assertTrue(again.end_turn(1000, DONE))
-
-    def test_a_turn_with_its_ending_comes_back_settled(self):
-        self.assertFalse(Session.load(finished().saved(), 999).turn.restored)
-
-    def test_an_ending_saved_before_the_gate_went_loads_as_done(self):
-        saved = finished().saved()
-        saved["label"] = "old label"
-        saved["turn"].update(outcome={"state": "blocked", "ask": "ship it?", "summary": "Asked.", "jobs": 0}, reading=False, doing="")
-        saved["history"] = [{"at": 110, "state": "needs-reply", "did": "Asked."}]
-        again = Session.load(saved, 999)
-        self.assertEqual((again.state(1000), again.history[0]["state"]), ("done", "done"))
+    def test_claudes_title_beats_the_derived_name_but_not_the_persons(self):
+        session = Session(id="s", cwd="/home/x/repo", derived="repo-12", title="Fix the footer")
+        self.assertEqual(session.row(0)["name"], "Fix the footer")
+        session.name = "mine"
+        self.assertEqual(session.row(0)["name"], "mine")
 
     def test_order_puts_the_longest_waiting_attention_first_then_the_latest(self):
         rows = [{"state": s, "since": t} for s, t in

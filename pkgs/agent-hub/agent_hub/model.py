@@ -1,29 +1,28 @@
 """A session as the hub knows it, and the rules that move it: pure, no I/O, no clock of
 its own (every change takes `now`), so the hub's behaviour is testable as data.
 
-A turn opens on the agent's own word (pi's `turn-start`, Claude's UserPromptSubmit) and
-closes on it (`turn-end`, Stop), which says how it ended (`ending`). The registry only
-stands in where that word never comes: `busy` with no turn open starts one, once the agent
-has had `REGISTRY_GRACE_MS` to speak if that would take an ending off the row, and `idle`
-with one open ends it as interrupted (Esc fires no Stop). An ending that lands on a turn
-already closed that way still counts, unless a newer turn started meanwhile. A turn a
-restart caught open comes back `restored`, for the hub to end if its ending went unheard.
+A turn opens on Claude's own word (its UserPromptSubmit hook) and closes on it (Stop), which
+says how it ended (`ending`). The registry only stands in where that word never comes: `busy`
+with no turn open starts one, once the agent has had `REGISTRY_GRACE_MS` to speak if that
+would take an ending off the row, and `idle` with one open ends it as interrupted (Esc fires
+no Stop). An ending that lands on a turn already closed that way still counts, unless a newer
+turn started meanwhile. pi has no hooks: its registry entry says how a turn ended, and the
+hub ends it (see `Hub._observe_pi`).
 
 A peer's message wakes the session without you: that turn is an `aside`, which leaves the
 standing turn alone, so what the row says of you and the session stays true.
 """
 
 import re
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import dataclass
 
-from .common import BLOCK_MAX, folded, shown_block
+from .common import folded
 from .protocol import ATTENTION, STATES
 
 # Claude marks every open modal `waiting`; one it names this only shows something (the history view, /config).
 SHOWING_DIALOGS = ("dialog open",)
 # The endings a turn can leave; `asking` wants more than a look, so only `x` hides it.
 DISMISSABLE = ("failed", "done")
-HISTORY = 3
 # A dialog answered within this long never pulses, and Claude's hook has time to name it.
 ASK_GRACE_MS = 1000
 # A `done` pulses once: one breath of the bar's dot.
@@ -32,8 +31,6 @@ ONCE_MS = 1000
 REGISTRY_GRACE_MS = 2000
 # Which field of a row says why it is in its state.
 REASON_FIELD = {"asking": "waitingFor", "failed": "summary", "done": "summary", "working": "doing"}
-# What a row says of a held prompt.
-PERMISSION = ("id", "tool", "about", "kind", "body", "complete")
 # Background task types that always report back; a shell task can be a server left running.
 AGENT_TASKS = ("subagent", "workflow", "teammate", "monitor", "cloud session")
 # Words of a turn that ended to wait for its own jobs; a server it left running for you says none of them.
@@ -44,19 +41,17 @@ MAX_SUMMARY = 120
 MAX_TASK_LINE = 80
 
 
-def ending(said="", tasks=(), pending=0, error=False, failure=""):
-    """How a turn ended, from the agent's own word (`turn-end`): `failed` on its error, else
-    `done`, with the jobs it still waits on. Agent work in flight reports back, so it waits on
-    that; a shell job only counts when the closing words say it waits, since it can as well be
-    a server left running for you."""
+def ending(said="", tasks=(), failure=""):
+    """How a turn ended, from Claude's own word (Stop): `failed` on its error (StopFailure),
+    else `done`, with the jobs it still waits on. Agent work in flight reports back, so it
+    waits on that; a shell job only counts when the closing words say it waits, since it can
+    as well be a server left running for you."""
     if failure:
-        return {"state": "failed", "summary": folded(failure)[:MAX_SUMMARY], "said": "", "jobs": 0, "doing": "", "tasks": []}
+        return {"state": "failed", "summary": folded(failure)[:MAX_SUMMARY], "jobs": 0, "doing": ""}
     agents = [t for t in tasks if t["type"] in AGENT_TASKS]
-    pending = max(len(tasks) - len(agents), int(pending or 0))
+    pending = len(tasks) - len(agents)
     final = CODE_BLOCK.sub("", said or "").strip()
-    if error:
-        jobs = 0
-    elif agents:
+    if agents:
         jobs = len(agents) + pending
     else:
         jobs = pending if WAITS.search(final) else 0
@@ -64,13 +59,10 @@ def ending(said="", tasks=(), pending=0, error=False, failure=""):
     doing = described[0][:MAX_TASK_LINE] + (f" +{len(tasks) - 1}" if len(tasks) > 1 else "") if described and jobs else ""
     first = next((p for p in (folded(MARKDOWN.sub("", p)) for p in re.split(r"\n\s*\n", final)) if p), "")
     return {
-        "state": "failed" if error else "done",
+        "state": "done",
         "summary": re.split(r"(?<=[.?!])\s+", first)[0][:MAX_SUMMARY],
-        # What the popout shows of the turn, in the agent's own words.
-        "said": shown_block((said or "")[-BLOCK_MAX:])[0],
         "jobs": jobs,
         "doing": doing,
-        "tasks": [d[:MAX_TASK_LINE] for d in described] if jobs else [],
     }
 
 
@@ -81,10 +73,8 @@ class Turn:
     # "agent" for the agent's own word, "registry" for a turn the registry stood in for.
     by: str = "agent"
     ended: int | None = None
-    # `ending`: state, summary, said, jobs, doing, tasks. None while open, or interrupted.
+    # `ending`: state, summary, jobs, doing. None while open, or interrupted.
     outcome: dict | None = None
-    # Loaded open: a restart may have missed how it ended.
-    restored: bool = False
 
     @property
     def open(self):
@@ -97,14 +87,12 @@ class Session:
     agent: str = "claude"
     pid: int | None = None
     cwd: str = ""
-    config_dir: str | None = None
-    # pi's session file and leaf entry, or Claude's transcript.
+    # Claude's transcript, which is read for the session's title.
     transcript: str | None = None
-    leaf: str | None = None
     # What the agent says it is doing: busy, idle or waiting, and since when.
     status: str = "idle"
     status_at: int = 0
-    # The dialog it waits on, as its hook or pi named it.
+    # The dialog it waits on, as the registry names it.
     dialog: str = ""
     # The registry entry's own status, dialog and stamp, as last seen.
     registry_seen: tuple | None = None
@@ -123,54 +111,20 @@ class Session:
     dismissed: int | None = None
     # The open prompt you put away, which stays away for as long as it is that prompt.
     dismissed_prompt: tuple | None = None
-    # The latest finished turns, newest last: `{at, state, did}`.
-    history: list = field(default_factory=list)
     # When it was last known live, so one the registry hasn't caught up with is kept a while.
     seen: int = 0
-    # The hook said the session ended: it lives only as long as the registry still lists it.
-    ending: bool = False
-    # The peers note a Claude session got last, which it is not told twice.
-    told: str = ""
     # Spawned by an agent (`AGENT_HUB_HIDDEN=1`): tracked, but off the bar.
     hidden: bool = False
     # Its tmux pane, and its Remote Control session: how another host can reach it.
     tmux: str = ""
     bridge: str = ""
-    # What the person last asked it. Never saved: it stays in the transcript's care.
-    prompt: str = ""
-    # The prompts its hook holds open, oldest first, which is the one its dialog shows.
-    holds: list = field(default_factory=list)
-    # Its working tree, as git last said: the tree's root, its repository, branch, and files changed.
-    root: str = ""
+    # Its repository, as git said when it was first seen there.
     project: str = ""
-    branch: str = ""
-    changed: int = 0
-    # Whether git has been asked since this hub met it.
+    # Whether git has been asked since this hub met it, and whether the environment was read.
     git_asked: bool = False
-
-    # Persistence.
-
-    KEPT = ("id", "agent", "pid", "cwd", "config_dir", "transcript", "leaf", "name", "title", "dismissed", "history", "hidden",
-            "tmux")
-
-    def saved(self):
-        data = {key: getattr(self, key) for key in self.KEPT}
-        if self.turn is not None:
-            data["turn"] = {k: v for k, v in asdict(self.turn).items() if k != "restored"}
-        return data
-
-    @classmethod
-    def load(cls, data, now):
-        session = cls(**{key: data[key] for key in cls.KEPT if key in data}, seen=now)
-        if isinstance(data.get("turn"), dict):
-            turn = Turn(**{f.name: data["turn"][f.name] for f in fields(Turn) if f.name in data["turn"]})
-            turn.restored = turn.open
-            # Before the gate went, an ending could be `blocked`: it was a `done` that asked.
-            if turn.outcome and turn.outcome.get("state") not in DISMISSABLE:
-                turn.outcome["state"] = "done"
-            session.turn = turn
-        session.history = [{**h, "state": h["state"] if h.get("state") in DISMISSABLE else "done"} for h in session.history]
-        return session
+    env_read: bool = False
+    # pi's registry entry as last seen, which is all pi says.
+    pi_seen: tuple | None = None
 
     def shown_name(self):
         return self.name or self.title or self.derived or self.cwd.rstrip("/").rsplit("/", 1)[-1] or self.agent
@@ -222,7 +176,6 @@ class Session:
         if outcome["state"] != "failed" or (self.turn is not None and self.turn.open):
             return False
         self.turn = Turn(n=self.turn.n + 1 if self.turn else 1, started=aside.started, ended=ended, outcome=outcome)
-        self._remember(ended, outcome)
         return True
 
     def aside_running(self):
@@ -239,11 +192,7 @@ class Session:
         if outcome is None:
             return False
         turn.outcome = outcome
-        self._remember(turn.ended, outcome)
         return True
-
-    def _remember(self, at, outcome):
-        self.history = (self.history + [{"at": at, "state": outcome["state"], "did": outcome.get("summary") or ""}])[-HISTORY:]
 
     # The agent's own status.
 
@@ -294,41 +243,6 @@ class Session:
         if self.status != "waiting":
             self.status, self.status_at = "waiting", now
 
-    # Prompts a hook holds open.
-
-    def hold(self, hold_id, ask, text, now):
-        """A hook holds a prompt open. The registry stamp it opened under, when it got there
-        first, tells it from the next prompt under a new stamp."""
-        seen = self.registry_seen
-        stamp = seen[2] if seen and seen[0] == "waiting" and not self.holds else None
-        self.holds.append({**ask, "id": hold_id, "text": text, "opened": now, "stamp": stamp})
-        self.wait(self.holds[0]["text"], now)
-
-    def unhold(self, hold):
-        """A held prompt is settled: the next one is what its dialog shows now."""
-        self.holds.remove(hold)
-        if self.holds:
-            self.dialog = self.holds[0]["text"]
-
-    def closed_holds(self):
-        """The holds the registry says are over. Claude leaves a hook running when you answer
-        its dialog in the terminal, so this is how the hub hears of it. A status older than the
-        prompt says nothing about it, and a new `waiting` stamp means the prompt shown closed."""
-        seen = self.registry_seen
-        if not (self.holds and seen):
-            return []
-        status, _, stamp = seen
-        if status != "waiting":
-            return [hold for hold in self.holds if stamp >= hold["opened"]]
-        first = self.holds[0]
-        if first["stamp"] is None:
-            first["stamp"] = stamp
-        if first["stamp"] == stamp:
-            return []
-        if len(self.holds) > 1:
-            self.holds[1]["stamp"] = stamp
-        return [first]
-
     # What the bar shows.
 
     def state(self, now):
@@ -370,13 +284,12 @@ class Session:
             "state": state,
             "since": since,
             "doing": doing,
-            "summary": outcome.get("summary") or "",
             "waitingFor": self.dialog if state == "asking" else "",
             "window": window,
-            "history": list(self.history),
         }
         field_ = REASON_FIELD.get(state)
-        row["reason"] = (row[field_] or "").strip() if field_ else ""
+        shown = {**row, "summary": outcome.get("summary") or ""}
+        row["reason"] = (shown[field_] or "").strip() if field_ else ""
         if self.hidden:
             row["hidden"] = True
         if turn is not None:
@@ -385,12 +298,8 @@ class Session:
             row["tmux"] = self.tmux
         if self.bridge:
             row["bridge"] = self.bridge
-        details = {"prompt": self.prompt, "project": self.project, "branch": self.branch, "changed": self.changed,
-                   "said": outcome.get("said") if state in DISMISSABLE else "",
-                   "jobs": outcome.get("tasks") if state == "working" and not aside and not turn.open else None}
-        row.update({key: value for key, value in details.items() if value})
-        if state == "asking" and self.holds:
-            row["permission"] = {key: self.holds[0][key] for key in PERMISSION}
+        if self.project:
+            row["project"] = self.project
         return row
 
     def open_prompt(self):

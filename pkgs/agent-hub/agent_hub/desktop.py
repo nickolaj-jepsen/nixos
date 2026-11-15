@@ -1,10 +1,8 @@
-"""The desktop layer: the compositor's windows and focus, from niri or Hyprland."""
+"""The desktop layer: the compositor's windows and focus, from niri."""
 
 import asyncio
 import json
 import os
-import shlex
-import socket
 import sys
 from pathlib import Path
 
@@ -40,26 +38,6 @@ def niri_env():
     else:
         env.pop("NIRI_SOCKET", None)
     return env
-
-
-def hyprland_dir():
-    """The socket directory of a Hyprland that answers, newest first, or None. A crashed one
-    leaves its sockets behind, and the hub's unit can outlive the session that named one."""
-    try:
-        dirs = sorted(
-            (path.parent for path in (runtime_dir() / "hypr").glob("*/.socket.sock")),
-            key=lambda path: path.stat().st_mtime, reverse=True,
-        )
-    except OSError:
-        return None
-    for path in dirs:
-        with socket.socket(socket.AF_UNIX) as probe:
-            try:
-                probe.connect(str(path / ".socket.sock"))
-            except OSError:
-                continue
-        return path
-    return None
 
 
 class Niri:
@@ -118,62 +96,8 @@ class Niri:
         await self._action("focus-window", "--id", str(window))
 
 
-class Hyprland:
-    """Hyprland, over its own two sockets. A window's id is its address as a number."""
-
-    def __init__(self, path):
-        self.path = path
-
-    async def stream(self, desktop):
-        reader, writer = await asyncio.open_unix_connection(str(self.path / ".socket2.sock"), limit=LINE_MAX)
-        try:
-            await self._list(desktop)
-            async for line in reader:
-                name, _, data = line.decode(errors="replace").rstrip("\n").partition(">>")
-                if name == "activewindowv2":
-                    desktop.update(desktop.windows, self._id(data))
-                elif name in ("openwindow", "closewindow"):
-                    # Neither event carries a pid.
-                    await self._list(desktop)
-        finally:
-            writer.close()
-
-    @staticmethod
-    def _id(address):
-        try:
-            return int(address, 16)
-        except (TypeError, ValueError):
-            return None
-
-    async def _list(self, desktop):
-        clients = json.loads(await self._request("j/clients"))
-        active = json.loads(await self._request("j/activewindow"))
-        desktop.update({self._id(c["address"]): c.get("pid") for c in clients}, self._id(active.get("address")))
-
-    async def _request(self, message):
-        reader, writer = await asyncio.open_unix_connection(str(self.path / ".socket.sock"))
-        try:
-            writer.write(message.encode())
-            await writer.drain()
-            return (await reader.read()).decode(errors="replace")
-        finally:
-            writer.close()
-
-    async def _dispatch(self, lua):
-        try:
-            await self._request(f"/dispatch {lua}")
-        except OSError:
-            pass
-
-    async def spawn(self, argv):
-        await self._dispatch(f"hl.dsp.exec_cmd({json.dumps(shlex.join(argv), ensure_ascii=False)})")
-
-    async def focus(self, window):
-        await self._dispatch(f'hl.dsp.focus({{ window = "address:{window:#x}" }})')
-
-
 class Desktop:
-    """Window ↔ pid map and the focused window, from whichever compositor is running.
+    """Window ↔ pid map and the focused window, from niri.
     Without a `niri` command there are no windows: a headless hub."""
 
     def __init__(self, niri, on_change):
@@ -187,9 +111,7 @@ class Desktop:
 
     async def run(self):
         while self.niri:
-            # Both sessions share this config, so the choice is made per connection.
-            path = hyprland_dir()
-            self.compositor = Hyprland(path) if path else Niri(self.niri)
+            self.compositor = Niri(self.niri)
             try:
                 failure = await self.compositor.stream(self)
             except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:

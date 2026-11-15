@@ -2,8 +2,6 @@
 
 import json
 import os
-import re
-import shlex
 import socket
 import struct
 import sys
@@ -12,10 +10,6 @@ from pathlib import Path
 
 LINE_MAX = 1 << 22
 LABEL_MAX = 200
-# As much of a request or a closing message as a popout pane shows.
-BLOCK_MAX = 4000
-# Control, bidi and zero-width characters, which could make a command read as something else.
-UNSHOWABLE = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f​-‏ -‮⁠-⁯﻿]")
 
 
 def state_dir():
@@ -24,18 +18,13 @@ def state_dir():
 
 def load_config():
     """The daemon's config. Only a desktop names `niri`; without it the hub runs
-    headless, for the agents' own TUIs."""
+    headless, to serve viewers."""
     default = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "agent-hub" / "config.json"
     path = Path(os.environ.get("AGENT_HUB_CONFIG") or default)
-    cfg = {"registry": "~/.claude/sessions", "state": str(state_dir() / "state.json")}
+    cfg = {"registry": "~/.claude/sessions"}
     if path.exists():
         cfg.update(json.loads(path.read_text()))
     return cfg
-
-
-def log_path(cfg):
-    """The work log, beside the state file."""
-    return Path(cfg["state"]).expanduser().parent / "log.jsonl"
 
 
 def socket_path():
@@ -127,45 +116,6 @@ def label_line(text):
     return folded(text)[:LABEL_MAX]
 
 
-def shown_block(value, limit=BLOCK_MAX):
-    """(text, whether all of it fit) for many lines of someone else's text: what can't be shown
-    honestly is marked rather than dropped, and line breaks and tabs stay."""
-    text = UNSHOWABLE.sub("�", value.replace("\r\n", "\n")) if isinstance(value, str) else ""
-    return text[:limit], len(text) <= limit
-
-
-def json_lines(path):
-    """Each JSON object in a JSON-lines file, skipping lines that aren't one; OSError propagates."""
-    with open(path, encoding="utf-8", errors="replace") as lines:
-        for line in lines:
-            try:
-                entry = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(entry, dict):
-                yield entry
-
-
-def write_atomic(path, text):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(text)
-    tmp.rename(path)
-
-
-def resume_argv(agent, session_id, config_dir=None):
-    """The agent command that resumes an ended session, run in its cwd: `claude-work` for
-    a ~/.claude-work session."""
-    if agent == "pi":
-        return ["pi", "--session", session_id[:8]]
-    wrapper = "claude-work" if config_dir and Path(config_dir).name == ".claude-work" else "claude"
-    return [wrapper, "--resume", session_id]
-
-
-def resume_command(agent, session_id, cwd, config_dir=None):
-    return f"cd {shlex.quote(cwd or '~')} && {shlex.join(resume_argv(agent, session_id, config_dir))}"
-
-
 def hub_message(message):
     """Sends one message to the hub and hangs up; a missing hub is no error."""
     try:
@@ -175,35 +125,6 @@ def hub_message(message):
             sock.sendall((json.dumps(message) + "\n").encode())
     except OSError:
         pass
-
-
-def hub_request(message, timeout=1.0):
-    """Sends one message that carries a `request` number and returns the hub's reply to
-    it, or None when the hub is down or slow: callers sit in an agent's prompt path.
-    A `timeout` of None waits for as long as the hub keeps the connection."""
-    try:
-        with socket.socket(socket.AF_UNIX) as sock:
-            sock.settimeout(timeout)
-            sock.connect(str(socket_path()))
-            sock.sendall((json.dumps(message) + "\n").encode())
-            buf = b""
-            while True:
-                while b"\n" not in buf:
-                    chunk = sock.recv(LINE_MAX)
-                    if not chunk:
-                        return None
-                    buf += chunk
-                line, buf = buf.split(b"\n", 1)
-                reply = json.loads(line)
-                if isinstance(reply, dict) and reply.get("request") == message.get("request"):
-                    return reply
-    except (KeyError, OSError, ValueError):
-        return None
-
-
-def hub_state(timeout=1.0):
-    """The hub's current `state` message, or None when it is down."""
-    return hub_request({"op": "subscribe"}, timeout)
 
 
 def peer_uid(sock):
@@ -217,3 +138,12 @@ def peer_uid(sock):
         _, uid = struct.unpack("Ii", sock.getsockopt(0, socket.LOCAL_PEERCRED, 76)[:8])
         return uid
     return None
+
+
+def hidden_by_env(pid):
+    """Whether the process was started with `AGENT_HUB_HIDDEN=1`, from /proc; False where there is none."""
+    try:
+        environ = Path(f"/proc/{int(pid)}/environ").read_bytes()
+    except (OSError, ValueError, TypeError):
+        return False
+    return b"AGENT_HUB_HIDDEN=1" in environ.split(b"\0")
