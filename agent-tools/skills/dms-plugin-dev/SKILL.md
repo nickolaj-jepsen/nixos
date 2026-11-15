@@ -62,3 +62,4 @@ bash $S run sh -c 'CLAUDE_CONFIG_DIR="$HOME/.claude" tmux -L sandbox new-session
 - `wtype` waits for the seat: `key` right after `up` can land before a surface has focus. Take a `shot` when a key seems ignored.
 - Never link a sandboxed Claude to your real `settings.json`. It rewrites that file through the link, which replaces a home-manager symlink with a plain file and makes the next switch fail with `would be clobbered`.
 - Never stop a sandbox by process name. The live shell runs the same store paths; `down` finds them by their runtime dir.
+- After a switch, the live shell can still draw the old QML. Nix store files all carry mtime 1970 and the plugin's path never changes, so Quickshell's compiled cache (`~/.cache/quickshell/qmlcache`) is hit as if nothing changed, and `systemctl --user restart dms` alone doesn't help. Delete that directory, then restart `dms`. The sandbox has its own cache, so it never shows this.
