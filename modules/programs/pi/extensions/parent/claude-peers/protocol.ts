@@ -8,7 +8,7 @@
  * Node built-ins only, so it can run outside pi for protocol tests.
  */
 /** The custom message type a peer's message reaches pi's transcript as. */
-export { PEER_MESSAGE_TYPE } from "../lib/protocol.gen.ts";
+export const PEER_MESSAGE_TYPE = "claude-peer-message";
 
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -61,6 +61,13 @@ export interface RegistryEntry {
   statusUpdatedAt?: number;
   /** What a `waiting` session waits on; Claude Code writes its own, pi the open permission dialog. */
   waitingFor?: string;
+  /** For agent-hub: why the last turn failed, until the next turn starts. */
+  hubFailed?: string;
+  /** For agent-hub: a peer's message woke the running turn. */
+  hubPeer?: boolean;
+  hubHidden?: boolean;
+  /** For agent-hub: the tmux pane this session runs in, when it does. */
+  tmux?: string;
   [key: string]: unknown;
 }
 

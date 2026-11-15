@@ -12,11 +12,9 @@
       inherit (pkgs.importNpmLock) npmConfigHook;
       nativeBuildInputs = [pkgs.typescript];
       # parent/lib/spellfix is a symlink to the spellfix plugin's core and dangles in the store.
-      # The hub's protocol types come from its Python definition, the one the hub validates against.
       postPatch = ''
         rm parent/lib/spellfix
         install -Dm644 ${../../../agent-tools/plugins/spellfix/core/spellfix.ts} parent/lib/spellfix/spellfix.ts
-        ${pkgs.python3.interpreter} ${../../../pkgs/agent-hub/agent_hub/protocol.py} --typescript > parent/lib/protocol.gen.ts
       '';
       buildPhase = ''
         runHook preBuild

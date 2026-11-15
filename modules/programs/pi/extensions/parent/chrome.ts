@@ -17,7 +17,7 @@ import type { Services } from "./services.ts";
 // pi's root types omit EditorFactory, so it comes from the one API that takes it.
 type EditorFactory = NonNullable<Parameters<ExtensionUIContext["setEditorComponent"]>[0]>;
 
-export default function (pi: ExtensionAPI, { identity, userWait, editorHooks, hub }: Services) {
+export default function (pi: ExtensionAPI, { identity, userWait, editorHooks }: Services) {
   const state = createState();
   const git = createGit(state);
   // Registered before the modules, so their handlers already see the session. pi
@@ -74,7 +74,7 @@ export default function (pi: ExtensionAPI, { identity, userWait, editorHooks, hu
   identity.onChange(() => state.tui?.requestRender());
   createTitle(pi, state, identity, userWait);
   const border = createBorder(state, identity);
-  const footer = createFooter(pi, state, actions, git, hub);
+  const footer = createFooter(pi, state, actions, git);
   const painters: Painters = {
     top: (width, hidden, color, status) =>
       border.drawTop(

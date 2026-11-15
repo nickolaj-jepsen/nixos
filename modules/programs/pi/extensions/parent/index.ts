@@ -11,7 +11,6 @@ import modelLabels from "./model-labels.ts";
 import questions from "./questions.ts";
 import notify from "./notify.ts";
 import { createServices, type Services } from "./services.ts";
-import sessions from "./sessions.ts";
 import spellfix from "./spellfix.ts";
 import worktree from "./worktree.ts";
 
@@ -22,7 +21,6 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["model-labels", modelLabels],
   ["questions", questions],
   ["notify", notify],
-  ["sessions", sessions],
   ["spellfix", spellfix],
   ["worktree", worktree],
 ];

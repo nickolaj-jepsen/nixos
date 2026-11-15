@@ -1,6 +1,6 @@
 /**
  * The dialogs open on the agent's behalf, each as a one-line label of what it
- * asks: what the registry entry and the hub say the session waits on. Permission
+ * asks: what the registry entry says the session waits on. Permission
  * prompts report themselves, and a tool's own dialog goes through `during`. A
  * finished run closes whatever is left.
  */
@@ -13,7 +13,7 @@ import {
 } from "@gotgenes/pi-permission-system";
 import { clip, oneLine } from "../../shared/naming.ts";
 
-// As the hub's own cap on a label.
+// As agent-hub's own cap on a label.
 const LABEL_MAX = 200;
 
 export const createDialogs = (pi: ExtensionAPI) => {

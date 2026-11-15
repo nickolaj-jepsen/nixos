@@ -1,12 +1,12 @@
 /**
- * What the session is called and whether its last turn wants you; chrome's
+ * What the session is called and whether its last turn failed; chrome's
  * border and title paint them.
  *
  * The label is the session's name, else the first request cut to a name. A
  * session with no name gets one after its first turn, from one side call, as
- * Claude Code titles its own; `/name` replaces it. This side tells agent-hub
- * (`lib/hub.ts`) where each turn starts and ends, and paints the state the hub's
- * row reports back.
+ * Claude Code titles its own; `/name` replaces it. agent-hub
+ * reads the turn's end from the registry entry `claude-peers.ts` writes, which asks this
+ * for the failure and whether a peer woke the turn.
  */
 import { contentText } from "@earendil-works/pi-ai";
 import {
@@ -17,7 +17,6 @@ import {
 import { firstRequest, oneLine, stripRequest } from "../shared/naming.ts";
 import { sideCall } from "../shared/side-call.ts";
 import { PEER_MESSAGE_TYPE } from "./claude-peers/protocol.ts";
-import type { Hub } from "./lib/hub.ts";
 import type { UserWait } from "./lib/user-wait.ts";
 
 type Source = "name" | "prompt";
@@ -28,9 +27,7 @@ export type Label = {
 };
 
 const MAX_LABEL_CHARS = 40;
-// The peers note is part of the system prompt, so the run waits for it; a hub slower than this goes without.
-const PEERS_TIMEOUT_MS = 500;
-// As much of the closing words as the hub keeps.
+// As much of the closing words as the title call keeps.
 const SAID_MAX = 6000;
 // What the title call reads of the first turn, and how long it may take.
 const TITLE_READS = 1500;
@@ -47,21 +44,19 @@ const cut = (text: string) => {
   return `${(lastSpace > 20 ? head.slice(0, lastSpace) : head).trim()}…`;
 };
 
-/** The background jobs bg_run has running, which a turn that ends to wait on them counts on. */
-export type Jobs = { running: () => number };
-
 /**
  * Registers the identity's handlers and `/header`. Create it before any feature
  * whose handlers read it on the same event.
  */
-export const createIdentity = (pi: ExtensionAPI, userWait: UserWait, hub: Hub, jobs: Jobs) => {
+export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
   let working = false;
-  /** Whether the run ended on an error, for a hub that cannot say so itself. */
-  let errored = false;
-  /** The run's closing words, for the hub's row. */
+  /** Why the run ended on an error, "" when it did not. */
+  let failed = "";
+  /** Whether a peer's message woke the turn about to run. */
+  let peerTurn = false;
+  /** The run's closing words, for the title. */
   let said = "";
   const listeners = new Set<() => void>();
-  let peers: Promise<string | undefined> = Promise.resolve(undefined);
   /** Whether this session has been offered a title: at most one call each. */
   let titled = false;
 
@@ -81,16 +76,12 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait, hub: Hub, j
     return fallback.text ? { text: fallback.text, source: "prompt" } : undefined;
   };
 
-  hub.onChange(paint);
-  hub.attachWith(() => ({ name: pi.getSessionName() }));
-
   // Sub-agent widgets already own `●`, `○`, `⟳` and `▸`, so states that need you
   // are words and "working" is either pi's spinner or a frozen frame of one.
   const stateWord = (ctx: ExtensionContext) => {
     if (userWait.waitingOnUser(ctx)) return "waiting";
     if (working) return "";
-    const state = hub.read()?.state;
-    return state === "failed" || (state === undefined && errored) ? "failed" : "";
+    return failed ? "failed" : "";
   };
 
   const quote = (path: string) =>
@@ -101,11 +92,9 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait, hub: Hub, j
 
   const summary = (ctx: ExtensionContext) => {
     const shown = current(ctx);
-    const row = hub.read();
     const persisted = ctx.sessionManager.getSessionFile();
     return [
       `${shown?.text ?? "(unnamed)"}  (${shown?.source ?? "none"})`,
-      row ? `hub: ${row.state}` : "hub: not connected",
       `path: ${ctx.cwd}`,
       persisted
         ? `session: ${sessionId(ctx)}`
@@ -145,25 +134,16 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait, hub: Hub, j
 
   pi.on("session_start", () => {
     working = false;
-    errored = false;
+    failed = "";
+    peerTurn = false;
     said = "";
     fallback = undefined;
     titled = false;
   });
 
-  pi.on("session_info_changed", () => {
-    hub.named(pi.getSessionName());
-  });
-
   pi.on("before_agent_start", (event) => {
-    errored = false;
-    peers = hub.turnStart(
-      event.messageType === "user" ? event.prompt : contentText(event.message.content, "\n"),
-      event.messageType === "user",
-      event.messageType === "custom" && event.message.customType === PEER_MESSAGE_TYPE,
-      pi.getActiveTools().includes("enter_worktree"),
-      PEERS_TIMEOUT_MS,
-    );
+    failed = "";
+    peerTurn = event.messageType === "custom" && event.message.customType === PEER_MESSAGE_TYPE;
   });
 
   pi.on("agent_start", () => {
@@ -174,7 +154,8 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait, hub: Hub, j
 
   pi.on("message_end", (event) => {
     if (event.message.role !== "assistant") return;
-    if (event.message.stopReason === "error") errored = true;
+    if (event.message.stopReason === "error")
+      failed = oneLine(event.message.errorMessage ?? "") || "API error";
     const text = contentText(event.message.content, "\n").trim();
     if (text) said = text.slice(-SAID_MAX);
   });
@@ -182,11 +163,10 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait, hub: Hub, j
   pi.on("agent_settled", (_event, ctx) => {
     working = false;
     paint();
-    hub.turnEnd(jobs.running(), errored, said);
     // Only an interactive session you started: a test session or a headless run needs no name.
     if (
       !titled &&
-      !errored &&
+      !failed &&
       ctx.hasUI &&
       process.env.AGENT_HUB_HIDDEN !== "1" &&
       !pi.getSessionName()
@@ -198,8 +178,10 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait, hub: Hub, j
     current,
     stateWord,
     working: () => working,
-    /** The note on the other sessions in this working tree, for the turn starting now. */
-    peers: () => peers,
+    /** Why the last turn failed, undefined when it did not. */
+    failure: () => failed || undefined,
+    /** Whether a peer's message woke the turn that is starting or running. */
+    peerTurn: () => peerTurn,
     /** Calls `listener` whenever what the label or the state word shows may have changed. */
     onChange: (listener: () => void) => {
       listeners.add(listener);

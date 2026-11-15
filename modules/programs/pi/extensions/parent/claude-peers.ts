@@ -11,9 +11,9 @@
  * a busy one, and `notify_when_idle` works in both directions. Pi advertises
  * itself as the "prompting" permission class.
  *
- * Each run's system prompt names the peers working in the same git working
- * tree and asks the model to coordinate destructive git operations with them;
- * agent-hub writes that note, for Claude Code sessions too.
+ *
+ * The entry is also what agent-hub reads of this session: `hubFailed` (why the last
+ * turn failed), `hubPeer` (a peer woke the running turn) and `hubHidden`.
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { contentText } from "@earendil-works/pi-ai";
@@ -92,7 +92,7 @@ interface Subscription {
   expires: number;
 }
 
-export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }: Services) {
+export default function (pi: ExtensionAPI, { identity, userWait, dialogs }: Services) {
   let ctx: ExtensionContext | undefined;
   /** Inbound frames arrive on socket callbacks, where a used-up ctx is an uncaught throw. */
   let live = false;
@@ -390,6 +390,8 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
       name: displayName(),
       nameSource: named ? "user" : "derived",
       nameSince: Date.now(),
+      ...(process.env.AGENT_HUB_HIDDEN === "1" ? { hubHidden: true } : {}),
+      ...(process.env.TMUX_PANE ? { tmux: process.env.TMUX_PANE } : {}),
     };
     await publish({ status: "idle" });
   }
@@ -440,17 +442,13 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
     await stop(event.reason);
   });
 
-  // The hub knows every session and its working tree, so it writes the note; identity's
-  // handler asked for it on this same event.
-  pi.on("before_agent_start", async (event) => {
-    const sections = event.systemPromptOptions.sections;
-    const note = await identity.peers();
-    if (note) sections.peer_sessions = note;
-    else delete sections.peer_sessions;
-  });
   pi.on("agent_start", async (_event, c) => {
     ctx = c;
-    await publish({ status: "busy" });
+    await publish({
+      status: "busy",
+      hubFailed: undefined,
+      hubPeer: identity.peerTurn() || undefined,
+    });
   });
   pi.on("session_info_changed", async (event) => {
     await publish({
@@ -465,7 +463,12 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs, hub }:
   pi.on("agent_settled", async (_event, c) => {
     ctx = c;
     if (!entry) return;
-    await publish({ status: "idle", waitingFor: undefined });
+    await publish({
+      status: "idle",
+      waitingFor: undefined,
+      hubFailed: identity.failure(),
+      hubPeer: undefined,
+    });
     const now = Date.now();
     const due = [...idleSubscribers.values()];
     idleSubscribers.clear();
