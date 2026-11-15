@@ -1,8 +1,9 @@
-"""Every message on the hub's socket, defined once; the hub validates what it takes against it.
+"""Every op the hub takes on its socket, defined once; the hub validates against it.
 
-Line-delimited JSON. A message to the hub names an `op`; one from it names a `type`. Nothing is
-answered: the hub sends its `state` to subscribers, and everything else is fire-and-forget. A
-session is always named by its id string, `session`. Fields may be added freely.
+Line-delimited JSON. Nothing is answered: the hub sends a `state` message
+(`{type, sessions: [row], hidden?, links?: [{host, status}]}`, built by `Hub.state` and
+`model.Session.row`) to subscribers, and every op is fire-and-forget. A session is always
+named by its id string, `session`. Fields may be added freely.
 
 A type is a string (`str`, `int`, `bool`, `any`, `null` or a literal word, joined with `|`), a
 list of one type or a dict of fields; a field whose key ends in `?` may
@@ -13,37 +14,6 @@ be left out.
 # The order the bar lists states in; the first three want you.
 STATES = ("asking", "failed", "done", "working", "idle")
 ATTENTION = STATES[:3]
-
-ROW = {
-    "id": "str",
-    "agent": "str",
-    "name": "str",
-    "cwd": "str",
-    "pid": "int|null",
-    "state": "|".join(STATES),
-    # Why it is in its state: the dialog it waits on, the error that failed it, the first sentence of its last words.
-    "reason": "str",
-    "since": "int",
-    "doing": "str",
-    "waitingFor": "str",
-    "window": "int|null",
-    # The bar's dot pulses: this came to want you and you haven't looked yet.
-    "pulse?": "bool",
-    # An agent-spawned session: tracked, but the bar never shows it.
-    "hidden?": "bool",
-    # The turn its ending belongs to, so a late dismissal can't put away a newer one.
-    "turn?": "int",
-    # Set by the viewer on a row from another host, where its id is `host:session`.
-    "host?": "str",
-    # How to reach it from elsewhere: its tmux pane, and its Remote Control session.
-    "tmux?": "str",
-    "bridge?": "str",
-    # The repository, the same from any of its worktrees; the directory's own name outside git.
-    "project?": "str",
-}
-
-# A link to another host's hub: `up`, or why it isn't.
-LINK = {"host": "str", "status": "str"}
 
 # A background task still in flight when a Claude turn stopped.
 TASK = {"type": "str", "description?": "str|null"}
@@ -68,14 +38,6 @@ OPS = {
     "turn-start": {"peer?": "bool", **WHO},
     # `said` and `tasks` are the agent's own word. `failure` is why the turn died, which needs no reading.
     "turn-end": {"said?": "str|null", "tasks?": [TASK], "failure?": "str", **WHO},
-}
-
-TYPES = {
-    # `hidden` counts the agent-spawned sessions left out of `sessions`.
-    "state": {"sessions": [ROW], "hidden?": "int", "links?": [LINK]},
-    # `attach` says it is alive between states.
-    "beat": {},
-    "error": {"error": "str"},
 }
 
 BASE = ("str", "int", "bool", "any", "null")

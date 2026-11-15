@@ -149,7 +149,7 @@ let
         copilot.enable = cascade config.fireproof.dev.enable "Enable the GitHub Copilot CLI";
         ai-usage.enable = cascade config.fireproof.dev.enable "Enable ai-usage, the agent subscription quota CLI (and its DMS bar widget on desktops)";
         agent-hub = {
-          enable = cascade config.fireproof.dev.enable "Enable agent-hub, the daemon that names and judges every live coding-agent session, with its DMS bar on desktops";
+          enable = cascade config.fireproof.dev.enable "Enable agent-hub, the daemon that shows which live coding-agent sessions want you, with its DMS bar on desktops";
           remotes = lib.mkOption {
             type = lib.types.attrsOf (lib.types.attrsOf lib.types.str);
             default = {};

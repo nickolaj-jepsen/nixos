@@ -172,8 +172,6 @@ test with; both skills' `tui.sh` do. It is the only opt-out.
   daemon component (`HubDaemon.qml`), which every bar's widget shares. It sends `subscribe`,
   `focus`, `dismiss`, `undo` and `seen`.
 - Config is `~/.config/agent-hub/config.json`, written by `modules/programs/agent-hub.nix`.
-- Claude Code shows a pi receipt as fixed text for its status and ignores `reason`, so pick
-  the status by what that text says (`ReceiptStatus` in `claude-peers/protocol.ts`).
 
 ## Working on it
 

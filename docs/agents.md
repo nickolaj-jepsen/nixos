@@ -174,6 +174,9 @@ layout, the traps it sets and the demo recordings.
   `$.command.register` throws for a name a built-in (`review`, now
   `/code-review`) or a skill (`tuicr`) already has, and the mod's own catch
   logs it at debug. Check a new name by typing it in a real session.
+- Claude Code shows a pi receipt as fixed text for its status and ignores `reason`, so
+  pick the status by what that text says (`ReceiptStatus` in
+  `pi/extensions/parent/claude-peers/protocol.ts`).
 - agent-hub (`docs/agent-hub.md`) already sees every pi and Claude Code
   session; don't add per-agent toast hooks.
 - A Claude Code or pi session that ends inside a worktree closes it once nothing

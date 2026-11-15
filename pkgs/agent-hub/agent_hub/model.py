@@ -336,13 +336,13 @@ def alert_key(row):
 
 class Alerts:
     """Which of a host's rows pulse. A row pulses when it comes to want you with an ending
-    not yet known: `known` (row id → `state:since`) outlives a restart or a dropped link, so
-    a turn already known stays quiet and one that ended meanwhile pulses. Without a `known`,
-    at first sight of a host, whatever is there counts as known."""
+    not yet known: `known` is row id → `state:since`. At first sight of a host, whatever is
+    there counts as known."""
 
-    def __init__(self, known=None):
-        self.baseline = known is None
-        self.known = dict(known or {})
+    def __init__(self):
+        # Until the first update, whatever is there is known: a restart or a link coming up is no news.
+        self.baseline = True
+        self.known = {}
         # Row id → when its pulse stops; None for when you have looked.
         self.pulsing = {}
         # Rows you have been to since they came to want you.

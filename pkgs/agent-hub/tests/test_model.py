@@ -242,6 +242,13 @@ def row(state="failed", since=100, window=None, rid="s"):
     return {"id": rid, "state": state, "since": since, "window": window}
 
 
+def ready():
+    """Alerts past first sight, where whatever is there counts as known."""
+    alerts = Alerts()
+    alerts.update([], 0)
+    return alerts
+
+
 class AlertsTest(unittest.TestCase):
     def pulse(self, alerts, now, focused=None, **fields):
         rows = [row(**fields)]
@@ -254,7 +261,7 @@ class AlertsTest(unittest.TestCase):
         self.assertTrue(self.pulse(alerts, 300, since=250))
 
     def test_a_failure_pulses_until_you_look_or_open_the_popout(self):
-        alerts = Alerts({})
+        alerts = ready()
         self.assertTrue(self.pulse(alerts, 200))
         self.assertTrue(self.pulse(alerts, 100_000))
         self.assertFalse(self.pulse(alerts, 100_001, focused=7, window=7))
@@ -264,38 +271,31 @@ class AlertsTest(unittest.TestCase):
         self.assertFalse(self.pulse(alerts, 100_004, since=100_003 - 1))
 
     def test_done_pulses_once(self):
-        alerts = Alerts({})
+        alerts = ready()
         rows = [row("done")]
         self.assertEqual(alerts.update(rows, 200), ONCE_MS)
         self.assertTrue(rows[0]["pulse"])
         self.assertFalse(self.pulse(alerts, 200 + ONCE_MS, state="done"))
 
     def test_looking_at_it_as_it_ends_never_pulses(self):
-        self.assertFalse(self.pulse(Alerts({}), 200, focused=7, window=7))
+        self.assertFalse(self.pulse(ready(), 200, focused=7, window=7))
 
     def test_a_dialog_answered_within_the_grace_never_pulses(self):
-        alerts = Alerts({})
+        alerts = ready()
         rows = [row("asking", since=100)]
         self.assertEqual(alerts.update(rows, 100 + 10), ASK_GRACE_MS - 10)
         self.assertFalse(rows[0]["pulse"])
         self.assertFalse(self.pulse(alerts, 100 + 20, state="working"))
         self.assertTrue(self.pulse(alerts, 500 + ASK_GRACE_MS, state="asking", since=500))
 
-    def test_a_turn_known_across_a_restart_stays_quiet_and_one_that_ended_meanwhile_pulses(self):
-        alerts = Alerts({})
-        self.assertTrue(self.pulse(alerts, 200))
-        again = Alerts(alerts.known)
-        self.assertFalse(self.pulse(again, 300))
-        self.assertTrue(self.pulse(again, 400, since=350))
-
     def test_a_turn_with_a_new_ending_pulses_even_in_the_same_state(self):
-        alerts = Alerts({})
+        alerts = ready()
         self.pulse(alerts, 200)
         alerts.seen()
         self.assertTrue(self.pulse(alerts, 300, since=250))
 
     def test_a_row_gone_is_forgotten(self):
-        alerts = Alerts({})
+        alerts = ready()
         alerts.update([row()], 200)
         alerts.update([], 300)
         self.assertEqual((alerts.known, alerts.pulsing), ({}, {}))
