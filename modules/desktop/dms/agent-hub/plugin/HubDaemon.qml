@@ -14,8 +14,6 @@ Item {
     // Other hosts piped in, each `up` or saying why it isn't.
     property var links: []
     readonly property bool linkUp: socket.linkUp
-    // Set when the hub speaks another protocol version; the socket then stays closed.
-    property string refused: ""
 
     function focusSession(sessionId) {
         socket.send({
@@ -55,11 +53,6 @@ Item {
         if (message.type === "state") {
             root.sessions = message.sessions;
             root.links = message.links ?? [];
-        } else if (message.type === "refused") {
-            console.warn("agentHub: " + message.text);
-            root.refused = message.text;
-            // Not from inside the parser's own callback: this destroys the socket.
-            Qt.callLater(() => socket.connected = false);
         }
     }
 
@@ -70,8 +63,7 @@ Item {
         onConnectionStateChanged: {
             if (linkUp)
                 send({
-                    "op": "subscribe",
-                    "version": 6
+                    "op": "subscribe"
                 });
             else {
                 root.sessions = [];

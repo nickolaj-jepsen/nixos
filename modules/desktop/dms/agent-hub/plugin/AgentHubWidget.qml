@@ -38,9 +38,8 @@ PluginComponent {
     readonly property real contentHeightFixed: Math.min((parentScreen?.height ?? 1080) * 0.6, 620)
     popoutHeight: contentHeightFixed + PopoutMetrics.contentPadding * 2
 
-    // The row the pointer is settling on, and where it last was: a hover counts only when the
-    // pointer itself moved, never when a row moved under it.
-    property string hoverTarget: ""
+    // Where the pointer last was: a hover counts only when the pointer itself moved, never when a
+    // row moved under it.
     property real pointerX: -1
     property real pointerY: -1
     // Whether the pointer has been heard since the popout opened: the popout can open under a
@@ -52,30 +51,9 @@ PluginComponent {
         pointerHeard = true;
         pointerX = point.x;
         pointerY = point.y;
-        if (!moved)
-            return;
-        hoverTarget = id;
-        hoverTimer.restart();
+        if (moved)
+            selectedId = id;
     }
-
-    Timer {
-        id: hoverTimer
-        interval: 120
-        onTriggered: root.selectedId = root.hoverTarget
-    }
-
-    // What was just dismissed, offered back for a moment.
-    property string undoName: ""
-
-    Timer {
-        id: undoTimer
-        interval: 8000
-        onTriggered: root.undoName = ""
-    }
-
-    // The key legend, for whoever came by keyboard.
-    property bool legendShown: false
-    property bool pillHovered: false
 
     // Which rows pulsed at the last state, null until one has come in on this connection.
     property var announced: null
@@ -170,7 +148,7 @@ PluginComponent {
         return waits(session) || session.state === "failed" || session.state === "done";
     }
 
-    // The heading a row goes under; 
+    // The heading a row goes under.
     function sectionOf(index) {
         const row = rows[index];
         if (!row)
@@ -227,7 +205,6 @@ PluginComponent {
         return shortName(session) === repo ? "" : repo;
     }
 
-    // j/k and the ends.
     // How long something has been running; "now" would read as if it had just begun.
     function elapsed(ms) {
         const m = Math.floor((nowMs - ms) / 60000);
@@ -242,10 +219,8 @@ PluginComponent {
     }
 
     function select(index) {
-        if (!rows.length)
-            return;
-        selectedId = rows[Math.max(0, Math.min(rows.length - 1, index))].id;
-        hoverTimer.stop();
+        if (rows.length)
+            selectedId = rows[Math.max(0, Math.min(rows.length - 1, index))].id;
     }
 
     function dismiss(session) {
@@ -257,13 +232,6 @@ PluginComponent {
             selectedId = next ? next.id : "";
         }
         hub.dismiss(session.id, session.turn);
-        undoName = displayName(session);
-        undoTimer.restart();
-    }
-
-    function undo() {
-        hub?.undo();
-        undoName = "";
     }
 
     function focusSession(session) {
@@ -277,10 +245,7 @@ PluginComponent {
     function prepareToOpen() {
         nowMs = Date.now();
         selectedId = "";
-        undoName = "";
-        legendShown = !pillHovered;
         pointerHeard = false;
-        hoverTimer.stop();
     }
 
     // A filled dot, or a hollow ring. Its burst and breath are the same for every dot.
@@ -367,12 +332,6 @@ PluginComponent {
     horizontalBarPill: Component {
         Row {
             spacing: Theme.spacingXS + 2
-
-            // A popout opened while the pointer is off the pill came from the keyboard.
-            HoverHandler {
-                margin: 10
-                onHoveredChanged: root.pillHovered = hovered
-            }
 
             DIcon {
                 anchors.verticalCenter: parent.verticalCenter
@@ -464,11 +423,6 @@ PluginComponent {
     verticalBarPill: Component {
         Column {
             spacing: Theme.spacingXS + 2
-
-            HoverHandler {
-                margin: 10
-                onHoveredChanged: root.pillHovered = hovered
-            }
 
             DIcon {
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -578,32 +532,6 @@ PluginComponent {
         }
     }
 
-    component IconButton: Rectangle {
-        id: iconButton
-
-        required property string icon
-        required property string tip
-
-        signal clicked
-
-        width: 26
-        height: 26
-        radius: 6
-        color: "transparent"
-
-        DIcon {
-            anchors.centerIn: parent
-            name: iconButton.icon
-            size: 15
-            color: Theme.surfaceVariantText
-        }
-
-        StateLayer {
-            tooltipText: iconButton.tip
-            onClicked: iconButton.clicked()
-        }
-    }
-
     component KeyCap: Rectangle {
         id: cap
 
@@ -679,10 +607,6 @@ PluginComponent {
                 ColorAnimation {
                     duration: 90
                 }
-            }
-
-            HoverHandler {
-                id: rowHover
             }
 
             StateLayer {
@@ -761,7 +685,6 @@ PluginComponent {
                 }
             }
 
-            // Wide enough for its buttons at all times, so the text beside it never reflows on hover.
             Item {
                 id: rightSide
 
@@ -773,8 +696,7 @@ PluginComponent {
 
                 AgentIcon {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: rowAge.visible
-                    opacity: 0.7
+                                        opacity: 0.7
                     agent: row.session.agent ?? ""
                 }
 
@@ -782,29 +704,11 @@ PluginComponent {
                     id: rowAge
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: !(rowHover.hovered && rowActions.visibleCount > 0)
                     text: root.ago(row.session.since)
                     font.pixelSize: Theme.fontSizeSmall
                     color: root.stale(row.session) ? Theme.error : Theme.withAlpha(Theme.surfaceVariantText, 0.8)
                 }
 
-                Row {
-                    id: rowActions
-
-                    readonly property int visibleCount: dismissButton.visible ? 1 : 0
-
-                    anchors.right: parent.right
-                    visible: rowHover.hovered
-                    spacing: 2
-
-                    IconButton {
-                        id: dismissButton
-                        visible: root.wantsYou(row.session)
-                        icon: "close"
-                        tip: "Dismiss"
-                        onClicked: root.dismiss(row.session)
-                    }
-                }
             }
         }
     }
@@ -875,7 +779,6 @@ PluginComponent {
                     root.select(root.rows.length - 1);
                 else
                     return;
-                root.legendShown = true;
                 Qt.callLater(pop.reveal);
                 event.accepted = true;
             }
@@ -883,26 +786,17 @@ PluginComponent {
             StyledText {
                 anchors.centerIn: parent
                 visible: !root.rows.length
-                text: root.linkUp ? "No agent sessions." : root.hub?.refused || "The agent-hub service is not running."
+                text: root.linkUp ? "No agent sessions." : "The agent-hub service is not running."
                 font.pixelSize: Theme.fontSizeMedium
                 color: Theme.surfaceVariantText
             }
 
-            Item {
-                id: panes
-
+            Column {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                // The legend's room is kept whether it shows or not, so the buttons never shift.
-                anchors.bottom: undoNote.visible ? undoNote.top : legend.top
+                anchors.bottom: legend.top
                 visible: root.rows.length > 0
-
-                Column {
-                    id: leftColumn
-
-                    width: parent.width
-                    height: parent.height
 
                     OneLine {
                         id: linkLine
@@ -944,51 +838,6 @@ PluginComponent {
                         }
                     }
                 }
-            }
-
-            // What was just dismissed, offered back for a moment.
-            Rectangle {
-                id: undoNote
-
-                anchors.bottom: legend.top
-                width: parent.width
-                height: 34
-                radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
-                visible: root.undoName !== ""
-
-                OneLine {
-                    x: Theme.spacingM
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - x - Theme.spacingM * 2 - undoButton.width
-                    text: "Dismissed " + root.undoName
-                    color: Theme.surfaceText
-                }
-
-                Rectangle {
-                    id: undoButton
-                    anchors.right: parent.right
-                    anchors.rightMargin: 4
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: undoLabel.implicitWidth + 16
-                    height: 26
-                    radius: 6
-                    color: Theme.withAlpha(Theme.surfaceText, 0.1)
-
-                    StyledText {
-                        id: undoLabel
-                        anchors.centerIn: parent
-                        text: "Undo"
-                        font.pixelSize: Theme.fontSizeSmall
-                        font.weight: Font.Medium
-                        color: Theme.surfaceText
-                    }
-
-                    StateLayer {
-                        onClicked: root.undo()
-                    }
-                }
-            }
 
             Row {
                 id: legend
@@ -997,13 +846,11 @@ PluginComponent {
                 x: Theme.spacingS
                 topPadding: Theme.spacingS
                 visible: root.rows.length > 0
-                opacity: root.legendShown ? 1 : 0
                 spacing: Theme.spacingL
 
-                Behavior on opacity {
-                    NumberAnimation {
-                        duration: 150
-                    }
+                KeyHint {
+                    key: "x"
+                    label: "dismiss"
                 }
 
                 KeyHint {
