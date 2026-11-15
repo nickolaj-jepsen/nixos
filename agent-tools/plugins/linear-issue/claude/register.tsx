@@ -998,99 +998,95 @@ export const register: Register = (on) => {
     );
   });
 
+  // The band asks each plugin for its own row: this one holds the draft chip and the filed
+  // issues, and passes while it has neither.
   on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
-    const tree = await next(e);
-    if (e.props.hasSurvey) return tree;
+    if (e.props.hasSurvey) return next(e);
     const { Box, Text, Button } = $.ui.resolve(e);
 
     const issues = await read($, filed);
     const draft = (await read($, isPaneOpen)) ? null : await read($, form);
     const isArmed = await read($, isDiscardArmed);
-    const withBanner = (card: RenderNode) => {
-      if (issues.length === 0 && !draft) return card as RenderElement;
-      return (
-        <Box flexDirection="column">
-          {card}
-          {draft && (
-            <Box key="draft" flexDirection="row">
-              <Text color="claude">✎ </Text>
-              <Text wrap="truncate-end">
-                Linear draft:{" "}
-                {draft.phase === "drafting" ? "drafting…" : draft.title || "untitled"}{" "}
-              </Text>
+    if (issues.length === 0 && !draft) return next(e);
+    return (
+      <Box flexDirection="column">
+        {draft && (
+          <Box key="draft" flexDirection="row">
+            <Text color="claude">✎ </Text>
+            <Text wrap="truncate-end">
+              Linear draft:{" "}
+              {draft.phase === "drafting" ? "drafting…" : draft.title || "untitled"}{" "}
+            </Text>
+            <Box marginLeft={1}>
+              <Button key="draft-open" label="Open" hotkey="8" plain onPress={() => openPane($)} />
+            </Box>
+            <Box marginLeft={1}>
+              {/* A digit in an empty prompt presses this, so a prompt starting "9" must not discard. */}
+              <Button
+                key="draft-discard"
+                label={isArmed ? "Press 9 again to discard" : "Discard"}
+                hotkey="9"
+                plain
+                onPress={async () => {
+                  if (await read($, isDiscardArmed)) return discard($);
+                  await update($, isDiscardArmed, () => true);
+                  $.clock.after(DISCARD_ARM_MS, () => void update($, isDiscardArmed, () => false));
+                }}
+              />
+            </Box>
+          </Box>
+        )}
+        {issues.map((i) => (
+          <Box key={`filed-${i.key}`} flexDirection="row">
+            <Text color="success">✓ </Text>
+            <Text wrap="truncate-end">
+              {i.key} {i.title}{" "}
+            </Text>
+            {i.url !== "" && (
               <Box marginLeft={1}>
                 <Button
-                  key="draft-open"
+                  key={`open-${i.key}`}
                   label="Open"
-                  hotkey="8"
                   plain
-                  onPress={() => openPane($)}
+                  onPress={() => openUrl($, i.url)}
                 />
               </Box>
+            )}
+            {i.url !== "" && (
               <Box marginLeft={1}>
-                {/* A digit in an empty prompt presses this, so a prompt starting "9" must not discard. */}
                 <Button
-                  key="draft-discard"
-                  label={isArmed ? "Press 9 again to discard" : "Discard"}
-                  hotkey="9"
+                  key={`copy-${i.key}`}
+                  label="Copy link"
                   plain
                   onPress={async () => {
-                    if (await read($, isDiscardArmed)) return discard($);
-                    await update($, isDiscardArmed, () => true);
-                    $.clock.after(
-                      DISCARD_ARM_MS,
-                      () => void update($, isDiscardArmed, () => false),
-                    );
+                    const r = await $.ui.copy({ text: i.url });
+                    $.ui.toast(r.isCopied ? `Copied ${i.url}` : `Couldn't copy: ${r.reason}`);
                   }}
                 />
               </Box>
+            )}
+            <Box marginLeft={1}>
+              <Button
+                key={`dismiss-${i.key}`}
+                label="×"
+                plain
+                onPress={() => update($, filed, (list) => list.filter((x) => x.key !== i.key))}
+              />
             </Box>
-          )}
-          {issues.map((i) => (
-            <Box key={`filed-${i.key}`} flexDirection="row">
-              <Text color="success">✓ </Text>
-              <Text wrap="truncate-end">
-                {i.key} {i.title}{" "}
-              </Text>
-              {i.url !== "" && (
-                <Box marginLeft={1}>
-                  <Button
-                    key={`open-${i.key}`}
-                    label="Open"
-                    plain
-                    onPress={() => openUrl($, i.url)}
-                  />
-                </Box>
-              )}
-              {i.url !== "" && (
-                <Box marginLeft={1}>
-                  <Button
-                    key={`copy-${i.key}`}
-                    label="Copy link"
-                    plain
-                    onPress={async () => {
-                      const r = await $.ui.copy({ text: i.url });
-                      $.ui.toast(r.isCopied ? `Copied ${i.url}` : `Couldn't copy: ${r.reason}`);
-                    }}
-                  />
-                </Box>
-              )}
-              <Box marginLeft={1}>
-                <Button
-                  key={`dismiss-${i.key}`}
-                  label="×"
-                  plain
-                  onPress={() => update($, filed, (list) => list.filter((x) => x.key !== i.key))}
-                />
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      );
-    };
+          </Box>
+        ))}
+      </Box>
+    );
+  });
+
+  // The built-in card's own row, which this hook names to splice the button into.
+  on("ui.render", { component: "AbovePrompt", plugin: YSK }, async ($, e, next) => {
+    const tree = await next(e);
+    if (e.props.hasSurvey) return tree;
+    const { Box, Button } = $.ui.resolve(e);
 
     const card = cardText(tree);
-    if (card !== "" && card === (await read($, hidden))) return withBanner(<Box />);
+    if (card !== "" && card === (await read($, hidden))) return <Box />;
 
     const anchor = pathTo(tree, (n) => isButton(n, ANCHOR))?.at(-1);
     if (!anchor) {
@@ -1103,10 +1099,10 @@ export const register: Register = (on) => {
         isExpanding = false;
         await warnDrift($);
       }
-      return withBanner(tree);
+      return tree;
     }
     isExpanding = false;
-    if (!(await hasLinear($))) return withBanner(tree);
+    if (!(await hasLinear($))) return tree;
 
     const style = isElement(anchor) && anchor.type === "Button" ? anchor.props : undefined;
     const taken = hotkeysIn(tree);
@@ -1123,6 +1119,6 @@ export const register: Register = (on) => {
         }}
       />
     );
-    return withBanner(insertButton(tree, button) ?? tree);
+    return (insertButton(tree, button) ?? tree) as RenderElement;
   });
 };

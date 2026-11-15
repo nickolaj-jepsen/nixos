@@ -5,6 +5,7 @@ import { formId, offer, parse, startLines, step as stepForm, view as viewOf } fr
 import type { Action, Current, Entry, Held, Item, Split, View } from "./types.d.ts";
 
 // The two fields, each drawn while it is being typed in.
+const PLUGIN = "answer";
 const WRITE = "write";
 const NOTE = "note";
 /** A field's address; a key row button is already called `note`. */
@@ -451,13 +452,12 @@ export const register: Register = (on, options) => {
   });
 
   // Drawn in the band, not a pane: the surface docks every pane beside the transcript once
-  // the terminal is wide, and a round of questions reads better over the prompt. Open, it
-  // has the band to itself: what the mods beneath draw there waits until it folds.
+  // the terminal is wide, and a round of questions reads better over the prompt. This is the
+  // plugin's own row of the band; the hook below gives it the band to itself while open.
   on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
-    const below = await next(e);
-    if (e.props.hasSurvey) return below;
+    if (e.props.hasSurvey) return next(e);
     const c = await read($, current);
-    if (!c) return below;
+    if (!c) return next(e);
     band = e.requestId;
     room = { rows: e.props.maxRows, columns: e.props.bodyColumns };
     const els = $.ui.resolve(e);
@@ -470,15 +470,12 @@ export const register: Register = (on, options) => {
 
     if (!c.isOpen)
       return (
-        <Box flexDirection="column">
-          {below}
-          <Button key="answer" plain autoFocus onPress={() => open($)}>
-            {view.title}
-            <Text dimColor>
-              {` · ${view.answered} of ${view.count} · ${isNative ? "click to answer" : `${CHORD} then Enter, or /answer`}`}
-            </Text>
-          </Button>
-        </Box>
+        <Button key="answer" plain autoFocus onPress={() => open($)}>
+          {view.title}
+          <Text dimColor>
+            {` · ${view.answered} of ${view.count} · ${isNative ? "click to answer" : `${CHORD} then Enter, or /answer`}`}
+          </Text>
+        </Button>
       );
 
     const columns = e.props.bodyColumns;
@@ -780,6 +777,16 @@ export const register: Register = (on, options) => {
         ])}
       </Box>
     );
+  });
+
+  // The open form has the band to itself: the other plugins' rows wait until it folds.
+  on("ui.render", { component: "AbovePromptList", plugin: "*" }, async ($, e, next) => {
+    const c = await read($, current);
+    if (e.props.hasSurvey || !c?.isOpen) return next(e);
+    return next({
+      ...e,
+      props: { ...e.props, rows: e.props.rows.filter((r) => r.plugin === PLUGIN) },
+    });
   });
 
   // The message that asked: where the transcript scrolls to for its first question, and

@@ -132,8 +132,8 @@ Options (`claude plugin configure answer`):
 - `scrollTranscript` (off): leave a question's body out of the form and scroll the
   transcript to it instead.
 
-Load it first in `CLAUDE_CODE_PLUGIN_DIRS`: an open form takes the band above the
-prompt to itself.
+An open form takes the band above the prompt to itself; the other plugins' rows come back
+when it closes.
 
 ### transcript-tweaks
 

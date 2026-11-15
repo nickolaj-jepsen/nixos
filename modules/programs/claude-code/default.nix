@@ -133,8 +133,8 @@
     # built-in you-should-know card by label; a card redesign only hides it, with a toast.
     claudePlugins = lib.attrNames (lib.filterAttrs (_: plugin: plugin.claude) fpLib.agentToolPlugins);
     mods = lib.genAttrs claudePlugins mkToolMod;
-    # answer first: its open form has the band to itself, which only hides the rows of mods
-    # whose hooks sit beneath its own. spellfix's band button next, then the rest by name.
+    # The band stacks each mod's row in load order: answer's offer first, spellfix's band
+    # button next, then the rest by name.
     loadFirst = ["answer" "spellfix"];
     loadOrder = loadFirst ++ lib.subtractLists loadFirst claudePlugins;
     # The marketplace publishes each one from its folder; the skills plugin is the other entry.

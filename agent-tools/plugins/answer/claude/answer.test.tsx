@@ -191,15 +191,32 @@ test("a background task's turn leaves the round and its answers alone", async ($
   expect(await hint($)).toContain("1 of 3");
 });
 
-test("the row keeps what is drawn beneath it; the open form has the band to itself", async ($, on) => {
+// The band as core hands it over once each plugin's row settled: this one's and another's.
+const row = (plugin: string) => ({
+  plugin,
+  tree: { type: "Text" as const, props: {}, children: [`${plugin}'s row`] },
+});
+const LIST = {
+  plugin: "answer",
+  component: "AbovePromptList",
+  props: { ...BAND.props, rows: [row("neighbour"), row("answer")] },
+  surface: "terminal",
+} as const;
+
+test("the offer sits beside the other rows; the open form has the band to itself", async ($, on) => {
   world(on);
+  // What core is left to stack.
+  let stacked: string[] = [];
+  on("ui.render", { component: "AbovePromptList", plugin: "*" }, (_, e) => {
+    stacked = e.props.rows.map((r) => r.plugin);
+    return { type: "Box", props: {}, children: [] };
+  });
   await ends($, GRILLING);
-  let drawn = await band($);
-  expect(await drawn.find({ type: "Text", text: /engine/ })).toBeDefined();
-  await drawn.unmount();
-  drawn = await form($);
-  expect(await drawn.find({ type: "Text", text: /engine/ })).toBeUndefined();
-  await drawn.unmount();
+  await (await $.ui.mount(LIST)).unmount();
+  expect(stacked).toEqual(["neighbour", "answer"]);
+  await $.command.run(RUN);
+  await (await $.ui.mount(LIST)).unmount();
+  expect(stacked).toEqual(["answer"]);
 });
 
 test("a draft that crowds the form is set aside while it is open, and a second fill takes the first one's place", async ($, on) => {
