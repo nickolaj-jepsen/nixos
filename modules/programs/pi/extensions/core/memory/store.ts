@@ -20,7 +20,7 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import { getAgentDir, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
-import { gitRoots } from "../../shared/git.ts";
+import { gitRoots } from "../lib/git.ts";
 import { parse, serialize, type FrontmatterValue } from "./frontmatter.ts";
 
 export const KINDS = ["rule", "preference", "environment", "gotcha", "reference"] as const;

@@ -18,7 +18,7 @@ import {
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from "@earendil-works/pi-tui";
-import { frame, frameWidth } from "../../../shared/panel.ts";
+import { frame, frameWidth } from "./panel.ts";
 import type { HotIndex } from "../hot.ts";
 import type { Entry, Scope } from "../store.ts";
 import {

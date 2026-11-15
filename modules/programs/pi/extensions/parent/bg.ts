@@ -13,8 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { BG_RUN } from "../shared/tools.ts";
-import type { Services } from "./services.ts";
+import { BG_RUN } from "./lib/tools.ts";
 
 const STATUS = "bg";
 const TAIL_LINES = 40;
@@ -40,9 +39,8 @@ const tail = (path: string) => {
   }
 };
 
-export default function (pi: ExtensionAPI, { jobs }: Services) {
+export default function (pi: ExtensionAPI) {
   let session: Session | undefined;
-  jobs.running = () => session?.running.size ?? 0;
 
   const showCount = (s: Session) =>
     s.ctx.ui.setStatus(

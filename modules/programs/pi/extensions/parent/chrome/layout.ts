@@ -14,18 +14,16 @@ export type Part = {
   bold?: boolean;
   /** What `text` collapses to when the line is squeezed; the layout swaps it in. */
   short?: string;
-  /** Join to the previous part with one space instead of `GAP`. */
-  tight?: boolean;
 };
 
 export type Region = { x0: number; x1: number; id: string; action: Action };
 
 const GAP = 2;
 
-const joinWidth = (part: Part, index: number) => (index === 0 ? 0 : part.tight ? 1 : GAP);
+const joinWidth = (index: number) => (index === 0 ? 0 : GAP);
 
 export const partsWidth = (parts: readonly Part[]) =>
-  parts.reduce((sum, part, index) => sum + joinWidth(part, index) + visibleWidth(part.text), 0);
+  parts.reduce((sum, part, index) => sum + joinWidth(index) + visibleWidth(part.text), 0);
 
 /**
  * Paints parts from column `x`, recording a click region for each part that has
@@ -36,7 +34,7 @@ export const paintParts = (parts: readonly Part[], theme: Theme, x: number, hove
   let text = "";
   const regions: Region[] = [];
   parts.forEach((part, index) => {
-    const join = joinWidth(part, index);
+    const join = joinWidth(index);
     text += " ".repeat(join);
     column += join;
     const width = visibleWidth(part.text);

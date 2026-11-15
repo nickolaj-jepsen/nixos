@@ -54,7 +54,7 @@ import type { Services } from "./services.ts";
 const HUNSPELL = process.env.PI_SPELLFIX_HUNSPELL || "hunspell";
 const DICTIONARIES = process.env.PI_SPELLFIX_DICTS || "en_US";
 const PERSONAL = process.env.PI_SPELLFIX_PERSONAL || "";
-// Not vm/flash: its endpoint spends seconds on reasoning for this prompt, and
+// Not DeepSeek Flash: its endpoint spends seconds on reasoning for this prompt, and
 // the review waits on the call. Haiku answers every word in about a second.
 const MODEL = "anthropic/claude-haiku-5-5";
 
@@ -431,9 +431,8 @@ function rows(items: readonly string[], width: number, sep: string): string[] {
  * How many findings fit the overlay: pi clips an overlay at the bottom, so the
  * frame and the hints are budgeted before the list and a long one scrolls.
  */
-function windowSize(): number {
-  const terminal = process.stdout.rows ?? 40;
-  const room = Math.floor(terminal * 0.8) - CHROME_LINES - 1;
+function windowSize(rows: number): number {
+  const room = Math.floor(rows * 0.8) - CHROME_LINES - 1;
   return Math.max(3, Math.min(MAX_FINDINGS, Math.floor(room / FINDING_LINES)));
 }
 
@@ -767,7 +766,7 @@ class Review implements Component {
       return box(theme, width, title, body);
     }
 
-    const window = windowSize();
+    const window = windowSize(this.tui.terminal.rows);
     if (this.index - this.top >= window) this.top = this.index - window + 1;
     if (this.index < this.top) this.top = this.index;
 

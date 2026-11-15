@@ -20,13 +20,10 @@ import type { Git } from "./git.ts";
 import { PR_COMMAND } from "./git.ts";
 import { click, hoverAt, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";
-import { modelAlias, providerName, providerShortName } from "../lib/model-names.ts";
-import { createRouted } from "../../shared/routed-model.ts";
+import { modelAlias, providerShortName } from "../lib/model-names.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
-import { createUsage } from "./usage.ts";
-import { stageTone } from "../../shared/kinds.ts";
-import { shellCommand } from "../../shared/tools.ts";
+import { shellCommand } from "../lib/tools.ts";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
@@ -53,9 +50,7 @@ export const createFooter = (
   actions: ReturnType<typeof createActions>,
   git: Git,
 ) => {
-  const usage = createUsage(state);
   const stats = createStats();
-  const routed = createRouted();
   let regions: Region[] = [];
 
   /** Cost and speed as text; `undefined` when there is nothing worth showing. */
@@ -78,7 +73,7 @@ export const createFooter = (
   const measurements = (): Measurements => {
     const ctx = state.ctx;
     if (!ctx) return { context: undefined, meters: [] };
-    const model = routed(ctx)?.model ?? ctx.model;
+    const model = ctx.model;
     const { cost, speed } = meterTexts(ctx, model);
     const meters = [
       cost === undefined ? undefined : { id: "cost", text: cost },
@@ -97,18 +92,11 @@ export const createFooter = (
       regions = [];
       return "";
     }
-    const selected = ctx.model;
-    const route = routed(ctx);
-    const routedTo = route?.model;
-    const phase = route?.phase;
-    // Provider, quota and stats follow the model that answers.
-    const model = routedTo ?? selected;
+    const model = ctx.model;
     const s = stats.statsFor(ctx, model);
     const thinking = ctx.thinkingLevel ?? pi.getThinkingLevel();
 
     const alarms: Part[] = [];
-    const quota = model ? usage.alarm(usage.provider(model.provider)) : undefined;
-    if (quota) alarms.push(quota);
     if (s.cacheHit !== undefined && s.cacheHit < CACHE_WARN_PCT) {
       alarms.push({
         id: "cache",
@@ -130,20 +118,11 @@ export const createFooter = (
 
     const { cost: costText, speed: speedText } = meterTexts(ctx, model);
 
-    // The kind's ladder decides how alarming the answering model is: a later rung
-    // means the preferred one ran out, and the credit-backed ones are a warning in
-    // their own right. Neutral for a model reached outside the kinds.
-    const tone = model ? stageTone(model.provider, model.id) : "normal";
-    const modelColor = tone === "alert" ? "error" : tone === "warn" ? "warning" : "dim";
+    // Anything on the Anthropic credit spends the reserve, so it stays alarming.
+    const modelColor = model?.provider === "anthropic" ? "error" : "dim";
 
-    // The selection names itself only while its router tracks a phase: that is the
-    // one thing about it the routed name cannot say.
-    const selection = selected && routedTo && phase ? selected.name || selected.id : undefined;
     const modelText = model ? model.name || model.id : "no model";
-    // Before the first answer the selection is the name already on show, so its
-    // phase rides along instead of repeating it.
-    const phased = !selection && phase !== undefined && model === selected;
-    const provider = model ? providerName(model.provider, ctx.modelRegistry) : undefined;
+    const provider = model ? ctx.modelRegistry.getProviderDisplayName(model.provider) : undefined;
 
     const statusEntries = [...footerData.getExtensionStatuses()].sort(([a], [b]) =>
       a.localeCompare(b),
@@ -169,20 +148,6 @@ export const createFooter = (
       theme,
       {
         // One phrase, one target: every part opens the picker and lights together.
-        selection:
-          selected && selection
-            ? {
-                id: "model",
-                text: selection,
-                color: "text",
-                bold: true,
-                action: actions.model,
-              }
-            : undefined,
-        phase:
-          selection && phase
-            ? { id: "model", text: `(${phase})`, color: "dim", tight: true, action: actions.model }
-            : undefined,
         provider:
           provider === undefined
             ? undefined
@@ -195,13 +160,10 @@ export const createFooter = (
               },
         model: {
           id: "model",
-          text: phased ? `${modelText} (${phase})` : modelText,
+          text: modelText,
           short: model ? modelAlias(model) : undefined,
           color: modelColor,
           bold: true,
-          styled: phased
-            ? (t) => t.bold(t.fg(modelColor, modelText)) + t.fg("dim", ` (${phase})`)
-            : undefined,
           action: actions.model,
         },
         // The effort wears the colour of the editor border, which is keyed to the same level.
@@ -271,12 +233,10 @@ export const createFooter = (
     if (!state.live) return;
     git.start(ctx.cwd);
     mountFooter(ctx);
-    usage.refresh();
   });
 
   const repaint = () => {
     if (!state.live) return;
-    usage.refresh();
     state.tui?.requestRender();
   };
   const repaintAndGit = () => {

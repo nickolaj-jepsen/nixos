@@ -8,7 +8,7 @@
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { publishMemoryTally } from "../../shared/memory-tally.ts";
-import { isSubagentSession } from "../../shared/subagent-session.ts";
+import { isSubagentSession } from "../lib/subagent-session.ts";
 import { buildHotSection, type HotIndex } from "./hot.ts";
 import {
   invalidateAll,

@@ -7,7 +7,6 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import bg from "./bg.ts";
 import chrome from "./chrome.ts";
 import claudePeers from "./claude-peers.ts";
-import modelLabels from "./model-labels.ts";
 import questions from "./questions.ts";
 import notify from "./notify.ts";
 import { createServices, type Services } from "./services.ts";
@@ -18,7 +17,6 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["bg", bg],
   ["chrome", chrome],
   ["claude-peers", claudePeers],
-  ["model-labels", modelLabels],
   ["questions", questions],
   ["notify", notify],
   ["spellfix", spellfix],

@@ -11,7 +11,7 @@ export type ChromeState = {
   ctx: ExtensionContext | undefined;
   /**
    * Whether the session draws pi's TUI. A headless one (`pi -p`, RPC) shows
-   * none of this, so it runs no git, gh or ai-usage call.
+   * none of this, so it runs no git or gh call.
    */
   live: boolean;
   tui: Renderer | undefined;

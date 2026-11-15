@@ -617,16 +617,6 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs }: Serv
       return { content: [{ type: "text", text: notes.join(" ") }], details: undefined };
     },
   });
-
-  pi.registerCommand("list-agents", {
-    description: "Show the Claude Code and pi sessions this session can message",
-    handler: async (_args, c) => {
-      const peers = await listPeersWarned();
-      const self = entry ? `This session: ${ownLabel()}` : "This session has no inbox";
-      const rows = peers.map((p) => `  ${peerLine(p)}`);
-      c.ui.notify([self, `Other sessions (${peers.length}):`, ...rows].join("\n"), "info");
-    },
-  });
 }
 
 /** One peer for a listing. */

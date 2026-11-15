@@ -46,8 +46,7 @@ must be `git add`ed or flake eval ignores them.
 - `docs/homelab.md` — adding or changing a service under `modules/homelab/`.
 - `docs/agent-hub.md` — the agent hub: `pkgs/agent-hub`, its DMS plugin, and
   its pi and Claude Code halves.
-- `docs/models.md` — pi's router (`extensions/core/routers.ts` and
-  `shared/kinds.ts`), its `models.json`, `enabledModels` or
+- `docs/models.md` — pi's `models.json`, `defaultModel`, `enabledModels` or
   `modules/programs/pi/agents/`.
 - `docs/notes.md` — the agent note store, its links, scratch, the git hook and
   the migration.

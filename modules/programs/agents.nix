@@ -52,7 +52,7 @@
         };
       })
 
-      # pi's Jev classifier gate (extensions/core/routers.ts) needs no other agent.
+      # typesafe's classifier models, which only pi's codemode can call.
       (lib.mkIf config.fireproof.dev.pi.enable {
         age.secrets.typesafe-api-key = {
           rekeyFile = ../../secrets/typesafe-api-key.age;

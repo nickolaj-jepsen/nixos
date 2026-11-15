@@ -9,11 +9,7 @@
  * for the failure and whether a peer woke the turn.
  */
 import { contentText } from "@earendil-works/pi-ai";
-import {
-  copyToClipboard,
-  type ExtensionAPI,
-  type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { firstRequest, oneLine, stripRequest } from "../shared/naming.ts";
 import { sideCall } from "../shared/side-call.ts";
 import { PEER_MESSAGE_TYPE } from "./claude-peers/protocol.ts";
@@ -45,7 +41,7 @@ const cut = (text: string) => {
 };
 
 /**
- * Registers the identity's handlers and `/header`. Create it before any feature
+ * Registers the identity's handlers. Create it before any feature
  * whose handlers read it on the same event.
  */
 export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
@@ -83,37 +79,6 @@ export const createIdentity = (pi: ExtensionAPI, userWait: UserWait) => {
     if (working) return "";
     return failed ? "failed" : "";
   };
-
-  const quote = (path: string) =>
-    /^[a-zA-Z0-9_\-./~:@]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`;
-  const sessionId = (ctx: ExtensionContext) => ctx.sessionManager.getSessionId();
-  const resumeCommand = (ctx: ExtensionContext) =>
-    `cd ${quote(ctx.cwd)} && pi --session ${sessionId(ctx).slice(0, 8)}`;
-
-  const summary = (ctx: ExtensionContext) => {
-    const shown = current(ctx);
-    const persisted = ctx.sessionManager.getSessionFile();
-    return [
-      `${shown?.text ?? "(unnamed)"}  (${shown?.source ?? "none"})`,
-      `path: ${ctx.cwd}`,
-      persisted
-        ? `session: ${sessionId(ctx)}`
-        : "session: ephemeral (--no-session), nothing to resume",
-      persisted ? `resume: ${resumeCommand(ctx)}` : undefined,
-    ]
-      .filter(Boolean)
-      .join("\n");
-  };
-
-  pi.registerCommand("header", {
-    description: "Session identity: show path and id, and copy the resume command",
-    handler: async (_args, ctx) => {
-      ctx.ui.notify(summary(ctx), "info");
-      if (!ctx.sessionManager.getSessionFile()) return;
-      await copyToClipboard(resumeCommand(ctx));
-      ctx.ui.notify("identity: resume command copied", "info");
-    },
-  });
 
   /** Names a session that has none, once, from its first turn; one named meanwhile keeps its name. */
   const title = async (ctx: ExtensionContext) => {

@@ -45,7 +45,7 @@ const dismissOverlay =
   };
 
 export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git) => {
-  const openModels = command(state, pi, "/models");
+  const openModels = appAction(state, "app.model.select", "ctrl+l");
   const closeOverlay = dismissOverlay(state);
   const menus = createMenuPopper();
   // Building the git menu asks git and gh, so a double click could queue a second
@@ -98,9 +98,9 @@ export const createActions = (pi: ExtensionAPI, state: ChromeState, git: Git) =>
     folder,
     notes: ((ctx) => openNotes(ctx)) as Action,
     git: gitLinks,
-    // The picker is this repo's own (/models: labels, cost, context). A click while
-    // it or any other dialog holds focus closes that instead of stacking the
-    // picker on top: pi closes those on Escape without telling anyone.
+    // pi's own picker. A click while it or any other dialog holds focus closes
+    // that instead of stacking the picker on top: pi closes those on Escape
+    // without telling anyone.
     model: ((ctx) => {
       const focus = state.tui?.getFocusedComponent?.();
       if (focus && focus !== state.editor) return closeOverlay(ctx);

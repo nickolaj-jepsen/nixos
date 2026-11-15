@@ -1,7 +1,7 @@
 # Agent tooling
 
 Read this before adding or changing a skill, a pi extension or package, pi
-itself, a Claude Code mod or an agent language server. pi's router, providers
+itself, a Claude Code mod or an agent language server. pi's providers, models
 and subagent roles are in `docs/models.md`; desktop toasts and the bar are in
 `docs/agent-hub.md`.
 

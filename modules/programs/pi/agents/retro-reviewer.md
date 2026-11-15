@@ -2,7 +2,7 @@
 name: retro-reviewer
 description: Reviews how one finished session went, from its transcript and result, for /retro. Read-only.
 tools: bash, read, grep, find, ls
-model: vm/deep
+model: kimi-coding/k3.1-pro
 thinking: high
 prompt_mode: replace
 locked: model, thinking

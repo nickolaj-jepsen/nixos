@@ -20,12 +20,6 @@ export const formatCost = (cost: number) => {
   return `$${cost.toFixed(2)}`;
 };
 
-/** Whole dollars once cents stop mattering. */
-export const formatCredit = (usd: number) =>
-  usd >= 10 ? `$${Math.round(usd)}` : `$${usd.toFixed(2)}`;
-
-const HOUR = 3_600_000;
-
 /** A coarse age: minutes, hours up to two days, then days; `fresh` under a minute. */
 export const formatAge = (ms: number, fresh: string) => {
   const minutes = Math.floor(ms / 60_000);
@@ -33,16 +27,6 @@ export const formatAge = (ms: number, fresh: string) => {
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
   return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
-};
-
-/** A moment as the shortest unambiguous text: `14:30` today, `Fri 09:00` within a week, else `31 Oct`. */
-export const formatWhen = (at: Date, now = new Date()) => {
-  const time = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  if (at.toDateString() === now.toDateString()) return time;
-  if (Math.abs(at.getTime() - now.getTime()) < 7 * 24 * HOUR) {
-    return `${at.toLocaleDateString("en-GB", { weekday: "short" })} ${time}`;
-  }
-  return at.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 };
 
 /**

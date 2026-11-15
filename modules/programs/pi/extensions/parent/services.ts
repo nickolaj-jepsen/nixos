@@ -13,12 +13,9 @@ export const createServices = (pi: ExtensionAPI) => {
   const userWait = createUserWait(pi);
   // Before the identity: a run's end closes its dialogs before it reports the turn.
   const dialogs = createDialogs(pi);
-  // bg.ts supplies the count.
-  const jobs = { running: () => 0 };
   return {
     userWait,
     dialogs,
-    jobs,
     identity: createIdentity(pi, userWait),
     editorHooks: createEditorHooks(),
   };

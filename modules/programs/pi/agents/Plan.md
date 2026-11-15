@@ -2,7 +2,7 @@
 name: Plan
 description: Designs an implementation plan from the code as it is. Read-only.
 tools: read, bash, grep, find, ls
-model: vm/architect
+model: kimi-coding/k3.1-pro
 thinking: high
 prompt_mode: replace
 max_turns: 60

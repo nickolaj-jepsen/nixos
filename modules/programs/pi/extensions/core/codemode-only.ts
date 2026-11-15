@@ -19,9 +19,10 @@
  */
 import { Type } from "typebox";
 import type { ExtensionAPI, ToolInfo } from "@earendil-works/pi-coding-agent";
-import { isExpensiveModel } from "./lib/model-tier.ts";
-import { createRouted } from "../shared/routed-model.ts";
-import { isSubagentSession } from "../shared/subagent-session.ts";
+import { isSubagentSession } from "./lib/subagent-session.ts";
+
+/** USD per million output tokens at or above which a model counts as Opus/Kimi tier. */
+const EXPENSIVE_OUTPUT = 8;
 
 const NAME = "codemode_only";
 const CODEMODE = "codemode";
@@ -73,8 +74,6 @@ const guidelines = (tools: Map<string, ToolInfo>, active: Set<string>, expensive
 };
 
 export default function (pi: ExtensionAPI) {
-  const routed = createRouted();
-
   pi.on("session_start", (_event, ctx) => {
     // A child never gets the agent tools, so the warning below would fire on
     // every delegation.
@@ -95,11 +94,9 @@ export default function (pi: ExtensionAPI) {
   pi.on("before_agent_start", (event, ctx) => {
     const active = new Set(pi.getActiveTools());
     if (!active.has(NAME) || !active.has(CODEMODE)) return;
-    const answering = routed(ctx)?.model ?? ctx.model;
+    const expensive = (ctx.model?.cost?.output ?? 0) >= EXPENSIVE_OUTPUT;
     const tools = new Map(pi.getAllTools().map((tool) => [tool.name, tool]));
-    event.systemPromptOptions.promptGuidelines.push(
-      ...guidelines(tools, active, isExpensiveModel(answering)),
-    );
+    event.systemPromptOptions.promptGuidelines.push(...guidelines(tools, active, expensive));
   });
 
   pi.registerTool({

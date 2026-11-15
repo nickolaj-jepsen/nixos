@@ -15,8 +15,7 @@ import { open, readdir, readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { IDENTITY_ENTRY, readIdentity } from "../../shared/identity.ts";
-import { gitRoots } from "../../shared/git.ts";
+import { gitRoots } from "../lib/git.ts";
 
 export type SessionScope = "repo" | "all";
 export type SessionHit = {
@@ -37,20 +36,31 @@ const MAX_LINE_BYTES = 512 * 1024;
 const EXCERPT_CHARS = 320;
 
 type Header = { id?: string; cwd?: string; timestamp?: string };
+/**
+ * The label record an older agent-hub persisted on a session's branch. Nothing
+ * writes it any more; old sessions still carry it, and the last one is current.
+ */
+const IDENTITY_ENTRY = "identity_label";
 // As JSON.stringify writes it; a message quoting the name has its quotes escaped.
 const IDENTITY_LINE = `"customType":"${IDENTITY_ENTRY}"`;
 type Card = { label?: string; summary?: string; tags: string[]; timestamp: string };
 
+const str = (value: unknown) => (typeof value === "string" && value !== "" ? value : undefined);
+
 /** The identity record a transcript line holds, if it is one. */
 function identityCard(entry: unknown): Card | undefined {
-  const record = readIdentity(entry);
-  if (!record) return undefined;
-  const { timestamp } = entry as { timestamp?: string };
+  const row = entry as
+    | { type?: unknown; customType?: unknown; data?: unknown; timestamp?: string }
+    | undefined;
+  if (row?.type !== "custom" || row.customType !== IDENTITY_ENTRY) return undefined;
+  const data = (row.data ?? {}) as Record<string, unknown>;
   return {
-    label: record.text,
-    summary: record.summary,
-    tags: record.tags ?? [],
-    timestamp: timestamp ?? "",
+    label: str(data.text),
+    summary: str(data.summary),
+    tags: Array.isArray(data.tags)
+      ? data.tags.filter((tag): tag is string => typeof tag === "string")
+      : [],
+    timestamp: row.timestamp ?? "",
   };
 }
 

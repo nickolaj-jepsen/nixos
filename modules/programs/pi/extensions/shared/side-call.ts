@@ -2,8 +2,8 @@
 import { contentText, type SimpleStreamOptions } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-/** The default side model: the flash ladder, so a side call falls back the way the session does. */
-export const SIDE_MODEL = "vm/flash";
+/** The default side model: the cheap workhorse. */
+export const SIDE_MODEL = "opencode-go/deepseek-v4.1-flash";
 
 export type SideCall = {
   system: string;

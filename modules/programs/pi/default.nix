@@ -95,7 +95,7 @@ in {
       done
       cp -r ${./agents} $out
     '';
-    # Children keep core/ (only its router registers vm/*) and the permission system.
+    # Children keep core/ and the permission system.
     childExcludedPackages =
       map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages)
       ++ [parentPath]
@@ -116,18 +116,17 @@ in {
         PI_LSP_SERVERS = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
       };
     settings = {
-      defaultProvider = "vm";
-      defaultModel = "flash";
+      defaultProvider = "opencode-go";
+      defaultModel = "deepseek-v4.1-flash";
       defaultThinkingLevel = "high";
-      # A default outside the list starts on the first entry, so vm/* leads.
+      # A default outside the list starts on the first entry, so the default leads.
       enabledModels =
         [
-          "vm/*"
+          # The one paid Go model; `*` holds because no free id has a slash.
+          "opencode-go/deepseek-v4.1-flash"
+          "kimi-coding/k3.1-pro"
           "anthropic/claude-opus-5-5"
           "anthropic/claude-sonnet-5-5"
-          "kimi-coding/k3.1-pro"
-          # The one paid Go hand-pick; `*` holds because no free id has a slash.
-          "opencode-go/deepseek-v4.1-flash"
           "opencode-go/*-free"
         ]
         ++ lib.optional config.fireproof.dev.llm.enable "local/*";
@@ -284,7 +283,7 @@ in {
             };
             # API credits; a `/login anthropic` OAuth credential would take precedence.
             anthropic.apiKey = "!cat ${config.age.secrets.anthropic-api-key.path}";
-            # Built-in provider; only the router's Jev gate uses it.
+            # Built-in provider of classifier models, reached from codemode scripts.
             typesafe.apiKey = "!cat ${config.age.secrets.typesafe-api-key.path}";
             tensorx = {
               baseUrl = "https://api.tensorx.ai/v1";
@@ -403,9 +402,9 @@ in {
         # before a picker's search field, which would stop accepting them.
         "tui.select.up" = ["up" "ctrl+p"];
         "tui.select.down" = ["down" "ctrl+n"];
-        # Reserved keys block an extension's, so the stock picker holds none.
-        "app.model.select" = [];
-        # Drops WSL's alt+p default, which would win over the picker.
+        # Claude Code's alt+p next to pi's ctrl+l.
+        "app.model.select" = ["alt+p" "ctrl+l"];
+        # Drops WSL's alt+p default, which would clash with the picker's.
         "app.model.cycleBackward" = ["shift+ctrl+p"];
         "app.thinking.toggle" = "alt+t";
         "app.thinking.save" = "alt+s";

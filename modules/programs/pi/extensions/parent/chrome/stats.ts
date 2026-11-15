@@ -1,7 +1,28 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { entrySpend } from "../../shared/spend.ts";
+import type { Usage } from "@earendil-works/pi-ai";
+import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
+
+/**
+ * What a session entry cost, by pi's own accounting: assistant replies,
+ * tool-result `usage`, usage entries (cache warming), compaction and branch
+ * summaries. Every branch counts, abandoned ones were paid for too.
+ */
+const entryCost = (entry: SessionEntry): number => {
+  const usd = (usage: Usage | undefined) => usage?.cost?.total ?? 0;
+  switch (entry.type) {
+    case "message":
+      return entry.message.role === "assistant" || entry.message.role === "toolResult"
+        ? usd(entry.message.usage)
+        : 0;
+    case "usage":
+    case "compaction":
+    case "branch_summary":
+      return usd(entry.usage);
+    default:
+      return 0;
+  }
+};
 
 export type Stats = {
   cost: number;
@@ -26,7 +47,7 @@ const collectStats = (ctx: ExtensionContext, model: ActiveModel | undefined): St
   const caching = new Set<string>();
 
   for (const entry of ctx.sessionManager.getEntries()) {
-    cost += entrySpend(entry)?.usd ?? 0;
+    cost += entryCost(entry);
     if (entry.type === "compaction" || entry.type === "branch_summary") {
       warmModel = undefined;
       cacheHit = undefined;
