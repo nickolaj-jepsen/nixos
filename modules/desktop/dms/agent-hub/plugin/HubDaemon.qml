@@ -11,27 +11,15 @@ Item {
     property var pluginService
 
     property var sessions: []
-    // Sessions that ended, newest first, each with the command that resumes it.
-    property var recent: []
     // Other hosts piped in, each `up` or saying why it isn't.
     property var links: []
     readonly property bool linkUp: socket.linkUp
     // Set when the hub speaks another protocol version; the socket then stays closed.
     property string refused: ""
-    // The menu last asked for, null until it answers; it may answer again with more.
-    property var menu: null
-    property int menuRequest: 0
 
     function focusSession(sessionId) {
         socket.send({
             "op": "focus",
-            "session": sessionId
-        });
-    }
-
-    function resume(sessionId) {
-        socket.send({
-            "op": "resume",
             "session": sessionId
         });
     }
@@ -56,40 +44,6 @@ Item {
         });
     }
 
-    function answer(sessionId, ask, allow) {
-        socket.send({
-            "op": "answer",
-            "session": sessionId,
-            "ask": ask,
-            "allow": allow
-        });
-    }
-
-    function openMenu(sessionId, which) {
-        root.menu = null;
-        root.menuRequest += 1;
-        socket.send({
-            "op": "menu",
-            "request": root.menuRequest,
-            "session": sessionId,
-            "which": which
-        });
-    }
-
-    function closeMenu() {
-        root.menu = null;
-        root.menuRequest += 1;
-    }
-
-    function run(sessionId, action) {
-        socket.send({
-            "op": "run",
-            "session": sessionId,
-            "kind": action.kind,
-            "value": action.value
-        });
-    }
-
     function handle(line) {
         let message;
         try {
@@ -100,11 +54,7 @@ Item {
         }
         if (message.type === "state") {
             root.sessions = message.sessions;
-            root.recent = message.recent ?? [];
             root.links = message.links ?? [];
-        } else if (message.type === "menu") {
-            if (message.request === root.menuRequest)
-                root.menu = message.menu;
         } else if (message.type === "refused") {
             console.warn("agentHub: " + message.text);
             root.refused = message.text;
@@ -121,11 +71,10 @@ Item {
             if (linkUp)
                 send({
                     "op": "subscribe",
-                    "version": 5
+                    "version": 6
                 });
             else {
                 root.sessions = [];
-                root.recent = [];
                 root.links = [];
             }
         }

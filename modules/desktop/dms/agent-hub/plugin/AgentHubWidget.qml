@@ -1,10 +1,7 @@
 // Bar pill: a dot per session that wants you, in the hub's order, then a ring per working
 // one. Something new bursts, a prompt also peeks its name, and it breathes until you look.
-// Popout: every session on the left, by what it is, and on the right everything about the
-// selected one, which is whatever you last hovered or moved to. Nothing moves under the
-// pointer. Keys act on the selection: Enter opens it (or resumes an ended one in a new
-// terminal), x dismisses, u undoes the last dismissal, a and d
-// answer its prompt, j/k move, g/G jump to the ends.
+// Popout: one list of every session, by what it is. Keys act on the selection: Enter opens
+// it, x dismisses, u undoes the last dismissal, j/k move, g/G jump to the ends.
 import QtQuick
 import QtQuick.Effects
 import Quickshell
@@ -21,82 +18,25 @@ PluginComponent {
     readonly property var sessions: hub?.sessions ?? []
     readonly property var active: sessions.filter(s => s.state !== "idle")
     readonly property var idleRows: sessions.filter(s => s.state === "idle")
-    readonly property int maxRecent: 5
-    readonly property var endedRows: (hub?.recent ?? []).slice(0, maxRecent).map(r => ({
-                "id": r.id,
-                "agent": r.agent,
-                "name": r.name,
-                "cwd": r.cwd,
-                "project": r.project,
-                "reason": r.summary,
-                "state": "ended",
-                "host": r.host,
-                "since": r.endedAt,
-                "history": r.history
-            }))
-    readonly property var foldRow: endedRows.length ? [
-        {
-            "id": "fold:ended",
-            "fold": true,
-            "state": "fold",
-            "members": endedRows
-        }
-    ] : []
-    // The list: the hub's order, then what ended behind its heading.
-    readonly property var rows: active.concat(idleRows, foldRow, endedOpen ? endedRows : [])
+    // The list: the hub's order.
+    readonly property var rows: active.concat(idleRows)
     readonly property int maxDots: 6
     // A session left waiting on you this long has its age turn red.
     readonly property int staleSeconds: 900
-    // A working session silent this long has its last activity turn amber: a hint, not a verdict.
-    readonly property int quietSeconds: 300
     readonly property var pillGroups: [["asking"], ["failed"], ["done"], ["working"]]
 
     property string selectedId: ""
-    property bool endedOpen: false
     property real nowMs: Date.now()
 
     readonly property int selectedIndex: {
         const at = rows.findIndex(s => s.id === selectedId);
-        return at >= 0 ? at : rows.findIndex(s => !s.fold);
+        return at >= 0 ? at : 0;
     }
     readonly property var selected: rows[selectedIndex] ?? null
-    readonly property var permission: selected?.permission ?? null
-
-    // What the pane shows: a new one keeps Allow and Deny off long enough to read what they'd answer.
-    readonly property string paneKey: (selected?.id ?? "") + ":" + (permission?.id ?? "")
-    property bool armed: true
-    onPaneKeyChanged: {
-        disarm();
-        paneFade.restart();
-    }
-
-    function disarm() {
-        armed = false;
-        armTimer.restart();
-    }
-
-    // The pane changes what it says in place, so a soft fade is all the motion it needs.
-    property real paneOpacity: 1
-
-    NumberAnimation {
-        id: paneFade
-        target: root
-        property: "paneOpacity"
-        from: 0.55
-        to: 1
-        duration: 130
-        easing.type: Easing.OutCubic
-    }
 
     // One height whatever it holds, known before it first opens: the popout never resizes.
     readonly property real contentHeightFixed: Math.min((parentScreen?.height ?? 1080) * 0.6, 620)
     popoutHeight: contentHeightFixed + PopoutMetrics.contentPadding * 2
-
-    Timer {
-        id: armTimer
-        interval: 500
-        onTriggered: root.armed = true
-    }
 
     // The row the pointer is settling on, and where it last was: a hover counts only when the
     // pointer itself moved, never when a row moved under it.
@@ -124,25 +64,13 @@ PluginComponent {
         onTriggered: root.selectedId = root.hoverTarget
     }
 
-    // What was just dismissed, offered back for a moment; and what a menu just copied.
+    // What was just dismissed, offered back for a moment.
     property string undoName: ""
-    property string noteText: ""
-
-    function note(text) {
-        noteText = text;
-        noteTimer.restart();
-    }
 
     Timer {
         id: undoTimer
         interval: 8000
         onTriggered: root.undoName = ""
-    }
-
-    Timer {
-        id: noteTimer
-        interval: 3000
-        onTriggered: root.noteText = ""
     }
 
     // The key legend, for whoever came by keyboard.
@@ -242,11 +170,7 @@ PluginComponent {
         return waits(session) || session.state === "failed" || session.state === "done";
     }
 
-    function finished(session) {
-        return session.state === "failed" || session.state === "done";
-    }
-
-    // The heading a row goes under; what ended sits under its own fold.
+    // The heading a row goes under; 
     function sectionOf(index) {
         const row = rows[index];
         if (!row)
@@ -278,20 +202,6 @@ PluginComponent {
         return m < 1 ? "now" : m < 60 ? m + "m" : m < 2880 ? Math.floor(m / 60) + "h" : Math.floor(m / 1440) + "d";
     }
 
-    // The pane's heading words: what it is doing, and for how long.
-    function stateWords(session) {
-        const word = {
-            "asking": "waiting",
-            "failed": "failed",
-            "done": "finished",
-            "working": "working",
-            "idle": "idle",
-            "ended": "ended"
-        }[session.state] ?? "";
-        const age = ago(session.since);
-        return age === "now" ? word + " just now" : word + " " + age;
-    }
-
     function displayName(session) {
         return session.name || folderName(session) || session.agent || "";
     }
@@ -317,60 +227,24 @@ PluginComponent {
         return shortName(session) === repo ? "" : repo;
     }
 
+    // j/k and the ends.
     // How long something has been running; "now" would read as if it had just begun.
     function elapsed(ms) {
         const m = Math.floor((nowMs - ms) / 60000);
         return m < 1 ? "under 1m" : m < 60 ? m + "m" : Math.floor(m / 60) + "h " + (m % 60) + "m";
     }
 
-    function nowLine(session) {
-        return session.now ? session.now + " · " + elapsed(session.nowAt) : "";
-    }
-
-    // This turn's tally, leaving out what hasn't happened.
-    function countsLine(session) {
-        const counts = session.counts;
-        if (!counts)
-            return "";
-        const part = (n, word) => n ? n + " " + word + (n === 1 ? "" : "s") : "";
-        const parts = [part(counts.edits, "edit"), part(counts.commands, "command"), counts.failed ? counts.failed + " failed" : ""];
-        return parts.filter(text => text).join(", ");
-    }
-
-    // A running turn's narration, oldest first, as a pane's lines read.
-    function trailLines(session) {
-        if (session?.state !== "working")
-            return [];
-        return (session.trail ?? []).slice(-6).map(step => ({
-                    "did": step.text,
-                    "at": step.at,
-                    "state": "working"
-                }));
-    }
-
-    // A row's second line: what is running, its step, or how its turn ended.
+    // A row's second line: what it waits on, how its turn failed or ended, or that it is working, and for how long.
     function rowLine(session) {
-        if (session.state === "working" && session.now)
-            return nowLine(session);
+        if (session.state === "working")
+            return (session.doing || "working") + " · " + elapsed(session.since);
         return session.reason || "";
     }
 
-    // j/k and the ends. Landing on the fold goes through it, which opens it on the way down.
     function select(index) {
         if (!rows.length)
             return;
-        const at = Math.max(0, Math.min(rows.length - 1, index));
-        const row = rows[at];
-        if (row.fold) {
-            if (at > selectedIndex) {
-                endedOpen = true;
-                selectedId = row.members[0].id;
-            } else if (at > 0) {
-                selectedId = rows[at - 1].id;
-            }
-        } else {
-            selectedId = row.id;
-        }
+        selectedId = rows[Math.max(0, Math.min(rows.length - 1, index))].id;
         hoverTimer.stop();
     }
 
@@ -380,7 +254,7 @@ PluginComponent {
         // It leaves its section, so the selection goes to what took its place.
         if (session.id === selected?.id) {
             const next = rows[selectedIndex + 1] ?? rows[selectedIndex - 1];
-            selectedId = next && !next.fold ? next.id : "";
+            selectedId = next ? next.id : "";
         }
         hub.dismiss(session.id, session.turn);
         undoName = displayName(session);
@@ -392,56 +266,21 @@ PluginComponent {
         undoName = "";
     }
 
-    // A row on another host that Enter can't reach, and why it says so.
-    function unreachable(session) {
-        return !!session.host && session.state !== "ended" && !session.tmux && !session.bridge;
-    }
-
     function focusSession(session) {
-        if (!session || session.fold)
+        if (!session)
             return;
-        if (session.state === "ended")
-            hub.resume(session.id);
-        else
-            hub.focusSession(session.id);
+        hub.focusSession(session.id);
         closePopout();
-    }
-
-    // Only while the pane has shown this prompt long enough to be read, and only all of it.
-    function answer(allow) {
-        if (!permission || !armed || (allow && !permission.complete))
-            return;
-        hub.answer(selected.id, permission.id, allow);
-        // It moves down to Working, so the highlight stays put on whatever waits next.
-        const next = rows[selectedIndex + 1];
-        if (next && waits(next))
-            selectedId = next.id;
     }
 
     // What it opens with. Set before it shows, so nothing changes on screen as it does.
     function prepareToOpen() {
         nowMs = Date.now();
-        hub?.closeMenu();
         selectedId = "";
-        endedOpen = false;
         undoName = "";
-        noteText = "";
         legendShown = !pillHovered;
         pointerHeard = false;
         hoverTimer.stop();
-        disarm();
-    }
-
-    function runMenuRow(row) {
-        const action = row.run;
-        if (!action)
-            return;
-        hub.run(selected.id, action);
-        hub.closeMenu();
-        if (action.kind === "copy")
-            note("Copied");
-        else
-            closePopout();
     }
 
     // A filled dot, or a hollow ring. Its burst and breath are the same for every dot.
@@ -696,15 +535,6 @@ PluginComponent {
         }
     }
 
-    // Someone else's words: never read as markup, which could hide what a command says.
-    component PaneText: StyledText {
-        width: parent.width
-        textFormat: Text.PlainText
-        wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-        font.pixelSize: Theme.fontSizeSmall + 1
-        color: Theme.surfaceText
-    }
-
     component OneLine: StyledText {
         textFormat: Text.PlainText
         wrapMode: Text.NoWrap
@@ -740,7 +570,7 @@ PluginComponent {
         Rectangle {
             anchors.centerIn: parent
             visible: mark.session.state !== "working"
-            readonly property bool quiet: mark.session.state === "idle" || mark.session.state === "ended"
+            readonly property bool quiet: mark.session.state === "idle"
             width: quiet ? 6 : 9
             height: width
             radius: width / 2
@@ -794,104 +624,6 @@ PluginComponent {
         }
     }
 
-    component PaneButton: Rectangle {
-        id: button
-
-        required property string label
-        property string kind: "plain"
-        // Always drawn, as a width that followed the legend could slide Allow under the pointer.
-        property string shortcut: ""
-
-        signal clicked
-
-        width: buttonContent.implicitWidth + Theme.spacingM * 2
-        height: 34
-        radius: Theme.cornerRadius
-        color: kind === "open" ? Theme.primaryContainer : kind === "allow" ? Theme.withAlpha(Theme.success, 0.32) : "transparent"
-        border.width: kind === "plain" ? 1 : 0
-        border.color: Theme.outline
-        opacity: enabled ? 1 : 0.4
-
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 120
-            }
-        }
-
-        Row {
-            id: buttonContent
-            anchors.centerIn: parent
-            spacing: Theme.spacingXS + 2
-
-            StyledText {
-                anchors.verticalCenter: parent.verticalCenter
-                text: button.label
-                font.pixelSize: Theme.fontSizeSmall + 1
-                font.weight: Font.Medium
-                color: Theme.surfaceText
-            }
-
-            KeyCap {
-                anchors.verticalCenter: parent.verticalCenter
-                visible: button.shortcut !== ""
-                key: button.shortcut
-            }
-        }
-
-        StateLayer {
-            onClicked: button.clicked()
-        }
-    }
-
-    // An icon and a word in the pane's quiet bottom row, which says the rest when hovered.
-    component MetaChip: Rectangle {
-        id: chip
-
-        required property string icon
-        required property string label
-        required property string tip
-        property bool clickable: false
-        property color tint: Theme.surfaceVariantText
-        property real maxLabel: 160
-
-        signal clicked
-
-        width: chipRow.implicitWidth + 8
-        height: 22
-        radius: 5
-        color: "transparent"
-
-        Row {
-            id: chipRow
-            anchors.centerIn: parent
-            spacing: 4
-
-            DIcon {
-                anchors.verticalCenter: parent.verticalCenter
-                name: chip.icon
-                size: 13
-                color: chip.tint
-            }
-
-            OneLine {
-                anchors.verticalCenter: parent.verticalCenter
-                width: Math.min(implicitWidth, chip.maxLabel)
-                visible: chip.label !== ""
-                text: chip.label
-                color: chip.tint
-            }
-        }
-
-        StateLayer {
-            tooltipText: chip.tip
-            tooltipSide: "top"
-            cursorShape: chip.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor
-            enableRipple: chip.clickable
-            stateColor: chip.clickable ? Theme.surfaceText : "transparent"
-            onClicked: chip.clicked()
-        }
-    }
-
     component KeyHint: Row {
         id: hint
 
@@ -921,7 +653,7 @@ PluginComponent {
         required property int index
         readonly property var session: modelData
         readonly property bool isSelected: index === root.selectedIndex
-        readonly property bool slim: session.state === "idle" || session.state === "ended"
+        readonly property bool slim: session.state === "idle"
         readonly property string section: root.sectionOf(index)
         readonly property bool headed: section !== "" && (index === 0 || root.sectionOf(index - 1) !== section)
         readonly property string line: slim ? "" : root.rowLine(session)
@@ -1077,143 +809,7 @@ PluginComponent {
         }
     }
 
-    // What ended: its heading, which a click opens, as it stays until the popout closes.
-    component FoldRow: Rectangle {
-        id: foldRow
-
-        required property var members
-
-        width: parent.width
-        height: 32
-        radius: Theme.cornerRadius
-        color: "transparent"
-
-        DIcon {
-            id: chevron
-            x: Theme.spacingS
-            anchors.verticalCenter: parent.verticalCenter
-            name: root.endedOpen ? "expand_more" : "chevron_right"
-            size: 16
-            color: Theme.surfaceVariantText
-        }
-
-        SectionLabel {
-            anchors.left: chevron.right
-            anchors.leftMargin: 4
-            anchors.verticalCenter: parent.verticalCenter
-            text: "Ended · " + foldRow.members.length
-        }
-
-        StateLayer {
-            onClicked: root.endedOpen = !root.endedOpen
-        }
-    }
-
-    // The agent's request in full: a command as it would run, an edit as the lines it changes.
-    component RequestBlock: Rectangle {
-        id: request
-
-        required property var ask
-
-        width: parent.width
-        height: requestBody.implicitHeight + Theme.spacingM * 2 - 4
-        radius: Theme.cornerRadius
-        color: Theme.withAlpha(Theme.surfaceText, 0.05)
-
-        Column {
-            id: requestBody
-
-            x: Theme.spacingM
-            y: Theme.spacingS
-            width: parent.width - Theme.spacingM * 2
-            spacing: 0
-
-            Repeater {
-                model: request.ask?.kind === "diff" ? request.ask.body.split("\n") : [request.ask?.body ?? ""]
-
-                PaneText {
-                    required property var modelData
-
-                    text: modelData
-                    wrapMode: Text.WrapAnywhere
-                    font.family: Theme.monoFontFamily
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: request.ask?.kind !== "diff" ? Theme.surfaceText : modelData.startsWith("- ") ? Theme.error : modelData.startsWith("+ ") ? Theme.success : Theme.surfaceText
-                }
-            }
-        }
-    }
-
-    // A past turn, its mark and when.
-    component TurnLine: Item {
-        id: turn
-
-        required property var modelData
-
-        width: parent.width
-        height: did.implicitHeight
-
-        Rectangle {
-            x: 4
-            anchors.verticalCenter: parent.verticalCenter
-            width: 5
-            height: 5
-            radius: 2.5
-            color: root.tone(turn.modelData)
-        }
-
-        OneLine {
-            id: did
-            x: 18
-            width: parent.width - x - turnAge.width - Theme.spacingS
-            text: turn.modelData.did
-        }
-
-        OneLine {
-            id: turnAge
-            anchors.right: parent.right
-            text: root.ago(turn.modelData.at)
-            color: Theme.withAlpha(Theme.surfaceVariantText, 0.8)
-        }
-    }
-
-    // A line with a quiet icon where a label would be.
-    component IconLine: Item {
-        id: iconLine
-
-        required property string icon
-        required property string text
-        property string tip: ""
-
-        width: parent.width
-        height: iconLineText.implicitHeight
-
-        DIcon {
-            id: iconMark
-            y: 1
-            name: iconLine.icon
-            size: 15
-            color: Theme.withAlpha(Theme.surfaceVariantText, 0.8)
-        }
-
-        PaneText {
-            id: iconLineText
-            x: 22
-            width: parent.width - x
-            text: iconLine.text
-            color: Theme.surfaceVariantText
-        }
-
-        StateLayer {
-            anchors.fill: iconMark
-            tooltipText: iconLine.tip
-            cursorShape: Qt.ArrowCursor
-            enableRipple: false
-            stateColor: "transparent"
-        }
-    }
-
-    popoutWidth: 850
+    popoutWidth: 420
 
     popoutContent: Component {
         FocusScope {
@@ -1254,14 +850,6 @@ PluginComponent {
                 }
             }
 
-            Connections {
-                target: root
-                function onPaneKeyChanged() {
-                    root.hub?.closeMenu();
-                    paneScroll.contentY = 0;
-                }
-            }
-
             // Only the keyboard scrolls the list: a row you are pointing at is already in view.
             function reveal() {
                 if (root.selectedIndex >= 0)
@@ -1271,21 +859,12 @@ PluginComponent {
             Keys.onPressed: event => {
                 if (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))
                     return;
-                if (event.key === Qt.Key_Escape && root.hub?.menu) {
-                    root.hub.closeMenu();
-                    event.accepted = true;
-                    return;
-                }
                 if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                     root.focusSession(root.selected);
                 else if (event.key === Qt.Key_X)
                     root.dismiss(root.selected);
                 else if (event.key === Qt.Key_U)
                     root.undo();
-                else if (event.key === Qt.Key_A)
-                    root.answer(true);
-                else if (event.key === Qt.Key_D)
-                    root.answer(false);
                 else if (event.key === Qt.Key_J || event.key === Qt.Key_Down)
                     root.select(root.selectedIndex + 1);
                 else if (event.key === Qt.Key_K || event.key === Qt.Key_Up)
@@ -1316,13 +895,13 @@ PluginComponent {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 // The legend's room is kept whether it shows or not, so the buttons never shift.
-                anchors.bottom: legend.top
+                anchors.bottom: undoNote.visible ? undoNote.top : legend.top
                 visible: root.rows.length > 0
 
                 Column {
                     id: leftColumn
 
-                    width: 360
+                    width: parent.width
                     height: parent.height
 
                     OneLine {
@@ -1358,562 +937,55 @@ PluginComponent {
 
                             width: ListView.view.width - Theme.spacingS
 
-                            FoldRow {
-                                visible: !!rowSlot.modelData.fold
-                                members: rowSlot.modelData.members ?? []
-                            }
-
                             SessionRow {
-                                visible: !rowSlot.modelData.fold
-                                modelData: rowSlot.modelData
+                                                modelData: rowSlot.modelData
                                 index: rowSlot.index
                             }
                         }
                     }
                 }
+            }
 
-                Rectangle {
-                    id: divider
-                    x: leftColumn.width + Theme.spacingS
-                    width: 1
-                    height: parent.height
-                    color: Theme.surfaceContainerHigh
+            // What was just dismissed, offered back for a moment.
+            Rectangle {
+                id: undoNote
+
+                anchors.bottom: legend.top
+                width: parent.width
+                height: 34
+                radius: Theme.cornerRadius
+                color: Theme.surfaceContainerHigh
+                visible: root.undoName !== ""
+
+                OneLine {
+                    x: Theme.spacingM
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - x - Theme.spacingM * 2 - undoButton.width
+                    text: "Dismissed " + root.undoName
+                    color: Theme.surfaceText
                 }
 
-                Item {
-                    id: pane
-
-                    readonly property var session: root.selected && !root.selected.fold ? root.selected : null
-
-                    anchors.left: divider.right
-                    anchors.leftMargin: Theme.spacingL
+                Rectangle {
+                    id: undoButton
                     anchors.right: parent.right
-                    height: parent.height
-
-                    // Passive, so it hears the pointer over the buttons too: a hover on its way
-                    // here must not change what they would answer.
-                    HoverHandler {
-                        onHoveredChanged: {
-                            if (hovered)
-                                hoverTimer.stop();
-                        }
-                    }
-
-                    Row {
-                        id: paneHead
-
-                        width: parent.width
-                        height: 26
-                        visible: pane.session !== null
-                        opacity: root.paneOpacity
-                        spacing: Theme.spacingS
-
-                        OneLine {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Math.min(implicitWidth, parent.width - paneRepo.width - paneIcon.width - paneAge.width - Theme.spacingS * 4)
-                            text: pane.session ? root.shortName(pane.session) : ""
-                            font.pixelSize: Theme.fontSizeLarge
-                            font.weight: Font.DemiBold
-                            color: Theme.surfaceText
-                        }
-
-                        OneLine {
-                            id: paneRepo
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: text !== ""
-                            width: Math.min(implicitWidth, parent.width * 0.35)
-                            text: pane.session ? root.repoBeside(pane.session) : ""
-                            font.pixelSize: Theme.fontSizeLarge
-                            font.weight: Font.Medium
-                        }
-
-                        AgentIcon {
-                            id: paneIcon
-                            anchors.verticalCenter: parent.verticalCenter
-                            size: 13
-                            agent: pane.session?.agent ?? ""
-                        }
-
-                        Item {
-                            width: parent.width - x - paneAge.width - Theme.spacingS
-                            height: 1
-                        }
-
-                        OneLine {
-                            id: paneAge
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: pane.session ? root.stateWords(pane.session) : ""
-                            font.weight: Font.Medium
-                            color: pane.session && root.stale(pane.session) ? Theme.error : Theme.surfaceVariantText
-                        }
-                    }
-
-                    DFlickable {
-                        id: paneScroll
-
-                        anchors.top: paneHead.bottom
-                        anchors.topMargin: Theme.spacingM
-                        anchors.bottom: paneNotes.visible ? paneNotes.top : paneMeta.top
-                        anchors.bottomMargin: Theme.spacingS
-                        width: parent.width
-                        clip: true
-                        contentWidth: width
-                        contentHeight: paneBody.implicitHeight
-                        visible: pane.session !== null
-                        opacity: root.paneOpacity
-
-                        Column {
-                            id: paneBody
-
-                            width: paneScroll.width
-                            spacing: Theme.spacingM
-
-                            IconLine {
-                                visible: !!pane.session?.prompt && !root.waits(pane.session)
-                                icon: "person"
-                                text: pane.session?.prompt ?? ""
-                                tip: "What you last asked"
-                            }
-
-                            // What it wants permission for, in full when its hook is holding the prompt.
-                            Column {
-                                width: parent.width
-                                visible: pane.session?.state === "asking"
-                                spacing: Theme.spacingS
-
-                                Row {
-                                    width: parent.width
-                                    spacing: Theme.spacingS
-                                    visible: root.permission !== null
-
-                                    Rectangle {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        width: toolName.implicitWidth + 12
-                                        height: toolName.implicitHeight + 2
-                                        radius: 4
-                                        color: Theme.withAlpha(Theme.surfaceText, 0.1)
-
-                                        OneLine {
-                                            id: toolName
-                                            anchors.centerIn: parent
-                                            text: root.permission?.tool ?? ""
-                                            font.family: Theme.monoFontFamily
-                                            color: Theme.surfaceText
-                                        }
-                                    }
-
-                                    OneLine {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        width: parent.width - x
-                                        text: root.permission?.about ?? ""
-                                    }
-                                }
-
-                                Loader {
-                                    width: parent.width
-                                    active: root.permission !== null
-                                    visible: active
-                                    sourceComponent: RequestBlock {
-                                        ask: root.permission
-                                    }
-                                }
-
-                                PaneText {
-                                    visible: root.permission !== null && !root.permission.complete
-                                    text: "Too long to show in full, so it can only be allowed in the session."
-                                    color: Theme.warning
-                                }
-
-                                // pi's own prompts, and anything no hook is holding, come as one line.
-                                Rectangle {
-                                    width: parent.width
-                                    visible: root.permission === null
-                                    height: plainAsk.implicitHeight + Theme.spacingM * 2 - 4
-                                    radius: Theme.cornerRadius
-                                    color: Theme.withAlpha(Theme.surfaceText, 0.05)
-
-                                    PaneText {
-                                        id: plainAsk
-                                        x: Theme.spacingM
-                                        y: Theme.spacingS
-                                        width: parent.width - Theme.spacingM * 2
-                                        text: pane.session?.reason ?? ""
-                                        wrapMode: Text.WrapAnywhere
-                                        font.family: Theme.monoFontFamily
-                                        font.pixelSize: Theme.fontSizeSmall
-                                    }
-                                }
-                            }
-
-                            // A finished turn's closing words, as the agent wrote them.
-                            PaneText {
-                                visible: !!pane.session && root.finished(pane.session) && !!pane.session.said
-                                text: pane.session?.said ?? ""
-                                font.pixelSize: Theme.fontSizeMedium
-                            }
-
-                            // Below, as what a waiting session wants of you is the first thing to read.
-                            IconLine {
-                                visible: !!pane.session?.prompt && root.waits(pane.session)
-                                icon: "person"
-                                text: pane.session?.prompt ?? ""
-                                tip: "What you last asked"
-                            }
-
-                            // A working session's trail has this line as its last; a done turn's closing words say more.
-                            PaneText {
-                                visible: !!pane.session && !root.waits(pane.session) && !(pane.session.state === "done" && pane.session.said) && text !== "" && root.trailLines(pane.session).length === 0
-                                text: pane.session?.reason ?? ""
-                                font.pixelSize: Theme.fontSizeMedium
-                            }
-
-                            // What it has said so far, then what is running now and the turn's tally.
-                            Column {
-                                width: parent.width
-                                visible: root.trailLines(pane.session).length > 0
-                                spacing: 5
-
-                                Repeater {
-                                    model: root.trailLines(pane.session)
-
-                                    TurnLine {}
-                                }
-                            }
-
-                            Item {
-                                width: parent.width
-                                height: nowText.implicitHeight
-                                visible: pane.session?.state === "working" && !!pane.session?.now
-
-                                DSpinner {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    size: 11
-                                    strokeWidth: 2
-                                    color: Theme.surfaceVariantText
-                                }
-
-                                OneLine {
-                                    id: nowText
-                                    x: 18
-                                    width: parent.width - x
-                                    text: pane.session ? root.nowLine(pane.session) : ""
-                                    color: Theme.surfaceText
-                                }
-                            }
-
-                            OneLine {
-                                width: parent.width
-                                visible: pane.session?.state === "working" && text !== ""
-                                text: pane.session ? root.countsLine(pane.session) : ""
-                                color: Theme.withAlpha(Theme.surfaceVariantText, 0.8)
-                            }
-
-                            Column {
-                                width: parent.width
-                                visible: (pane.session?.jobs ?? []).length > 0
-                                spacing: 4
-
-                                Repeater {
-                                    model: pane.session?.jobs ?? []
-
-                                    Item {
-                                        required property var modelData
-
-                                        width: parent.width
-                                        height: jobText.implicitHeight
-
-                                        DSpinner {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            size: 11
-                                            strokeWidth: 2
-                                            color: Theme.surfaceVariantText
-                                        }
-
-                                        OneLine {
-                                            id: jobText
-                                            x: 18
-                                            width: parent.width - x
-                                            text: parent.modelData
-                                        }
-                                    }
-                                }
-                            }
-
-                            Column {
-                                width: parent.width
-                                visible: (pane.session?.history ?? []).length > 0
-                                spacing: 5
-
-                                Repeater {
-                                    model: (pane.session?.history ?? []).slice(-3).reverse()
-
-                                    TurnLine {}
-                                }
-                            }
-                        }
-                    }
-
-                    // What only words can say, and what can be taken back.
-                    Rectangle {
-                        id: paneNotes
-
-                        anchors.bottom: paneMeta.top
-                        anchors.bottomMargin: Theme.spacingS
-                        width: parent.width
-                        height: 34
-                        radius: Theme.cornerRadius
-                        color: Theme.surfaceContainerHigh
-                        visible: root.undoName !== "" || noteLine.text !== ""
-
-                        OneLine {
-                            id: noteLine
-                            x: Theme.spacingM
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - x - Theme.spacingM * 2 - undoButton.width
-                            text: {
-                                if (root.undoName)
-                                    return "Dismissed " + root.undoName;
-                                if (root.noteText)
-                                    return root.noteText;
-                                if (pane.session && root.unreachable(pane.session))
-                                    return "No way to open it from here";
-                                return "";
-                            }
-                            color: Theme.surfaceText
-                        }
-
-                        Rectangle {
-                            id: undoButton
-                            anchors.right: parent.right
-                            anchors.rightMargin: 4
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: root.undoName !== ""
-                            width: visible ? undoLabel.implicitWidth + 16 : 0
-                            height: 26
-                            radius: 6
-                            color: Theme.withAlpha(Theme.surfaceText, 0.1)
-
-                            StyledText {
-                                id: undoLabel
-                                anchors.centerIn: parent
-                                text: "Undo"
-                                font.pixelSize: Theme.fontSizeSmall
-                                font.weight: Font.Medium
-                                color: Theme.surfaceText
-                            }
-
-                            StateLayer {
-                                onClicked: root.undo()
-                            }
-                        }
-                    }
-
-                    // Where it is: quiet, one line, and only what applies.
-                    Row {
-                        id: paneMeta
-
-                        anchors.bottom: paneButtons.top
-                        anchors.bottomMargin: Theme.spacingS
-                        width: parent.width
-                        visible: pane.session !== null
-                        opacity: root.paneOpacity
-                        spacing: 4
-
-                        MetaChip {
-                            visible: !!pane.session?.branch
-                            icon: "commit"
-                            label: pane.session?.branch ?? ""
-                            tip: "This branch on the web"
-                            clickable: true
-                            maxLabel: 120
-                            onClicked: {
-                                menuBox.x = x;
-                                root.hub?.openMenu(pane.session.id, "git");
-                            }
-                        }
-
-                        MetaChip {
-                            visible: (pane.session?.changed ?? 0) > 0
-                            icon: "edit"
-                            label: String(pane.session?.changed ?? "")
-                            tip: (pane.session?.changed ?? 0) + " files with uncommitted changes"
-                        }
-
-                        MetaChip {
-                            visible: (pane.session?.peers ?? []).length > 0
-                            icon: "group"
-                            label: String((pane.session?.peers ?? []).length)
-                            tip: "Also in this folder: " + (pane.session?.peers ?? []).join(", ")
-                        }
-
-                        MetaChip {
-                            readonly property bool quiet: !!pane.session?.activity && (root.nowMs - pane.session.activity) / 1000 >= root.quietSeconds
-                            visible: !!pane.session?.activity
-                            icon: "timeline"
-                            label: pane.session?.activity ? root.ago(pane.session.activity) : ""
-                            tip: "Last activity"
-                            tint: quiet ? Theme.warning : Theme.surfaceVariantText
-                        }
-
-                        MetaChip {
-                            icon: "folder"
-                            label: pane.session ? Paths.shortenHome(pane.session.cwd || "") : ""
-                            tip: "Open this folder in another app"
-                            clickable: true
-                            // Last, so it takes what the others leave: its icon and padding come off too.
-                            maxLabel: Math.max(40, paneMeta.width - x - 25)
-                            onClicked: {
-                                menuBox.x = Math.min(x, paneMeta.width - menuBox.width);
-                                root.hub?.openMenu(pane.session.id, "folder");
-                            }
-                        }
-                    }
-
-                    Item {
-                        id: paneButtons
-
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 2
-                        width: parent.width
-                        height: 34
-                        visible: pane.session !== null
-
-                        Row {
-                            spacing: Theme.spacingS
-
-                            PaneButton {
-                                visible: !!pane.session && root.wantsYou(pane.session)
-                                label: "Dismiss"
-                                shortcut: "x"
-                                onClicked: root.dismiss(pane.session)
-                            }
-                        }
-
-                        Row {
-                            anchors.right: parent.right
-                            spacing: Theme.spacingS
-
-                            PaneButton {
-                                visible: root.permission !== null
-                                enabled: root.armed
-                                label: "Deny"
-                                shortcut: "d"
-                                onClicked: root.answer(false)
-                            }
-
-                            PaneButton {
-                                visible: root.permission !== null
-                                enabled: root.armed && (root.permission?.complete ?? false)
-                                label: "Allow"
-                                kind: "allow"
-                                shortcut: "a"
-                                onClicked: root.answer(true)
-                            }
-
-                            PaneButton {
-                                enabled: !!pane.session && !root.unreachable(pane.session)
-                                label: pane.session?.state === "ended" ? "Resume" : "Open"
-                                kind: "open"
-                                shortcut: "↵"
-                                onClicked: root.focusSession(pane.session)
-                            }
-                        }
-                    }
-
-                    // A click anywhere else in the pane puts the menu away.
-                    MouseArea {
-                        anchors.fill: parent
-                        visible: !!root.hub?.menu
-                        onClicked: root.hub.closeMenu()
-                    }
-
-                    Rectangle {
-                        id: menuBox
-
-                        anchors.bottom: paneMeta.top
-                        anchors.bottomMargin: 4
-                        visible: !!root.hub?.menu
-                        width: 250
-                        height: menuColumn.implicitHeight + Theme.spacingS
-                        radius: Theme.cornerRadius
-                        color: Theme.surfaceContainerHighest
-                        border.width: 1
-                        border.color: Theme.outlineVariant
-
-                        Column {
-                            id: menuColumn
-
-                            x: 4
-                            y: 4
-                            width: parent.width - 8
-
-                            Item {
-                                width: parent.width
-                                height: 26
-
-                                SectionLabel {
-                                    x: Theme.spacingS
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root.hub?.menu?.title ?? ""
-                                }
-
-                                OneLine {
-                                    anchors.right: parent.right
-                                    anchors.rightMargin: Theme.spacingS
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: Math.min(implicitWidth, 150)
-                                    text: root.hub?.menu?.context ?? ""
-                                }
-                            }
-
-                            Repeater {
-                                model: root.hub?.menu?.rows ?? []
-
-                                Rectangle {
-                                    id: menuRow
-
-                                    required property var modelData
-                                    readonly property bool canRun: !!modelData.run
-
-                                    width: parent.width
-                                    height: 30
-                                    radius: 6
-                                    color: modelData.id === root.hub?.menu?.preferred ? Theme.withAlpha(Theme.surfaceText, 0.08) : "transparent"
-
-                                    OneLine {
-                                        x: Theme.spacingS
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        width: Math.min(implicitWidth, parent.width - x - menuHint.width - Theme.spacingM)
-                                        text: menuRow.modelData.label
-                                        color: menuRow.canRun ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceVariantText, 0.7)
-                                    }
-
-                                    OneLine {
-                                        id: menuHint
-                                        anchors.right: parent.right
-                                        anchors.rightMargin: Theme.spacingS
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        width: Math.min(implicitWidth, 120)
-                                        text: menuRow.modelData.unavailable || menuRow.modelData.description || ""
-                                        font.pixelSize: Theme.fontSizeSmall - 1
-                                        color: Theme.withAlpha(Theme.surfaceVariantText, 0.8)
-                                    }
-
-                                    StateLayer {
-                                        disabled: !menuRow.canRun
-                                        onClicked: root.runMenuRow(menuRow.modelData)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    anchors.rightMargin: 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: undoLabel.implicitWidth + 16
+                    height: 26
+                    radius: 6
+                    color: Theme.withAlpha(Theme.surfaceText, 0.1)
 
                     StyledText {
+                        id: undoLabel
                         anchors.centerIn: parent
-                        visible: pane.session === null
-                        text: "Nothing selected"
+                        text: "Undo"
                         font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.surfaceVariantText
+                        font.weight: Font.Medium
+                        color: Theme.surfaceText
+                    }
+
+                    StateLayer {
+                        onClicked: root.undo()
                     }
                 }
             }
