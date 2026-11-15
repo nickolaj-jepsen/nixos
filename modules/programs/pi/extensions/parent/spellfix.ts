@@ -1,6 +1,6 @@
 /**
  * Spelling fixes for the prompt draft, on the Claude Code spellfix plugin's core
- * (agent-tools/plugins/spellfix/core). hunspell flags the words; one
+ * (plugins/spellfix/core in nickolaj-jepsen/agents). hunspell flags the words; one
  * model call answers every flagged word at once and finds real-word typos
  * hunspell cannot see (`form` for `from`).
  *

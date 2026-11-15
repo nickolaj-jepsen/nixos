@@ -315,10 +315,10 @@ docs:
     install -m 644 "$out" docs/fireproof-options.md
     echo "Wrote docs/fireproof-options.md"
 
-[doc("Set up what development needs but git ignores: direnv, the pi extensions' node_modules, the mods' types")]
+[doc("Set up what development needs but git ignores: direnv and the pi extensions' node_modules; the plugins' own setup is `just dev-setup` in nickolaj-jepsen/agents")]
 [group('dev')]
 [parallel]
-dev-setup: _dev-setup-direnv _dev-setup-pi _dev-setup-claude _dev-setup-agent-tools
+dev-setup: _dev-setup-direnv _dev-setup-pi
 
 [private]
 _dev-setup-direnv:
@@ -332,23 +332,3 @@ _dev-setup-pi:
     {{ nixcmd }} build {{ justfile_directory() }}#pi-extensions --out-link result
     ln -sfn result/node_modules node_modules
     ln -sfn ../../result/parent/lib/protocol.gen.ts parent/lib/protocol.gen.ts
-
-[private]
-_dev-setup-claude:
-    scripts/dev-setup-claude.sh
-
-# Links the pi that ships into agent-tools' node_modules, so `npm run typecheck` there reads
-# the plugins' pi halves against it, as pkgs/agent-tools does in its build.
-[private]
-[script]
-_dev-setup-agent-tools:
-    [ -d {{ justfile_directory() }}/agent-tools/node_modules ] || exit 0
-    ext={{ justfile_directory() }}/modules/programs/pi/extensions/node_modules
-    mkdir -p {{ justfile_directory() }}/agent-tools/node_modules/@types
-    ln -sfn "$ext/@earendil-works" {{ justfile_directory() }}/agent-tools/node_modules/@earendil-works
-    ln -sfn "$ext/@types/node" {{ justfile_directory() }}/agent-tools/node_modules/@types/node
-    ln -sfn "$ext/typebox" {{ justfile_directory() }}/agent-tools/node_modules/typebox
-
-# Re-records an agent-tools demo GIF in a live Claude Code session (agent-tools/README.md).
-demo name:
-    agent-tools/demos/record.sh {{ name }}

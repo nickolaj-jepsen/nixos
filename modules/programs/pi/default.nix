@@ -11,10 +11,9 @@
       npmDeps = pkgs.importNpmLock {npmRoot = ./extensions;};
       inherit (pkgs.importNpmLock) npmConfigHook;
       nativeBuildInputs = [pkgs.typescript];
-      # parent/lib/spellfix is a symlink to the spellfix plugin's core and dangles in the store.
+      # parent/lib/spellfix is where pi-dev links the spellfix plugin's core; the build copies it in.
       postPatch = ''
-        rm parent/lib/spellfix
-        install -Dm644 ${../../../agent-tools/plugins/spellfix/core/spellfix.ts} parent/lib/spellfix/spellfix.ts
+        install -Dm644 ${inputs.agents.lib.plugins.spellfix.path}/core/spellfix.ts parent/lib/spellfix/spellfix.ts
       '';
       buildPhase = ''
         runHook preBuild
@@ -76,9 +75,9 @@ in {
     packagePath = name: "${piPackages}/node_modules/${name}";
     extensions = mkExtensions pkgs pi piPackages;
     parentPath = "${extensions}/parent";
-    # The agent-tools plugins with a pi half, each its own package. One that doesn't set
+    # The agents plugins with a pi half, each its own package. One that doesn't set
     # `agentTools.subagents` in its package.json loads only in the session you started.
-    piPlugins = lib.filterAttrs (_: plugin: plugin.pi) fpLib.agentToolPlugins;
+    piPlugins = lib.filterAttrs (_: plugin: plugin.pi) inputs.agents.lib.plugins;
     pluginNames = lib.attrNames piPlugins;
     pluginPath = name: "${pkgs.agent-tools}/plugins/${name}";
     parentOnlyPlugins = lib.attrNames (lib.filterAttrs (_: plugin: !plugin.subagents) piPlugins);
@@ -183,13 +182,16 @@ in {
       ${lib.optionalString pkgs.stdenv.isLinux ''${lib.getExe' pkgs.util-linux "renice"} --priority 10 -p $$ >/dev/null 2>&1 || true''}
       exec ${lib.getExe pi} "$@"
     '';
-    # The checkout's extensions in place of the installed ones, with no rebuild.
+    # The checkout's extensions in place of the installed ones, with no rebuild, and the agents
+    # checkout's plugins (spellfix's core is linked into the parent package, which imports it).
     piDev = pkgs.writeShellApplication {
       name = "pi-dev";
       text = ''
         extensions="${config.fireproof.agents.checkout}/modules/programs/pi/extensions"
-        plugins="${config.fireproof.agents.checkout}/agent-tools/plugins"
+        plugins="${config.fireproof.agents.devCheckout}/plugins"
         [ -d "$extensions/parent" ] || { echo "pi-dev: no extensions under $extensions" >&2; exit 1; }
+        [ -d "$plugins" ] || { echo "pi-dev: no plugins under $plugins (fireproof.agents.devCheckout)" >&2; exit 1; }
+        ln -sfn "$plugins/spellfix/core" "$extensions/parent/lib/spellfix"
         exec pi -ne -e builtin:codemode -e builtin:mcp -e "$extensions/core" -e "$extensions/parent" ${lib.concatMapStringsSep " " (name: ''-e "$plugins/${name}"'') pluginNames} "$@"
       '';
     };

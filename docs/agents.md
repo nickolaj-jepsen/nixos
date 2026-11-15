@@ -7,30 +7,30 @@ and subagent roles are in `docs/models.md`; desktop toasts and the bar are in
 
 ## Where things go
 
-Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
+Paths in the table that don't start with `agents:` or `pkgs/` are under
 `modules/programs/`.
 
-| Thing                    | Lives in                         | Registered by                 | Build check                     | Dev loop                     |
-| ------------------------ | -------------------------------- | ----------------------------- | ------------------------------- | ---------------------------- |
-| Own skill                | `agent-tools/skills/<name>/`     | `agent-skills.nix`            | —                               | frontmatter check            |
-| Third-party skill        | upstream source                  | its feature leaf              | —                               | —                            |
-| Private skill            | a Claude Code marketplace        | `claude-code/default.nix`     | —                               | —                            |
-| Pi extension             | `pi/extensions/`                 | `settings.packages`           | `tsc --noEmit`                  | `just dev-setup`, `pi -ne …` |
-| A plugin's pi half       | `agent-tools/plugins/<name>/pi/` | the plugin's `package.json`   | `pkgs/agent-tools`              | `just dev-setup`, `pi -ne …` |
-| Third-party pi package   | `pkgs/pi-packages/`              | `settings.packages`           | —                               | `UPDATERS` bump              |
-| Pi itself                | `pkgs/pi-coding-agent/`          | the `pi` wrapper              | —                               | `UPDATERS` bump              |
-| Pi settings, MCP servers | pi leaf `settings`, `mcp`        | the `pi` wrapper, at launch   | —                               | —                            |
-| Claude Code mod          | `agent-tools/plugins/<name>/`    | `CLAUDE_CODE_PLUGIN_DIRS`     | `claude plugin validate`/`test` | `claude-dev`, `tsc -p`       |
-| Two-harness plugin       | `agent-tools/plugins/`           | both rows above               | `pkgs.agent-tools`, then both   | `npm test` in `agent-tools/` |
-| Language server          | `agent-lsp.nix`                  | `fireproof.agents.lspServers` | —                               | —                            |
+| Thing                    | Lives in                    | Registered by                 | Build check                     | Dev loop                     |
+| ------------------------ | --------------------------- | ----------------------------- | ------------------------------- | ---------------------------- |
+| Own skill                | `agents:skills/<name>/`     | `agent-skills.nix`            | —                               | frontmatter check            |
+| Third-party skill        | upstream source             | its feature leaf              | —                               | —                            |
+| Private skill            | a Claude Code marketplace   | `claude-code/default.nix`     | —                               | —                            |
+| Pi extension             | `pi/extensions/`            | `settings.packages`           | `tsc --noEmit`                  | `just dev-setup`, `pi -ne …` |
+| A plugin's pi half       | `agents:plugins/<name>/pi/` | the plugin's `package.json`   | `pkgs.agent-tools` (agents)     | `just dev-setup`, `pi -ne …` |
+| Third-party pi package   | `pkgs/pi-packages/`         | `settings.packages`           | —                               | `UPDATERS` bump              |
+| Pi itself                | `pkgs/pi-coding-agent/`     | the `pi` wrapper              | —                               | `UPDATERS` bump              |
+| Pi settings, MCP servers | pi leaf `settings`, `mcp`   | the `pi` wrapper, at launch   | —                               | —                            |
+| Claude Code mod          | `agents:plugins/<name>/`    | `CLAUDE_CODE_PLUGIN_DIRS`     | `claude plugin validate`/`test` | `claude-dev`, `tsc -p`       |
+| Two-harness plugin       | `agents:plugins/`           | both rows above               | `pkgs.agent-tools`, then both   | `just test` in agents        |
+| Language server          | `agent-lsp.nix`             | `fireproof.agents.lspServers` | —                               | —                            |
 
 ## Skills
 
 - Own and third-party skills reach the agents through the
   `fireproof.agents.skills` registry (`attrsOf path`, merged across leaves).
-- Own skills are `agent-tools/skills/<name>/SKILL.md`, registered
-  automatically by `modules/programs/agent-skills.nix`. They are publicly
-  installable and listed in `agent-tools/README.md`'s Skills section; a new
+- Own skills are `skills/<name>/SKILL.md` in nickolaj-jepsen/agents, registered
+  automatically by `modules/programs/agent-skills.nix` (the input's `lib.skills`). They are publicly
+  installable and listed in that repo's README.md Skills section; a new
   one gets a line there.
 - A third-party skill is registered by its feature leaf from the upstream
   source, e.g. `modules/programs/git.nix` sets
@@ -60,14 +60,14 @@ Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
     names, the footer's tallies) is declared once in `shared/` with its
     parser.
   - A helper only one package needs lives in that package.
-  - A plugin's pi half (`agent-tools/plugins/<name>/pi/`) is a package of its own: the
+  - A plugin's pi half (`agents:plugins/<name>/pi/`) is a package of its own: the
     plugin's `package.json` names it under `pi`, the leaf finds it there
     (`"agentTools": {"subagents": true}` loads it in subagents too, else only the
     session you started),
     and it imports the plugin's `core/` directly. It gets no copy under `parent/lib/`
     and can't import `shared/`. A plugin can be pi-only, with no Claude half.
 - The build runs `tsc --noEmit` over `core/`, `parent/` and `shared/` against
-  the pi that ships, so a type error fails `just build`; `pkgs/agent-tools` links the
+  the pi that ships, so a type error fails `just build`; `pkgs.agent-tools` (agents) links the
   same pi to type-check the plugins' `pi/` halves. That resolves
   `@earendil-works/pi-ai` to its published types, which no longer carry
   TypeBox's re-exports (pi's runtime width adds them back), so extension code
@@ -95,26 +95,28 @@ Paths in the table that don't start with `agent-tools/` or `pkgs/` are under
 
 ## Claude Code mods
 
-- A mod is an agent-tools plugin with a hooks module, its code in
-  `agent-tools/plugins/<name>/claude/`, built by `mkToolMod`. The leaf builds every
+- A mod is a plugin of nickolaj-jepsen/agents (`agents:` above) with a hooks module, its code in
+  `plugins/<name>/claude/`, built by `mkToolMod` (the input's `lib.mkClaudePlugin`). The leaf builds every
   plugin folder with a `.claude-plugin/plugin.json`; only the load order of the
   first few is set by hand (`loadFirst`).
 - The claude-code leaf builds it with `claude plugin validate` and
   `claude plugin test` against the claude-code that runs it, so an API break
   fails `just build`. It loads it through `CLAUDE_CODE_PLUGIN_DIRS` in the
   settings `env`.
-- A new mod also gets an entry in `.claude-plugin/marketplace.json`, which
-  `just build` checks against the folders, and a section in `agent-tools/README.md`.
-- Dev loop: `claude-dev`, from any directory, loads every mod from the checkout
-  in place of the store copies, and a save reloads it with no switch. Only a
+- A new mod also gets an entry in agents' `.claude-plugin/marketplace.json`, which its
+  `nix flake check` compares to the folders, and a section in agents' README.md.
+- Dev loop: `claude-dev`, from any directory, loads every mod from the agents checkout
+  (`fireproof.agents.devCheckout`, default `~/dev/agents`) in place of the store copies, and a save reloads it with no switch. Only a
   change on the nix side (keybindings, settings, `userConfig` values) needs one.
 - A change to what a mod draws or to its keys is seen before it is handed back:
   load the `claude-mod-dev` skill, which drives such a session in tmux and lists
   the engine's limits. A green `just build` says nothing about layout or focus.
 
-## agent-tools
+## agents
 
-`agent-tools/README.md` covers every plugin, Claude-only, pi-only or both: their
+nickolaj-jepsen/agents is a flake input: `overlays.default` supplies `pkgs.agent-tools`, built
+and checked against `pkgs/pi-coding-agent` here, as each Claude plugin is against
+`pkgs/claude-code`; `lib.skills` and `lib.plugins` feed the leaves. Its README.md covers every plugin, Claude-only, pi-only or both: their
 layout, the traps it sets and the demo recordings.
 
 ## Notes
@@ -136,16 +138,13 @@ layout, the traps it sets and the demo recordings.
 
 - `fireproof.agents.lspServers` (`command`/`args`/`extensionToLanguage`) is
   filled by `modules/programs/agent-lsp.nix`. Each agent leaf maps it to its
-  own schema. pi's is the `lsp` plugin (`agent-tools/plugins/lsp/pi/`), which reads
+  own schema. pi's is the `lsp` plugin (`plugins/lsp/pi/` of agents), which reads
   it from the JSON file `PI_LSP_SERVERS` names, written by the pi leaf.
 
 ## Traps
 
-- The `skills` plugin in `.claude-plugin/marketplace.json` has source
-  `./agent-tools` and discovers its `skills/` by default; don't add a `skills`
-  list there.
 - No build check reads skill content. To check frontmatter, copy (don't
-  symlink) `agent-tools/skills/` into `<dir>/skills/` and run
+  symlink) `skills/` of agents into `<dir>/skills/` and run
   `claude plugin validate --strict --json <dir>`; an empty `contents` is
   clean.
 - Never add an npm package the pi leaf links in from pi itself or from

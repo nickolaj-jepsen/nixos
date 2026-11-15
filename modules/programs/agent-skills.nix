@@ -1,10 +1,18 @@
-# Registers the agent-tools/skills/ directories (own skills; see agent-tools/README.md)
-# into the fireproof.agents.skills registry. Third-party skills are registered
-# by their feature leaves instead (e.g. gh-stack in git.nix).
-{
-  flake.modules.homeManager.agent-skills = {lib, ...}: {
-    fireproof.agents.skills =
-      lib.mapAttrs (name: _: ../../agent-tools/skills + "/${name}")
-      (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ../../agent-tools/skills));
+# Wires nickolaj-jepsen/agents into home-manager: its skills (`lib.skills`) go into the
+# fireproof.agents.skills registry, and `fireproof.agents.devCheckout` says where its checkout is.
+# Third-party skills are registered by their feature leaves instead (e.g. gh-stack in git.nix).
+{inputs, ...}: {
+  flake.modules.homeManager.agent-skills = {
+    config,
+    lib,
+    ...
+  }: {
+    options.fireproof.agents.devCheckout = lib.mkOption {
+      type = lib.types.str;
+      default = "${config.home.homeDirectory}/dev/agents";
+      description = "Where nickolaj-jepsen/agents is checked out. `claude-dev` and `pi-dev` load the plugins from it in place of the store copies.";
+    };
+
+    config.fireproof.agents.skills = inputs.agents.lib.skills;
   };
 }

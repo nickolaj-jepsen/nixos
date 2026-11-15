@@ -35,10 +35,10 @@ must be `git add`ed or flake eval ignores them.
 
 - `docs/modules.md` — creating/editing anything under `modules/`, `pkgs/` or
   `migrations/`.
-- `docs/agents.md` — `agent-tools/skills/`, `modules/programs/{pi,claude-code}`,
+- `docs/agents.md` — the agents wiring (skills, plugins), `modules/programs/{pi,claude-code}`,
   `pkgs/pi-*`, and the agent-skills and agent-lsp leaves.
-- `agent-tools/README.md` — anything under `agent-tools/`: its plugins' layout,
-  traps and demo recordings.
+- `nickolaj-jepsen/agents` (a flake input, checked out at `fireproof.agents.devCheckout`) — the skills,
+  plugins (Claude Code mods and pi packages) and UI kits, with its own AGENTS.md and README.md.
 - `docs/hosts.md` — anything under `hosts/`, adding a host, or making an app
   leaf work on darwin.
 - `docs/secrets.md` — anything under `secrets/`.

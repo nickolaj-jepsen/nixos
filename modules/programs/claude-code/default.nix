@@ -1,5 +1,9 @@
 # Always-on; the claude-work wrapper is gated by claude-code.work.enable.
-{fpLib, ...}: {
+{
+  fpLib,
+  inputs,
+  ...
+}: {
   flake.modules.homeManager.claude-code = {
     pkgs,
     config,
@@ -100,48 +104,21 @@
     # missing personal dictionary nor saves into one, so activation touches it.
     personalDictionary = fpLib.hunspellPersonalDictionary config;
 
-    # A plugin of agent-tools: `.claude-plugin/` and `hooks/` at its root, its module in
-    # `claude/` and, when pi shares it, the harness-free `core/`, whose own tests ran in
-    # pkgs.agent-tools. Validated and tested against the claude-code that runs it, so a
-    # bump that breaks its API (or drops the keybinding action spellfix borrows) fails the
-    # build. The install leaves out tests and the editor's tsconfig.
-    mkToolMod = name:
-      pkgs.stdenvNoCC.mkDerivation {
-        name = "claude-code-${name}";
-        src = "${pkgs.agent-tools}/plugins/${name}";
-        nativeBuildInputs = [ccfg.package];
-        buildPhase = ''
-          runHook preBuild
-          export HOME="$TMPDIR"
-          claude plugin validate .
-          claude plugin test .
-          runHook postBuild
-        '';
-        installPhase = ''
-          runHook preInstall
-          mkdir -p $out
-          cp -r .claude-plugin hooks claude $out/
-          rm -f $out/claude/*.test.ts $out/claude/*.test.tsx $out/claude/tsconfig.json
-          if [ -d core ]; then
-            cp -r core $out/
-            rm -f $out/core/*.spec.ts
-          fi
-          runHook postInstall
-        '';
-      };
-    # Every agent-tools plugin with a Claude half. linear-issue's button is spliced into the
+    # A plugin of nickolaj-jepsen/agents: validated and tested against the claude-code that
+    # runs it, so a bump that breaks its API (or drops the keybinding action spellfix borrows)
+    # fails the build. `pkgs.agent-tools`'s own tests ran first.
+    mkToolMod = inputs.agents.lib.mkClaudePlugin {
+      inherit pkgs;
+      claude-code = ccfg.package;
+    };
+    # Every plugin of agents with a Claude half. linear-issue's button is spliced into the
     # built-in you-should-know card by label; a card redesign only hides it, with a toast.
-    claudePlugins = lib.attrNames (lib.filterAttrs (_: plugin: plugin.claude) fpLib.agentToolPlugins);
+    claudePlugins = lib.attrNames (lib.filterAttrs (_: plugin: plugin.claude) inputs.agents.lib.plugins);
     mods = lib.genAttrs claudePlugins mkToolMod;
     # The band stacks each mod's row in load order: answer's offer first, spellfix's band
     # button next, then the rest by name.
     loadFirst = ["answer" "spellfix"];
     loadOrder = loadFirst ++ lib.subtractLists loadFirst claudePlugins;
-    # The marketplace publishes each one from its folder; the skills plugin is the other entry.
-    marketplace = lib.importJSON ../../../.claude-plugin/marketplace.json;
-    published = map (p: "${p.name} ${p.source}") (builtins.filter (p: p.name != "skills") marketplace.plugins);
-    expected = map (name: "${name} ./agent-tools/plugins/${name}") claudePlugins;
-
     # ctrl+q presses spellfix's band button, borrowing an action; a single modified key
     # reaches a plugin Button only from the Global context.
     keybindings = {
@@ -153,7 +130,7 @@
         }
         {
           # A mod can't take the keyboard, so this hands it to the band, where answer's form
-          # is (agent-tools/plugins/answer): its row first, and Enter opens it.
+          # is (plugins/answer in agents): its row first, and Enter opens it.
           context = "Chat";
           bindings."alt+a" = "abovePrompt:focus";
         }
@@ -219,14 +196,14 @@
       '';
     };
 
-    # The checkout's mods in place of the store copies, so a save reloads them without
+    # The agents checkout's mods in place of the store copies, so a save reloads them without
     # a switch. An emptied CLAUDE_CODE_PLUGIN_DIRS beats the one in settings' env.
     claudeDev = pkgs.writeShellApplication {
       name = "claude-dev";
       text = ''
-        checkout="${config.fireproof.agents.checkout}"
+        checkout="${config.fireproof.agents.devCheckout}"
         args=()
-        for manifest in "$checkout"/agent-tools/plugins/*/.claude-plugin/plugin.json; do
+        for manifest in "$checkout"/plugins/*/.claude-plugin/plugin.json; do
           [ -f "$manifest" ] && args+=(--plugin-dir "''${manifest%/.claude-plugin/plugin.json}")
         done
         [ ''${#args[@]} -gt 0 ] || { echo "claude-dev: no mods under $checkout" >&2; exit 1; }
@@ -254,12 +231,7 @@
       })
     mirroredNames));
   in {
-    assertions = [
-      {
-        assertion = lib.sort lib.lessThan published == lib.sort lib.lessThan expected;
-        message = "claude-code: .claude-plugin/marketplace.json lists ${toString published}; agent-tools/plugins has ${toString expected}";
-      }
-    ];
+    # .claude-plugin/marketplace.json lives in agents, whose checks compare it to the plugin folders.
 
     # Mutes warning about installMethod by placing the wrapped binary in ~/.local/bin
     home.file = lib.mkMerge [
@@ -439,7 +411,7 @@
           checker = "hunspell";
           language = lib.concatStringsSep "," dictionaries;
         };
-        # ctrl+q picks fixes for the words the underline flags (agent-tools/plugins/spellfix).
+        # ctrl+q picks fixes for the words the underline flags (plugins/spellfix in agents).
         pluginConfigs.spellfix.options = {
           hunspell = lib.getExe spellChecker;
           dictionaries = lib.concatStringsSep "," dictionaries;

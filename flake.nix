@@ -118,6 +118,13 @@
     fnug.inputs.nixpkgs.follows = "nixpkgs";
     fnug.inputs.flake-parts.follows = "flake-parts";
 
+    # Plugins and skills for Claude Code and pi (overlay, lib.plugins, lib.skills). The
+    # claude-code and pi-coding-agent they run against stay pinned in ./pkgs.
+    agents.url = "github:nickolaj-jepsen/agents";
+    agents.inputs.nixpkgs.follows = "nixpkgs";
+    agents.inputs.flake-parts.follows = "flake-parts";
+    agents.inputs.treefmt-nix.follows = "treefmt-nix";
+
     zero-x-cb-media.url = "github:nickolaj-jepsen/0xCB-media";
     zero-x-cb-media.inputs.nixpkgs.follows = "nixpkgs";
 
