@@ -1,5 +1,5 @@
 /**
- * The identity record agent-hub's label reading used to persist on a session's
+ * The identity record an older agent-hub's label reading persisted on a session's
  * branch. Nothing writes it any more; memory still searches the old ones.
  */
 
@@ -8,7 +8,7 @@ export const IDENTITY_ENTRY = "identity_label";
 
 /** One persisted identity record; any field may be missing in an old one. */
 export type IdentityRecord = {
-  /** The label agent-hub's reading wrote. */
+  /** The label that reading wrote. */
   text?: string;
   calls?: number;
   summary?: string;

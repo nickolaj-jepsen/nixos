@@ -33,7 +33,7 @@ for _, b in ipairs({
     { "space", "spotlight toggle", "Toggle Application Launcher" },
     { "semicolon", 'spotlight toggleQuery ":"', "Toggle Emoji Picker" },
     { "P", "powermenu toggle", "Toggle Power Menu" },
-    { "B", fp.dms_b, "Toggle Agent Hub / Dashboard" },
+    { "B", 'dash toggle ""', "Toggle Dashboard" },
     { "SHIFT + N", "notifications toggle", "Toggle Notification Center" },
     { "SHIFT + comma", "settings focusOrToggle", "Toggle DMS Settings" },
     { "SHIFT + Escape", "processlist focusOrToggle", "Toggle Process List" },

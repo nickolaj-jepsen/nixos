@@ -13,7 +13,7 @@ import {
 } from "@gotgenes/pi-permission-system";
 import { clip, oneLine } from "../../shared/naming.ts";
 
-// As agent-hub's own cap on a label.
+// The cap on a label, which the registry carries as `waitingFor`.
 const LABEL_MAX = 200;
 
 export const createDialogs = (pi: ExtensionAPI) => {

@@ -117,10 +117,6 @@
         (lib.filter (m: m.name != null) config.fireproof.monitors);
       workspaces = import ../_workspaces.nix;
       home = config.home.homeDirectory;
-      dms_b =
-        if config.fireproof.dev.agent-hub.enable
-        then "widget toggle agentHub"
-        else ''dash toggle ""'';
       bin = {
         grim = lib.getExe pkgs.grim;
         slurp = lib.getExe pkgs.slurp;
