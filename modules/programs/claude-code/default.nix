@@ -35,13 +35,9 @@
     # throughput, plus which profile is running — claude-work shares this
     # file and CLAUDE.md by symlink, so nothing else distinguishes the two.
     # ANSI codes only, so the ghostty Flexoki palette stays authoritative.
-    # agent-hub joins its PATH only where the hub's daemon runs: its segment is
-    # this session's own row on the bar, and a host without a hub shows none.
     statusLine = pkgs.writeShellApplication {
       name = "claude-statusline";
-      runtimeInputs =
-        [pkgs.jq pkgs.git pkgs.gh pkgs.coreutils]
-        ++ lib.optional config.fireproof.dev.agent-hub.enable pkgs.agent-hub;
+      runtimeInputs = [pkgs.jq pkgs.git pkgs.gh pkgs.coreutils];
       text = builtins.readFile ./statusline.sh;
     };
 
@@ -338,28 +334,25 @@
         };
         hooks = let
           hub = config.fireproof.dev.agent-hub.enable;
-          hubHook = extra: [
+          # Fire and forget: the hub reads the rest of the session on its own time.
+          hubHook = [
             {
               hooks = [
-                ({
-                    type = "command";
-                    command = "${lib.getExe pkgs.agent-hub} hook";
-                  }
-                  // extra)
+                {
+                  type = "command";
+                  command = "${lib.getExe pkgs.agent-hub} hook";
+                  async = true;
+                }
               ];
             }
           ];
-          # Fire and forget: the hub reads the session on its own time.
-          hubAsync = hubHook {async = true;};
         in
           {
-            # SessionStart names the profile the hub's readings of this session run as.
-            SessionStart = direnvHooks ++ lib.optionals hub hubAsync;
+            SessionStart = direnvHooks;
             CwdChanged = direnvHooks;
             WorktreeCreate = worktreeLifecycle;
             WorktreeRemove = worktreeLifecycle;
-            # Claude is exiting: an async hook can die before it reaches the hub.
-            SessionEnd = worktreeLifecycle ++ lib.optionals hub (hubHook {timeout = 2;});
+            SessionEnd = worktreeLifecycle;
             PreToolUse = [
               {
                 matcher = "Skill";
@@ -372,18 +365,12 @@
               }
             ];
           }
-          # PermissionRequest shows the hub the prompt and waits for an answer from the bar, racing
-          # the terminal's dialog, for as long as a prompt can stay open;
-          # Stop hands the hub the turn's closing words and the tasks still out, and
-          # StopFailure the API error that ended it, so it can tell how the turn ended;
-          # SessionEnd (above) ends the session without waiting for its pid to die.
+          # Only a turn's start and its two endings: the closing words and tasks still out come with Stop,
+          # the API error with StopFailure.
           // lib.optionalAttrs hub {
-            PermissionRequest = hubHook {timeout = 86400;};
-            Stop = hubAsync;
-            StopFailure = hubAsync;
-            # Waited on: the hub's note on the other sessions in this working tree
-            # joins the prompt. The hook itself gives up on the hub after a second.
-            UserPromptSubmit = hubHook {timeout = 5;};
+            UserPromptSubmit = hubHook;
+            Stop = hubHook;
+            StopFailure = hubHook;
           };
         # Context for the auto-mode classifier, adapted from /auto-mode-setup
         # (run per-project) to every project and host. Replaces the built-in

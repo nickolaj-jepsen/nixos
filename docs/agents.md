@@ -181,7 +181,7 @@ layout, the traps it sets and the demo recordings.
   between calls, so a test session it drives there must set `WT_NO_AUTOCLOSE=1`, as
   both skills' `tui.sh` do, or ending it removes the folder mid-task.
 - Don't name an editor in the folder menus (pi `parent/chrome/places.ts`,
-  Claude Code's `git-menu`, agent-hub's `menus.py`): `fireproof.desktop.editor`
+  Claude Code's `git-menu`): `fireproof.desktop.editor`
   picks it. `editor-open` (`modules/scripts`) carries the argv for shells and
   niri spawns, and the `FIREPROOF_EDITOR` session variable tells the TUI menus
   which row leads. zed's CLI is `zeditor` on nixpkgs and `zed` from the cask;

@@ -121,14 +121,12 @@
         if config.fireproof.dev.agent-hub.enable
         then "widget toggle agentHub"
         else ''dash toggle ""'';
-      bin =
-        {
-          grim = lib.getExe pkgs.grim;
-          slurp = lib.getExe pkgs.slurp;
-          wl_copy = lib.getExe' pkgs.wl-clipboard "wl-copy";
-          shell_cwd = lib.getExe shellCwd;
-        }
-        // lib.optionalAttrs config.fireproof.dev.agent-hub.enable {agent_hub = lib.getExe pkgs.agent-hub;};
+      bin = {
+        grim = lib.getExe pkgs.grim;
+        slurp = lib.getExe pkgs.slurp;
+        wl_copy = lib.getExe' pkgs.wl-clipboard "wl-copy";
+        shell_cwd = lib.getExe shellCwd;
+      };
     };
   in {
     config = lib.mkIf (config.fireproof.desktop.hyprland.enable && pkgs.stdenv.isLinux) {

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
-import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -67,20 +65,8 @@ def busy_pids(path: str, *, ignore_ancestors: bool = True) -> list[int]:
     return found
 
 
-def _hub_session(pid: int) -> Optional[str]:
-    """The name agent-hub has for the agent session `pid` runs under, when it is installed and knows one."""
-    hub = shutil.which("agent-hub")
-    if not hub:
-        return None
-    try:
-        out = subprocess.run([hub, "status", "--pid", str(pid), "--json"], capture_output=True, text=True, timeout=2)
-        return json.loads(out.stdout).get("name") or None if out.stdout.strip() else None
-    except (OSError, ValueError, AttributeError, subprocess.TimeoutExpired):
-        return None
-
-
 def describe_pid(pid: int) -> str:
-    """`<command> (pid N)`, with the agent session it runs under when agent-hub knows it."""
+    """`<command> (pid N)`."""
     try:
         name = Path(f"/proc/{pid}/comm").read_text().strip()
     except OSError:
@@ -88,6 +74,5 @@ def describe_pid(pid: int) -> str:
             name = run(["ps", "-o", "comm=", "-p", str(pid)], check=False).stdout.strip()
         except OSError:
             name = ""
-    session = _hub_session(pid)
-    detail = f"pid {pid}" + (f', session "{session}"' if session else "")
+    detail = f"pid {pid}"
     return f"{os.path.basename(name)} ({detail})" if name else detail

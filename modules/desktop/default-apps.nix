@@ -69,7 +69,7 @@
       "application/x-zstd-compressed-tar"
     ];
   in {
-    # The same choice for the folder menus in pi, Claude Code and agent-hub, which read it from
+    # The same choice for the folder menus in pi and Claude Code, which read it from
     # the session's environment; not gated on Linux, so a Mac's menus follow it too.
     config = lib.mkMerge [
       (lib.mkIf config.fireproof.desktop.enable {

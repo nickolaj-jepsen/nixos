@@ -43,10 +43,9 @@ bash $S up --plugin modules/desktop/dms/agent-hub/plugin=agentHub
 bash $S bg hub "$HUB" daemon
 bash $S bg demo "$HUB" demo        # fake sessions in every state
 bash $S ipc widget toggle agentHub
-bash $S run "$HUB" status
 ```
 
-`docs/agent-hub.md` has what the popout's keys do. Its prompts and forms answer only what is in the sandbox.
+`docs/agent-hub.md` has what the popout's keys do.
 
 For a real agent behind the plugin, keep its config dir inside the sandbox, or it registers with your live hub. Copy its settings and link only its login, so a token refresh reaches the real file:
 

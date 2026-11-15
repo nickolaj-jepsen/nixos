@@ -12,7 +12,7 @@ let
       forwarding = lib.optionalString (cfg.linkJumps != []) (
         "port-forwarding," + lib.concatMapStrings (hop: ''permitopen="${hop}",'') cfg.linkJumps
       );
-    in ''restrict,${forwarding}command="${lib.getExe pkgs.agent-hub} attach --control" ${pub}'')
+    in ''restrict,${forwarding}command="${lib.getExe pkgs.agent-hub} attach" ${pub}'')
     cfg.viewers;
 in {
   flake.modules.nixos.agent-hub = {
@@ -94,20 +94,14 @@ in {
       {
         home.packages = [pkgs.agent-hub];
         xdg.configFile."agent-hub/config.json".text = builtins.toJSON ({
-            # A user unit has no login PATH: working trees and branches for the rows.
+            # A user unit has no login PATH: the repository name for each row.
             git = lib.getExe pkgs.git;
           }
           // lib.optionalAttrs desktop {
             # The running compositor's IPC, and a user unit has no login PATH.
             niri = lib.getExe pkgs.niri-unstable;
-            # What resumes an ended session from the popout, spawned through niri as Mod+Return is.
+            # Opens a remote row's tmux pane over ssh, spawned through niri as Mod+Return is.
             terminal = ["ghostty" "--working-directory={cwd}" "-e"];
-            # Which editor the folder menu leads with, as fireproof.desktop.editor.
-            editor = fp.desktop.editor;
-            # Looks up a branch's pull request for the popout's git menu.
-            gh = lib.getExe pkgs.gh;
-            # Where the folder menu's apps can be, which this unit's own PATH doesn't reach.
-            appPath = ["/etc/profiles/per-user/${fp.username}/bin" "/run/current-system/sw/bin"];
           }
           // lib.optionalAttrs linked {
             remotes = remoteHosts;
@@ -134,8 +128,7 @@ in {
         '';
       })
 
-      # Everything but Claude's dialog labels is read back from the registry or the
-      # hub's state file, so a restart loses at most a label.
+      # The hub rebuilds from the registry alone, so a restart loses only what was pulsing.
       (lib.mkIf pkgs.stdenv.isLinux {
         systemd.user.services.agent-hub = {
           Unit = {

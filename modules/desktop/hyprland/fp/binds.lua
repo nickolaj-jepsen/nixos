@@ -48,15 +48,6 @@ for _, b in ipairs({
     hl.bind(mod .. " + " .. b[1], dms(b[2]), { description = b[3] })
 end
 
-if fp.bin.agent_hub then
-    for _, b in ipairs({
-        { "SHIFT + B", "focus-next", "Focus the Next Agent That Wants You" },
-        { "CTRL + B", "toggle", "Dismiss or Bring Back the Focused Agent's Turn" },
-    }) do
-        hl.bind(mod .. " + " .. b[1], hl.dsp.exec_cmd(fp.bin.agent_hub .. " " .. b[2]), { description = b[3] })
-    end
-end
-
 hl.bind(mod .. " + D", hl.dsp.submap("fp-switch"), { description = "Switch to project workspace" })
 hl.bind(mod .. " + SHIFT + D", hl.dsp.submap("fp-move"), { description = "Move window to project workspace" })
 hl.bind(mod .. " + CTRL + D", hl.dsp.submap("fp-close"), { description = "Close a project workspace" })
