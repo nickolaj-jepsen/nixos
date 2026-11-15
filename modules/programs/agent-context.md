@@ -38,7 +38,7 @@ Always defer to the repo's existing tooling, but if you have a choice, prefer th
 
 - Work in the current checkout and branch (main included). Use a worktree (the harness tool, else `wt new`) only if you'd conflict with other work.
 - Never touch changes you didn't make. Stage only your own paths, never `-A`.
-- Never commit to the primary branch (main) unless I explicitly ask for that commit; a yes to the change is not a yes to committing it. On any other branch, commit each step as you go.
+- Never push to the primary branch (main) unless I explicitly ask for that push; a yes to the commit is not a yes to pushing it. On any other branch.
 - Never push or open a PR unless asked.
 - No merge commits: rebase. Fix earlier commits with `git commit --fixup`; `git rebase` autosquashes.
 - A worktree closes itself when the session leaves it or ends, keeping unlanded work on its branch, so `wt land` from inside is fine and `wt close` isn't needed. To leave early: `exit_worktree` in pi, `ExitWorktree` with `remove` and `discard_changes: true` in Claude Code (safe: it runs `wt close`).
