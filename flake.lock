@@ -49,6 +49,32 @@
         "type": "github"
       }
     },
+    "agents": {
+      "inputs": {
+        "flake-parts": [
+          "flake-parts"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "treefmt-nix": [
+          "treefmt-nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1794785059,
+        "narHash": "sha256-dOnpBeuflVvu2FLT8OYjlINPWbxwGy2yrxODGBI6gLQ=",
+        "owner": "nickolaj-jepsen",
+        "repo": "agents",
+        "rev": "720762caa6bd7a20daefe1e3a74f3e966215483c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nickolaj-jepsen",
+        "repo": "agents",
+        "type": "github"
+      }
+    },
     "brew-src": {
       "flake": false,
       "locked": {
@@ -934,6 +960,7 @@
       "inputs": {
         "agenix": "agenix",
         "agenix-rekey": "agenix-rekey",
+        "agents": "agents",
         "dank-material-shell": "dank-material-shell",
         "disko": "disko",
         "dms-plugin-registry": "dms-plugin-registry",
