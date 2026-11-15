@@ -855,7 +855,7 @@ true
 
 
 
-Enable agent-hub, the daemon that names and judges every live coding-agent session, with its DMS bar on desktops
+Enable agent-hub, the daemon that shows which live coding-agent sessions want you, with its DMS bar on desktops
 
 
 
