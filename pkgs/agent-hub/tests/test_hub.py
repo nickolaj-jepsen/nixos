@@ -612,6 +612,7 @@ class ClaudeTurnTest(HubTest):
 class HiddenTest(HubTest):
     """A session an agent spawned, tracked but kept off the bar."""
 
+    @unittest.skipUnless(Path("/proc/self/environ").exists(), "the hub reads environments from /proc")
     def test_claude_reads_its_environment_when_it_first_sees_it(self):
         bar = self.hub.subscribe()
         self.hub.write_session(self.hub.process(AGENT_HUB_HIDDEN="1").pid, self.sid, status="busy")
