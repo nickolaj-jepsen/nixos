@@ -76,10 +76,10 @@
           # Wrappers for non-git tools, because Sublime Merge's custom commands can
           # only run `git` argv (see modules/programs/sublime-merge.nix). Absolute
           # paths: the GUI process has no shell PATH of its own. `sm-land` and
-          # `sm-close` default to the worktree the command runs in; closing waits
-          # in the background until the git process Sublime Merge started has left it.
+          # `sm-close` default to the worktree the command runs in; `sm-close` steps out
+          # to the primary checkout first, since `wt close` refuses the folder it runs in.
           sm-land = "!${lib.getExe pkgs.wt} land \"\${1:-.}\"";
-          sm-close = "!${lib.getExe pkgs.wt} close --when-free \"\${1:-.}\"";
+          sm-close = "!f() { t=\"\${1:-$PWD}\"; cd \"$(${lib.getExe pkgs.wt} cd --main)\" && ${lib.getExe pkgs.wt} close \"$t\"; }; f";
           sm-submit = "!${lib.getExe pkgs.unstable.gh} stack submit --auto";
           sm-sync = "!${lib.getExe pkgs.unstable.gh} stack sync";
           sm-view = "!${lib.getExe pkgs.unstable.gh} stack view";

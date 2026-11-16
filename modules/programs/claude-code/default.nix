@@ -76,8 +76,8 @@
     };
 
     # Claude Code's own worktrees (EnterWorktree, `claude -w`, agent isolation)
-    # are made by `wt new` and closed by `wt close`, and a session that ends in a
-    # worktree closes it. Without the remove half Claude falls back to
+    # are made by `wt new` and closed by `wt close` when removed explicitly; a
+    # session that ends leaves them for `wt clean`. Without the remove half Claude falls back to
     # `git worktree remove --force`, which would discard uncommitted work.
     worktreeHooks = pkgs.writeShellApplication {
       name = "claude-worktree-hooks";
@@ -324,7 +324,6 @@
             CwdChanged = direnvHooks;
             WorktreeCreate = worktreeLifecycle;
             WorktreeRemove = worktreeLifecycle;
-            SessionEnd = worktreeLifecycle;
             PreToolUse = [
               {
                 matcher = "Skill";

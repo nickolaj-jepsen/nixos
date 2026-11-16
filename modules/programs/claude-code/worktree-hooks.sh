@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Claude Code's WorktreeCreate, WorktreeRemove and SessionEnd hooks, backed by `wt`:
+# Claude Code's WorktreeCreate and WorktreeRemove hooks, backed by `wt`:
 # EnterWorktree, `claude -w` and agent isolation create through `wt new`, so their
-# worktrees share the shared root. Removing one, or ending a session inside one,
-# runs `wt close --when-free`, which commits what is uncommitted onto the branch and
-# removes the folder once Claude and its children have left it.
+# worktrees share the shared root. An explicit removal (ExitWorktree with remove)
+# runs `wt close`, which commits what is uncommitted onto the branch and removes the
+# folder. Nothing closes a worktree when a session or subagent ends; `wt clean`
+# does that by hand.
 set -euo pipefail
 
 input=$(cat)
@@ -12,27 +13,9 @@ case "$(jq -r '.hook_event_name // empty' <<<"$input")" in
 WorktreeRemove)
   path=$(jq -r '.worktree_path // empty' <<<"$input")
   [ -d "$path" ] || exit 0
-  exec wt close --when-free "$path"
-  ;;
-SessionEnd)
-  # Claude Code can't verify a hook-made worktree, so it keeps every isolated
-  # subagent's, unchanged or not; closing keeps any work on the branch.
-  transcript=$(jq -r '.transcript_path // empty' <<<"$input")
-  for meta in "${transcript%.jsonl}"/subagents/*.meta.json; do
-    [ -e "$meta" ] || continue
-    tree=$(jq -r '.worktreePath // empty' "$meta")
-    if [ -n "$tree" ] && [ -d "$tree" ]; then wt close --when-free "$tree" 2>/dev/null || true; fi
-  done
-  # /clear ends a conversation, not the process: the session goes on in the same folder.
-  [ "$(jq -r '.reason // empty' <<<"$input")" != clear ] || exit 0
-  # A test session another agent drives (claude-mod-dev) runs in that agent's worktree,
-  # which its Bash calls only visit, so a close here would remove it mid-task.
-  [ -z "${WT_NO_AUTOCLOSE:-}" ] || exit 0
-  cwd=$(jq -r '.cwd // empty' <<<"$input")
-  [ -d "$cwd" ] || exit 0
-  # Only a worktree wt knows; the primary checkout and plain directories are left alone.
-  (cd "$cwd" && wt list --json . >/dev/null 2>&1) || exit 0
-  wt close --when-free "$cwd" 2>/dev/null || true
+  # wt refuses the folder it runs in, and the hook starts in the worktree.
+  cd /
+  exec wt close "$path"
   ;;
 *)
   cd "$(jq -r '.cwd // empty' <<<"$input")"

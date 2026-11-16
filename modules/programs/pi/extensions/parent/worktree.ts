@@ -1,8 +1,9 @@
 /**
  * pi's adapter for `wt`: moves a running session into a worktree, or back to
- * the repo's primary checkout, and closes the worktree a session leaves or quits
- * in (`wt close --when-free`: uncommitted work becomes a wip commit on the branch,
- * and the folder goes once nothing works in it). Landing stays an explicit `wt land`.
+ * the repo's primary checkout. Going back closes the worktree it leaves (`wt close`:
+ * uncommitted work becomes a wip commit on the branch, and the folder goes); quitting
+ * or moving to another worktree leaves it open for `wt clean`. Landing stays an
+ * explicit `wt land`.
  *
  * pi pins a session's cwd at startup, so a move forks the conversation into a
  * new session file whose header names the target directory and switches to it:
@@ -44,11 +45,11 @@ const resolveWorktree = (target: string, cwd: string, base?: string) =>
   wt(base ? ["new", target, base] : ["new", target], cwd);
 
 /**
- * Closes the worktree at `path` once nothing works in it; `wt` refuses the primary checkout
- * and anything that is not a worktree, which is the common case and not worth reporting.
+ * Closes the worktree at `path`; `wt` refuses the primary checkout and anything that is
+ * not a worktree, which is the common case and not worth reporting.
  */
-const closeWhenFree = (path: string) =>
-  wt(["close", "--when-free", path], "/").then(
+const closeWorktree = (path: string) =>
+  wt(["close", path], "/").then(
     () => undefined,
     (error: Error) =>
       /primary checkout|not inside a worktree|not inside a git repository|already closed/.test(
@@ -91,8 +92,13 @@ export default function (pi: ExtensionAPI) {
   // The queued command, set just before it runs, so the move knows to re-prompt the agent.
   let agentMove: string | undefined;
 
-  /** Forks the conversation into `path`, switches to it, and reports the move. */
-  const moveTo = async (path: string, ctx: ExtensionCommandContext, resume: boolean) => {
+  /** Forks the conversation into `path`, switches to it, and reports the move; `close` closes the checkout left. */
+  const moveTo = async (
+    path: string,
+    ctx: ExtensionCommandContext,
+    resume: boolean,
+    close = false,
+  ) => {
     if (path === ctx.cwd) {
       ctx.ui.notify(`Already in ${path}`, "info");
       return;
@@ -109,7 +115,7 @@ export default function (pi: ExtensionAPI) {
       withSession: async (next) => {
         follow(path);
         next.ui.notify(`Moved session to ${path}`, "info");
-        const refused = await closeWhenFree(from);
+        const refused = close ? await closeWorktree(from) : undefined;
         if (refused) next.ui.notify(`Left ${from} open: ${refused}`, "warning");
         await next.sendMessage(
           {
@@ -133,13 +139,6 @@ export default function (pi: ExtensionAPI) {
     const active = pi.getActiveTools();
     if (!ctx.hasUI || active.includes(ENTER_WORKTREE_TOOL)) return;
     pi.setActiveTools([...active, ENTER_WORKTREE_TOOL, EXIT_WORKTREE_TOOL]);
-  });
-
-  // Quitting inside a worktree closes it; reload, /new, /resume and /fork keep the process going.
-  // WT_NO_AUTOCLOSE marks a test session another agent drives (pi-plugin-dev) in its own
-  // worktree, which that agent's tool calls only visit, so closing would remove it mid-task.
-  pi.on("session_shutdown", async (event, ctx) => {
-    if (event.reason === "quit" && !process.env.WT_NO_AUTOCLOSE) await closeWhenFree(ctx.cwd);
   });
 
   // Anything run between the worktree tool and the move would still act on the old checkout.
@@ -212,7 +211,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify(`Not in a repo wt knows: ${(error as Error).message}`, "error");
         return;
       }
-      await moveTo(path, ctx, resume);
+      await moveTo(path, ctx, resume, true);
     },
   });
 
