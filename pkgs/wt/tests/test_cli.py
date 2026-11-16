@@ -35,7 +35,6 @@ class Base(unittest.TestCase):
             {
                 "HOME": self.root,
                 "WT_WORKTREE_ROOT": os.path.join(self.root, "trees"),
-                "WT_WHEN_FREE_TIMEOUT": "20",
                 "GIT_CONFIG_GLOBAL": os.path.join(self.root, "gitconfig"),
                 "GIT_CONFIG_SYSTEM": os.devnull,
                 "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z",
@@ -96,18 +95,6 @@ class Base(unittest.TestCase):
     def subject(self, ref: str = "HEAD", cwd: str | None = None) -> str:
         return self.git("log", "-1", "--format=%s", ref, cwd=cwd).strip()
 
-    def sleeper(self, cwd: Path) -> subprocess.Popen:
-        process = subprocess.Popen(["sleep", "60"], cwd=str(cwd))
-        self.addCleanup(lambda: (process.kill(), process.wait()))
-        time.sleep(0.2)
-        return process
-
-    def wait_gone(self, path: Path, seconds: float = 15) -> None:
-        deadline = time.time() + seconds
-        while path.exists() and time.time() < deadline:
-            time.sleep(0.2)
-        self.assertFalse(path.exists(), f"{path} still exists")
-
     def git_dir(self, path: Path) -> Path:
         return Path(self.git("rev-parse", "--absolute-git-dir", cwd=str(path)).strip())
 
@@ -144,7 +131,7 @@ class Local(Base):
         usage = self.wt("--help").stdout
         block = usage.split("  <verb>\n", 1)[1].split("\n\n", 1)[0]
         listed = [line.split()[0] for line in block.splitlines()]
-        self.assertEqual(sorted(listed), sorted(["new", "land", "close", "drop", "list", "cd"]))
+        self.assertEqual(sorted(listed), sorted(["new", "land", "close", "clean", "drop", "list", "cd"]))
 
     # new, list, cd -----------------------------------------------------------
 
@@ -319,7 +306,7 @@ class Local(Base):
         result = self.wt("list", "--all", "--json", cwd=self.root, check=False)
         self.assertEqual(result.returncode, 1, result.stderr)
         document = json.loads(result.stdout)
-        self.assertEqual(document["version"], 3)
+        self.assertEqual(document["version"], 4)
         repos = {repo["name"]: repo for repo in document["repos"]}
         self.assertEqual(sorted(repos), ["broken", "repo"])
         healthy = repos["repo"]
@@ -359,7 +346,7 @@ class Local(Base):
         result = self.wt("list", "--json")
         self.assertEqual(result.returncode, 0, result.stderr)
         document = json.loads(result.stdout)
-        self.assertEqual(document["version"], 3)
+        self.assertEqual(document["version"], 4)
         self.assertIsNone(document["repos"][0]["error"])
         rows = document["repos"][0]["worktrees"]
         self.assertEqual(sorted(row["name"] for row in rows), ["kept", "open"])
@@ -377,13 +364,60 @@ class Local(Base):
         result = self.wt("list", "--all", "--json", cwd=self.root, check=False)
         self.assertEqual(result.returncode, 1, result.stderr)
         document = json.loads(result.stdout)
-        self.assertEqual(document["version"], 3)
+        self.assertEqual(document["version"], 4)
         repos = {repo["name"]: repo for repo in document["repos"]}
         self.assertEqual(sorted(repos), ["repo", "unreadable"])
         self.assertEqual([row["name"] for row in repos["repo"]["worktrees"]], ["healthy"])
         self.assertEqual(repos["unreadable"]["worktrees"], [])
         self.assertIsNone(repos["unreadable"]["main"])
         self.assertIn("config", repos["unreadable"]["error"])
+
+    def test_list_json_counts_commits_behind_the_default(self) -> None:
+        self.feature("work")
+        self.write("c.txt", "main moved\n")
+        self.commit("main moved")
+        row = self.entry("work")
+        self.assertEqual((row["ahead"], row["behind"]), (1, 1))
+
+    # clean -------------------------------------------------------------------
+
+    def test_clean_without_a_terminal_lists_and_removes_nothing(self) -> None:
+        tidy = self.feature("tidy")
+        messy = self.feature("messy")
+        self.write("b.txt", "edited\n", cwd=str(messy))
+        result = self.wt("clean")
+        self.assertIn("tidy", result.stdout)
+        self.assertIn("+1 -0", result.stdout)
+        self.assertNotIn("messy", result.stdout)
+        self.assertIn("messy: uncommitted changes", result.stderr)
+        self.assertTrue(tidy.exists() and messy.exists())
+
+    def test_clean_yes_closes_only_what_holds_nothing_uncommitted(self) -> None:
+        tidy = self.feature("tidy")
+        empty = self.new("empty")
+        messy = self.feature("messy")
+        self.write("untracked.txt", "new\n", cwd=str(messy))
+        self.wt("clean", "--yes")
+        self.assertFalse(tidy.exists())
+        self.assertFalse(empty.exists())
+        self.assertTrue(messy.exists())
+        # Unlanded commits keep the branch for `wt new`; a branch with nothing of its own goes.
+        self.assertTrue(self.has_branch("tidy"))
+        self.assertFalse(self.has_branch("empty"))
+        self.assertTrue(Path(messy, "untracked.txt").exists())
+
+    def test_clean_leaves_the_worktree_it_runs_in(self) -> None:
+        here = self.feature("here")
+        result = self.wt("clean", "--yes", cwd=str(here))
+        self.assertTrue(here.exists())
+        self.assertIn("here: you are in it", result.stderr)
+
+    def test_clean_outside_a_repository_covers_every_repository(self) -> None:
+        tidy = self.feature("tidy")
+        result = self.wt("clean", "--dry-run", cwd=self.root)
+        self.assertIn("repo", result.stdout.splitlines()[1])
+        self.assertIn("tidy", result.stdout)
+        self.assertTrue(tidy.exists())
 
     # close -------------------------------------------------------------------
 
@@ -589,26 +623,18 @@ class Local(Base):
         self.assertIn("rebase", result.stderr)
         self.assertTrue(path.exists())
 
-    def test_close_refuses_a_folder_in_use_and_when_free_waits_for_it(self) -> None:
-        path = self.feature("busy")
+    def test_close_commits_late_edits_as_a_wip_commit(self) -> None:
+        path = self.feature("late")
         self.write("b.txt", "late edit\n", cwd=str(path))
-        process = self.sleeper(path)
-        result = self.wt("close", "busy", check=False)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(f"pid {process.pid}", result.stderr)
-        self.wt("close", "--when-free", "busy")
-        time.sleep(1.5)
-        self.assertTrue(path.exists())
-        process.kill()
-        process.wait()
-        self.wait_gone(path)
-        self.assertTrue(self.entry("busy")["wip"])
+        self.wt("close", "late")
+        self.assertFalse(path.exists())
+        self.assertTrue(self.entry("late")["wip"])
 
     def test_close_refuses_the_folder_it_runs_in(self) -> None:
         path = self.new("self")
         result = self.wt("close", cwd=str(path), check=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("--when-free", result.stderr)
+        self.assertIn("cd out of it first", result.stderr)
         self.assertTrue(path.exists())
 
     def test_close_takes_a_path_from_outside_any_checkout(self) -> None:
@@ -781,13 +807,6 @@ class Local(Base):
         self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD").strip(), "elsewhere")
         self.assertFalse(Path(self.main, "b.txt").exists())
 
-    def test_land_names_a_live_process_in_the_default_checkout(self) -> None:
-        self.feature("land-me")
-        process = self.sleeper(Path(self.main))
-        result = self.wt("land", "land-me")
-        self.assertIn(f"pid {process.pid}", result.stderr)
-        self.assertTrue(Path(self.main, "b.txt").exists())
-
     def test_land_with_nothing_new_just_closes(self) -> None:
         path = self.new("idle")
         self.wt("land", "idle")
@@ -835,12 +854,6 @@ class Local(Base):
         result = self.wt("land", "loose", check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not checked out anywhere", result.stderr)
-
-    def test_land_from_the_root_names_a_live_process(self) -> None:
-        self.topic()
-        process = self.sleeper(Path(self.main))
-        result = self.wt("land")
-        self.assertIn(f"pid {process.pid}", result.stderr)
 
     def test_land_from_the_root_refuses_to_rebase_over_a_dirty_path(self) -> None:
         self.topic()

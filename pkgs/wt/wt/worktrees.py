@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Callable, Iterator, Optional, TypeVar
 
 from .git import ProbeError, die, git_ok, is_within, normpath, probe, run
-from .procs import busy_pids
 from .repo import Repo, registered_worktrees
 
 T = TypeVar("T")
@@ -63,10 +62,10 @@ class Row:
     path: Optional[str]
     open: bool
     ahead: Optional[int] = None
+    behind: Optional[int] = None
     landed: Optional[bool] = None
     dirty: Optional[bool] = None
     wip: Optional[bool] = None
-    busy: bool = False
     idle_seconds: Optional[int] = None
     errors: list[str] = field(default_factory=list)
 
@@ -282,6 +281,14 @@ def ahead(repo: Repo, ref: str, cwd: Optional[str] = None) -> int:
     return int(out)
 
 
+def behind(repo: Repo, ref: str, cwd: Optional[str] = None) -> int:
+    """Commits the default branch has that `ref` in `cwd` does not; raises ProbeError rather than counting 0."""
+    out = probe(cwd or repo.main, "rev-list", "--count", f"{ref}..{repo.default}", "--").strip()
+    if not out.isdigit():
+        raise ProbeError(f"git rev-list --count {ref}..{repo.default} answered {out!r}, not a count")
+    return int(out)
+
+
 def landed(repo: Repo, ref: str, cwd: Optional[str] = None) -> Optional[bool]:
     """Whether every commit of `ref` in `cwd` is in the default branch; None when git cannot tell.
 
@@ -343,11 +350,15 @@ def inspect_row(repo: Repo, entry: Entry) -> Row:
             raise ProbeError(f"could not tell whether {ref} is in {repo.default}")
         return answer
 
+    def behind_of() -> int:
+        cwd, ref = head_of(repo, entry)
+        return behind(repo, ref, cwd)
+
     row.ahead = asked(ahead_of)
+    row.behind = asked(behind_of)
     row.landed = asked(landed_of)
-    # A closed worktree has no folder, so there is nothing of it to be dirty or busy.
+    # A closed worktree has no folder, so there is nothing of it to be dirty.
     row.dirty = asked(lambda: dirty(entry.path or "")) if entry.path else False
-    row.busy = bool(entry.path) and bool(busy_pids(entry.path or ""))
     row.wip = asked(lambda: is_wip(repo.main, entry.branch)) if entry.branch else False
     row.idle_seconds = asked(lambda: idle_seconds(repo, entry))
     return row

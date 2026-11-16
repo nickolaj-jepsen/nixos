@@ -12,10 +12,9 @@ import sys
 import time
 from typing import Callable, Optional
 
-from .commands import close_entry, occupants
+from .commands import close_entry
 from .gh import GhError, checks_state, gh, has_origin, merged_heads, pr_view, requires_checks, stack
 from .git import ProbeError, die, git, git_ok, info, inspect, is_within, probe, run
-from .procs import busy_pids, describe_pid
 from .repo import Repo, RepoLock, current_repo, registered_worktrees
 from .worktrees import Entry, ahead, conflicted, dirty, entries, is_wip, operation_in_progress, resolve
 
@@ -58,14 +57,6 @@ def _conflicts(path: str) -> list[str]:
 def is_root(repo: Repo, path: str) -> bool:
     """Whether `path` is the primary checkout, which other sessions share and wt never closes."""
     return os.path.realpath(path) == os.path.realpath(repo.main)
-
-
-def tell_sessions(repo: Repo, what: str) -> None:
-    """Name a live process in the primary checkout, so the landing session can tell it `what`."""
-    busy = busy_pids(repo.main)
-    if busy:
-        more = f" (and {len(busy) - 1} more process(es))" if len(busy) > 1 else ""
-        info(f"{describe_pid(busy[0])}{more} is working in {repo.main}; {what}; tell that session")
 
 
 def default_checkout(repo: Repo) -> Optional[str]:
@@ -181,26 +172,15 @@ def _fast_forward_default(repo: Repo, entry: Entry) -> None:
         info(f"landed {entry.branch} ({count} commit(s)) onto {repo.default}; ref only, since no checkout has it")
         return
     _require_checkout_ready(repo, entry.branch, checkout)
-    try:
-        changed: Optional[int] = len(_incoming_paths(repo, entry.branch))
-    except ProbeError:
-        # Only the note below needs the count; it must not abort a landing that already checked
-        # the same paths, and a failure must never read as "0 path(s) changed".
-        changed = None
     if run(["git", "-C", checkout, "merge", "--quiet", "--ff-only", entry.branch], check=False).returncode != 0:
         die(f"could not fast-forward {repo.default} onto {entry.branch}; the rebased branch is left in place")
     info(f"landed {entry.branch} ({count} commit(s)) onto {repo.default}")
-    busy = busy_pids(checkout)
-    if busy:
-        moved = f"{changed} path(s) changed" if changed is not None else "files changed"
-        info(f"{moved} under {checkout}, where {describe_pid(busy[0])} is working; tell that session its files moved")
 
 
 def close_after_landing(repo: Repo, entry: Entry) -> None:
-    """Close a landed worktree now, or leave it for the session-exit close when something still works in it."""
-    path = entry.path or ""
-    if is_within(os.getcwd(), os.path.realpath(path)) or occupants(path):
-        info(f"{entry.name} stays open while a session works in it; it closes when that session ends")
+    """Close a landed worktree now, or leave it open for `wt clean` when this shell stands in it."""
+    if is_within(os.getcwd(), os.path.realpath(entry.path or "")):
+        info(f"{entry.name} stays open while you are in it; close it from outside, or 'wt clean' later")
         return
     close_entry(repo, entry)
 
@@ -290,8 +270,6 @@ def _publish(repo: Repo, entry: Entry) -> None:
                     f"{branch} does not rebase cleanly onto {upstream}: it conflicts, or depends on commits only "
                     f"local {repo.default} has. Push {repo.default} first, or land locally with 'wt land{retry}'."
                 )
-            if root:
-                tell_sessions(repo, f"files moved under it while {branch} was rebased")
     else:
         proc = run(["git", "-C", path, "merge-base", "--is-ancestor", f"origin/{branch}", branch], check=False)
         if proc.returncode == 1:

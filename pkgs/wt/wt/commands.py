@@ -13,7 +13,6 @@ from typing import NoReturn, Optional
 
 from .gh import has_origin, pr_merged, stack_layers
 from .git import ProbeError, die, git, git_ok, info, inspect, is_within, normpath, probe, run
-from .procs import busy_pids, describe_pid
 from .repo import Located, Repo, RepoLock, current_repo, repos_under_root, stale_worktrees
 from .worktrees import (
     WIP_TRAILER,
@@ -40,10 +39,7 @@ from .worktrees import (
     set_record,
 )
 
-STATUS_VERSION = 3
-# How long a `close --when-free` waits for the folder to empty before it leaves it be.
-WHEN_FREE_TIMEOUT = float(os.environ.get("WT_WHEN_FREE_TIMEOUT") or 3600)
-WHEN_FREE_POLL = 1.0
+STATUS_VERSION = 4
 
 
 # ---------------------------------------------------------------------------
@@ -234,11 +230,6 @@ def cmd_new(args: argparse.Namespace) -> None:
 # close
 
 
-def occupants(path: str) -> list[int]:
-    """Live processes with their cwd inside `path`, this one's ancestors included: removing it strands them."""
-    return busy_pids(path, ignore_ancestors=False)
-
-
 def _commit_wip(path: str, name: str) -> None:
     run(["git", "-C", path, "add", "--all"])
     # Signing could prompt for a key at session exit, and a wip commit never lands anyway.
@@ -371,7 +362,7 @@ def prune(repo: Repo) -> None:
 def close_entry(repo: Repo, entry: Entry) -> None:
     """Commit what is uncommitted, remove the folder, and drop the branch when nothing of it is unlanded.
 
-    The caller holds the repo lock and has checked that nothing works inside the folder.
+    The caller holds the repo lock and has checked that the shell is not inside the folder.
     """
     path = entry.path or ""
     _check_closable(repo, entry)
@@ -397,45 +388,6 @@ def close_entry(repo: Repo, entry: Entry) -> None:
     prune(repo)
 
 
-def _detach() -> bool:
-    """Fork into a background process with no terminal; True in the original process, which should return."""
-    pid = os.fork()
-    if pid:
-        os.waitpid(pid, 0)
-        return True
-    os.setsid()
-    if os.fork():
-        os._exit(0)
-    null = os.open(os.devnull, os.O_RDWR)
-    for fd in (0, 1, 2):
-        os.dup2(null, fd)
-    os.chdir("/")
-    return False
-
-
-def _close_when_free(repo: Repo, entry: Entry) -> None:
-    path = entry.path or ""
-    info(f"closing {entry.name} once nothing works in it")
-    sys.stdout.flush()
-    sys.stderr.flush()
-    if _detach():
-        return
-    deadline = time.monotonic() + WHEN_FREE_TIMEOUT
-    try:
-        while time.monotonic() < deadline:
-            if not os.path.isdir(path):
-                break
-            if not occupants(path):
-                with RepoLock(repo):
-                    current = next((e for e in entries(repo) if e.path == path), None)
-                    if current and not occupants(path):
-                        close_entry(repo, current)
-                break
-            time.sleep(WHEN_FREE_POLL)
-    finally:
-        os._exit(0)
-
-
 def cmd_close(args: argparse.Namespace) -> None:
     # A path names its own repository, so a hook can close without standing in a checkout.
     target = args.target or "."
@@ -446,16 +398,9 @@ def cmd_close(args: argparse.Namespace) -> None:
             info(f"'{entry.name}' is already closed")
             return
         _check_closable(repo, entry)
-        if not args.when_free:
-            path = entry.path or ""
-            if is_within(os.getcwd(), os.path.realpath(path)):
-                die(f"you are inside '{entry.name}'; cd out of it first, or pass --when-free to close it once you leave")
-            busy = occupants(path)
-            if busy:
-                die(f"'{entry.name}' is in use by {describe_pid(busy[0])}; pass --when-free to close it once that exits")
-            close_entry(repo, entry)
-            return
-    _close_when_free(repo, entry)
+        if is_within(os.getcwd(), os.path.realpath(entry.path or "")):
+            die(f"you are inside '{entry.name}'; cd out of it first")
+        close_entry(repo, entry)
 
 
 # ---------------------------------------------------------------------------
@@ -473,9 +418,6 @@ def cmd_drop(args: argparse.Namespace) -> None:
                 stacked = stack_layers(path)
             if is_within(os.getcwd(), os.path.realpath(path)):
                 die(f"you are inside '{entry.name}'; cd out of it first")
-            busy = occupants(path)
-            if busy:
-                die(f"'{entry.name}' is in use by {describe_pid(busy[0])}; close that first")
             _check_closable(repo, entry)
             _empty_submodules(path)
             if inspect(f"'{entry.name}'", lambda: dirty(path)):
@@ -515,10 +457,10 @@ def _row_document(row: Row) -> dict:
         "path": row.path,
         "open": row.open,
         "ahead": row.ahead,
+        "behind": row.behind,
         "landed": row.landed,
         "dirty": row.dirty,
         "wip": row.wip,
-        "busy": row.busy,
         "idleSeconds": row.idle_seconds,
         "error": row.error,
     }

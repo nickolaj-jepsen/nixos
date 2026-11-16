@@ -19,7 +19,6 @@ from .land import (
     land_pr,
     rebase,
     rebase_moves,
-    tell_sessions,
 )
 from .repo import Repo
 from .worktrees import Entry, ahead, branch_exists, conflicted, dir_name, entries, is_wip, operation_in_progress
@@ -121,7 +120,6 @@ def _push_default(repo: Repo, args: argparse.Namespace) -> None:
         guard_moves(path, lambda: rebase_moves(path, upstream, upstream), f"rebasing {repo.default} onto {upstream}")
         rebase(Entry(repo.default, repo.default, path), upstream,
                abort_on_conflict=args.abort_on_conflict, autostash=True, resume="")
-        tell_sessions(repo, f"files moved under it when {repo.default} was rebased onto {upstream}")
     elif args.dry_run:
         info(f"would push {unpushed} commit(s) of {repo.default} to {upstream}")
         return
@@ -166,7 +164,6 @@ def _carve(repo: Repo, args: argparse.Namespace) -> None:
     run(["git", "-C", path, "switch", "--quiet", "-c", name])
     run(["git", "-C", path, "branch", "--quiet", "--force", repo.default, upstream])
     info(f"moved {count} commit(s) from {repo.default} to {name}; {repo.default} is back at {upstream}")
-    tell_sessions(repo, f"it is now on {name}, with the same files")
     _land_branch_pr(repo, name, args)
 
 
@@ -241,7 +238,6 @@ def _switch_to_default(repo: Repo, branch: str, *, merged: bool) -> None:
     if deleted.returncode:
         info(f"kept {branch}: {deleted.stderr.strip()}")
     info(f"{path} is on {repo.default}" + ("" if deleted.returncode else f"; deleted {branch}"))
-    tell_sessions(repo, f"it is now on {repo.default}")
 
 
 def _land_branch_pr(repo: Repo, branch: str, args: argparse.Namespace) -> None:
@@ -281,7 +277,6 @@ def _resume(repo: Repo, args: argparse.Namespace) -> None:
     # Mid-rebase the checkout is detached, so which landing paused is only known again now.
     branch = root_branch(repo)
     if branch == repo.default:
-        tell_sessions(repo, f"files moved under it when {repo.default} was rebased")
         _push(repo, f"origin/{repo.default}")
     elif branch:
         _finish_branch(repo, branch)

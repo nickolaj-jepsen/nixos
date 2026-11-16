@@ -35,7 +35,6 @@ complete -c wt -n '__fish_seen_subcommand_from land' -l abort -d 'Abort a paused
 complete -c wt -n '__fish_seen_subcommand_from land' -l draft -d 'Open a draft PR'
 complete -c wt -n '__fish_seen_subcommand_from land' -l pr -d 'Open a PR ready for review'
 complete -c wt -n '__fish_seen_subcommand_from land' -l green -d 'Open a PR and merge it on green'
-complete -c wt -n '__fish_seen_subcommand_from close' -l when-free -d 'Close once nothing works inside'
 complete -c wt -n '__fish_seen_subcommand_from cd' -l main -d 'The primary checkout'
 complete -c wt -n '__fish_seen_subcommand_from list' -l all -d 'Every repository under the root'
 complete -c wt -n '__fish_seen_subcommand_from list' -l json -d 'JSON output'

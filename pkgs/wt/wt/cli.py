@@ -6,6 +6,7 @@ import argparse
 import sys
 from typing import Optional
 
+from .clean import cmd_clean
 from .commands import cmd_cd, cmd_close, cmd_drop, cmd_list, cmd_new
 from .git import ProbeError, die
 from .land import cmd_land
@@ -26,12 +27,12 @@ def build_parser() -> argparse.ArgumentParser:
             "Worktrees live in <root>/<repo>/<name> (root: WT_WORKTREE_ROOT, default ~/worktrees).\n"
             "\n"
             "  wt new <name>     start work, or reopen a closed worktree as it was left\n"
-            "  wt land [name]    put it in <default>, locally or through a PR, then close it;\n"
-            "                    from the primary checkout, push <default> or land its branch\n"
+            "  wt land [name]    put it in <default>, locally or through a PR, then close it\n"
             "  wt close [name]   commit what is uncommitted as a wip commit, remove the folder,\n"
             "                    and delete the branch once its work is in <default>\n"
+            "  wt clean          pick which worktrees with nothing uncommitted to close\n"
             "\n"
-            "Closing never loses work, so agent sessions close their own worktree when they exit.\n"
+            "Closing never loses work, and nothing closes a worktree on its own.\n"
             "<default> is the branch origin/HEAD names, else main, else master."
         ),
     )
@@ -43,11 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         "Start a worktree, or reopen a closed one",
         "Create a worktree on a new branch, or reopen a closed one, and print its path.",
         "A new branch starts from <base>, by default origin/<default> (fetched when over a day old),\n"
-        "else <default>. A name that is already open just prints its path. Reopening checks out\n"
-        "the branch the worktree was closed on and turns a wip commit at its tip back into\n"
-        "uncommitted changes. Gitignored paths listed in the primary checkout's .worktreeinclude\n"
-        "are copied in. Submodules the primary checkout has are cloned from it, and listed paths\n"
-        "inside them copied when both are on the same commit.",
+        "else <default>. An open name just prints its path. Reopening checks out the branch the\n"
+        "worktree was closed on and turns a wip commit at its tip back into uncommitted changes.\n"
+        "Gitignored paths listed in the primary checkout's .worktreeinclude are copied in. Its\n"
+        "submodules are cloned from it, with their listed paths copied when both are on the same\n"
+        "commit.",
     )
     new.add_argument("name", help="worktree and branch name; slashes become dashes in the folder name")
     new.add_argument("base", nargs="?", help="ref a new branch starts from")
@@ -58,38 +59,35 @@ def build_parser() -> argparse.ArgumentParser:
         "land",
         "Land a worktree, or the primary checkout, in the default branch",
         "Rebase a worktree onto <default>, fast-forward <default> onto it, then close the worktree.",
-        "Commit first: land refuses uncommitted changes and a wip commit at the tip. When the\n"
-        "checkout holding <default> has uncommitted changes, landing leaves them alone and refuses\n"
-        "only when the branch changes the same paths. When a session works in the worktree (this\n"
-        "one included), it stays open and closes when that session ends.\n"
+        "Commit first: land refuses uncommitted changes and a wip commit at the tip. Uncommitted\n"
+        "changes in the checkout holding <default> are left alone; landing refuses only when the\n"
+        "branch changes the same paths. From inside the worktree, it stays open for `wt clean`.\n"
         "\n"
-        "A conflict pauses the rebase inside the worktree: resolve it there, then\n"
+        "A conflict pauses the rebase in the worktree: resolve it there, then\n"
         "`wt land --continue <name>`, or `wt land --abort <name>` to put the branch back.\n"
         "\n"
         "Through GitHub instead (needs gh and an origin remote):\n"
         "  --draft  push and open a draft PR          --pr  push and open a PR ready for review\n"
-        "  --green  open it and merge on green: GitHub auto-merges (--rebase) when <default>\n"
-        "           requires checks; otherwise this waits for the checks, up to --timeout, and a\n"
-        "           rerun resumes the wait.\n"
+        "  --green  open a PR and merge on green: GitHub auto-merges (rebase) when <default>\n"
+        "           requires checks, else this waits for them, up to --timeout; a rerun resumes.\n"
         "A branch never pushed is rebased onto origin/<default> first; a pushed one is only pushed\n"
-        "on, never forced. Without --title/--body-file, gh fills both from the commits. A worktree\n"
-        "holding a gh stack submits the whole stack (gh stack submit), and --green merges it with\n"
-        "gh stack merge once every layer's checks pass. The worktree closes afterwards; its branch\n"
-        "stays until the PR merges, and the next `wt close` anywhere in the repo deletes it then.\n"
+        "on, never forced. gh fills the title and body from the commits unless --title/--body-file.\n"
+        "A worktree holding a gh stack submits the whole stack, and --green merges it once every\n"
+        "layer's checks pass. The worktree closes afterwards; its branch stays until the PR\n"
+        "merges, and the next `wt close` anywhere in the repo deletes it then.\n"
         "\n"
         "From the primary checkout (`.` there, or the branch it has checked out), uncommitted\n"
-        "changes are left alone unless a step would overwrite one, and a live process there is\n"
-        "named whenever its branch or files change:\n"
+        "changes are left alone unless a step would overwrite one:\n"
         "  on <default>  push it to origin, fast-forward only. When origin/<default> is ahead this\n"
         "                refuses unless --rebase, which rebases <default> onto it first (uncommitted\n"
         "                changes autostashed). --draft/--pr/--green need --branch <name>: the\n"
-        "                unpushed commits move to that new branch, the checkout switches to it at\n"
-        "                the same commit, local <default> goes back to origin's, and it lands as below.\n"
+        "                unpushed commits move to that new branch, the checkout switches to it, and\n"
+        "                local <default> goes back to origin's.\n"
         "  on a branch   rebase it onto <default>, fast-forward <default>, switch to it, and delete\n"
         "                the branch. Through a PR the checkout stays on the branch until the PR\n"
-        "                merges; once it has, it switches to <default>, fast-forwards to origin's\n"
-        "                and deletes the branch. Refused while <default> is checked out in a\n"
-        "                worktree, and for a gh stack.",
+        "                merges, then switches to <default>, fast-forwards to origin's and deletes\n"
+        "                the branch. Refused while <default> is checked out in a worktree, and for\n"
+        "                a gh stack.",
     )
     land.add_argument("target", nargs="?", help="worktree name, path, branch, or . (default) for the current checkout")
     land.add_argument("--dry-run", action="store_true", help="say what would happen")
@@ -114,14 +112,11 @@ def build_parser() -> argparse.ArgumentParser:
         "Commit any uncommitted changes as a wip commit, remove the folder, and delete the branch\n"
         "when all its commits are in <default>.",
         "A kept branch reopens with `wt new <name>`, wip commit undone. Refuses mid-rebase, merge\n"
-        "or conflict, with unsaved work in a submodule, and while a process works inside;\n"
-        "--when-free instead waits in the background until the folder is empty (an hour at\n"
-        "most), which is what session-exit hooks run. Gitignored files (.env, build output,\n"
-        "result links) go with the folder;\n"
-        "`wt new` copies the paths in the primary checkout's .worktreeinclude back in.",
+        "or conflict, with unsaved work in a submodule, and from inside the folder. Gitignored\n"
+        "files (.env, build output, result links) go with the folder; `wt new` copies back the\n"
+        "paths in the primary checkout's .worktreeinclude.",
     )
     close.add_argument("target", nargs="?", help="worktree name, path, or . (default) for the current one")
-    close.add_argument("--when-free", action="store_true", help="close in the background once nothing works inside")
     close.set_defaults(func=cmd_close)
 
     drop = _verb(
@@ -134,6 +129,25 @@ def build_parser() -> argparse.ArgumentParser:
     drop.add_argument("name")
     drop.set_defaults(func=cmd_drop)
 
+    clean = _verb(
+        sub,
+        "clean",
+        "Close the worktrees that hold nothing uncommitted",
+        "Close open worktrees with no uncommitted changes: in a terminal, pick which in fzf.",
+        "Committed work stays on the branch, which goes too only when all its commits are in\n"
+        "<default> (COMMITS +0). Rows show the commits ahead of and behind <default>, when the\n"
+        "worktree last changed, and its last commit; the picker previews the commits not in\n"
+        "<default>. Worktrees with uncommitted changes, a lock, or this shell in them are left,\n"
+        "and named on stderr.\n"
+        "\n"
+        "Without a terminal it only lists them; --yes closes every one listed. Outside a\n"
+        "repository it covers every repository under the root, as --all does.",
+    )
+    clean.add_argument("--all", action="store_true", help="every repository under the root")
+    clean.add_argument("--dry-run", action="store_true", help="list what could be closed and close nothing")
+    clean.add_argument("--yes", action="store_true", help="close every one listed, without picking")
+    clean.set_defaults(func=cmd_clean)
+
     listing = _verb(
         sub,
         "list",
@@ -142,11 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
         "AHEAD counts commits not in <default>, or says landed. DIRTY is yes for uncommitted\n"
         "changes and wip for a closed worktree holding a wip commit.\n"
         "--json prints {version, repos[]}, each repository {name, main, defaultBranch, error,\n"
-        "worktrees[]} and each worktree {name, branch, path, open, ahead, landed, dirty, wip,\n"
-        "busy, idleSeconds, error}. A value git could not answer is null, with the reason in that\n"
-        "row's error; a table prints it as ?. Listing prints every value it could read, including\n"
-        "the healthy rows of a repository beside a broken one, then exits 1 if anything could not\n"
-        "be inspected and 0 otherwise.",
+        "worktrees[]} and each worktree {name, branch, path, open, ahead, behind, landed, dirty,\n"
+        "wip, idleSeconds, error}. A value git could not answer is null, with the reason in that\n"
+        "row's error (a table prints ?). Healthy rows beside a broken one still print; the exit\n"
+        "is 1 if anything could not be inspected, else 0.",
     )
     listing.add_argument("target", nargs="?", help="narrow to one worktree: name, path, or .")
     listing.add_argument("--all", action="store_true", help="every repository under the root")
@@ -159,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
         "cd",
         "Print an open worktree's path",
         "Print an open worktree's path, or the primary checkout's with --main.",
-        "For `cd $(wt cd <name>)`, which moves a shell without moving an agent's session.",
+        "For `cd $(wt cd <name>)`: moves a shell, not an agent's session.",
     )
     cd.add_argument("target", nargs="?")
     cd.add_argument("--main", action="store_true", help="the primary checkout")

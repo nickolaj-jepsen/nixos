@@ -3,15 +3,15 @@
 # tools it shells out to are added to PATH by the wrapper.
 {
   lib,
-  stdenv,
   python3Packages,
   makeWrapper,
   git,
   coreutils,
-  lsof,
+  fzf,
 }: let
   inherit ((builtins.fromTOML (builtins.readFile ./pyproject.toml))) project;
-  runtime = [git coreutils] ++ lib.optional stdenv.isDarwin lsof;
+  # fzf is `wt clean`'s picker.
+  runtime = [git coreutils fzf];
 in
   python3Packages.buildPythonApplication {
     pname = "wt";
@@ -21,11 +21,7 @@ in
 
     build-system = [python3Packages.setuptools];
     nativeBuildInputs = [makeWrapper];
-    # Occupancy is read from lsof where there is no /proc, so the check needs
-    # the same tool as the wrapper or the busy tests see no processes at all.
-    nativeCheckInputs =
-      [python3Packages.unittestCheckHook git coreutils]
-      ++ lib.optional stdenv.isDarwin lsof;
+    nativeCheckInputs = [python3Packages.unittestCheckHook git coreutils];
     unittestFlags = ["-s" "tests" "-p" "test_*.py"];
 
     # `unittestCheckHook` runs after install; pointing the suite at the installed command makes it
