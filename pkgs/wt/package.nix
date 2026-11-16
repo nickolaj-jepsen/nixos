@@ -19,7 +19,7 @@ in
 
     build-system = [python3Packages.setuptools];
     # `wt clean`'s checklist picker.
-    dependencies = [python3Packages.questionary];
+    dependencies = [python3Packages.prompt-toolkit];
     nativeBuildInputs = [makeWrapper];
     nativeCheckInputs = [python3Packages.unittestCheckHook git coreutils];
     unittestFlags = ["-s" "tests" "-p" "test_*.py"];

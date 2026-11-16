@@ -7,7 +7,7 @@ name = "wt"
 version = "0.2.0"
 description = "Throwaway git worktrees, landed into the default branch"
 requires-python = ">=3.11"
-dependencies = ["questionary>=2"]
+dependencies = ["prompt-toolkit>=3"]
 
 [project.scripts]
 wt = "wt.cli:main"

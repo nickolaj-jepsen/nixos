@@ -9,6 +9,7 @@ Skills, AGENTS.md, CLAUDE.md and memory. An agent follows them, but a person edi
 - Only what the agent wouldn't do anyway. Every line is paid for in context by every later session.
 - Say what to do rather than listing what not to do. "Never" only for real absolutes.
 - When editing one, cut before you add. A new rule that repeats an old one in other words replaces it.
+- When rewriting a rule, keep its traps: the cases where the obvious action goes wrong. Those are what the rule is for.
 
 ## Example
 
