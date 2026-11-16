@@ -7,11 +7,9 @@
   makeWrapper,
   git,
   coreutils,
-  fzf,
 }: let
   inherit ((builtins.fromTOML (builtins.readFile ./pyproject.toml))) project;
-  # fzf is `wt clean`'s picker.
-  runtime = [git coreutils fzf];
+  runtime = [git coreutils];
 in
   python3Packages.buildPythonApplication {
     pname = "wt";
@@ -20,6 +18,8 @@ in
     src = ./.;
 
     build-system = [python3Packages.setuptools];
+    # `wt clean`'s checklist picker.
+    dependencies = [python3Packages.questionary];
     nativeBuildInputs = [makeWrapper];
     nativeCheckInputs = [python3Packages.unittestCheckHook git coreutils];
     unittestFlags = ["-s" "tests" "-p" "test_*.py"];

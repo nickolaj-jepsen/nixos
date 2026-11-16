@@ -133,12 +133,14 @@ def build_parser() -> argparse.ArgumentParser:
         sub,
         "clean",
         "Close the worktrees that hold nothing uncommitted",
-        "Close open worktrees with no uncommitted changes: in a terminal, pick which in fzf.",
+        "Close open worktrees with no uncommitted changes: in a terminal, tick which in a checklist.",
         "Committed work stays on the branch, which goes too only when all its commits are in\n"
-        "<default> (COMMITS +0). Rows show the commits ahead of and behind <default>, when the\n"
-        "worktree last changed, and its last commit; the picker previews the commits not in\n"
-        "<default>. Worktrees with uncommitted changes, a lock, or this shell in them are left,\n"
-        "and named on stderr.\n"
+        "<default> (COMMITS +0) or its pull request merged. Rows show the commits ahead of and\n"
+        "behind <default>, whether the branch goes (BRANCH AFTER), when the worktree last\n"
+        "changed, and its last commit. The checklist starts with the worktrees whose branch goes\n"
+        "ticked, since closing those leaves nothing behind, and lists the commits not in <default>\n"
+        "under the highlighted row. Worktrees with uncommitted changes, a lock, or this shell in\n"
+        "them are left, and named on stderr.\n"
         "\n"
         "Without a terminal it only lists them; --yes closes every one listed. Outside a\n"
         "repository it covers every repository under the root, as --all does.",

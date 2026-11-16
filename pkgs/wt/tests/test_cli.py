@@ -392,6 +392,16 @@ class Local(Base):
         self.assertIn("messy: uncommitted changes", result.stderr)
         self.assertTrue(tidy.exists() and messy.exists())
 
+    def test_clean_says_which_branches_go_with_the_folder(self) -> None:
+        # The picker ticks exactly these, so the listing must name them: nothing of it is left behind.
+        self.feature("tidy")
+        self.new("empty")
+        lines = self.wt("clean", "--dry-run").stdout.splitlines()
+        self.assertIn("BRANCH AFTER", lines[0])
+        rows = {line.split()[0]: line for line in lines[1:]}
+        self.assertIn("deleted", rows["empty"])
+        self.assertIn("kept", rows["tidy"])
+
     def test_clean_yes_closes_only_what_holds_nothing_uncommitted(self) -> None:
         tidy = self.feature("tidy")
         empty = self.new("empty")
