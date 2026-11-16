@@ -30,6 +30,8 @@
       enable = true;
       flags = ["--all"];
     };
+    # Its images live on btrfs beside a stale overlay2 tree, and dockerd refuses to choose between the two.
+    virtualisation.docker.storageDriver = "btrfs";
 
     # Enable OpenGL and NVIDIA VAAPI for hardware-accelerated transcoding
     hardware.graphics = {
