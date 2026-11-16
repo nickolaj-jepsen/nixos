@@ -32,6 +32,12 @@
           access: $all
           publish: $authenticated
           unpublish: $authenticated
+        # sjusk's builds of pi and Gondolin beside npmjs's releases, readable by envs and VMs that hold no token.
+        '@earendil-works/*':
+          access: $all
+          publish: $authenticated
+          unpublish: $authenticated
+          proxy: npmjs
         # Signed in only, so the vhost isn't an open npmjs proxy.
         '**':
           access: $authenticated
