@@ -33,7 +33,7 @@
           charliermarsh.ruff
 
           # JavaScript
-          astro-build.astro-vscode
+          marketplaceReleases.astro-build.astro-vscode
           bradlc.vscode-tailwindcss
           dbaeumer.vscode-eslint
           esbenp.prettier-vscode

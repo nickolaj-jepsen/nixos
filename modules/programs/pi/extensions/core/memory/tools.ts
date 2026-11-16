@@ -16,6 +16,14 @@ import {
   type Entry,
 } from "./store.ts";
 
+/**
+ * StringEnum's JSON, typed for TypeBox: pi types tool parameters with TypeBox's
+ * Static, which reads pi-ai's pi-schema `Schema<T>` as `unknown`.
+ */
+function stringEnum<const T extends readonly string[]>(values: T) {
+  return Type.Unsafe<T[number]>(StringEnum(values));
+}
+
 export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
   pi.registerTool({
     name: "memory_save",
@@ -27,7 +35,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
       statement: Type.String({
         description: `One line under ${STATEMENT_MAX} chars; imperative for a rule, present tense otherwise.`,
       }),
-      kind: StringEnum(KINDS),
+      kind: stringEnum(KINDS),
       priority: Type.Number({
         description:
           "0-100; higher enters the hot index first. Hard rules ~90, preferences ~60, trivia ~30.",
@@ -38,7 +46,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
       }),
       citations: Type.Array(
         Type.Object({
-          kind: StringEnum(CITATION_KINDS),
+          kind: stringEnum(CITATION_KINDS),
           value: Type.String({
             description: "Path, symbol, exact snippet, command, user quote, url, or session file.",
           }),
@@ -55,7 +63,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
       detail: Type.Optional(
         Type.String({ description: "Longer explanation, or the command to run." }),
       ),
-      scope: Type.Optional(StringEnum(["project", "global"] as const)),
+      scope: Type.Optional(stringEnum(["project", "global"] as const)),
       replaces: Type.Optional(Type.String({ description: "Id of the entry this corrects." })),
       distinct_from: Type.Optional(
         Type.String({
@@ -127,7 +135,7 @@ export function registerTools(pi: ExtensionAPI, sessions: Sessions) {
       query: Type.String({
         description: "Words or phrase to look for in user and assistant messages.",
       }),
-      scope: Type.Optional(StringEnum(["repo", "all"] as const)),
+      scope: Type.Optional(stringEnum(["repo", "all"] as const)),
       since: Type.Optional(
         Type.String({ description: "ISO date; skip sessions started before it." }),
       ),
