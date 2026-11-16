@@ -13,6 +13,7 @@
       description = "Where nickolaj-jepsen/agents is checked out. `claude-dev` and `pi-dev` load the plugins from it in place of the store copies.";
     };
 
-    config.fireproof.agents.skills = inputs.agents.lib.skills;
+    # plain is personal (Nickolaj's writing style), so it lives here, not in the public agents repo.
+    config.fireproof.agents.skills = inputs.agents.lib.skills // {plain = ./agent-skills/plain;};
   };
 }

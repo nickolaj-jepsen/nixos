@@ -32,6 +32,9 @@ Paths in the table that don't start with `agents:` or `pkgs/` are under
   automatically by `agent-skills.nix` (the input's `lib.skills`). They are
   publicly installable; a new one gets a line in that repo's README.md Skills
   section.
+- A personal skill that shouldn't be public lives in this repo and is added to
+  the registry beside `lib.skills` (`plain` in `agent-skills.nix`) or by its
+  feature leaf (`notes` in `obsidian/agents.nix`).
 - A third-party skill is registered by its feature leaf, from the upstream
   source (see `gh-stack` in `git.nix`).
 - Private skills (e.g. Digital-Udvikling/skills) must not be flake inputs: they
