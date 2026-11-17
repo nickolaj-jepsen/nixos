@@ -36,7 +36,7 @@ const JOIN =
 const DELEGATING = [
   "Use a subagent when the work can't be scoped in one guess (a sweep over many files, a search that would mean reading the whole tree, a second opinion on a change), not for a path you already know. Hand over the question, not a step list, and say what you want back.",
   "A subagent's result is not shown to the user: summarise it, and check an agent's claimed edits before reporting them done.",
-  "Fanning out over many items needs an explicit ask, such as `/delegate` or `/workflow`; a task that would merely benefit from parallelism is not one.",
+  "Fanning out over many items needs an explicit ask from the user; a task that would merely benefit from parallelism is not one.",
 ];
 // Every file read here is paid for again on each later turn, so volume work
 // belongs on a cheap child and judgment stays put.

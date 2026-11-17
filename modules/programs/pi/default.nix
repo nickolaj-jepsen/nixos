@@ -409,11 +409,6 @@ in {
       # `npx skills add` fails instead of slipping skills into the prompt.
       home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" config.fireproof.agents.skills;
 
-      home.file.".pi/agent/prompts" = {
-        source = ./prompts;
-        recursive = true;
-      };
-
       home.file.".pi/agent/agents" = {
         source = agentRoles;
         recursive = true;
