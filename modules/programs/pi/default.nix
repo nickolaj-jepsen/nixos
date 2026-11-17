@@ -123,9 +123,13 @@ in {
         [
           # The one paid Go model; `*` holds because no free id has a slash.
           "opencode-go/deepseek-v4.1-flash"
+          # ChatGPT plan. The bundled catalog ends at GPT-6.1, so 6.2 comes from
+          # the pi.dev catalog overlay and is not pinned in models.json.
+          "openai-codex/gpt-6.2-sol"
           "kimi-coding/k3.1-pro"
           "anthropic/claude-opus-5-5"
           "anthropic/claude-sonnet-5-5"
+          "openai-codex/gpt-6.1-terra"
           "opencode-go/*-free"
         ]
         ++ lib.optional config.fireproof.dev.llm.enable "local/*";

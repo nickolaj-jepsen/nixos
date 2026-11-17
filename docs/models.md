@@ -12,6 +12,8 @@ Read this before changing the provider declarations in the pi leaf's
   is the scarcest resource we have.
 - Claude Max 20x stays for the Claude Code app. Its $200 monthly API credit is
   use-it-or-lose-it; inside pi, Opus and Sonnet on it are hand-picks.
+- A ChatGPT plan carries the Codex models through the OAuth credential a
+  `/login openai` writes; `ai-usage` tracks its remaining quota.
 - TensorX (EU, zero retention) and local models are for data-sensitive work,
   picked by hand.
 - `_tensorx-models.nix` holds only the models sessions actually pick; it is not
@@ -36,6 +38,9 @@ the picker's all scope.
   `opencode-go/*-free` for free Go experiments.
 - `kimi-coding/k3.1-pro` for hard work and for work Claude declines.
 - Opus and Sonnet on the credit.
+- `openai-codex/gpt-6.2-sol` and `openai-codex/gpt-6.1-terra` on the ChatGPT
+  plan. pi's bundled catalog ends at GPT-6.1, so 6.2 arrives from the pi.dev
+  catalog overlay (`pi update --models`) and is not pinned in `models.json`.
 - `local/*` for sensitive work on this host.
 
 ## Sensitive and declined work
