@@ -11,10 +11,6 @@
       npmDeps = pkgs.importNpmLock {npmRoot = ./extensions;};
       inherit (pkgs.importNpmLock) npmConfigHook;
       nativeBuildInputs = [pkgs.typescript];
-      # parent/lib/spellfix is where pi-dev links the spellfix plugin's core; the build copies it in.
-      postPatch = ''
-        install -Dm644 ${inputs.agents.lib.plugins.spellfix.path}/core/spellfix.ts parent/lib/spellfix/spellfix.ts
-      '';
       buildPhase = ''
         runHook preBuild
         # Type against the pi that runs, not an npm copy: a second copy would
@@ -187,7 +183,7 @@ in {
       exec ${lib.getExe pi} "$@"
     '';
     # The checkout's extensions in place of the installed ones, with no rebuild, and the agents
-    # checkout's plugins (spellfix's core is linked into the parent package, which imports it).
+    # checkout's plugins in the same way.
     piDev = pkgs.writeShellApplication {
       name = "pi-dev";
       text = ''
@@ -195,7 +191,6 @@ in {
         plugins="${config.fireproof.agents.devCheckout}/plugins"
         [ -d "$extensions/parent" ] || { echo "pi-dev: no extensions under $extensions" >&2; exit 1; }
         [ -d "$plugins" ] || { echo "pi-dev: no plugins under $plugins (fireproof.agents.devCheckout)" >&2; exit 1; }
-        ln -sfn "$plugins/spellfix/core" "$extensions/parent/lib/spellfix"
         exec pi -ne -e builtin:codemode -e builtin:mcp -e "$extensions/core" -e "$extensions/parent" ${lib.concatMapStringsSep " " (name: ''-e "$plugins/${name}"'') pluginNames} "$@"
       '';
     };

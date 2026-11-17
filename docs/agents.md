@@ -65,6 +65,12 @@ Paths in the table that don't start with `agents:` or `pkgs/` are under
     (`"agentTools": {"subagents": true}` there also loads it in subagents).
     It imports the plugin's `core/` directly, gets no copy under `parent/lib/`
     and can't import `shared/`. A plugin can be pi-only.
+  - The one payload that leaves this repo for a plugin is chrome's prompt
+    editor: `parent/lib/editor-hooks.ts` offers its hooks on `pi.events`
+    (`fireproof:editor-hooks:offer`, and again on `:request` for a package that
+    loaded first), and spellfix's `pi/editor.ts` restates the channels and
+    decorates with them. Only spellfix's underline and live recheck need it; its
+    commands, shortcut and review fall back to `ctx.ui.getEditorText()`.
 - The build runs `tsc --noEmit` over `core/`, `parent/` and `shared/` against
   the shipped pi, so a type error fails `just build`; `pkgs.agent-tools` does
   the same for the plugins' `pi/` halves. `@earendil-works/pi-ai`'s published
