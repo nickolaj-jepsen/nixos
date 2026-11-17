@@ -16,8 +16,8 @@
     homeDir = config.home.homeDirectory;
     scratch = config.fireproof.dev.enable;
 
-    # Agent temp is the repository's scratch root (docs/notes.md), aged out by
-    # agent-notes' tmpfiles rule. Not a per-pid directory: Claude Code keys its
+    # Agent temp is the repository's scratch root, aged out by `agent-notes reap`
+    # (docs/notes.md). Not a per-pid directory: Claude Code keys its
     # scratchpad by session id under TMPDIR, so a resumed session finds it again.
     # Falls back to the ambient TMPDIR when it cannot be created.
     tmpDir = ''

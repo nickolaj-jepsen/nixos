@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import layout, links, migrate
+from . import layout, links, migrate, reap
 
 
 def _path(value):
@@ -85,6 +85,24 @@ def cmd_migrate(args):
     return 0
 
 
+def cmd_reap(args):
+    try:
+        max_age = reap.parse_age(args.max_age)
+    except ValueError as error:
+        sys.exit(str(error))
+    directory = Path(args.path) if args.path else layout.tmp_root()
+    summary = reap.reap(directory, max_age=max_age, apply=not args.dry_run, say=print)
+    if not summary["stale"]:
+        print("Nothing is old enough to reap.")
+        return 0
+    verb = "to reap" if args.dry_run else "reaped"
+    count = summary["stale"] if args.dry_run else summary["removed"]
+    print(f"\n{count} of {summary['stale']} stale entries {verb}, {reap.human(summary['bytes'])}.")
+    for path in summary["blocked"]:
+        _warn(f"left behind, not yours to remove: {path}")
+    return 0
+
+
 def _warn(message):
     print(message, file=sys.stderr)
 
@@ -118,6 +136,12 @@ def main(argv=None):
     # Git hands post-checkout its old head, new head and flag; they matter to nobody here.
     init.add_argument("git_args", nargs="*", help=argparse.SUPPRESS)
     init.set_defaults(func=cmd_init)
+
+    reaping = sub.add_parser("reap", help="delete session scratch older than the cutoff, even a tree tmpfiles cannot touch")
+    reaping.add_argument("--max-age", default="3d", help="how old is stale: 90m, 12h, 3d (default)")
+    reaping.add_argument("--dry-run", action="store_true", help="list what would go, delete nothing")
+    reaping.add_argument("--path", help="the scratch root to reap (default: the agent scratch root)")
+    reaping.set_defaults(func=cmd_reap)
 
     status = sub.add_parser("status", help="what this checkout resolves to, and the state of its links")
     status.add_argument("--path", help="a directory in the checkout (default: cwd)")

@@ -176,7 +176,7 @@ in {
     wrapper = pkgs.writeShellScriptBin "pi" ''
       ${lib.concatLines (lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}") env)}
       # Agent temp is this session's directory in the repository's scratch root
-      # (docs/notes.md), aged out by agent-notes' tmpfiles rule.
+      # (docs/notes.md), aged out by `agent-notes reap`.
       ${lib.optionalString config.fireproof.dev.enable ''TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
       dir="''${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
       mkdir -p "$dir"

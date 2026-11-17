@@ -91,11 +91,17 @@ ran it.
 - The `claude` and `claude-work` wrappers export `TMPDIR=$(agent-notes tmp --repo)`
   instead: Claude Code nests its scratchpad by session id under it, so a resumed
   session keeps its scratchpad, which a new pid would lose.
-- A user tmpfiles rule in `modules/programs/agent-notes.nix` ages out
-  everything under `<state>/agents/tmp/<repo>/` untouched for three days, on the
-  daily `systemd-tmpfiles-clean` run (Linux only). The repository directories
+- `agent-notes reap` ages out everything under `<state>/agents/tmp/<repo>/`
+  untouched for three days, on a daily user timer in
+  `modules/programs/agent-notes.nix` (Linux only). The repository directories
   themselves stay, so a checkout's `.agents/tmp` link never dangles. A session
   idle that long loses its old files too: there is no liveness check.
+- It is not a `systemd-tmpfiles` rule, because tmpfiles stamps out on the first
+  directory it may not open or unlink and leaves the rest of that session alone:
+  Go's module cache is read-only, and a test bed can leave a `d---------`
+  directory owned by another uid. `reap` makes a read-only tree writable first
+  and removes an empty directory it cannot enter, and it logs whatever is left
+  as not ours rather than retrying it every day.
 - On hosts that snapshot `/home`, `.local/state/agents/tmp` is a nested subvolume
   so scratch does not pin snapshots (`hosts/desktop/filesystems.nix`).
 

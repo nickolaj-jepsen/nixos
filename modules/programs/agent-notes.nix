@@ -14,12 +14,30 @@
       home.packages = [pkgs.agent-notes];
 
       # Session scratch (`tmp/<repo>/<pid>`, or Claude Code's session-keyed folders
-      # under `tmp/<repo>`) untouched for 3 days goes on the daily
-      # systemd-tmpfiles-clean run. The `<repo>` level is the glob, so it survives
-      # and a checkout's `.agents/tmp` link never dangles.
-      systemd.user.tmpfiles.rules = lib.mkIf pkgs.stdenv.isLinux [
-        "e %h/.local/state/agents/tmp/* - - - 3d"
-      ];
+      # under `tmp/<repo>`) untouched for 3 days goes on a daily timer. Not a
+      # `systemd-tmpfiles` rule: tmpfiles gives up on the first directory it may
+      # not open or unlink — a read-only Go module cache, or a `d---------` a test
+      # bed left behind — and with it the rest of that multi-gigabyte session.
+      # `reap` chmods what it may and removes an empty directory it may not enter.
+      # The `<repo>` level stays, so a checkout's `.agents/tmp` link never dangles.
+      systemd.user.services.agent-notes-reap = lib.mkIf pkgs.stdenv.isLinux {
+        Unit.Description = "Age out agent session scratch older than three days";
+        Service = {
+          Type = "oneshot";
+          ExecStart = "${lib.getExe pkgs.agent-notes} reap --max-age 3d";
+          IOSchedulingClass = "idle";
+          Nice = 10;
+        };
+      };
+      systemd.user.timers.agent-notes-reap = lib.mkIf pkgs.stdenv.isLinux {
+        Unit.Description = "Daily age-out of agent session scratch";
+        Install.WantedBy = ["timers.target"];
+        Timer = {
+          OnCalendar = "daily";
+          RandomizedDelaySec = "1h";
+          Persistent = true;
+        };
+      };
     };
   };
 }
