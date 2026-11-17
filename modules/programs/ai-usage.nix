@@ -57,6 +57,7 @@
         kind = "codex";
         name = "Codex";
         short = "CX";
+        icon = "openai";
         # pi's ChatGPT OAuth credential, which a `/login openai` writes and pi
         # refreshes; read here, never refreshed.
         authFile = "${home}/.pi/agent/auth.json";
