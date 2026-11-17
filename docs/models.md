@@ -21,8 +21,9 @@ Read this before changing the provider declarations in the pi leaf's
 
 ## Roles and enabledModels
 
-- Every subagent role locks its model; none inherits the parent's, because
-  inheritance once ran cheap children on Opus.
+- Subagent roles pin a model; ordinary roles lock it, because inheritance once
+  ran cheap children on Opus. `handoff-review` pins Sol but allows the caller's
+  per-invocation model override.
 - Explore, general-purpose, reviewer and verifier run on
   `opencode-go/deepseek-v4.1-flash`.
 - retro-reviewer runs on `kimi-coding/k3.1-pro`: a `/retro` starts it at most
@@ -30,6 +31,10 @@ Read this before changing the provider declarations in the pi leaf's
   its cost.
 - Plan runs on `kimi-coding/k3.1-pro`: a plan is judgment work, and it never
   edits.
+- `handoff-review` runs on `openai-codex/gpt-6.2-sol`, read-only: full handoff
+  cold reads and run-handoff's final review use it, not ordinary item reviews.
+  Those skills allow a per-invocation override and a reported fallback to the
+  cheap reviewer when the stronger model is unavailable.
 
 `enabledModels` has one entry per reason to hand-pick; everything else stays in
 the picker's all scope.
