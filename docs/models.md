@@ -6,14 +6,12 @@ Read this before changing the provider declarations in the pi leaf's
 
 ## Subscriptions
 
-- OpenCode Go, $10 a month (moving to $40 when Synthetic ends), runs DeepSeek
-  V4.1 Flash, the workhorse and the default model.
+- OpenCode Go, $10 a month, $40 once Synthetic ends, runs DeepSeek V4.1 Flash,
+  the workhorse and the default model.
 - Kimi.ai Pro, $39 a month, serves K3.1 Pro for hard work. Its five-hour window
   is the scarcest resource we have.
 - Claude Max 20x stays for the Claude Code app. Its $200 monthly API credit is
   use-it-or-lose-it; inside pi, Opus and Sonnet on it are hand-picks.
-- Synthetic is paid through 2026-11-23. A dated commit then removes its
-  provider, catalog and secret, and Go moves to the $40 plan.
 - TensorX (EU, zero retention) and local models are for data-sensitive work,
   picked by hand.
 - `_tensorx-models.nix` holds only the models sessions actually pick; it is not

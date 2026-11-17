@@ -9,6 +9,7 @@ are only ever read, never refreshed or written.
 """
 
 import argparse
+import base64
 import calendar
 import email.utils
 import hashlib
@@ -30,14 +31,10 @@ TIMEOUT = 10
 MIN_ELAPSED_PCT = 5
 MIN_USED_PCT = 10
 CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
-# Synthetic refills its weekly credit meter in 2% steps, one every 202 minutes,
-# so a spent meter is full again one week later. A meter has no window to be on
-# pace with, so it is reported as one (`meter`) and warned on by what is left.
-SYNTHETIC_TICK = timedelta(minutes=202)
-SYNTHETIC_STEP_PCT = 2.0
-# Past this share a meter is nearly spent: at 2% per 202 minutes it is under a
-# day of regeneration from empty, which is the last point worth warning at.
-METER_WARN_PCT = 80.0
+# Codex's own usage endpoint, on the private ChatGPT backend its /status card reads.
+CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
+# Where the access token names the ChatGPT account the endpoint scopes its answer to.
+CODEX_AUTH_CLAIM = "https://api.openai.com/auth"
 
 
 class FetchError(Exception):
@@ -74,12 +71,8 @@ def keeps(p, key):
     return not wanted or key in wanted
 
 
-def window(label, used_pct, resets_at, length, ring=None, detail=None, starts=None, meter=False):
-    """A quota window; `length` is a timedelta, or "month" for a calendar month.
-
-    `meter` marks a budget that regenerates instead of resetting: `resets_at` is
-    then the next top-up, not a turnover, and nothing is on pace.
-    """
+def window(label, used_pct, resets_at, length, ring=None, detail=None, starts=None):
+    """A quota window; `length` is a timedelta, or "month" for a calendar month."""
     resets = parse_time(resets_at) if isinstance(resets_at, str) else resets_at
     if starts is None:
         starts = month_before(resets) if length == "month" else resets - length
@@ -90,7 +83,6 @@ def window(label, used_pct, resets_at, length, ring=None, detail=None, starts=No
         "resetsAt": resets.isoformat(),
         "ring": ring,
         "detail": detail,
-        "meter": meter,
     }
 
 
@@ -248,74 +240,101 @@ def fetch_anthropic_credits(p):
 
 
 def number(value):
-    """A /v2/quotas amount, some of which it writes as dollars ("$2.10")."""
+    """A quota amount, some of which a server writes as dollars ("$2.10")."""
     try:
         return float(str(value).lstrip("$").strip())
     except (TypeError, ValueError):
         return None
 
 
-def fetch_synthetic(p):
-    """The weekly credit meter on /v2/quotas, plus the rolling burst cap beside it.
+def codex_credentials(p):
+    """The ChatGPT OAuth credential pi stored: `openai` (Sign in with ChatGPT) first,
+    then the older `openai-codex` provider's.
 
-    Synthetic regenerates credits instead of resetting them: the plan reports
-    what is left and when the next slice lands, where a slice is a percentage
-    (`nextRegenPercent`) or a dollar amount (`nextRegenCredits`) of the weekly
-    limit. So the meter is reported as a `meter`, with `resetsAt` at the next
-    top-up. `subscription` is left out: it is a legacy request counter that only
-    some accounts still populate, and it is not what blocks a request.
+    Reading only, like fetch_claude: pi refreshes the token itself, and refreshing
+    here would rotate the refresh token out from under it.
     """
-    key = Path(p["keyFile"]).read_text().strip()
-    data = http_json(
-        "https://api.synthetic.new/v2/quotas",
-        {"Authorization": f"Bearer {key}", "User-Agent": "ai-usage"},
-    )
+    try:
+        auth = json.loads(Path(p["authFile"]).read_text())
+    except FileNotFoundError:
+        raise FetchError("not logged in (run /login openai in pi)") from None
+    except json.JSONDecodeError:
+        raise FetchError("auth.json is not JSON") from None
+    expired = False
+    for pid in ("openai", "openai-codex"):
+        cred = auth.get(pid) or {}
+        if cred.get("type") != "oauth" or not cred.get("access"):
+            continue
+        if cred.get("expires", 0) / 1000 < now().timestamp():
+            expired = True
+            continue
+        return cred
+    if expired:
+        raise FetchError("token expired; run pi to refresh it")
+    raise FetchError("no ChatGPT login in pi's auth.json")
+
+
+def codex_account_id(cred):
+    """The ChatGPT account the token belongs to, which scopes the usage answer.
+
+    `openai-codex` stores it beside the tokens; `openai` only carries it as a
+    claim inside the access token, the same one pi reads to send it.
+    """
+    if cred.get("accountId"):
+        return cred["accountId"]
+    try:
+        payload = cred["access"].split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    except (IndexError, ValueError):
+        return None
+    return (claims.get(CODEX_AUTH_CLAIM) or {}).get("chatgpt_account_id")
+
+
+def codex_label(seconds):
+    """A window's name from its own length, as Codex names them: the plan, not the
+    position, decides which windows exist (a Pro account reports only a weekly one)."""
+    if seconds <= 86400:
+        return f"{seconds / 3600:g}h"
+    return f"{seconds / 86400:g}d" if seconds < 30 * 86400 else "month"
+
+
+def fetch_codex(p):
+    """The ChatGPT plan's rate-limit windows from the usage endpoint Codex's own
+    `/status` reads, gated on a ChatGPT login rather than an API key: the two are
+    different quotas. `credits` is left out: it is a paid top-up balance, not part
+    of the plan, and most accounts report none.
+    """
+    cred = codex_credentials(p)
+    account = codex_account_id(cred)
+    headers = {
+        "Authorization": f"Bearer {cred['access']}",
+        "Accept": "application/json",
+        "User-Agent": "ai-usage",
+    }
+    if account:
+        headers["ChatGPT-Account-Id"] = account
+    data = http_json(CODEX_USAGE_URL, headers)
+    limits = data.get("rate_limit") or {}
     t = now()
     windows = []
-    burst = data.get("rollingFiveHourLimit") or {}
-    if keeps(p, "rolling") and number(burst.get("max")):
-        limit = number(burst["max"])
-        used = (limit - (number(burst.get("remaining")) or 0)) / limit * 100
-        windows.append(
-            window(
-                "5h",
-                # The endpoint's own verdict, which outranks the arithmetic.
-                100.0 if burst.get("limited") else used,
-                burst.get("nextTickAt") or t,
-                timedelta(hours=5),
-                "outer",
-            )
+    for key, ring in (("primary_window", "outer"), ("secondary_window", "inner")):
+        w = limits.get(key)
+        if not keeps(p, key) or not isinstance(w, dict):
+            continue
+        used = number(w.get("used_percent"))
+        seconds = number(w.get("limit_window_seconds"))
+        reset = number(w.get("reset_at"))
+        if used is None or not seconds:
+            continue
+        resets = (
+            datetime.fromtimestamp(reset, timezone.utc)
+            if reset
+            # A relative reset only where the absolute one is missing.
+            else t + timedelta(seconds=number(w.get("reset_after_seconds")) or 0)
         )
-    weekly = data.get("weeklyTokenLimit") or data.get("planWeeklyLimit") or {}
-    allowance = number(weekly.get("maxCredits"))
-    left = number(weekly.get("remainingCredits"))
-    remaining = number(weekly.get("percentRemaining"))
-    if remaining is None and allowance and left is not None:
-        remaining = left / allowance * 100
-    if keeps(p, "weekly") and remaining is not None:
-        used = 100 - remaining
-        step = number(weekly.get("nextRegenPercent"))
-        if step is None and allowance and number(weekly.get("nextRegenCredits")) is not None:
-            step = number(weekly["nextRegenCredits"]) / allowance * 100
-        detail = (
-            f"{money(left, 'USD')} of {money(allowance, 'USD')} left"
-            if None not in (left, allowance)
-            else None
-        )
-        windows.append(
-            window(
-                "7d",
-                used,
-                # Without a tick time, one step's worth of spend is a tick's wait.
-                weekly.get("nextRegenAt") or t + SYNTHETIC_TICK * (used / (step or SYNTHETIC_STEP_PCT)),
-                timedelta(days=7),
-                "inner" if windows else "outer",
-                detail,
-                meter=True,
-            )
-        )
+        windows.append(window(codex_label(seconds), used, resets, timedelta(seconds=seconds), ring))
     if not windows:
-        raise FetchError("no quota in the answer")
+        raise FetchError("no quota windows in the answer")
     return {"windows": windows, "overage": None}
 
 
@@ -477,8 +496,8 @@ def fetch_kimi_coding(p):
 FETCHERS = {
     "claude": fetch_claude,
     "anthropic-credits": fetch_anthropic_credits,
+    "codex": fetch_codex,
     "opencode-go": fetch_opencode_go,
-    "synthetic": fetch_synthetic,
     "kimi-coding": fetch_kimi_coding,
     "copilot": fetch_copilot,
 }
@@ -538,13 +557,8 @@ def pace(w, t):
     """Add the elapsed share, the linear projection to reset, and the pace status.
 
     Over pace means the projection passes 100%; `runsOutAt` is then when the
-    current rate hits 100%. A meter has no window to project across, so it only
-    warns: over once spent past the warn threshold, out at 100%.
+    current rate hits 100%.
     """
-    if w.get("meter"):
-        used = w["usedPct"]
-        status = "exhausted" if used >= 100 else "over" if used >= METER_WARN_PCT else "under"
-        return {**w, "elapsedPct": 0.0, "projectedPct": None, "runsOutAt": None, "pace": status}
     start, end = parse_time(w["startsAt"]), parse_time(w["resetsAt"])
     total = (end - start).total_seconds()
     since = max(0.0, (t - start).total_seconds())
@@ -625,11 +639,10 @@ def render(result, color):
             projection = f"→{w['projectedPct']}%" if w["projectedPct"] is not None else ""
             if w["runsOutAt"]:
                 projection += " out " + parse_time(w["runsOutAt"]).astimezone().strftime("%a %H:%M")
-            moves = "top-up" if w["meter"] else "resets"
             lines.append(
                 f"  {w['label']:<6} {bar} {w['usedPct']:5.1f}% "
                 + c(pace_color[w["pace"]] if w["pace"] != "under" else "2", f"{projection:<20}")
-                + c("2", f"{w.get('detail') or '':<12} {moves} {when} (in {left})")
+                + c("2", f"{w.get('detail') or '':<12} resets {when} (in {left})")
             )
         if p["overage"]:
             o = p["overage"]

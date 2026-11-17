@@ -53,11 +53,13 @@
         windows = ["rolling" "weekly" "monthly"];
       }
       ++ lib.optional hasAgentKeys {
-        id = "synthetic";
-        kind = "synthetic";
-        name = "Synthetic";
-        short = "SY";
-        keyFile = config.age.secrets.synthetic-api-key.path;
+        id = "codex";
+        kind = "codex";
+        name = "Codex";
+        short = "CX";
+        # pi's ChatGPT OAuth credential, which a `/login openai` writes and pi
+        # refreshes; read here, never refreshed.
+        authFile = "${home}/.pi/agent/auth.json";
       }
       ++ lib.optional hasAgentKeys {
         id = "kimi-coding";

@@ -302,49 +302,6 @@ in {
               };
               models = import ./_tensorx-models.nix;
             };
-            synthetic = {
-              baseUrl = "https://api.synthetic.new/openai/v1";
-              api = "openai-completions";
-              apiKey = "!cat ${config.age.secrets.synthetic-api-key.path}";
-              compat = {
-                supportsStore = false;
-                supportsDeveloperRole = false;
-                maxTokensField = "max_tokens";
-                supportsStrictMode = false;
-              };
-              models =
-                lib.mapAttrsToList (id: m: let
-                  level = effort:
-                    if lib.elem effort m.efforts
-                    then effort
-                    else null;
-                in {
-                  inherit id;
-                  inherit (m) name input;
-                  reasoning = true;
-                  contextWindow = m.ctx;
-                  maxTokens = m.maxOut;
-                  thinkingLevelMap = {
-                    off =
-                      if lib.elem "none" m.efforts
-                      then "none"
-                      else null;
-                    minimal = null;
-                    low = level "low";
-                    medium = level "medium";
-                    high = level "high";
-                    xhigh = level "xhigh";
-                    max = level "max";
-                  };
-                  cost = {
-                    input = m.cost.input;
-                    output = m.cost.output;
-                    cacheRead = m.cost.cached;
-                    cacheWrite = 0;
-                  };
-                })
-                (import ../_synthetic-models.nix);
-            };
           }
           // lib.optionalAttrs config.fireproof.dev.llm.enable {
             local = {
