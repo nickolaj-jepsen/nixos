@@ -36,8 +36,12 @@ Always defer to the repo's existing tooling, but if you have a choice, prefer th
 
 ## Git
 
-- Work in the current checkout and branch (main included). Use a worktree (the harness tool, else `wt new`) only if you'd conflict with other work.
+- A change that fits in one commit may go straight onto the current branch (main included).
+- A larger change gets its own worktree and branch (the harness tool, else `wt new`). Commit as you go there.
+- Use a worktree even for a small change when another agent is working on the same or related files, so neither of you commits over the other.
+- Keep commits to the logical steps of the change: a change that should be 2 commits doesn't land as 10. Fold a fix to an earlier commit into it with `git commit --fixup`.
 - Never touch changes you didn't make. Stage only your own paths, never `-A`.
-- Commit as you go, but never push or open a PR unless asked.
-- No merge commits: rebase. Fix earlier commits with `git commit --fixup`; `git rebase` autosquashes.
+- Never push or open a PR unless asked.
+- No merge commits: rebase. `git rebase` autosquashes the fixups.
+- Whether your subagents share your checkout or get worktrees of their own is your call, and so is managing those worktrees.
 - A worktree stays open when the session ends. When done, from the primary checkout, never inside it: `wt land <name>` to land it, `wt close <name>` to keep the branch, `wt drop <name>` to throw it away. To leave early: `exit_worktree` in pi, `ExitWorktree` with `remove` and `discard_changes: true` in Claude Code (safe: it runs `wt close`).
