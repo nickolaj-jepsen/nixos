@@ -47,7 +47,7 @@ Paths in the table that don't start with `agents:` or `pkgs/` are under
 - `modules/programs/pi/extensions/` holds one local pi package per audience.
   The pi leaf builds both and lists them in `settings.packages`.
   - `core/` loads in every session, subagent children included. Each
-    top-level `.ts` file is one extension; a subfolder such as `memory/` holds
+    top-level `.ts` file is one extension; a subfolder such as `lib/` holds
     its helpers.
   - `parent/` loads only in the session you started (the leaf names it in
     subagents.json's `excludedExtensionPackages`). A feature is a default
