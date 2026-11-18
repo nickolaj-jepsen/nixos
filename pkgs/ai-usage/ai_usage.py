@@ -35,6 +35,18 @@ CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
 CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 # Where the access token names the ChatGPT account the endpoint scopes its answer to.
 CODEX_AUTH_CLAIM = "https://api.openai.com/auth"
+# Base monthly grants, used only when the credits response omits its grant total.
+# Promotional model allowances draw from these pools; they do not increase the grant.
+COMMAND_CODE_MONTHLY_GRANTS = {
+    "individual-go": 10,
+    "individual-go-v1": 10,
+    "individual-goat": 70,
+    "individual-pro": 30,
+    "individual-pro-v1": 80,
+    "individual-max": 150,
+    "individual-ultra": 300,
+    "teams-pro": 40,
+}
 
 
 class FetchError(Exception):
@@ -102,10 +114,10 @@ def retry_after(error):
     return max(0.0, (when - now()).total_seconds())
 
 
-def http_json(url, headers):
+def http_json(url, headers, timeout=TIMEOUT):
     req = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.load(resp)
     except urllib.error.HTTPError as e:
         raise FetchError(f"HTTP {e.code}", retry_after=retry_after(e)) from e
@@ -245,6 +257,90 @@ def number(value):
         return float(str(value).lstrip("$").strip())
     except (TypeError, ValueError):
         return None
+
+
+def command_code_time(value):
+    """Command Code writes timestamps as ISO strings, seconds, or milliseconds."""
+    numeric = number(value)
+    if numeric is not None:
+        if numeric <= 0:
+            return None
+        return datetime.fromtimestamp(numeric / 1000 if numeric > 10_000_000_000 else numeric, timezone.utc)
+    try:
+        return parse_time(str(value))
+    except (ValueError, AttributeError):
+        return None
+
+
+def fetch_command_code(p):
+    """The plan's rolling limits and monthly grant from the CLI's billing routes.
+
+    The credits response is required. The subscription response only adds the
+    billing period, so a failure there must not hide the rolling limits.
+    """
+    key = Path(p["keyFile"]).read_text().strip()
+    headers = {"Authorization": f"Bearer {key}", "Accept": "application/json", "User-Agent": "ai-usage"}
+    base = "https://api.commandcode.ai/alpha/billing"
+    # These routes can each take several seconds; keep the widget's total wait bounded.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        credits_request = pool.submit(http_json, f"{base}/credits", headers, 15)
+        subscription_request = pool.submit(http_json, f"{base}/subscriptions", headers, 15)
+        data = credits_request.result()
+        try:
+            subscription = subscription_request.result()
+        except FetchError:
+            subscription = None
+
+    credits = data.get("credits")
+    if not isinstance(credits, dict):
+        raise FetchError("credits response has no credits object")
+    remaining = number(credits.get("monthlyCredits"))
+    if remaining is None:
+        raise FetchError("credits response has no monthly balance")
+
+    limits = data.get("windowLimits") or credits.get("windowLimits") or {}
+    windows = []
+    for key, label, length, ring in (
+        ("fiveHour", "5h", timedelta(hours=5), "outer"),
+        ("weekly", "7d", timedelta(days=7), "inner"),
+    ):
+        limit = limits.get(key) if isinstance(limits, dict) else None
+        if not isinstance(limit, dict):
+            continue
+        cap = number(limit.get("cap"))
+        used = number(limit.get("used"))
+        resets = command_code_time(limit.get("resetAt"))
+        # An untouched rolling window reports resetAt: 0, not a real reset time.
+        if not cap or used is None or resets is None:
+            continue
+        detail = f"{money(used, 'USD')} of {money(cap, 'USD')} used"
+        windows.append(window(label, used / cap * 100, resets, length, ring, detail))
+
+    sub = (subscription or {}).get("data") or {}
+    grant = number(credits.get("monthlyCreditsGranted")) or COMMAND_CODE_MONTHLY_GRANTS.get(sub.get("planId"))
+    resets = command_code_time(sub.get("currentPeriodEnd"))
+    has_monthly = bool(grant and 0 <= remaining <= grant and resets)
+    if has_monthly:
+        starts = command_code_time(sub.get("currentPeriodStart"))
+        used = grant - remaining
+        detail = f"{money(used, 'USD')} of {money(grant, 'USD')} used"
+        # Before the first billable request neither rolling window has a reset
+        # time, so the monthly meter is the useful one to put on the bar.
+        ring = None if windows else "outer"
+        windows.append(window("month", used / grant * 100, resets, "month", ring, detail, starts))
+
+    purchased = number(credits.get("purchasedCredits")) or 0
+    if purchased > 0:
+        overage = {
+            "active": remaining <= 0,
+            "text": f"{money(purchased, 'USD')} on-demand credits available",
+        }
+    elif not has_monthly:
+        # A money-only balance is still useful when the API omits the grant or period.
+        overage = {"active": False, "text": f"{money(remaining, 'USD')} monthly credits remaining"}
+    else:
+        overage = None
+    return {"windows": windows, "overage": overage}
 
 
 def codex_credentials(p):
@@ -498,6 +594,7 @@ FETCHERS = {
     "anthropic-credits": fetch_anthropic_credits,
     "codex": fetch_codex,
     "opencode-go": fetch_opencode_go,
+    "command-code": fetch_command_code,
     "kimi-coding": fetch_kimi_coding,
     "copilot": fetch_copilot,
 }
@@ -655,12 +752,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--json", action="store_true", help="print JSON instead of a table")
     parser.add_argument("--refresh", action="store_true", help="ignore the cache TTL")
+    parser.add_argument("--provider", action="append", help="fetch only this provider id (repeatable)")
     parser.add_argument("--config", type=Path, default=default_config)
     args = parser.parse_args()
     try:
         config = json.loads(args.config.read_text())
     except FileNotFoundError:
         sys.exit(f"ai-usage: no config at {args.config}")
+    if args.provider:
+        wanted = set(args.provider)
+        config["providers"] = [p for p in config.get("providers", []) if p["id"] in wanted]
     result = collect(config, args.refresh)
     if args.json:
         json.dump(result, sys.stdout)

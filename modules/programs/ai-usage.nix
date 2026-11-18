@@ -68,6 +68,13 @@
         name = "Kimi Code";
         short = "KC";
         keyFile = config.age.secrets.kimi-coding-api-key.path;
+      }
+      ++ lib.optional hasAgentKeys {
+        id = "command-code";
+        kind = "command-code";
+        name = "Command Code";
+        short = "CC";
+        keyFile = config.age.secrets.command-code-api-key.path;
       };
   in {
     config = lib.mkIf fp.dev.ai-usage.enable {

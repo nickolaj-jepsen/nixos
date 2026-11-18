@@ -7,13 +7,16 @@ Read this before changing the provider declarations in the pi leaf's
 ## Subscriptions
 
 - OpenCode Go, $10 a month, $40 once Synthetic ends, runs DeepSeek V4.1 Flash,
-  the workhorse and the default model.
+  one of the two providers behind the default virtual model.
 - Kimi.ai Pro, $39 a month, serves K3.1 Pro for hard work. Its five-hour window
   is the scarcest resource we have.
 - Claude Max 20x stays for the Claude Code app. Its $200 monthly API credit is
   use-it-or-lose-it; inside pi, Opus and Sonnet on it are hand-picks.
 - A ChatGPT plan carries the Codex models through the OAuth credential a
   `/login openai` writes; `ai-usage` tracks its remaining quota.
+- Command Code GOAT serves its live multi-provider catalog through the official
+  provider package and is the default DeepSeek model's other provider. Its API
+  key comes from agenix through `models.json`.
 - TensorX (EU, zero retention) and local models are for data-sensitive work,
   picked by hand.
 - `_tensorx-models.nix` holds only the models sessions actually pick; it is not
@@ -25,7 +28,7 @@ Read this before changing the provider declarations in the pi leaf's
   ran cheap children on Opus. `handoff-review` pins Sol but allows the caller's
   per-invocation model override.
 - Explore, general-purpose, reviewer and verifier run on
-  `opencode-go/deepseek-v4.1-flash`.
+  `auto/deepseek-v4.1-flash`, as do the shared side calls.
 - retro-reviewer runs on `kimi-coding/k3.1-pro`: a `/retro` starts it at most
   once, when it wants an independent read of the session, so quality outweighs
   its cost.
@@ -39,13 +42,19 @@ Read this before changing the provider declarations in the pi leaf's
 `enabledModels` has one entry per reason to hand-pick; everything else stays in
 the picker's all scope.
 
-- `opencode-go/deepseek-v4.1-flash` first, as the default, and
-  `opencode-go/*-free` for free Go experiments.
+- `auto/deepseek-v4.1-flash` first, as the default. It picks OpenCode Go or
+  Command Code by the smallest remaining percentage across their 5-hour,
+  weekly and monthly windows. Pi keeps the choice on the session branch,
+  including retries and compaction; the footer names the provider it picked.
+- `opencode-go/deepseek-v4.1-flash` is the explicit physical fallback, and
+  `opencode-go/*-free` is for free Go experiments.
 - `kimi-coding/k3.1-pro` for hard work and for work Claude declines.
 - Opus and Sonnet on the credit.
 - `openai-codex/gpt-6.2-sol` and `openai-codex/gpt-6.1-terra` on the ChatGPT
   plan. pi's bundled catalog ends at GPT-6.1, so 6.2 arrives from the pi.dev
   catalog overlay (`pi update --models`) and is not pinned in `models.json`.
+- `command-code/deepseek/deepseek-v4.1-flash` as the subscription's alternate
+  DeepSeek route; the rest of its catalog stays in the all scope.
 - `local/*` for sensitive work on this host.
 
 ## Sensitive and declined work

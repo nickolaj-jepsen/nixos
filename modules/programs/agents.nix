@@ -38,6 +38,11 @@
           path = "${config.home.homeDirectory}/.pi/agent/opencode-go-api-key";
           mode = "0600";
         };
+        age.secrets.command-code-api-key = {
+          rekeyFile = ../../secrets/command-code-api-key.age;
+          path = "${config.home.homeDirectory}/.pi/agent/command-code-api-key";
+          mode = "0600";
+        };
         # The Kimi Code plan's API key: the pi provider and ai-usage both read it.
         age.secrets.kimi-coding-api-key = {
           rekeyFile = ../../secrets/kimi-coding-api-key.age;

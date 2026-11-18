@@ -20,6 +20,7 @@ import { PR_COMMAND } from "./git.ts";
 import { click, hoverAt, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";
 import { modelAlias, providerShortName } from "../lib/model-names.ts";
+import { selectedDeepSeekProvider } from "../../shared/deepseek-route.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { shellCommand } from "../lib/tools.ts";
@@ -120,7 +121,16 @@ export const createFooter = (
     // Anything on the Anthropic credit spends the reserve, so it stays alarming.
     const modelColor = model?.provider === "anthropic" ? "error" : "dim";
 
-    const modelText = model ? model.name || model.id : "no model";
+    const routedProvider =
+      model?.provider === "auto" && model.id === "deepseek-v4.1-flash"
+        ? selectedDeepSeekProvider(ctx.sessionManager.getSessionId())
+        : undefined;
+    const routedName = routedProvider
+      ? ctx.modelRegistry.getProviderDisplayName(routedProvider)
+      : undefined;
+    const modelText = model
+      ? `${model.name || model.id}${routedName ? ` (${routedName})` : ""}`
+      : "no model";
     const provider = model ? ctx.modelRegistry.getProviderDisplayName(model.provider) : undefined;
 
     const statusEntries = [...footerData.getExtensionStatuses()].sort(([a], [b]) =>
@@ -246,6 +256,7 @@ export const createFooter = (
 
   pi.on("model_select", repaint);
   pi.on("thinking_level_select", repaint);
+  pi.on("message_start", repaint);
   pi.on("message_end", repaint);
   pi.on("agent_start", repaint);
   pi.on("session_info_changed", repaint);

@@ -2,7 +2,7 @@
 name: Explore
 description: "Finds things fast: files, symbols and call sites in the code, or docs and answers on the web, and reports what it read. Read-only."
 tools: read, bash, grep, find, ls, exa_search, exa_fetch
-model: opencode-go/deepseek-v4.1-flash
+model: auto/deepseek-v4.1-flash
 thinking: low
 prompt_mode: replace
 locked: model, thinking

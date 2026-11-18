@@ -41,7 +41,7 @@ const actors = processGlobal(
   () => new Map<string, () => Model<any> | undefined>(),
 );
 
-const DEEPSEEK_JUDGE = "opencode-go/deepseek-v4.1-flash";
+const DEEPSEEK_JUDGE = "auto/deepseek-v4.1-flash";
 const CLAUDE_JUDGE = "anthropic/claude-sonnet-5-5";
 // No remote judge is as private as these, so their asks skip the judge.
 const PRIVATE_PROVIDERS = new Set(["local", "tensorx"]);

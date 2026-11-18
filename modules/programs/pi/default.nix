@@ -65,8 +65,10 @@ in {
     }));
     localModels = (import ../_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
     localMaxTokens = 8192;
-    # Alphabetical order loads the permission system first.
-    thirdPartyPackages = piPackages.packageNames;
+    # The permission system loads first; the rest stay alphabetical.
+    thirdPartyPackages =
+      ["@gotgenes/pi-permission-system"]
+      ++ lib.remove "@gotgenes/pi-permission-system" piPackages.packageNames;
     # settings.packages and the children's exclusions must match string for string.
     packagePath = name: "${piPackages}/node_modules/${name}";
     extensions = mkExtensions pkgs pi piPackages;
@@ -90,9 +92,13 @@ in {
       done
       cp -r ${./agents} $out
     '';
-    # Children keep core/ and the permission system.
+    # Children keep core/, the permission system, and model providers.
     childExcludedPackages =
-      map packagePath (lib.subtractLists ["@gotgenes/pi-permission-system"] thirdPartyPackages)
+      map packagePath (lib.subtractLists [
+          "@commandcode/pi-commandcode-provider"
+          "@gotgenes/pi-permission-system"
+        ]
+        thirdPartyPackages)
       ++ [parentPath]
       ++ map pluginPath parentOnlyPlugins;
     # agent-context.md is shared by every agent; keep it agent-agnostic. Children
@@ -109,14 +115,19 @@ in {
       }
       // lib.optionalAttrs (config.fireproof.agents.lspServers != {}) {
         PI_LSP_SERVERS = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
+      }
+      // lib.optionalAttrs config.fireproof.dev.ai-usage.enable {
+        PI_AI_USAGE_COMMAND = lib.getExe pkgs.ai-usage;
       };
     settings = {
-      defaultProvider = "opencode-go";
+      defaultProvider = "auto";
       defaultModel = "deepseek-v4.1-flash";
       defaultThinkingLevel = "high";
       # A default outside the list starts on the first entry, so the default leads.
       enabledModels =
         [
+          # The default: DeepSeek on whichever subscription has more headroom.
+          "auto/deepseek-v4.1-flash"
           # The one paid Go model; `*` holds because no free id has a slash.
           "opencode-go/deepseek-v4.1-flash"
           # ChatGPT plan. The bundled catalog ends at GPT-6.1, so 6.2 comes from
@@ -126,6 +137,8 @@ in {
           "anthropic/claude-opus-5-5"
           "anthropic/claude-sonnet-5-5"
           "openai-codex/gpt-6.1-terra"
+          # The Command Code subscription's live catalog.
+          "command-code/deepseek/deepseek-v4.1-flash"
           "opencode-go/*-free"
         ]
         ++ lib.optional config.fireproof.dev.llm.enable "local/*";
@@ -282,6 +295,8 @@ in {
                 }
               ];
             };
+            # The native provider extension supplies Command Code's live model catalog.
+            command-code.apiKey = "!cat ${config.age.secrets.command-code-api-key.path}";
             # API credits; a `/login anthropic` OAuth credential would take precedence.
             anthropic.apiKey = "!cat ${config.age.secrets.anthropic-api-key.path}";
             # Built-in provider of classifier models, reached from codemode scripts.

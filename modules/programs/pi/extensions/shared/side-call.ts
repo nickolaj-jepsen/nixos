@@ -3,7 +3,7 @@ import { contentText, type SimpleStreamOptions } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 /** The default side model: the cheap workhorse. */
-export const SIDE_MODEL = "opencode-go/deepseek-v4.1-flash";
+export const SIDE_MODEL = "auto/deepseek-v4.1-flash";
 
 export type SideCall = {
   system: string;
