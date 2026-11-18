@@ -157,6 +157,8 @@
             openssh
             nftables
             iptables
+            iproute2 # the dummy link that carries the work DNS routes
+            systemd # resolvectl
             tailscale
             jq
             gawk
