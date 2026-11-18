@@ -2,6 +2,7 @@
   flake.modules.nixos.homelab-security = {
     config,
     lib,
+    pkgs,
     ...
   }: let
     # nginx's access log is file-only, so these jails can't use the module's default systemd backend.
@@ -31,6 +32,12 @@
           nginx-bad-request.settings = accessLogJail;
         };
       };
+      # The SCTP local root that NGINX2Root chains with has no kernel fix yet, and
+      # nothing here uses SCTP. Remove once the kernel is patched.
+      boot.extraModprobeConfig = ''
+        install sctp ${pkgs.coreutils}/bin/false
+      '';
+
       # fail2ban refuses to start when a jail's logpath doesn't exist yet.
       systemd.services.fail2ban.after = ["nginx.service"];
     };

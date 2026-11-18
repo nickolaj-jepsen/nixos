@@ -12,6 +12,15 @@
 
       services.nginx = {
         enable = true;
+        # NGINX2Root (CVE-2026-123007 and four more) is fixed in 1.30.7. Drops out by
+        # itself once nixos-26.05 carries it; delete this block then.
+        package = lib.mkIf (lib.versionOlder pkgs.nginx.version "1.30.7") (pkgs.nginx.overrideAttrs (_: rec {
+          version = "1.30.7";
+          src = pkgs.fetchurl {
+            url = "https://nginx.org/download/nginx-${version}.tar.gz";
+            hash = "sha256-JWW1yDcFDpWPcPsPc8SOK8pFQq00n9NW9G+wxyYQvG4=";
+          };
+        }));
         recommendedTlsSettings = true;
         recommendedOptimisation = true;
         recommendedProxySettings = true;
