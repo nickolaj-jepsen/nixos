@@ -2,8 +2,9 @@
 import { contentText, type SimpleStreamOptions } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-/** The default side model: the cheap workhorse. */
-export const SIDE_MODEL = "auto/deepseek-v4.1-flash";
+/** The default side model: the cheap workhorse, or the profile's own (PI_SIDE_MODEL,
+ * which pi-work sets because it reaches GitHub Copilot alone). */
+export const SIDE_MODEL = process.env.PI_SIDE_MODEL || "auto/deepseek-v4.1-flash";
 
 export type SideCall = {
   system: string;

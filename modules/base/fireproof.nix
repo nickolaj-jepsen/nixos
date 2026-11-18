@@ -82,19 +82,8 @@ let
         };
       };
 
-      claude-code = {
-        work.enable =
-          lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
-        workMcpServers = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
-          description = ''
-            MCP servers only the claude-work wrapper loads. Work-owned services
-            stay out of programs.mcp.servers, which every agent (pi,
-            copilot, vscode and the personal claude) reads.
-          '';
-        };
-      };
+      claude-code.work.enable =
+        lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
       # Registry: leaves register skills next to the feature they document; third-party
       # skills are referenced from their upstream source, never vendored.
@@ -102,6 +91,16 @@ let
         type = lib.types.attrsOf lib.types.path;
         default = {};
         description = "Agent skill directories by skill name, installed for every coding agent.";
+      };
+
+      agents.workMcpServers = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+        description = ''
+          MCP servers only the work profiles load, claude-work and pi-work.
+          Work-owned services stay out of programs.mcp.servers, which every
+          agent (pi, copilot, vscode and the personal claude) reads.
+        '';
       };
 
       agents.checkout = lib.mkOption {
@@ -145,7 +144,29 @@ let
           enable = cascade config.fireproof.dev.enable "Enable MCP servers";
           homelab.enable = cascade (config.fireproof.dev.mcp.enable && config.fireproof.trusted) "Enable the homelab Grafana MCP server and its token secret";
         };
-        pi.enable = cascade (config.fireproof.dev.enable && config.fireproof.trusted) "Enable the pi coding agent with the lazypi extension roster";
+        pi = {
+          enable = cascade (config.fireproof.dev.enable && config.fireproof.trusted) "Enable the pi coding agent with the lazypi extension roster";
+          work = {
+            enable = lib.mkEnableOption "pi-work wrapper: a second pi profile in ~/.pi/work that shares the personal config and reaches GitHub Copilot alone";
+            model = lib.mkOption {
+              type = lib.types.str;
+              default = "gpt-6-luna";
+              description = ''
+                GitHub Copilot model id (no provider prefix) the work profile
+                starts on, and the default of its model picker.
+              '';
+            };
+            fastModel = lib.mkOption {
+              type = lib.types.str;
+              default = "mai-code-2-flash";
+              description = ''
+                GitHub Copilot model id (no provider prefix) the work profile
+                runs its subagent roles and its title and judge side calls with,
+                where the personal profile uses DeepSeek.
+              '';
+            };
+          };
+        };
         copilot.enable = cascade config.fireproof.dev.enable "Enable the GitHub Copilot CLI";
         ai-usage.enable = cascade config.fireproof.dev.enable "Enable ai-usage, the agent subscription quota CLI (and its DMS bar widget on desktops)";
         agent-hub = {

@@ -184,9 +184,9 @@ check_trash() {
 }
 
 check_transcripts() {
-  emit transcripts "$(bytes "$HOME/.claude/projects" "$HOME/.claude-work/projects" "$HOME/.pi/agent/sessions")" \
+  emit transcripts "$(bytes "$HOME/.claude/projects" "$HOME/.claude-work/projects" "$HOME/.pi/agent/sessions" "$HOME/.pi/work/sessions")" \
     "agent transcripts" "kept on purpose: auto-gate and /mine read them" \
-    "find ~/.claude*/projects ~/.pi/agent/sessions -name '*.jsonl' -mtime +180 -delete   # older than 6 months"
+    "find ~/.claude*/projects ~/.pi/*/sessions -name '*.jsonl' -mtime +180 -delete   # older than 6 months"
 }
 
 check_models() {

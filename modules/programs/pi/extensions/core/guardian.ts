@@ -8,7 +8,8 @@
  *   file it read never reaches it.
  * - Only allows or defers, never denies: a wrong "no" would block work you
  *   asked for, while a deferral costs one dialog.
- * - One judge, never of the family that made the call (judgeFor).
+ * - One judge, never of the family that made the call (judgeFor); a profile with
+ *   a single provider (pi-work) can only name one (PI_JUDGE_MODEL).
  * - Never less private than the session or the subagent that asked: a local
  *   or TensorX model on either side sends the ask straight to the dialog.
  * - Every failure, timeout and missing model defers, so a broken judge means
@@ -41,8 +42,11 @@ const actors = processGlobal(
   () => new Map<string, () => Model<any> | undefined>(),
 );
 
-const DEEPSEEK_JUDGE = "auto/deepseek-v4.1-flash";
-const CLAUDE_JUDGE = "anthropic/claude-sonnet-5-5";
+// A profile with one provider (pi-work) names its judge with PI_JUDGE_MODEL: there
+// is no other family to judge with, so both slots take it.
+const JUDGE = process.env.PI_JUDGE_MODEL;
+const DEEPSEEK_JUDGE = JUDGE || "auto/deepseek-v4.1-flash";
+const CLAUDE_JUDGE = JUDGE || "anthropic/claude-sonnet-5-5";
 // No remote judge is as private as these, so their asks skip the judge.
 const PRIVATE_PROVIDERS = new Set(["local", "tensorx"]);
 // The dialog waits on this, so a slow judge is a slower prompt.

@@ -175,13 +175,13 @@
           inherit server;
           extraTransforms = [hmLib.mcp.addType (hmLib.mcp.wrapEnvFilesCommand {inherit pkgs name;})];
         })
-      cfg.workMcpServers;
+      config.fireproof.agents.workMcpServers;
     };
     workMcpPlugin = pkgs.runCommand "claude-code-work-mcp" {} ''
       install -Dm644 ${workMcpJson} $out/.mcp.json
       install -Dm644 ${jsonFormat.generate "claude-work-mcp-plugin.json" {name = "claude-work-mcp";}} $out/.claude-plugin/plugin.json
     '';
-    workMcpArgs = lib.optionals (cfg.workMcpServers != {}) ["--plugin-dir" workMcpPlugin];
+    workMcpArgs = lib.optionals (config.fireproof.agents.workMcpServers != {}) ["--plugin-dir" workMcpPlugin];
 
     claudeWorkWrapper = pkgs.writeShellApplication {
       name = "claude-work";

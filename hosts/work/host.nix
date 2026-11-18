@@ -17,6 +17,7 @@
       vramGiB = 12; # RTX 4070
     };
     fireproof.claude-code.work.enable = true;
+    fireproof.dev.pi.work.enable = true;
     fireproof.networkd.enable = true;
 
     # Work-owned machine: `tailscale up` by hand rather than enrolling itself

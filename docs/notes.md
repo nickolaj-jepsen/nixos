@@ -86,8 +86,9 @@ ran it.
 
 ## Scratch
 
-- The `pi` wrapper exports `TMPDIR=$(agent-notes tmp "$PPID")`, so an agent's
-  temp files sit beside its notes under the repository it is working in.
+- The `pi` and `pi-work` wrappers export `TMPDIR=$(agent-notes tmp "$$")`, so
+  an agent's temp files sit beside its notes under the repository it is working
+  in.
 - The `claude` and `claude-work` wrappers export `TMPDIR=$(agent-notes tmp --repo)`
   instead: Claude Code nests its scratchpad by session id under it, so a resumed
   session keeps its scratchpad, which a new pid would lose.

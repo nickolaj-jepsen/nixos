@@ -56,6 +56,8 @@ in {
     pkgs,
     ...
   }: let
+    cfg = config.fireproof.dev.pi;
+    homeDir = config.home.homeDirectory;
     pi = pkgs.pi-coding-agent;
     piPackages = pkgs.pi-packages;
     spellChecker = fpLib.mkHunspell pkgs;
@@ -167,11 +169,101 @@ in {
       # Empty on purpose: arrays replace wholesale, reverting `pi config` toggles.
       extensions = [];
     };
-    mcp = let
-      # pi rejects the null/empty fields home-manager's option fills in.
-      shared = lib.mapAttrs (_: lib.filterAttrs (_: v: v != null && v != {} && v != [])) config.programs.mcp.servers;
+
+    # pi-work: the personal config by symlink, its own credentials, and GitHub
+    # Copilot as its only provider (docs/models.md). Command Code's provider and
+    # the DeepSeek router are left out: with neither subscription there is
+    # nothing to route between.
+    workFastModel = "github-copilot/${cfg.work.fastModel}";
+    # pi's catalog does not carry these yet: the Copilot API lists them for this
+    # account, but neither the bundled catalog nor the pi.dev overlay knows them.
+    # `models` entries add them beside the built-in models, which stay (the
+    # provider key changes nothing else). Entries replace the Copilot chat request
+    # headers, hence the copy on each: without them the API answers 400.
+    copilotHeaders = {
+      User-Agent = "GitHubCopilotChat/0.35.0";
+      Editor-Version = "vscode/1.107.0";
+      Editor-Plugin-Version = "copilot-chat/0.35.0";
+      Copilot-Integration-Id = "vscode-chat";
+    };
+    workExtraModel = id: name: cost: {
+      inherit id name;
+      api = "openai-responses";
+      reasoning = true;
+      input = ["text" "image"];
+      contextWindow = 1050000;
+      maxTokens = 128000;
+      inherit cost;
+      headers = copilotHeaders;
+      # What the Copilot API reports for these two, from `reasoning_effort`.
+      thinkingLevelMap = {
+        off = null;
+        minimal = null;
+        low = "low";
+        medium = "medium";
+        high = "high";
+        xhigh = "xhigh";
+        max = "max";
+      };
+    };
+    workSettings =
+      settings
+      // {
+        defaultProvider = "github-copilot";
+        defaultModel = cfg.work.model;
+        # The work profile's whole menu, and nothing else the account reaches:
+        # one default, one fast, and two to pick by hand (docs/models.md).
+        enabledModels =
+          lib.unique (map (id: "github-copilot/${id}")
+            [cfg.work.model cfg.work.fastModel "mai-code-2" "gemini-4-hydrogen"]);
+        packages =
+          map packagePath (lib.remove "@commandcode/pi-commandcode-provider" thirdPartyPackages)
+          ++ [parentPath]
+          ++ map pluginPath pluginNames
+          ++ map (name: "${extensions}/core/${name}.ts") ["codemode-only" "guardian"];
+      };
+    # One edit to the rules, keybindings, theme, roles or permission policy reaches
+    # both profiles; models.json, auth.json, sessions and mcp.json stay apart.
+    mirror = name:
+      lib.mkIf cfg.work.enable {
+        source = config.lib.file.mkOutOfStoreSymlink "${homeDir}/.pi/agent/${name}";
+      };
+    # Every role pins a model from the personal catalogue, which this profile has no
+    # credentials for: there they all run on its fast model, where the personal ones
+    # run on DeepSeek. The body is untouched.
+    workAgentRoles = pkgs.runCommand "pi-work-agent-roles" {nativeBuildInputs = [pkgs.gnused];} ''
+      mkdir -p $out
+      for role in ${agentRoles}/*.md; do
+        sed -E 's|^model:.*|model: ${workFastModel}|' "$role" > "$out/$(basename "$role")"
+      done
+    '';
+    # pi rejects the null/empty fields home-manager's option fills in.
+    piServers = lib.mapAttrs (_: lib.filterAttrs (_: v: v != null && v != {} && v != []));
+    mcpFile = servers: let
+      filtered = piServers servers;
     in
-      lib.optionalAttrs (shared != {}) {mcpServers = shared;};
+      lib.optionalAttrs (filtered != {}) {mcpServers = filtered;};
+    mcp = mcpFile config.programs.mcp.servers;
+    # The work-owned servers ride here too, in this profile's own file, so neither
+    # reaches the personal agents.
+    workMcp = mcpFile (config.programs.mcp.servers // config.fireproof.agents.workMcpServers);
+    # Only the two models pi's own catalog is missing; the rest come from it.
+    workModels = {
+      providers.github-copilot.models = [
+        (workExtraModel "mai-code-2" "MAI Code 2" {
+          input = 0.5;
+          output = 2.5;
+          cacheRead = 0.025;
+          cacheWrite = 0;
+        })
+        (workExtraModel "mai-code-2-flash" "MAI Code 2 Flash" {
+          input = 0.05;
+          output = 0.25;
+          cacheRead = 0.005;
+          cacheWrite = 0;
+        })
+      ];
+    };
     # A key or server dropped here stays in the file until removed by hand.
     # Rewrites only on a change, so running sessions don't see the file churn.
     merge = name: value:
@@ -182,19 +274,54 @@ in {
         chmod 600 "$tmp"
         if cmp -s "$tmp" "$f"; then rm "$tmp"; else mv "$tmp" "$f"; fi
       '';
-    wrapper = pkgs.writeShellScriptBin "pi" ''
-      ${lib.concatLines (lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}") env)}
-      # Agent temp is this session's directory in the repository's scratch root
-      # (docs/notes.md), aged out by `agent-notes reap`.
-      ${lib.optionalString config.fireproof.dev.enable ''TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
-      dir="''${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
-      mkdir -p "$dir"
-      ${merge "settings.json" settings}
-      ${merge "mcp.json" mcp}
-      # Same nice as claude-code's wrapper: the agent and its tools yield to the desktop.
-      ${lib.optionalString pkgs.stdenv.isLinux ''${lib.getExe' pkgs.util-linux "renice"} --priority 10 -p $$ >/dev/null 2>&1 || true''}
-      exec ${lib.getExe pi} "$@"
-    '';
+    # Both profiles launch through this: the env, the scratch root and the nice are
+    # shared, while `dir` and the merged config are the profile's own. It exports
+    # `dir`, so the profile pi reads is the one the wrapper just merged into.
+    mkWrapper = {
+      name,
+      dir,
+      env,
+      settings,
+      mcp,
+      models ? {},
+    }:
+      pkgs.writeShellScriptBin name ''
+        ${lib.concatLines (lib.mapAttrsToList (key: value: "export ${key}=${lib.escapeShellArg value}") env)}
+        # Agent temp is this session's directory in the repository's scratch root
+        # (docs/notes.md), aged out by `agent-notes reap`.
+        ${lib.optionalString config.fireproof.dev.enable ''TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
+        # Export it: pi reads the profile from the same variable, and merging into a
+        # directory pi then ignores is how a "second profile" silently becomes the first.
+        dir="${dir}"
+        export PI_CODING_AGENT_DIR="$dir"
+        mkdir -p "$dir"
+        ${merge "settings.json" settings}
+        ${merge "mcp.json" mcp}
+        ${merge "models.json" models}
+        # Same nice as claude-code's wrapper: the agent and its tools yield to the desktop.
+        ${lib.optionalString pkgs.stdenv.isLinux ''${lib.getExe' pkgs.util-linux "renice"} --priority 10 -p $$ >/dev/null 2>&1 || true''}
+        exec ${lib.getExe pi} "$@"
+      '';
+    wrapper = mkWrapper {
+      name = "pi";
+      dir = "\${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}";
+      inherit env settings mcp;
+    };
+    # Guardian's judges and the personal side calls (`auto/deepseek…`) have no
+    # credentials here; the fast Copilot model stands in (docs/models.md).
+    workWrapper = mkWrapper {
+      name = "pi-work";
+      dir = "\${PI_CODING_AGENT_DIR:-$HOME/.pi/work}";
+      env =
+        env
+        // {
+          PI_SIDE_MODEL = workFastModel;
+          PI_JUDGE_MODEL = workFastModel;
+        };
+      settings = workSettings;
+      mcp = workMcp;
+      models = workModels;
+    };
     # The checkout's extensions in place of the installed ones, with no rebuild, and the agents
     # checkout's plugins in the same way.
     piDev = pkgs.writeShellApplication {
@@ -212,7 +339,21 @@ in {
       home.file.".pi/agent/APPEND_SYSTEM.md".text = rules;
       home.file.".pi/agent/themes/fireproof.json".source = theme;
 
-      home.packages = [wrapper spellChecker piDev];
+      home.packages = [wrapper spellChecker piDev] ++ lib.optional cfg.work.enable workWrapper;
+
+      # pi-work's config directory: the personal surfaces by symlink, so one edit
+      # reaches both (as claude-work mirrors ~/.claude), and its own roles, which
+      # name the one provider it reaches. Not auth.json, and not the personal
+      # models.json: the wrapper merges the work profile's own, Copilot only.
+      home.file.".pi/work/APPEND_SYSTEM.md" = mirror "APPEND_SYSTEM.md";
+      home.file.".pi/work/keybindings.json" = mirror "keybindings.json";
+      home.file.".pi/work/subagents.json" = mirror "subagents.json";
+      home.file.".pi/work/themes" = mirror "themes";
+      home.file.".pi/work/extensions" = mirror "extensions";
+      home.file.".pi/work/agents" = lib.mkIf cfg.work.enable {
+        source = workAgentRoles;
+        recursive = true;
+      };
 
       # Literal path: the wrapper single-quotes it, so a secretsDir spelling stays unexpanded.
       age.secrets.exa-api-key = {
@@ -501,6 +642,8 @@ in {
               "~/.claude-work/.credentials.json" = "deny";
               "~/.pi/agent/auth.json" = "deny";
               "~/.pi/agent/mcp-auth.json" = "deny";
+              "~/.pi/work/auth.json" = "deny";
+              "~/.pi/work/mcp-auth.json" = "deny";
             }
             // lib.listToAttrs (map (secret: lib.nameValuePair secret.path "deny")
               (lib.filter (secret: !lib.hasPrefix config.age.secretsDir secret.path)

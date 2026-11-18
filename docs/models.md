@@ -71,6 +71,35 @@ the picker's all scope.
   A subagent's forwarded ask goes by the child's model.
 - The judge is never from the actor's family (`judgeFor`): Sonnet judges
   DeepSeek, DeepSeek judges everyone else.
+- `PI_JUDGE_MODEL` names one judge for a profile with a single provider
+  (pi-work), where the two-family rule has nothing to pick from.
 - No judge is less private than the actor or the session it reads. An ask from
   a local or TensorX model, or forwarded into a local or TensorX session, skips
   the judge and goes straight to the dialog.
+
+## The work profile
+
+`pi-work` (the `fireproof.dev.pi.work.enable` toggle) runs the personal config as
+a second pi profile in `~/.pi/work`, with its own `auth.json` and this much
+different:
+
+- GitHub Copilot is the only provider: nothing else has a key in its
+  `models.json` or `auth.json`.
+- `enabledModels` is four ids: `fireproof.dev.pi.work.model`, default
+  `gpt-6-luna`, leads and is what a session starts on;
+  `fireproof.dev.pi.work.fastModel`, default `mai-code-2-flash`, is what the
+  subagent roles and the title and judge side calls use, where the personal
+  profile uses DeepSeek, through `PI_SIDE_MODEL` and `PI_JUDGE_MODEL`; the other
+  two, `mai-code-2` and `gemini-4-hydrogen`, are picked by hand. That list is
+  what `/model` starts on and what `Ctrl+P` cycles; `/model` can still widen to
+  every model the account reaches.
+- `mai-code-2` and `mai-code-2-flash` are `models.json` entries because pi's
+  catalog does not carry them yet, though the Copilot API serves them. Each
+  entry repeats the Copilot chat headers: a `models` entry replaces the model's
+  own, and without them the API answers 400. Delete them once the catalog grows
+  the ids. Their prices are the launch promo ones, 50% off until 2027-05-18.
+- The DeepSeek router is not loaded: with neither subscription there is nothing
+  to route between, and its virtual model would sit in the picker with no
+  provider behind it.
+- It logs in once with `pi-work auth login github-copilot`. The personal
+  `~/.pi/agent/auth.json` is not read, so the two accounts stay apart.

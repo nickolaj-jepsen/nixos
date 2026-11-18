@@ -93,6 +93,13 @@ Paths in the table that don't start with `agents:` or `pkgs/` are under
 - The leaf's `pi` wrapper exports the env, merges the config, and places the
   rules in `~/.pi/agent/APPEND_SYSTEM.md` and the theme in
   `~/.pi/agent/themes/`.
+- `pi-work` is the same agent on a second profile: `PI_CODING_AGENT_DIR=~/.pi/work`,
+  its own login, and GitHub Copilot as its only provider. Rules, keybindings,
+  theme, permission policy and extensions are symlinks into `~/.pi/agent`, so
+  one edit reaches both; models, credentials, sessions and MCP servers are its
+  own. Its roles are a copy of the same files with `model:` rewritten to
+  `fireproof.dev.pi.work.fastModel`. It gets `fireproof.agents.workMcpServers`,
+  shared with claude-work, and not the DeepSeek router (docs/models.md).
 
 ## Claude Code mods
 
@@ -155,9 +162,9 @@ leaves. Its README.md covers every plugin: layout, traps, demo recordings.
   copy (across packages, children or reloads) goes through
   `shared/process-global.ts`, never a bare `globalThis`.
 - The pi wrapper merges the leaf's `settings` and `mcp` into
-  `~/.pi/agent/settings.json` and `mcp.json` at every launch, so a key or
-  server dropped from the leaf stays in the file until removed by hand. Only
-  arrays are replaced.
+  `~/.pi/agent/settings.json` and `mcp.json` at every launch (`~/.pi/work` for
+  pi-work), so a key or server dropped from the leaf stays in the file until
+  removed by hand. Only arrays are replaced.
 - `just dev-setup` links `modules/programs/pi/extensions/result`, and
   `node_modules` through it. The weekly `nh clean` removes a `result` link
   older than 7 days; then in-repo `tsc` fails with `TS2688` for `node` and

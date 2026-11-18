@@ -14,6 +14,7 @@
     fireproof.dev.agent-hub.viewers = ["work"];
     fireproof.work.enable = true;
     fireproof.claude-code.work.enable = true;
+    fireproof.dev.pi.work.enable = true;
 
     # chromium: Linux-only here; the Mac browser-extra is google-chrome's cask.
     fireproof.desktop.chromium.enable = false;
