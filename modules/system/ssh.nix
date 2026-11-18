@@ -3,8 +3,12 @@
   inherit (config.flake) trustedHosts;
   # Break-glass key; private half lives only in Bitwarden, not in this repo.
   backupKey = builtins.readFile ../../secrets/backup-key.pub;
+  # The phone (Pixel 8 Pro) has its host card on feat/phone-vm only, but its key is
+  # trusted here too: fireproof.trusted is what gates the fleet-wide list, and a
+  # hollow card on this branch would make `just switch phone-vm` overwrite the phone.
+  phoneKey = builtins.readFile ../../secrets/hosts/phone-vm/id_ed25519.pub;
   # builtins-only so the list is shared across all three module halves without lib at this scope.
-  publicKeys = [backupKey] ++ map (h: builtins.readFile (../../secrets/hosts + ("/" + h) + "/id_ed25519.pub")) trustedHosts;
+  publicKeys = [backupKey phoneKey] ++ map (h: builtins.readFile (../../secrets/hosts + ("/" + h) + "/id_ed25519.pub")) trustedHosts;
   # Each .pub already ends in "\n"; strip it so the joined file is one key per line, no blanks.
   authorizedKeysText = builtins.concatStringsSep "\n" (map (k: builtins.replaceStrings ["\n"] [""] k) publicKeys) + "\n";
   # flake.trustedHosts only sees a literal in the card's `shared`, so catch a flag set any other way.
