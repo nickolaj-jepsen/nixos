@@ -134,6 +134,7 @@ in {
           "opencode-go/deepseek-v4.1-flash"
           # ChatGPT plan. The bundled catalog ends at GPT-6.1, so 6.2 comes from
           # the pi.dev catalog overlay and is not pinned in models.json.
+          "openai-codex/gpt-6.2-astra"
           "openai-codex/gpt-6.2-sol"
           "kimi-coding/k3.1-pro"
           "anthropic/claude-opus-5-5"
