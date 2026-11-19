@@ -25,8 +25,7 @@ Read this before changing the provider declarations in the pi leaf's
 ## Roles and enabledModels
 
 - Subagent roles pin a model; ordinary roles lock it, because inheritance once
-  ran cheap children on Opus. `handoff-review` pins Sol but allows the caller's
-  per-invocation model override.
+  ran cheap children on Opus.
 - Explore, general-purpose, reviewer and verifier run on
   `auto/deepseek-v4.1-flash`, as do the shared side calls.
 - retro-reviewer runs on `kimi-coding/k3.1-pro`: a `/retro` starts it at most
@@ -34,10 +33,6 @@ Read this before changing the provider declarations in the pi leaf's
   its cost.
 - Plan runs on `kimi-coding/k3.1-pro`: a plan is judgment work, and it never
   edits.
-- `handoff-review` runs on `openai-codex/gpt-6.2-sol`, read-only: full handoff
-  cold reads and run-handoff's final review use it, not ordinary item reviews.
-  Those skills allow a per-invocation override and a reported fallback to the
-  cheap reviewer when the stronger model is unavailable.
 
 `enabledModels` has one entry per reason to hand-pick; everything else stays in
 the picker's all scope.
@@ -50,8 +45,8 @@ the picker's all scope.
   `opencode-go/*-free` is for free Go experiments.
 - `kimi-coding/k3.1-pro` for hard work and for work Claude declines.
 - Opus and Sonnet on the credit.
-- `openai-codex/gpt-6.2-sol` and `openai-codex/gpt-6.1-terra` on the ChatGPT
-  plan. pi's bundled catalog ends at GPT-6.1, so 6.2 arrives from the pi.dev
+- `openai-codex/gpt-6.2-astra`, `openai-codex/gpt-6.2-sol` and
+  `openai-codex/gpt-6.1-terra` on the ChatGPT plan. pi's bundled catalog ends at GPT-6.1, so 6.2 arrives from the pi.dev
   catalog overlay (`pi update --models`) and is not pinned in `models.json`.
 - `command-code/deepseek/deepseek-v4.1-flash` as the subscription's alternate
   DeepSeek route; the rest of its catalog stays in the all scope.
