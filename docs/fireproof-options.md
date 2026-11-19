@@ -132,6 +132,32 @@ attribute set of absolute path
 
 
 
+## fireproof\.agents\.workMcpServers
+
+
+
+MCP servers only the work profiles load, claude-work and pi-work\.
+Work-owned services stay out of programs\.mcp\.servers, which every
+agent (pi, copilot, vscode and the personal claude) reads\.
+
+
+
+*Type:*
+attribute set of anything
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.claude-code\.work\.enable
 
 
@@ -157,32 +183,6 @@ false
 
 ```nix
 true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
-## fireproof\.claude-code\.workMcpServers
-
-
-
-MCP servers only the claude-work wrapper loads\. Work-owned services
-stay out of programs\.mcp\.servers, which every agent (pi,
-copilot, vscode and the personal claude) reads\.
-
-
-
-*Type:*
-attribute set of anything
-
-
-
-*Default:*
-
-```nix
-{ }
 ```
 
 *Declared by:*
@@ -1192,6 +1192,89 @@ boolean
 
 ```nix
 true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.pi\.work\.enable
+
+
+
+Whether to enable pi-work wrapper: a second pi profile in ~/\.pi/work that shares the personal config and reaches GitHub Copilot alone\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.pi\.work\.fastModel
+
+
+
+GitHub Copilot model id (no provider prefix) the work profile
+runs its subagent roles and its title and judge side calls with,
+where the personal profile uses DeepSeek\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"mai-code-2-flash"
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.dev\.pi\.work\.model
+
+
+
+GitHub Copilot model id (no provider prefix) the work profile
+starts on, and the default of its model picker\.
+
+
+
+*Type:*
+string
+
+
+
+*Default:*
+
+```nix
+"gpt-6-luna"
 ```
 
 *Declared by:*
@@ -2588,8 +2671,6 @@ string
 
 ## fireproof\.theme\.colors\.magentaAlt
 
-
-
 Dark magenta
 
 
@@ -2683,6 +2764,8 @@ string
 
 
 ## fireproof\.theme\.colors\.orangeAlt
+
+
 
 Dark orange
 
