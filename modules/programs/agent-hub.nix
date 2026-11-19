@@ -52,6 +52,9 @@ in {
       );
     remoteHosts = builtins.attrNames cfg.remotes;
     jumps = lib.remove "none" (lib.filter (jump: jump != null) (map (host: (hostOptions host).ProxyJump or null) remoteHosts));
+    # A remote behind a jump host this repo doesn't configure can't take the link key, so it
+    # shows only on viewers that reach it directly: dev.ao shows on work and nowhere else,
+    # since from anywhere else it sits behind bastion.ao.
     # Its own config, not the login one: that one's `*` multiplexes every connection, so a link
     # could ride a full login, or a later `ssh host` land in `attach`, and adds the host's full key.
     sshConfig = lib.concatStringsSep "\n" (
@@ -129,6 +132,8 @@ in {
       })
 
       # The hub rebuilds from the registry alone, so a restart loses only what was pulsing.
+      # A host users log out of needs `loginctl enable-linger <user>` once, by hand: without it
+      # the hub stops at the last logout and a viewer says `no hub`.
       (lib.mkIf pkgs.stdenv.isLinux {
         systemd.user.services.agent-hub = {
           Unit = {

@@ -16,6 +16,7 @@
       sed 's/<svg /<svg fill="#fff" /' ${claudeIcon} > $out/icons/claude.svg
     '';
   in {
+    # A switch doesn't reload the bar: `systemctl --user restart dms` to see a QML change.
     config = lib.mkIf (config.fireproof.dev.agent-hub.enable && config.fireproof.desktop.enable && pkgs.stdenv.isLinux) {
       programs.dank-material-shell.plugins.agentHub.src = plugin;
     };

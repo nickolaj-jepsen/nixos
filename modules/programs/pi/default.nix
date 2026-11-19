@@ -172,7 +172,7 @@ in {
     };
 
     # pi-work: the personal config by symlink, its own credentials, and GitHub
-    # Copilot as its only provider (docs/models.md). Command Code's provider and
+    # Copilot as its only provider. Command Code's provider and
     # the DeepSeek router are left out: with neither subscription there is
     # nothing to route between.
     workFastModel = "github-copilot/${cfg.work.fastModel}";
@@ -213,7 +213,7 @@ in {
         defaultProvider = "github-copilot";
         defaultModel = cfg.work.model;
         # The work profile's whole menu, and nothing else the account reaches:
-        # one default, one fast, and two to pick by hand (docs/models.md).
+        # one default, one fast, and two to pick by hand.
         enabledModels =
           lib.unique (map (id: "github-copilot/${id}")
             [cfg.work.model cfg.work.fastModel "mai-code-2" "gemini-4-hydrogen"]);
@@ -309,7 +309,7 @@ in {
       inherit env settings mcp;
     };
     # Guardian's judges and the personal side calls (`auto/deepseek…`) have no
-    # credentials here; the fast Copilot model stands in (docs/models.md).
+    # credentials here; the fast Copilot model stands in.
     workWrapper = mkWrapper {
       name = "pi-work";
       dir = "\${PI_CODING_AGENT_DIR:-$HOME/.pi/work}";
