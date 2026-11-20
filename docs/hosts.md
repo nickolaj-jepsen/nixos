@@ -38,6 +38,8 @@ throws. The class routes the whole host:
 - `nixos` → `nixosConfigurations.<h>` via `nixosSystem`. The host builder
   defines `home-manager.users.<fireproof.username>` and routes all homeManager
   leaves plus the card's `shared`/`homeManager` buckets into `sharedModules`.
+  - It defaults to x86_64-linux; another platform sets
+    `nixos.nixpkgs.hostPlatform` in the card (`phone-vm`).
 - `home` → `homeConfigurations.<h>` via `mkHome` in `hosts/default.nix`.
   Example: `dev-ao`.
   - It is standalone HM with no NixOS eval; `osConfig = null`.
@@ -86,10 +88,37 @@ Run these on the Mac:
      users" (or includes the user).
    - Auth is key-only; reach it over Tailscale or the LAN.
 
+## The phone (pocketnix)
+
+`phone-vm` is NixOS on the Pixel 8 Pro (GrapheneOS), an aarch64 dev env run
+by the [pocketnix](https://github.com/nickolaj-jepsen/pocketnix) app (input
+`pocketnix`) under Android's AVF. pocketnix's `nixosModules.default` owns the
+guest: kernel, image, boot, agent and GUI, all in its
+[docs](https://github.com/nickolaj-jepsen/pocketnix/tree/main/docs).
+`modules/system/pocketnix.nix` (`fireproof.pocketnix.enable`) wires in the
+user, the ssh forward, the terminal's theme and tab profiles, and with
+`fireproof.gui.enable` the GUI. CI builds it into attic; never evaluate or
+build on the phone, it freezes.
+
+One-time bootstrap, over USB with adb:
+
+1. `just provision phone-vm` injects the committed SSH host key into the image
+   (so agenix decrypts on the first boot) and hands the rest to pocketnix's
+   `provision`; extra args pass through to it (`--help`).
+2. The app forwards sshd to the phone's `127.0.0.1:2222`: `adb forward
+tcp:2222 tcp:2222`, then `NIX_SSHOPTS="-p 2222" just switch phone-vm
+nickolaj@localhost`. Drop any old `[localhost]:2222` known_hosts entry
+   first. tailscaled enrols it as `phone-vm` (delete an older `phone-vm` node
+   in the admin console first, or it becomes `phone-vm-1`); the ssh alias
+   reaches it by that name, so `just switch phone-vm phone-vm` from then on.
+
 ## Cross-platform apps
 
 - Everyday GUI apps have no toggle of their own: they gate on `desktop.enable`
   (plus `dev`/`work` where relevant).
+- The few worth having without a desktop session (Firefox, Sublime Merge,
+  the GTK theme and fonts) gate on `gui.enable` instead, which
+  `desktop.enable` turns on and phone-vm sets alone.
 - The darwin host opts into the whole GUI roster with `desktop.enable = true`,
   same as Linux.
 - A cross-platform app leaf carries a `flake.modules.darwin.<app>` half that

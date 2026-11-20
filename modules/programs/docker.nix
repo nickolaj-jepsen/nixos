@@ -7,22 +7,24 @@
   }: let
     inherit (config.fireproof) username;
   in {
-    environment.systemPackages = [
-      pkgs.docker
-      pkgs.docker-compose
-    ];
+    config = lib.mkIf config.fireproof.docker.enable {
+      environment.systemPackages = [
+        pkgs.docker
+        pkgs.docker-compose
+      ];
 
-    virtualisation.docker = {
-      enable = true;
-      enableOnBoot = lib.mkDefault false;
-      # No storageDriver: Docker's btrfs driver is slower and hits early ENOSPC; it picks
-      # overlayfs on a fresh /var/lib/docker and keeps an existing driver's data.
-    };
-    virtualisation.oci-containers = {
-      backend = "docker";
-    };
+      virtualisation.docker = {
+        enable = true;
+        enableOnBoot = lib.mkDefault false;
+        # No storageDriver: Docker's btrfs driver is slower and hits early ENOSPC; it picks
+        # overlayfs on a fresh /var/lib/docker and keeps an existing driver's data.
+      };
+      virtualisation.oci-containers = {
+        backend = "docker";
+      };
 
-    users.extraGroups.docker.members = [username];
+      users.extraGroups.docker.members = [username];
+    };
   };
 
   # macOS has no native Docker engine: Colima runs it in a Lima VM on Apple's
@@ -37,7 +39,7 @@
   }: let
     inherit (config.fireproof) username;
   in {
-    config = lib.mkIf config.fireproof.dev.enable {
+    config = lib.mkIf (config.fireproof.dev.enable && config.fireproof.docker.enable) {
       environment.systemPackages = [
         pkgs.colima
         pkgs.docker-client

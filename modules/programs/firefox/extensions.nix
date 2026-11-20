@@ -7,7 +7,7 @@
   }: let
     extensions = pkgs.firefox-addons;
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
+    config = lib.mkIf config.fireproof.gui.enable {
       programs.firefox.profiles.default = {
         extensions.packages = with extensions; [
           # Privacy

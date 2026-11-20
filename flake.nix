@@ -59,6 +59,10 @@
     nixos-wsl.url = "github:nix-community/NixOS-WSL/main";
     nixos-wsl.inputs.nixpkgs.follows = "nixpkgs";
 
+    # phone-vm's guest contract (kernel, image, agent, GUI).
+    # No nixpkgs follows: its own nixpkgs builds the agent and compositor, so they come from its cache.
+    pocketnix.url = "github:nickolaj-jepsen/pocketnix";
+
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
 
