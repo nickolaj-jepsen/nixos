@@ -306,24 +306,6 @@ clean:
 disk:
     disk-report
 
-[doc('Report documentation edits from local pi and Claude histories; --show ID includes context and diff')]
-[group('dev')]
-[positional-arguments]
-doc-edits *args:
-    @python3 scripts/doc-edits.py "$@"
-
-[doc('Preview documentation eval cases offline; pass a pi provider/model for a blind comparison')]
-[group('dev')]
-[positional-arguments]
-eval-docs *args:
-    @python3 scripts/eval-docs/compare.py "$@"
-
-[doc('Turn a completed documentation eval into an offline HTML scorecard')]
-[group('dev')]
-[positional-arguments]
-review-docs report:
-    @{{ nixcmd }} shell nixpkgs#cmark-gfm -c python3 scripts/eval-docs/review.py "$1"
-
 [doc('Generate Markdown reference for the fireproof.* options into docs/')]
 [group('dev')]
 [script]
