@@ -268,8 +268,7 @@
 
     home.packages = [spellChecker claudeDev] ++ lib.optional cfg.work.enable claudeWorkWrapper;
 
-    # agent-context.md is shared with pi and Copilot; context.md is Claude's alone.
-    programs.claude-code.context = builtins.readFile ../agent-context.md + builtins.readFile ./context.md;
+    programs.claude-code.context = builtins.readFile ../agent-context.md;
 
     programs.claude-code = {
       enable = true;

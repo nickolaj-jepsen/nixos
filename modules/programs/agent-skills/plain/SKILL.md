@@ -12,14 +12,14 @@ Write for the reader, not about the work. These rules apply to everything you wr
 
 1. Write for a reader who wasn't there. They haven't seen your tool calls, the files you read or your reasoning. Leave out what they already know or don't need.
 2. Open with the result, the answer, or what you need from the reader. Background comes after.
-3. Easy to read beats short. Cut repetition, history and process, but keep every fact the reader needs to act correctly, gotchas most of all. Then give the rest room:
+3. Give the reader enough detail for the job at hand. Cut repetition, history and caveats about other tasks. Give the rest room:
    - one idea per sentence, and two short sentences over one long one;
    - keep the small words that connect ideas (because, so, but, which);
    - paragraphs of three sentences or fewer.
 4. Never cryptic. A name you coined, or a tool, flag or internal term the reader may not know, gets a clause saying what it is the first time it appears. Or use plain words instead. Show an example or sketch when a point is abstract.
 5. Give the page a shape the reader can scan:
    - Headers for anything with more than one part: docs, PRs, plans, reports. Each names what is under it.
-   - Bullets or a table for separate items. Three or more items in one sentence become a list.
+   - Use lists for alternatives or steps a reader needs to scan. Let connected ideas unfold in prose.
    - A bullet holds one or two short sentences. One that needs more gets sub-bullets, or becomes a paragraph.
    - Prose where the reasoning connects.
    - A diagram only for a real flow: calls between parts, a sequence, states.
@@ -54,7 +54,7 @@ After drafting, make one pass:
 - Is every name defined, and every abstract point shown with an example?
 - Do several of rule 6's habits cluster anywhere?
 - Is every concrete claim (a file, a count, a cause, an order of events) one you checked?
-- If you rewrote something, did any fact, name or number get lost?
+- Did the edit preserve the facts the reader needs and the scope of any actual promises?
 
 For docs and reports over about 100 lines, also hand the draft to a fresh subagent with no context. Give it five questions the reader would come with. Fix what it gets wrong or can't answer, once.
 
