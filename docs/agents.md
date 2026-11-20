@@ -55,8 +55,8 @@ and skills themselves: nickolaj-jepsen/agents' AGENTS.md and `docs/`.
 - agent-hub already sees every pi and Claude Code session; don't add per-agent toast hooks.
 - Nothing closes a worktree when a session or subagent ends, and `wt` doesn't look for
   processes in one: its only guard is the cwd it runs in. So agents land, close or drop theirs
-  from the primary checkout (`agent-context.md`), and only explicit leaves close one
-  (`ExitWorktree` with `remove`, `exit_worktree` and `/back`, `wt land`).
+  from the primary checkout (`agent-context.md`). Leaving with `action: "keep"`
+  in either harness returns to the primary checkout without closing the worktree.
 - Don't name an editor in the folder menus (pi `parent/chrome/places.ts`, Claude Code's
   `git-menu`): `fireproof.desktop.editor` picks it and `FIREPROOF_EDITOR` says which row
   leads. `editor-open` (`modules/scripts`) resolves it on PATH for shells and niri spawns, so

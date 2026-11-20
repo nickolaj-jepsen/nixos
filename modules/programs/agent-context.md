@@ -54,4 +54,4 @@ Always defer to the repo's existing tooling, but if you have a choice, prefer th
 - Never push or open a PR unless asked.
 - No merge commits: rebase. `git rebase` autosquashes the fixups.
 - Whether your subagents share your checkout or get worktrees of their own is your call, and so is managing those worktrees.
-- A worktree stays open when the session ends. When done, from the primary checkout, never inside it: `wt land <name>` to land it, `wt close <name>` to keep the branch, `wt drop <name>` to throw it away. To leave early: `exit_worktree` in pi, `ExitWorktree` with `remove` and `discard_changes: true` in Claude Code (safe: it runs `wt close`).
+- Stay in the worktree after finishing a task so the user can test and request follow-ups. Only leave if asked, using `exit_worktree` in pi or `ExitWorktree` in Claude Code with `action: "keep"`. To land, close or drop it when asked, leave with `keep` first. From the primary checkout, run `wt land <name>` to land it, `wt close <name>` to remove the checkout but keep its work, or `wt drop <name>` to throw it away.
