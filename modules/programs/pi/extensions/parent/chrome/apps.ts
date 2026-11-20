@@ -7,7 +7,7 @@
  * launch is detached: the editor or file manager outlives the click, and pi is
  * never waiting on it.
  */
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { copyToClipboard } from "@earendil-works/pi-coding-agent";
@@ -139,30 +139,6 @@ const editorLaunch = (path: string, env: NodeJS.ProcessEnv = process.env) => {
       return target.command === "code" ? { ...target, args: ["--reuse-window", path] } : target;
   }
   return undefined;
-};
-
-// `tuicr -w` exits on a clean tree, so that opens its commit picker instead. $0 is tuicr.
-const REVIEW = 'if [ -n "$(git status --porcelain)" ]; then exec "$0" -w; fi; exec "$0"';
-
-const isRepo = (cwd: string) =>
-  new Promise<boolean>((resolve) =>
-    execFile("git", ["-C", cwd, "rev-parse", "--git-dir"], (error) => resolve(!error)),
-  );
-
-/** Starts tuicr on a checkout in a new Ghostty window; throws when it can't. */
-export const openReview = async (cwd: string): Promise<void> => {
-  if (!(await isRepo(cwd))) throw new Error("not a git repository");
-  // An absolute path: a mac app started through `open` does not get this PATH.
-  const tuicr = which("tuicr");
-  if (!tuicr) throw new Error("tuicr is not installed");
-  const args = [`--working-directory=${cwd}`, "-e", "sh", "-c", REVIEW, tuicr];
-  const target = MAC
-    ? openNewBundle("Ghostty", args)
-    : onPath("ghostty")
-      ? { command: "ghostty", args }
-      : undefined;
-  if (!target) throw new Error("Ghostty is not installed");
-  await start(target.command, target.args);
 };
 
 /** Opens a note through the opener, else in the preferred editor; false when neither is installed. */
