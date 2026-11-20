@@ -1,14 +1,10 @@
 # Working preferences
 
-Repository-local instructions and existing conventions take precedence over these defaults.
+Explicit repository instructions take precedence over these defaults.
 
 ## Documentation
 
-Write docs when a reader has something to learn, do or look up. An overview can pair a map with a worked example. A how-to follows the reader's steps. Keep lookup details in reference. Use the plain skill when drafting. Leave out facts readers already know, can readily discover where they work, or would need only for a different task. A feature can be complete without a docs change.
-
-Keep the local terms and formats that help readers find or use the answer. A reference table can keep its columns even when a new entry needs only a few words. If nearby prose is hard to follow, write the new passage plainly. Give separate ideas their own sentences, drop labels that repeat the text, and keep examples together so readers can use them.
-
-When a passage becomes stale, consider deleting it. Delete the page if nothing useful remains. For compatibility decisions, check actual callers and promises the project has made.
+Update the docs a reader uses when a change affects what they need to know or do. Check actual callers and published promises before assuming compatibility requirements.
 
 Keep feedback, planning answers and lessons from this session in this session. Only carry one into memory, agent instructions or a skill if I explicitly ask you to remember or apply it beyond this task.
 

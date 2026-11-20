@@ -1,69 +1,26 @@
 ---
 name: plain
-description: How to write prose a person will read, so it is clear, easy to skim and free of AI habits. Load before writing docs, a README, a PR description, a plan or design doc, a research report, or an agent context file (a skill, AGENTS.md, CLAUDE.md, memory). Not for commit messages, short code comments, chat messages, handoffs or dispatch briefs. `/plain` turns it on for replies in this session; `/plain review [diff|branch|<path>]` reviews existing prose.
+description: Write and revise documentation, READMEs, PR descriptions, plans, reports and agent instructions for their intended reader. Use for a single passage or to organize and rewrite the surviving docs after a repository cleanup. Excludes routine code edits, commit messages, chat, handoffs and dispatch briefs. Use /plain explicitly for chat.
 argument-hint: "[review [diff|branch|<path>]]"
 ---
 
 # Plain
 
-Write for the reader, not about the work. These rules apply to everything you write while this skill is loaded.
+Start with what the reader came for. A returning maintainer may know the language and still need a map of this particular system. A user following a procedure needs the command they can actually run and some way to recognize success.
 
-## Rules
+Follow explicit project requirements. Keep the local names, useful table columns and example formats a reader already knows. Dense neighboring prose can be rewritten. Give distinct ideas space, leave connected reasoning together and choose headings a reader would look for.
 
-1. Write for a reader who wasn't there. They haven't seen your tool calls, the files you read or your reasoning. Leave out what they already know or don't need.
-2. Open with the result, the answer, or what you need from the reader. Background comes after.
-3. Give the reader enough detail for the job at hand. Cut repetition, history and caveats about other tasks. Give the rest room:
-   - one idea per sentence, and two short sentences over one long one;
-   - keep the small words that connect ideas (because, so, but, which);
-   - paragraphs of three sentences or fewer.
-4. Never cryptic. A name you coined, or a tool, flag or internal term the reader may not know, gets a clause saying what it is the first time it appears. Or use plain words instead. Show an example or sketch when a point is abstract.
-5. Give the page a shape the reader can scan:
-   - Headers for anything with more than one part: docs, PRs, plans, reports. Each names what is under it.
-   - Use lists for alternatives or steps a reader needs to scan. Let connected ideas unfold in prose.
-   - A bullet holds one or two short sentences. One that needs more gets sub-bullets, or becomes a paragraph.
-   - Prose where the reasoning connects.
-   - A diagram only for a real flow: calls between parts, a sequence, states.
-6. Say the fact instead of announcing it. "This is the key insight" and "here's why it matters" add nothing; the next sentence is the point. One habit on its own is fine. Several together is what reads as AI.
+Read the reference for the work at hand:
 
-Formatting details:
+- [Docs and READMEs](references/docs.md), including the shape of a whole repo.
+- [Comments and docstrings](references/comments.md).
+- [Pull requests](references/prs.md).
+- [Plans and design docs](references/plans.md).
+- [Reports](references/reports.md).
+- [Agent instructions](references/agent-context.md).
 
-- No em-dashes. Use a colon, a comma or a new sentence.
-- Bold lead-ins only in reference lists, where each bullet names a term or option. A group label ("Claude Code:", "pi:") is a header or a parent bullet instead.
-- A reply of a few paragraphs needs no headers.
-
-## Genres
-
-Before writing, read the file for the kind of writing at hand in `references/`:
-
-- `docs.md`: docs and READMEs
-- `comments.md`: docstrings and comments
-- `prs.md`: PR descriptions and commits
-- `plans.md`: plans and design docs
-- `reports.md`: research reports and findings
-- `agent-context.md`: skills, AGENTS.md, CLAUDE.md, memory
-
-A repo's own writing rules (its AGENTS.md, contributing docs) win over these. So does a format another skill or plugin sets.
-
-## Check once, then stop
-
-After drafting, make one pass:
-
-- Is the answer or ask in the first sentence?
-- Does any sentence carry two ideas, any bullet run past two sentences, or any paragraph past three?
-- Would a header or a list make a part easier to find?
-- Is every name defined, and every abstract point shown with an example?
-- Do several of rule 6's habits cluster anywhere?
-- Is every concrete claim (a file, a count, a cause, an order of events) one you checked?
-- Did the edit preserve the facts the reader needs and the scope of any actual promises?
-
-For docs and reports over about 100 lines, also hand the draft to a fresh subagent with no context. Give it five questions the reader would come with. Fix what it gets wrong or can't answer, once.
+For a documentation edit, check the facts that determine the reader's answer. For a procedure, follow it from its stated starting point where feasible. For an explanation, see whether it lets a reader predict what happens next. A fresh reader is especially valuable for onboarding, changed defaults or an unfamiliar architecture. Say which consequential step you could not verify.
 
 ## Review mode
 
-`/plain review` checks existing prose against these rules and the matching reference file. The target is one of:
-
-- `diff` (default): prose added or changed in `git diff HEAD`
-- `branch`: prose changed against the default branch
-- a path
-
-Edit in place, then list each change in a line. Leave code, generated and vendored files alone, and never commit.
+`/plain review` edits the changed prose in the uncommitted diff by default. `branch` selects changed prose against the default branch. A path selects that file or directory. Respect the agreed removal scope when continuing a repo cleanup. Preserve public promises, meaningful qualifiers and author-owned decisions. Leave generated and vendored files to their owners. Summarize material changes and any unresolved factual question.

@@ -6,7 +6,6 @@ The reader is at the call site or in a diff, with the code in front of them.
 - A docstring is the contract: enough to call the function without reading its body. One imperative line, then only what that line can't carry (errors, side effects, invariants).
 - Don't restate the signature or the types.
 - Name other code by symbol, not by file and line, and don't list callers.
-- Default to one line.
 - For trimming existing comments, `prune-comments` has the full rules.
 
 ## Examples
@@ -19,10 +18,10 @@ Keep only the why:
 # build time (e.g. writeShellScript's bash -n), which fails without binfmt.
 boot.binfmt.emulatedSystems = ["aarch64-linux"];
 
-→ # cross-builds the Raspberry Pi kiosk SD image
+→ # The kiosk image build runs ARM binaries on this x86 host.
 ```
 
-The code already says it enables emulation. The only thing it can't say is why this host needs it.
+The shorter comment keeps the failure mechanism a maintainer needs when debugging the cross-build.
 
 A docstring that labels, not narrates:
 
