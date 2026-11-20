@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"
+  />
+  <title>Documentation review</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f4ef;
+      --card: #fffefa;
+      --text: #202b28;
+      --muted: #566661;
+      --border: #cfd5cd;
+      --accent: #126951;
+      --tint: #e4f1e9;
+      --bar: #183d34;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #151c19;
+        --card: #1c2722;
+        --text: #eaf1eb;
+        --muted: #aabbb0;
+        --border: #44544a;
+        --accent: #8bd5b8;
+        --tint: #233f34;
+        --bar: #172e27;
+      }
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font:
+        16px/1.55 "Inter",
+        system-ui,
+        sans-serif;
+    }
+    header {
+      background: var(--bar);
+      color: white;
+      padding: 17px max(4vw, 20px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    header strong {
+      font-size: 20px;
+    }
+    header small {
+      color: #c9d9d1;
+      margin-left: 14px;
+      overflow-wrap: anywhere;
+    }
+    main {
+      max-width: 1400px;
+      margin: auto;
+      padding: 24px clamp(14px, 3vw, 48px) 48px;
+    }
+    nav,
+    .row,
+    .picks {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    nav {
+      justify-content: space-between;
+    }
+    button,
+    select,
+    textarea {
+      color: inherit;
+      font: inherit;
+    }
+    button,
+    select {
+      cursor: pointer;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+    button:hover:enabled,
+    select:hover {
+      border-color: var(--accent);
+    }
+    :focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+    }
+    header button {
+      color: #183d34;
+      background: #fffefa;
+    }
+    h1 {
+      margin: 20px 0 3px;
+      font-size: clamp(24px, 3vw, 36px);
+      line-height: 1.2;
+    }
+    #brief {
+      margin: 8px 0;
+      max-width: 90ch;
+    }
+    details {
+      color: var(--muted);
+      margin: 6px 0;
+    }
+    summary {
+      cursor: pointer;
+      width: fit-content;
+      font-weight: 600;
+    }
+    details p {
+      white-space: pre-wrap;
+      max-width: 90ch;
+      margin: 8px 0 12px;
+    }
+    .pair {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+      gap: 16px;
+      margin: 18px 0;
+    }
+    article {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    article.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    article h2 {
+      margin: 0;
+      padding: 9px 19px;
+      background: var(--tint);
+      color: var(--accent);
+      font-size: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .answer {
+      padding: 4px clamp(14px, 2vw, 28px) 12px;
+      overflow-wrap: anywhere;
+    }
+    .answer h1,
+    .answer h2,
+    .answer h3 {
+      color: inherit;
+      border: 0;
+      background: none;
+      padding: 0;
+      font-size: 19px;
+      margin: 16px 0 8px;
+    }
+    .answer h1 {
+      font-size: 23px;
+    }
+    .answer li {
+      margin: 0.3em 0;
+    }
+    .answer ul,
+    .answer ol {
+      padding-left: 1.5em;
+    }
+    .answer code {
+      font-size: 0.88em;
+    }
+    .answer pre {
+      overflow: auto;
+      background: var(--bg);
+      padding: 12px;
+    }
+    .answer blockquote {
+      margin-left: 0;
+      padding-left: 14px;
+      border-left: 3px solid var(--border);
+    }
+    footer {
+      padding: 16px 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .picks {
+      margin-bottom: 10px;
+    }
+    .picks button[aria-pressed="true"] {
+      background: var(--bar);
+      color: white;
+      border-color: var(--accent);
+    }
+    textarea {
+      display: block;
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      resize: vertical;
+    }
+    .footer-nav {
+      margin-top: 12px;
+      justify-content: space-between;
+    }
+    .muted,
+    #status {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    dialog {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-width: min(560px, 94vw);
+      width: 100%;
+    }
+    dialog::backdrop {
+      background: #12221c88;
+    }
+    dialog h2 {
+      margin-top: 0;
+    }
+    dialog .row {
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+    @media (max-width: 700px) {
+      .pair {
+        grid-template-columns: 1fr;
+      }
+      header small {
+        display: block;
+        margin-left: 0;
+      }
+      .row {
+        gap: 6px;
+      }
+      main {
+        padding-top: 16px;
+      }
+    }
+  </style>
+  <header>
+    <div><strong>Documentation review</strong><small id="model"></small></div>
+    <button id="feedback">Export feedback</button>
+  </header>
+  <main>
+    <nav aria-label="Cases">
+      <div class="row">
+        <label for="cases">Case</label
+        ><select id="cases"></select>
+      </div>
+      <span id="progress" class="muted"></span>
+    </nav>
+    <h1 id="title"></h1>
+    <p id="brief"></p>
+    <details id="source">
+      <summary>Full task</summary>
+      <p></p>
+    </details>
+    <details id="criteria">
+      <summary>Review criteria</summary>
+      <p></p>
+    </details>
+    <div class="pair">
+      <article>
+        <h2>Answer A</h2>
+        <div class="answer"></div>
+      </article>
+      <article>
+        <h2>Answer B</h2>
+        <div class="answer"></div>
+      </article>
+    </div>
+    <footer>
+      <div class="picks" role="group" aria-label="Your pick">
+        <strong>Your pick</strong> <button data-pick="A">A</button><button data-pick="B">B</button
+        ><button data-pick="Both">Both</button><button data-pick="Neither">Neither</button>
+      </div>
+      <label for="note">What decided it? <span class="muted">(optional)</span></label
+      ><textarea id="note" rows="2"></textarea>
+      <div class="row footer-nav">
+        <span id="status" aria-live="polite"></span>
+        <div class="row">
+          <button id="reveal">Reveal versions</button><button id="back">Previous</button
+          ><button id="next">Next</button>
+        </div>
+      </div>
+    </footer>
+  </main>
+  <dialog id="export">
+    <h2>Your feedback</h2>
+    <textarea id="summary" rows="10" aria-label="Feedback to share" readonly></textarea>
+    <div class="row"><button id="copy">Copy feedback</button><button id="close">Close</button></div>
+  </dialog>
+  <script type="application/json" id="data">
+    __RUN_JSON__
+  </script>
+  <script>
+    const run = JSON.parse(document.getElementById("data").textContent);
+    const byId = (id) => document.getElementById(id);
+    const cards = [...document.querySelectorAll("article")];
+    const picks = [...document.querySelectorAll("[data-pick]")];
+    const key = "doc-review-" + run.id;
+    let saved = {},
+      index = 0,
+      revealed = false,
+      canSave = true;
+    try {
+      saved = JSON.parse(localStorage.getItem(key)) || {};
+    } catch {
+      canSave = false;
+    }
+    const label = (name) => name.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+    const runLabel = run.model + (run.guidance ? " · Adjacent style comparison" : "");
+    byId("model").textContent = runLabel;
+    run.cases.forEach((item, i) => byId("cases").add(new Option(label(item.name), i)));
+    function update() {
+      const choice = saved[run.cases[index].name]?.pick;
+      for (const button of picks)
+        button.setAttribute("aria-pressed", String(button.dataset.pick === choice));
+      cards.forEach((card, i) =>
+        card.classList.toggle("selected", choice === "AB"[i] || choice === "Both"),
+      );
+      const count = run.cases.filter((c) => saved[c.name]?.pick).length;
+      byId("progress").textContent = count + " of " + run.cases.length + " reviewed";
+      run.cases.forEach(
+        (c, i) =>
+          (byId("cases").options[i].text = (saved[c.name]?.pick ? "✓ " : "") + label(c.name)),
+      );
+      byId("status").textContent = !canSave
+        ? "Browser storage unavailable. Export to keep your feedback."
+        : Object.keys(saved).length
+          ? "Saved in this browser"
+          : "";
+    }
+    function save(field, value) {
+      const name = run.cases[index].name;
+      saved[name] = { ...saved[name], [field]: value };
+      try {
+        localStorage.setItem(key, JSON.stringify(saved));
+      } catch {
+        canSave = false;
+      }
+      update();
+    }
+    function show(i) {
+      index = i;
+      revealed = false;
+      const item = run.cases[i];
+      byId("title").textContent = label(item.name);
+      byId("brief").textContent = item.task.split("\n\n")[0];
+      byId("source").hidden = !item.task.includes("\n\n");
+      byId("source").open = false;
+      byId("criteria").open = false;
+      byId("source").querySelector("p").textContent = item.task.split("\n\n").slice(1).join("\n\n");
+      byId("criteria").querySelector("p").textContent = item.rubric;
+      cards.forEach((card, j) => {
+        card.querySelector("h2").textContent = "Answer " + "AB"[j];
+        card.querySelector(".answer").innerHTML = item.answers[j];
+      });
+      byId("note").value = saved[item.name]?.note || "";
+      byId("cases").value = String(i);
+      byId("back").disabled = i === 0;
+      byId("next").textContent = i === run.cases.length - 1 ? "Review feedback" : "Next";
+      byId("reveal").textContent = "Reveal versions";
+      update();
+      window.scrollTo(0, 0);
+    }
+    function feedback() {
+      const lines = run.cases.map((c) => {
+        const vote = saved[c.name] || {};
+        return c.name + ": " + (vote.pick || "Unreviewed") + (vote.note ? "\n  " + vote.note : "");
+      });
+      byId("summary").value = [runLabel + " · run " + run.id, ...lines].join("\n\n");
+      byId("copy").textContent = "Copy feedback";
+      byId("export").showModal();
+    }
+    byId("cases").onchange = (e) => show(Number(e.target.value));
+    byId("back").onclick = () => show(index - 1);
+    byId("next").onclick = () => (index === run.cases.length - 1 ? feedback() : show(index + 1));
+    picks.forEach((b) => (b.onclick = () => save("pick", b.dataset.pick)));
+    byId("note").oninput = (e) => save("note", e.target.value);
+    byId("reveal").onclick = () => {
+      revealed = !revealed;
+      cards.forEach(
+        (card, j) =>
+          (card.querySelector("h2").textContent =
+            "Answer " + "AB"[j] + (revealed ? " · " + run.cases[index].versions[j] : "")),
+      );
+      byId("reveal").textContent = revealed ? "Hide versions" : "Reveal versions";
+    };
+    byId("feedback").onclick = feedback;
+    byId("close").onclick = () => byId("export").close();
+    byId("copy").onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(byId("summary").value);
+        byId("copy").textContent = "Copied";
+      } catch {
+        byId("summary").focus();
+        byId("summary").select();
+        byId("copy").textContent = "Press Ctrl/Cmd+C";
+      }
+    };
+    show(0);
+  </script>
+</html>
