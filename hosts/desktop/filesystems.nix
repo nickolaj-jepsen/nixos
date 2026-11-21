@@ -31,7 +31,7 @@
       "/home" = btrfs "@home" [];
       "/tmp" = btrfs "@tmp" [];
       "/var/lib/docker" = btrfs "@docker" [];
-      # btrbk works on the top level, where @home and @snapshots sit side by side.
+      # The btrfs top level, for managing subvolumes by hand.
       "/mnt/btrfs" = btrfs "/" ["noauto" "x-systemd.automount" "x-systemd.idle-timeout=10min"];
       # Shared with Windows' boot manager.
       "/boot" = {
@@ -86,7 +86,7 @@
       };
     };
 
-    # Nested subvolumes stay out of /home's snapshots: rebuildable, or churn that snapshots would pin.
+    # Nested subvolumes keep rebuildable data and churn apart from @home.
     systemd.tmpfiles.rules =
       ["d ${user.home}/.local/state/agents 0700 ${user.name} ${user.group} -"]
       ++ lib.mapAttrsToList (dir: mode: "v ${user.home}/${dir} ${mode} ${user.name} ${user.group} -") {
@@ -94,28 +94,11 @@
         "models" = "0755";
         ".local/share/Steam" = "0700";
         ".local/share/pnpm" = "0755";
-        # Agent scratch is aged out by tmpfiles; a snapshot would pin what it frees.
+        # Agent scratch is aged out by tmpfiles.
         ".local/state/agents/tmp" = "0700";
         "vms" = "0755";
       }
       # VM disk images are rewritten in place; copy-on-write fragments them.
       ++ ["h ${user.home}/vms - - - - +C"];
-
-    services.btrbk.instances.home = {
-      onCalendar = "hourly";
-      settings = {
-        # sudo is wheel-only (security leaf), so the btrbk user's sudo backend can't run; local
-        # snapshots need no privilege separation.
-        backend = "btrfs-progs";
-        # btrbk deletes nothing unless retention is set.
-        snapshot_preserve_min = "6h";
-        snapshot_preserve = "24h 7d 4w";
-        volume."/mnt/btrfs" = {
-          snapshot_dir = "@snapshots";
-          subvolume = "@home";
-        };
-      };
-    };
-    systemd.services.btrbk-home.serviceConfig.User = lib.mkForce "root";
   };
 }

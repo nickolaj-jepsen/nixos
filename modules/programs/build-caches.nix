@@ -1,4 +1,4 @@
-# Build caches under ~/.cache, which hosts keep out of /home's snapshots.
+# Build caches under ~/.cache.
 {
   flake.modules.homeManager.build-caches = {
     config,

@@ -103,8 +103,8 @@ ran it.
   directory owned by another uid. `reap` makes a read-only tree writable first
   and removes an empty directory it cannot enter, and it logs whatever is left
   as not ours rather than retrying it every day.
-- On hosts that snapshot `/home`, `.local/state/agents/tmp` is a nested subvolume
-  so scratch does not pin snapshots (`hosts/desktop/filesystems.nix`).
+- On the desktop, `.local/state/agents/tmp` is a nested subvolume, apart from
+  `@home` (`hosts/desktop/filesystems.nix`).
 
 ## Migration
 
@@ -148,5 +148,4 @@ under the data root, and reports before touching anything:
   Nothing in the store is lost.
 - `git worktree move` and a `mv` of the main checkout change the path the id
   hashes, so the old store stops being found.
-- Btrfs snapshots of `/home` include the store. They are local recovery, not a
-  backup; the store is not in any off-host backup.
+- `/home` is not snapshotted and the store is not in any off-host backup.
