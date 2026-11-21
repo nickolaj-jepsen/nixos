@@ -130,21 +130,17 @@ in {
         [
           # The default: DeepSeek on whichever subscription has more headroom.
           "auto/deepseek-v4.1-flash"
-          # The one paid Go model; `*` holds because no free id has a slash.
-          "opencode-go/deepseek-v4.1-flash"
           # ChatGPT plan. The bundled catalog ends at GPT-6.1, so 6.2 comes from
           # the pi.dev catalog overlay and is not pinned in models.json.
-          "openai-codex/gpt-6.2-astra"
           "openai-codex/gpt-6.2-sol"
           "kimi-coding/k3.1-pro"
-          "anthropic/claude-opus-5-5"
           "anthropic/claude-sonnet-5-5"
-          "openai-codex/gpt-6.1-terra"
-          # The Command Code subscription's live catalog.
-          "command-code/deepseek/deepseek-v4.1-flash"
-          "opencode-go/*-free"
+          "openai-codex/gpt-6.2-astra"
+          "anthropic/claude-opus-5-5"
         ]
-        ++ lib.optional config.fireproof.dev.llm.enable "local/*";
+        ++ lib.optional config.fireproof.dev.llm.enable "local/*"
+        # `*` holds because no free id has a slash.
+        ++ ["opencode-go/*-free"];
       # pi's defaults (reserve 16k, keep 20k) overrun a 32k window.
       compaction.modelOverrides = lib.optionalAttrs config.fireproof.dev.llm.enable (lib.mapAttrs' (id: m:
         lib.nameValuePair "local/${id}" {
