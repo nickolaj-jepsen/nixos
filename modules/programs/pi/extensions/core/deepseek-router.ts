@@ -8,12 +8,6 @@
  */
 import { execFile } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext, ModelRoute } from "@earendil-works/pi-coding-agent";
-import {
-  forgetDeepSeekRoute,
-  rememberDeepSeekRoute,
-  selectedDeepSeekProvider,
-  type DeepSeekProvider,
-} from "../shared/deepseek-route.ts";
 
 const MODEL_ID = "deepseek-v4.1-flash";
 const WINDOWS = ["5h", "7d", "month"] as const;
@@ -22,7 +16,7 @@ const TARGETS = {
   "command-code": "deepseek/deepseek-v4.1-flash",
 } as const;
 
-type Provider = DeepSeekProvider;
+type Provider = keyof typeof TARGETS;
 
 interface RouterState {
   provider: Provider;
@@ -66,7 +60,6 @@ function routeTo(
 ): ModelRoute<RouterState> {
   const model = ctx.modelRegistry.find(provider, TARGETS[provider]);
   if (!model) throw new Error(`${provider}/${TARGETS[provider]} is not in the catalog`);
-  rememberDeepSeekRoute(ctx.sessionManager.getSessionId(), provider);
   return { model, thinkingLevel, state };
 }
 
@@ -109,11 +102,8 @@ export default function (pi: ExtensionAPI) {
         }
       }
       if (request.state) return routeTo(request.state.provider, request.thinkingLevel, ctx);
-      // Direct calls have no branch state in pi. Keep compaction side calls on the choice the session already made.
-      const remembered = selectedDeepSeekProvider(ctx.sessionManager.getSessionId());
-      if (request.reason === "direct" && remembered) {
-        return routeTo(remembered, request.thinkingLevel, ctx);
-      }
+      // A direct call (compaction) has no branch state but does carry `previous`,
+      // so the sticky branch above already keeps it on the session's choice.
 
       let provider: Provider = "opencode-go";
       if (usageCommand) {
@@ -125,9 +115,5 @@ export default function (pi: ExtensionAPI) {
       }
       return routeTo(provider, request.thinkingLevel, ctx, { provider });
     },
-  });
-
-  pi.on("session_shutdown", (_event, ctx) => {
-    forgetDeepSeekRoute(ctx.sessionManager.getSessionId());
   });
 }

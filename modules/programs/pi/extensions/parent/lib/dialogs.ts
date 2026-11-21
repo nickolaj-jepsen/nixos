@@ -11,7 +11,7 @@ import {
   type PermissionDecisionEvent,
   type PermissionUiPromptEvent,
 } from "@gotgenes/pi-permission-system";
-import { clip, oneLine } from "../../shared/naming.ts";
+import { clip, oneLine } from "./format.ts";
 
 // The cap on a label, which the registry carries as `waitingFor`.
 const LABEL_MAX = 200;

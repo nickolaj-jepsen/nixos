@@ -1,6 +1,13 @@
 import { homedir } from "node:os";
 import { relative, sep } from "node:path";
 
+/** `text` on one line, whitespace collapsed. */
+export const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
+
+/** `text` cut to `max` characters, the last one an ellipsis. */
+export const clip = (text: string, max: number) =>
+  text.length > max ? `${text.slice(0, max - 1)}…` : text;
+
 export const formatTokens = (count: number) => {
   if (count < 1000) return count.toString();
   if (count < 10000) return `${(count / 1000).toFixed(1)}k`;

@@ -8,7 +8,7 @@
  * for the failure and whether a peer woke the turn.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { oneLine } from "../shared/naming.ts";
+import { oneLine } from "./lib/format.ts";
 import { PEER_MESSAGE_TYPE } from "./claude-peers/protocol.ts";
 import type { UserWait } from "./lib/user-wait.ts";
 

@@ -60,7 +60,7 @@ import {
   userFrame,
   writeRegistryEntry,
 } from "./claude-peers/protocol.ts";
-import { clip, oneLine } from "../shared/naming.ts";
+import { clip, oneLine } from "./lib/format.ts";
 import type { Services } from "./services.ts";
 
 const OWN_MODE: PermissionClass = "prompting";

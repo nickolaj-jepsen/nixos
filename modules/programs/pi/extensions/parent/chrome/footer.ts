@@ -20,10 +20,21 @@ import { PR_COMMAND } from "./git.ts";
 import { click, hoverAt, type Part, type Region } from "./layout.ts";
 import { contextColor, type Measurements, type Meter } from "./measurements.ts";
 import { modelAlias, providerShortName } from "../lib/model-names.ts";
-import { selectedDeepSeekProvider } from "../../shared/deepseek-route.ts";
 import type { ChromeState } from "./state.ts";
 import { createStats } from "./stats.ts";
 import { shellCommand } from "../lib/tools.ts";
+
+/** The physical provider behind the session's last reply, which a virtual model's own name hides. */
+const answeringProvider = (ctx: ExtensionContext) => {
+  const branch = ctx.sessionManager.getBranch();
+  for (let i = branch.length - 1; i >= 0; i--) {
+    const entry = branch[i];
+    if (entry?.type !== "message" || entry.message.role !== "assistant") continue;
+    if (entry.message.stopReason === "error" || entry.message.stopReason === "aborted") continue;
+    return entry.message.provider;
+  }
+  return undefined;
+};
 
 type ActiveModel = NonNullable<ExtensionContext["model"]>;
 
@@ -123,7 +134,7 @@ export const createFooter = (
 
     const routedProvider =
       model?.provider === "auto" && model.id === "deepseek-v4.1-flash"
-        ? selectedDeepSeekProvider(ctx.sessionManager.getSessionId())
+        ? answeringProvider(ctx)
         : undefined;
     const routedName = routedProvider
       ? ctx.modelRegistry.getProviderDisplayName(routedProvider)

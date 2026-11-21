@@ -14,8 +14,7 @@ and skills themselves: nickolaj-jepsen/agents' AGENTS.md and `docs/`.
   be flake inputs: they are marketplaces fetched at runtime, so only Claude Code gets them.
 - In `pi/extensions/`, `core/` loads in every session and `parent/` only in the one you
   started. What parent features share is a service in `parent/services.ts`, never a module
-  variable another feature imports. `shared/` is not a package: whatever one package writes
-  and the other reads is declared there once, with its parser.
+  variable another feature imports.
 - chrome's prompt editor is the one payload that leaves this repo for a plugin:
   `parent/lib/editor-hooks.ts` offers its hooks on `pi.events`
   (`fireproof:editor-hooks:offer`, and again on `:request` for a package that loaded first),
@@ -40,8 +39,8 @@ and skills themselves: nickolaj-jepsen/agents' AGENTS.md and `docs/`.
   `mcp.json` at every launch (`~/.pi/work` for pi-work), so a key or server dropped from the
   leaf stays in the file until removed by hand. Only arrays are replaced.
 - Every `core/` file and `parent/index.ts` evaluates its own copy of each module it imports,
-  so module state is shared only among parent features. State that must outlive a module copy
-  goes through `shared/process-global.ts`, never a bare `globalThis`.
+  so module state is shared only among parent features. Don't pass state between `core/` and
+  `parent/` through module variables or `globalThis`; read it from the session branch instead.
 - Never add an npm package the pi leaf links in from pi itself or from `pkgs/pi-packages`
   (`@gotgenes/*`): an integration imports the package's published API instead of copying it
   (`mkExtensions`).
