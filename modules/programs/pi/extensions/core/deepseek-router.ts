@@ -109,8 +109,7 @@ export default function (pi: ExtensionAPI) {
         }
       }
       if (request.state) return routeTo(request.state.provider, request.thinkingLevel, ctx);
-      // Direct calls have no branch state in pi. Keep guardian, title and
-      // compaction side calls on the choice the session already made.
+      // Direct calls have no branch state in pi. Keep compaction side calls on the choice the session already made.
       const remembered = selectedDeepSeekProvider(ctx.sessionManager.getSessionId());
       if (request.reason === "direct" && remembered) {
         return routeTo(remembered, request.thinkingLevel, ctx);

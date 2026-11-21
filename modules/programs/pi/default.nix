@@ -221,7 +221,7 @@ in {
           map packagePath (lib.remove "@commandcode/pi-commandcode-provider" thirdPartyPackages)
           ++ [parentPath]
           ++ map pluginPath pluginNames
-          ++ map (name: "${extensions}/core/${name}.ts") ["codemode-only" "guardian"];
+          ++ ["${extensions}/core/codemode-only.ts"];
       };
     # One edit to the rules, keybindings, theme, roles or permission policy reaches
     # both profiles; models.json, auth.json, sessions and mcp.json stay apart.
@@ -308,17 +308,10 @@ in {
       dir = "\${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}";
       inherit env settings mcp;
     };
-    # Guardian's judges and the personal side calls (`auto/deepseek…`) have no
-    # credentials here; the fast Copilot model stands in.
     workWrapper = mkWrapper {
       name = "pi-work";
       dir = "\${PI_CODING_AGENT_DIR:-$HOME/.pi/work}";
-      env =
-        env
-        // {
-          PI_SIDE_MODEL = workFastModel;
-          PI_JUDGE_MODEL = workFastModel;
-        };
+      inherit env;
       settings = workSettings;
       mcp = workMcp;
       models = workModels;
@@ -573,7 +566,6 @@ in {
       home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
         # Otherwise bg_run is an ordinary extension tool and skips the bash rules below.
         shellTools.bg_run.commandArgument = "command";
-        authorizerChain = ["guardian"];
         # An undeclared reader outside the package's core lands on the write ask
         # below. Declaring a core word (cat, grep, sed, …) is ignored with a warning.
         commandEffects = {
