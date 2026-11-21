@@ -25,7 +25,7 @@ export const createTitle = (
   let painted = "";
 
   const render = (ctx: ExtensionContext) => {
-    const text = label.current(ctx)?.text;
+    const text = label.current()?.text;
     const word = label.stateWord(ctx);
     // A frozen frame, not the animation: the title is rewritten by the OS.
     const lead = label.working() ? `${WORK_GLYPH} ` : "";
@@ -107,7 +107,7 @@ export const createTitle = (
     if (state.ctx && state.live) {
       // Leave an honest title for the shell prompt that follows; the fish title
       // takes over from here, but a crash-free exit should not show a stale run.
-      const text = label.current(state.ctx)?.text;
+      const text = label.current()?.text;
       state.ctx.ui.setTitle(`${text ? `${text} · ` : ""}${shortPath(state.ctx.cwd)}`);
     }
   });

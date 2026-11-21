@@ -1,13 +1,12 @@
 /**
- * The prompts you actually sent: the session label is the first one cut to a
- * name, and guardian reads the latest.
+ * The prompts you actually sent, for guardian to read.
  */
 import { contentText } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 // Bare acknowledgements only. A word count cannot tell "sounds good, but make
-// it async" from "sounds good", and dropping that sentence silently freezes the
-// name on the work before it.
+// it async" from "sounds good", and dropping that sentence silently hides the
+// change of direction.
 const ACK = new Set(
   "ok okay k yes yeah yep yup sure continue proceed thanks thank ty lgtm agreed agree perfect great nice cool fine good sounds right correct carry on next go ahead do it please".split(
     " ",
@@ -46,21 +45,4 @@ export const requests = (ctx: ExtensionContext, recent: number, chars: number) =
   const latest = prompts.slice(-recent);
   const picked = prompts[0] && !latest.includes(prompts[0]) ? [prompts[0], ...latest] : latest;
   return picked.map((prompt) => oneLine(prompt).slice(0, chars));
-};
-
-/** The first prompt that is not a bare acknowledgement, whole. */
-export const firstRequest = (ctx: ExtensionContext) => sessionPrompts(ctx)[0];
-
-// The deterministic name comes from a whole sentence, so drop the asking part.
-const REQUEST_PREFIX = /^(?:(?:can|could|would|will) you (?:please )?|(?:please|help me|to) )/i;
-
-/** `text` without the "can you please" that a named thing does not want. */
-export const stripRequest = (text: string) => {
-  let stripped = text.trim();
-  for (let i = 0; i < 3; i++) {
-    const next = stripped.replace(REQUEST_PREFIX, "");
-    if (next === stripped) break;
-    stripped = next;
-  }
-  return stripped;
 };

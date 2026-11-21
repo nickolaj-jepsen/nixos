@@ -29,7 +29,7 @@ export const createBorder = (state: ChromeState, label: Identity) => {
     const ctx = state.ctx;
     if (!ctx) return { left: "", right: "", controls: [] };
     const theme = ctx.ui.theme;
-    const current = label.current(ctx);
+    const current = label.current();
     const name = current?.text ?? "";
     const stateText = label.stateWord(ctx) || undefined;
     // pi reports scrolled editor content as `↑ N more`; it describes the editor,
@@ -97,9 +97,8 @@ export const createBorder = (state: ChromeState, label: Identity) => {
       // The label wears the input's own border color (pi keys it to the
       // thinking level), so it reads as box chrome rather than prompt text.
       const shown = name ? truncateToWidth(name, room, "…") : "";
-      const painted = current?.source === "prompt" ? theme.fg("dim", shown) : border(shown);
       return {
-        left: `${lead}${painted}${theme.fg("dim", hint)}${name ? " " : ""}`,
+        left: `${lead}${border(shown)}${theme.fg("dim", hint)}${name ? " " : ""}`,
         right,
         controls,
       };
