@@ -216,8 +216,7 @@ in {
         packages =
           map packagePath (lib.remove "@commandcode/pi-commandcode-provider" thirdPartyPackages)
           ++ [parentPath]
-          ++ map pluginPath pluginNames
-          ++ ["${extensions}/core/codemode-only.ts"];
+          ++ map pluginPath pluginNames;
       };
     # One edit to the rules, keybindings, theme, roles or permission policy reaches
     # both profiles; models.json, auth.json, sessions and mcp.json stay apart.
