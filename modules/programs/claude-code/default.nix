@@ -106,7 +106,7 @@
 
     # A plugin of nickolaj-jepsen/agents: validated and tested against the claude-code that
     # runs it, so a bump that breaks its API (or drops the keybinding action spellfix borrows)
-    # fails the build. `pkgs.agent-tools`'s own tests ran first.
+    # fails the build.
     mkToolMod = inputs.agents.lib.mkClaudePlugin {
       inherit pkgs;
       claude-code = ccfg.package;

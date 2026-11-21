@@ -17,8 +17,6 @@
     inputs.niri.overlays.niri
     inputs.fnug.overlays.default
     inputs.self.overlays.default
-    # agent-tools and tui-test; agent-tools is built and checked against the pi pinned here.
-    inputs.agents.overlays.default
   ];
 in {
   flake.overlays.default = final: _prev: let

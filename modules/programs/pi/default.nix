@@ -79,7 +79,7 @@ in {
     # `agentTools.subagents` in its package.json loads only in the session you started.
     piPlugins = lib.filterAttrs (_: plugin: plugin.pi) inputs.agents.lib.plugins;
     pluginNames = lib.attrNames piPlugins;
-    pluginPath = name: "${pkgs.agent-tools}/plugins/${name}";
+    pluginPath = name: inputs.agents.lib.plugins.${name}.path;
     parentOnlyPlugins = lib.attrNames (lib.filterAttrs (_: plugin: !plugin.subagents) piPlugins);
     # One role pi's reader can't parse stops pi-subagents from loading at all.
     agentRoles = pkgs.runCommand "pi-agent-roles" {nativeBuildInputs = [pkgs.nodejs];} ''
