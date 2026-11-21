@@ -3,7 +3,7 @@
   "private": true,
   "dependencies": {
     "@commandcode/pi-commandcode-provider": "0.3.0",
-    "@gotgenes/pi-permission-system": "42.0.2",
+    "@gotgenes/pi-permission-system": "42.1.0",
     "@gotgenes/pi-subagents": "25.0.5",
     "@juicesharp/rpiv-todo": "2.15.0"
   }
