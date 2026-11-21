@@ -209,22 +209,11 @@ check_downloads() {
     "rm ~/Downloads/<file>"
 }
 
-# Snapshot sizes need root (squota), so only the count is shown.
-check_snapshots() {
-  local dir=/mnt/btrfs/@snapshots count
-  [ -d "$dir" ] || return 0
-  count=$(find "$dir" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
-  [ "$count" -gt 0 ] || return 0
-  emit snapshots -1 "btrbk snapshots" "$count of @home; they pin what was deleted since they were taken" \
-    "sudo btrfs qgroup show -re --sort=-excl /mnt/btrfs | head   # size them" \
-    "sudo btrfs subvolume delete $dir/<name>"
-}
-
 checks=(
   check_nix_store check_nix_cache check_agent_tmp check_tmp check_docker
   check_uv check_pnpm check_npm check_pip check_go check_cargo check_gradle
   check_cache_other check_build_dirs check_worktrees check_journal check_trash
-  check_transcripts check_models check_vms check_steam check_downloads check_snapshots
+  check_transcripts check_models check_vms check_steam check_downloads
 )
 
 echo "measuring ${#checks[@]} places, the nix store takes longest..." >&2
