@@ -7,10 +7,11 @@
   gnused,
   jq,
   kondo,
+  btrfs-progs,
 }:
 writeShellApplication {
   name = "disk-report";
-  runtimeInputs = [coreutils findutils gnused jq kondo];
+  runtimeInputs = [coreutils findutils gnused jq kondo btrfs-progs];
   # The clear commands are printed for a person, so their `~` stays literal.
   excludeShellChecks = ["SC2088"];
   text = builtins.readFile ./disk-report.sh;

@@ -3,6 +3,11 @@
 #
 # Every check runs in parallel; the nix store scan sets the pace (~45 s). Paths
 # other users own (/tmp, the journal) are counted only as far as they are readable.
+#
+# Sizes are bytes allocated on disk (du), not apparent size: a sparse VM image counts what
+# it uses, not what it declares. Data shared between files (reflinks) shows under each file,
+# so entries can overlap and add up to more than is used. On btrfs, the summary under the
+# header comes from `btrfs filesystem usage`, which also counts what no file shows: metadata.
 
 # A check that fails reports less, it does not stop the others.
 set +e
@@ -15,7 +20,7 @@ bytes() {
   local p existing=()
   for p in "$@"; do [ -e "$p" ] && existing+=("$p"); done
   [ "${#existing[@]}" -eq 0 ] && { echo 0; return; }
-  du -scb "${existing[@]}" 2>/dev/null | tail -1 | cut -f1
+  du -sc --block-size=1 "${existing[@]}" 2>/dev/null | tail -1 | cut -f1
 }
 
 human() { numfmt --to=iec-i --suffix=B --format=%.1f "$1"; }
@@ -25,7 +30,7 @@ top() {
   local dir=$1 n=${2:-3}
   [ -d "$dir" ] || return 0
   find "$dir" -mindepth 1 -maxdepth 1 -print0 2>/dev/null |
-    xargs -0r du -sb 2>/dev/null | sort -rn | head -n "$n" |
+    xargs -0r du -s --block-size=1 2>/dev/null | sort -rn | head -n "$n" |
     while IFS=$'\t' read -r size path; do printf '%s %s, ' "${path##*/}" "$(human "$size")"; done |
     sed 's/, $//'
 }
@@ -141,7 +146,7 @@ check_cache_other() {
   done
   [ "${#paths[@]}" -eq 0 ] && return 0
   local biggest
-  biggest=$(du -sb "${paths[@]}" 2>/dev/null | sort -rn | head -4 |
+  biggest=$(du -s --block-size=1 "${paths[@]}" 2>/dev/null | sort -rn | head -4 |
     while IFS=$'\t' read -r size path; do path=${path%/}; printf '%s %s, ' "${path##*/}" "$(human "$size")"; done | sed 's/, $//')
   emit cache-other "$(bytes "${paths[@]}")" "other ~/.cache" "biggest: $biggest" \
     "rm -rf ~/.cache/<name>            # caches refill themselves"
@@ -209,12 +214,36 @@ check_downloads() {
     "rm ~/Downloads/<file>"
 }
 
+# btrfs counts what du cannot: metadata (stored twice on DUP) is real usage no file shows.
+check_btrfs_metadata() {
+  [ -n "$btrfs_usage" ] || return 0
+  local size used ratio slack cmds=()
+  read -r size used < <(sed -n 's/^Metadata,[A-Za-z0-9]*: Size:\([0-9]*\), Used:\([0-9]*\).*/\1 \2/p' <<<"$btrfs_usage" | head -1)
+  [ -n "$used" ] || return 0
+  ratio=$(sed -n 's/^ *Metadata ratio:[[:space:]]*\([0-9]*\).*/\1/p' <<<"$btrfs_usage")
+  ratio=${ratio:-1}
+  slack=$(((size - used) * ratio))
+  # Only worth a balance when a real amount is reserved but empty.
+  [ "$slack" -gt $((2 * 1024 ** 3)) ] &&
+    cmds=("sudo btrfs balance start -musage=50 /   # hand emptied metadata chunks back")
+  emit btrfs-metadata "$((used * ratio))" "btrfs metadata" \
+    "$(human "$used") stored ${ratio}x, $(human "$slack") more reserved but empty; grows with file count and snapshots" \
+    "${cmds[@]}"
+}
+
 checks=(
   check_nix_store check_nix_cache check_agent_tmp check_tmp check_docker
   check_uv check_pnpm check_npm check_pip check_go check_cargo check_gradle
   check_cache_other check_build_dirs check_worktrees check_journal check_trash
   check_transcripts check_models check_vms check_steam check_downloads
+  check_btrfs_metadata
 )
+
+# The checks inherit this; empty unless / is btrfs.
+btrfs_usage=
+if [ "$(stat -f -c %T /)" = btrfs ] && command -v btrfs >/dev/null; then
+  btrfs_usage=$(btrfs filesystem usage -b / 2>/dev/null)
+fi
 
 echo "measuring ${#checks[@]} places, the nix store takes longest..." >&2
 for c in "${checks[@]}"; do "$c" & done
@@ -224,8 +253,23 @@ if [ -t 1 ]; then bold=$'\e[1m' dim=$'\e[2m' reset=$'\e[0m'; else bold='' dim=''
 
 df -h --output=avail,size,pcent / | tail -1 | {
   read -r avail size pcent
-  printf '%s%s free of %s on / (%s used)%s\n\n' "$bold" "$avail" "$size" "$pcent" "$reset"
+  printf '%s%s free of %s on / (%s used)%s\n' "$bold" "$avail" "$size" "$pcent" "$reset"
 }
+
+if [ -n "$btrfs_usage" ]; then
+  # "Label:   <bytes>" from the Overall block.
+  field() { sed -n "s/^ *$1:[[:space:]]*\([0-9]*\).*/\1/p" <<<"$btrfs_usage" | head -1; }
+  used=$(field Used) unalloc=$(field "Device unallocated")
+  data=$(sed -n 's/^Data,[A-Za-z0-9]*: Size:[0-9]*, Used:\([0-9]*\).*/\1/p' <<<"$btrfs_usage" | head -1)
+  if [ -n "$used" ] && [ -n "$data" ] && [ -n "$unalloc" ]; then
+    printf '%sbtrfs: %s used = %s data + %s metadata and system; %s unallocated%s\n' \
+      "$dim" "$(human "$used")" "$(human "$data")" "$(human $((used - data)))" "$(human "$unalloc")" "$reset"
+    # New metadata chunks come out of the unallocated space, so writes can fail before df hits 0.
+    [ "$unalloc" -lt $((2 * 1024 ** 3)) ] &&
+      printf '%sunallocated is nearly gone: btrfs can refuse writes before df shows full%s\n' "$dim" "$reset"
+  fi
+fi
+echo
 
 for f in "$out"/*; do
   [ -e "$f" ] || continue
