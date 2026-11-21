@@ -14,6 +14,9 @@
     };
 
     # plain is personal (Nickolaj's writing style), so it lives here, not in the public agents repo.
-    config.fireproof.agents.skills = inputs.agents.lib.skills // {plain = ./agent-skills/plain;};
+    # The ponytail pair are copies pinned by hand: `metadata.source` in each names the upstream commit.
+    config.fireproof.agents.skills =
+      inputs.agents.lib.skills
+      // lib.genAttrs ["plain" "ponytail-review" "ponytail-audit"] (name: ./agent-skills + "/${name}");
   };
 }

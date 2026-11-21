@@ -9,7 +9,8 @@ and skills themselves: nickolaj-jepsen/agents' AGENTS.md and `docs/`.
 - Skills are one registry (`fireproof.agents.skills`, merged across leaves) that each leaf
   fills its own way: the input's `lib.skills`, a local one beside it (`plain` in
   `agent-skills.nix`) or from a feature leaf (`notes` in `obsidian/agents.nix`), a
-  third-party one from its leaf's source. Private skills (Digital-Udvikling/skills) must not
+  third-party one from its leaf's source, or a copy beside `plain` whose `metadata.source`
+  names the upstream commit (`ponytail-review`, `ponytail-audit`). Private skills (Digital-Udvikling/skills) must not
   be flake inputs: they are marketplaces fetched at runtime, so only Claude Code gets them.
 - In `pi/extensions/`, `core/` loads in every session and `parent/` only in the one you
   started. What parent features share is a service in `parent/services.ts`, never a module
