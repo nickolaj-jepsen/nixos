@@ -115,9 +115,6 @@ in {
         PI_SPELLFIX_DICTS = lib.concatStringsSep "," fpLib.hunspellLanguages;
         PI_SPELLFIX_PERSONAL = fpLib.hunspellPersonalDictionary config;
       }
-      // lib.optionalAttrs (config.fireproof.agents.lspServers != {}) {
-        PI_LSP_SERVERS = toString (pkgs.writeText "pi-lsp-servers.json" (builtins.toJSON config.fireproof.agents.lspServers));
-      }
       // lib.optionalAttrs config.fireproof.dev.ai-usage.enable {
         PI_AI_USAGE_COMMAND = lib.getExe pkgs.ai-usage;
       };

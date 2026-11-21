@@ -26,8 +26,8 @@ and skills themselves: nickolaj-jepsen/agents' AGENTS.md and `docs/`.
 - `pi-work` is the same agent on a second profile: its own login, Copilot alone, its roles a
   copy with `model:` rewritten to `fireproof.dev.pi.work.fastModel`, and its MCP servers
   `fireproof.agents.workMcpServers`, shared with claude-work.
-- `fireproof.agents.lspServers` is filled by `agent-lsp.nix`, one schema per leaf; pi's `lsp`
-  plugin reads the JSON file `PI_LSP_SERVERS` names.
+- `fireproof.agents.lspServers` is filled by `agent-lsp.nix`, one schema per leaf: Claude Code and
+  Copilot CLI read it, and pi no longer does.
 - See what a mod or plugin draws, and its keys, in a real session before handing it back: load
   the `agent-plugin-dev` skill. A green `just build` says nothing about layout or focus.
 - A skill names its note files relative to the store and never says where notes live;
