@@ -70,6 +70,11 @@
           ++ lib.optional config.fireproof.dev.ai-usage.enable "aiUsage"
           ++ [
             "cpuUsage"
+            # RAM% · swap%: a zram near 100% is when the desktop starts to thrash (docs/responsiveness.md).
+            {
+              id = "memUsage";
+              showSwap = true;
+            }
           ]
           ++ [
             "diskUsage"
