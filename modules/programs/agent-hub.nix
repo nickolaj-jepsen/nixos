@@ -145,6 +145,8 @@ in {
             ExecStart = "${exe} daemon";
             Restart = "always";
             RestartSec = 2;
+            # Nobody waits on it; yields to the apps under load (modules/system/responsiveness.nix).
+            Slice = "background.slice";
           };
           Install.WantedBy = ["default.target"];
         };

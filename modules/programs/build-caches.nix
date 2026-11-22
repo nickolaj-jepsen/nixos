@@ -24,8 +24,7 @@
       '';
 
       # Overrides every project's jvmargs. Setting jvmargs at all drops Gradle's default metaspace cap,
-      # and an idle Gradle + Kotlin daemon pair holds ~7 GiB for the default 3 h. No
-      # org.gradle.priority=low: it's a relative nice, so an agent's daemon would land at 19.
+      # and an idle Gradle + Kotlin daemon pair holds ~7 GiB for the default 3 h.
       xdg.cacheFile."gradle/gradle.properties".text = ''
         org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=1g -XX:+UseParallelGC -Dfile.encoding=UTF-8
         org.gradle.daemon.idletimeout=3600000

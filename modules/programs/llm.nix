@@ -100,6 +100,9 @@
           RestartSec = 5;
           # Inherited by llama-server, whose CUDA-abort core is ~15G and holds the VRAM while it streams.
           LimitCORE = 0;
+          # Its CPU-side experts saturate the cores; under load they yield to the apps. No memory
+          # cap: reclaiming a mapped model's pages would make every token refault them.
+          Slice = "background.slice";
         };
         Install.WantedBy = ["default.target"];
       };

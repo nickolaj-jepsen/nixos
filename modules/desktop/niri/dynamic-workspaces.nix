@@ -74,6 +74,10 @@
         };
       };
 
+      # Part of the shell: beside niri in session.slice. Its programs are spawned through niri,
+      # so they still land in app.slice scopes.
+      systemd.user.services.niri-dynamic-workspaces.Service.Slice = "session.slice";
+
       # Key -> project dir for ghostty-here. Space-separated, so a project path
       # with whitespace in it would break the lookup.
       xdg.configFile."ghostty-here/dirs".text =

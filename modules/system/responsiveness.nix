@@ -6,20 +6,35 @@
     ...
   }: {
     config = lib.mkIf config.fireproof.hardware.physical {
-      # Ranks frequent sleepers ahead of CPU hogs, so every compiler yields to the desktop without per-tool rules.
-      services.scx = lib.mkIf config.fireproof.desktop.enable {
-        enable = true;
-        scheduler = "scx_bpfland";
+      # No sched_ext scheduler (scx_bpfland & co.): they ignore cgroup CPU weights, which is what
+      # keeps niri in session.slice responsive while app.slice is saturated; under scx_bpfland a
+      # single parallel build made input lag. The kernel's EEVDF honours them.
+      # Give the session a bigger share than stock: under 32 CPU hogs it halved niri's worst wait.
+      systemd.user.slices.session = lib.mkIf config.fireproof.desktop.enable {
+        overrideStrategy = "asDropin";
+        sliceConfig.CPUWeight = 1000;
       };
-      # A stalled task makes the kernel eject the scheduler; nixpkgs allows 2 restarts per 30 s, after
-      # which the machine silently stays on EEVDF, where none of the nice-based tiering applies.
-      systemd.services.scx = lib.mkIf config.fireproof.desktop.enable {
-        startLimitIntervalSec = lib.mkForce 600;
-        startLimitBurst = lib.mkForce 10;
-        serviceConfig.RestartSec = 2;
+      # Daemons nobody waits on (agent-hub, llama-swap, devmon) yield to the apps under load.
+      systemd.user.slices.background = lib.mkIf config.fireproof.desktop.enable {
+        overrideStrategy = "asDropin";
+        sliceConfig.CPUWeight = 20;
       };
+      # Firefox outranks the rest of app.slice: inside it CPU is otherwise shared per thread, so a
+      # dozen busy agent terminals left it ~1 of 16 cores. With this it kept ~90% of what it asked
+      # for beside 32 CPU hogs. A weight on any app scope also makes app.slice share per app.
+      # Prefix drop-ins match the launchers' transient scopes (app-dms-firefox-<id>.scope).
+      systemd.user.units = lib.mkIf config.fireproof.desktop.enable (lib.genAttrs [
+          "app-dms-firefox-.scope"
+          "app-niri-firefox-.scope"
+        ] (_: {
+          overrideStrategy = "asDropin";
+          text = ''
+            [Scope]
+            CPUWeight=1000
+          '';
+        }));
 
-      # Gauges for the tuning here: runqlat/runqslower (bcc), bpftrace, perf; scxtop ships with scx.
+      # Gauges for scheduling delay: runqlat/runqslower (bcc), bpftrace, perf.
       programs.bcc.enable = true;
       environment.systemPackages = [pkgs.bpftrace pkgs.perf];
 

@@ -270,7 +270,7 @@ in {
         chmod 600 "$tmp"
         if cmp -s "$tmp" "$f"; then rm "$tmp"; else mv "$tmp" "$f"; fi
       '';
-    # Both profiles launch through this: the env, the scratch root and the nice are
+    # Both profiles launch through this: the env and the scratch root are
     # shared, while `dir` and the merged config are the profile's own. It exports
     # `dir`, so the profile pi reads is the one the wrapper just merged into.
     mkWrapper = {
@@ -294,8 +294,6 @@ in {
         ${merge "settings.json" settings}
         ${merge "mcp.json" mcp}
         ${merge "models.json" models}
-        # Same nice as claude-code's wrapper: the agent and its tools yield to the desktop.
-        ${lib.optionalString pkgs.stdenv.isLinux ''${lib.getExe' pkgs.util-linux "renice"} --priority 10 -p $$ >/dev/null 2>&1 || true''}
         exec ${lib.getExe pi} "$@"
       '';
     wrapper = mkWrapper {

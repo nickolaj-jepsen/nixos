@@ -104,12 +104,7 @@ in {
       IOWeight = 20;
       MemoryHigh = "75%";
     };
-    systemd.services.nix-daemon.serviceConfig = {
-      Slice = "nix.slice";
-      # scx schedulers ignore CPUWeight but honour nice; under EEVDF this only competes inside the slice.
-      # Not 19: bpfland gives that weight 1, and a builder starved past the 5 s sched_ext watchdog.
-      Nice = 10;
-    };
+    systemd.services.nix-daemon.serviceConfig.Slice = "nix.slice";
 
     # Nix ≥2.30 builds here, not /tmp; zram absorbs overflow.
     fileSystems."/nix/var/nix/builds" = lib.mkIf (ramBytes >= 32 * 1024 * 1024 * 1024) {

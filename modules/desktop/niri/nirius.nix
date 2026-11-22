@@ -19,6 +19,8 @@
         };
         Service = {
           ExecStart = lib.getExe' pkgs.nirius "niriusd";
+          # Part of the shell: beside niri in session.slice, not competing in app.slice.
+          Slice = "session.slice";
           Restart = "on-failure";
           RestartSec = 2;
         };
