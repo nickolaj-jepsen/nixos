@@ -34,6 +34,8 @@
           font-family = config.fireproof.theme.font.family;
           # The single-instance handoff intermittently yields shell-less transparent windows.
           gtk-single-instance = false;
+          # Linux counts idle io_uring event waits as I/O pressure.
+          async-backend = lib.mkIf pkgs.stdenv.isLinux "epoll";
           window-inherit-font-size = false;
           shell-integration-features = true;
           # Keyboard-first QoL: hide the pointer while typing.

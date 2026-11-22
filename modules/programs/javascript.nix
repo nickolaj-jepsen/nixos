@@ -7,9 +7,9 @@
   }: {
     config = lib.mkIf config.fireproof.dev.enable {
       home.packages = [
-        pkgs.nodejs
+        pkgs.unstable.nodejs
         pkgs.unstable.pnpm
-        pkgs.turbo-unwrapped
+        pkgs.unstable.turbo
       ];
     };
   };
