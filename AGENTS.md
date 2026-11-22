@@ -53,5 +53,6 @@ must be `git add`ed or flake eval ignores them.
 
 ## Maintaining these files
 
-New agent-relevant traps go in the matching `docs/` page, or here only if every
-task needs them. CLAUDE.md just `@`-includes this file.
+Put a trap in a comment at the line that causes it. Add it to the matching
+`docs/` page only when it spans files or has no single line, and here only if
+every task needs it. CLAUDE.md just `@`-includes this file.

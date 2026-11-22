@@ -81,10 +81,9 @@ Claude (`claude-code-action`, `CLAUDE_CODE_OAUTH_TOKEN`) returns a verdict:
   the update lands.
 - `needs-human`: explains, and @-mentions the owner.
 
-Limits, and how its changes reach a branch:
+What it may not touch is listed in its prompt in `update-fix.yml`. How its
+changes reach a branch:
 
-- Workaround pins, `enable = false` and `allowBroken` are off-limits: holding
-  an update back is already the bot's job.
 - The agent can run anything in its job (`nix run`), so that job holds no push
   token and nothing from it is trusted.
 - It hands its verdict and its changes (a `git diff`) to a second job,

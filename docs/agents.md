@@ -6,19 +6,16 @@ and skills themselves: nickolaj-jepsen/agents' AGENTS.md and `docs/`.
 
 ## Rules that aren't in the code
 
-- Skills are one registry (`fireproof.agents.skills`, merged across leaves) that each leaf
-  fills its own way: the input's `lib.skills`, a local one beside it (`plain` in
-  `agent-skills.nix`) or from a feature leaf (`notes` in `obsidian/agents.nix`), a
-  third-party one from its leaf's source, or a copy beside `plain` whose `metadata.source`
-  names the upstream commit (`ponytail-review`, `ponytail-audit`). Private skills (Digital-Udvikling/skills) must not
-  be flake inputs: they are marketplaces fetched at runtime, so only Claude Code gets them.
+- Skills are one registry, `fireproof.agents.skills`, filled from
+  nickolaj-jepsen/agents (`lib.skills`), from a feature leaf (gh-stack in
+  `git.nix`, notes in `obsidian/agents.nix`), or from
+  `modules/programs/agent-skills/` (personal skills, and hand-pinned copies
+  whose `metadata.source` names the upstream commit). Private skills
+  (Digital-Udvikling/skills) must not be flake inputs: they are marketplaces
+  fetched at runtime, so only Claude Code gets them.
 - In `pi/extensions/`, `core/` loads in every session and `parent/` only in the one you
   started. What parent features share is a service in `parent/services.ts`, never a module
   variable another feature imports.
-- chrome's prompt editor is the one payload that leaves this repo for a plugin:
-  `parent/lib/editor-hooks.ts` offers its hooks on `pi.events`
-  (`fireproof:editor-hooks:offer`, and again on `:request` for a package that loaded first),
-  and spellfix's `pi/editor.ts` restates the channels and decorates with them.
 - npm dependencies live in `extensions/package.json` and its lockfile, the npm root, never in
   `core/` or `parent/package.json` (`npm install --package-lock-only`).
 - `pkgs/pi-packages/` and `pkgs/pi-coding-agent/` are pinned here rather than taken from
@@ -27,11 +24,9 @@ and skills themselves: nickolaj-jepsen/agents' AGENTS.md and `docs/`.
   copy with `model:` rewritten to `fireproof.dev.pi.work.fastModel`, and its MCP servers
   `fireproof.agents.workMcpServers`, shared with claude-work.
 - `fireproof.agents.lspServers` is filled by `agent-lsp.nix`, one schema per leaf: Claude Code and
-  Copilot CLI read it, and pi no longer does.
+  Copilot CLI read it; pi doesn't.
 - See what a mod or plugin draws, and its keys, in a real session before handing it back: load
   the `agent-plugin-dev` skill. A green `just build` says nothing about layout or focus.
-- A skill names its note files relative to the store and never says where notes live;
-  `agent-context.md` states that once, and `docs/notes.md` has the rest.
 
 ## Traps
 

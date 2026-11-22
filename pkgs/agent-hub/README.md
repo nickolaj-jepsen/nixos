@@ -12,8 +12,7 @@ headless, polling the registry instead of watching it, to serve viewers.
 - Config: `~/.config/agent-hub/config.json`.
 - It keeps nothing on disk. After a restart it rebuilds from the registry alone: a busy
   session is `working`, the rest `idle`, and nothing pulses. A turn that ends while the daemon
-  is down is never announced. `state.json` and `log.jsonl` from older versions are ignored and
-  can be deleted.
+  is down is never announced.
 
 ## States
 
@@ -58,7 +57,7 @@ first three want you.
 - A row is named by `/rename` or `/name` (the registry's `nameSource: user`), else Claude's
   `ai-title` read from the transcript, else the registry's name, else the folder.
 - Only `custom-title` and `ai-title` entries are read from the transcript, incrementally, on
-  the hooks and when the popout opens (`TitleTail`). It is the only transcript read left.
+  the hooks and when the popout opens (`TitleTail`).
 - The repository name is one `git rev-parse --git-common-dir` when a session is first seen,
   the same from any worktree, or the folder's own name outside git.
 

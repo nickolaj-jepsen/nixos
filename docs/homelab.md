@@ -29,7 +29,6 @@ Read this before adding or reworking a service under `modules/homelab/`.
 
 ## Arr stack (Sonarr, Radarr, Prowlarr, SABnzbd)
 
-- The services live in `modules/homelab/arr.nix`.
 - recyclarr (`modules/homelab/recyclarr.nix`) owns grab policy: profiles,
   custom formats, quality sizes and naming. It syncs daily from the TRaSH
   guides.
@@ -40,20 +39,14 @@ Read this before adding or reworking a service under `modules/homelab/`.
 
 ### Profiles
 
-Assigned per series or movie in the UI.
+Assigned per series or movie in the UI. The defaults are Sonarr `WEB-1080p` and
+Radarr `HD Bluray + WEB`; `WEB-2160p` and `UHD Bluray + WEB` opt into 4K.
 
-- Sonarr:
-  - `WEB-1080p`: the default.
-  - `WEB-1080p (Keep)`: the same with upgrades off, for legacy shows whose
-    sub-1080p files must not be re-downloaded.
-  - `WEB-2160p`: 4K HDR opt-in.
-  - `[Anime] Remux-1080p`: the series type must be `anime`.
-- Radarr:
-  - `HD Bluray + WEB`: the default.
-  - `UHD Bluray + WEB`: 4K opt-in.
-  - `HD Remux (Keep)` and `UHD Remux (Keep)`: upgrades off, for existing
-    remuxes the main profiles would replace with encodes.
-  - All use language `Original`, set via the API (not a recyclarr field).
+- A `(Keep)` profile turns upgrades off: for legacy shows whose sub-1080p files
+  must not be re-downloaded, or existing remuxes the main profiles would replace
+  with encodes.
+- `[Anime] Remux-1080p` needs the series type `anime`.
+- Every Radarr profile's language is `Original`, set via the API.
 
 ### Set once via the API
 
@@ -162,9 +155,6 @@ Not declarative:
     back;
   - target group entities, never HA areas, for multi-bulb actions (one
     multicast; no per-bulb timeout).
-- Availability is on: a device that stops answering goes `unavailable` in HA.
-- `advanced.last_seen` exposes per-device last-seen sensors (disabled by
-  default).
 - `version` in the Z2M settings must track upstream `CURRENT_VERSION`; Z2M
   refuses to start on an unsupported value.
 - `log_level` must be one of `error|warning|info|debug`.
@@ -173,7 +163,6 @@ Not declarative:
   - `network_key`, a list of 16 ints. Rotating it means re-pairing every
     device;
   - `frontend_token`.
-- The broker listens on loopback only; both users have `readwrite #`.
 - Network identity (`pan_id`, `ext_pan_id`, `channel`, `network_key`) is
   pinned.
 - `coordinator_backup.json`, `database.db` and `devices.yaml` are what avoid
@@ -227,7 +216,6 @@ Not declarative:
   - Revoke a device by deleting its `.age` file, then its `_users` doc.
 - `secrets/obsidian/passphrase.age` is the vault E2EE passphrase every device
   shares; the server never sees it. Changing it means a remote rebuild.
-- `couchdb-obsidian-provision` creates the users and databases.
 - Device users are database members only and can't delete a database, so
   LiveSync's "rebuild remote" (first upload, or after changing E2EE or chunk
   settings) is done with the admin login (`/run/agenix/couchdb-admin` on the
@@ -237,40 +225,20 @@ Not declarative:
 
 ### Client side
 
-The client files are `default.nix` (app settings), `plugins.nix` (per-vault
-plugins) and `livesync.nix`.
-
-- App settings and plugin code (`pkgs.obsidianPlugins`, from the
-  `obsidian-extensions` input) are read-only Nix links.
-- Plugin settings are deep-merged into each mutable `data.json` on activation;
-  Nix keys win.
-- Keep LiveSync's hidden-file sync off.
-- Customization sync is on so the phone can apply the Nix hosts'
-  plugins/settings. Never apply it on a Nix host.
-- Templater's "trigger on file creation" is per-device localStorage, so the
-  package is patched to default it on.
-- `plugin.js` is our own plugin: code-block formatting with Nix-pinned
-  formatters, and a Claude terminal toggle.
-- Hotkeys are `settings.hotkeys` in `default.nix`.
-- LiveSync's own `data.json` stays mutable.
-  - `obsidian-livesync-seed` (run on activation) writes the connection, E2EE
-    and path-obfuscation settings only when the file is missing.
-  - Delete the file to re-seed after a password change.
-- `obsidian-livesync-creds` prints the device's login and the passphrase.
-- The phone must match the seeded E2EE + path obfuscation settings.
+- A plugin setting changed in the app lasts only if Nix doesn't set that key:
+  on each activation Nix's keys are merged into the plugin's `data.json` and win.
+- Keep LiveSync's hidden-file sync off, or it syncs `.git` and `.claude`. Never
+  apply Customization Sync on a Nix host; it is on only so the phone can pull.
+- After a password change, delete the vault's LiveSync `data.json` to re-seed
+  it. `obsidian-livesync-creds` prints this device's login and the passphrase.
+- The phone must use the same E2EE and path-obfuscation settings as the seed.
 
 ### Agents (`agents.nix`)
 
 - The notes vault's conventions are its own synced `AGENTS.md`.
-- Nix adds:
-  - the CLI (`obsidian-cli`);
-  - a global `/notes` skill (explicit invocation only);
-  - in the vault's `.claude/`, vault-scoped skills plus hooks.
-- The hooks git-snapshot the vault on session start/end, in a local,
-  never-pushed repo. Review agent edits with `git log -p`.
-- The hooks also lint changed notes through the running app.
-- Claude opens below the note via the Terminal plugin (`plugins.nix`).
-- Hidden-file sync being off keeps `.git` and `.claude` local.
+- The vault's Claude hooks git-snapshot it on session start and end, in a
+  local, never-pushed repo: review agent edits with `git log -p`. They also
+  lint changed notes through the running app.
 
 ## Notifications and health
 

@@ -57,16 +57,6 @@ doesn't own, so the nixos and HM nodes of one host must not share a dir.
   pruned only there, and until then they ship in that host's store copy of the
   dir.
 
-## Darwin
-
-- agenix-rekey auto-discovers `darwinConfigurations`.
-- A not-yet-deployed Mac ships the agenix-rekey dummy pubkey as its
-  `id_ed25519.pub`, so the flake still evaluates.
-- The first bootstrap replaces it: `sudo ssh-keygen -A` creates the real
-  `/etc/ssh/ssh_host_ed25519_key.pub`, then run `just secret-rekey`.
-- Only then set `fireproof.trusted` on the host. That is what authorizes its key
-  for SSH logins fleet-wide (see "Trust" in `docs/hosts.md`).
-
 ## Rekeying from WSL
 
 `desktop-wsl` drives the YubiKey itself. The master identity's PIN/touch policy

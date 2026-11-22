@@ -14,20 +14,14 @@ cross-platform.
   or in siblings (`system.nix`, `monitors.nix`, or a feature co-located with
   its config, e.g. minilab's `snapcast.nix`).
 - `shared` is merged into both the nixos and home-manager evals; there is no
-  osConfig bridge.
-  - A "fact" is just a `fireproof.*` value set in `shared`. The toggle
-    `fireproof.<feature>.enable = true` is the fact that gates the feature's
-    leaves.
-  - Hosts set parent toggles and override the exceptions, e.g. minilab sets
-    `desktop.enable = true` and then `desktop.chromium.enable = false`.
+  osConfig bridge. Set `fireproof.*` toggles there, e.g. minilab sets
+  `desktop.enable = true` and then `desktop.chromium.enable = false`.
 - `nixos` / `homeManager` / `darwin` are per-class config buckets. They are
   plain modules with no `inputs`/`fpLib` args (no specialArgs), so anything
   needing a flake input belongs in a leaf under `modules/`.
 - `state-version.nix` pins `system.stateVersion` and `home.stateVersion` per
   host. `just new-host` stamps it, and there is no fleet-wide default. Never
   bump it.
-- Every toggle is declared in all module classes (centrally, in
-  `modules/base/fireproof.nix`) so `shared` values reach every eval.
 
 ## Classes
 
@@ -57,14 +51,6 @@ they differ from its dir name, e.g. dev-ao's `["dev-01"]`. A verb run without
 a host resolves through `config.flake.hostAliases`; an alias that shadows a
 host or is claimed twice throws.
 
-Verbs per class:
-
-- `just build`/`switch`/`diff` take any host. They read
-  `config.flake.hostMeta` (class, rebuild tool, activation attrpath) and run
-  that verb.
-- `boot`/`test` are nixos-only and refuse other classes.
-- `switch` pushes only nixos hosts to a remote target.
-
 ## First switch on a fresh Mac
 
 Run these on the Mac:
@@ -72,7 +58,8 @@ Run these on the Mac:
 1. Install Nix (Determinate or upstream) with flakes enabled.
 2. `sudo ssh-keygen -A` creates `/etc/ssh/ssh_host_ed25519_key`.
 3. Replace `secrets/hosts/<h>/id_ed25519.{pub,age}` with this Mac's real host
-   key (the committed pub is a placeholder), then run `just secret-rekey`
+   key (the committed pub is agenix-rekey's dummy key, there only so the flake
+   evaluates), then run `just secret-rekey`
    (YubiKey). If `<h>` isn't `fireproof.trusted` yet, set it now that the real
    key is committed, and switch the other hosts so they accept it.
 4. Before the Mac has `darwin-rebuild` on `PATH`, run

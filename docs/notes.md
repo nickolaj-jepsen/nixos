@@ -49,21 +49,12 @@ ${XDG_STATE_HOME:-~/.local/state}/agents/tmp/<repo-id>/<pid>/   scratch, reaped
 
 ## The commands
 
-```bash
-agent-notes root                  # the store directory for this checkout (not created)
-agent-notes root --ensure         # create it, and repair the links
-agent-notes tmp [PID]             # this session's scratch directory, created
-agent-notes tmp --repo            # the repository's scratch root, created
-agent-notes init                  # create or repair the links; quiet, never fails
-agent-notes id                    # the repo-id alone
-agent-notes status                # id, paths, and what state each link is in
-agent-notes migrate [--apply]     # the old per-project layout, moved
-```
+`agent-notes --help` lists them. Skills call `agent-notes root --ensure`, which
+creates the store and repairs the links.
 
 `init` refuses to replace a real file, a real directory, a symlink pointing
-somewhere else, or a path git tracks. It prints why it left one alone and exits
-zero, because git hands a `post-checkout` hook's status back to the checkout that
-ran it.
+somewhere else, or a path git tracks. It prints why and exits zero, because git
+hands a `post-checkout` hook's status back to the checkout that ran it.
 
 ## The links, and what makes them
 
@@ -108,42 +99,22 @@ ran it.
 
 ## Migration
 
-`agent-notes migrate` reads the old layout, where every project was a bare name
-under the data root, and reports before touching anything:
-
-- A project whose name matches a checkout is mapped to that checkout's id; an
-  ambiguous one takes `--map OLD=ID`. A checkout is found through its worktrees
-  too, so one whose main checkout sits below a monorepo
-  (`~/dev/devenv-tilt/projects/<name>`) still maps.
-- Markdown moves as it is. A file that some note names moves to that topic's
-  `files/`. Anything else is listed as unclaimed and, on `--apply`, deleted;
-  `--keep-unclaimed` puts it under `_orphaned/<project>/unclaimed/` instead.
-- A project that maps nowhere keeps its Markdown under `_orphaned/<project>/` and
-  loses its unclaimed files the same way. Rerunning the migration picks such a
-  project up once its checkout exists: the Markdown moves home and whatever was
-  parked in its `unclaimed/` stays parked.
-- Absolute and `~`-relative paths of every moved file are rewritten in the notes
-  and in the agents' memory files. Relative links between notes keep working
-  because a topic directory keeps its shape.
-- Nothing is deleted until `--apply`, and `--apply` refuses when a destination
-  already exists. Stop live sessions first: a note written through an old path
-  during the run is not in the plan.
+`agent-notes migrate` moves a host's notes from the old layout (every project a
+bare name under the data root). It reports first and changes nothing until
+`--apply`; stop live sessions before applying, because a note written through
+an old path during the run is missed.
 
 ## Editing a note in the editor
 
-- Zed shows the store through the link. `scan_symlinks` defaults to `expanded`,
-  so the store's contents are indexed once the folder is expanded, and a note
-  rewritten by an agent updates in place.
-- `.agents/tmp` is in Zed's `file_scan_exclusions`: scratch is not worth the
-  project search.
-- `/open plan` in pi and Claude Code lists the store's notes, newest first, and
-  opens the picked one in the editor. Ghostty opens a clicked `.agents/store` or
-  store path there too. Both go through `agent-note-open` (`modules/scripts`).
+`/open plan` in pi and Claude Code lists the store's notes, newest first, and
+opens the picked one through `agent-note-open` (`modules/scripts`), as does a
+clicked store path in Ghostty. Zed indexes the store through the link and
+excludes `.agents/tmp`.
 
 ## Traps
 
-- Two checkouts of one upstream keep separate notes. That is deliberate: the
-  identity is the checkout, not the remote.
+- Two checkouts of one upstream keep separate notes: the identity is the
+  checkout, not the remote.
 - `git clean -xdf` removes the links; run `agent-notes init` to get them back.
   Nothing in the store is lost.
 - `git worktree move` and a `mv` of the main checkout change the path the id
