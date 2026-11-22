@@ -42,7 +42,7 @@ def ensure(root, create_store=False, report=None):
             problems.append(f"{relative} is tracked by git; commit a real directory or remove it, not a link")
             continue
         if path.is_symlink():
-            if os.readlink(path) == str(target):
+            if os.path.realpath(path) == os.path.realpath(target):
                 continue
             problems.append(f"{relative} is a link to {os.readlink(path)}, not to {target}; leaving it alone")
             continue

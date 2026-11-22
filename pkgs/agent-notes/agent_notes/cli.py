@@ -129,7 +129,7 @@ def main(argv=None):
             command.add_argument("--repo", action="store_true",
                                  help="the repository's scratch root instead, for a harness that keys its own scratch by session")
 
-    init = sub.add_parser("init", help="create or repair .agents/{store,tmp} for a checkout; quiet, never fails a git hook")
+    init = sub.add_parser("init", help="create or repair the agent-note links for a checkout; quiet, never fails a git hook")
     init.add_argument("--path", help="a directory in the checkout (default: cwd)")
     init.add_argument("--ensure-store", action="store_true", help="also create the store directory")
     init.add_argument("--strict", action="store_true", help="exit 1 when a path was left alone")

@@ -1,6 +1,6 @@
 # `agent-notes`: where a checkout's notes live. The store is per checkout, keyed
 # by a hash of the main worktree's path, and each checkout sees it through
-# `.agents/{store,tmp}`. Init runs from a git hook, so it is quiet and always
+# the managed links in `.agents/`. Init runs from a git hook, so it is quiet and always
 # succeeds; the tests drive it against throwaway repositories.
 {
   git,

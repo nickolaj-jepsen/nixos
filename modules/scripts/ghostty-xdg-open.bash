@@ -152,7 +152,7 @@ fi
 # A note, whether named by its store path or through the link in a checkout.
 if [[ -f $path && -z $line ]]; then
   case "$path" in
-    "$HOME"/.local/share/agents/store/*.md | */.agents/store/*.md) exec @agentNoteOpen@ "$path" ;;
+    "$HOME"/.local/share/agents/store/*.md | */.agents/store/*.md | */.agents/workflows/*.md) exec @agentNoteOpen@ "$path" ;;
   esac
 fi
 

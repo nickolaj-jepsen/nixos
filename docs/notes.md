@@ -2,7 +2,7 @@
 
 Notes and the artifacts they name outlive the session that wrote them, so they
 live outside the checkout but visible inside it: every checkout exposes
-`.agents/store`, `.agents/tmp` and `.agents/claude-memory` as symlinks into the
+`.agents/store`, `.agents/workflows`, `.agents/tmp` and `.agents/claude-memory` as symlinks into the
 agents' own directories.
 
 - A note is Markdown under the store; git never holds one, so no commit, stash,
@@ -19,6 +19,7 @@ agents' own directories.
 ```text
 ${XDG_DATA_HOME:-~/.local/share}/agents/store/<repo-id>/
   plans/<slug>/{PLAN.md,HANDOFF.md,PROGRESS.md,notes/,files/,history/}
+  workflows/<slug>/{spec.md,research.md,tickets/}
   research/<topic>/{REPORT.md,notes/,files/}
   ideas/<focus>.md
   findings/<target>.md
@@ -36,6 +37,8 @@ ${XDG_STATE_HOME:-~/.local/state}/agents/tmp/<repo-id>/<pid>/   scratch, reaped
 - The id comes from `git worktree list --porcelain`'s first entry, so moving or
   renaming the main checkout strands its store under the old id. Move the store
   directory to the new id, or let the next write start a fresh one.
+- `.agents/workflows/<slug>/` opens `workflows/<slug>/` in the same durable store.
+  Run `agent-notes root --ensure` before the first write.
 - `files/` holds what a note names: captured output, images, a generated
   devshell. `/open plan` does not list Markdown in there as a note, so a generated
   report never looks like something a session wrote.
@@ -71,8 +74,7 @@ hands a `post-checkout` hook's status back to the checkout that ran it.
 - The hook creates the links, never the store. A clone that is thrown away
   therefore leaves nothing behind, and a brand-new project's `.agents/store`
   dangles until something writes a note.
-- Ignored by `/.agents/store` and `/.agents/tmp`, root-anchored, in the global
-  ignore file. A path git already tracks is unaffected by an ignore rule, which
+- All four link paths are root-anchored in the global Git ignore file. A path git already tracks is unaffected by an ignore rule, which
   is why `init` checks rather than assumes.
 
 ## Scratch

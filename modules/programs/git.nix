@@ -93,7 +93,7 @@
       # pi's background tasks write their output into the checkout, and untracked
       # files there would ride into the wip commit `wt close` makes of a worktree.
       # The agent-notes links are root-anchored, so a nested `.agents/` does not match.
-      ignores = ["**/.claude/settings.local.json" "**/.pi/tasks/" "/.agents/store" "/.agents/tmp" "/.agents/claude-memory"];
+      ignores = ["**/.claude/settings.local.json" "**/.pi/tasks/" "/.agents/store" "/.agents/workflows" "/.agents/tmp" "/.agents/claude-memory"];
       includes = [
         {
           condition = "hasconfig:remote.*.url:git@github.com:Digital-Udvikling/**";

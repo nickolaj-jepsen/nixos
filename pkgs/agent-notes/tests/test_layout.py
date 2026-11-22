@@ -1,4 +1,4 @@
-"""The store's identity and its two links, driven against throwaway repositories."""
+"""The store's identity and its checkout links, driven against throwaway repositories."""
 
 import os
 import subprocess
@@ -66,6 +66,26 @@ class LayoutTest(unittest.TestCase):
         self.assertEqual(os.readlink(self.repo / ".agents/claude-memory"),
                          str(layout.claude_memory_root() / layout.repo_id(self.repo)))
         self.assertFalse((layout.store_root() / layout.repo_id(self.repo)).exists(), "the store is created by a write")
+
+    def test_workflow_notes_are_shared_across_worktrees(self):
+        worktree = Path(self.home.name) / "work" / "side"
+        git("worktree", "add", "-q", "-b", "side", str(worktree), cwd=self.repo)
+        workflows = self.repo / ".agents/workflows"
+        self.assertEqual(links.ensure(self.repo), [])
+        self.assertTrue(workflows.is_symlink())
+        self.assertFalse(workflows.exists())
+        self.assertEqual(links.ensure(worktree, create_store=True), [])
+        (workflows / "feature").mkdir()
+        (workflows / "feature/spec.md").write_text("agreed")
+        self.assertEqual((worktree / ".agents/workflows/feature/spec.md").read_text(), "agreed")
+        self.assertTrue(workflows.samefile(self.repo / ".agents/store/workflows"))
+
+    def test_init_accepts_an_existing_relative_workflow_link(self):
+        (self.repo / ".agents").mkdir()
+        workflows = self.repo / ".agents/workflows"
+        workflows.symlink_to("store/workflows")
+        self.assertEqual(links.ensure(self.repo), [])
+        self.assertEqual(os.readlink(workflows), "store/workflows")
 
     def test_init_is_idempotent(self):
         links.ensure(self.repo)
