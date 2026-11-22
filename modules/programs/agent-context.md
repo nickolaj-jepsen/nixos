@@ -1,53 +1,29 @@
 # Working preferences
 
-Explicit repository instructions take precedence over these defaults.
+Use the repository’s instructions and tools first. These are defaults.
 
-## Documentation
+## Documentation and memory
 
-Update the docs a reader uses when a change affects what they need to know or do. Check actual callers and published promises before assuming compatibility requirements.
+- Ask me before writing a decision from a conversation (a grilling or planning answer, feedback, a lesson) into anything that outlasts the task: repo docs, agent instructions, a skill or memory. My answers are often for the task at hand, and once written down they read as standing rules. Documenting what a change does needs no asking.
+- Treat a decision already recorded in a repo's docs as what was decided at the time, not as settled: an agent may have written it without my review. When one looks wrong or blocks a better approach, raise it with me instead of following it or working around it silently.
 
-Keep feedback, planning answers and lessons from this session in this session. Only carry one into memory, agent instructions or a skill if I explicitly ask you to remember or apply it beyond this task.
+## Environment and files
 
-## Environment
+- Manage persistent system and user configuration in `~/nixos` (NixOS, home-manager or nix-darwin), not through `apt`, global npm/pip installs or edits to `/etc`. For a one-off tool, use `nix run nixpkgs#<tool>` or `nix shell nixpkgs#<tool>`.
+- Put throwaway work in your scratchpad or a directory from `mktemp -d`. Other sessions share `$TMPDIR` and may share `.agents/tmp`; don’t use fixed names directly in either. Leave disposable files there.
+- Write persistent agent files and notes through `.agents/store`, the project store shared by all checkouts, not directly in `~`. Use `agent-notes root --ensure` to create the store or repair its links.
 
-- This machine is managed by the `~/nixos` flake (NixOS, or nix-darwin on macOS). Persistent system or user configuration belongs there; do not use `apt`, global npm/pip installs, or edit `/etc`.
-- For one-off tools, use `nix run nixpkgs#<tool>` or `nix shell nixpkgs#<tool>`.
-- Put throwaway files (benchmarks, experiments, spikes, builds, test fixtures) in a directory of your own: your scratchpad, or `mktemp -d`. `$TMPDIR` and `.agents/tmp` can be shared with other sessions, so never write a fixed name straight into them. Scratch is disposable; don't copy files out of it just to keep them.
-- Notes and persistent files live in the project's store, `agent-notes root`, which every checkout sees as `.agents/store`. Write notes through the link, so an editor shows them beside the code and git only ever sees a link. `agent-notes root --ensure` creates the store and repairs the links. Don't create files or folders directly in `~`.
+## Tool preferences
 
-## Tooling
+- Python: `uv`, `ruff`, `pyrefly`, `pytest`.
+- JavaScript: TypeScript, Node, `pnpm`, `oxlint`, `oxfmt`, `vitest`.
+- Version control: `git`, `gh` for GitHub, `gh stack` for stacked PRs, `wt` for worktrees.
+- Environments: Nix flakes; `ds` for devenv in Digital-Udvikling repos.
 
-Always defer to the repo's existing tooling, but if you have a choice, prefer these:
+## Git and worktrees
 
-- python:
-  - `uv`
-  - `ruff`
-  - `pyrefly`
-  - `pytest`
-- javascript:
-  - `typescript`
-  - `node`
-  - `pnpm`
-  - `oxlint`
-  - `oxfmt`
-  - `vitest`
-- version control:
-  - `git` for version control
-  - `gh` for GitHub operations
-  - `gh stack` for stacked prs
-  - `wt` for worktree management (custom tool)
-- other:
-  - `ds` for managing the devenv in Digital-Udvikling repos (custom tool)
-  - `nix` + flakes for reproducible builds and environments
-
-## Git
-
-- A change that fits in one commit may go straight onto the current branch (main included).
-- A larger change gets its own worktree and branch (the harness tool, else `wt new`). Commit as you go there.
-- Use a worktree even for a small change when another agent is working on the same or related files, so neither of you commits over the other.
-- Keep commits to the logical steps of the change: a change that should be 2 commits doesn't land as 10. Fold a fix to an earlier commit into it with `git commit --fixup`.
-- Never touch changes you didn't make. Stage only your own paths, never `-A`.
-- Never push or open a PR unless asked.
-- No merge commits: rebase. `git rebase` autosquashes the fixups.
-- Whether your subagents share your checkout or get worktrees of their own is your call, and so is managing those worktrees.
-- Stay in the worktree after finishing a task so the user can test and request follow-ups. Only leave if asked, using `exit_worktree` in pi or `ExitWorktree` in Claude Code with `action: "keep"`. To land, close or drop it when asked, leave with `keep` first. From the primary checkout, run `wt land <name>` to land it, `wt close <name>` to remove the checkout but keep its work, or `wt drop <name>` to throw it away.
+- A one-commit change can go on the current branch, including main. For larger changes, or when another agent is editing related files, use a separate worktree and branch (harness worktree tool, else `wt new`).
+- Leave others’ changes untouched. Stage only your own paths, never `-A`.
+- Commit as you go in logical steps. Rebase rather than merging.
+- Push or open a PR only when asked.
+- Stay in your worktree for testing and follow-ups.
