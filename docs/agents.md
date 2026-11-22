@@ -7,10 +7,8 @@ and skills themselves: nickolaj-jepsen/agents' AGENTS.md and `docs/`.
 ## Rules that aren't in the code
 
 - Skills are one registry, `fireproof.agents.skills`, filled from
-  nickolaj-jepsen/agents (`lib.skills`), from a feature leaf (gh-stack in
-  `git.nix`, notes in `obsidian/agents.nix`), or from
-  `modules/programs/agent-skills/` (personal skills, and hand-pinned copies
-  whose `metadata.source` names the upstream commit). Private skills
+  nickolaj-jepsen/agents (`lib.skills`) or from a feature leaf (gh-stack in
+  `git.nix`, notes in `obsidian/agents.nix`). Private skills
   (Digital-Udvikling/skills) must not be flake inputs: they are marketplaces
   fetched at runtime, so only Claude Code gets them.
 - In `pi/extensions/`, `core/` loads in every session and `parent/` only in the one you

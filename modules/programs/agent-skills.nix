@@ -13,10 +13,6 @@
       description = "Where nickolaj-jepsen/agents is checked out. `claude-dev` and `pi-dev` load the plugins from it in place of the store copies.";
     };
 
-    # plain is personal (Nickolaj's writing style), so it lives here, not in the public agents repo.
-    # The ponytail pair are copies pinned by hand: `metadata.source` in each names the upstream commit.
-    config.fireproof.agents.skills =
-      inputs.agents.lib.skills
-      // lib.genAttrs ["plain" "ponytail-review" "ponytail-audit"] (name: ./agent-skills + "/${name}");
+    config.fireproof.agents.skills = inputs.agents.lib.skills;
   };
 }

@@ -86,7 +86,7 @@ let
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 
       # Registry: leaves register skills next to the feature they document; third-party
-      # skills are referenced from their upstream source, except the copies in agent-skills/.
+      # skills are referenced from their upstream source.
       agents.skills = lib.mkOption {
         type = lib.types.attrsOf lib.types.path;
         default = {};
