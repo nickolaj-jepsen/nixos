@@ -11,7 +11,7 @@
     full = config.fireproof.neovim.full.enable;
     c = config.fireproof.theme.colors;
   in {
-    imports = [inputs.nvf.homeManagerModules.default];
+    imports = [inputs.nvf.homeModules.default];
 
     programs.nvf = {
       enable = true;
