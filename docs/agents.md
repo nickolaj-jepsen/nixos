@@ -34,14 +34,27 @@ profiles send traces to separate projects (`claude-code`, `pi`, `claude-work`,
 `pi-work`) on the same Phoenix server with the same key. Project names are
 not access controls. Only send work metadata where your employer permits it.
 Both personal and work profiles send content-bearing traces. Claude uses
-native beta OTLP tracing with prompt, tool argument, and tool output capture
-enabled. Its raw API bodies and assistant-response log events are not sent to
-the trace endpoint. Pi uses the pinned `@amaster.ai/pi-telemetry` extension
-with payload capture enabled, including model inputs/outputs and tool data.
-It ignores project telemetry settings, reads its key from agenix, and keeps
-credential masking and raw error-text suppression. Neither agent ships logs
-or metrics. Trace content can include source code, secrets printed by tools,
-and work data; it is stored on the homelab and included in backups.
+Arize's `claude-code-tracing` plugin (`pkgs/claude-code-tracing`) — one AGENT
+span per turn with the LLM calls and tool spans nested under it, and prompt,
+tool argument and tool output capture on. A wrapper passes it with
+`--plugin-dir` only when that profile owns the project and the key is
+enrolled, so plain `claude`, `claude-work` and `claude-dev` each need nothing
+beyond their own wrapper. The key's _path_ is what reaches the session; each
+hook process reads the key itself, so no copy sits in the env a Bash tool can
+read or in a file at rest. Pi uses the pinned `@amaster.ai/pi-telemetry`
+extension with payload capture enabled, including model inputs/outputs and tool
+data. It ignores project telemetry settings, reads its key from agenix, and
+keeps credential masking and raw error-text suppression. Neither agent ships
+logs or metrics. Trace content can include source code, secrets printed by
+tools, and work data; it is stored on the homelab and included in backups.
+
+Upstream cuts no releases (only rc tags), so the plugin is pinned to a main
+commit: bump `rev` and `hash` in `pkgs/claude-code-tracing/package.nix`
+together, and re-read `tracing/claude_code/hooks/hooks.json` for the hook
+events Claude Code now has. Claude's hook log is
+`~/.arize/harness/logs/claude-code.log`; `ARIZE_VERBOSE=true` logs every fire
+and `ARIZE_DRY_RUN=true` builds spans without sending them, both worth setting
+for one session when traces don't show up.
 
 To enroll a key, create a system API key in Phoenix Settings and run this from
 Bash in the repo. Paste the key at the hidden prompt; don't put it on a command
@@ -60,8 +73,9 @@ just secret-rekey
 Commit the encrypted source and rekeyed HM blobs before rolling out. Until the
 source exists, the integration is inert. After enrollment, build and activate
 one host first. Start fresh personal and work sessions, send a harmless prompt
-in each, and exit. Check Phoenix for Claude spans and Pi `chat-turn` spans in
-the corresponding projects. In Pi, `/telemetry status` shows exporter status.
+in each, and exit. Check Phoenix for a Claude `Turn n` span tree and Pi
+`chat-turn` spans in the corresponding projects. In Pi, `/telemetry status`
+shows exporter status.
 Verify that `just eval hm.fireproof.dev.phoenix.enable dev-ao` is `false`.
 To revoke access, revoke the key in Phoenix, not just in Nix.
 

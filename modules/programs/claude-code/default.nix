@@ -16,11 +16,6 @@
     homeDir = config.home.homeDirectory;
     scratch = config.fireproof.dev.enable;
     phoenix = import ../_phoenix-client.nix {inherit config;};
-    phoenixHeaders = pkgs.writeShellScript "claude-phoenix-headers" ''
-      key=$(<${lib.escapeShellArg phoenix.path}) || exit 1
-      [ -n "$key" ] || exit 1
-      printf '%s' "$key" | ${lib.getExe pkgs.jq} -Rs '{Authorization: ("Bearer " + sub("[\\r\\n]+$"; ""))}'
-    '';
 
     # Agent temp is the repository's scratch root, aged out by `agent-notes reap`
     # (docs/notes.md). Not a per-pid directory: Claude Code keys its
@@ -156,27 +151,28 @@
       ];
     };
 
-    phoenixTracing = {
+    # Arize's tracing hooks as a plugin dir of their own (pkgs/claude-code-tracing),
+    # loaded with --plugin-dir rather than installed from a marketplace: pinned in the
+    # store, no runtime clone. Only the profile that owns the project gets it, and only
+    # once a key is enrolled; the key's path goes into the env, the key itself only into
+    # each hook process (scripts/run-hook in the plugin).
+    tracingArgs = {
       project,
       profileCheck,
-    }:
-      lib.optionalString phoenix.enabled ''
+    }: ''
+      tracing_args=()
+      ${lib.optionalString phoenix.enabled ''
+        ${phoenix.clear}
         if [ -s ${lib.escapeShellArg phoenix.path} ] && ${profileCheck}; then
-          ${phoenix.clear}
-          export CLAUDE_CODE_ENABLE_TELEMETRY=1 CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
-          export OTEL_TRACES_EXPORTER=otlp OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none
-          export OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf
-          export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${lib.escapeShellArg phoenix.endpoint}
-          export OTEL_RESOURCE_ATTRIBUTES=openinference.project.name=${project}
-          export OTEL_LOG_USER_PROMPTS=1 OTEL_LOG_TOOL_DETAILS=1 OTEL_LOG_TOOL_CONTENT=1
-          empty_settings='{}'
-          if settings=$(${lib.getExe pkgs.jq} -c --arg helper ${lib.escapeShellArg (toString phoenixHeaders)} '. + {otelHeadersHelper: $helper}' <<< "''${memory_args[1]:-$empty_settings}"); then
-            memory_args=(--settings "$settings")
-          else
-            ${phoenix.clear}
-          fi
+          export PHOENIX_ENDPOINT=${lib.escapeShellArg phoenix.baseUrl}
+          export PHOENIX_PROJECT=${lib.escapeShellArg project}
+          export CLAUDE_TRACING_KEY_FILE=${lib.escapeShellArg phoenix.path}
+          # The plugin's content capture, which native telemetry used to switch on too.
+          export ARIZE_LOG_PROMPTS=true ARIZE_LOG_TOOL_DETAILS=true ARIZE_LOG_TOOL_CONTENT=true
+          tracing_args=(--plugin-dir ${pkgs.claude-code-tracing})
         fi
-      '';
+      ''}
+    '';
 
     # `claude plugin test` refuses any option before `plugin`, and the
     # home-manager wrapper always prepends --plugin-dir.
@@ -184,11 +180,11 @@
       ${lib.optionalString scratch tmpDir}
       if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
       ${memoryArgs}
-      ${phoenixTracing {
+      ${tracingArgs {
         project = "claude-code";
         profileCheck = ''[ -z "''${CLAUDE_CONFIG_DIR:-}" ]'';
       }}
-      exec -a "$0" ${ccfg.finalPackage}/bin/claude "''${memory_args[@]}" "$@"
+      exec -a "$0" ${ccfg.finalPackage}/bin/claude "''${tracing_args[@]}" "''${memory_args[@]}" "$@"
     '';
 
     # Work-owned MCP servers ride in their own plugin, which only claude-work
@@ -214,15 +210,14 @@
       text = ''
         ${lib.optionalString scratch tmpDir}
         ${phoenix.clear}
-        export CLAUDE_CODE_ENABLE_TELEMETRY=0 OTEL_TRACES_EXPORTER=none
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
         ${memoryArgs}
-        ${phoenixTracing {
+        ${tracingArgs {
           project = "claude-work";
           profileCheck = ''[ "$CLAUDE_CONFIG_DIR" = "$HOME/.claude-work" ]'';
         }}
-        exec ${ccfg.finalPackage}/bin/claude ${lib.escapeShellArgs workMcpArgs} "''${memory_args[@]}" "$@"
+        exec ${ccfg.finalPackage}/bin/claude ${lib.escapeShellArgs workMcpArgs} "''${tracing_args[@]}" "''${memory_args[@]}" "$@"
       '';
     };
 
