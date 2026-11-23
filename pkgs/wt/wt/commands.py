@@ -46,12 +46,31 @@ STATUS_VERSION = 4
 # new
 
 
+def _orphaned_dependency(source: str, dest: str, rel: str) -> bool:
+    """Whether `rel` is a nested dependency that would create a parent with no source in it."""
+    parent = os.path.dirname(rel)
+    if not parent or os.path.basename(rel) != "node_modules":
+        return False
+    if os.path.lexists(os.path.join(dest, parent)):
+        return False
+    try:
+        if os.listdir(os.path.join(source, parent)) != [os.path.basename(rel)]:
+            return False
+    except OSError:
+        return False
+    tracked = run(["git", "-C", source, "ls-files", "-z", "--", parent], check=False)
+    return tracked.returncode == 0 and not tracked.stdout
+
+
 def _copy_ignored(source: str, dest: str, excludes: list[str]) -> None:
     """Copy into `dest` the paths of checkout `source` that `excludes` selects and git ignores."""
     proc = run(["git", "-C", source, "ls-files", "-z", "--others", "--ignored", "--directory", *excludes], check=False)
     for rel in proc.stdout.split("\0"):
         rel = rel.rstrip("/")
         if not rel or run(["git", "-C", source, "check-ignore", "-q", "--", rel], check=False).returncode != 0:
+            continue
+        if _orphaned_dependency(source, dest, rel):
+            info(f"skipped {rel}: it would create a folder holding only dependencies")
             continue
         target = os.path.join(dest, rel)
         if os.path.lexists(target):

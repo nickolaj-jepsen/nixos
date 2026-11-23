@@ -46,8 +46,9 @@ def build_parser() -> argparse.ArgumentParser:
         "A new branch starts from <base>, by default origin/<default> (fetched when over a day old),\n"
         "else <default>. An open name just prints its path. Reopening checks out the branch the\n"
         "worktree was closed on and turns a wip commit at its tip back into uncommitted changes.\n"
-        "Gitignored paths listed in the primary checkout's .worktreeinclude are copied in. Its\n"
-        "submodules are cloned from it, with their listed paths copied when both are on the same\n"
+        "Gitignored paths listed in the primary checkout's .worktreeinclude are copied in, except a\n"
+        "nested node_modules whose folder is absent and holds nothing else in the primary checkout.\n"
+        "Its submodules are cloned from it, with their listed paths copied when both are on the same\n"
         "commit.",
     )
     new.add_argument("name", help="worktree and branch name; slashes become dashes in the folder name")

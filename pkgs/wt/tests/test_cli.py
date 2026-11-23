@@ -891,6 +891,53 @@ class Local(Base):
         self.assertEqual(Path(self.main, "a.txt").read_text(), "both\n")
 
 
+class WorktreeInclude(Base):
+    """A checkout whose .worktreeinclude selects dependency folders at several depths."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write(".gitignore", "node_modules/\ngenerated/\n")
+        self.write(".worktreeinclude", "node_modules/\ngenerated/\n")
+        for package in ("kept", "trimmed"):
+            os.makedirs(os.path.join(self.main, "packages", package), exist_ok=True)
+            self.write(f"packages/{package}/package.json", "{}\n")
+        self.commit("ignore dependencies")
+        self.git("switch", "-qc", "trimmed")
+        self.git("rm", "-q", "packages/trimmed/package.json")
+        self.commit("drop the package")
+        self.git("switch", "-q", "main")
+        for rel, text in {
+            "node_modules/root-dep/index.js": "root\n",
+            "packages/kept/node_modules/dep/index.js": "kept\n",
+            "packages/stale/node_modules/dep/index.js": "stale\n",
+            "packages/trimmed/node_modules/dep/index.js": "trimmed\n",
+            "packages/loose/src/keep.txt": "source\n",
+            "packages/loose/node_modules/dep/index.js": "loose\n",
+            "packages/copied/generated/out": "generated\n",
+        }.items():
+            os.makedirs(os.path.dirname(os.path.join(self.main, rel)), exist_ok=True)
+            self.write(rel, text)
+
+    def test_new_skips_a_dependency_whose_parent_holds_nothing_else(self) -> None:
+        result = self.wt("new", "feature")
+        path = Path(result.stdout.strip())
+        self.assertEqual(result.stdout, f"{path}\n")
+        self.assertFalse((path / "packages/stale").exists())
+        self.assertIn("skipped packages/stale/node_modules", result.stderr)
+
+    def test_new_copies_dependencies_with_a_parent_or_explicit_include(self) -> None:
+        path = self.new("feature")
+        self.assertEqual((path / "node_modules/root-dep/index.js").read_text(), "root\n")
+        self.assertEqual((path / "packages/kept/node_modules/dep/index.js").read_text(), "kept\n")
+        self.assertEqual((path / "packages/copied/generated/out").read_text(), "generated\n")
+        self.assertEqual((path / "packages/loose/node_modules/dep/index.js").read_text(), "loose\n")
+        self.assertFalse((path / "packages/stale").exists())
+
+        trimmed = self.new("trimmed-base", "trimmed")
+        self.assertFalse((trimmed / "packages/trimmed/package.json").exists())
+        self.assertEqual((trimmed / "packages/trimmed/node_modules/dep/index.js").read_text(), "trimmed\n")
+
+
 class Submodules(Base):
     """A repository with an upstream at vendor/s, checked out and built in the primary checkout."""
 
