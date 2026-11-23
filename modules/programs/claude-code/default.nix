@@ -156,20 +156,18 @@
       ];
     };
 
-    # `claude plugin test` refuses any option before `plugin`, and the
-    # home-manager wrapper always prepends --plugin-dir.
-    claudeEntry = pkgs.writeShellScript "claude" ''
-      ${lib.optionalString scratch tmpDir}
-      if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
-      ${memoryArgs}
-      ${lib.optionalString phoenix.enabled ''
-        if [ -s ${lib.escapeShellArg phoenix.path} ] && [ -z "''${CLAUDE_CONFIG_DIR:-}" ]; then
+    phoenixTracing = {
+      project,
+      profileCheck,
+    }:
+      lib.optionalString phoenix.enabled ''
+        if [ -s ${lib.escapeShellArg phoenix.path} ] && ${profileCheck}; then
           ${phoenix.clear}
           export CLAUDE_CODE_ENABLE_TELEMETRY=1 CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
           export OTEL_TRACES_EXPORTER=otlp OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none
           export OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf
           export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${lib.escapeShellArg phoenix.endpoint}
-          export OTEL_RESOURCE_ATTRIBUTES=openinference.project.name=claude-code
+          export OTEL_RESOURCE_ATTRIBUTES=openinference.project.name=${project}
           export OTEL_LOG_USER_PROMPTS=0 OTEL_LOG_TOOL_DETAILS=0 OTEL_LOG_TOOL_CONTENT=0
           empty_settings='{}'
           if settings=$(${lib.getExe pkgs.jq} -c --arg helper ${lib.escapeShellArg (toString phoenixHeaders)} '. + {otelHeadersHelper: $helper}' <<< "''${memory_args[1]:-$empty_settings}"); then
@@ -178,7 +176,18 @@
             ${phoenix.clear}
           fi
         fi
-      ''}
+      '';
+
+    # `claude plugin test` refuses any option before `plugin`, and the
+    # home-manager wrapper always prepends --plugin-dir.
+    claudeEntry = pkgs.writeShellScript "claude" ''
+      ${lib.optionalString scratch tmpDir}
+      if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
+      ${memoryArgs}
+      ${phoenixTracing {
+        project = "claude-code";
+        profileCheck = ''[ -z "''${CLAUDE_CONFIG_DIR:-}" ]'';
+      }}
       exec -a "$0" ${ccfg.finalPackage}/bin/claude "''${memory_args[@]}" "$@"
     '';
 
@@ -209,7 +218,11 @@
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
         ${memoryArgs}
-        exec claude ${lib.escapeShellArgs workMcpArgs} "''${memory_args[@]}" "$@"
+        ${phoenixTracing {
+          project = "claude-work";
+          profileCheck = ''[ "$CLAUDE_CONFIG_DIR" = "$HOME/.claude-work" ]'';
+        }}
+        exec ${ccfg.finalPackage}/bin/claude ${lib.escapeShellArgs workMcpArgs} "''${memory_args[@]}" "$@"
       '';
     };
 
