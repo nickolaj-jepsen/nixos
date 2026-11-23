@@ -11,6 +11,7 @@
     fireproof.neovim.full.enable = false;
     fireproof.dev.pi.enable = true;
     fireproof.homelab.enable = true;
+    fireproof.homelab.phoenix.enable = true;
     fireproof.networkd.enable = true;
   };
 

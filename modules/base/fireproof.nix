@@ -236,6 +236,7 @@ let
           default = "nickolaj@fireproof.website";
           description = "Contact email registered with the ACME provider.";
         };
+        phoenix.enable = lib.mkEnableOption "Arize Phoenix LLM tracing and evaluation server";
         plex.enable = lib.mkEnableOption "Plex Media Server. Off by default: kept only until everyone has moved to Jellyfin";
         dashboard.monitors = lib.mkOption {
           type = lib.types.attrsOf (lib.types.submodule {

@@ -27,6 +27,25 @@ Read this before adding or reworking a service under `modules/homelab/`.
   - `virtualisation.docker.enableOnBoot = true` so it survives reboot;
   - port published to `127.0.0.1` behind an nginx vhost.
 
+## Arize Phoenix
+
+- UI: `https://phoenix.<domain>`. Sign in as `admin@localhost` with the
+  initial password in `secrets/hosts/homelab/phoenix-env.age`. The env file
+  also holds `PHOENIX_SECRET`; keep it stable, since changing it invalidates
+  sessions and API keys and makes stored provider credentials unreadable.
+- Create an API key in Phoenix Settings. Point OTLP/HTTP clients at
+  `https://phoenix.<domain>/v1/traces` with `Authorization: Bearer <key>`.
+  For `phoenix.otel.register`, use `protocol="http/protobuf"` and set
+  `PHOENIX_API_KEY` in the client environment. gRPC isn't published.
+- Phoenix uses the shared PostgreSQL `phoenix` database over the local socket
+  with peer authentication. The database is included in the PostgreSQL dump
+  Restic takes before each snapshot. Default trace retention is 30 days. Traces
+  and backups can contain prompts, completions and other sensitive data; only
+  instrument apps whose data you intend to send to this server.
+- The SQLite cutover preserves users and API keys, not traces or sessions.
+  The old `/var/lib/phoenix/phoenix.db` is not mounted by the new container
+  and can be retained for rollback.
+
 ## Arr stack (Sonarr, Radarr, Prowlarr, SABnzbd)
 
 - recyclarr (`modules/homelab/recyclarr.nix`) owns grab policy: profiles,
