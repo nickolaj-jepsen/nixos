@@ -57,15 +57,17 @@ jobs:
   # `if` on the outputs, not on `needs.plan.result`: a plan that fails leaves the
   # outputs empty, and an empty matrix errors instead of skipping.
   # --single: one toplevel per job, so nix-fast-build's parallel eval buys nothing.
+  # The name is pinned: update_bot.py maps `build (<host>)` back to the host.
   build:
+    name: build (${{ matrix.host }})
     needs: [plan]
     if: needs.plan.outputs.linux != '' && needs.plan.outputs.linux != '[]'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        host: ${{ fromJson(needs.plan.outputs.linux) }}
+        include: ${{ fromJson(needs.plan.outputs.linux) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: ./.github/actions/setup-nix

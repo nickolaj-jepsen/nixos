@@ -26,6 +26,12 @@
         extraUpFlags = lib.mkIf cfg.autoLogin ["--reset" "--advertise-tags=tag:fireproof"];
       };
 
+      # Upstream orders autoconnect only after tailscaled; on a slow DHCP (phone-vm) it ran before DNS and failed.
+      systemd.services.tailscaled-autoconnect = lib.mkIf cfg.autoLogin {
+        after = ["network-online.target"];
+        wants = ["network-online.target"];
+      };
+
       # Manual-login hosts may be pointed at a tailnet other than the personal
       # one, so only auto-enrolled hosts trust the interface.
       networking.firewall.trustedInterfaces = lib.mkIf cfg.autoLogin ["tailscale0"];
