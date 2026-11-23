@@ -1,5 +1,6 @@
 # bind-address 0.0.0.0 relies on the firewall's default deny to keep 3306 off the
-# LAN/WAN NICs; docker0 is the only hole. Adding a database: docs/homelab.md.
+# LAN/WAN NICs; docker0 is the only hole. Consumers add ensureDatabases and
+# mysqlBackup entries; TCP password users need a mysql.postStart provisioner.
 {
   flake.modules.nixos.mariadb = {
     config,

@@ -19,7 +19,7 @@
       just deploy-remote <host> root@<this-machine>   # FORMATS this disk
 
     or install by hand: nmtui for WiFi, then the host's disko config followed by
-    nixos-install. See docs/hosts.md.
+    nixos-install.
 
   '';
 

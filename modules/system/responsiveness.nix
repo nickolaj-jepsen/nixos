@@ -6,6 +6,8 @@
     ...
   }: {
     config = lib.mkIf config.fireproof.hardware.physical {
+      # Diagnose lag/pressure: journalctl --user -t niri | grep 'lagging behind'
+      # cat /proc/pressure/{cpu,memory,io}; systemd-cgtop; journalctl -u earlyoom
       # No sched_ext scheduler (scx_bpfland & co.): they ignore cgroup CPU weights, which is what
       # keeps niri in session.slice responsive while app.slice is saturated; under scx_bpfland a
       # single parallel build made input lag. The kernel's EEVDF honours them.

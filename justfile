@@ -247,6 +247,8 @@ secret-write file force="":
     EDITOR="$temp/editor" just secret-edit "{{ file }}"
     echo "Wrote {{ file }} - run 'just secret-rekey' (YubiKey) before it can build."
 
+# Generators are for new random secrets only. Retrofitting one and forcing
+# generation rotates existing secrets; that is fatal for restic-password/zitadel-master.
 [doc('Create secrets that declare a `generator` and have no file yet (no YubiKey) - follow with secret-rekey')]
 [group('secret')]
 [script]
@@ -305,15 +307,6 @@ clean:
 [group('maintenance')]
 disk:
     disk-report
-
-[doc('Generate Markdown reference for the fireproof.* options into docs/')]
-[group('dev')]
-[script]
-docs:
-    mkdir -p docs
-    out=$({{ nixcmd }} build --no-link --print-out-paths .#fireproof-docs)
-    install -m 644 "$out" docs/fireproof-options.md
-    echo "Wrote docs/fireproof-options.md"
 
 [doc("Set up what development needs but git ignores: direnv and the pi extensions' node_modules; the plugins' own setup is `just dev-setup` in nickolaj-jepsen/agents")]
 [group('dev')]

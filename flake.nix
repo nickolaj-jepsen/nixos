@@ -8,13 +8,12 @@
         inputs.agenix-rekey.flakeModule
         ./formatter.nix
         ./devshell.nix
-        ./docs.nix
         ./home-check.nix
         ./lib/flake-module.nix
         ./hosts
         ./installer
         ./pkgs
-        # Every file under ./modules is a self-gating dendritic leaf; see docs/modules.md.
+        # Every file under ./modules is a self-gating dendritic leaf.
         (inputs.import-tree ./modules)
       ];
       systems = [

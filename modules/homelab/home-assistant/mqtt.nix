@@ -50,6 +50,7 @@
     config = lib.mkIf cfg.enable {
       age.secrets = {
         # Keys: password (MQTT), network_key (Zigbee, list of 16 ints), frontend_token.
+        # Rotating network_key means re-pairing every device.
         "zigbee2mqtt-secret.yaml" = {
           rekeyFile = ../../../secrets/hosts/homelab/zigbee2mqtt-secret.yaml.age;
           owner = "zigbee2mqtt";
@@ -61,6 +62,8 @@
 
       environment.systemPackages = [z2mMqtt];
 
+      # coordinator_backup.json, database.db and devices.yaml avoid re-pairing;
+      # copy them off-box before touching the dongle or data directory.
       services.restic.backups.homelab = {
         paths = [config.services.zigbee2mqtt.dataDir];
         exclude = ["/var/lib/zigbee2mqtt/log/"];

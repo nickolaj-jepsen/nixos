@@ -1,5 +1,5 @@
 # One update PR per night: flake inputs + pkgs/ on `auto/update`, automerged
-# once `CI gate` passes. Failures are handled by update-triage.yml; see docs/updates.md.
+# once `CI gate` passes. Failures are handled by update-triage.yml.
 #
 # Gated by repo settings: a ruleset on `main` requiring `CI gate` (fmt.yml),
 # "Allow auto-merge", and BOT_TOKEN (fine-grained PAT: contents, pull-requests,

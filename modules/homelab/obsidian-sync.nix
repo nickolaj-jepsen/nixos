@@ -12,8 +12,8 @@
     domain = "obsidian.${cfg.domain}";
     accessLog = "/var/log/nginx/obsidian.access.log";
     # One CouchDB user per device (every secrets/obsidian/*.age but the E2EE passphrase),
-    # each a member of every vault database. The Nix hosts decrypt their own password
-    # HM-side (homeManager.obsidian-livesync).
+    # each a member of every vault database. Revoke a device by deleting both its
+    # age file and _users document. Nix hosts decrypt their own password HM-side.
     devices = lib.pipe (builtins.readDir ../../secrets/obsidian) [
       builtins.attrNames
       (lib.filter (lib.hasSuffix ".age"))
@@ -71,7 +71,7 @@
 
       # Idempotent: creates each device user (or resets a changed password) and each
       # vault database with every device as a member. Members can't delete a database,
-      # so LiveSync's "rebuild remote" needs the admin login.
+      # so LiveSync's "rebuild remote" uses /run/agenix/couchdb-admin.
       systemd.services.couchdb-obsidian-provision = {
         description = "Provision CouchDB users and databases for Obsidian LiveSync";
         after = ["couchdb.service"];
@@ -161,7 +161,8 @@
         };
       };
 
-      # CouchDB files are append-only, so a live copy restores to the last complete write.
+      # A live copy restores to the last complete write; decryption also needs
+      # secrets/obsidian/passphrase.age.
       services.restic.backups.homelab.paths = [couch.databaseDir];
     };
   };

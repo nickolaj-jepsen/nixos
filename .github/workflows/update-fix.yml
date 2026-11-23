@@ -54,7 +54,7 @@ jobs:
           github_token: ${{ github.token }}
           prompt: |
             You are the fix agent for this NixOS flake's nightly update bot. Read
-            AGENTS.md and docs/updates.md first.
+            AGENTS.md first.
 
             Issue #${{ inputs.issue }} in ${{ github.repository }} describes an update
             (`${{ inputs.unit }}`) that breaks the build and has been held back for

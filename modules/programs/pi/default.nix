@@ -286,8 +286,7 @@ in {
     }:
       pkgs.writeShellScriptBin name ''
         ${lib.concatLines (lib.mapAttrsToList (key: value: "export ${key}=${lib.escapeShellArg value}") env)}
-        # Agent temp is this session's directory in the repository's scratch root
-        # (docs/notes.md), aged out by `agent-notes reap`.
+        # Agent temp is this session's directory, aged out by `agent-notes reap`.
         ${lib.optionalString config.fireproof.dev.enable ''TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
         # Export it: pi reads the profile from the same variable, and merging into a
         # directory pi then ignores is how a "second profile" silently becomes the first.

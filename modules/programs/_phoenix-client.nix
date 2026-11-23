@@ -1,3 +1,7 @@
+# Enroll a Phoenix system API key with
+# `just secret-edit secrets/phoenix-client-key.age`, then `just secret-rekey`.
+# Personal/work traces contain prompts and tool content and are backed up on the
+# homelab; send work data only where the employer permits it.
 {config}: let
   secret = ../../secrets/phoenix-client-key.age;
   baseUrl = "https://phoenix.${config.fireproof.homelab.domain}";

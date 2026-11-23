@@ -1,5 +1,8 @@
-# One-shot moves of user data; see docs/modules.md "Migrating user data". Runs
-# before checkLinkTargets so a migration can clear the way for a new home.file.
+# One-shot user-data moves, before checkLinkTargets so old paths can make way
+# for home.file. Scripts run in filename order and must be idempotent and safe
+# to interrupt. Success is stamped; failure retries without failing activation.
+# Ship with the config that needs the move; delete after every host has switched.
+# Warn in the script if live writers can make a partial migration lose writes.
 {
   flake.modules.homeManager.migrations = {
     config,

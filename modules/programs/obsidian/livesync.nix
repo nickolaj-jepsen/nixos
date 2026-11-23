@@ -1,6 +1,7 @@
 # Self-hosted LiveSync connection per vault. The plugin owns its data.json, so it is
 # only seeded once from agenix. Customization Sync is on so the phone (not
-# Nix-managed) can pull plugins and settings the Nix hosts publish.
+# Nix-managed) can pull plugins and settings the Nix hosts publish. The phone
+# must use the same E2EE and path-obfuscation settings as the seed.
 {
   flake.modules.homeManager.obsidian-livesync = {
     config,
@@ -52,8 +53,8 @@
       }
     '';
 
-    # Writes the connection settings in the pre-1.0 flat form, which the plugin
-    # migrates into a remote profile on load. Only when absent: the plugin owns the file after.
+    # Writes the pre-1.0 flat settings for the plugin to migrate. Only when absent:
+    # the plugin owns data.json after that; delete it to reseed after a password change.
     seed = pkgs.writeShellApplication {
       name = "obsidian-livesync-seed";
       runtimeInputs = [pkgs.jq pkgs.coreutils];

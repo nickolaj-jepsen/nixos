@@ -5,7 +5,7 @@ let
     lib,
     ...
   }: let
-    # Bool defaulting to another toggle (the cascade in docs/modules.md).
+    # Bool defaulting to another toggle.
     cascade = default: description:
       lib.mkOption {
         type = lib.types.bool;
@@ -130,8 +130,6 @@ let
         default = {};
         description = "Language servers by name, configured for every coding agent that speaks LSP.";
       };
-
-      # Cross-platform GUI app packaging: docs/hosts.md "Cross-platform apps".
 
       dev = {
         enable = lib.mkEnableOption "development tools and applications";

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Nightly update bot: one PR per day, quarantine of breaking updates, escalation to Claude.
 
-Subcommands: see --help; the flow is in docs/updates.md.
+Subcommands: see --help.
 
 A "unit" is one revertible update: a root flake input (by name) or a package
 with an updater (`pkgs/<name>`). State lives in the pinned `update-status` issue.

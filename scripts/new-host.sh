@@ -18,11 +18,11 @@ trap 'rm -rf "$temp"' EXIT
 echo "Setting up folders"
 mkdir -p "secrets/hosts/$host" "hosts/$host"
 
-# Discovery is the presence of host.nix; the card shape is documented in docs/hosts.md.
+# Discovery is the presence of host.nix.
 cat > "$temp/host.nix" <<'EOF'
 # @HOST@'s host card: the feature toggles it enables + its facts. The
 # presence of this file is what makes hosts/@HOST@/ a discovered host.
-# Every host file is a card (shape: docs/hosts.md): enable features via
+# Every host file is a card: enable features via
 # `shared.fireproof.<feature>.enable = true`, add settings for the host's
 # class under its bucket, and host-specific home-manager tweaks under
 # `homeManager`.

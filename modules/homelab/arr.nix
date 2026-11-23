@@ -99,6 +99,9 @@
       };
 
       services = {
+        # Manual UI/API settings: recycle bins at /mnt/data/.recycle/<app>, SAB
+        # remove-completed, notifications and profile assignment. A mass rename
+        # drops Jellyfin watched state because items are keyed by path.
         oauth2-proxy.nginx.virtualHosts = {
           "radarr.${cfg.domain}".allowed_groups = ["arr"];
           "sonarr.${cfg.domain}".allowed_groups = ["arr"];
@@ -159,6 +162,13 @@
           enable = true;
         };
         bazarr = {
+          # Manual config in /var/lib/bazarr/config/config.yaml (restic-backed):
+          # Default da+en, no cutoff, HI fallback; upgrades on, 7 days.
+          # Auto-sync 96 series / 86 movies; original audio + deep analysis on.
+          # Providers: OpenSubtitles.com, subf2m, gestdown, supersubtitles, yify, animetosho, embedded.
+          # Treat embedded PGS/VobSub as absent; image subs make Jellyfin transcode.
+          # Refresh Jellyfin immediately; Sonarr/Radarr import srt.
+          # SRT archive: /mnt/data/.subtitle-backup/.
           inherit user group;
           enable = true;
         };

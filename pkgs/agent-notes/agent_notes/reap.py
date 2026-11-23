@@ -6,7 +6,7 @@ It stops at the first directory it may not open or write, and then leaves the
 rest of that session alone: Go's module cache is `r-xr-xr-x`, so unlinking a
 file inside it fails, and a test bed can leave a `d---------` directory owned by
 another uid, which it cannot even enter. Both are logged and ignored, so a
-multi-gigabyte test bed survives its age forever (docs/notes.md).
+multi-gigabyte test bed survives its age forever.
 
 This walks the same layout and deletes what it can: read-only directories are
 made writable first, an empty unreadable one is removed without entering it, and

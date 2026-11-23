@@ -3,8 +3,7 @@
 # both halves install. Both come from nixpkgs-unstable.
 #
 # The app is an everyday GUI app, so it gates on desktop.enable with no toggle of
-# its own; on the Mac it is the `chatgpt` cask and the nixpkgs build stays off
-# (docs/hosts.md "Cross-platform apps").
+# its own; on the Mac it is the `chatgpt` cask and the nixpkgs build stays off.
 {
   flake.modules.darwin.codex = {
     config,

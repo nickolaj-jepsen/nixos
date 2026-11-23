@@ -1,6 +1,9 @@
 #!/usr/bin/env -S bash -euo pipefail
 # Installs hosts/<host> onto user@target with nixos-anywhere. FORMATS the target disks.
 # Usage: scripts/deploy-remote.sh <host> <user@target>
+# Optional LUKS TPM unlock after install:
+#   sudo systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=7 /dev/disk/by-partlabel/disk-main-luks
+# Never add a TPM-only slot with desktop.autologin; boot would reach a signed-in desktop.
 
 host=$1
 target=$2

@@ -96,7 +96,8 @@ def repo_id(path):
     """The store directory name for `path`: `<main checkout's basename>-<path hash>`.
 
     The hash is of the real main worktree path, so it survives `git worktree add`,
-    and two checkouts that share a basename never share notes.
+    and two checkouts that share a basename never share notes. Moving the main
+    checkout changes the id; move the store to the new id or start a fresh one.
     """
     main = main_worktree(path)
     if main is None:

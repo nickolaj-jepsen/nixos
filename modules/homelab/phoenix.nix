@@ -8,11 +8,16 @@
     domain = "phoenix.${cfg.domain}";
     port = 6006;
     stateDir = "/var/lib/phoenix/data";
+    # The SQLite cutover kept users/API keys, not traces/sessions. The old
+    # /var/lib/phoenix/phoenix.db is unused but retained for rollback.
     pgSocket = "/run/postgresql";
     # Match the nonroot image so PostgreSQL can authenticate the container via peer.
     uid = 65532;
   in {
     config = lib.mkIf (cfg.enable && cfg.phoenix.enable) {
+      # Initial UI login: admin@localhost plus the password in this file. Keep
+      # PHOENIX_SECRET stable: changing it invalidates sessions/API keys and
+      # makes stored provider credentials unreadable. Backups contain trace content.
       age.secrets.phoenix-env.rekeyFile = ../../secrets/hosts/homelab/phoenix-env.age;
       virtualisation.docker.enableOnBoot = true;
 

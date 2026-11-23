@@ -1,4 +1,9 @@
-# First deploy needs an on-Mac bootstrap (host key + rekey); see "First switch on a fresh Mac" in docs/hosts.md.
+# First deploy: `sudo ssh-keygen -A`; replace the dummy pub/age pair with the
+# real /etc/ssh/ssh_host_ed25519_key{,.pub} (encrypt as in scripts/new-host.sh);
+# `just secret-rekey`. Until darwin-rebuild is on PATH:
+# `nix run nix-darwin/nix-darwin-26.05#darwin-rebuild -- switch --flake .#macbook`.
+# Review homebrew.onActivation.cleanup first. Enable Remote Login with
+# `sudo systemsetup -setremotelogin on`; Nix only manages sshd's config.
 {
   class = "darwin";
 
