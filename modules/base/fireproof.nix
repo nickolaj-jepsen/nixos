@@ -135,6 +135,7 @@ let
 
       dev = {
         enable = lib.mkEnableOption "development tools and applications";
+        phoenix.enable = cascade (config.fireproof.dev.enable && config.fireproof.trusted && builtins.elem config.fireproof.hostname ["desktop" "desktop-wsl" "homelab" "laptop" "macbook" "minilab" "work"]) "Send personal Claude Code and Pi traces to the homelab Phoenix server when its client key is enrolled";
         intellij.enable = cascade config.fireproof.dev.enable "Enable IntelliJ-based IDEs";
         clickhouse.enable = cascade config.fireproof.dev.enable "Enable Clickhouse";
         k8s.enable = cascade (config.fireproof.dev.enable && config.fireproof.work.enable) "Enable kubectl and the AO kube configs";

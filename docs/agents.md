@@ -26,6 +26,40 @@ and skills themselves: nickolaj-jepsen/agents' AGENTS.md and `docs/`.
 - See what a mod or plugin draws, and its keys, in a real session before handing it back: load
   the `agent-plugin-dev` skill. A green `just build` says nothing about layout or focus.
 
+## Personal agent tracing (Phoenix)
+
+`fireproof.dev.phoenix.enable` opts in the trusted personal hosts (including
+`work`, but excluding the shared `dev-ao`). It affects only the default personal
+profiles of `claude` and `pi`, not either `-work` launcher. `claude` uses native
+beta OTLP tracing with prompt and tool content disabled. `pi` uses the pinned
+TGYD-helige `@amaster.ai/pi-telemetry` extension for Phoenix-native interaction,
+model, and tool spans, with first-token latency and usage where available.
+The managed Pi extension ignores `pi-telemetry` settings, exports only traces
+without payloads or raw error text, and reads its API key directly from agenix.
+Neither agent ships logs or metrics.
+
+To enroll a key, create a system API key in Phoenix Settings and run this from
+Bash in the repo. Paste the key at the hidden prompt; don't put it on a command
+line, in `.env`, or in settings JSON:
+
+```bash
+(
+  set -o pipefail
+  IFS= read -rs -p 'Phoenix API key: ' key && [ -n "$key" ] || exit 1
+  printf '\n' >&2
+  printf '%s\n' "$key" | just secret-write secrets/phoenix-client-key.age
+)
+just secret-rekey
+```
+
+Commit the encrypted source and rekeyed HM blobs before rolling out. Until the
+source exists, the integration is inert. After enrollment, build and activate
+one host first. Start fresh personal sessions, send a harmless prompt in each,
+exit, then check Phoenix for Claude spans and `chat-turn` in the `pi`
+project. In Pi, `/telemetry status` shows exporter status. Repeat with `claude-work` and `pi-work`: neither should add spans.
+Verify that `just eval hm.fireproof.dev.phoenix.enable dev-ao` is `false`.
+To revoke access, revoke the key in Phoenix, not just in Nix.
+
 ## Traps
 
 - The pi wrapper merges the leaf's `settings` and `mcp` into `~/.pi/agent/settings.json` and

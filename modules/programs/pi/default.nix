@@ -57,6 +57,8 @@ in {
     ...
   }: let
     cfg = config.fireproof.dev.pi;
+    phoenix = import ../_phoenix-client.nix {inherit config;};
+    phoenixExtension = "${piPackages}/node_modules/@amaster.ai/pi-telemetry/dist/index.js";
     homeDir = config.home.homeDirectory;
     pi = pkgs.pi-coding-agent;
     piPackages = pkgs.pi-packages;
@@ -280,6 +282,7 @@ in {
       settings,
       mcp,
       models ? {},
+      launch ? "",
     }:
       pkgs.writeShellScriptBin name ''
         ${lib.concatLines (lib.mapAttrsToList (key: value: "export ${key}=${lib.escapeShellArg value}") env)}
@@ -294,12 +297,32 @@ in {
         ${merge "settings.json" settings}
         ${merge "mcp.json" mcp}
         ${merge "models.json" models}
+        ${launch}
         exec ${lib.getExe pi} "$@"
       '';
     wrapper = mkWrapper {
       name = "pi";
       dir = "\${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}";
       inherit env settings mcp;
+      launch = lib.optionalString phoenix.enabled ''
+        # Pi dispatches subcommands from argv[0]; don't prepend -e to them.
+        case "''${1:-}" in
+          install|remove|uninstall|update|list|config|auth|mcp)
+            exec ${lib.getExe pi} "$@" ;;
+        esac
+        for arg in "$@"; do
+          case "$arg" in
+            --) break ;;
+            -ne|--no-extensions) exec ${lib.getExe pi} "$@" ;;
+          esac
+        done
+        if [ "$dir" = "$HOME/.pi/agent" ] && [ -s ${lib.escapeShellArg phoenix.path} ] && [ "''${PI_OTEL_DISABLED:-0}" != 1 ]; then
+          ${phoenix.clear}
+          export PI_PHOENIX_ENDPOINT=${lib.escapeShellArg phoenix.endpoint}
+          export PI_PHOENIX_KEY_FILE=${lib.escapeShellArg phoenix.path}
+          exec ${lib.getExe pi} -e ${phoenixExtension} "$@"
+        fi
+      '';
     };
     workWrapper = mkWrapper {
       name = "pi-work";
@@ -308,6 +331,11 @@ in {
       settings = workSettings;
       mcp = workMcp;
       models = workModels;
+      launch = ''
+        ${phoenix.clear}
+        unset PI_PHOENIX_ENDPOINT PI_PHOENIX_KEY_FILE "''${!PI_TELEMETRY_@}"
+        export PI_OTEL_DISABLED=1 PI_OTEL_ENABLE=0 OTEL_TRACES_EXPORTER=none
+      '';
     };
     # The checkout's extensions in place of the installed ones, with no rebuild, and the agents
     # checkout's plugins in the same way.

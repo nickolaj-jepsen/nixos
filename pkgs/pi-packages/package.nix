@@ -5,6 +5,7 @@
   buildNpmPackage,
   importNpmLock,
   lib,
+  pi-coding-agent,
 }: let
   packageJson = lib.importJSON ./package.json;
 in
@@ -23,11 +24,20 @@ in
       runHook preInstall
       mkdir -p $out
       cp -r node_modules $out/
+      # Managed-only: read the key at runtime and ignore project settings.
+      telemetry="$out/node_modules/@amaster.ai/pi-telemetry"
+      patch --fuzz=0 -d "$telemetry" -p1 < ${./pi-telemetry-phoenix.patch}
+      # The extension's dynamic import bypasses Pi's static module aliases.
+      mkdir -p "$telemetry/node_modules/@earendil-works"
+      ln -s ${pi-coding-agent}/lib/node_modules/pi-monorepo "$telemetry/node_modules/@earendil-works/pi-coding-agent"
       # Lists the build-time tarball store paths, which would drag every
       # package source into the runtime closure.
       rm -f $out/node_modules/.package-lock.json
       runHook postInstall
     '';
-    # settings.packages points at these, one local path each.
-    passthru.packageNames = builtins.attrNames packageJson.dependencies;
+    # Telemetry loads in the personal launcher only; its Langfuse peers are
+    # pinned explicitly because npm installs with --legacy-peer-deps.
+    passthru.packageNames = builtins.filter (name:
+      name != "@amaster.ai/pi-telemetry" && !lib.hasPrefix "@opentelemetry/" name)
+    (builtins.attrNames packageJson.dependencies);
   }

@@ -1,0 +1,64 @@
+--- a/dist/extension.js
++++ b/dist/extension.js
+@@ -1,6 +1,6 @@
+ import { randomUUID } from 'node:crypto';
+-import { isProjectTrusted } from '@amaster.ai/pi-shared/settings';
+-import { loadConfigFromFile, resolveConfig } from './config.js';
++import { readFileSync } from 'node:fs';
++import { resolveConfig } from './config.js';
+ import { NoopRuntimeEventExporter } from './exporters.js';
+ import { captureProviderHeaders, displayContent, displayMessage, hasFirstToken, modelParameters, providerDisplayInput, serializeTelemetryValue, toTelemetryValue, } from './observations.js';
+ import { createTelemetryExporter } from './otel.js';
+@@ -359,10 +359,23 @@
+         generationOpen = false;
+         boundaryFailure = {};
+         toolStarts.clear();
+-        const config = resolveConfig(loadConfigFromFile({
+-            cwd: ctx.cwd,
+-            projectTrusted: isProjectTrusted(ctx),
+-        }));
++        // Fireproof: do not read repo/user settings or export an uncredentialed trace.
++        const endpoint = process.env.PI_PHOENIX_ENDPOINT;
++        const keyFile = process.env.PI_PHOENIX_KEY_FILE;
++        let apiKey;
++        if (endpoint && keyFile && process.env.PI_OTEL_DISABLED !== '1') {
++            try {
++                apiKey = readFileSync(keyFile, 'utf8').trim();
++            }
++            catch {
++                // Missing enrollment: tracing stays off.
++            }
++        }
++        const config = resolveConfig({
++            serviceName: 'pi',
++            includePayloads: false,
++            phoenix: { enabled: Boolean(endpoint && apiKey), endpoint, apiKey, projectName: 'pi' },
++        });
+         // One exporter/provider even when both Langfuse and a generic OTLP
+         // endpoint are configured: two providers would mint different span ids for
+         // the same logical span and cross-wire PI_TELEMETRY_TRACEPARENT.
+--- a/dist/otel/exporters.js
++++ b/dist/otel/exporters.js
+@@ -94,7 +94,8 @@
+     async publish(event) {
+         const redactedEvent = applyTelemetryRedaction(this.config, {
+             ...event,
+-            ...(this.requestContext.metadata ? { contextMetadata: this.requestContext.metadata } : {}),
++            // Error classification, not the raw error text, is telemetry metadata.
++            ...(event.error ? { error: 'Operation failed' } : {}),
+         });
+         if (!redactedEvent?.traceId) {
+             return;
+@@ -760,10 +761,8 @@
+     if (!error) {
+         return { code: SpanStatusCode.OK };
+     }
+-    const message = error.length > MAX_STATUS_MESSAGE_CHARS
+-        ? `${error.slice(0, MAX_STATUS_MESSAGE_CHARS)}... [truncated]`
+-        : error;
+-    return { code: SpanStatusCode.ERROR, message };
++    // Provider/tool error text can embed contents even when payloads are disabled.
++    return { code: SpanStatusCode.ERROR };
+ }
+ async function waitForExport(operation) {
+     return Promise.race([

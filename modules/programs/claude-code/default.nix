@@ -15,6 +15,12 @@
     hmLib = config.lib;
     homeDir = config.home.homeDirectory;
     scratch = config.fireproof.dev.enable;
+    phoenix = import ../_phoenix-client.nix {inherit config;};
+    phoenixHeaders = pkgs.writeShellScript "claude-phoenix-headers" ''
+      key=$(<${lib.escapeShellArg phoenix.path}) || exit 1
+      [ -n "$key" ] || exit 1
+      printf '%s' "$key" | ${lib.getExe pkgs.jq} -Rs '{Authorization: ("Bearer " + sub("[\\r\\n]+$"; ""))}'
+    '';
 
     # Agent temp is the repository's scratch root, aged out by `agent-notes reap`
     # (docs/notes.md). Not a per-pid directory: Claude Code keys its
@@ -156,6 +162,23 @@
       ${lib.optionalString scratch tmpDir}
       if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
       ${memoryArgs}
+      ${lib.optionalString phoenix.enabled ''
+        if [ -s ${lib.escapeShellArg phoenix.path} ] && [ -z "''${CLAUDE_CONFIG_DIR:-}" ]; then
+          ${phoenix.clear}
+          export CLAUDE_CODE_ENABLE_TELEMETRY=1 CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
+          export OTEL_TRACES_EXPORTER=otlp OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none
+          export OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf
+          export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${lib.escapeShellArg phoenix.endpoint}
+          export OTEL_RESOURCE_ATTRIBUTES=openinference.project.name=claude-code
+          export OTEL_LOG_USER_PROMPTS=0 OTEL_LOG_TOOL_DETAILS=0 OTEL_LOG_TOOL_CONTENT=0
+          empty_settings='{}'
+          if settings=$(${lib.getExe pkgs.jq} -c --arg helper ${lib.escapeShellArg (toString phoenixHeaders)} '. + {otelHeadersHelper: $helper}' <<< "''${memory_args[1]:-$empty_settings}"); then
+            memory_args=(--settings "$settings")
+          else
+            ${phoenix.clear}
+          fi
+        fi
+      ''}
       exec -a "$0" ${ccfg.finalPackage}/bin/claude "''${memory_args[@]}" "$@"
     '';
 
@@ -181,6 +204,8 @@
       runtimeInputs = [config.programs.claude-code.finalPackage];
       text = ''
         ${lib.optionalString scratch tmpDir}
+        ${phoenix.clear}
+        export CLAUDE_CODE_ENABLE_TELEMETRY=0 OTEL_TRACES_EXPORTER=none
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
         ${memoryArgs}
@@ -569,19 +594,21 @@
           ];
           # Read rules cover the file tools only — Bash can still cat these. agenix
           # decrypts to /run, and the ~/.ssh keys are symlinks into it.
-          deny = [
-            "Read(//run/agenix/**)"
-            "Read(//run/user/*/agenix/**)"
-            "Read(~/.ssh/id_*)"
-            "Read(~/.claude/.credentials.json)"
-            "Read(~/.claude-work/.credentials.json)"
-            "Read(**/.env)"
-            # Holds both Scaleway key pairs; pi denies this path via age.secrets.
-            "Read(~/.config/scw/config.yaml)"
-            # Print the plaintext key into the transcript, sidestepping the Read deny.
-            "Bash(scw config get secret-key)"
-            "Bash(scw config dump)"
-          ];
+          deny =
+            [
+              "Read(//run/agenix/**)"
+              "Read(//run/user/*/agenix/**)"
+              "Read(~/.ssh/id_*)"
+              "Read(~/.claude/.credentials.json)"
+              "Read(~/.claude-work/.credentials.json)"
+              "Read(**/.env)"
+              # Holds both Scaleway key pairs; pi denies this path via age.secrets.
+              "Read(~/.config/scw/config.yaml)"
+              # Print the plaintext key into the transcript, sidestepping the Read deny.
+              "Bash(scw config get secret-key)"
+              "Bash(scw config dump)"
+            ]
+            ++ lib.optional phoenix.enabled "Read(/${phoenix.path})";
         };
       };
     };
