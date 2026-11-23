@@ -1,8 +1,4 @@
-# Arize's Claude Code tracing plugin: the `claude-code-tracing` marketplace plugin,
-# pinned as a plugin directory so `--plugin-dir` loads it without a runtime clone
-# (docs/agents.md, "Agent tracing"). Upstream cuts no releases -- only rc tags -- so
-# this follows a main commit: bump `rev` and `hash` together, and re-read
-# `tracing/claude_code/hooks/hooks.json` for the events Claude Code now gets.
+# No releases upstream (only rc tags), so this tracks a main commit: bump rev and hash together.
 {
   lib,
   runCommand,
@@ -19,25 +15,19 @@
   };
   plugin = "${src}/tracing/claude_code";
 
-  # Replaces upstream's scripts/run-hook, which creates a Python venv per plugin data
-  # dir on first use. Every handler imports only the stdlib from the plugin tree
-  # (`hooks.*` and `core.*`, per upstream's own standing invariant), so the pinned
-  # interpreter runs them directly: no venv, no network, nothing mutable but the
-  # harness's own state and log dirs under ~/.arize.
+  # Replaces upstream's run-hook, which builds a per-plugin venv; the handlers are stdlib-only.
   runHook = writeShellScript "claude-tracing-run-hook" ''
     set -eu
 
     hook=''${1:?usage: run-hook arize-hook-<event>}
     root=$(cd -P -- "$(dirname -- "$0")/.." && pwd)
 
-    # The key reaches this hook process and nothing else: the wrapper exports the
-    # path, not the secret, so a session's Bash tool cannot read it from its own env.
+    # Read here so the key never sits in the session env a Bash tool can read.
     if [ -n "''${CLAUDE_TRACING_KEY_FILE:-}" ] && [ -s "$CLAUDE_TRACING_KEY_FILE" ]; then
       PHOENIX_API_KEY=$(cat -- "$CLAUDE_TRACING_KEY_FILE")
       export PHOENIX_API_KEY
     fi
 
-    # Only the handlers upstream registers, so a stale hooks.json can't run anything else.
     case "''${hook#arize-hook-}" in
       session-start) handler=session_start ;;
       session-end) handler=session_end ;;
@@ -65,9 +55,8 @@ in
   runCommand "claude-code-tracing-${lib.substring 0 7 rev}" {} ''
     mkdir -p $out/.claude-plugin $out/scripts
     install -Dm644 ${plugin}/.claude-plugin/plugin.json $out/.claude-plugin/plugin.json
-    # hooks/hooks.json is upstream's, so the registered events stay upstream's too.
     cp -r ${plugin}/hooks $out/hooks
-    # core/ is a symlink to the repo root's copy; take the real tree.
+    # core/ is a symlink in the source tree, so copy its target.
     cp -r ${src}/core $out/core
     install -Dm755 ${runHook} $out/scripts/run-hook
   ''

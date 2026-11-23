@@ -151,11 +151,7 @@
       ];
     };
 
-    # Arize's tracing hooks as a plugin dir of their own (pkgs/claude-code-tracing),
-    # loaded with --plugin-dir rather than installed from a marketplace: pinned in the
-    # store, no runtime clone. Only the profile that owns the project gets it, and only
-    # once a key is enrolled; the key's path goes into the env, the key itself only into
-    # each hook process (scripts/run-hook in the plugin).
+    # Only the profile that owns the project, and only once a key is enrolled.
     tracingArgs = {
       project,
       profileCheck,
@@ -167,7 +163,6 @@
           export PHOENIX_ENDPOINT=${lib.escapeShellArg phoenix.baseUrl}
           export PHOENIX_PROJECT=${lib.escapeShellArg project}
           export CLAUDE_TRACING_KEY_FILE=${lib.escapeShellArg phoenix.path}
-          # The plugin's content capture, which native telemetry used to switch on too.
           export ARIZE_LOG_PROMPTS=true ARIZE_LOG_TOOL_DETAILS=true ARIZE_LOG_TOOL_CONTENT=true
           tracing_args=(--plugin-dir ${pkgs.claude-code-tracing})
         fi
