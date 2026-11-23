@@ -18,6 +18,17 @@
     c = config.fireproof.theme.colors;
     # Mirrors themes.fireproof in the ghostty leaf; keep the two in sync.
     palette = with c; [black redAlt greenAlt yellowAlt blueAlt magentaAlt cyanAlt fg muted red green yellow blue magenta cyan whiteAlt];
+    # Ghostty-style search overlay; a selection prefills it.
+    search = lib.concatStringsSep " " [
+      "kitten ${./kitty-search.py}"
+      "match_fg=${c.black} match_bg=${c.yellow} current_fg=${c.black} current_bg=${c.orange}"
+      "box_fg=${c.fg} box_muted=${c.muted} field_bg=${c.ui} error=${c.red}"
+      "@selection"
+    ];
+    searchKey =
+      if pkgs.stdenv.isDarwin
+      then "cmd+f"
+      else "kitty_mod+f";
   in {
     config = lib.mkIf config.fireproof.desktop.enable {
       home.sessionVariables.TERMINAL = "kitty";
@@ -60,12 +71,17 @@
             "ctrl+enter" = "no_op";
             # The compositor opens a fresh terminal; Kitty knows the pane's cwd.
             "kitty_mod+n" = "launch --type=os-window --cwd=current";
-            # Replaces the default move_window_forward.
-            "kitty_mod+f" = "kitten ${./kitty-search.py}";
+            # Replaces kitty's default (move_window_forward; search_scrollback on macOS).
+            ${searchKey} = search;
           }
           // lib.optionalAttrs pkgs.stdenv.isDarwin {
             "cmd+n" = "launch --type=os-window --cwd=current";
           };
+        # Inside the search overlay the key goes to the kitten (re-selecting its
+        # text, like Ghostty) instead of stacking a second search on top.
+        extraConfig = ''
+          map --when-focus-on var:kitty_search ${searchKey}
+        '';
       };
     };
   };
