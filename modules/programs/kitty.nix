@@ -18,16 +18,6 @@
     c = config.fireproof.theme.colors;
     # Mirrors themes.fireproof in the ghostty leaf; keep the two in sync.
     palette = with c; [black redAlt greenAlt yellowAlt blueAlt magentaAlt cyanAlt fg muted red green yellow blue magenta cyan whiteAlt];
-    # Fuzzy-find scrollback lines (Tab marks several) and copy them. Copies via
-    # OSC 52 rather than `kitten clipboard`: the macOS kitty is a cask, not in the store.
-    scrollbackFzf = pkgs.writeShellApplication {
-      name = "kitty-scrollback-fzf";
-      runtimeInputs = [pkgs.fzf pkgs.coreutils pkgs.gnugrep];
-      text = ''
-        selection=$(grep -v '^[[:space:]]*$' | fzf --tac --no-sort --multi --prompt 'scrollback> ') || exit 0
-        printf '\e]52;c;%s\a' "$(printf '%s' "$selection" | base64 -w0)" > /dev/tty
-      '';
-    };
   in {
     config = lib.mkIf config.fireproof.desktop.enable {
       home.sessionVariables.TERMINAL = "kitty";
@@ -71,7 +61,7 @@
             # The compositor opens a fresh terminal; Kitty knows the pane's cwd.
             "kitty_mod+n" = "launch --type=os-window --cwd=current";
             # Replaces the default move_window_forward.
-            "kitty_mod+f" = "launch --type=overlay --stdin-source=@screen_scrollback ${lib.getExe scrollbackFzf}";
+            "kitty_mod+f" = "kitten ${./kitty-search.py}";
           }
           // lib.optionalAttrs pkgs.stdenv.isDarwin {
             "cmd+n" = "launch --type=os-window --cwd=current";
