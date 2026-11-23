@@ -1,16 +1,19 @@
 /**
- * auto/deepseek-v4.1-flash: pick the subscription with the most quota left.
+ * auto/deepseek-v4.1-flash: split new branches 80/20 (Command Code / OpenCode Go)
+ * when both have >20% left in their tightest quota window. Otherwise favor the
+ * provider with headroom, or pick the one with more quota left.
  *
- * The first request on a session branch compares the smallest remaining
- * percentage across the 5-hour, weekly and monthly windows. Pi then keeps that
- * choice in branch state; previous responses also pin retries, continuations
- * and direct calls such as compaction to the same physical model.
+ * Keep the provider sticky unless a rate-limit retry can switch to the other
+ * provider. Switch at most once per retry chain.
  */
 import { execFile } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext, ModelRoute } from "@earendil-works/pi-coding-agent";
 
 const MODEL_ID = "deepseek-v4.1-flash";
 const WINDOWS = ["5h", "7d", "month"] as const;
+const HEADROOM_FLOOR = 20;
+const COMMAND_CODE_SHARE = 0.8;
+const RATE_LIMIT_ERROR = /\b429\b|rate.?limit|too many requests/i;
 const TARGETS = {
   "opencode-go": MODEL_ID,
   "command-code": "deepseek/deepseek-v4.1-flash",
@@ -20,6 +23,7 @@ type Provider = keyof typeof TARGETS;
 
 interface RouterState {
   provider: Provider;
+  failedOver?: true;
 }
 
 interface UsageWindow {
@@ -46,10 +50,32 @@ export function remainingHeadroom(provider: UsageProvider | undefined): number {
   return Math.min(...WINDOWS.map((label) => Math.max(0, 100 - (windows.get(label) ?? 0))));
 }
 
-export function providerWithMostHeadroom(providers: UsageProvider[]): Provider {
-  const score = (id: Provider) => remainingHeadroom(providers.find((p) => p.id === id));
+function canTakeTraffic(provider: UsageProvider | undefined): boolean {
+  // Last-good data can inform the quota fallback, but cannot justify a split or failover.
+  return (
+    !!provider && !provider.error && !provider.stale && remainingHeadroom(provider) > HEADROOM_FLOOR
+  );
+}
+
+function chooseProvider(providers: UsageProvider[]): Provider {
+  const go = providers.find((p) => p.id === "opencode-go");
+  const command = providers.find((p) => p.id === "command-code");
+  const goReady = canTakeTraffic(go);
+  const commandReady = canTakeTraffic(command);
+  if (goReady && commandReady)
+    return Math.random() < COMMAND_CODE_SHARE ? "command-code" : "opencode-go";
+  if (commandReady) return "command-code";
+  if (goReady) return "opencode-go";
   // OpenCode wins ties, and is the fallback when neither provider has usable data.
-  return score("command-code") > score("opencode-go") ? "command-code" : "opencode-go";
+  return remainingHeadroom(command) > remainingHeadroom(go) ? "command-code" : "opencode-go";
+}
+
+function targetProvider(model: ModelRoute["model"] | undefined): Provider | undefined {
+  if (!model) return;
+  const { provider, id } = model;
+  if ((provider === "opencode-go" || provider === "command-code") && id === TARGETS[provider]) {
+    return provider;
+  }
 }
 
 function routeTo(
@@ -63,16 +89,26 @@ function routeTo(
   return { model, thinkingLevel, state };
 }
 
-async function chooseProvider(command: string, signal: AbortSignal | undefined): Promise<Provider> {
-  const stdout = await new Promise<string>((resolve, reject) => {
-    execFile(
-      command,
-      ["--json", "--provider", "opencode-go", "--provider", "command-code"],
-      { signal, timeout: 25_000, maxBuffer: 4 * 1024 * 1024 },
-      (error, stdout) => (error ? reject(error) : resolve(stdout)),
-    );
-  });
-  return providerWithMostHeadroom((JSON.parse(stdout) as UsageResult).providers);
+async function readUsage(
+  command: string | undefined,
+  signal: AbortSignal | undefined,
+): Promise<UsageProvider[]> {
+  if (!command) return [];
+  try {
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        command,
+        ["--json", "--provider", "opencode-go", "--provider", "command-code"],
+        { signal, timeout: 25_000, maxBuffer: 4 * 1024 * 1024 },
+        (error, stdout) => (error ? reject(error) : resolve(stdout)),
+      );
+    });
+    const { providers } = JSON.parse(stdout) as UsageResult;
+    return Array.isArray(providers) ? providers : [];
+  } catch {
+    // Usage being unavailable must not block a normal request or retry.
+    return [];
+  }
 }
 
 export default function (pi: ExtensionAPI) {
@@ -87,33 +123,44 @@ export default function (pi: ExtensionAPI) {
     maxTokens: 32_768,
     input: ["text"],
     async route(request, ctx) {
-      // A manual switch from either physical model to auto keeps that model.
-      // Retries stay put too, even when their failure was a rate limit.
-      const sticky = request.failed ?? request.previous;
-      if (sticky?.model.provider === "opencode-go" || sticky?.model.provider === "command-code") {
-        const provider = sticky.model.provider;
-        if (sticky.model.id === TARGETS[provider]) {
-          return routeTo(
-            provider,
-            sticky.thinkingLevel ?? request.thinkingLevel,
-            ctx,
-            request.state ?? { provider },
-          );
+      const { failed, reason, state, signal } = request;
+      // Also keep the physical model when manually switching to auto, and when
+      // a direct call (e.g. compaction) carries a previous response but no state.
+      const sticky = failed ?? request.previous;
+      const stickyProvider = targetProvider(sticky?.model);
+      const provider = stickyProvider ?? state?.provider;
+      if (provider) {
+        const thinkingLevel = (stickyProvider && sticky?.thinkingLevel) ?? request.thinkingLevel;
+        // Pi saves routing state before dispatch. Keep the guard through further
+        // retries (even if the alternate also returns 429), not the next request.
+        const failedOver = reason === "retry" && state?.failedOver === true;
+        if (
+          reason === "retry" &&
+          !failedOver &&
+          failed?.message.stopReason === "error" &&
+          stickyProvider &&
+          RATE_LIMIT_ERROR.test(failed.message.errorMessage ?? "")
+        ) {
+          const alternate = provider === "opencode-go" ? "command-code" : "opencode-go";
+          const model = ctx.modelRegistry.find(alternate, TARGETS[alternate]);
+          if (model && ctx.modelRegistry.hasConfiguredAuth(model)) {
+            const usage = await readUsage(usageCommand, signal);
+            if (canTakeTraffic(usage.find((p) => p.id === alternate))) {
+              return { model, thinkingLevel, state: { provider: alternate, failedOver: true } };
+            }
+          }
         }
+        const nextState: RouterState =
+          state?.provider === provider && Boolean(state.failedOver) === failedOver
+            ? state
+            : failedOver
+              ? { provider, failedOver: true }
+              : { provider };
+        return routeTo(provider, thinkingLevel, ctx, nextState);
       }
-      if (request.state) return routeTo(request.state.provider, request.thinkingLevel, ctx);
-      // A direct call (compaction) has no branch state but does carry `previous`,
-      // so the sticky branch above already keeps it on the session's choice.
 
-      let provider: Provider = "opencode-go";
-      if (usageCommand) {
-        try {
-          provider = await chooseProvider(usageCommand, request.signal);
-        } catch {
-          // A new session must still start when the usage service is unavailable.
-        }
-      }
-      return routeTo(provider, request.thinkingLevel, ctx, { provider });
+      const initialProvider = chooseProvider(await readUsage(usageCommand, signal));
+      return routeTo(initialProvider, request.thinkingLevel, ctx, { provider: initialProvider });
     },
   });
 }
