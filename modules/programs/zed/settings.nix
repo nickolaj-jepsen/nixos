@@ -168,7 +168,7 @@
           # Terminal
           terminal = {
             shell.program = "fish";
-            # Larger than Ghostty's 11: the panel is small and read at a glance.
+            # Larger than the terminal's font: the panel is small and read at a glance.
             font_size = 14;
             blinking = "on";
             cursor_shape = "bar";

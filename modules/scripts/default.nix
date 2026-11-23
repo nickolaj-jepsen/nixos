@@ -34,8 +34,14 @@
         builtins.replaceStrings ["@bridgeHosts@"] [(lib.concatStringsSep " " bridgeHosts)]
         (builtins.readFile ./editor-open-bridge.bash);
     };
-    # The Ghostty xdg-open shim is a Linux desktop's, even though editor-open is any dev host's.
-    desktopShim = config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux;
+    kittyEditorLinks = config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux;
+    # Kitty matches the first rule, so notes come before general text files.
+    kittyFileRule = match: opener: ''
+      protocol file
+      url ^file://(?:localhost)?/
+      ${match}
+      action launch --type=background -- ${opener} ''${FILE_PATH}
+    '';
     # The editor answering another host's ssh connection is a GUI host's job too.
     editorBridge = config.fireproof.desktop.enable && pkgs.stdenv.isLinux;
     # One request in, one editor out; a request that says nothing dies after a few seconds.
@@ -51,6 +57,21 @@
     # there, and sshd on the far end could not bind the port under it.
     forwardHosts = lib.remove config.fireproof.hostname bridgeHosts;
   in {
+    xdg.configFile."kitty/open-actions.conf" = lib.mkIf kittyEditorLinks {
+      text = lib.concatStringsSep "\n" (
+        map (path: kittyFileRule "path ${path}" (lib.getExe agent-note-open)) [
+          "${config.xdg.dataHome}/agents/store/*.md"
+          "*/.agents/store/*.md"
+          "*/.agents/workflows/*.md"
+        ]
+        ++ [(kittyFileRule "mime text/*" "${lib.getExe editor-open} --")]
+      );
+    };
+    # Keep Kitty's standard file:line shortcut, but use the desktop editor.
+    programs.kitty.keybindings."kitty_mod+p>n" =
+      lib.mkIf kittyEditorLinks
+      "kitten hints --type=linenum --linenum-action=background ${lib.getExe editor-open} --line {line} -- {path}";
+
     # The bridge on the GUI end: sshd on the remote forwards one connection here, and this
     # socket hands it to editor-open-bridge. The forward itself is declared below, per host.
     systemd.user.sockets = lib.mkIf editorBridge {
@@ -188,15 +209,6 @@
             procps
           ];
         })
-        (makeScript {
-          path = ./ghostty-here.bash;
-          runtimeInputs = with pkgs; [
-            niri-unstable # match the running compositor's IPC
-            jq
-            procps
-            gawk
-          ];
-        })
       ]
       # The niri scratch note; zeditor comes from PATH, which only a dev host has.
       ++ lib.optionals (config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux) [
@@ -208,27 +220,6 @@
             coreutils
           ];
         })
-      ]
-      # Shadows the system xdg-open (per-user profile precedes it on PATH) so Ghostty link clicks land in the editor.
-      ++ lib.optionals desktopShim [
-        (lib.hiPrio (pkgs.writeShellApplication {
-          name = "xdg-open";
-          runtimeInputs = with pkgs; [
-            procps
-            gawk
-            coreutils
-            file
-            git
-            libnotify
-          ];
-          text =
-            builtins.replaceStrings ["@xdgOpen@" "@agentNoteOpen@" "@editorOpen@"] [
-              "${pkgs.xdg-utils}/bin/xdg-open"
-              (lib.getExe agent-note-open)
-              (lib.getExe editor-open)
-            ]
-            (builtins.readFile ./ghostty-xdg-open.bash);
-        }))
       ];
   };
 }

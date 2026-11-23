@@ -207,11 +207,7 @@
 
         "Mod+Slash".action.show-hotkey-overlay = {};
 
-        "Mod+Return".action.spawn = ["ghostty-here"];
-        "Mod+Shift+Return" = {
-          action.spawn = ["ghostty-here" "--stack"];
-          hotkey-overlay.title = "Terminal stacked in the focused column";
-        };
+        "Mod+Return".action.spawn = ["kitty"];
         "Mod+Backspace".action.close-window = {};
         "Mod+Shift+Backspace" = {
           action.spawn = ["window-kill"];

@@ -5,9 +5,6 @@
     pkgs,
     ...
   }: let
-    # Project workspaces: both the spawn programs and ghostty-here's dir lookup
-    # come from here, so a bare terminal opens where the workspace points. The
-    # editor is `editor-open`, which knows the argv zed and vscode each want.
     workspaces = import ../_workspaces.nix;
   in {
     imports = [
@@ -41,13 +38,13 @@
                 name = "diff";
               };
             }
-            // lib.mapAttrs (_: w: {inherit (w) name programs;}) workspaces;
+            // workspaces;
 
           template = {
             dev = {
               programs = [
                 "editor-open {{path}}"
-                "ghostty --working-directory={{path}}"
+                "kitty --directory={{path}}"
               ];
               variables = {
                 path = {
@@ -60,7 +57,7 @@
             remote = {
               programs = [
                 "editor-open --remote {{host}}"
-                "ghostty -e ssh -t {{host}}"
+                "kitty -- ssh -t {{host}}"
               ];
               variables = {
                 host = {
@@ -77,13 +74,6 @@
       # Part of the shell: beside niri in session.slice. Its programs are spawned through niri,
       # so they still land in app.slice scopes.
       systemd.user.services.niri-dynamic-workspaces.Service.Slice = "session.slice";
-
-      # Key -> project dir for ghostty-here. Space-separated, so a project path
-      # with whitespace in it would break the lookup.
-      xdg.configFile."ghostty-here/dirs".text =
-        lib.concatStringsSep "\n"
-        (lib.mapAttrsToList (key: w: "${key} ${w.path}") (lib.filterAttrs (_: w: w ? path) workspaces))
-        + "\n";
     };
   };
 }

@@ -55,7 +55,7 @@
               "keyd"
               ".zed-editor-wra"
               ".firefox-wrappe"
-              ".ghostty-wrappe"
+              "kitty"
               "claude"
               ".claude-wrapped"
               "claude.exe"

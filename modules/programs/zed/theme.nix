@@ -161,7 +161,7 @@
                 "scrollbar.track.background" = hex "bg";
                 "scrollbar.track.border" = hex "bg";
 
-                # Terminal (matches Ghostty's palette)
+                # Terminal (matches Kitty)
                 "terminal.background" = hex "bg";
                 "terminal.foreground" = hex "fg";
                 "terminal.bright_foreground" = hex "whiteAlt";

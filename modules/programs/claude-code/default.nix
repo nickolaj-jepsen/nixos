@@ -38,7 +38,7 @@
     # changed by /effort, fast mode), git state and the last response's
     # throughput, plus which profile is running — claude-work shares this
     # file and CLAUDE.md by symlink, so nothing else distinguishes the two.
-    # ANSI codes only, so the ghostty Flexoki palette stays authoritative.
+    # ANSI codes only, so the terminal's Flexoki palette stays authoritative.
     statusLine = pkgs.writeShellApplication {
       name = "claude-statusline";
       runtimeInputs = [pkgs.jq pkgs.git pkgs.gh pkgs.coreutils];

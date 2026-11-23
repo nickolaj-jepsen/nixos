@@ -28,7 +28,7 @@ const onPath = (command: string) => which(command) !== undefined;
 /** A mac app bundle in the usual place, for a GUI that ships no CLI on PATH. */
 const appBundle = (name: string) => MAC && existsSync(`/Applications/${name}.app`);
 
-export const folderApps = ["code", "zed", "smerge", "files", "ghostty"] as const;
+export const folderApps = ["code", "zed", "smerge", "files", "kitty"] as const;
 export type FolderApp = (typeof folderApps)[number];
 export type EditorApp = Extract<FolderApp, "code" | "zed">;
 
@@ -49,8 +49,8 @@ export const appLabel = (app: FolderApp): string => {
       return "Sublime Merge";
     case "files":
       return MAC ? "Finder" : "Files";
-    case "ghostty":
-      return "Ghostty";
+    case "kitty":
+      return "Kitty";
   }
 };
 
@@ -59,12 +59,6 @@ type Launch = { command: string; args: string[] };
 /** A mac app bundle, opened with arguments; `open` needs it installed either way. */
 const openBundle = (bundle: string, args: string[]): Launch | undefined =>
   appBundle(bundle) ? { command: "open", args: ["-a", bundle, ...args] } : undefined;
-
-/** A second instance of a mac bundle, which Ghostty needs to take a directory. */
-const openNewBundle = (bundle: string, args: string[]): Launch | undefined =>
-  appBundle(bundle)
-    ? { command: "open", args: ["-na", `${bundle}.app`, "--args", ...args] }
-    : undefined;
 
 /**
  * How to start an app on a directory, in this platform's words; undefined when
@@ -97,12 +91,13 @@ const launcher = (app: FolderApp, cwd: string): Launch | undefined => {
         : onPath("xdg-open")
           ? { command: "xdg-open", args: [cwd] }
           : undefined;
-    case "ghostty":
+    case "kitty": {
+      const args = [`--directory=${cwd}`];
       // A shortcut should open a fresh shell, not resume this session's work.
-      if (MAC) return openNewBundle("Ghostty", [`--working-directory=${cwd}`]);
-      return onPath("ghostty")
-        ? { command: "ghostty", args: [`--working-directory=${cwd}`] }
-        : undefined;
+      if (MAC && appBundle("kitty"))
+        return { command: "open", args: ["-na", "kitty.app", "--args", ...args] };
+      return onPath("kitty") ? { command: "kitty", args } : undefined;
+    }
   }
 };
 

@@ -33,11 +33,16 @@
       args = {inherit argv;};
     };
 
-    # Opens an agent in its own Ghostty window at the directory the menu was used
+    # The macOS app comes from the cask, so launch its bundle without relying on PATH.
+    terminal =
+      if pkgs.stdenv.isDarwin
+      then "open -na kitty.app --args"
+      else lib.getExe config.programs.kitty.package;
+
+    # Opens an agent in its own Kitty window at the directory the menu was used
     # on, with the review prompt as its first message.
     agentLauncher = pkgs.writeShellApplication {
       name = "sm-agent";
-      runtimeInputs = lib.optional (!pkgs.stdenv.isDarwin) config.programs.ghostty.package;
       text = ''
         # sm-agent <pi|claude|claude-work> <dir> <prompt>
         agent=$1
@@ -60,11 +65,7 @@
         else
           dir=$PWD
         fi
-        ${
-          if pkgs.stdenv.isDarwin
-          then ''exec open -na Ghostty --args --working-directory="$dir" -e "$bin" "$prompt"''
-          else ''exec ghostty --working-directory="$dir" -e "$bin" "$prompt"''
-        }
+        exec ${terminal} --directory="$dir" -- "$bin" "$prompt"
       '';
     };
 
@@ -77,10 +78,7 @@
         if pkgs.stdenv.isDarwin
         then ''exec open "$dir"''
         else ''exec xdg-open "$dir"'';
-      terminalCmd =
-        if pkgs.stdenv.isDarwin
-        then ''exec open -na Ghostty --args --working-directory="$dir"''
-        else ''exec ghostty --working-directory="$dir"'';
+
       copyCmd =
         if pkgs.stdenv.isDarwin
         then ''printf '%s' "$dir" | pbcopy''
@@ -91,12 +89,11 @@
         runtimeInputs =
           lib.optional config.programs.vscode.enable config.programs.vscode.package
           ++ lib.optionals (!pkgs.stdenv.isDarwin) [
-            config.programs.ghostty.package
             pkgs.xdg-utils
             pkgs.wl-clipboard
           ];
         text = ''
-          # sm-open <code|files|ghostty|path> <dir>
+          # sm-open <code|files|kitty|path> <dir>
           app=''${1:?app}
           dir=''${2:-.}
 
@@ -110,7 +107,7 @@
 
           case $app in
             code) exec code "$dir" ;;
-            ghostty) ${terminalCmd} ;;
+            kitty) exec ${terminal} --directory="$dir" ;;
             files) ${fileManagerCmd} ;;
             path) ${copyCmd} ;;
             *) echo "sm-open: unknown app '$app'" >&2; exit 2 ;;
@@ -166,7 +163,7 @@
       children = [
         (run "VS Code" ["sm-open" "code" dir])
         (run filesLabel ["sm-open" "files" dir])
-        (run "Ghostty" ["sm-open" "ghostty" dir])
+        (run "Kitty" ["sm-open" "kitty" dir])
         (run "Copy Path" ["sm-open" "path" dir])
       ];
     };
@@ -208,7 +205,7 @@
       (run "Repo: Format (just fmt)" ["sm-fmt"])
       (run "Open: VS Code" ["sm-open" "code" "."])
       (run "Open: ${filesLabel}" ["sm-open" "files" "."])
-      (run "Open: Ghostty" ["sm-open" "ghostty" "."])
+      (run "Open: Kitty" ["sm-open" "kitty" "."])
       (run "Open: Copy Path" ["sm-open" "path" "."])
       # Palette commands cannot nest, so the agent gets one entry per front-end.
       (run "Agent: Review HEAD + Uncommitted in pi" ["sm-agent" "pi" "." reviewHead])
@@ -279,13 +276,8 @@
       # One window per repository, so two worktrees can be read side by side.
       open_files_in_new_window = "always";
       highlight_modified_tabs = true;
-      # Backs the built-in Open Repository in Terminal. On darwin the app comes
-      # from the cask, so `package` is null there and the handoff goes through
-      # `open` like the other darwin launchers above.
-      terminal_command =
-        if pkgs.stdenv.isDarwin
-        then "open -na Ghostty --args --working-directory=$dir"
-        else "${lib.getExe config.programs.ghostty.package} --working-directory=$dir";
+      # Backs the built-in Open Repository in Terminal.
+      terminal_command = "${terminal} --directory=$dir";
     };
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {

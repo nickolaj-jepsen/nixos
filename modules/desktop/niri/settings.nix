@@ -105,12 +105,9 @@
             };
           }
           # Behind a CSD window niri fills the whole rect with the border color
-          # rather than tracing the rounded corners, so ghostty's translucent
-          # background reads as accent-tinted instead of showing what's behind it.
+          # rather than tracing the rounded corners, tinting translucent terminals.
           {
-            matches = [
-              {app-id = "^com\\.mitchellh\\.ghostty$";}
-            ];
+            matches = [{app-id = "^kitty$";}];
             draw-border-with-background = false;
           }
           # A markdown file opened on its own (no project) gets a reading

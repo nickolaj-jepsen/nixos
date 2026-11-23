@@ -104,7 +104,7 @@ in {
             # The running compositor's IPC, and a user unit has no login PATH.
             niri = lib.getExe pkgs.niri-unstable;
             # Opens a remote row's tmux pane over ssh, spawned through niri as Mod+Return is.
-            terminal = ["ghostty" "--working-directory={cwd}" "-e"];
+            terminal = ["kitty" "--directory={cwd}" "--"];
           }
           // lib.optionalAttrs linked {
             remotes = remoteHosts;

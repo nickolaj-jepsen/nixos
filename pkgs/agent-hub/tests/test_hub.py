@@ -91,7 +91,7 @@ class Hub:
         )
         niri.chmod(0o755)
         config = self.tmp / "config.json"
-        desktop = {"niri": str(niri), "terminal": ["ghostty", "--working-directory={cwd}", "-e"]}
+        desktop = {"niri": str(niri), "terminal": ["kitty", "--directory={cwd}", "--"]}
         config.write_text(json.dumps({
             "registry": str(self.registry),
             "git": shutil.which("git"),
@@ -786,7 +786,11 @@ class LinkTest(unittest.TestCase):
         self.bar.send(op="focus", session=self.rid)
         spawn = self.near.focus_log.with_name("focus.log.spawn")
         eventually(lambda: spawn.exists() and spawn.read_text())
-        self.assertIn('"ssh", "-t", "far", "tmux", "attach", "-t", "%3"', spawn.read_text())
+        argv = json.loads(spawn.read_text())
+        self.assertEqual(argv[0], "kitty")
+        self.assertTrue(argv[1].startswith("--directory=/"))
+        self.assertEqual(argv[2:5], ["--", "ssh", "-t"])
+        self.assertEqual(argv[-5:], ["far", "tmux", "attach", "-t", "%3"])
         self.bar.wait(has_session(self.rid, lambda s: s["state"] == "idle"))
 
     def test_a_viewer_cannot_send_anything_but_subscribe(self):

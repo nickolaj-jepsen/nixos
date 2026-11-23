@@ -110,8 +110,8 @@ an old path during the run is missed.
 
 `/open plan` in pi and Claude Code lists the store's notes, newest first, and
 opens the picked one through `agent-note-open` (`modules/scripts`), as does a
-clicked store path in Ghostty. Zed indexes the store through the link and
-excludes `.agents/tmp`.
+clicked `file://` link to a note's store path in Kitty on Linux.
+Zed indexes the store through the link and excludes `.agents/tmp`.
 
 ## Traps
 

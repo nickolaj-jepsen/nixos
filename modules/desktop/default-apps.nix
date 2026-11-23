@@ -15,7 +15,7 @@
 
       xdg.terminal-exec = {
         enable = true;
-        settings.default = ["com.mitchellh.ghostty.desktop"];
+        settings.default = ["kitty.desktop"];
       };
     };
   };

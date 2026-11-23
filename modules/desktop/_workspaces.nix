@@ -1,11 +1,10 @@
-# Project workspaces keyed by their switcher key, shared by niri-dynamic-workspaces and the
-# Hyprland session. Entries with a `path` also give a bare terminal its starting directory.
+# Project workspaces keyed by their niri-dynamic-workspaces switcher key.
 let
   local = name: path: {
-    inherit name path;
+    inherit name;
     programs = [
       "editor-open ${path}"
-      "ghostty --working-directory=${path}"
+      "kitty --directory=${path}"
     ];
   };
 
@@ -18,7 +17,7 @@ let
     inherit name;
     programs = [
       "editor-open --remote ${host} ${path}"
-      "ghostty -e ssh -t ${host} 'cd ${path} && exec ${shell} -l'"
+      "kitty -- ssh -t ${host} 'cd ${path} && exec ${shell} -l'"
     ];
   };
 in {

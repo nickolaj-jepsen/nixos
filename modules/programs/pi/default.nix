@@ -495,7 +495,7 @@ in {
         # ctrl+c stays pi's clear-editor, and its second press within 500ms exits.
         # It cannot also interrupt: the editor checks app.interrupt first, and two
         # interrupts on an empty editor are the double-escape gesture (the tree).
-        # Claude Code's copy key is absent on purpose: ghostty binds ctrl+shift+c
+        # Claude Code's copy key is absent on purpose: the terminal binds ctrl+shift+c
         # to copy_to_clipboard, so pi never sees it.
         "app.interrupt" = "escape";
         "app.clear" = "ctrl+c";

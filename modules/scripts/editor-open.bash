@@ -2,10 +2,10 @@ set -euo pipefail
 
 # Opens a path in the desktop's chosen editor, in the argv that editor wants:
 # vscode's --reuse-window/--goto and ssh-remote+host, zed's path:line:col and
-# ssh://host/path. Callers (Ghostty links, agent notes, the dynamic workspaces)
-# stay editor-agnostic; fireproof.desktop.editor picks the name below. A machine
-# with no GUI editor — a remote shell — asks the ssh connection's own reverse
-# forward to open it on the other end, and opens nvim when there is no forward.
+# ssh://host/path. Callers stay editor-agnostic; fireproof.desktop.editor picks
+# the name below. A machine with no GUI editor — a remote shell — asks the ssh
+# connection's own reverse forward to open it on the other end, and opens nvim
+# when there is no forward.
 editor=@editor@
 
 usage='usage: editor-open [--line N] [--col N] [--remote HOST] [PATH]'
