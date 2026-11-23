@@ -101,6 +101,25 @@ in {
       map packagePath (lib.subtractLists ["@commandcode/pi-commandcode-provider"] thirdPartyPackages)
       ++ [parentPath]
       ++ map pluginPath parentOnlyPlugins;
+    # Browser automation over CDP, driven through bash. `agent-browser install`
+    # fetches a Chrome for Testing that NixOS can't run, so Linux points it at
+    # nixpkgs' Chromium (the desktop's own, when chromium is enabled); macOS finds
+    # Google Chrome in /Applications.
+    agentBrowser = pkgs.symlinkJoin {
+      name = "agent-browser";
+      paths = [pkgs.unstable.agent-browser];
+      nativeBuildInputs = [pkgs.makeWrapper];
+      postBuild = lib.optionalString pkgs.stdenv.isLinux ''
+        wrapProgram $out/bin/agent-browser \
+          --set-default AGENT_BROWSER_EXECUTABLE_PATH ${lib.getExe pkgs.unstable.chromium}
+      '';
+    };
+    # Pi-only: Claude Code has its own browser tools. The stub tells the agent to
+    # `npm i -g` and `agent-browser install`; both are wrong here.
+    agentBrowserSkill = pkgs.runCommand "agent-browser-skill" {} ''
+      mkdir $out
+      sed '/^Install: /d' ${agentBrowser}/skills/agent-browser/SKILL.md > $out/SKILL.md
+    '';
     # agent-context.md is shared by every agent; keep it agent-agnostic. Children
     # read these rules too and hold no agent tools, so no delegation how-to here.
     rules = builtins.readFile ../agent-context.md;
@@ -350,7 +369,7 @@ in {
       home.file.".pi/agent/APPEND_SYSTEM.md".text = rules;
       home.file.".pi/agent/themes/fireproof.json".source = theme;
 
-      home.packages = [wrapper spellChecker piDev] ++ lib.optional cfg.work.enable workWrapper;
+      home.packages = [wrapper spellChecker piDev agentBrowser] ++ lib.optional cfg.work.enable workWrapper;
 
       # pi-work's config directory: the personal surfaces by symlink, so one edit
       # reaches both (as claude-work mirrors ~/.claude), and its own roles, which
@@ -569,7 +588,7 @@ in {
 
       # A dir, not --skill flags, which children never see. One read-only link, so
       # `npx skills add` fails instead of slipping skills into the prompt.
-      home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" config.fireproof.agents.skills;
+      home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" (config.fireproof.agents.skills // {agent-browser = agentBrowserSkill;});
 
       home.file.".pi/agent/agents" = {
         source = agentRoles;
