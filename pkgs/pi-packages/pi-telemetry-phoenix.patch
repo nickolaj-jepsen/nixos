@@ -9,15 +9,7 @@
  import { NoopRuntimeEventExporter } from './exporters.js';
  import { captureProviderHeaders, displayContent, displayMessage, hasFirstToken, modelParameters, providerDisplayInput, serializeTelemetryValue, toTelemetryValue, } from './observations.js';
  import { createTelemetryExporter } from './otel.js';
-@@ -247,6 +247,7 @@
-     let hasFullContext = false;
-     let enabled = false;
-     let capturePayloads = false;
-+    const captureTurnText = process.env.PI_PHOENIX_PROJECT === 'pi' && !isSubagent;
-     let mediaEnabled = false;
-     let lastModelConfig = { provider: 'unknown', model: 'unknown' };
-     let streamInput;
-@@ -359,10 +360,23 @@
+@@ -359,10 +359,23 @@
          generationOpen = false;
          boundaryFailure = {};
          toolStarts.clear();
@@ -45,27 +37,9 @@
          // One exporter/provider even when both Langfuse and a generic OTLP
          // endpoint are configured: two providers would mint different span ids for
          // the same logical span and cross-wire PI_TELEMETRY_TRACEPARENT.
-@@ -452,7 +466,7 @@
-         pendingContext = undefined;
-         promptNumber += 1;
-         inputNumbered = true;
--        pendingInput = capturePayloads ? event.text : undefined;
-+        pendingInput = captureTurnText ? event.text : undefined;
-         pendingImages = capturePayloads ? (event.images ?? []) : [];
-         contextHistory = undefined;
-         hasFullContext = false;
-@@ -611,7 +625,7 @@
-             return;
-         const now = Date.now();
-         const durationMs = traceStartTime ? now - traceStartTime : undefined;
--        const output = capturePayloads ? extractLastOutput(finalMessages) : undefined;
-+        const output = captureTurnText ? extractLastOutput(finalMessages) : undefined;
-         const lastAssistant = [...finalMessages]
-             .reverse()
-             .find((message) => message &&
 --- a/dist/otel/exporters.js
 +++ b/dist/otel/exporters.js
-@@ -94,11 +94,24 @@
+@@ -94,7 +94,8 @@
      async publish(event) {
          const redactedEvent = applyTelemetryRedaction(this.config, {
              ...event,
@@ -75,23 +49,7 @@
          });
          if (!redactedEvent?.traceId) {
              return;
-         }
-+        // Restore only explicitly selected text on personal root turns. The
-+        // normal payload filter stays on for provider, tool and subagent events.
-+        if (process.env.PI_PHOENIX_PROJECT === 'pi') {
-+            const input = event.type === 'chat_turn_started' && event.details?.input;
-+            const output = event.type === 'chat_turn_completed' && event.details?.output;
-+            if (typeof input === 'string' || typeof output === 'string') {
-+                redactedEvent.details = redactTelemetryValue(this.config, {
-+                    ...(typeof input === 'string' ? { input: input.slice(0, 16000) } : {}),
-+                    ...(typeof output === 'string' ? { output: output.slice(0, 16000) } : {}),
-+                });
-+            }
-+        }
-         const createdAtMs = Date.parse(redactedEvent.createdAt);
-         // ponytail: five minutes covers ordinary clock skew; future-dated replay
-         // can add an explicit normalization policy if it ever becomes a real use.
-@@ -760,10 +773,8 @@
+@@ -760,10 +761,8 @@
      if (!error) {
          return { code: SpanStatusCode.OK };
      }
@@ -104,17 +62,3 @@
  }
  async function waitForExport(operation) {
      return Promise.race([
---- a/dist/phoenix/mapping.js
-+++ b/dist/phoenix/mapping.js
-@@ -14,8 +14,9 @@
-     const sessionId = source['langfuse.session.id'];
-     if (typeof sessionId === 'string')
-         attributes['session.id'] = sessionId;
--    mapPayload(attributes, 'input', includePayloads);
--    mapPayload(attributes, 'output', includePayloads);
-+    const rootTurnText = process.env.PI_PHOENIX_PROJECT === 'pi' && span.name === 'chat-turn';
-+    mapPayload(attributes, 'input', includePayloads || rootTurnText);
-+    mapPayload(attributes, 'output', includePayloads || rootTurnText);
-     const metadata = Object.fromEntries(Object.entries(source)
-         .filter(([key]) => key.startsWith('langfuse.observation.metadata.'))
-         .filter(([key]) => !['rawInput', 'rawOutput'].includes(key.slice('langfuse.observation.metadata.'.length)))

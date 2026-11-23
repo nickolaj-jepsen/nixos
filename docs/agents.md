@@ -37,12 +37,9 @@ Claude uses native
 beta OTLP tracing with prompt and tool content disabled. `pi` uses the pinned
 TGYD-helige `@amaster.ai/pi-telemetry` extension for Phoenix-native interaction,
 model, and tool spans, with first-token latency and usage where available.
-The managed Pi extension ignores `pi-telemetry` settings and reads its API key
-from agenix. Personal `pi` also exports the user prompt and final reply as plain
-text on new root turns (up to 16,000 characters each); old turns cannot be
-backfilled. `pi-work` stays metadata-only. Neither profile captures tool
-payloads, system prompts, raw provider data, or raw error text. Neither agent
-ships logs or metrics. Captured text is stored on the homelab and in its backups.
+The managed Pi extension ignores `pi-telemetry` settings, exports only traces
+without payloads or raw error text, and reads its API key directly from agenix.
+Neither agent ships logs or metrics.
 
 To enroll a key, create a system API key in Phoenix Settings and run this from
 Bash in the repo. Paste the key at the hidden prompt; don't put it on a command
