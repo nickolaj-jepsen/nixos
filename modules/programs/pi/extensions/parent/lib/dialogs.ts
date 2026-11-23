@@ -1,81 +1,39 @@
 /**
  * The dialogs open on the agent's behalf, each as a one-line label of what it
- * asks: what the registry entry says the session waits on. Permission
- * prompts report themselves, and a tool's own dialog goes through `during`. A
- * finished run closes whatever is left.
+ * asks: what the registry entry says the session waits on. Pi reports every
+ * `ctx.ui` prompt it raises, and a finished run closes whatever is left.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-  PERMISSIONS_DECISION_CHANNEL,
-  PERMISSIONS_UI_PROMPT_CHANNEL,
-  type PermissionDecisionEvent,
-  type PermissionUiPromptEvent,
-} from "@gotgenes/pi-permission-system";
 import { clip, oneLine } from "./format.ts";
 
 // The cap on a label, which the registry carries as `waitingFor`.
 const LABEL_MAX = 200;
 
 export const createDialogs = (pi: ExtensionAPI) => {
-  // Request id → label, in the order they opened; the first is the one shown.
-  const open = new Map<string, string>();
-  let ownDialogs = 0;
+  // The label of the prompt open now; pi nests them under one start/end pair.
+  let label: string | undefined;
   const listeners = new Set<() => void>();
-  let offs: (() => void)[] = [];
 
   const notify = () => {
     for (const listener of listeners) listener();
   };
-  const unsubscribe = () => {
-    for (const off of offs) off();
-    offs = [];
-  };
-
-  const onPrompt = (data: unknown) => {
-    const event = data as PermissionUiPromptEvent;
-    const what = `${event.request?.toolName ?? event.surface ?? "permission"}: ${event.value ?? ""}`;
-    const requester = event.forwarding?.requesterAgentName;
-    const label = oneLine(requester ? `${requester} · ${what}` : what);
-    open.set(event.requestId, clip(label, LABEL_MAX));
+  const clear = () => {
+    if (label === undefined) return;
+    label = undefined;
     notify();
   };
 
-  const onDecision = (data: unknown) => {
-    if (open.delete((data as PermissionDecisionEvent).requestId)) notify();
-  };
-
-  pi.on("session_start", () => {
-    unsubscribe();
-    open.clear();
-    offs = [
-      pi.events.on(PERMISSIONS_UI_PROMPT_CHANNEL, onPrompt),
-      pi.events.on(PERMISSIONS_DECISION_CHANNEL, onDecision),
-    ];
-  });
-  pi.on("agent_settled", () => {
-    if (open.size === 0) return;
-    open.clear();
+  pi.on("ui_prompt_start", (event) => {
+    label = clip(oneLine(event.title ?? `${event.kind} prompt`), LABEL_MAX);
     notify();
   });
-  pi.on("session_shutdown", () => {
-    unsubscribe();
-    open.clear();
-  });
+  pi.on("ui_prompt_end", clear);
+  pi.on("agent_settled", clear);
+  pi.on("session_shutdown", clear);
 
   return {
     /** The label of the dialog the session waits on, or undefined when none is open. */
-    current: (): string | undefined => open.values().next().value,
-    /** Counts `label` as a dialog the session waits on until `run` settles. */
-    during: async <T>(label: string, run: () => Promise<T>): Promise<T> => {
-      const id = `own-${ownDialogs++}`;
-      open.set(id, clip(oneLine(label), LABEL_MAX));
-      notify();
-      try {
-        return await run();
-      } finally {
-        if (open.delete(id)) notify();
-      }
-    },
+    current: (): string | undefined => label,
     /** Calls `listener` whenever a dialog opens or closes; returns the unsubscribe. */
     onChange: (listener: () => void) => {
       listeners.add(listener);

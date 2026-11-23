@@ -421,7 +421,7 @@ export default function (pi: ExtensionAPI, { identity, userWait, dialogs }: Serv
       delete process.env.CLAUDE_CODE_MESSAGING_SOCKET;
   }
 
-  /** The entry says `waiting` while a permission dialog is open, with its label. */
+  /** The entry says `waiting` while a dialog is open, with its label. */
   function onDialogs() {
     if (!entry) return;
     const waitingFor = dialogs.current();

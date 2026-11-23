@@ -59,7 +59,7 @@ export interface RegistryEntry {
   updatedAt?: number;
   status?: string;
   statusUpdatedAt?: number;
-  /** What a `waiting` session waits on; Claude Code writes its own, pi the open permission dialog. */
+  /** What a `waiting` session waits on; Claude Code writes its own, pi the open dialog's label. */
   waitingFor?: string;
   /** For agent-hub: why the last turn failed, until the next turn starts. */
   hubFailed?: string;

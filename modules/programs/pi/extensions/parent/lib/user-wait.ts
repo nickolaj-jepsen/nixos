@@ -1,8 +1,8 @@
 /**
  * Whether the agent is blocked on the user: a dialog is open while a tool call
- * is in flight, as with a permission ask or a question tool, or a dialog an
- * extension opened on the agent's behalf outside a tool call. A dialog opened
- * between runs, such as a menu the user called up, does not count.
+ * is in flight, as with a tool's own ask, or a dialog an extension opened on
+ * the agent's behalf outside a tool call. A dialog opened between runs, such as
+ * a menu the user called up, does not count.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -22,7 +22,7 @@ export const createUserWait = (pi: ExtensionAPI) => {
     return wait;
   };
 
-  // tool_execution_start fires before tool_call hooks, so a permission ask counts as in flight.
+  // tool_execution_start fires before tool_call hooks, so an ask raised from one counts as in flight.
   pi.on("tool_execution_start", (event, ctx) => {
     state(ctx).tools.add(event.toolCallId);
   });

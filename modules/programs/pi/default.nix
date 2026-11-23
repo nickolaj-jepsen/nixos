@@ -69,10 +69,7 @@ in {
     }));
     localModels = (import ../_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
     localMaxTokens = 8192;
-    # The permission system loads first; the rest stay alphabetical.
-    thirdPartyPackages =
-      ["@gotgenes/pi-permission-system"]
-      ++ lib.remove "@gotgenes/pi-permission-system" piPackages.packageNames;
+    thirdPartyPackages = piPackages.packageNames;
     # settings.packages and the children's exclusions must match string for string.
     packagePath = name: "${piPackages}/node_modules/${name}";
     extensions = mkExtensions pkgs pi piPackages;
@@ -99,13 +96,9 @@ in {
       done
       cp -r ${./agents} $out
     '';
-    # Children keep core/, the permission system, and model providers.
+    # Children keep core/ and model providers.
     childExcludedPackages =
-      map packagePath (lib.subtractLists [
-          "@commandcode/pi-commandcode-provider"
-          "@gotgenes/pi-permission-system"
-        ]
-        thirdPartyPackages)
+      map packagePath (lib.subtractLists ["@commandcode/pi-commandcode-provider"] thirdPartyPackages)
       ++ [parentPath]
       ++ map pluginPath parentOnlyPlugins;
     # agent-context.md is shared by every agent; keep it agent-agnostic. Children
@@ -220,8 +213,8 @@ in {
           ++ [parentPath]
           ++ map pluginPath pluginNames;
       };
-    # One edit to the rules, keybindings, theme, roles or permission policy reaches
-    # both profiles; models.json, auth.json, sessions and mcp.json stay apart.
+    # One edit to the rules, keybindings, theme or roles reaches both profiles;
+    # models.json, auth.json, sessions and mcp.json stay apart.
     mirror = name:
       lib.mkIf cfg.work.enable {
         source = config.lib.file.mkOutOfStoreSymlink "${homeDir}/.pi/agent/${name}";
@@ -581,158 +574,6 @@ in {
       home.file.".pi/agent/agents" = {
         source = agentRoles;
         recursive = true;
-      };
-
-      # Its config modal saves yolo and log toggles by renaming over this file; over a
-      # store link that leaves a plain file the next activation refuses to clobber.
-      # Writable instead, reset to Nix's on activation (modules/base/writable-configs.nix).
-      fireproof.writableConfigs.pi-permissions.file = ".pi/agent/extensions/pi-permission-system/config.json";
-      home.file.".pi/agent/extensions/pi-permission-system/config.json".text = builtins.toJSON {
-        # Otherwise bg_run is an ordinary extension tool and skips the bash rules below.
-        shellTools.bg_run.commandArgument = "command";
-        # An undeclared reader outside the package's core lands on the write ask
-        # below. Declaring a core word (cat, grep, sed, …) is ignored with a warning.
-        commandEffects = {
-          readlink.effects = "read";
-          jq.effects = "read";
-          cut.effects = "read";
-          du.effects = "read";
-          df.effects = "read";
-          strings.effects = "read";
-          sha256sum.effects = "read";
-          # The core leaves it out because -C compiles a magic.mgc.
-          file = {
-            effects = "read";
-            unlessOption = ["-C" "--compile"];
-          };
-          git = {
-            unlessOption = ["--output"];
-            subcommands = {
-              log = "read";
-              show = "read";
-              status = "read";
-              diff = "read";
-              rev-parse = "read";
-              rev-list = "read";
-              merge-base = "read";
-              blame = "read";
-              grep = "read";
-              ls-files = "read";
-              cat-file = "read";
-              describe = "read";
-              shortlog = "read";
-              whatchanged = "read";
-              for-each-ref = "read";
-              remote.subcommands = {
-                show = "read";
-                get-url = "read";
-              };
-            };
-          };
-          # build and run stay undeclared so their store paths and links still ask.
-          nix.subcommands = {
-            eval = "read";
-            search = "read";
-            path-info = "read";
-            why-depends = "read";
-            show-config = "read";
-            flake.subcommands = {
-              show = "read";
-              metadata = "read";
-            };
-          };
-        };
-        permission = {
-          "*" = "allow";
-          # Also matches symlink targets, hence the agenix.d/<gen> globs.
-          path =
-            {
-              "*.env" = "deny";
-              "*.env.*" = "deny";
-              "*.env.example" = "allow";
-              "*/agenix" = "deny";
-              "*/agenix/*" = "deny";
-              "*/agenix.d" = "deny";
-              "*/agenix.d/*" = "deny";
-              "~/.ssh/id_*" = "deny";
-              "~/.claude/.credentials.json" = "deny";
-              "~/.claude-work/.credentials.json" = "deny";
-              "~/.pi/agent/auth.json" = "deny";
-              "~/.pi/agent/mcp-auth.json" = "deny";
-              "~/.pi/work/auth.json" = "deny";
-              "~/.pi/work/mcp-auth.json" = "deny";
-            }
-            // lib.listToAttrs (map (secret: lib.nameValuePair secret.path "deny")
-              (lib.filter (secret: !lib.hasPrefix config.age.secretsDir secret.path)
-                (lib.attrValues config.age.secrets)));
-          # Bash path args are also matched absolute, so gate write locations here,
-          # not in bash rules. The cwd root counts as inside, so a path outside the
-          # roots is what asks.
-          external_directory_write = let
-            roots =
-              # /nix/store so `rm result` doesn't ask; ~/worktrees/* so a whole <repo> does.
-              ["/tmp" "~/.local/share/agents" "~/.local/state/agents" "~/.local/state/pi-plugin-dev" "~/worktrees/*" "/nix/store"];
-          in
-            {"*" = "ask";}
-            // lib.listToAttrs (lib.concatMap (root: [
-                (lib.nameValuePair "${root}/*" "allow")
-                # The typed spelling is matched too, so `/tmp/../home` would ride the allow.
-                (lib.nameValuePair "${root}/*..*" "ask")
-              ])
-              roots);
-          # Reading your own trees is not a decision worth making; the write
-          # direction stays exactly as gated above. The bare root is listed
-          # because `<root>/*` misses the directory itself, which is what a `cd`
-          # operand names.
-          external_directory_read = let
-            roots = ["/tmp" "~/.local/share/agents" "~/.local/state/agents" "~/worktrees" "~/dev" "~/.claude" "/var/tmp"];
-          in
-            lib.listToAttrs (lib.concatMap (root: [
-                (lib.nameValuePair root "allow")
-                (lib.nameValuePair "${root}/*" "allow")
-              ])
-              roots);
-          bash = {
-            # Explicit, or the top-level "*" still applies but warns at startup.
-            "*" = "allow";
-            # Last match wins and Nix sorts keys: `*` sorts first, so narrower rules win.
-            # The projection resolves no variable, so a `$name` path gets no absolute
-            # spelling and the write gate never sees it. Only $HOME and $PWD can hide
-            # a home-wide delete that way; every other name, and `./x`, is left to the
-            # write gate, which already asks outside its roots.
-            "rm * $HOME*" = "ask";
-            "rm * \${HOME}*" = "ask";
-            "rm * $PWD*" = "ask";
-            "rm * /" = "deny";
-            "rm -rf /" = "deny";
-            "sudo rm *" = "deny";
-            "sudo *" = "ask";
-            "git push --force*" = "ask";
-            # Mirrored in claude-code's ask list.
-            "just switch *" = "ask";
-            "just boot *" = "ask";
-            "just deploy-remote *" = "ask";
-            "just gc *" = "ask";
-            "just decrypt *" = "ask";
-            "gh pr merge *" = "ask";
-            "gh pr create *" = "ask";
-            "gh pr comment *" = "ask";
-            "gh pr review *" = "ask";
-            "gh issue create *" = "ask";
-            "gh issue comment *" = "ask";
-            # Scaleway: ao-prod carries the same full-access user key as ao-dev, so
-            # the profile name and the destructive verbs are the only local gate.
-            # SCW_PROFILE= is stripped as an assignment prefix, so an exported
-            # profile is not caught here; -p/--profile is.
-            "scw * delete*" = "ask";
-            "scw * terminate*" = "ask";
-            "scw * poweroff*" = "ask";
-            "scw * reboot*" = "ask";
-            # Print the plaintext key into the transcript, sidestepping the path deny.
-            "scw config get secret-key*" = "deny";
-            "scw config dump*" = "deny";
-          };
-        };
       };
     };
   };
