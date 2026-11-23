@@ -390,38 +390,6 @@ one of “zed”, “vscode”
 
 
 
-## fireproof\.desktop\.hyprland\.enable
-
-
-
-Whether to enable a Hyprland session (scrolling layout, Lua config) beside niri\. Temporary, until one of the two is chosen: while it is on the greeter always shows, to pick the session\.
-
-
-
-*Type:*
-boolean
-
-
-
-*Default:*
-
-```nix
-false
-```
-
-
-
-*Example:*
-
-```nix
-true
-```
-
-*Declared by:*
- - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
-
-
-
 ## fireproof\.desktop\.ivpn\.enable
 
 
@@ -1175,6 +1143,30 @@ true
 
 
 
+## fireproof\.dev\.phoenix\.enable
+
+
+
+Send Claude Code and Pi traces from personal and work profiles to the homelab Phoenix server when its client key is enrolled
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
 ## fireproof\.dev\.pi\.enable
 
 
@@ -1707,6 +1699,38 @@ string
 
 ```nix
 "nickolaj.com"
+```
+
+*Declared by:*
+ - [modules/base/fireproof\.nix](https://github.com/nickolaj-jepsen/nixos/blob/main/modules/base/fireproof.nix)
+
+
+
+## fireproof\.homelab\.phoenix\.enable
+
+
+
+Whether to enable Arize Phoenix LLM tracing and evaluation server\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+*Example:*
+
+```nix
+true
 ```
 
 *Declared by:*
@@ -2639,8 +2663,6 @@ string
 
 ## fireproof\.theme\.colors\.magenta
 
-
-
 Magenta
 
 
@@ -2670,6 +2692,8 @@ string
 
 
 ## fireproof\.theme\.colors\.magentaAlt
+
+
 
 Dark magenta
 
