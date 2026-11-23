@@ -58,7 +58,7 @@ in {
   }: let
     cfg = config.fireproof.dev.pi;
     phoenix = import ../_phoenix-client.nix {inherit config;};
-    phoenixExtension = "${piPackages}/node_modules/@amaster.ai/pi-telemetry/dist/index.js";
+    phoenixTelemetry = "${piPackages}/node_modules/@amaster.ai/pi-telemetry/dist/index.js";
     homeDir = config.home.homeDirectory;
     pi = pkgs.pi-coding-agent;
     piPackages = pkgs.pi-packages;
@@ -300,28 +300,19 @@ in {
         ${launch}
         exec ${lib.getExe pi} "$@"
       '';
+    # core/telemetry.ts loads the package from PI_PHOENIX_TELEMETRY, so subagent
+    # sessions get it too: a `-e` flag dies at the session boundary.
     phoenixLaunch = {
       profile,
       project,
     }:
       lib.optionalString phoenix.enabled ''
-        # Pi dispatches subcommands from argv[0]; don't prepend -e to them.
-        case "''${1:-}" in
-          install|remove|uninstall|update|list|config|auth|mcp)
-            exec ${lib.getExe pi} "$@" ;;
-        esac
-        for arg in "$@"; do
-          case "$arg" in
-            --) break ;;
-            -ne|--no-extensions) exec ${lib.getExe pi} "$@" ;;
-          esac
-        done
         if [ "$dir" = "$HOME/${profile}" ] && [ -s ${lib.escapeShellArg phoenix.path} ] && [ "''${PI_OTEL_DISABLED:-0}" != 1 ]; then
           ${phoenix.clear}
           export PI_PHOENIX_ENDPOINT=${lib.escapeShellArg phoenix.endpoint}
           export PI_PHOENIX_PROJECT=${lib.escapeShellArg project}
           export PI_PHOENIX_KEY_FILE=${lib.escapeShellArg phoenix.path}
-          exec ${lib.getExe pi} -e ${phoenixExtension} "$@"
+          export PI_PHOENIX_TELEMETRY=${lib.escapeShellArg phoenixTelemetry}
         fi
       '';
     wrapper = mkWrapper {
@@ -342,7 +333,7 @@ in {
       models = workModels;
       launch = ''
         ${phoenix.clear}
-        unset PI_PHOENIX_ENDPOINT PI_PHOENIX_KEY_FILE PI_PHOENIX_PROJECT "''${!PI_TELEMETRY_@}"
+        unset PI_PHOENIX_ENDPOINT PI_PHOENIX_KEY_FILE PI_PHOENIX_PROJECT PI_PHOENIX_TELEMETRY "''${!PI_TELEMETRY_@}"
         ${phoenixLaunch {
           profile = ".pi/work";
           project = "pi-work";

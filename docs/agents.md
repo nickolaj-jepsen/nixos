@@ -44,9 +44,13 @@ hook process reads the key itself, so no copy sits in the env a Bash tool can
 read or in a file at rest. Pi uses the pinned `@amaster.ai/pi-telemetry`
 extension with payload capture enabled, including model inputs/outputs and tool
 data. It ignores project telemetry settings, reads its key from agenix, and
-keeps credential masking and raw error-text suppression. Neither agent ships
-logs or metrics. Trace content can include source code, secrets printed by
-tools, and work data; it is stored on the homelab and included in backups.
+keeps credential masking and raw error-text suppression. `core/telemetry.ts`
+loads it when the wrapper exports `PI_PHOENIX_TELEMETRY`, so subagent sessions
+get it too; the patched build traces pi-subagents' in-process children as
+`subagent [role]` spans under the tool call that spawned them, in the calling
+trace. Neither agent ships logs or metrics. Trace content can include source
+code, secrets printed by tools, and work data; it is stored on the homelab and
+included in backups.
 
 Upstream cuts no releases (only rc tags), so the plugin is pinned to a main
 commit: bump `rev` and `hash` in `pkgs/claude-code-tracing/package.nix`
@@ -105,6 +109,11 @@ profiles bypass this default. So do `px setup`, `px auth`, `px profile`, and
   `.claude-plugin/types/`; re-run it after a Claude Code upgrade.
 - Claude Code shows a pi receipt as fixed text for its status and ignores `reason`, so pick
   the status by what that text says (`ReceiptStatus` in `parent/claude-peers/protocol.ts`).
+- A subagent is a session in this process, not a child process: it loads `settings.packages`
+  minus `subagents.json`'s `excludedExtensionPackages`, never the launcher's `-e` paths. So an
+  extension that must see children (telemetry) belongs in `core/`, and the parent and child
+  instances do not share module state — jiti loads the file per session, so share through
+  `globalThis` or the event bus.
 - agent-hub already sees every pi and Claude Code session; don't add per-agent toast hooks.
 - Nothing closes a worktree when a session or subagent ends, and `wt` doesn't look for
   processes in one: its only guard is the cwd it runs in. So agents land, close or drop theirs
