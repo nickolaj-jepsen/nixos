@@ -61,9 +61,9 @@ it is `.github/scripts/update_bot.py`, driven by the workflows named below.
 
 ## npm cooldown
 
-- `pi-coding-agent` and `pi-packages` only move to an npm release published at
-  least three days earlier (`npm_cooled` in `update_packages.py`).
-- The pi-packages lock is regenerated with `npm --before` at the same cutoff,
+- `pi-coding-agent`, `pi-packages`, and `phoenix-cli` only move to npm releases
+  published at least three days earlier (`npm_cooled` in `update_packages.py`).
+- The pi-packages and phoenix-cli locks are regenerated with `npm --before` at the same cutoff,
   so new transitive deps wait too.
 - A broken or hijacked release is usually pulled within that window, and these
   bumps still automerge.

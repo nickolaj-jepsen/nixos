@@ -66,6 +66,13 @@ the corresponding projects. In Pi, `/telemetry status` shows exporter status.
 Verify that `just eval hm.fireproof.dev.phoenix.enable dev-ao` is `false`.
 To revoke access, revoke the key in Phoenix, not just in Nix.
 
+Enrolled hosts also install Arize's Phoenix CLI. Use `px project list` to
+check the connection or `px trace list --project pi --limit 5` to inspect
+recent traces. `px` (also `phoenix-cli`) defaults to the homelab and reads the
+agenix key for that invocation only. Explicit endpoints, credentials or
+profiles bypass this default. So do `px setup`, `px auth`, `px profile`, and
+`px self`. The upstream `pxi` interactive CLI is installed but not configured.
+
 ## Traps
 
 - The pi wrapper merges the leaf's `settings` and `mcp` into `~/.pi/agent/settings.json` and

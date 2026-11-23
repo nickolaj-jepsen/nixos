@@ -1,0 +1,8 @@
+{
+  "name": "fireproof-phoenix-cli",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@arizeai/phoenix-cli": "1.24.0"
+  }
+}

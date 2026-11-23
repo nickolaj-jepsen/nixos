@@ -268,9 +268,9 @@ def update_npm_tarball(name: str) -> tuple[str, str]:
     return old, new
 
 
-def update_pi_packages() -> tuple[str, str]:
-    """Bump every pin in pkgs/pi-packages and regenerate its npm lock."""
-    path = PKGS / "pi-packages" / "package.json"
+def update_npm_lock(name: str, *, legacy_peer_deps: bool = False) -> tuple[str, str]:
+    """Bump every cooled pin in a package manifest and regenerate its npm lock."""
+    path = PKGS / name / "package.json"
     package = json.loads(path.read_text())
     deps = package["dependencies"]
     cooled = {name: npm_cooled(name, deps[name]) for name in deps}
@@ -292,7 +292,8 @@ def update_pi_packages() -> tuple[str, str]:
             "npm",
             "install",
             "--package-lock-only",
-            "--legacy-peer-deps",
+            "--ignore-scripts",
+            *(["--legacy-peer-deps"] if legacy_peer_deps else []),
             f"--before={NPM_COOLDOWN_CUTOFF.isoformat()}",
         ],
         cwd=path.parent,
@@ -315,7 +316,8 @@ UPDATERS = {
     "ha-bambulab": lambda: update_github_release("ha-bambulab", "greghesp/ha-bambulab"),
     "pi-coding-agent": update_pi_coding_agent,
     "pele": lambda: update_npm_tarball("pele"),
-    "pi-packages": update_pi_packages,
+    "pi-packages": lambda: update_npm_lock("pi-packages", legacy_peer_deps=True),
+    "phoenix-cli": lambda: update_npm_lock("phoenix-cli", legacy_peer_deps=True),
     "zwift-hass": lambda: update_github_release("zwift-hass", "snicker/zwift_hass"),
 }
 
