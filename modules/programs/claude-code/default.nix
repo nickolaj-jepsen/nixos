@@ -168,7 +168,7 @@
           export OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf
           export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${lib.escapeShellArg phoenix.endpoint}
           export OTEL_RESOURCE_ATTRIBUTES=openinference.project.name=${project}
-          export OTEL_LOG_USER_PROMPTS=0 OTEL_LOG_TOOL_DETAILS=0 OTEL_LOG_TOOL_CONTENT=0
+          export OTEL_LOG_USER_PROMPTS=1 OTEL_LOG_TOOL_DETAILS=1 OTEL_LOG_TOOL_CONTENT=1
           empty_settings='{}'
           if settings=$(${lib.getExe pkgs.jq} -c --arg helper ${lib.escapeShellArg (toString phoenixHeaders)} '. + {otelHeadersHelper: $helper}' <<< "''${memory_args[1]:-$empty_settings}"); then
             memory_args=(--settings "$settings")

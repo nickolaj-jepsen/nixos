@@ -31,7 +31,7 @@
 +        }
 +        const config = resolveConfig({
 +            serviceName: 'pi',
-+            includePayloads: false,
++            includePayloads: true,
 +            phoenix: { enabled: Boolean(endpoint && apiKey), endpoint, apiKey, projectName: process.env.PI_PHOENIX_PROJECT === 'pi-work' ? 'pi-work' : 'pi' },
 +        });
          // One exporter/provider even when both Langfuse and a generic OTLP

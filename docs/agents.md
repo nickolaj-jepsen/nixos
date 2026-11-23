@@ -33,13 +33,15 @@ and skills themselves: nickolaj-jepsen/agents' AGENTS.md and `docs/`.
 profiles send traces to separate projects (`claude-code`, `pi`, `claude-work`,
 `pi-work`) on the same Phoenix server with the same key. Project names are
 not access controls. Only send work metadata where your employer permits it.
-Claude uses native
-beta OTLP tracing with prompt and tool content disabled. `pi` uses the pinned
-TGYD-helige `@amaster.ai/pi-telemetry` extension for Phoenix-native interaction,
-model, and tool spans, with first-token latency and usage where available.
-The managed Pi extension ignores `pi-telemetry` settings, exports only traces
-without payloads or raw error text, and reads its API key directly from agenix.
-Neither agent ships logs or metrics.
+Both personal and work profiles send content-bearing traces. Claude uses
+native beta OTLP tracing with prompt, tool argument, and tool output capture
+enabled. Its raw API bodies and assistant-response log events are not sent to
+the trace endpoint. Pi uses the pinned `@amaster.ai/pi-telemetry` extension
+with payload capture enabled, including model inputs/outputs and tool data.
+It ignores project telemetry settings, reads its key from agenix, and keeps
+credential masking and raw error-text suppression. Neither agent ships logs
+or metrics. Trace content can include source code, secrets printed by tools,
+and work data; it is stored on the homelab and included in backups.
 
 To enroll a key, create a system API key in Phoenix Settings and run this from
 Bash in the repo. Paste the key at the hidden prompt; don't put it on a command
