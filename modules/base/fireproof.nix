@@ -54,7 +54,6 @@ let
         obsidian-livesync.enable = cascade config.fireproof.desktop.enable "Sync Obsidian vaults with the homelab's CouchDB (needs its per-device secret)";
         bambu-studio.enable = lib.mkEnableOption "Bambu Studio 3D printing slicer";
         jellyfin-media-player.enable = lib.mkEnableOption "Jellyfin Media Player desktop client";
-        hyprland.enable = lib.mkEnableOption "a Hyprland session (scrolling layout, Lua config) beside niri. Temporary, until one of the two is chosen: while it is on the greeter always shows, to pick the session";
         ivpn.enable = lib.mkEnableOption "IVPN client (daemon + CLI + desktop UI)";
         mullvad.enable = lib.mkEnableOption "Mullvad VPN client (daemon + CLI + desktop UI)";
         snapcast.enable = lib.mkEnableOption "Snapcast audio streaming server";

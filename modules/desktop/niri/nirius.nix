@@ -14,7 +14,6 @@
           Description = "nirius daemon";
           After = ["graphical-session.target"];
           PartOf = ["graphical-session.target"];
-          # The Hyprland session shares graphical-session.target but has no niri socket.
           ConditionEnvironment = "NIRI_SOCKET";
         };
         Service = {
