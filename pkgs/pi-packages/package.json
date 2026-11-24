@@ -4,10 +4,10 @@
   "dependencies": {
     "@amaster.ai/pi-telemetry": "0.1.40",
     "@commandcode/pi-commandcode-provider": "0.3.0",
-    "@gotgenes/pi-subagents": "25.0.5",
     "@opentelemetry/core": "3.1.1",
     "@opentelemetry/exporter-trace-otlp-http": "0.301.2",
     "@opentelemetry/otlp-exporter-base": "0.301.2",
-    "@opentelemetry/sdk-trace-base": "2.12.0"
+    "@opentelemetry/sdk-trace-base": "2.12.0",
+    "pi-agents": "0.42.0"
   }
 }

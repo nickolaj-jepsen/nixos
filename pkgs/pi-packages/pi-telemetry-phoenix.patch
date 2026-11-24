@@ -1,87 +1,391 @@
 # Fireproof's changes to @amaster.ai/pi-telemetry 0.1.40, applied from
 # package.nix: read the Phoenix key from PI_PHOENIX_KEY_FILE instead of project
-# settings, keep error text out of spans, and instrument the subagent sessions
-# pi-subagents runs in-process (same pid, so upstream's environment handoff
-# cannot see them). Regenerate against the pristine tarball, then apply here.
+# settings, keep error text out of spans, and turn pi-agents 0.42 lifecycle
+# snapshots into child spans parented to the main turn. Child generations,
+# tools, and usage are not traced yet. Regenerate against the pristine tarball,
+# then apply here.
+--- /dev/null
++++ b/dist/agent-lifecycle.js
+@@ -0,0 +1,342 @@
++/**
++ * Fireproof: pi-agents 0.42 runs child agents on pi-durable inside this
++ * process, so there is no child Pi session to instrument. It publishes
++ * lifecycle snapshots instead (pi-agents:state), and this tracer turns one
++ * observed agent run into one span. Snapshots carry id, name, state, and
++ * closed only: generations, tools, usage, and results are not in scope yet.
++ *
++ * The tracer is per Pi session and never consults process globals, so a
++ * snapshot from another session, a restarted publisher, or a new session
++ * cannot be attributed to the spans of this one.
++ */
++import { randomUUID } from 'node:crypto';
++
++export const AGENTS_STATE_EVENT = 'pi-agents:state';
++export const AGENTS_STATE_REQUEST_EVENT = 'pi-agents:state:request';
++
++/** States an agent has while its run is alive. */
++const ACTIVE_STATES = new Set(['working', 'waiting']);
++/** States that end the observed run, with the telemetry event they publish. */
++const TERMINAL_STATES = new Map([
++    ['idle', 'completed'],
++    ['failed', 'failed'],
++    ['interrupted', 'interrupted'],
++    ['skipped', 'skipped'],
++]);
++const CANCEL_REASONS = new Set(['interrupted', 'skipped']);
++
++function isRecord(value) {
++    return typeof value === 'object' && value !== null && !Array.isArray(value);
++}
++
++function nonEmptyString(value) {
++    return typeof value === 'string' && value.length > 0 ? value : undefined;
++}
++
++/**
++ * Publishes subagent_started/subagent_* telemetry from pi-agents' lifecycle
++ * snapshots. Construct one per session, after the exporter is ready.
++ */
++export class AgentLifecycleTracer {
++    #publish;
++    #sessionId;
++    #publisherSessionId;
++    #now;
++    #log;
++    #traceId;
++    #publisher;
++    #runs = new Map();
++    #pending = new Map();
++    #seen = new Set();
++    #stoppedInstance;
++    #closed = false;
++    #disposed = false;
++    #queue = Promise.resolve();
++
++    constructor({ publish, sessionId, publisherSessionId = sessionId, traceId, now = Date.now, log = () => {} }) {
++        if (typeof publish !== 'function')
++            throw new TypeError('AgentLifecycleTracer needs a publish function');
++        if (!nonEmptyString(sessionId))
++            throw new TypeError('AgentLifecycleTracer needs the owning session id');
++        if (!nonEmptyString(publisherSessionId))
++            throw new TypeError('AgentLifecycleTracer needs the pi-agents session id');
++        this.#publish = publish;
++        this.#sessionId = sessionId;
++        this.#publisherSessionId = publisherSessionId;
++        this.#traceId = nonEmptyString(traceId);
++        this.#now = now;
++        this.#log = log;
++    }
++
++    get sessionId() {
++        return this.#sessionId;
++    }
++
++    /**
++     * Listen for snapshots and ask for the current one. pi-agents answers a
++     * request synchronously when it already owns the session, and publishes an
++     * initial snapshot when it starts afterwards; both paths reach handle().
++     * @param {{ on: Function, emit: Function }} events Pi's session event bus.
++     * @returns {() => void} Unsubscribe.
++     */
++    subscribe(events) {
++        if (this.#disposed)
++            return () => {};
++        const unsubscribe = events.on(AGENTS_STATE_EVENT, (snapshot) => this.handle(snapshot));
++        try {
++            events.emit(AGENTS_STATE_REQUEST_EVENT, Object.freeze({ protocol: 1 }));
++        }
++        catch (error) {
++            this.#log(error);
++        }
++        return unsubscribe;
++    }
++
++    /**
++     * The main trace new runs hang from. Undefined outside a chat turn, so a
++     * restored agent waits for a span to parent to instead of becoming a
++     * detached trace.
++     */
++    setTraceId(traceId) {
++        if (this.#closed || this.#disposed)
++            return;
++        this.#traceId = nonEmptyString(traceId);
++        if (this.#traceId)
++            this.#startPending();
++    }
++
++    /** Observe one pi-agents lifecycle snapshot. */
++    handle(snapshot) {
++        if (this.#closed || this.#disposed || !isRecord(snapshot))
++            return;
++        if (snapshot.protocol !== 1)
++            return;
++        // The event bus is process-wide: only this session's publisher may
++        // attribute runs here. In a nested pi process the publisher's session
++        // id is local, while the trace lineage stays with the root session.
++        if (snapshot.sessionId !== this.#publisherSessionId)
++            return;
++        const instanceId = nonEmptyString(snapshot.instanceId);
++        if (!instanceId)
++            return;
++        if (instanceId === this.#stoppedInstance)
++            return;
++        if (snapshot.type === 'stopped') {
++            if (this.#publisher && this.#publisher.instanceId !== instanceId)
++                return;
++            this.#finishAll('publisher_stopped');
++            this.#pending.clear();
++            this.#seen.clear();
++            this.#publisher = undefined;
++            this.#stoppedInstance = instanceId;
++            return;
++        }
++        if (snapshot.type !== 'snapshot' || !Array.isArray(snapshot.agents))
++            return;
++        const sequence = Number.isSafeInteger(snapshot.sequence)
++            ? snapshot.sequence
++            : undefined;
++        if (this.#publisher && this.#publisher.instanceId === instanceId) {
++            // Snapshots are ordered within one publisher; a late one must not
++            // reopen a run this tracer already settled.
++            if (sequence !== undefined && sequence <= this.#publisher.sequence)
++                return;
++        }
++        else if (this.#publisher) {
++            // A new publisher instance means the previous session scope is
++            // gone. Its spans cannot be completed honestly, so close them.
++            this.#finishAll('publisher_replaced');
++            this.#pending.clear();
++            this.#seen.clear();
++        }
++        this.#publisher = {
++            instanceId,
++            sequence: sequence ?? (this.#publisher?.sequence ?? 0) + 1,
++        };
++        const seen = new Set();
++        for (const value of snapshot.agents) {
++            if (!isRecord(value))
++                continue;
++            const id = nonEmptyString(value.id);
++            if (!id || seen.has(id))
++                continue;
++            seen.add(id);
++            this.#observe({
++                id,
++                name: nonEmptyString(value.name) ?? id,
++                state: nonEmptyString(value.state) ?? 'unknown',
++                closed: value.closed === true,
++                restored: !this.#seen.has(id),
++            });
++        }
++        // A closed agent that no longer works is hidden from the snapshot. A
++        // failure or interruption between snapshots would be hidden with it,
++        // so this is not an observed success. End the span with the exporter's
++        // completed event (it has no unknown terminal event) and label why.
++        for (const id of [...this.#runs.keys()])
++            if (!seen.has(id))
++                this.#finish(id, 'closed', { outcome: 'closed' });
++        for (const id of [...this.#pending.keys()])
++            if (!seen.has(id))
++                this.#pending.delete(id);
++        this.#seen = seen;
++    }
++
++    /** Wait until every event queued so far has reached the exporter. */
++    async flush() {
++        await this.#queue;
++    }
++
++    /**
++     * End every open run because this process stops observing them. Call
++     * before the exporter closes, so the terminal spans are queued for export.
++     * @param {string} reason session_shutdown, session_restarted, or similar.
++     */
++    async close(reason = 'session_shutdown') {
++        if (this.#disposed)
++            return this.#queue;
++        this.#closed = true;
++        this.#pending.clear();
++        this.#finishAll(reason);
++        this.#publisher = undefined;
++        await this.#queue;
++    }
++
++    /** Drop listeners and buffered state; call close() first to export them. */
++    dispose() {
++        if (this.#disposed)
++            return;
++        this.#disposed = true;
++        this.#pending.clear();
++        this.#runs.clear();
++        this.#seen.clear();
++        this.#publisher = undefined;
++        this.#traceId = undefined;
++    }
++
++    #observe(agent) {
++        const run = this.#runs.get(agent.id);
++        if (ACTIVE_STATES.has(agent.state)) {
++            if (run) {
++                run.name = agent.name;
++                run.state = agent.state;
++                return;
++            }
++            if (!this.#traceId) {
++                const pending = this.#pending.get(agent.id);
++                this.#pending.set(agent.id, {
++                    name: agent.name,
++                    state: agent.state,
++                    restored: pending?.restored ?? agent.restored,
++                });
++                return;
++            }
++            this.#start(agent);
++            return;
++        }
++        const outcome = TERMINAL_STATES.get(agent.state);
++        if (outcome === undefined)
++            return;
++        if (run)
++            this.#finish(agent.id, outcome, {
++                outcome,
++                state: agent.state,
++                ...(agent.closed ? { closed: true } : {}),
++            });
++        else
++            this.#pending.delete(agent.id);
++    }
++
++    #startPending() {
++        for (const [id, pending] of [...this.#pending]) {
++            if (!this.#traceId)
++                return;
++            this.#start({
++                id,
++                name: pending.name,
++                state: pending.state,
++                closed: false,
++                restored: pending.restored,
++            });
++        }
++    }
++
++    #start(agent) {
++        if (!this.#traceId)
++            return;
++        const run = {
++            id: agent.id,
++            name: agent.name,
++            state: agent.state,
++            runId: randomUUID(),
++            traceId: this.#traceId,
++            startedAt: this.#now(),
++        };
++        this.#runs.set(agent.id, run);
++        this.#pending.delete(agent.id);
++        this.#emit({
++            type: 'subagent_started',
++            traceId: run.traceId,
++            sessionId: this.#sessionId,
++            parentSessionId: this.#sessionId,
++            childSessionId: agent.id,
++            runId: run.runId,
++            createdAt: new Date(run.startedAt).toISOString(),
++            details: {
++                agent: run.name,
++                agentId: agent.id,
++                agentState: agent.state,
++                lifecycleSource: 'pi-agents:state',
++                ...(agent.restored ? { restored: true } : {}),
++            },
++        });
++    }
++
++    #finish(id, outcome, details = {}) {
++        const run = this.#runs.get(id);
++        if (!run)
++            return;
++        this.#runs.delete(id);
++        const now = this.#now();
++        const { state, ...rest } = details;
++        const cancelled = CANCEL_REASONS.has(outcome) || outcome.startsWith('publisher_') || outcome === 'session_shutdown' || outcome === 'session_restarted';
++        this.#emit({
++            type: cancelled
++                ? 'subagent_cancelled'
++                : outcome === 'failed'
++                    ? 'subagent_failed'
++                    : 'subagent_completed',
++            traceId: run.traceId,
++            sessionId: this.#sessionId,
++            parentSessionId: this.#sessionId,
++            childSessionId: id,
++            runId: run.runId,
++            createdAt: new Date(now).toISOString(),
++            durationMs: Math.max(0, now - run.startedAt),
++            // A failure is classified, not quoted: pi-agents keeps the error
++            // text in its own conversation, and it can contain user content.
++            ...(outcome === 'failed' ? { error: 'Agent failed' } : {}),
++            details: {
++                agent: run.name,
++                agentId: id,
++                ...(state ? { agentState: state } : {}),
++                lifecycleSource: 'pi-agents:state',
++                outcome,
++                ...rest,
++            },
++        });
++    }
++
++    #finishAll(outcome) {
++        for (const id of [...this.#runs.keys()])
++            this.#finish(id, outcome, { outcome });
++    }
++
++    #emit(event) {
++        const value = { id: randomUUID(), ...event };
++        // A publish failure must not break pi-agents' synchronous event bus.
++        this.#queue = this.#queue
++            .then(() => this.#publish(value))
++            .catch((error) => this.#log(error));
++    }
++}
 --- a/dist/extension.js
 +++ b/dist/extension.js
-@@ -1,6 +1,6 @@
+@@ -1,6 +1,7 @@
  import { randomUUID } from 'node:crypto';
 -import { isProjectTrusted } from '@amaster.ai/pi-shared/settings';
 -import { loadConfigFromFile, resolveConfig } from './config.js';
 +import { readFileSync } from 'node:fs';
++import { AgentLifecycleTracer } from './agent-lifecycle.js';
 +import { resolveConfig } from './config.js';
  import { NoopRuntimeEventExporter } from './exporters.js';
  import { captureProviderHeaders, displayContent, displayMessage, hasFirstToken, modelParameters, providerDisplayInput, serializeTelemetryValue, toTelemetryValue, } from './observations.js';
  import { createTelemetryExporter } from './otel.js';
-@@ -222,19 +222,27 @@
-     const inheritedTraceId = process.env.PI_TELEMETRY_TRACE_ID;
-     const inheritedSessionId = process.env.PI_TELEMETRY_SESSION_ID;
-     const ownerPid = process.env.PI_TELEMETRY_OWNER_PID;
--    const subagentAgent = nonEmptyEnv('PI_SUBAGENT_CHILD_AGENT') ??
-+    let subagentAgent = nonEmptyEnv('PI_SUBAGENT_CHILD_AGENT') ??
-         nonEmptyEnv('PI_TELEMETRY_SUBAGENT_NAME') ??
-         nonEmptyEnv('PI_TELEMETRY_SUBAGENT_AGENT');
-     const inheritedParentToolCallId = nonEmptyEnv('PI_TELEMETRY_PARENT_TOOL_CALL_ID');
-     const taskRunId = nonEmptyEnv('PI_TELEMETRY_TASK_RUN_ID');
-     const runtimeCorrelation = taskRunId ? { taskRunId } : {};
--    const isSubagent = Boolean(inheritedTraceId && ownerPid && ownerPid !== String(process.pid));
-+    const isNestedProcess = Boolean(inheritedTraceId && ownerPid && ownerPid !== String(process.pid));
-+    // Fireproof: a subagent that pi-subagents runs in this process keeps this
-+    // pid, and the extension module is loaded per session, so the parent's
-+    // instance hands its trace to the child through this process-wide registry
-+    // (keyed by child session id) instead of the environment.
-+    const inProcessSubagents = (globalThis[Symbol.for('pi-telemetry:in-process-subagents')] ??= new Map());
-+    let isSubagent = isNestedProcess;
-+    let inProcessChild = false;
-+    let launchParentTraceparent;
+@@ -231,6 +232,7 @@ export default function telemetryExtension(pi) {
+     const isSubagent = Boolean(inheritedTraceId && ownerPid && ownerPid !== String(process.pid));
      let presetRootTraceId = isSubagent ? undefined : inheritedTraceId;
      let exporter = new NoopRuntimeEventExporter();
++    let agentTracer;
      let pendingFlush;
      let localSessionId = randomUUID();
      let sessionId = isSubagent && inheritedSessionId ? inheritedSessionId : localSessionId;
--    const parentSessionId = isSubagent ? inheritedSessionId : undefined;
-+    let parentSessionId = isSubagent ? inheritedSessionId : undefined;
-     let currentTraceId = isSubagent ? inheritedTraceId : undefined;
-     let traceStartTime;
-     let tracePublished = false;
-@@ -286,6 +294,13 @@
-                 : {}),
-         };
-     }
-+    // pi-subagents writes the role into the child's prompt header. It is the
-+    // only place an in-process child's agent name is available, since nothing
-+    // sets PI_SUBAGENT_CHILD_AGENT across a session boundary.
-+    function agentNameFromPrompt() {
-+        const match = /<active_agent\s+name="([^"\n]{1,64})"/.exec(systemPrompt ?? pendingInput ?? '');
-+        return match?.[1];
-+    }
-     function flushInBackground(ctx) {
-         if (pendingFlush)
-             return;
-@@ -344,8 +359,19 @@
+@@ -343,6 +345,15 @@ export default function telemetryExtension(pi) {
+         },
      });
      pi.on('session_start', async (_event, ctx) => {
-         localSessionId = ctx.sessionManager?.getSessionId() ?? randomUUID();
--        sessionId = isSubagent && inheritedSessionId ? inheritedSessionId : localSessionId;
--        currentTraceId = isSubagent ? inheritedTraceId : undefined;
-+        // pi-subagents publishes the child's session id before binding its
-+        // extensions, so this parent entry exists by the time the child's own
-+        // instance starts.
-+        const inProcessRun = isNestedProcess ? undefined : inProcessSubagents.get(localSessionId);
-+        if (inProcessRun) {
-+            inProcessChild = true;
-+            isSubagent = true;
-+            parentSessionId = inProcessRun.parentSessionId;
-+            launchParentTraceparent = inProcessRun.parentTraceparent;
-+            presetRootTraceId = undefined;
++        // Drop the previous session's listeners before its tracer settles any
++        // run still open, so no late snapshot can slip into the old scope.
++        for (const unsubscribe of subscriptions.splice(0))
++            unsubscribe();
++        if (agentTracer) {
++            await agentTracer.close('session_restarted');
++            agentTracer.dispose();
++            agentTracer = undefined;
 +        }
-+        sessionId = isSubagent ? (parentSessionId ?? localSessionId) : localSessionId;
-+        currentTraceId = isSubagent ? (inProcessRun?.traceId ?? inheritedTraceId) : undefined;
-         tracePublished = false;
-         traceStartTime = undefined;
-         finalMessages = [];
-@@ -359,14 +385,29 @@
+         localSessionId = ctx.sessionManager?.getSessionId() ?? randomUUID();
+         sessionId = isSubagent && inheritedSessionId ? inheritedSessionId : localSessionId;
+         currentTraceId = isSubagent ? inheritedTraceId : undefined;
+@@ -359,10 +370,23 @@ export default function telemetryExtension(pi) {
          generationOpen = false;
          boundaryFailure = {};
          toolStarts.clear();
@@ -109,117 +413,81 @@
          // One exporter/provider even when both Langfuse and a generic OTLP
          // endpoint are configured: two providers would mint different span ids for
          // the same logical span and cross-wire PI_TELEMETRY_TRACEPARENT.
--        exporter = createTelemetryExporter(config);
-+        exporter = createTelemetryExporter(config, launchParentTraceparent
-+            ? { parentTraceparent: launchParentTraceparent, publishLaunchEnv: false }
-+            : undefined);
-         enabled = exporter.getStatus?.().enabled !== false;
-         capturePayloads = enabled && config.includePayloads === true;
-         mediaEnabled = config.includePayloads === true && config.mediaUploadEnabled === true;
-@@ -405,6 +446,18 @@
+@@ -384,8 +408,6 @@ export default function telemetryExtension(pi) {
+         supportsSettlement = false;
+         convertMessages = undefined;
+         showStatus(ctx);
+-        for (const unsubscribe of subscriptions.splice(0))
+-            unsubscribe();
+         pendingContext = undefined;
+         auxiliaryTraces.clear();
+         auxiliaryCounter = 0;
+@@ -405,6 +427,21 @@ export default function telemetryExtension(pi) {
              subscriptions.push(pi.events.on('pi-telemetry:llm', (value) => {
                  return publishExactAuxiliary(value).catch(() => console.error('[pi-telemetry] auxiliary observation failed'));
              }));
-+            // Fireproof: pi-subagents runs its children in this process and
-+            // emits this synchronously before the child binds its extensions.
-+            subscriptions.push(pi.events.on('subagents:child:session-created', (value) => {
-+                const childSessionId = value?.sessionId;
-+                if (!enabled || typeof childSessionId !== 'string' || !currentTraceId)
-+                    return;
-+                inProcessSubagents.set(childSessionId, {
-+                    traceId: currentTraceId,
-+                    parentSessionId: sessionId,
-+                    parentTraceparent: exporter.subagentLaunchTraceparent?.(),
-+                });
-+            }));
++            // Fireproof: pi-agents runs agent children in this process on
++            // pi-durable. It publishes lifecycle snapshots on this bus; the
++            // tracer turns them into spans parented to this session's chat
++            // turn. It never runs in a child session, and the tool twin loads
++            // only its own extensions, so no other instance sees these.
++            agentTracer = new AgentLifecycleTracer({
++                publish: (event) => exporter.publish(event),
++                // Keep the trace lineage of this session, but filter snapshots
++                // by the pi-agents publisher's session id.
++                sessionId,
++                publisherSessionId: localSessionId,
++                traceId: currentTraceId,
++                log: (error) => console.error('[pi-telemetry] agent lifecycle observation failed', error),
++            });
++            subscriptions.push(agentTracer.subscribe(pi.events));
          }
          // Keep the runtime peer optional for callers importing programmatic exporters.
          const runtime = await import('@earendil-works/pi-coding-agent');
-@@ -545,7 +598,7 @@
-                 : pendingInput;
-             if (isSubagent) {
-                 const details = subagentLifecycleDetails({
--                    agent: subagentAgent,
-+                    agent: subagentAgent ?? agentNameFromPrompt(),
-                     input,
-                 });
-                 await exporter.publish({
-@@ -634,7 +687,7 @@
-         toolStarts.clear();
-         if (isSubagent) {
-             const details = subagentLifecycleDetails({
--                agent: subagentAgent,
-+                agent: subagentAgent ?? agentNameFromPrompt(),
-                 output,
-             });
-             await exporter.publish({
-@@ -683,7 +736,8 @@
+@@ -577,6 +614,9 @@ export default function telemetryExtension(pi) {
+             pendingInput = undefined;
+             pendingImages = [];
+         }
++        // After the chat span opens: a run started from a snapshot queues
++        // after it and parents to it, never to a stale traceparent.
++        agentTracer?.setTraceId(currentTraceId);
+     });
+     pi.on('agent_end', async (event) => {
+         if (!enabled)
+@@ -683,6 +723,7 @@ export default function telemetryExtension(pi) {
          finalMessages = [];
          inputNumbered = false;
          boundaryFailure = {};
--        restoreCorrelation();
-+        if (!inProcessChild)
-+            restoreCorrelation();
++        agentTracer?.setTraceId(undefined);
+         restoreCorrelation();
          exporter.setContext?.({});
      }
-     pi.on('tool_execution_start', async (event) => {
-@@ -1156,7 +1210,9 @@
+@@ -1152,6 +1193,13 @@ export default function telemetryExtension(pi) {
+     pi.on('session_shutdown', async () => {
+         for (const unsubscribe of subscriptions.splice(0))
+             unsubscribe();
++        // End the child spans this process still observes before the exporter
++        // flushes; pi-agents pauses them, but this span cannot survive a stop.
++        if (agentTracer) {
++            await agentTracer.close('session_shutdown');
++            agentTracer.dispose();
++            agentTracer = undefined;
++        }
+         if (pendingFlush)
              await pendingFlush;
          pendingFlush = undefined;
-         await exporter.close?.();
--        restoreCorrelation();
-+        inProcessSubagents.delete(localSessionId);
-+        if (!inProcessChild)
-+            restoreCorrelation();
-     });
- }
- //# sourceMappingURL=extension.js.map
-\ No newline at end of file
---- a/dist/otel.js
-+++ b/dist/otel.js
-@@ -10,7 +10,7 @@
- // Combined factory for the extension: every configured destination rides on
- // ONE provider — separate providers would mint different span ids for the same
- // logical span and cross-wire the PI_TELEMETRY_TRACEPARENT for child processes.
--export function createTelemetryExporter(telemetryConfig) {
-+export function createTelemetryExporter(telemetryConfig, launchOptions) {
-     const langfuse = resolveLangfuseExporterConfig(telemetryConfig);
-     const otel = resolveOtelExporterConfig(telemetryConfig);
-     const phoenix = resolvePhoenixExporterConfig(telemetryConfig);
-@@ -42,7 +42,7 @@
-         // All resolvers default this to false; a truthy spread here would drop the
-         // false and applyTelemetryRedaction's strict === false check would never strip.
-         ...runtimeTelemetryOptions(telemetryConfig),
--    });
-+    }, launchOptions);
- }
- export function createOtelExporter(telemetryConfig) {
-     const config = resolveOtelExporterConfig(telemetryConfig);
 --- a/dist/otel/exporters.js
 +++ b/dist/otel/exporters.js
-@@ -60,6 +60,11 @@
-     requestContext = {};
-     constructor(config, opts) {
-         this.config = normalizeExporterConfig(config);
-+        // Fireproof: an in-process child session cannot learn its parent from
-+        // the environment, and it must not publish its own spans there — the
-+        // root's environment is what nested pi launches inherit.
-+        this.parentTraceparent = opts?.parentTraceparent;
-+        this.publishLaunchEnv = opts?.publishLaunchEnv !== false;
-         const labels = Object.fromEntries([
-             'serviceName',
-             'serviceVersion',
-@@ -94,7 +99,8 @@
+@@ -94,6 +94,8 @@ export class OtelRuntimeEventExporter {
      async publish(event) {
          const redactedEvent = applyTelemetryRedaction(this.config, {
              ...event,
--            ...(this.requestContext.metadata ? { contextMetadata: this.requestContext.metadata } : {}),
 +            // Error classification, not the raw error text, is telemetry metadata.
 +            ...(event.error ? { error: 'Operation failed' } : {}),
+             ...(this.requestContext.metadata ? { contextMetadata: this.requestContext.metadata } : {}),
          });
          if (!redactedEvent?.traceId) {
-             return;
-@@ -258,10 +264,12 @@
+@@ -258,10 +260,15 @@ export class OtelRuntimeEventExporter {
                      ...langfuseObservationAttributes({ input: event.details?.input, level: 'DEFAULT' }),
                  }, event), this.subagentParentContext(event));
                  this.trackOpenSpan(key, span);
@@ -227,7 +495,10 @@
 -                delete process.env.PI_TELEMETRY_PARENT_TOOL_CALL_ID;
 -                process.env[TRACEPARENT_ENV] = traceparent(span);
 -                this.refreshToolContexts();
-+                if (this.publishLaunchEnv) {
++                // A lifecycle-only agent span (pi-agents state) is not a launch
++                // context: in-process children must not become the traceparent
++                // that later nested pi processes inherit.
++                if (event.details?.lifecycleSource !== 'pi-agents:state') {
 +                    // The incoming pin has been consumed; descendants advertise their own launch context.
 +                    delete process.env.PI_TELEMETRY_PARENT_TOOL_CALL_ID;
 +                    process.env[TRACEPARENT_ENV] = traceparent(span);
@@ -236,63 +507,7 @@
                  return;
              }
              case 'subagent_completed':
-@@ -290,6 +298,8 @@
-         return context ? { ...context } : undefined;
-     }
-     refreshToolContexts() {
-+        if (!this.publishLaunchEnv)
-+            return;
-         const contexts = {};
-         for (const [key, span] of this.openSpans) {
-             if (key.startsWith('tool:'))
-@@ -452,13 +462,36 @@
-                 return span;
-         return undefined;
-     }
-+    // Traceparent a child session created right now hangs from: the one open
-+    // tool span (its spawner), else this session's root span, never an
-+    // unrelated tool the environment happens to advertise.
-+    subagentLaunchTraceparent() {
-+        let launch;
-+        let launches = 0;
-+        for (const span of this.openSpans.values()) {
-+            if (!this.launchContexts.has(span))
-+                continue;
-+            launches += 1;
-+            launch = this.launchContexts.get(span);
-+        }
-+        if (launches === 1 && launch?.PI_TELEMETRY_TRACEPARENT)
-+            return launch.PI_TELEMETRY_TRACEPARENT;
-+        for (const [key, span] of this.openSpans) {
-+            if (key.startsWith('chat:'))
-+                return traceparent(span);
-+        }
-+        return undefined;
-+    }
-+    launchParentContext() {
-+        return (this.parentTraceparent ? contextFromTraceparent(this.parentTraceparent) : undefined) ?? remoteParentContext();
-+    }
-     subagentParentContext(event) {
-         const local = (event.parentSessionId && event.parentToolCallId
-             ? this.findToolSpan(event.parentSessionId, event.parentToolCallId)
-             : undefined) ?? this.openSpans.get(chatSpanKey(event));
-         // In a subagent (child) process there is no local root span — parent to
-         // the main process's span advertised through the environment instead.
--        return parentContextOf(local) ?? remoteParentContext();
-+        return parentContextOf(local) ?? this.launchParentContext();
-     }
-     telemetryParentContext(event) {
-         const subagentKey = telemetryEventSubagentSpanKey(event);
-@@ -468,7 +501,7 @@
-         const local = toolParent ??
-             (subagentKey ? this.openSpans.get(subagentKey) : undefined) ??
-             this.openSpans.get(chatSpanKey(event));
--        return parentContextOf(local) ?? remoteParentContext();
-+        return parentContextOf(local) ?? this.launchParentContext();
-     }
-     // langfuse.trace.metadata.* lands in the trace's top-level metadata and is
-     // filterable; plain span attributes sink into the metadata.attributes
-@@ -760,10 +793,8 @@
+@@ -760,10 +767,8 @@ function statusFor(error) {
      if (!error) {
          return { code: SpanStatusCode.OK };
      }

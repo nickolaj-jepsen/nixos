@@ -3,7 +3,7 @@
   inputs,
   ...
 }: let
-  mkExtensions = pkgs: pi: piPackages:
+  mkExtensions = pkgs: pi:
     pkgs.buildNpmPackage {
       pname = "pi-extensions";
       version = "0";
@@ -26,10 +26,8 @@
         done
         ln -s ${pi}/lib/node_modules/pi-monorepo/node_modules/typebox node_modules/
         ln -s ${pi}/lib/node_modules/pi-monorepo/node_modules/@types/node node_modules/@types/
-        # The third-party packages pi loads, so an extension uses their published
-        # API and a bump that breaks it fails here.
-        ln -s ${piPackages}/node_modules/@gotgenes node_modules/
         tsc --noEmit
+        node --experimental-strip-types --test parent/chrome/*.test.ts
         runHook postBuild
       '';
       installPhase = ''
@@ -47,7 +45,7 @@ in {
       overlays = [inputs.self.overlays.default];
     };
   in {
-    packages.pi-extensions = mkExtensions pkgs pkgs.pi-coding-agent pkgs.pi-packages;
+    packages.pi-extensions = mkExtensions pkgs pkgs.pi-coding-agent;
   };
 
   flake.modules.homeManager.pi = {
@@ -68,37 +66,48 @@ in {
     localModels = (import ../_llm-models.nix).${toString config.fireproof.dev.llm.vramGiB};
     localMaxTokens = 8192;
     thirdPartyPackages = piPackages.packageNames;
-    # settings.packages and the children's exclusions must match string for string.
+    # Load the pinned npm tree as local packages; startup never installs dependencies.
     packagePath = name: "${piPackages}/node_modules/${name}";
-    extensions = mkExtensions pkgs pi piPackages;
+    extensions = mkExtensions pkgs pi;
     parentPath = "${extensions}/parent";
-    # The agents plugins with a pi half, each its own package. One that doesn't set
-    # `agentTools.subagents` in its package.json loads only in the session you started.
+    # Every plugin loads in the main session. Durable agents get only the
+    # headless-safe tool packages explicitly shared with their tool twin.
     piPlugins = lib.filterAttrs (_: plugin: plugin.pi) inputs.agents.lib.plugins;
     pluginNames = lib.attrNames piPlugins;
     # The built plugin: newer agents flakes build it per system (`lib.pluginsFor pkgs`) and make
     # `lib.plugins.<name>.path` throw; older ones point `path` at the source.
     agentsPlugins = (inputs.agents.lib.pluginsFor or (_: inputs.agents.lib.plugins)) pkgs;
     pluginPath = name: agentsPlugins.${name}.path;
-    parentOnlyPlugins = lib.attrNames (lib.filterAttrs (_: plugin: !plugin.subagents) piPlugins);
-    # One role pi's reader can't parse stops pi-subagents from loading at all.
-    agentRoles = pkgs.runCommand "pi-agent-roles" {nativeBuildInputs = [pkgs.nodejs];} ''
-      for role in ${./agents}/*.md; do
-        node --input-type=module -e "
-          import { readFileSync } from 'node:fs';
-          import { parseFrontmatter } from '${pi}/lib/node_modules/pi-monorepo/dist/utils/frontmatter.js';
-          const { frontmatter } = parseFrontmatter(readFileSync(process.argv[1], 'utf8'));
-          for (const key of ['name', 'description'])
-            if (typeof frontmatter[key] !== 'string') throw new Error(process.argv[1] + ': ' + key + ' must be a string');
-        " "$role"
-      done
+    # Validate against the pinned plugin's actual parser: unknown legacy keys
+    # silently drop profiles at runtime, which could cause expensive inheritance.
+    agentRoles = pkgs.runCommand "pi-agent-profiles" {nativeBuildInputs = [pkgs.nodejs];} ''
+      node --input-type=module <<'JS'
+      import { readdirSync } from 'node:fs';
+      import { createJiti } from '${pi}/lib/node_modules/pi-monorepo/node_modules/jiti/lib/jiti.mjs';
+      const jiti = createJiti(import.meta.url, {
+        alias: { '@earendil-works/pi-coding-agent': '${pi}/lib/node_modules/pi-monorepo/dist/index.js' },
+        fsCache: false,
+      });
+      const { parseProfileFile } = await jiti.import('${piPackages}/node_modules/pi-agents/src/catalog/profiles.ts');
+      const names = new Set();
+      const tools = new Set(['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'codemode']);
+      for (const file of readdirSync('${./agents}')) {
+        if (!file.endsWith('.md')) continue;
+        const profile = parseProfileFile('${./agents}/' + file, 'user');
+        if (typeof profile === 'string') throw new Error(file + ': ' + profile);
+        if (names.has(profile.name)) throw new Error('Duplicate profile: ' + profile.name);
+        names.add(profile.name);
+        if (!profile.tools?.length || profile.tools.some(tool => !tools.has(tool)))
+          throw new Error(file + ': unsupported built-in tool');
+        const expected = profile.name === 'expert' ? 'openai-codex/gpt-6.1-sol' : 'auto/deepseek-v4.1-flash';
+        if (profile.model !== expected || profile.spawn !== false)
+          throw new Error(file + ': model must be explicit and nested delegation disabled');
+      }
+      if ([...names].sort().join(',') !== 'expert,researcher,reviewer,verifier,worker')
+        throw new Error('Unexpected profile roster');
+      JS
       cp -r ${./agents} $out
     '';
-    # Children keep core/ and model providers.
-    childExcludedPackages =
-      map packagePath (lib.subtractLists ["@commandcode/pi-commandcode-provider"] thirdPartyPackages)
-      ++ [parentPath]
-      ++ map pluginPath parentOnlyPlugins;
     # Browser automation over CDP, driven through bash. `agent-browser install`
     # fetches a Chrome for Testing that NixOS can't run, so Linux points it at
     # nixpkgs' Chromium (the desktop's own, when chromium is enabled); macOS finds
@@ -118,8 +127,8 @@ in {
       mkdir $out
       sed '/^Install: /d' ${agentBrowser}/skills/agent-browser/SKILL.md > $out/SKILL.md
     '';
-    # agent-context.md is shared by every agent; keep it agent-agnostic. Children
-    # read these rules too and hold no agent tools, so no delegation how-to here.
+    # Shared behavior stays agent-agnostic. Delegation policy lives in parent/
+    # rather than in the durable agents' own system prompts.
     rules = builtins.readFile ../agent-context.md;
     env =
       {
@@ -169,6 +178,12 @@ in {
       terminal.showTerminalProgress = true;
       shellCommandPrefix = ''eval "$(${lib.getExe config.programs.direnv.package} export bash 2>/dev/null)"'';
       defaultTools = ["+codemode"];
+      piAgents = {
+        maxWorkingAgents = 6;
+        retentionDays = 30;
+        # Twins never prompt a model: share tools, not the model router or telemetry.
+        twinExtensions = map pluginPath (lib.filter (name: builtins.elem name ["exa" "docfix"]) pluginNames);
+      };
       # parent/ before core/: handlers chain in package order, which sets the
       # system prompt's section order.
       packages =
@@ -224,8 +239,8 @@ in {
         ${launch}
         exec ${lib.getExe pi} "$@"
       '';
-    # core/telemetry.ts loads the package from PI_PHOENIX_TELEMETRY, so subagent
-    # sessions get it too: a `-e` flag dies at the session boundary.
+    # The personal profile loads telemetry from core/. Its pi-agents event bridge
+    # traces child lifecycles; detailed child generation/tool tracing is deferred.
     phoenixLaunch = profile:
       lib.optionalString phoenix.enabled ''
         if [ "$dir" = "$HOME/${profile}" ] && [ -s ${lib.escapeShellArg phoenix.path} ] && [ "''${PI_OTEL_DISABLED:-0}" != 1 ]; then
@@ -435,11 +450,6 @@ in {
         "app.session.resume" = "alt+shift+r";
         "app.session.tree" = "alt+shift+t";
         "app.session.fork" = "alt+shift+f";
-      };
-
-      home.file.".pi/agent/subagents.json".text = builtins.toJSON {
-        midRunUpdates = false;
-        excludedExtensionPackages = childExcludedPackages;
       };
 
       # A dir, not --skill flags, which children never see. One read-only link, so

@@ -24,6 +24,8 @@ in
       runHook preInstall
       mkdir -p $out
       cp -r node_modules $out/
+      # pi-durable's direct requests bypass Pi's virtual-model retry routing.
+      patch --fuzz=0 -d "$out/node_modules/pi-agents" -p1 < ${./pi-agents-failover.patch}
       # Managed-only: read the key at runtime and ignore project settings.
       telemetry="$out/node_modules/@amaster.ai/pi-telemetry"
       patch --fuzz=0 -d "$telemetry" -p1 < ${./pi-telemetry-phoenix.patch}
@@ -34,6 +36,17 @@ in
       # package source into the runtime closure.
       rm -f $out/node_modules/.package-lock.json
       runHook postInstall
+    '';
+    doInstallCheck = true;
+    installCheckPhase = ''
+      runHook preInstallCheck
+      PI_AGENTS_DIR="$out/node_modules/pi-agents" \
+      PI_DEEPSEEK_ROUTER=${../../modules/programs/pi/extensions/core/deepseek-router.ts} \
+        node --experimental-strip-types --test ${./tests/pi-agents-failover.test.mjs}
+      PI_TELEMETRY_DIR="$out/node_modules/@amaster.ai/pi-telemetry" \
+      PI_TELEMETRY_PATCH=${./pi-telemetry-phoenix.patch} \
+        node --test ${./tests/agent-lifecycle.test.mjs}
+      runHook postInstallCheck
     '';
     # Telemetry loads in the personal launcher only; its Langfuse peers are
     # pinned explicitly because npm installs with --legacy-peer-deps.

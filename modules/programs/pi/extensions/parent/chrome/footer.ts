@@ -12,7 +12,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import type { createActions } from "./actions.ts";
-import { agentParts } from "./agents.ts";
+import { agentParts, createAgentState } from "./agents.ts";
 import { layoutFooter } from "./footer-line.ts";
 import { formatCost, splitPath } from "../lib/format.ts";
 import type { Git } from "./git.ts";
@@ -62,6 +62,13 @@ export const createFooter = (
   git: Git,
 ) => {
   const stats = createStats();
+  // pi-agents owns the state; its event is the repaint signal, unlike the old
+  // package's extension status.
+  const agents = createAgentState(
+    pi.events,
+    () => state.tui?.requestRender(),
+    () => state.ctx?.sessionManager.getSessionId(),
+  );
   let regions: Region[] = [];
 
   /** Cost and speed as text; `undefined` when there is nothing worth showing. */
@@ -147,11 +154,9 @@ export const createFooter = (
     const statusEntries = [...footerData.getExtensionStatuses()].sort(([a], [b]) =>
       a.localeCompare(b),
     );
-    // The package's status is still the repaint signal; the tallies come from its service.
-    const badges = agentParts(actions.agents);
     const statuses = [
-      ...statusEntries.flatMap(([key, text], index) => {
-        if (key === "subagents" && badges) return badges;
+      ...agentParts(agents.tracker.counts(), actions.agents),
+      ...statusEntries.flatMap(([, text], index) => {
         const plain = sanitize(text);
         return plain ? [{ id: `status-${index}`, text: plain, color: "dim" as const }] : [];
       }),
@@ -246,6 +251,11 @@ export const createFooter = (
   };
 
   pi.on("session_start", (_event, ctx) => {
+    // pi-agents publishes its first snapshot after restoring the session, which
+    // in a non-interactive mode happens before this handler; ask again after the
+    // reset so neither load order leaves the footer without counts.
+    agents.tracker.reset();
+    agents.request();
     if (!state.live) return;
     git.start(ctx.cwd);
     mountFooter(ctx);

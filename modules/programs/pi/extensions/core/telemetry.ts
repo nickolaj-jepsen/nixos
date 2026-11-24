@@ -1,11 +1,12 @@
 /**
  * Loads `@amaster.ai/pi-telemetry` when Phoenix tracing is enrolled (docs/agents.md).
  *
- * It lives in core/ rather than on the launcher's command line because
- * pi-subagents runs subagent sessions inside this process, and a child session
- * loads only what settings.json lists: `pi -e` flags are not propagated, and
- * `childExcludedPackages` can only subtract. `PI_PHOENIX_TELEMETRY` carries the
- * package path, so an unenrolled session imports nothing at all.
+ * It lives in core/ because pi-agents runs child agents on pi-durable inside
+ * this process: there is no child Pi session to hand `-e` flags to. The
+ * telemetry patch observes their lifecycle through pi-agents' state event. The
+ * tool twin loads only its own extensions and never generates, so it does not
+ * load telemetry. `PI_PHOENIX_TELEMETRY` carries the package path, so an
+ * unenrolled session imports nothing at all.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 

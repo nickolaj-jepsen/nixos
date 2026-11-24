@@ -1,0 +1,212 @@
+# Fireproof's changes to pi-agents 0.42.0, applied from package.nix: give
+# pi-durable's direct streamSimple the failed response and router state that
+# Pi's virtual-model retry path uses, so a child agent's 429 can fail over.
+# Regenerate against the pristine tarball, then apply here.
+diff --git a/src/host/models.ts b/src/host/models.ts
+index dba00d0..2d8d9ab 100644
+--- a/src/host/models.ts
++++ b/src/host/models.ts
+@@ -3,11 +3,15 @@
+  * so logins and providers that extensions registered work for them too.
+  */
+ 
+-import type { Models } from "@earendil-works/pi-ai";
++import { lazyStream, type Models } from "@earendil-works/pi-ai";
+ import {
+   type ModelRegistry,
+   ModelRuntime,
+ } from "@earendil-works/pi-coding-agent";
++import {
++  isVirtualModelRuntime,
++  withVirtualFailover,
++} from "./virtual-model-routing.js";
+ 
+ function isModels(value: unknown): value is Models {
+   if (typeof value !== "object" || value === null) return false;
+@@ -26,6 +30,9 @@ function isModels(value: unknown): value is Models {
+  */
+ export async function resolveModels(registry: ModelRegistry): Promise<Models> {
+   const runtime = (registry as unknown as { runtime?: unknown }).runtime;
+-  if (isModels(runtime)) return runtime;
++  if (isModels(runtime))
++    return isVirtualModelRuntime(runtime)
++      ? withVirtualFailover(runtime, runtime, lazyStream)
++      : runtime;
+   return ModelRuntime.create();
+ }
+diff --git a/src/host/virtual-model-routing.ts b/src/host/virtual-model-routing.ts
+new file mode 100644
+index 0000000..1e0880d
+--- /dev/null
++++ b/src/host/virtual-model-routing.ts
+@@ -0,0 +1,170 @@
++/**
++ * Pi routes virtual models itself, but a request outside the agent loop is
++ * `direct`: it carries neither the failed response nor the router state, so a
++ * 429 retry cannot switch providers. Pi-durable's requests are direct, and it
++ * retries them through `streamSimple`, so wrap the models it uses and supply
++ * the agent loop's retry contract from the previous failed attempt.
++ *
++ * State lives only for one failure chain: a successful response clears it, so
++ * the next turn starts from the transcript again.
++ */
++import type {
++  Api,
++  AssistantMessage,
++  AssistantMessageEvent,
++  AssistantMessageEventStream,
++  Message,
++  Model,
++  ModelThinkingLevel,
++  Models,
++} from "@earendil-works/pi-ai";
++
++/** `VIRTUAL_MODEL_API` from pi-coding-agent, which does not export it. */
++const VIRTUAL_MODEL_API = "pi-virtual";
++
++/** The part of Pi's runtime that resolves a virtual model. */
++export interface VirtualModelRouter {
++  resolveModel(
++    model: Model<Api>,
++    messages: readonly Message[],
++    options: {
++      reason: "retry" | "direct";
++      thinkingLevel: ModelThinkingLevel;
++      signal?: AbortSignal;
++      failed?: AssistantMessage;
++      state?: unknown;
++    },
++  ): Promise<{
++    model: Model<Api>;
++    thinkingLevel: ModelThinkingLevel;
++    state?: unknown;
++  }>;
++}
++
++type LazyStream = (
++  model: Model<Api>,
++  setup: () => Promise<AsyncIterable<AssistantMessageEvent>>,
++  observer?: { onResult?(result: AssistantMessage | undefined): void },
++  signal?: AbortSignal,
++) => AssistantMessageEventStream;
++
++interface RetryChain {
++  failed: AssistantMessage;
++  messages: readonly Message[];
++  state?: unknown;
++}
++
++export function isVirtualModelRuntime(
++  value: Models,
++): value is Models & VirtualModelRouter {
++  return typeof (value as { resolveModel?: unknown }).resolveModel === "function";
++}
++
++/**
++ * Pi's own `streamSimple` routing for virtual models, with the retry context
++ * the direct path lacks. `lazy` is Pi's `lazyStream`, passed in so this module
++ * has no runtime dependency on pi-ai.
++ */
++export function withVirtualFailover(
++  models: Models,
++  router: Models & VirtualModelRouter,
++  lazy: LazyStream,
++): Models {
++  const chains = new Map<string, RetryChain>();
++  const streamSimple: Models["streamSimple"] = (model, context, options) => {
++    if (model.api !== VIRTUAL_MODEL_API)
++      return models.streamSimple(model, context, options);
++    const sessionId = options?.sessionId;
++    const chain = typeof sessionId === "string" ? chains.get(sessionId) : undefined;
++    const retry =
++      chain !== undefined && !conversationChanged(chain.messages, context.messages)
++        ? chain
++        : undefined;
++    if (typeof sessionId === "string" && chain !== undefined && retry === undefined)
++      chains.delete(sessionId);
++    let state: unknown;
++    return lazy(
++      model,
++      async () => {
++        const route = await router.resolveModel(model, context.messages, {
++          reason: retry ? "retry" : "direct",
++          thinkingLevel: options?.reasoning ?? "off",
++          ...(options?.signal ? { signal: options.signal } : {}),
++          ...(retry
++            ? {
++                failed: retry.failed,
++                ...(retry.state === undefined ? {} : { state: retry.state }),
++              }
++            : {}),
++        });
++        state = route.state;
++        // Pi caps a direct request's output to the routed model and resolves
++        // another provider's credentials instead of forwarding these.
++        const { maxTokens: limit } = route.model;
++        const maxTokens =
++          options?.maxTokens && limit > 0
++            ? Math.min(options.maxTokens, limit)
++            : options?.maxTokens;
++        const reasoning =
++          route.thinkingLevel === "off" ? undefined : route.thinkingLevel;
++        const { apiKey, headers, env, ...rest } = options ?? {};
++        const auth =
++          route.model.provider === model.provider ? { apiKey, headers, env } : {};
++        return models.streamSimple(route.model, context, {
++          ...rest,
++          ...auth,
++          maxTokens,
++          reasoning,
++        });
++      },
++      {
++        onResult: (message) => {
++          if (typeof sessionId !== "string") return;
++          if (message?.stopReason !== "error") {
++            chains.delete(sessionId);
++            return;
++          }
++          chains.set(sessionId, {
++            failed: message,
++            messages: context.messages,
++            state,
++          });
++        },
++      },
++      options?.signal,
++    );
++  };
++  const completeSimple: Models["completeSimple"] = (model, context, options) =>
++    streamSimple(model, context, options).result();
++  return new Proxy(models, {
++    get(target, key) {
++      if (key === "streamSimple") return streamSimple;
++      if (key === "completeSimple") return completeSimple;
++      const value = Reflect.get(target, key, target);
++      return typeof value === "function" ? value.bind(target) : value;
++    },
++  });
++}
++
++/**
++ * A retry repeats the failed request's conversation with the failed assistant
++ * message removed; a new turn, a tool result, or a replayed completed turn adds
++ * or replaces one. Durable storage rebuilds the messages for each attempt, so
++ * compare them by value, not identity. System messages are re-rendered per
++ * attempt and say nothing the model answers, so they are not compared.
++ */
++function conversationChanged(
++  previous: readonly Message[],
++  next: readonly Message[],
++): boolean {
++  const before = previous.filter((message) => message.role !== "system");
++  const after = next.filter((message) => message.role !== "system");
++  return (
++    before.length !== after.length ||
++    before.some(
++      (message, index) =>
++        message !== after[index] &&
++        JSON.stringify(message) !== JSON.stringify(after[index]),
++    )
++  );
++}
