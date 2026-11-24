@@ -4,8 +4,8 @@
     fireproof.trusted = true;
 
     fireproof.desktop.enable = true;
-    # Passphrase-only LUKS (no TPM slot), so the boot prompt already needs a human.
-    fireproof.desktop.autologin.enable = true;
+    # The greeter picks between niri and mango, so no silent sign-in.
+    fireproof.desktop.alwaysGreeter.enable = true;
     fireproof.desktop.boot-splash.enable = true;
     fireproof.desktop.mango.enable = true;
     fireproof.desktop.bambu-studio.enable = true;

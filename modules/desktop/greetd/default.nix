@@ -7,6 +7,7 @@
   }: let
     autologin = pkgs.writers.writePython3Bin "greetd-autologin" {} (builtins.readFile ./autologin.py);
     always = config.fireproof.desktop.autologin.enable;
+    greeterOnly = config.fireproof.desktop.alwaysGreeter.enable;
     c = config.fireproof.theme.colors;
     user = config.users.users.${config.fireproof.username};
     dmsGreeter = config.programs.dms-greeter;
@@ -100,17 +101,31 @@
           # TPM unlock caches none, so those hosts (and mismatched passwords) still get a prompt.
           # With autologin PAM always signs in silently, so the greeter only catches IPC failures.
           # programs.dms-greeter's own autologin would skip PAM auth and leave the keyring locked.
-          default_session.command = lib.escapeShellArgs [
-            (lib.getExe autologin)
-            config.fireproof.username
-            (lib.getExe' config.programs.niri.package "niri-session")
-            "--"
-            greeter
-          ];
+          # alwaysGreeter skips autologin.py, so every sign-in picks a session.
+          default_session.command =
+            if greeterOnly
+            then "${greeter}"
+            else
+              lib.escapeShellArgs [
+                (lib.getExe autologin)
+                config.fireproof.username
+                (lib.getExe' config.programs.niri.package "niri-session")
+                "--"
+                greeter
+              ];
         };
       };
 
-      security.pam.services.greetd.rules.auth = {
+      assertions = [
+        {
+          assertion = !(always && greeterOnly);
+          message = "fireproof.desktop.autologin and alwaysGreeter contradict each other; enable one.";
+        }
+      ];
+
+      # With alwaysGreeter the cached LUKS passphrase must stay out: try_first_pass would accept
+      # it and sign in before the greeter's prompt. The typed password still unlocks the keyring.
+      security.pam.services.greetd.rules.auth = lib.mkIf (!greeterOnly) {
         # systemd-cryptsetup keeps a typed passphrase in root's keyring for 2.5 min; use it as
         # the login password, which also unlocks gnome-keyring. No-op when nothing is cached.
         systemd_loadkey = {
