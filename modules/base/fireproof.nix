@@ -56,11 +56,7 @@ let
         obsidian-livesync.enable = cascade config.fireproof.desktop.enable "Sync Obsidian vaults with the homelab's CouchDB (needs its per-device secret)";
         bambu-studio.enable = lib.mkEnableOption "Bambu Studio 3D printing slicer";
         jellyfin-media-player.enable = lib.mkEnableOption "Jellyfin Media Player desktop client";
-        ivpn.enable = lib.mkEnableOption "IVPN client (daemon + CLI + desktop UI)";
         mullvad.enable = lib.mkEnableOption "Mullvad VPN client (daemon + CLI + desktop UI)";
-        snapcast.enable = lib.mkEnableOption "Snapcast audio streaming server";
-        oxcbMedia.enable = lib.mkEnableOption "0xCB-media host daemon (bridges MPRIS + PipeWire to the 0xCB-1337 macropad over USB CDC ACM)";
-        lan-mouse.enable = lib.mkEnableOption "Lan Mouse — LAN keyboard/mouse sharing (edge-crossing KVM). On niri it uses the layer-shell capture backend (no input-capture portal needed)";
         windows-vm = {
           enable = lib.mkEnableOption "the physical dual-boot Windows install as an on-demand libvirt VM (start-windows)";
           disk = lib.mkOption {

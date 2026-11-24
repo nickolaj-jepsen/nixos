@@ -10,9 +10,7 @@
     fireproof.desktop.umbriel.enable = true;
     fireproof.desktop.bambu-studio.enable = true;
     fireproof.desktop.jellyfin-media-player.enable = true;
-    fireproof.desktop.ivpn.enable = true;
     fireproof.desktop.mullvad.enable = true;
-    fireproof.desktop.snapcast.enable = true;
     fireproof.desktop.windows-vm = {
       enable = true;
       disk = "/dev/disk/by-id/nvme-Samsung_SSD_970_EVO_Plus_1TB_S6P7NF0T427535Z";

@@ -23,9 +23,6 @@
     # Work-owned machine: `tailscale up` by hand rather than enrolling itself
     # into the personal tailnet on first boot.
     fireproof.tailscale.autoLogin = false;
-
-    # Share keyboard/mouse with the Mac (edge-crossing KVM) via Lan Mouse.
-    fireproof.desktop.lan-mouse.enable = true;
   };
 
   homeManager = {lib, ...}: {

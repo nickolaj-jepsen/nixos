@@ -131,9 +131,6 @@
     agents.inputs.flake-parts.follows = "flake-parts";
     agents.inputs.treefmt-nix.follows = "treefmt-nix";
 
-    zero-x-cb-media.url = "github:nickolaj-jepsen/0xCB-media";
-    zero-x-cb-media.inputs.nixpkgs.follows = "nixpkgs";
-
     # Declarative libvirt domains (the windows-vm leaf).
     nixvirt.url = "github:AshleyYakeley/NixVirt";
     nixvirt.inputs.nixpkgs.follows = "nixpkgs";
