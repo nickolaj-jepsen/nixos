@@ -231,6 +231,8 @@
               {
                 match.app_id = "^kitty$";
                 blur = true;
+                # A background command's completion bell shouldn't steal focus.
+                focus_on_activate = false;
               }
               {
                 match.is_floating = true;
