@@ -7,6 +7,7 @@
     # Passphrase-only LUKS (no TPM slot), so the boot prompt already needs a human.
     fireproof.desktop.autologin.enable = true;
     fireproof.desktop.boot-splash.enable = true;
+    fireproof.desktop.mango.enable = true;
     fireproof.desktop.bambu-studio.enable = true;
     fireproof.desktop.jellyfin-media-player.enable = true;
     fireproof.desktop.ivpn.enable = true;

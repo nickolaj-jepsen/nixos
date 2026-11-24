@@ -97,6 +97,11 @@
     niri.inputs.nixpkgs.follows = "nixpkgs";
     niri.inputs.nixpkgs-stable.follows = "nixpkgs";
 
+    mangowm.url = "github:mangowm/mango";
+    mangowm.inputs.nixpkgs.follows = "nixpkgs";
+    mangowm.inputs.flake-parts.follows = "flake-parts";
+    mangowm.inputs.scenefx.inputs.nixpkgs.follows = "nixpkgs";
+
     dank-material-shell.url = "github:AvengeMedia/DankMaterialShell";
     dank-material-shell.inputs.nixpkgs.follows = "nixpkgs";
     dms-plugin-registry.url = "github:AvengeMedia/dms-plugin-registry";
