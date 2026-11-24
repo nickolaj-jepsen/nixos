@@ -1034,6 +1034,7 @@
         "obsidian-extensions": "obsidian-extensions",
         "obsidian-skills": "obsidian-skills",
         "treefmt-nix": "treefmt-nix",
+        "umbriel": "umbriel",
         "walldye": "walldye",
         "zero-x-cb-media": "zero-x-cb-media",
         "zwift-client": "zwift-client"
@@ -1149,6 +1150,27 @@
         "type": "github"
       }
     },
+    "umbriel": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "xdg-desktop-portal-umbriel": "xdg-desktop-portal-umbriel"
+      },
+      "locked": {
+        "lastModified": 1795398579,
+        "narHash": "sha256-MGbhwBptD1DPIS9M48hpwRnYUOmeW0H+48yWXAdzPZY=",
+        "owner": "noctalia-dev",
+        "repo": "umbriel",
+        "rev": "a909081a934a80bb7685080884ffaaa30c857e4c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "noctalia-dev",
+        "repo": "umbriel",
+        "type": "github"
+      }
+    },
     "uv2nix": {
       "inputs": {
         "nixpkgs": [
@@ -1194,6 +1216,26 @@
       "original": {
         "owner": "nickolaj-jepsen",
         "repo": "walldye",
+        "type": "github"
+      }
+    },
+    "xdg-desktop-portal-umbriel": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795324755,
+        "narHash": "sha256-RZqgldOeppp09S0HiXhgraJoBGzsup8BBIa4fU7L/xc=",
+        "owner": "noctalia-dev",
+        "repo": "xdg-desktop-portal-umbriel",
+        "rev": "cb5829efccfcf4816c20c0ca0c95b89867ffc908",
+        "type": "github"
+      },
+      "original": {
+        "owner": "noctalia-dev",
+        "repo": "xdg-desktop-portal-umbriel",
         "type": "github"
       }
     },

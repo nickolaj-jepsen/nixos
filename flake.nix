@@ -102,6 +102,12 @@
     mangowm.inputs.flake-parts.follows = "flake-parts";
     mangowm.inputs.scenefx.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Built locally against our nixpkgs: noctalia's cachix needs umbriel's own nixpkgs, a second
+    # Mesa beside the system's graphics stack.
+    umbriel.url = "github:noctalia-dev/umbriel";
+    umbriel.inputs.nixpkgs.follows = "nixpkgs";
+    umbriel.inputs.xdg-desktop-portal-umbriel.inputs.nixpkgs.follows = "nixpkgs";
+
     dank-material-shell.url = "github:AvengeMedia/DankMaterialShell";
     dank-material-shell.inputs.nixpkgs.follows = "nixpkgs";
     dms-plugin-registry.url = "github:AvengeMedia/dms-plugin-registry";
