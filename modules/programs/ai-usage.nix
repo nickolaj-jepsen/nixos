@@ -32,16 +32,6 @@
         configDir = "${home}/.claude-work";
         clientVersion = pkgs.claude-code.version;
       }
-      # The Copilot subscription pi-work runs on, read through gh's own login like
-      # the CLI does; the premium-request window is the one that runs out.
-      ++ lib.optional fp.dev.pi.work.enable {
-        id = "copilot";
-        kind = "copilot";
-        name = "Copilot";
-        short = "CP";
-        icon = "copilot";
-        gh = lib.getExe pkgs.unstable.gh;
-      }
       ++ lib.optional fp.dev.pi.enable {
         id = "anthropic";
         kind = "anthropic-credits";

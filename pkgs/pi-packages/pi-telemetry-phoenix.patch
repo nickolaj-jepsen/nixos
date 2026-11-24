@@ -104,7 +104,7 @@
 +        const config = resolveConfig({
 +            serviceName: 'pi',
 +            includePayloads: true,
-+            phoenix: { enabled: Boolean(endpoint && apiKey), endpoint, apiKey, projectName: process.env.PI_PHOENIX_PROJECT === 'pi-work' ? 'pi-work' : 'pi' },
++            phoenix: { enabled: Boolean(endpoint && apiKey), endpoint, apiKey, projectName: process.env.PI_PHOENIX_PROJECT || 'pi' },
 +        });
          // One exporter/provider even when both Langfuse and a generic OTLP
          // endpoint are configured: two providers would mint different span ids for

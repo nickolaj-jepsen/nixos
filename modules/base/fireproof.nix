@@ -94,7 +94,7 @@ let
         type = lib.types.attrsOf lib.types.anything;
         default = {};
         description = ''
-          MCP servers only the work profiles load, claude-work and pi-work.
+          MCP servers only the work profile loads, claude-work.
           Work-owned services stay out of programs.mcp.servers, which every
           agent (pi, copilot, vscode and the personal claude) reads.
         '';
@@ -103,7 +103,7 @@ let
       agents.checkout = lib.mkOption {
         type = lib.types.str;
         default = "$HOME/nixos";
-        description = "Where this flake is checked out. `claude-dev` and `pi-dev` load the mods and extensions from it; the shell expands it.";
+        description = "Where this flake is checked out. The shell expands it.";
       };
 
       # Same registry pattern for language servers; each agent leaf maps them to its own schema.
@@ -142,26 +142,6 @@ let
         };
         pi = {
           enable = cascade (config.fireproof.dev.enable && config.fireproof.trusted) "Enable the pi coding agent with the lazypi extension roster";
-          work = {
-            enable = lib.mkEnableOption "pi-work wrapper: a second pi profile in ~/.pi/work that shares the personal config and reaches GitHub Copilot alone";
-            model = lib.mkOption {
-              type = lib.types.str;
-              default = "gpt-6-luna";
-              description = ''
-                GitHub Copilot model id (no provider prefix) the work profile
-                starts on, and the default of its model picker.
-              '';
-            };
-            fastModel = lib.mkOption {
-              type = lib.types.str;
-              default = "mai-code-2-flash";
-              description = ''
-                GitHub Copilot model id (no provider prefix) the work profile
-                runs its subagent roles and its title and judge side calls with,
-                where the personal profile uses DeepSeek.
-              '';
-            };
-          };
         };
         copilot.enable = cascade config.fireproof.dev.enable "Enable the GitHub Copilot CLI";
         ai-usage.enable = cascade config.fireproof.dev.enable "Enable ai-usage, the agent subscription quota CLI (and its DMS bar widget on desktops)";

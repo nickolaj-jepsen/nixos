@@ -56,10 +56,8 @@ in {
     pkgs,
     ...
   }: let
-    cfg = config.fireproof.dev.pi;
     phoenix = import ../_phoenix-client.nix {inherit config;};
     phoenixTelemetry = "${piPackages}/node_modules/@amaster.ai/pi-telemetry/dist/index.js";
-    homeDir = config.home.homeDirectory;
     pi = pkgs.pi-coding-agent;
     piPackages = pkgs.pi-packages;
     spellChecker = fpLib.mkHunspell pkgs;
@@ -182,72 +180,6 @@ in {
       extensions = [];
     };
 
-    # pi-work: the personal config by symlink, its own credentials, and GitHub
-    # Copilot as its only provider. Command Code's provider and
-    # the DeepSeek router are left out: with neither subscription there is
-    # nothing to route between.
-    workFastModel = "github-copilot/${cfg.work.fastModel}";
-    # pi's catalog does not carry these yet: the Copilot API lists them for this
-    # account, but neither the bundled catalog nor the pi.dev overlay knows them.
-    # `models` entries add them beside the built-in models, which stay (the
-    # provider key changes nothing else). Entries replace the Copilot chat request
-    # headers, hence the copy on each: without them the API answers 400.
-    copilotHeaders = {
-      User-Agent = "GitHubCopilotChat/0.35.0";
-      Editor-Version = "vscode/1.107.0";
-      Editor-Plugin-Version = "copilot-chat/0.35.0";
-      Copilot-Integration-Id = "vscode-chat";
-    };
-    workExtraModel = id: name: cost: {
-      inherit id name;
-      api = "openai-responses";
-      reasoning = true;
-      input = ["text" "image"];
-      contextWindow = 1050000;
-      maxTokens = 128000;
-      inherit cost;
-      headers = copilotHeaders;
-      # What the Copilot API reports for these two, from `reasoning_effort`.
-      thinkingLevelMap = {
-        off = null;
-        minimal = null;
-        low = "low";
-        medium = "medium";
-        high = "high";
-        xhigh = "xhigh";
-        max = "max";
-      };
-    };
-    workSettings =
-      settings
-      // {
-        defaultProvider = "github-copilot";
-        defaultModel = cfg.work.model;
-        # The work profile's whole menu, and nothing else the account reaches:
-        # one default, one fast, and two to pick by hand.
-        enabledModels =
-          lib.unique (map (id: "github-copilot/${id}")
-            [cfg.work.model cfg.work.fastModel "mai-code-2" "gemini-4-hydrogen"]);
-        packages =
-          map packagePath (lib.remove "@commandcode/pi-commandcode-provider" thirdPartyPackages)
-          ++ [parentPath]
-          ++ map pluginPath pluginNames;
-      };
-    # One edit to the rules, keybindings, theme or roles reaches both profiles;
-    # models.json, auth.json, sessions and mcp.json stay apart.
-    mirror = name:
-      lib.mkIf cfg.work.enable {
-        source = config.lib.file.mkOutOfStoreSymlink "${homeDir}/.pi/agent/${name}";
-      };
-    # Every role pins a model from the personal catalogue, which this profile has no
-    # credentials for: there they all run on its fast model, where the personal ones
-    # run on DeepSeek. The body is untouched.
-    workAgentRoles = pkgs.runCommand "pi-work-agent-roles" {nativeBuildInputs = [pkgs.gnused];} ''
-      mkdir -p $out
-      for role in ${agentRoles}/*.md; do
-        sed -E 's|^model:.*|model: ${workFastModel}|' "$role" > "$out/$(basename "$role")"
-      done
-    '';
     # pi rejects the null/empty fields home-manager's option fills in.
     piServers = lib.mapAttrs (_: lib.filterAttrs (_: v: v != null && v != {} && v != []));
     mcpFile = servers: let
@@ -255,26 +187,6 @@ in {
     in
       lib.optionalAttrs (filtered != {}) {mcpServers = filtered;};
     mcp = mcpFile config.programs.mcp.servers;
-    # The work-owned servers ride here too, in this profile's own file, so neither
-    # reaches the personal agents.
-    workMcp = mcpFile (config.programs.mcp.servers // config.fireproof.agents.workMcpServers);
-    # Only the two models pi's own catalog is missing; the rest come from it.
-    workModels = {
-      providers.github-copilot.models = [
-        (workExtraModel "mai-code-2" "MAI Code 2" {
-          input = 0.5;
-          output = 2.5;
-          cacheRead = 0.025;
-          cacheWrite = 0;
-        })
-        (workExtraModel "mai-code-2-flash" "MAI Code 2 Flash" {
-          input = 0.05;
-          output = 0.25;
-          cacheRead = 0.005;
-          cacheWrite = 0;
-        })
-      ];
-    };
     # A key or server dropped here stays in the file until removed by hand.
     # Rewrites only on a change, so running sessions don't see the file churn.
     merge = name: value:
@@ -314,15 +226,12 @@ in {
       '';
     # core/telemetry.ts loads the package from PI_PHOENIX_TELEMETRY, so subagent
     # sessions get it too: a `-e` flag dies at the session boundary.
-    phoenixLaunch = {
-      profile,
-      project,
-    }:
+    phoenixLaunch = profile:
       lib.optionalString phoenix.enabled ''
         if [ "$dir" = "$HOME/${profile}" ] && [ -s ${lib.escapeShellArg phoenix.path} ] && [ "''${PI_OTEL_DISABLED:-0}" != 1 ]; then
           ${phoenix.clear}
           export PI_PHOENIX_ENDPOINT=${lib.escapeShellArg phoenix.endpoint}
-          export PI_PHOENIX_PROJECT=${lib.escapeShellArg project}
+          export PI_PHOENIX_PROJECT=pi
           export PI_PHOENIX_KEY_FILE=${lib.escapeShellArg phoenix.path}
           export PI_PHOENIX_TELEMETRY=${lib.escapeShellArg phoenixTelemetry}
         fi
@@ -331,60 +240,14 @@ in {
       name = "pi";
       dir = "\${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}";
       inherit env settings mcp;
-      launch = phoenixLaunch {
-        profile = ".pi/agent";
-        project = "pi";
-      };
-    };
-    workWrapper = mkWrapper {
-      name = "pi-work";
-      dir = "\${PI_CODING_AGENT_DIR:-$HOME/.pi/work}";
-      inherit env;
-      settings = workSettings;
-      mcp = workMcp;
-      models = workModels;
-      launch = ''
-        ${phoenix.clear}
-        unset PI_PHOENIX_ENDPOINT PI_PHOENIX_KEY_FILE PI_PHOENIX_PROJECT PI_PHOENIX_TELEMETRY "''${!PI_TELEMETRY_@}"
-        ${phoenixLaunch {
-          profile = ".pi/work";
-          project = "pi-work";
-        }}
-        export PI_OTEL_DISABLED=1 PI_OTEL_ENABLE=0 OTEL_TRACES_EXPORTER=none
-      '';
-    };
-    # The checkout's extensions in place of the installed ones, with no rebuild, and the agents
-    # checkout's plugins in the same way.
-    piDev = pkgs.writeShellApplication {
-      name = "pi-dev";
-      text = ''
-        extensions="${config.fireproof.agents.checkout}/modules/programs/pi/extensions"
-        plugins="${config.fireproof.agents.devCheckout}/plugins"
-        [ -d "$extensions/parent" ] || { echo "pi-dev: no extensions under $extensions" >&2; exit 1; }
-        [ -d "$plugins" ] || { echo "pi-dev: no plugins under $plugins (fireproof.agents.devCheckout)" >&2; exit 1; }
-        exec pi -ne -e builtin:codemode -e builtin:mcp -e "$extensions/core" -e "$extensions/parent" ${lib.concatMapStringsSep " " (name: ''-e "$plugins/${name}"'') pluginNames} "$@"
-      '';
+      launch = phoenixLaunch ".pi/agent";
     };
   in {
     config = lib.mkIf config.fireproof.dev.pi.enable {
       home.file.".pi/agent/APPEND_SYSTEM.md".text = rules;
       home.file.".pi/agent/themes/fireproof.json".source = theme;
 
-      home.packages = [wrapper spellChecker piDev agentBrowser] ++ lib.optional cfg.work.enable workWrapper;
-
-      # pi-work's config directory: the personal surfaces by symlink, so one edit
-      # reaches both (as claude-work mirrors ~/.claude), and its own roles, which
-      # name the one provider it reaches. Not auth.json, and not the personal
-      # models.json: the wrapper merges the work profile's own, Copilot only.
-      home.file.".pi/work/APPEND_SYSTEM.md" = mirror "APPEND_SYSTEM.md";
-      home.file.".pi/work/keybindings.json" = mirror "keybindings.json";
-      home.file.".pi/work/subagents.json" = mirror "subagents.json";
-      home.file.".pi/work/themes" = mirror "themes";
-      home.file.".pi/work/extensions" = mirror "extensions";
-      home.file.".pi/work/agents" = lib.mkIf cfg.work.enable {
-        source = workAgentRoles;
-        recursive = true;
-      };
+      home.packages = [wrapper spellChecker agentBrowser];
 
       # Literal path: the wrapper single-quotes it, so a secretsDir spelling stays unexpanded.
       age.secrets.exa-api-key = {
@@ -572,14 +435,6 @@ in {
         "app.session.resume" = "alt+shift+r";
         "app.session.tree" = "alt+shift+t";
         "app.session.fork" = "alt+shift+f";
-      };
-
-      home.file.".config/rpiv-todo/config.json".text = builtins.toJSON {
-        collapseKey = "ctrl+t";
-        guidance.promptGuidelines = [
-          "Use `todo` for work with 3+ steps or when the user hands you a list; skip it for a single trivial or conversational task."
-          "Keep exactly one task in_progress: mark it before you start and completed as soon as it is done, never while tests fail or the work is partial."
-        ];
       };
 
       home.file.".pi/agent/subagents.json".text = builtins.toJSON {

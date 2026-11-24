@@ -10,5 +10,4 @@ __pycache__/
 modules/programs/pi/extensions/node_modules
 modules/programs/pi/extensions/parent/lib/protocol.gen.ts
 
-# Linked by pi-dev to the agents checkout's spellfix core; the nix build copies the file in.
 modules/programs/pi/extensions/parent/lib/spellfix

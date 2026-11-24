@@ -10,7 +10,7 @@
     options.fireproof.agents.devCheckout = lib.mkOption {
       type = lib.types.str;
       default = "${config.home.homeDirectory}/dev/agents";
-      description = "Where nickolaj-jepsen/agents is checked out. `claude-dev` and `pi-dev` load the plugins from it in place of the store copies.";
+      description = "Where nickolaj-jepsen/agents is checked out.";
     };
 
     config.fireproof.agents.skills = inputs.agents.lib.skills;
