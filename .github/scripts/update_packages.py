@@ -317,7 +317,6 @@ UPDATERS = {
     "pi-coding-agent": update_pi_coding_agent,
     "pele": lambda: update_npm_tarball("pele"),
     "pi-packages": lambda: update_npm_lock("pi-packages", legacy_peer_deps=True),
-    "phoenix-cli": lambda: update_npm_lock("phoenix-cli", legacy_peer_deps=True),
     "zwift-hass": lambda: update_github_release("zwift-hass", "snicker/zwift_hass"),
 }
 
