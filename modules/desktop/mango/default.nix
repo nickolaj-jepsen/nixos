@@ -10,7 +10,7 @@
     # niri-session's job for mango: a login shell's environment, then graphical-session.target
     # torn down on exit so DMS and friends don't outlive the compositor. The target itself is
     # started from mango's autostart (wayland.windowManager.mango.systemd).
-    session = pkgs.writeShellScript "mango-session" ''
+    session = pkgs.writeShellScriptBin "mango-session" ''
       if [ "''${1:-}" != -l ] && [ -n "''${SHELL:-}" ]; then
         exec ${pkgs.bash}/bin/bash -c "exec -l '$SHELL' -c 'exec $0 -l'"
       fi
@@ -26,7 +26,7 @@
         [Desktop Entry]
         Name=Mango
         Comment=A dwl-based Wayland compositor
-        Exec=${session}
+        Exec=${lib.getExe session}
         Type=Application
         DesktopNames=mango
       ''
@@ -42,8 +42,10 @@
       };
       # mango's portals.conf takes wlr for capture; keep niri's file picker.
       xdg.portal.config.mango."org.freedesktop.impl.portal.FileChooser" = "gnome";
-      # On XDG_DATA_DIRS, where dms-greeter lists sessions; autologin still lands in niri.
+      # On XDG_DATA_DIRS, where dms-greeter lists sessions. Autologin always lands in niri, so
+      # with it on, start mango by running mango-session from a TTY.
       services.displayManager.sessionPackages = [sessionPackage];
+      environment.systemPackages = [session];
     };
   };
 }
