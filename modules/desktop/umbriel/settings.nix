@@ -89,17 +89,13 @@
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.desktop.umbriel.enable && pkgs.stdenv.isLinux) {
       programs.umbriel = {
         enable = true;
-        # The NixOS module installs it.
         package = null;
 
         settings = {
-          # niri-dynamic-workspaces' generated workspaces (umbriel.service sets the path).
           include.optional.files = ["$NDW_UMBRIEL_INCLUDE"];
 
           general = {
-            # niri's hotkey-overlay skip-at-startup.
             show_cheatsheet = false;
-            # niri's honor-xdg-activation-with-invalid-serial, roughly.
             focus_on_activate = true;
           };
 
@@ -115,10 +111,8 @@
           layout = {
             gap = 10;
             extent_presets = [0.33333 0.5 0.66667 1.0];
-            # default_extent_fraction stays unset: each app picks its width, as in niri.
             scrolling = {
               center_focused = "never";
-              # A lone column sits at the left edge, as in niri.
               center_underfull_strip = false;
             };
           };
@@ -173,7 +167,6 @@
 
           # niri's overview: zoomed out on the Flexoki background.
           overview = {
-            zoom = 0.45;
             background_blur = false;
           };
           # niri's default hot corner, without a delay. umbriel's zone is 8 px, niri's 1 px.
@@ -183,8 +176,6 @@
             action = "overview-toggle";
           };
 
-          # niri's slowdown 0.8 is its default springs with stiffness ×1/0.8² (same motion, faster
-          # clock). Window open/close are niri-settings' 150 ms ease-out-quad, ×0.8.
           animation = {
             workspaces.curve = "spring:1,1562.5";
             windows_move.curve = "spring:1,1250";
@@ -243,19 +234,10 @@
 
           window_rule =
             [
-              # niri blurs only what asks for it. kitty and ghostty ask (background_blur), but
-              # umbriel has no blur protocol, so rules stand in; optimized is niri's window xray.
-              {
-                match.app_id = ["^kitty$" "^com\\.mitchellh\\.ghostty$"];
-                blur = true;
-                blur_optimized = true;
-              }
               {
                 match.is_floating = true;
                 shadow = true;
               }
-              # A markdown file opened on its own gets a reading width. std::regex is byte-wise,
-              # so niri's [^—] becomes a lookahead.
               {
                 match.app_id = "^dev\\.zed\\.Zed$";
                 match.title = "^(?:(?!—).)+\\.(md|markdown)$";
@@ -265,7 +247,6 @@
                 match.app_id = "^org\\.gnome\\.NautilusPreviewer$";
                 default_floating = true;
               }
-              # niri's on-demand VRR while such a window is visible; umbriel's while it is focused.
               {
                 match.app_id = ["^steam_app_" "^gamescope$" "^mpv$"];
                 vrr = "always";
@@ -280,16 +261,11 @@
               default_focused = true;
             };
 
-          # niri's DMS layer rule: live blur of the windows behind, not the cached wallpaper.
           layer_rule = [
             {
               match.namespace = "^dms:";
               blur = true;
               blur_optimized = false;
-              # Without a threshold umbriel blurs a layer's whole box, and DMS keeps full-screen
-              # transparent layers mapped (popout-dismiss, popout, context-menu), which blurred
-              # every window. In niri DMS asks for blur on its panels' shapes only. Below the
-              # panels' opacity, above their soft shadows.
               blur_ignore_alpha = 0.8 * (config.programs.dank-material-shell.settings.popupTransparency or 1.0);
             }
           ];
