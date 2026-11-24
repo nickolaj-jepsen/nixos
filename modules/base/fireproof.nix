@@ -42,7 +42,6 @@ let
         enable = lib.mkEnableOption "desktop environment with niri, greetd, and all desktop features";
         autologin.enable = lib.mkEnableOption "signing in without a greeter even when no LUKS passphrase was typed at boot. Only for hosts where every disk unlock needs a human (no TPM-only slot)";
         alwaysGreeter.enable = lib.mkEnableOption "the greeter on every sign-in, to pick a session: no silent sign-in with the LUKS passphrase, so the password is typed again";
-        mango.enable = lib.mkEnableOption "mango (mangowm) as a second session beside niri, picked in the greeter";
         umbriel.enable = lib.mkEnableOption "umbriel as another session beside niri, picked in the greeter";
         boot-splash.enable = lib.mkEnableOption "the themed boot chain: a styled Limine, the Plymouth hex dump and a handoff into niri with no text console in between";
         editor = lib.mkOption {

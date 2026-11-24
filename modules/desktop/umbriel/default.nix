@@ -21,7 +21,7 @@
           ExecStartPre = "${pkgs.coreutils}/bin/touch %t/ndw-umbriel/workspaces.toml";
         };
       };
-      # Like mango, umbriel leaves the power key to logind, whose default is poweroff; niri suspends.
+      # Umbriel leaves the power key to logind, whose default is poweroff; niri suspends.
       services.logind.settings.Login.HandlePowerKey = "suspend";
       # niri's choices beside umbriel's own portal (capture, global shortcuts).
       xdg.portal.config.umbriel = {

@@ -46,8 +46,6 @@
             (names [
               "niri"
               "niri-session"
-              "mango"
-              "mango-session"
               # umbriel's binary is wrapped; comm is cut at 15 characters.
               ".umbriel-wrappe"
               "start-umbriel"

@@ -4,10 +4,9 @@
     fireproof.trusted = true;
 
     fireproof.desktop.enable = true;
-    # The greeter picks between niri and mango, so no silent sign-in.
+    # The greeter picks between niri and umbriel, so no silent sign-in.
     fireproof.desktop.alwaysGreeter.enable = true;
     fireproof.desktop.boot-splash.enable = true;
-    fireproof.desktop.mango.enable = true;
     fireproof.desktop.umbriel.enable = true;
     fireproof.desktop.bambu-studio.enable = true;
     fireproof.desktop.jellyfin-media-player.enable = true;

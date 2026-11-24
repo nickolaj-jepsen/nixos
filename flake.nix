@@ -97,11 +97,6 @@
     niri.inputs.nixpkgs.follows = "nixpkgs";
     niri.inputs.nixpkgs-stable.follows = "nixpkgs";
 
-    mangowm.url = "github:mangowm/mango";
-    mangowm.inputs.nixpkgs.follows = "nixpkgs";
-    mangowm.inputs.flake-parts.follows = "flake-parts";
-    mangowm.inputs.scenefx.inputs.nixpkgs.follows = "nixpkgs";
-
     # Built locally against our nixpkgs: noctalia's cachix needs umbriel's own nixpkgs, a second
     # Mesa beside the system's graphics stack.
     umbriel.url = "github:noctalia-dev/umbriel";
