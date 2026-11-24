@@ -73,7 +73,14 @@
 
       # Part of the shell: beside niri in session.slice. Its programs are spawned through niri,
       # so they still land in app.slice scopes.
-      systemd.user.services.niri-dynamic-workspaces.Service.Slice = "session.slice";
+      systemd.user.services.niri-dynamic-workspaces = {
+        Service.Slice = "session.slice";
+        # A warm daemon opens the overlay in ~90 ms against ~350 ms for a cold GTK start, so run it
+        # in umbriel sessions too (umbriel exports UMBRIEL_SOCKET before graphical-session.target).
+        Unit.ConditionEnvironment = lib.mkForce ["|NIRI_SOCKET" "|UMBRIEL_SOCKET"];
+        # The include umbriel.service creates (modules/desktop/umbriel); unused under niri.
+        Service.Environment = ["NDW_UMBRIEL_INCLUDE=%t/ndw-umbriel/workspaces.toml"];
+      };
     };
   };
 }
