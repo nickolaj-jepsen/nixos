@@ -26,11 +26,17 @@
     '';
 
     scratchFile = "${config.xdg.dataHome}/scratch/scratch.md";
-    openScratch = lib.getExe (pkgs.writeShellScriptBin "umbriel-scratch" ''
-      mkdir -p ${dirOf scratchFile}
-      touch -a ${scratchFile}
-      exec zeditor ${scratchFile}
-    '');
+    smerge = lib.getExe' pkgs.unstable.sublime-merge "smerge";
+    openScratch = lib.getExe (pkgs.writeShellScriptBin "umbriel-scratch" (lib.replaceStrings
+      ["@scratchDir@" "@scratchFile@"]
+      [(lib.escapeShellArg (dirOf scratchFile)) (lib.escapeShellArg scratchFile)]
+      (builtins.readFile ./scripts/open-scratch.sh)));
+
+    workspaceKitty = lib.getExe (pkgs.writeShellApplication {
+      name = "umbriel-workspace-kitty";
+      runtimeInputs = [package pkgs.jq config.programs.kitty.package pkgs.coreutils];
+      text = builtins.readFile ./scripts/workspace-kitty.sh;
+    });
 
     output = m:
       if !m.enable
@@ -60,24 +66,6 @@
         (lib.nameValuePair "Mod+Shift+${lib.toUpper key}" "column-move-to-workspace --name ${name}")
       ])
       workspaceKeys));
-
-    # niri-dynamic-workspaces' own keys and commands, as its module binds them in niri.
-    ndw = config.programs.niri-dynamic-workspaces;
-    ndwBinds = lib.listToAttrs (map (b: lib.nameValuePair b.key "spawn ${lib.getExe' ndw.package "niri-dynamic-workspaces"}${b.args}")
-      (lib.filter (b: b.key != null) [
-        {
-          key = ndw.keybind;
-          args = "";
-        }
-        {
-          key = ndw.deleteKeybind;
-          args = " delete";
-        }
-        {
-          key = ndw.moveWindowKeybind;
-          args = " move-window";
-        }
-      ]));
 
     locked = action: {
       inherit action;
@@ -129,46 +117,44 @@
               offset_x = 0;
               offset_y = 5;
             };
-            # niri's blur defaults; only the rules below blur anything.
-            blur = {
-              enabled = true;
-              passes = 3;
-              radius = 3;
-              noise = 0.02;
-              saturation = 1.5;
-              brightness = 1.0;
-              contrast = 1.0;
-            };
             tab_bar = {
-              style = "indicator";
-              position = "top";
-              height = 4;
-              gap = 2;
-              tab_gap = 0;
-              corner_radius = 8;
-              hide_when_single = true;
+              tab_gap = 6;
+              gap = 6;
             };
           };
 
           colors = {
+            background = color c.bg;
+            text_primary = color c.fg;
+            text_muted = color c.muted;
+            accent_primary = color c.accent;
+            accent_secondary = color c.cyan;
+            warning = color c.orange;
+            error = color c.red;
             border = {
               focused = color c.accent;
               unfocused = color c.ui;
             };
-            insert_hint = color c.accent;
+            insert_hint = "#${c.accent}80";
             shadow = "#100F0F99";
             backdrop = color c.bg;
             tab_bar = {
+              background = color c.bgAlt;
+              text = color c.fgAlt;
               active = color c.accent;
+              active_text = color c.black;
+              active_unfocused = color c.accentContainer;
+              active_unfocused_text = color c.whiteAlt;
               urgent = color c.red;
+              urgent_text = color c.black;
             };
-            overview.background_tint = color c.bg;
+            overview = {
+              background_tint = "#${c.black}80";
+              badge = color c.accent;
+            };
           };
 
-          # niri's overview: zoomed out on the Flexoki background.
-          overview = {
-            background_blur = false;
-          };
+          overview.background_blur = true;
           # niri's default hot corner, without a delay. umbriel's zone is 8 px, niri's 1 px.
           hot_corners.top_left = {
             enabled = true;
@@ -226,14 +212,26 @@
           };
 
           # zed-scratch's note (Mod+N): umbriel's named scratchpads launch and float it natively.
-          scratchpad = lib.optional config.fireproof.dev.enable {
-            name = "zed";
-            spawn_when_empty = openScratch;
-            hide_when_empty = true;
-          };
+          scratchpad = lib.optionals config.fireproof.dev.enable [
+            {
+              name = "zed";
+              spawn_when_empty = openScratch;
+              hide_when_empty = true;
+            }
+            {
+              name = "sublime-merge";
+              # A normal launch restores Merge's saved session instead of forcing a blank window.
+              spawn_when_empty = smerge;
+              hide_when_empty = true;
+            }
+          ];
 
           window_rule =
             [
+              {
+                match.app_id = "^kitty$";
+                blur = true;
+              }
               {
                 match.is_floating = true;
                 shadow = true;
@@ -252,14 +250,25 @@
                 vrr = "always";
               }
             ]
-            ++ lib.optional config.fireproof.dev.enable {
-              match.app_id = "^dev\\.zed\\.Zed$";
-              match.title = "^scratch\\.md";
-              default_scratchpad = "zed";
-              default_floating_size_px.width = 864;
-              default_floating_size.height = 0.6;
-              default_focused = true;
-            };
+            ++ lib.optionals config.fireproof.dev.enable [
+              {
+                match.app_id = "^dev\\.zed\\.Zed$";
+                match.title = "^scratch\\.md";
+                default_scratchpad = "zed";
+                default_floating_size_px.width = 864;
+                default_floating_size.height = 0.6;
+                default_focused = true;
+              }
+              {
+                match.app_id = "^sublime_merge$";
+                default_scratchpad = "sublime-merge";
+                default_floating_size = {
+                  width = 0.9;
+                  height = 0.85;
+                };
+                default_focused = true;
+              }
+            ];
 
           layer_rule = [
             {
@@ -373,7 +382,12 @@
 
               "Mod+Slash" = "cheatsheet-toggle";
 
-              "Mod+Return" = "spawn kitty";
+              "Mod+D" = "spawn niri-dynamic-workspaces";
+              "Mod+Ctrl+D" = "spawn niri-dynamic-workspaces delete";
+              "Mod+Shift+D" = "spawn niri-dynamic-workspaces move-window";
+
+              "Mod+Return" = "spawn ${workspaceKitty}";
+              "Mod+Shift+Return" = "spawn ${workspaceKitty} --in-column";
               "Mod+Backspace" = "window-close";
               # SIGKILL to the client, what window-kill does under niri.
               "Mod+Shift+Backspace" = "window-kill";
@@ -385,7 +399,21 @@
               "Mod+Tab" = "window-focus-last";
             }
             // workspaceBinds
-            // lib.optionalAttrs ndw.enable ndwBinds;
+            // lib.optionalAttrs config.fireproof.dev.enable {
+              "Mod+T" = "scratchpad-toggle sublime-merge";
+              "Mod+5" = workspaceBinds."Mod+T";
+            };
+        };
+      };
+
+      home.file = lib.mkIf config.fireproof.dev.enable {
+        ".local/bin/smerge" = {
+          executable = true;
+          text =
+            lib.replaceStrings
+            ["@shell@" "@jq@" "@smerge@"]
+            [pkgs.runtimeShell (lib.getExe pkgs.jq) smerge]
+            (builtins.readFile ./scripts/smerge.sh);
         };
       };
 
