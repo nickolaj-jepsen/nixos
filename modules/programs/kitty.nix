@@ -46,7 +46,7 @@
             # Ghostty's window-padding-color=extend has no kitty equivalent: deliberate
             # padding is always drawn in `background`, so a TUI's own bg would leave a
             # frame. Drop it and let the leftover strips take the neighbouring cell's colour.
-            window_padding_width = 0;
+            window_padding_width = 4;
             padding_fill_strategy = "neighboring_cell";
             background_opacity = 0.9;
             background_blur = 20;
