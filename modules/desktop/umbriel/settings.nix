@@ -34,7 +34,7 @@
 
     workspaceKitty = lib.getExe (pkgs.writeShellApplication {
       name = "umbriel-workspace-kitty";
-      runtimeInputs = [package pkgs.jq config.programs.kitty.package pkgs.coreutils];
+      runtimeInputs = [package pkgs.jq config.programs.kitty.package pkgs.coreutils config.programs.niri-dynamic-workspaces.package];
       text = builtins.readFile ./scripts/workspace-kitty.sh;
     });
 

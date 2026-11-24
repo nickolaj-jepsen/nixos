@@ -1,11 +1,17 @@
 # Project workspaces keyed by their niri-dynamic-workspaces switcher key.
+# Each key binds a template, because only a template records the `cwd` that
+# `niri-dynamic-workspaces cwd` prints back for umbriel-workspace-kitty.
 let
   local = name: path: {
     inherit name;
-    programs = [
-      "editor-open ${path}"
-      "kitty --directory=${path}"
-    ];
+    template = {
+      title = name;
+      cwd = path;
+      programs = [
+        "editor-open ${path}"
+        "kitty --directory=${path}"
+      ];
+    };
   };
 
   remote = {
@@ -15,10 +21,14 @@ let
     shell ? "fish",
   }: {
     inherit name;
-    programs = [
-      "editor-open --remote ${host} ${path}"
-      "kitty -- ssh -t ${host} 'cd ${path} && exec ${shell} -l'"
-    ];
+    template = {
+      title = name;
+      # No cwd: the path is on the remote host, not here.
+      programs = [
+        "editor-open --remote ${host} ${path}"
+        "kitty -- ssh -t ${host} 'cd ${path} && exec ${shell} -l'"
+      ];
+    };
   };
 in {
   n = local "nix" "/home/nickolaj/nixos";

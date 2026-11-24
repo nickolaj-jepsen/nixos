@@ -38,36 +38,40 @@
                 name = "diff";
               };
             }
-            // workspaces;
+            // lib.mapAttrs (_: w: {template = w.name;}) workspaces;
 
-          template = {
-            dev = {
-              programs = [
-                "editor-open {{path}}"
-                "kitty --directory={{path}}"
-              ];
-              variables = {
-                path = {
-                  name = "Path from dev folder";
-                  type = "dir";
-                  dirs = ["/home/nickolaj/dev/" "/home/nickolaj/dev/devenv-tilt/projects/"];
+          template =
+            {
+              dev = {
+                programs = [
+                  "editor-open {{path}}"
+                  "kitty --directory={{path}}"
+                ];
+                # Recorded so umbriel-workspace-kitty opens in the project.
+                cwd = "{{path}}";
+                variables = {
+                  path = {
+                    name = "Path from dev folder";
+                    type = "dir";
+                    dirs = ["/home/nickolaj/dev/" "/home/nickolaj/dev/devenv-tilt/projects/"];
+                  };
                 };
               };
-            };
-            remote = {
-              programs = [
-                "editor-open --remote {{host}}"
-                "kitty -- ssh -t {{host}}"
-              ];
-              variables = {
-                host = {
-                  name = "SSH host";
-                  type = "options";
-                  options = ["dev.ao" "homelab" "minilab" "desktop" "scw.ao" "staging.ao" "bastion.ao"];
+              remote = {
+                programs = [
+                  "editor-open --remote {{host}}"
+                  "kitty -- ssh -t {{host}}"
+                ];
+                variables = {
+                  host = {
+                    name = "SSH host";
+                    type = "options";
+                    options = ["dev.ao" "homelab" "minilab" "desktop" "scw.ao" "staging.ao" "bastion.ao"];
+                  };
                 };
               };
-            };
-          };
+            }
+            // lib.listToAttrs (lib.mapAttrsToList (_: w: lib.nameValuePair w.name w.template) workspaces);
         };
       };
 

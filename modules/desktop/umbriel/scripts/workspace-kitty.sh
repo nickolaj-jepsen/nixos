@@ -1,28 +1,9 @@
 kitty_args=()
-workspace=$(umbriel workspaces --json | jq -r '.[] | select(.focused) | .id') || workspace=""
-if [[ -n "$workspace" ]]; then
-  # NDW passes the project root to its initial Kitty. Read the launch
-  # argument rather than the shell's cwd, which can change after cd.
-  pids=$(umbriel windows --json | jq -r --arg ws "$workspace" '
-    map(select(.workspace == $ws and .app_id == "kitty" and .pid > 0))
-    | sort_by(.pid) | .[].pid
-  ') || pids=""
-  for pid in $pids; do
-    argv=()
-    mapfile -d "" -t argv 2>/dev/null < "/proc/$pid/cmdline" || continue
-    dir=""
-    for ((j = 1; j < ${#argv[@]}; j++)); do
-      case "${argv[j]}" in
-        --directory=*|--working-directory=*) dir="${argv[j]#*=}" ;;
-        -d|--directory|--working-directory) j=$((j + 1)); dir="${argv[j]:-}" ;;
-        --|[!-]*) break ;;
-      esac
-    done
-    if [[ "$dir" == /* && -d "$dir" ]]; then
-      kitty_args=(--directory "$dir")
-      break
-    fi
-  done
+# niri-dynamic-workspaces records a workspace's project root when it is created,
+# so the terminal opens there whatever its windows are running or were launched by.
+# It exits non-zero (and says why) for a workspace without one, hence the redirect.
+if dir=$(niri-dynamic-workspaces cwd 2>/dev/null); then
+  kitty_args=(--directory "$dir")
 fi
 if [[ "${1:-}" != --in-column ]]; then
   exec kitty "${kitty_args[@]}"
