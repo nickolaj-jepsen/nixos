@@ -13,6 +13,7 @@ import chrome from "./chrome.ts";
 import claudePeers from "./claude-peers.ts";
 import delegation from "./delegation.ts";
 import notify from "./notify.ts";
+import herdr from "./herdr.ts";
 import { createServices, type Services } from "./services.ts";
 
 const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
@@ -21,6 +22,7 @@ const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["chrome", chrome],
   ["claude-peers", claudePeers],
   ["notify", notify],
+  ["herdr", herdr],
 ];
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));

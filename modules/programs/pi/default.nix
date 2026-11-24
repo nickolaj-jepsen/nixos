@@ -27,7 +27,7 @@
         ln -s ${pi}/lib/node_modules/pi-monorepo/node_modules/typebox node_modules/
         ln -s ${pi}/lib/node_modules/pi-monorepo/node_modules/@types/node node_modules/@types/
         tsc --noEmit
-        node --experimental-strip-types --test parent/chrome/*.test.ts
+        node --experimental-strip-types --test parent/chrome/*.test.ts parent/herdr/*.test.*
         runHook postBuild
       '';
       installPhase = ''
@@ -138,6 +138,9 @@ in {
         PI_SPELLFIX_HUNSPELL = lib.getExe spellChecker;
         PI_SPELLFIX_DICTS = lib.concatStringsSep "," fpLib.hunspellLanguages;
         PI_SPELLFIX_PERSONAL = fpLib.hunspellPersonalDictionary config;
+      }
+      // lib.optionalAttrs config.fireproof.desktop.enable {
+        PI_HERDR_HC = lib.getExe' pkgs.unstable.herdr-core "hc";
       }
       // lib.optionalAttrs config.fireproof.dev.ai-usage.enable {
         PI_AI_USAGE_COMMAND = lib.getExe pkgs.ai-usage;
