@@ -14,24 +14,39 @@
   }: let
     c = config.fireproof.theme.colors;
     json = pkgs.formats.json {};
+    # Walkthrough v0.10.0. Updates are explicit rev/hash bumps, never a runtime clone.
+    walkthrough = pkgs.fetchFromGitHub {
+      owner = "dmazlum";
+      repo = "herdr-walkthrough";
+      rev = "8d35fd16c225dfe68769a0e8fa85a103bcac013e";
+      hash = "sha256-GsPw5aJb0YzMxfe3whXmc8yYSETk9MnILgxgahEoJqI=";
+    };
+    keys = json.generate "herdr-mod-keys.json" {
+      global.${
+        if pkgs.stdenv.isDarwin
+        then "cmd-shift-k"
+        else "ctrl-alt-k"
+      } = "mod.open:walkthrough";
+    };
     settings = json.generate "herdr-theme-settings.json" {
       theme = "fireproof";
       appearance = "dark";
       font = config.fireproof.theme.font.family;
     };
-    applyTheme = pkgs.writeShellApplication {
-      name = "herdr-apply-theme";
+    mergeConfig = pkgs.writeShellApplication {
+      name = "herdr-merge-config";
       runtimeInputs = [pkgs.jq];
       text = ''
         file=$1
+        defaults=$2
         mkdir -p "$(dirname "$file")"
         tmp=$(mktemp "$file.XXXXXX")
         trap 'rm -f "$tmp"' EXIT
         if [ -f "$file" ]; then
           jq -e 'type == "object"' "$file" >/dev/null
-          jq --slurpfile theme ${settings} '. * $theme[0]' "$file" > "$tmp"
+          jq --slurpfile defaults "$defaults" '. * $defaults[0]' "$file" > "$tmp"
         else
-          cp ${settings} "$tmp"
+          cp "$defaults" "$tmp"
         fi
         chmod 600 "$tmp"
         mv "$tmp" "$file"
@@ -43,6 +58,10 @@
         pkgs.unstable.herdr-desktop
         pkgs.unstable.herdr-core
       ];
+
+      # Link the whole mod so removed upstream files disappear on upgrades too.
+      # Walkthrough stores reports/preferences outside its source directory.
+      xdg.configFile."herdr-app/mods/walkthrough".source = "${walkthrough}/mods/walkthrough";
 
       xdg.configFile."herdr-app/themes/fireproof.json".source = json.generate "herdr-fireproof.json" {
         background = "#${c.bg}";
@@ -94,10 +113,11 @@
         };
       };
 
-      # Herdr writes settings from its UI; keep them writable and merge only our
-      # look on activation. Shipped layouts are replaced on launch, so leave them alone.
+      # Herdr writes settings/keys from its UI; merge our entries into writable
+      # files. Shipped layouts are replaced on launch, so leave them alone.
       home.activation.herdrTheme = lib.hm.dag.entryAfter ["linkGeneration"] ''
-        run ${lib.getExe applyTheme} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/settings.json"}
+        run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/settings.json"} ${settings}
+        run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/keys.json"} ${keys}
       '';
     };
   };
