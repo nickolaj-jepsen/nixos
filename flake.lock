@@ -653,15 +653,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1790181904,
-        "narHash": "sha256-9bgJeiLY+JdXEmBbNyLDSDn1KmTfeSYIJt5Yia3gVmA=",
+        "lastModified": 1795542295,
+        "narHash": "sha256-jP0qNLKCwCuwSmHgcggZ2kt43YWuXqbKdp9nbAH/PQA=",
         "owner": "nickolaj-jepsen",
         "repo": "niri-dynamic-workspaces",
-        "rev": "09d4f3bde47951cefe25cc86574a00ba22c573df",
+        "rev": "07cb9a09413333c7a97a7557e3f9870e83fbd599",
         "type": "github"
       },
       "original": {
         "owner": "nickolaj-jepsen",
+        "ref": "umbriel-prototype",
         "repo": "niri-dynamic-workspaces",
         "type": "github"
       }

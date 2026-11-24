@@ -118,7 +118,8 @@
     dux-greeter.url = "github:duxlabs-dev/dux-greeter";
     dux-greeter.inputs.nixpkgs.follows = "nixpkgs";
 
-    niri-dynamic-workspaces.url = "github:nickolaj-jepsen/niri-dynamic-workspaces";
+    # The umbriel-prototype branch adds an experimental Umbriel backend; niri is unchanged.
+    niri-dynamic-workspaces.url = "github:nickolaj-jepsen/niri-dynamic-workspaces/umbriel-prototype";
     niri-dynamic-workspaces.inputs.nixpkgs.follows = "nixpkgs";
     niri-dynamic-workspaces.inputs.flake-parts.follows = "flake-parts";
     niri-dynamic-workspaces.inputs.home-manager.follows = "home-manager";

@@ -20,7 +20,9 @@
     # The HM module dropped build-time checks; unknown keys and bad binds only warn at runtime.
     validated = pkgs.runCommand "umbriel-config.toml" {} ''
       cp ${toml} $out
-      ${lib.getExe' package "umbriel"} config validate -c $out
+      # An unset NDW_UMBRIEL_INCLUDE fails the include even though it is optional; the service sets it.
+      : > workspaces.toml
+      NDW_UMBRIEL_INCLUDE=$PWD/workspaces.toml ${lib.getExe' package "umbriel"} config validate -c $out
     '';
 
     scratchFile = "${config.xdg.dataHome}/scratch/scratch.md";
@@ -59,6 +61,24 @@
       ])
       workspaceKeys));
 
+    # niri-dynamic-workspaces' own keys and commands, as its module binds them in niri.
+    ndw = config.programs.niri-dynamic-workspaces;
+    ndwBinds = lib.listToAttrs (map (b: lib.nameValuePair b.key "spawn ${lib.getExe' ndw.package "niri-dynamic-workspaces"}${b.args}")
+      (lib.filter (b: b.key != null) [
+        {
+          key = ndw.keybind;
+          args = "";
+        }
+        {
+          key = ndw.deleteKeybind;
+          args = " delete";
+        }
+        {
+          key = ndw.moveWindowKeybind;
+          args = " move-window";
+        }
+      ]));
+
     locked = action: {
       inherit action;
       allow_when_locked = true;
@@ -73,6 +93,9 @@
         package = null;
 
         settings = {
+          # niri-dynamic-workspaces' generated workspaces (umbriel.service sets the path).
+          include.optional.files = ["$NDW_UMBRIEL_INCLUDE"];
+
           general = {
             # niri's hotkey-overlay skip-at-startup.
             show_cheatsheet = false;
@@ -294,7 +317,7 @@
                 if config.fireproof.dev.agent-hub.enable
                 then "spawn dms ipc widget toggle agentHub"
                 else "spawn dms ipc dash toggle \"\"";
-              # Mod+Shift+B / Mod+Ctrl+B (agent-hub) and Mod+D (niri-dynamic-workspaces) read niri's IPC.
+              # Mod+Shift+B / Mod+Ctrl+B (agent-hub) read niri's IPC.
               "Mod+Shift+Comma" = "spawn dms ipc settings focusOrToggle";
               "Mod+Shift+Escape" = "spawn dms ipc processlist focusOrToggle";
               "Mod+Shift+I" = "spawn dms ipc inhibit toggle";
@@ -380,7 +403,8 @@
               "Alt+Tab" = "window-focus-last";
               "Mod+Tab" = "window-focus-last";
             }
-            // workspaceBinds;
+            // workspaceBinds
+            // lib.optionalAttrs ndw.enable ndwBinds;
         };
       };
 
