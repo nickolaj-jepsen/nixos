@@ -27,31 +27,6 @@
         open = true;
         powerManagement.enable = true;
       };
-
-      # NVIDIA does not release VRAM back to the pool under Wayland compositors,
-      # so a long-running niri (or mango, umbriel) session can balloon. This is the niri-documented
-      # application profile that caps that growth.
-      # https://github.com/YaLTeR/niri/wiki/Nvidia
-      environment.etc."nvidia/nvidia-application-profiles-rc.d/50-limit-free-buffer-pool.json".text = builtins.toJSON {
-        rules = map (compositor: {
-          pattern = {
-            feature = "procname";
-            matches = compositor;
-          };
-          profile = "Limit Free Buffer Pool On Wayland Compositors";
-        }) ["niri" "mango" "umbriel" ".umbriel-wrapped"];
-        profiles = [
-          {
-            name = "Limit Free Buffer Pool On Wayland Compositors";
-            settings = [
-              {
-                key = "GLVidHeapReuseRatio";
-                value = 0;
-              }
-            ];
-          }
-        ];
-      };
     };
   };
 
