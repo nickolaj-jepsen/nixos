@@ -286,6 +286,11 @@
               match.namespace = "^dms:";
               blur = true;
               blur_optimized = false;
+              # Without a threshold umbriel blurs a layer's whole box, and DMS keeps full-screen
+              # transparent layers mapped (popout-dismiss, popout, context-menu), which blurred
+              # every window. In niri DMS asks for blur on its panels' shapes only. Below the
+              # panels' opacity, above their soft shadows.
+              blur_ignore_alpha = 0.8 * (config.programs.dank-material-shell.settings.popupTransparency or 1.0);
             }
           ];
 
