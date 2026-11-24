@@ -69,14 +69,16 @@
           c.whiteAlt
         ];
         colors = {
+          # One Kitty-colored surface for panels, bars and terminals. The main
+          # layout already has 8px gutters; only their canvas is lighter.
           surface = "#${c.bg}";
-          canvas = "#${c.black}";
-          chrome = "#${c.bgAlt}";
-          popover = "#${c.bgAlt}";
-          raised = "#${c.ui}";
-          hover = "#${c.ui}";
-          selected = "#${c.uiAlt}";
-          border = "#${c.uiAlt}";
+          canvas = "#${c.bgAlt}";
+          chrome = "#${c.bg}";
+          popover = "#${c.bg}";
+          raised = "#${c.bg}";
+          hover = "#${c.bgAlt}";
+          selected = "#${c.ui}";
+          border = "#${c.bgAlt}";
           input = "#${c.bg}";
           muted = "#${c.fgAlt}";
           dim = "#${c.muted}";
