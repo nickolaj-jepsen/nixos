@@ -13,8 +13,6 @@
   in {
     config = lib.mkIf (config.fireproof.desktop.enable && config.fireproof.dev.enable) {
       home.file = {
-        "${prompts}/taskmaster.agent.md".source = ./taskmaster.agent.md;
-
         "${prompts}/global.toolsets.jsonc".text = builtins.toJSON {
           issues = {
             tools = ["linear"];
