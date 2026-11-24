@@ -7,6 +7,9 @@
   # trusted here too: fireproof.trusted is what gates the fleet-wide list, and a
   # hollow card on this branch would make `just switch phone-vm` overwrite the phone.
   phoneKey = builtins.readFile ../../secrets/hosts/phone-vm/id_ed25519.pub;
+  # Herdr's mobile client key. Unlike the two above it is not in the fleet-wide list:
+  # it only lands on hosts running the desktop, where Herdr's chat host listens.
+  mobileKey = builtins.readFile ../../secrets/herdr-mobile.pub;
   # builtins-only so the list is shared across all three module halves without lib at this scope.
   publicKeys = [backupKey phoneKey] ++ map (h: builtins.readFile (../../secrets/hosts + ("/" + h) + "/id_ed25519.pub")) trustedHosts;
   # Each .pub already ends in "\n"; strip it so the joined file is one key per line, no blanks.
@@ -17,7 +20,11 @@
     message = "fireproof.trusted on ${fireproof.hostname} must be set as a literal in its host card's `shared`.";
   };
 in {
-  flake.modules.nixos.ssh = {config, ...}: let
+  flake.modules.nixos.ssh = {
+    config,
+    lib,
+    ...
+  }: let
     inherit (config.fireproof) username hostname;
   in {
     assertions = [(trustedHostsAgree config.fireproof)];
@@ -44,7 +51,9 @@ in {
       settings.AcceptEnv = ["EDITOR_OPEN_*"];
     };
 
-    users.users.${username}.openssh.authorizedKeys.keys = publicKeys;
+    users.users.${username}.openssh.authorizedKeys.keys =
+      publicKeys
+      ++ lib.optional config.fireproof.desktop.enable mobileKey;
   };
 
   # darwin: place the host identity at ~/.ssh (so HM-side agenix can decrypt) and

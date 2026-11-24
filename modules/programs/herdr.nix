@@ -38,6 +38,8 @@
       appearance = "dark";
       font = config.fireproof.theme.font.family;
     };
+    uiDefaults = json.generate "herdr-ui-defaults.json" {layout = "nested";};
+    uiFiles = lib.filesystem.listFilesRecursive ./herdr-ui;
     mergeConfig = pkgs.writeShellApplication {
       name = "herdr-merge-config";
       runtimeInputs = [pkgs.jq];
@@ -49,7 +51,11 @@
         trap 'rm -f "$tmp"' EXIT
         if [ -f "$file" ]; then
           jq -e 'type == "object"' "$file" >/dev/null
-          jq --slurpfile defaults "$defaults" '. * $defaults[0]' "$file" > "$tmp"
+          if [ "''${3:-}" = "--defaults" ]; then
+            jq --slurpfile defaults "$defaults" '$defaults[0] * .' "$file" > "$tmp"
+          else
+            jq --slurpfile defaults "$defaults" '. * $defaults[0]' "$file" > "$tmp"
+          fi
         else
           cp "$defaults" "$tmp"
         fi
@@ -134,6 +140,20 @@
           unknown = "#${c.muted}";
         };
       };
+
+      # Personal UI sources live here, not in Herdr's shipped files. Deploy real
+      # writable files: the app generates metadata alongside mods, and its layout
+      # editor must be able to save. Live source edits reset on the next activation;
+      # make persistent changes in herdr-ui. Keep machine/session/click state out.
+      home.activation.herdrUi = lib.hm.dag.entryAfter ["linkGeneration"] ''
+        ${lib.concatMapStringsSep "\n" (source: let
+          relative = lib.removePrefix "${toString ./herdr-ui}/" (toString source);
+          target = "${config.xdg.configHome}/herdr-app/${relative}";
+        in ''
+          run ${lib.getExe' pkgs.coreutils "install"} -Dm644 ${source} ${lib.escapeShellArg target}
+        '') uiFiles}
+        run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/shared.json"} ${uiDefaults} --defaults
+      '';
 
       # Herdr writes settings/keys from its UI; merge our entries into writable
       # files. Shipped layouts are replaced on launch, so leave them alone.
