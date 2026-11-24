@@ -27,6 +27,11 @@
         then "cmd-shift-k"
         else "ctrl-alt-k"
       } = "mod.open:walkthrough";
+      global.${
+        if pkgs.stdenv.isDarwin
+        then "cmd-i"
+        else "ctrl-alt-shift-p"
+      } = "mod.open:new-chat";
     };
     settings = json.generate "herdr-theme-settings.json" {
       theme = "fireproof";
@@ -62,6 +67,23 @@
       # Link the whole mod so removed upstream files disappear on upgrades too.
       # Walkthrough stores reports/preferences outside its source directory.
       xdg.configFile."herdr-app/mods/walkthrough".source = "${walkthrough}/mods/walkthrough";
+
+      # Only install the chat and Codex-filtered launcher, not upstream's
+      # replacements for the agents list, terminal menu or shipped layout.
+      xdg.configFile."herdr-app/mods/new-chat".source = "${pkgs.herdr-chat}/share/herdr-chat/mods/new-chat";
+      xdg.configFile."herdr-app/mods/chat" = {
+        source = "${pkgs.herdr-chat}/share/herdr-chat/mods/chat";
+        recursive = true;
+      };
+      xdg.configFile."herdr-app/mods/chat/config.json".source = json.generate "herdr-codex-chat.json" {
+        host = lib.getExe pkgs.herdr-chat;
+        node = lib.getExe pkgs.nodejs;
+        hc = lib.getExe' pkgs.unstable.herdr-core "hc";
+        codex = lib.getExe pkgs.unstable.codex;
+        version = pkgs.herdr-chat.version;
+        # Release-channel installs can download and run an upstream installer.
+        channel = "nix";
+      };
 
       xdg.configFile."herdr-app/themes/fireproof.json".source = json.generate "herdr-fireproof.json" {
         background = "#${c.bg}";
