@@ -7,7 +7,19 @@
     ...
   }: let
     primary = fpLib.primaryMonitorName config.fireproof.monitors;
+    # Opens zed-scratch's note; mango's toggle_named_scratchpad shows and hides it after that.
     scratchFile = "${config.xdg.dataHome}/scratch/scratch.md";
+    openScratch = lib.getExe (pkgs.writeShellScriptBin "mango-scratch" ''
+      mkdir -p ${dirOf scratchFile}
+      touch -a ${scratchFile}
+      exec ${app} zeditor ${scratchFile}
+    '');
+    # niri runs what it spawns in app-niri-<name>-<id>.scope under app.slice (CPU weights, oomd);
+    # mango forks into its own service, session.slice.
+    app = lib.getExe (pkgs.writeShellScriptBin "mango-app" ''
+      exec systemd-run --user --scope --quiet --collect --slice=app.slice \
+        --unit="app-mango-$(basename "$1")-$RANDOM$RANDOM" -- "$@"
+    '');
     # niri pins workspaces 01-05 to the primary monitor; mango's tags are per monitor.
     workspaceKeys = ["q" "w" "e" "r" "t"];
     workspaceBinds = lib.concatLists (lib.imap1 (n: key:
@@ -44,7 +56,7 @@
             # A scratch note: zed where there is one, else the DMS notepad.
             (
               if config.fireproof.dev.enable
-              then "SUPER,n,toggle_named_scratchpad,^dev\\.zed\\.Zed$,^scratch\\.md( |$),mkdir -p ${dirOf scratchFile} && touch -a ${scratchFile} && zeditor ${scratchFile}"
+              then "SUPER,n,toggle_named_scratchpad,^dev\\.zed\\.Zed$,^scratch\\.md( |$),${openScratch}"
               else "SUPER,n,spawn,dms ipc notepad toggle"
             )
             "SUPER+SHIFT,n,spawn,dms ipc notifications toggle"
@@ -114,14 +126,20 @@
 
             # Mod+Print: region grab annotated in satty. The others copy to the clipboard only,
             # like niri's built-in screenshots with screenshot-path null.
-            "SUPER,Print,spawn,screenshot"
+            "SUPER,Print,spawn,${app} screenshot"
             "NONE,Print,spawn,dms screenshot --no-file"
             "CTRL,Print,spawn,dms screenshot full --no-file"
             "ALT,Print,spawn,dms screenshot window --no-file"
 
             "SUPER,slash,spawn,dms ipc call keybinds toggle mangowc"
 
-            "SUPER,Return,spawn,kitty"
+            # niri's built-in recent-windows switcher. mango has no same-app variant (Alt+grave).
+            "ALT,Tab,switcher,all_next"
+            "ALT+SHIFT,Tab,switcher,all_prev"
+            "SUPER,Tab,switcher,all_next"
+            "SUPER+SHIFT,Tab,switcher,all_prev"
+
+            "SUPER,Return,spawn,${app} kitty"
             "SUPER,BackSpace,killclient"
             # SIGKILL, what window-kill does under niri.
             "SUPER+SHIFT,BackSpace,killclient,force"

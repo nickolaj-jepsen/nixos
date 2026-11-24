@@ -46,6 +46,8 @@
             (names [
               "niri"
               "niri-session"
+              "mango"
+              "mango-session"
               ".dms-wrapped"
               "Xwayland"
               ".xwayland-satel"
