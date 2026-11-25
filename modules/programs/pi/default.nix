@@ -264,6 +264,13 @@ in {
     };
   in {
     config = lib.mkIf config.fireproof.dev.pi.enable {
+      assertions = [
+        {
+          assertion = piPlugins ? claude-peers;
+          message = "Update the agents input to a revision containing claude-peers before using this Pi configuration.";
+        }
+      ];
+
       home.file.".pi/agent/APPEND_SYSTEM.md".text = rules;
       home.file.".pi/agent/themes/fireproof.json".source = theme;
 
