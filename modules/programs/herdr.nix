@@ -32,6 +32,16 @@
         then "cmd-i"
         else "ctrl-alt-shift-p"
       } = "mod.open:new-chat";
+      global.${
+        if pkgs.stdenv.isDarwin
+        then "cmd-shift-g"
+        else "ctrl-alt-shift-g"
+      } = "mod.open:gitview-sidebar";
+      global.${
+        if pkgs.stdenv.isDarwin
+        then "cmd-g"
+        else "ctrl-alt-g"
+      } = "mod.open:gitview-tab";
     };
     settings = json.generate "herdr-theme-settings.json" {
       theme = "fireproof";
@@ -84,6 +94,28 @@
         pkgs.unstable.herdr-desktop
         pkgs.unstable.herdr-core
       ];
+
+      # Keep directories writable for metadata and image caches.
+      home.file =
+        lib.genAttrs (map (name: "${config.xdg.configHome}/herdr-app/mods/${name}") [
+          "gitview"
+          "gitview-diff"
+          "gitview-agents"
+          "gitview-ask"
+          "gitview-sidebar"
+          "gitview-tab"
+          "gitview-keys"
+          "gitview-mark"
+          "gitview-tracing"
+        ]) (path: {
+          source = "${pkgs.herdr-gitview}/share/herdr-gitview/mods/${baseNameOf path}";
+          recursive = true;
+        });
+      xdg.configFile."herdr-app/mods/gitview/config.json".source = json.generate "herdr-gitview-config.json" {
+        bin = lib.getExe pkgs.herdr-gitview;
+        herdr_app = lib.getExe pkgs.unstable.herdr-desktop;
+        hc = lib.getExe' pkgs.unstable.herdr-core "hc";
+      };
 
       # Link the whole mod so removed upstream files disappear on upgrades too.
       # Walkthrough stores reports/preferences outside its source directory.
