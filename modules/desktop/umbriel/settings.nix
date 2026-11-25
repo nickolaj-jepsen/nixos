@@ -408,16 +408,18 @@
         };
       };
 
-      home.file = lib.mkIf config.fireproof.dev.enable {
-        ".local/bin/smerge" = {
-          executable = true;
-          text =
-            lib.replaceStrings
-            ["@shell@" "@jq@" "@smerge@"]
-            [pkgs.runtimeShell (lib.getExe pkgs.jq) smerge]
-            (builtins.readFile ./scripts/smerge.sh);
-        };
-      };
+      # hiPrio, not ~/.local/bin: Herdr and login shells put the profile first on PATH,
+      # and the plain smerge leaves a hidden scratchpad window hidden.
+      home.packages = lib.optional config.fireproof.dev.enable (lib.hiPrio (pkgs.writeTextFile {
+        name = "smerge-umbriel";
+        executable = true;
+        destination = "/bin/smerge";
+        text =
+          lib.replaceStrings
+          ["@shell@" "@jq@" "@smerge@"]
+          [pkgs.runtimeShell (lib.getExe pkgs.jq) smerge]
+          (builtins.readFile ./scripts/smerge.sh);
+      }));
 
       xdg.configFile."umbriel/config.toml".source = lib.mkForce validated;
     };
