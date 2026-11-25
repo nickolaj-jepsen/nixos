@@ -25,6 +25,9 @@
   };
 
   homeManager = {lib, ...}: {
+    # Skills and plugins from ~/dev/agents rather than the pinned input.
+    fireproof.agents.live = true;
+
     programs.firefox.profiles.default.settings."browser.startup.homepage" =
       lib.mkForce "https://glance.nickolaj.com/work";
 
