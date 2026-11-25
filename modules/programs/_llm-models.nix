@@ -36,6 +36,28 @@ let
     "--spec-draft-type-k q4_0"
     "--spec-draft-type-v q4_0"
   ];
+  # Ternary QAT of Qwen3.8 27B, same template and sampling. Q2_0 is the only
+  # packing stock llama.cpp loads (PTQ1_0/PQ2_0 need the PrismML fork), and
+  # builds before b11556 load it silently and emit garbage. The -mtp file
+  # carries PrismML's draft head; draft flags are their CUDA preset's.
+  bonsai25 = {
+    name = "Bonsai 2.5 27B";
+    weights = {
+      file = "Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf";
+      url = "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF/resolve/main/Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf";
+    };
+    # On the 4070: 8.8 GiB at 32k, ~28 MiB per 1k beyond, ~98 tok/s vs IQ2_XXS's
+    # ~69. 48k stays under the IQ2_XXS entry's 9.4 GiB; 64k (9.7 GiB) doesn't.
+    ctx = 49152;
+    args =
+      kvQ4
+      ++ mtp
+      ++ [
+        "--spec-draft-n-min 0"
+        "--spec-draft-p-min 0.1"
+        "--ubatch-size 256"
+      ];
+  };
 in {
   # desktop, RTX 5070 Ti. The desktop holds 1.1–1.6 GiB, and the model is capped
   # at ~13.7 GiB so the compositor keeps ~1 GiB of headroom: a failed display
@@ -72,6 +94,7 @@ in {
       # default 512 saves ~240 MiB with prefill speed unchanged.
       args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
     };
+    "bonsai-2.5-27b" = bonsai25;
     "qwen3.5-4b" = qwen35-4b;
   };
 }
