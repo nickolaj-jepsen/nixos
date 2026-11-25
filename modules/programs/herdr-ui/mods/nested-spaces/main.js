@@ -5,6 +5,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
+import { monitorRow } from "./monitor-row.js";
 import {
   agents,
   terminals,
@@ -747,18 +748,24 @@ export default class Spaces extends View {
 
   agentRow(a, depth, t, listed) {
     const on = focused()?.terminal === a.address || focused()?.agent === a.address;
+    const monitor = monitorRow(
+      a,
+      terminals().find((terminal) => terminal.address === a.address),
+    );
     const status = a.status === "error" ? "blocked" : a.status;
-    const color = t[status] ?? t.dim;
+    const color = t[monitor?.tone ?? status] ?? t.dim;
     const program = a.program;
     const runner = program?.name || a.app || "Agent";
     const branch = a.git?.branch ?? a.worktree ?? "Terminal";
-    const name = [branch, a.worktree && a.worktree !== branch ? a.worktree : ""]
-      .filter(Boolean)
-      .join(" · ");
-    const label = a.plain
-      ? runner
-      : ({ blocked: "Needs you", done: "Finished", working: "Working", idle: "Idle" }[status] ??
-        "Unknown");
+    const name =
+      monitor?.name ??
+      [branch, a.worktree && a.worktree !== branch ? a.worktree : ""].filter(Boolean).join(" · ");
+    const label =
+      monitor?.label ??
+      (a.plain
+        ? runner
+        : ({ blocked: "Needs you", done: "Finished", working: "Working", idle: "Idle" }[status] ??
+          "Unknown"));
     const dirty = a.git?.dirty;
     const gitTip =
       dirty === true
@@ -769,7 +776,7 @@ export default class Spaces extends View {
     const pic = program?.icon
       ? (program.tint ? svg(program.icon).text_color(t.muted) : image(program.icon)).size(13)
       : svg("mods/workspace-chrome/terminal.svg").size(13);
-    const lines = a.git?.lines;
+    const lines = monitor ? undefined : a.git?.lines;
     return h_flex()
       .id(`nested-agent-${a.address}`)
       .h(30)
@@ -782,11 +789,20 @@ export default class Spaces extends View {
       .when(on, (el) => el.bg(t.selected))
       .hover((s) => s.bg(on ? t.selected : t.hover))
       .cursor_pointer()
-      .tooltip(`${runner} · ${name} · ${label}\n${gitTip}`)
+      .tooltip(monitor?.tooltip ?? `${runner} · ${name} · ${label}\n${gitTip}`)
       .on_click(() =>
-        run(a.plain ? "pane.focus" : listed ? "agent.focus" : "terminal.peek", {
-          terminal: a.address,
-        }),
+        run(
+          monitor
+            ? "terminal.peek"
+            : a.plain
+              ? "pane.focus"
+              : listed
+                ? "agent.focus"
+                : "terminal.peek",
+          {
+            terminal: a.address,
+          },
+        ),
       )
       .when(Boolean(a.pane), (el) =>
         el.on_mouse_down("right", () =>
@@ -826,7 +842,7 @@ export default class Spaces extends View {
           ),
       )
       .child(div().flex_1().min_w(0))
-      .when(a.git?.ahead > 0 || a.git?.behind > 0, (el) =>
+      .when(!monitor && (a.git?.ahead > 0 || a.git?.behind > 0), (el) =>
         el.child(
           h_flex()
             .flex_none()
@@ -874,6 +890,7 @@ export default class Spaces extends View {
             .font_semibold()
             .text_color(color)
             .tooltip(label)
+            .when(Boolean(monitor), (badge) => badge.child(div().child(label)))
             .child(
               status === "working"
                 ? svg("mods/workspace-chrome/spinner.svg").size(11).spin(900)
