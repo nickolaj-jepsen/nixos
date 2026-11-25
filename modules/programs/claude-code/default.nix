@@ -284,6 +284,28 @@
       })
     ];
 
+    # fireproof.agents.live turns each agents skill from a directory of store links into
+    # one link to the checkout, and back; home-manager won't put either over the other,
+    # so this clears the old form when it holds nothing but home-manager's links.
+    home.activation.agentsSkillForm = lib.hm.dag.entryBefore ["checkLinkTargets"] ''
+      for name in ${lib.escapeShellArgs (lib.attrNames inputs.agents.lib.skills)}; do
+        dir=${lib.escapeShellArg "${ccfg.configDir}/skills"}/$name
+        ${
+        if liveSkills != {}
+        then ''
+          if [ -d "$dir" ] && [ ! -L "$dir" ] && [ -z "$(find "$dir" ! -type d ! -lname '/nix/store/*' -print -quit)" ]; then
+            run rm -r "$dir"
+          fi
+        ''
+        else ''
+          if [ -L "$dir" ] && [[ "$(readlink "$dir")" == /nix/store/* ]]; then
+            run rm "$dir"
+          fi
+        ''
+      }
+      done
+    '';
+
     home.activation.hunspellPersonalDictionary = lib.hm.dag.entryAfter ["writeBoundary"] ''
       run mkdir -p ${lib.escapeShellArg (dirOf personalDictionary)}
       [ -e ${lib.escapeShellArg personalDictionary} ] || run touch ${lib.escapeShellArg personalDictionary}
