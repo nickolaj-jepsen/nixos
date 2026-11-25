@@ -1,9 +1,5 @@
 # Always-on; the claude-work wrapper is gated by claude-code.work.enable.
-{
-  fpLib,
-  inputs,
-  ...
-}: {
+{fpLib, ...}: {
   flake.modules.homeManager.claude-code = {
     pkgs,
     config,
@@ -28,11 +24,19 @@
     # One auto-memory per repository, shared by worktrees and both profiles. Flag
     # settings, since autoMemoryDirectory must be absolute and is ignored in a
     # checked-in .claude/settings.json. `global` is agent-notes' outside-git store.
+    # With updates on it rides in the launch settings file, so a session gets exactly one
+    # --settings (what a second one does to the first is not something to rely on).
     memoryArgs = ''
       memory_args=()
+      memory_settings=
       if id=$(${lib.getExe pkgs.agent-notes} id 2>/dev/null) && [ "$id" != global ]; then
-        memory_args=(--settings "$(${lib.getExe pkgs.jq} -cn --arg dir "${config.xdg.dataHome}/agents/claude-memory/$id" '{autoMemoryDirectory: $dir}')")
+        memory_settings=$(${lib.getExe pkgs.jq} -cn --arg dir "${config.xdg.dataHome}/agents/claude-memory/$id" '{autoMemoryDirectory: $dir}')
       fi
+      ${
+        if updates.enable
+        then ''[ -z "$memory_settings" ] || export AGENTS_CLAUDE_EXTRA_SETTINGS="$memory_settings"''
+        else ''[ -z "$memory_settings" ] || memory_args=(--settings "$memory_settings")''
+      }
     '';
 
     # Surfaces session state that settings.json can't pin (model, effort as
@@ -72,7 +76,7 @@
     skillGuard = pkgs.writeShellApplication {
       name = "claude-skill-guard";
       runtimeInputs = [pkgs.jq pkgs.gnugrep];
-      runtimeEnv.LOCAL_SKILLS = pkgs.writeText "claude-local-skills" (lib.concatLines (lib.attrNames ccfg.skills));
+      runtimeEnv.LOCAL_SKILLS = pkgs.writeText "claude-local-skills" (lib.concatLines skillNames);
       text = builtins.readFile ./skill-guard.sh;
     };
 
@@ -105,17 +109,15 @@
     # missing personal dictionary nor saves into one, so activation touches it.
     personalDictionary = fpLib.hunspellPersonalDictionary config;
 
-    # A plugin of nickolaj-jepsen/agents: validated and tested against the claude-code that
-    # runs it, so a bump that breaks its API (or drops the keybinding action spellfix borrows)
-    # fails the build.
-    mkToolMod = inputs.agents.lib.mkClaudePlugin {
-      inherit pkgs;
-      claude-code = ccfg.package;
-    };
+    # A plugin of nickolaj-jepsen/agents as this generation pins it, Claude half only: the
+    # build validates and tests it against the claude-code that runs it, so a bump that breaks
+    # its API (or drops the keybinding action spellfix borrows) fails the switch. A published
+    # snapshot is validated the same way, against the same package (agent-skills.nix).
+    baselinePlugins = config.fireproof.agents.updates.baseline.plugins;
     # Every plugin of agents with a Claude half. linear-issue's button is spliced into the
     # built-in you-should-know card by label; a card redesign only hides it, with a toast.
-    claudePlugins = lib.attrNames (lib.filterAttrs (_: plugin: plugin.claude) inputs.agents.lib.plugins);
-    mods = lib.genAttrs claudePlugins mkToolMod;
+    claudePlugins = lib.attrNames (lib.filterAttrs (_: plugin: plugin.claude != null) baselinePlugins);
+    mods = lib.genAttrs claudePlugins (name: baselinePlugins.${name}.claude);
     # The band stacks each mod's row in load order: answer's offer first, spellfix's band
     # button next, then the rest by name.
     loadFirst = ["answer" "spellfix"];
@@ -169,17 +171,78 @@
       ''}
     '';
 
+    # fireproof.agents.updates: what a publication changes is resolved at launch, because
+    # Claude Code reads its plugin dirs from settings once per session. Neither the checkout
+    # nor a build at startup is involved; an update reaches the next session only.
+    updates = config.fireproof.agents.updates;
+    skillNames = lib.attrNames config.fireproof.agents.skills;
+
+    # The env block every session starts from. The launch settings repeat all of it with the
+    # effective plugin dirs, so nothing depends on how a partial env map would merge.
+    settingsEnv = {
+      # Not programs.claude-code.plugins: the env block also reaches desktop-app sessions.
+      CLAUDE_CODE_PLUGIN_DIRS = lib.concatMapStringsSep ":" (name: "${mods.${name}}") loadOrder;
+      # hunspell's personal dictionary for the underline's checker too.
+      WORDLIST = personalDictionary;
+    };
+    settingsEnvJson = jsonFormat.generate "claude-agent-env.json" {env = settingsEnv;};
+
+    # Resolves the published paths, syncs this profile's skill view and writes the launch
+    # settings; prints that file, so a launcher has one --settings to pass.
+    agentSettings = pkgs.writeShellApplication {
+      name = "claude-agents-settings";
+      runtimeInputs = [pkgs.coreutils];
+      text = ''
+        ${updates.envExports}
+        export AGENTS_HARNESS=claude
+        export AGENTS_PROFILE="''${CLAUDE_CONFIG_DIR:-${ccfg.configDir}}"
+        export AGENTS_CLAUDE_SETTINGS_DIR="${config.xdg.stateHome}/agents-updates/claude-settings"
+        export AGENTS_CLAUDE_ENV=${settingsEnvJson}
+        export AGENTS_PLUGIN_ORDER=${lib.escapeShellArg (lib.concatStringsSep " " loadOrder)}
+        exec ${lib.getExe updates.helper}
+      '';
+    };
+
+    # `claude --settings` merges over the user's settings, so only what changes is passed:
+    # the effective plugin dirs (plus the memory directory memoryArgs exports). The pinned
+    # dirs stay in settings.json for anything that does not go through this launcher.
+    launchSettings = ''
+      settings_args=()
+      ${lib.optionalString updates.enable ''
+        if agents_settings=$(${lib.getExe agentSettings} 2>/dev/null); then
+          settings_args=(--settings "$agents_settings")
+        else
+          # No resolved settings file: keep the session usable and its memory in place.
+          echo "agents updates: could not resolve the published paths; the pinned ones load" >&2
+          [ -z "$memory_settings" ] || memory_args=(--settings "$memory_settings")
+        fi
+      ''}
+    '';
+
+    # Claude Code resolves plugin paths and skills at startup and needs a restart to see new
+    # ones: the SessionStart hook reports what is published, it never claims a reload.
+    agentCheck = pkgs.writeShellApplication {
+      name = "claude-agents-check";
+      runtimeInputs = [pkgs.jq];
+      text = ''
+        ${updates.envExports}
+        out=$(${lib.getExe updates.cli} check 2>/dev/null) || out=""
+        [ -z "$out" ] || ${lib.getExe pkgs.jq} -n --arg m "$out" '{systemMessage: $m}'
+      '';
+    };
+
     # `claude plugin test` refuses any option before `plugin`, and the
     # home-manager wrapper always prepends --plugin-dir.
     claudeEntry = pkgs.writeShellScript "claude" ''
       ${lib.optionalString scratch tmpDir}
       if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
       ${memoryArgs}
+      ${launchSettings}
       ${tracingArgs {
         project = "claude-code";
         profileCheck = ''[ -z "''${CLAUDE_CONFIG_DIR:-}" ]'';
       }}
-      exec -a "$0" ${ccfg.finalPackage}/bin/claude "''${tracing_args[@]}" "''${memory_args[@]}" "$@"
+      exec -a "$0" ${ccfg.finalPackage}/bin/claude "''${settings_args[@]}" "''${tracing_args[@]}" "''${memory_args[@]}" "$@"
     '';
 
     # Work-owned MCP servers ride in their own plugin, which only claude-work
@@ -208,11 +271,12 @@
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
         ${memoryArgs}
+        ${launchSettings}
         ${tracingArgs {
           project = "claude-work";
           profileCheck = ''[ "$CLAUDE_CONFIG_DIR" = "$HOME/.claude-work" ]'';
         }}
-        exec ${ccfg.finalPackage}/bin/claude ${lib.escapeShellArgs workMcpArgs} "''${tracing_args[@]}" "''${memory_args[@]}" "$@"
+        exec ${ccfg.finalPackage}/bin/claude "''${settings_args[@]}" ${lib.escapeShellArgs workMcpArgs} "''${tracing_args[@]}" "''${memory_args[@]}" "$@"
       '';
     };
 
@@ -225,7 +289,7 @@
     # Claude writes them, so each profile gets its own writable copy (below).
     mirroredNames =
       ["CLAUDE.md" "plugins" "sessions"]
-      ++ lib.optional (ccfg.skills != {}) "skills"
+      ++ lib.optional (skillNames != []) "skills"
       ++ lib.optional (ccfg.outputStyles != {}) "output-styles"
       ++ lib.concatMap (name: lib.optional (ccfg.${name} != {} || ccfg."${name}Dir" != null) name)
       ["agents" "commands" "hooks" "rules"];
@@ -266,6 +330,16 @@
       })
     ];
 
+    # fireproof.agents.updates owns the per-name entries of ${ccfg.configDir}/skills: the
+    # launch and this activation point them at the effective store paths, and the helper
+    # replaces a previous generation's entry (home-manager's directory of store links, or the
+    # checkout links `agents.live` made) only when it holds nothing but those. The directory
+    # itself stays a real directory: Claude Code also syncs skills of its own into it.
+    # A publication reaches the next start; a running session keeps what it loaded.
+    home.activation.agentsSkills = lib.mkIf updates.enable (lib.hm.dag.entryAfter ["linkGeneration"] ''
+      run ${lib.getExe agentSettings} >/dev/null || echo "agents updates: could not refresh claude's skill view" >&2
+    '');
+
     home.activation.hunspellPersonalDictionary = lib.hm.dag.entryAfter ["writeBoundary"] ''
       run mkdir -p ${lib.escapeShellArg (dirOf personalDictionary)}
       [ -e ${lib.escapeShellArg personalDictionary} ] || run touch ${lib.escapeShellArg personalDictionary}
@@ -279,8 +353,9 @@
       enable = true;
       package = pkgs.claude-code;
       enableMcpIntegration = true;
-      # The fireproof.agents.skills registry.
-      skills = config.fireproof.agents.skills;
+      # With updates on, the skills come from the synced view (home.file above); the registry
+      # is home-manager's own set of store links only when nothing is syncing it.
+      skills = lib.optionalAttrs (! updates.enable) config.fireproof.agents.skills;
 
       # The fireproof.agents.lspServers registry (agent-lsp.nix); its rust-analyzer
       # replaces the hand-installed rust-analyzer-lsp plugin.
@@ -324,7 +399,16 @@
           ];
         in
           {
-            SessionStart = direnvHooks;
+            SessionStart =
+              direnvHooks
+              ++ lib.optional updates.enable {
+                hooks = [
+                  {
+                    type = "command";
+                    command = lib.getExe agentCheck;
+                  }
+                ];
+              };
             CwdChanged = direnvHooks;
             WorktreeCreate = worktreeLifecycle;
             WorktreeRemove = worktreeLifecycle;
@@ -426,12 +510,7 @@
           # Event-driven updates miss what other sessions and editors do to the checkout.
           refreshInterval = 2;
         };
-        env = {
-          # Not programs.claude-code.plugins: the env block also reaches desktop-app sessions.
-          CLAUDE_CODE_PLUGIN_DIRS = lib.concatMapStringsSep ":" (name: "${mods.${name}}") loadOrder;
-          # hunspell's personal dictionary for the underline's checker too.
-          WORDLIST = personalDictionary;
-        };
+        env = settingsEnv;
         # Private repo, so fetched by Claude Code at runtime with the user's git
         # credentials rather than as a flake input; no access just means no plugin.
         extraKnownMarketplaces = lib.mkIf cfg.work.enable {
@@ -446,7 +525,7 @@
         skillOverrides = let
           synced = state: names: lib.genAttrs (map (name: "anthropic-skills:${name}") names) (_: state);
         in
-          synced "off" (lib.attrNames ccfg.skills)
+          synced "off" skillNames
           // synced "off" [
             "built-in-browser"
             "computer-use"

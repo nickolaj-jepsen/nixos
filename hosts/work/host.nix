@@ -26,6 +26,9 @@
   };
 
   homeManager = {lib, ...}: {
+    # Skills and plugins stay pinned by the flake input; `agents update NAME` publishes a
+    # snapshot of ~/dev/agents for the next launch (fireproof.agents.updates is on by default).
+
     programs.firefox.profiles.default.settings."browser.startup.homepage" =
       lib.mkForce "https://glance.nickolaj.com/work";
 

@@ -25,9 +25,9 @@ Every `.nix` file under `modules/` is a dendritic flake-parts leaf
 (`flake.modules.{nixos,homeManager,darwin}.<name>`), auto-imported into
 **every** host — so each leaf must gate its `config` with `lib.mkIf
 config.fireproof.<feature>.enable` (both halves; `options`/`imports` stay
-outside the mkIf). `fireproof.*` options are declared centrally in
-`modules/base/fireproof.nix`, nest, and cascade (child enables default to their
-parent). A host is a `hosts/<name>/` dir of cards setting toggles via
+outside the mkIf). Shared `fireproof.*` options are declared in `modules/base/fireproof.nix`, nest,
+and cascade (child enables default to their parent). Harness-specific options,
+such as `fireproof.agents.updates`, also live in their integration leaf. A host is a `hosts/<name>/` dir of cards setting toggles via
 `shared.fireproof.<feature>.enable = true`; discovery is automatic. New files
 must be `git add`ed or flake eval ignores them.
 

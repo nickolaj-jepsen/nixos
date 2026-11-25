@@ -71,17 +71,18 @@ in {
     extensions = mkExtensions pkgs pi;
     # A stable package path lets /reload pick up a rebuilt parent integration.
     parentPath = "${config.xdg.configHome}/pi/extensions/parent";
+    # What this generation pins, from the flake input (agent-skills.nix builds every half).
+    updates = config.fireproof.agents.updates;
+    baselinePlugins = updates.baseline.plugins;
     # Every plugin loads in the main session. Durable agents get only the
     # headless-safe tool packages explicitly shared with their tool twin.
-    piPlugins = let
-      plugins = lib.filterAttrs (_: plugin: plugin.pi) inputs.agents.lib.plugins;
-    in
-      assert lib.assertMsg (plugins ? claude-peers) "Update the agents input to a revision containing claude-peers before using this Pi configuration."; plugins;
+    piPlugins = lib.filterAttrs (_: plugin: plugin.pi != null) baselinePlugins;
     pluginNames = lib.attrNames piPlugins;
-    # The built plugin: newer agents flakes build it per system (`lib.pluginsFor pkgs`) and make
-    # `lib.plugins.<name>.path` throw; older ones point `path` at the source.
-    agentsPlugins = (inputs.agents.lib.pluginsFor or (_: inputs.agents.lib.plugins)) pkgs;
-    pluginPath = name: agentsPlugins.${name}.path;
+    pluginPath = name:
+      assert lib.assertMsg (piPlugins ? claude-peers) "Update the agents input to a revision containing claude-peers before using this Pi configuration.";
+        piPlugins.${name}.pi;
+    # A published snapshot replaces a pinned path at launch and on reload (agents-refresh);
+    # nothing links the checkout, and no build runs at startup.
     # Validate against the pinned plugin's actual parser: unknown legacy keys
     # silently drop profiles at runtime, which could cause expensive inheritance.
     agentRoles = pkgs.runCommand "pi-agent-profiles" {nativeBuildInputs = [pkgs.nodejs];} ''
@@ -149,7 +150,17 @@ in {
       }
       // lib.optionalAttrs config.fireproof.dev.ai-usage.enable {
         PI_AI_USAGE_COMMAND = lib.getExe pkgs.ai-usage;
-      };
+      }
+      # fireproof.agents.updates: the bridge in core/agents-update.ts runs AGENTS_REFRESH
+      # before it reloads, so a published path becomes what this session loads. AGENTS_PROFILE
+      # (the profile dir) is exported below, once the wrapper knows it.
+      // lib.optionalAttrs updates.enable ({
+          AGENTS_UPDATES_ENABLED = "1";
+          AGENTS_HARNESS = "pi";
+          AGENTS_REFRESH = lib.getExe updates.helper;
+          AGENTS_SKILL_EXTRAS = "${updates.extraSkillsFile}";
+        }
+        // updates.env);
     settings = {
       defaultProvider = "openai-codex";
       defaultModel = "gpt-6.1-sol";
@@ -248,6 +259,15 @@ in {
         ${merge "mcp.json" mcp}
         ${merge "models.json" models}
         ${launch}
+        ${lib.optionalString updates.enable ''
+          # The managed entries of $dir/settings.json (skill resources, packages, twin tools)
+          # become what `agents update` published, so this start — and a later reload, which
+          # re-reads the file — loads the published store paths. Nothing is built or linked
+          # from a checkout, and the skill paths are canonical, not a shared directory.
+          export AGENTS_PROFILE="$dir"
+          ${lib.getExe updates.helper} || echo "agents updates: could not apply the published paths" >&2
+          ${lib.getExe updates.cli} check >&2 || true
+        ''}
         exec ${lib.getExe pi} "$@"
       '';
     # The personal profile loads telemetry from core/. Its pi-agents event bridge
@@ -464,8 +484,10 @@ in {
         "app.session.fork" = "alt+shift+f";
       };
 
-      # A dir, not --skill flags, which children never see. One read-only link, so
-      # `npx skills add` fails instead of slipping skills into the prompt.
+      # The pinned registry, read-only, so `npx skills add` fails instead of slipping skills
+      # into the prompt. fireproof.agents.updates then lists the effective skill store paths
+      # in settings.json and excludes this directory's copies by name, so a publication reaches
+      # the next launch or reload without a directory anything has to rewrite.
       home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" (config.fireproof.agents.skills // {agent-browser = agentBrowserSkill;});
 
       home.file.".pi/agent/agents" = {
