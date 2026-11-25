@@ -151,18 +151,19 @@ in {
         PI_AI_USAGE_COMMAND = lib.getExe pkgs.ai-usage;
       };
     settings = {
-      defaultProvider = "auto";
-      defaultModel = "deepseek-v4.1-flash";
-      defaultThinkingLevel = "high";
+      defaultProvider = "openai-codex";
+      defaultModel = "gpt-6.1-sol";
+      defaultThinkingLevel = "medium";
       # A default outside the list starts on the first entry, so the default leads.
       enabledModels =
         [
-          # The default: DeepSeek on whichever subscription has more headroom.
-          "auto/deepseek-v4.1-flash"
-          # ChatGPT plan. The bundled catalog ends at GPT-6.1, so 6.2 comes from
-          # the pi.dev catalog overlay and is not pinned in models.json.
-          "openai-codex/gpt-6.2-sol"
+          # The default, on the ChatGPT plan.
           "openai-codex/gpt-6.1-sol"
+          # DeepSeek on whichever subscription has more headroom.
+          "auto/deepseek-v4.1-flash"
+          # The bundled catalog ends at GPT-6.1, so 6.2 comes from the pi.dev
+          # catalog overlay and is not pinned in models.json.
+          "openai-codex/gpt-6.2-sol"
           "kimi-coding/k3.1-pro"
           "anthropic/claude-sonnet-5-5"
           "openai-codex/gpt-6.2-astra"
