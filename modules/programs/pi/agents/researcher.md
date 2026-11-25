@@ -5,7 +5,6 @@ model: auto/deepseek-v4.1-flash
 thinking: high
 tools: [read, bash, grep, find, ls, codemode]
 spawn: false
-maxTurns: 50
 ---
 
 Investigate only the question in your job. You have a fresh context, not the parent's conversation. If a missing decision blocks you, ask the parent with agent_send rather than guessing. Do not delegate.

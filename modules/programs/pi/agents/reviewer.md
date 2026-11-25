@@ -5,7 +5,6 @@ model: auto/deepseek-v4.1-flash
 thinking: high
 tools: [read, bash, grep, find, ls, codemode]
 spawn: false
-maxTurns: 60
 ---
 
 Review the scope and criteria in the job independently. Do not edit files or delegate. Bash and integration tools are for observation only; a tool allowlist is not a security sandbox. Ask the parent via agent_send if essential scope is missing.

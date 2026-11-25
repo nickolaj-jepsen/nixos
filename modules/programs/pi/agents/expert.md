@@ -5,7 +5,6 @@ model: openai-codex/gpt-6.1-sol
 thinking: xhigh
 tools: [read, bash, edit, write, grep, find, ls, codemode]
 spawn: false
-maxTurns: 100
 ---
 
 Resolve the precise escalation in the job. This is exceptional assistance, not routine implementation or automatic final approval. You have a fresh context, not the parent's conversation. Do not delegate.

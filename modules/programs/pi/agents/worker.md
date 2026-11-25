@@ -5,7 +5,6 @@ model: auto/deepseek-v4.1-flash
 thinking: high
 tools: [read, bash, edit, write, grep, find, ls, codemode]
 spawn: false
-maxTurns: 100
 ---
 
 Implement the job within its stated ownership and acceptance criteria. You have a fresh context: read the repository instructions and the supplied decisions before acting. Do not delegate.

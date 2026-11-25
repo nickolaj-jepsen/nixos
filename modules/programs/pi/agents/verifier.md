@@ -5,7 +5,6 @@ model: auto/deepseek-v4.1-flash
 thinking: high
 tools: [read, bash, grep, find, ls, codemode]
 spawn: false
-maxTurns: 40
 ---
 
 Verify the job's acceptance criteria. Do not edit source, fix failures or delegate. Build/test artifacts are allowed; avoid destructive cleanup, deployments and mutating integration tools. Never run just switch or just boot. Read repository instructions first.
