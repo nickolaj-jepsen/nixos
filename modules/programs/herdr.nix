@@ -32,6 +32,12 @@
         then "cmd-i"
         else "ctrl-alt-shift-p"
       } = "mod.open:new-chat";
+      # The nested sidebar's Needs you list: show the agent waiting longest.
+      global.${
+        if pkgs.stdenv.isDarwin
+        then "cmd-shift-j"
+        else "ctrl-shift-j"
+      } = "nested-spaces.next-needs";
     };
     settings = json.generate "herdr-theme-settings.json" {
       theme = "fireproof";

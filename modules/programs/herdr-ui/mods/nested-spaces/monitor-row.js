@@ -1,4 +1,4 @@
-const clean = (value) =>
+export const clean = (value) =>
   typeof value === "string"
     ? value
         .replace(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b[\]P^_][\s\S]*?(?:\x07|\x1b\\)/g, " ")
