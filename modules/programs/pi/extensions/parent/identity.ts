@@ -4,13 +4,15 @@
  *
  * The label is the session's name, set by `/name`; an unnamed session has none.
  * agent-hub
- * reads the turn's end from the registry entry `claude-peers.ts` writes, which asks this
- * for the failure and whether a peer woke the turn.
+ * reads the turn's end from the standalone claude-peers plugin's registry entry;
+ * peer-registry.ts supplies the failure and whether a peer woke the turn.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { oneLine } from "./lib/format.ts";
-import { PEER_MESSAGE_TYPE } from "./claude-peers/protocol.ts";
 import type { UserWait } from "./lib/user-wait.ts";
+
+// Public transcript customType shared with the standalone claude-peers plugin.
+const PEER_MESSAGE_TYPE = "claude-peer-message";
 
 export type Label = {
   text: string;

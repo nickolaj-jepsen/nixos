@@ -27,7 +27,7 @@
         ln -s ${pi}/lib/node_modules/pi-monorepo/node_modules/typebox node_modules/
         ln -s ${pi}/lib/node_modules/pi-monorepo/node_modules/@types/node node_modules/@types/
         tsc --noEmit
-        node --experimental-strip-types --test parent/chrome/*.test.ts parent/herdr/*.test.*
+        node --experimental-strip-types --test parent/*.test.ts parent/lib/*.test.ts parent/chrome/*.test.ts parent/herdr/*.test.*
         runHook postBuild
       '';
       installPhase = ''

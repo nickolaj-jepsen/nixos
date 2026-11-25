@@ -42,7 +42,20 @@ export const createUserWait = (pi: ExtensionAPI) => {
     sessions.delete(ctx.sessionManager.getSessionId());
   });
 
+  const beginAgentPrompt = (ctx: ExtensionContext) => {
+    const wait = state(ctx);
+    wait.agentPrompts++;
+    let ended = false;
+    return () => {
+      if (ended) return;
+      ended = true;
+      wait.agentPrompts--;
+    };
+  };
+
   return {
+    /** Mark a dialog owned by another plugin; the returned end function is idempotent. */
+    beginAgentPrompt,
     /**
      * Runs `open`, which opens one dialog in `ctx`'s UI, and counts that dialog as
      * the agent waiting on the user until it settles. Use it for a dialog raised
@@ -50,12 +63,11 @@ export const createUserWait = (pi: ExtensionAPI) => {
      */
     async markAgentPrompt<T>(ctx: ExtensionContext, open: () => Promise<T>): Promise<T> {
       // Set before `open` runs: pi emits ui_prompt_start on a later microtask.
-      const wait = state(ctx);
-      wait.agentPrompts++;
+      const end = beginAgentPrompt(ctx);
       try {
         return await open();
       } finally {
-        wait.agentPrompts--;
+        end();
       }
     },
     /** True while `ctx`'s session has a dialog open and a tool call or `markAgentPrompt` dialog in flight. */

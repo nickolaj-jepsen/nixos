@@ -44,8 +44,9 @@ first three want you.
   - The registry can say `busy` before the hook does, so a turn starts only after
     `REGISTRY_GRACE_MS`, and `idle` with a turn open ends it as interrupted (Esc fires no
     Stop). A Stop that lands after that still counts.
-- **pi**: its registry entry only, written by the pi extension in a system config, with no
-  socket connection. Besides `status`, `waitingFor`, `name` and `nameSource` it carries
+- **pi**: its registry entry only, written by the agents repo's `claude-peers` plugin, with
+  optional hub fields supplied by the system config's `peer-registry` adapter. The hub
+  opens no socket connection. Besides `status`, `waitingFor`, `name` and `nameSource` it carries
   `hubFailed` (the error, written with the move to `idle`), `hubPeer` (a peer woke this turn),
   `hubHidden` and `tmux`. A busy-to-idle move is `done` unless `hubFailed` is set.
 - Claude Code can park a conversation in a background job under its daemon; the front's entry
