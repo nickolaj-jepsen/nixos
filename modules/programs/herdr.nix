@@ -38,6 +38,18 @@
       appearance = "dark";
       font = config.fireproof.theme.font.family;
     };
+    programs = json.generate "herdr-programs.json" {
+      programs = lib.optionalAttrs config.fireproof.claude-code.work.enable {
+        claude-work = {
+          name = "Claude Code (work)";
+          icon = "icons/claude.svg";
+          run = ["claude-work"];
+          tint = false;
+          tile = "#1c1d21";
+          color = "#ffffff";
+        };
+      };
+    };
     uiDefaults = json.generate "herdr-ui-defaults.json" {layout = "nested";};
     uiFiles =
       lib.filter
@@ -164,6 +176,7 @@
       home.activation.herdrTheme = lib.hm.dag.entryAfter ["linkGeneration"] ''
         run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/settings.json"} ${settings}
         run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/keys.json"} ${keys}
+        run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/programs.json"} ${programs}
       '';
     };
   };
