@@ -1,6 +1,7 @@
 # Wires nickolaj-jepsen/agents into home-manager: its skills (`lib.skills`) go into the
 # fireproof.agents.skills registry, and `fireproof.agents.updates` publishes an explicit
-# snapshot of a checkout on demand (`agents update NAME`) instead of linking one live. Third
+# snapshot of a checkout on demand (`agents update NAME`) instead of linking one live. UI
+# artifacts share the same baseline/override selection and ownership-aware deployer. Third
 # party skills are registered by their feature leaves instead (e.g. gh-stack in git.nix).
 {inputs, ...}: {
   perSystem = {system, ...}: {
@@ -43,6 +44,7 @@
       revision = inputs.agents.rev or "";
       plugins = baselinePlugins;
       skills = lib.mapAttrs (_: path: "${path}") cfg.skills;
+      ui = lib.mapAttrs (_: path: "${path}") updates.ui;
     };
     # Read by `agents`, which builds a published snapshot against this nixpkgs and reports on
     # the pinned revision. AGENTS_CLAUDE is the package mkClaudePlugin runs (the unwrapped
@@ -54,6 +56,8 @@
       AGENTS_NIXPKGS = "${pkgs.path}";
       AGENTS_CLAUDE = "${config.programs.claude-code.package}";
       AGENTS_SYSTEM = pkgs.stdenv.hostPlatform.system;
+      XDG_CONFIG_HOME = config.xdg.configHome;
+      XDG_STATE_HOME = config.xdg.stateHome;
     };
     # For scripts that call the CLI: baked in, so nothing depends on the caller's PATH or
     # remembering to export the baseline.
@@ -81,12 +85,19 @@
           '';
         };
 
+        ui = lib.mkOption {
+          type = lib.types.attrsOf lib.types.path;
+          default = {};
+          internal = true;
+          description = "Pinned UI artifacts deployed by the shared agents updater.";
+        };
+
         baselineFile = lib.mkOption {
           type = lib.types.path;
           readOnly = true;
           internal = true;
           default = pkgs.writeText "agents-baseline.json" (builtins.toJSON baseline);
-          description = "The pinned revision, plugin and skill paths, as `agents` reads them.";
+          description = "The pinned revision, plugin, skill and UI paths, as `agents` reads them.";
         };
 
         baseline = lib.mkOption {
@@ -119,7 +130,7 @@
               exec ${updates.package}/bin/agents "$@"
             '';
           };
-          description = "The `agents` command: update, reset, status, check, resolve.";
+          description = "The `agents` command: update, reset, status, check, resolve and deploy-ui.";
         };
 
         helper = lib.mkOption {

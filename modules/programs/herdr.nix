@@ -58,6 +58,7 @@
     };
     uiDefaults = json.generate "herdr-ui-defaults.json" {layout = "nested";};
     uiSource = inputs.agents.packages.${pkgs.stdenv.hostPlatform.system}.herdr-ui;
+    updates = config.fireproof.agents.updates;
     mergeConfig = pkgs.writeShellApplication {
       name = "herdr-merge-config";
       runtimeInputs = [pkgs.jq];
@@ -95,6 +96,7 @@
       })
       (lib.mkIf config.fireproof.desktop.enable {
         home.packages = [pkgs.unstable.herdr-desktop];
+        fireproof.agents.updates.ui.herdr-ui = uiSource;
 
         # Link the whole mod so removed upstream files disappear on upgrades too.
         # Walkthrough stores reports/preferences outside its source directory.
@@ -167,15 +169,16 @@
           };
         };
 
-        # UI sources live in the agents flake, not Herdr's shipped files. Deploy real
-        # writable files: the app generates metadata alongside mods, and its layout
-        # editor must be able to save. Live source edits reset on the next activation;
-        # make persistent changes in agents/apps/herdr-ui. Keep runtime state out.
+        # Share ownership and version selection with `agents update herdr-ui`: a
+        # switch must not silently replace a published override with the baseline.
+        # Herdr watches these writable files and reloads changes itself. Persistent
+        # edits belong in agents/apps/herdr-ui, not in the deployed copies.
         home.activation.herdrUi = lib.hm.dag.entryAfter ["linkGeneration"] ''
-          while IFS= read -r -d "" relative; do
-            run ${lib.getExe' pkgs.coreutils "install"} -Dm644 "${uiSource}/$relative" "${config.xdg.configHome}/herdr-app/$relative"
-          done < <(${lib.getExe' pkgs.findutils "find"} ${uiSource} -type f -printf '%P\0' | ${lib.getExe' pkgs.coreutils "sort"} -z)
-          run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/shared.json"} ${uiDefaults} --defaults
+          run ${lib.getExe updates.cli} deploy-ui herdr-ui
+          # Only seed a missing layout selection; Herdr owns this live state.
+          if [ ! -e ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/shared.json"} ] || ! ${lib.getExe pkgs.jq} -e 'has("layout")' ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/shared.json"} >/dev/null; then
+            run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/shared.json"} ${uiDefaults} --defaults
+          fi
         '';
 
         # Herdr writes settings/keys from its UI; merge our entries into writable
