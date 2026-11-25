@@ -4,44 +4,91 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { AGENTS_STATE_EVENT, AGENTS_STATE_REQUEST_EVENT } from "./chrome/agents.ts";
 import { createHerdrBridge } from "./herdr/bridge.ts";
-
+import { createAgentContext } from "./herdr/context.ts";
 const exec = promisify(execFile);
 
 export default function herdr(pi: ExtensionAPI) {
   let bridge: Awaited<ReturnType<typeof createHerdrBridge>> | undefined;
+  let context: ReturnType<typeof createAgentContext> | undefined;
   let unsubscribe: (() => void) | undefined;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const request = () => pi.events.emit(AGENTS_STATE_REQUEST_EVENT, { protocol: 1 });
 
   pi.on("session_start", async (_event, ctx) => {
-    const hc = process.env.PI_HERDR_HC;
     const parent = process.env.HC_TERMINAL_ID;
-    // Native Pi already reports the parent's status. Only mirror in-process
-    // agents when the interactive session actually belongs to herdr-core.
-    if (!hc || !parent || ctx.mode !== "tui") return;
+    // HC_TERMINAL_ID is the gate, not a wrapper-only opt-in. /reload should
+    // work in an existing Herdr terminal whose environment predates the switch.
+    if (!parent || ctx.mode !== "tui") return;
+    const hc = process.env.PI_HERDR_HC || "hc";
+    context = createAgentContext(ctx.cwd);
+    context.restore(ctx.sessionManager.getEntries());
     let warned = false;
     bridge = await createHerdrBridge({
       parent,
       sessionId: ctx.sessionManager.getSessionId(),
       cwd: ctx.cwd,
       monitor: fileURLToPath(new URL("./herdr/monitor.mjs", import.meta.url)),
-      run: async (args) => (await exec(hc, args, { timeout: 5000, maxBuffer: 65536 })).stdout,
+      context: (id, name) => context?.get(id, name) ?? {},
+      run: async (args) => (await exec(hc, args, { timeout: 5000, maxBuffer: 1048576 })).stdout,
       onError: () => {
         if (warned) return;
         warned = true;
         ctx.ui.notify(
-          "Herdr child-agent monitors unavailable; agents keep running in Pi.",
+          "Herdr monitors temporarily unavailable; agents keep running. Retrying automatically (/herdr for status).",
           "warning",
         );
       },
     });
     unsubscribe = pi.events.on(AGENTS_STATE_EVENT, (value) => bridge?.accept(value));
-    pi.events.emit(AGENTS_STATE_REQUEST_EVENT, { protocol: 1 });
+    request();
+    // Recover killed monitors and failed launches even if no lifecycle event
+    // changes. Never allow overlapping health checks to pile up on a slow core.
+    let checking = false;
+    timer = setInterval(() => {
+      if (checking || !bridge) return;
+      checking = true;
+      request();
+      void bridge.refresh().finally(() => {
+        checking = false;
+      });
+    }, 5000);
+    timer.unref();
   });
-
+  pi.on("tool_execution_start", (event) =>
+    context?.start(event.toolCallId, event.toolName, event.args),
+  );
+  pi.on("tool_execution_end", (event) => {
+    context?.result(event.toolCallId, event.toolName, event.result);
+  });
+  pi.registerCommand("herdr", {
+    description: "Show child-monitor status; /herdr reconnect forces recovery",
+    handler: async (args, ctx) => {
+      if (!bridge) {
+        ctx.ui.notify(
+          "Child monitors need an interactive Pi session inside Herdr. After switching, restart Pi once to pick up its new package path.",
+          "info",
+        );
+        return;
+      }
+      if (args.trim() === "reconnect") {
+        request();
+        await bridge.refresh();
+      }
+      const status = bridge.status();
+      ctx.ui.notify(
+        `Herdr: ${status.monitors}/${status.agents} read-only child monitors.${status.lastError ? " Core unavailable; automatic recovery is active." : " Connected."}`,
+        status.lastError ? "warning" : "info",
+      );
+    },
+  });
   pi.on("session_shutdown", async () => {
+    if (timer) clearInterval(timer);
+    timer = undefined;
     unsubscribe?.();
     unsubscribe = undefined;
     const old = bridge;
     bridge = undefined;
+    context = undefined;
     await old?.dispose();
   });
 }

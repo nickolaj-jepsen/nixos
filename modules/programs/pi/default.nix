@@ -69,7 +69,8 @@ in {
     # Load the pinned npm tree as local packages; startup never installs dependencies.
     packagePath = name: "${piPackages}/node_modules/${name}";
     extensions = mkExtensions pkgs pi;
-    parentPath = "${extensions}/parent";
+    # A stable package path lets /reload pick up a rebuilt parent integration.
+    parentPath = "${config.xdg.configHome}/pi/extensions/parent";
     # Every plugin loads in the main session. Durable agents get only the
     # headless-safe tool packages explicitly shared with their tool twin.
     piPlugins = lib.filterAttrs (_: plugin: plugin.pi) inputs.agents.lib.plugins;
@@ -266,6 +267,7 @@ in {
       home.file.".pi/agent/themes/fireproof.json".source = theme;
 
       home.packages = [wrapper spellChecker agentBrowser];
+      xdg.configFile."pi/extensions/parent".source = "${extensions}/parent";
 
       # Literal path: the wrapper single-quotes it, so a secretsDir spelling stays unexpanded.
       age.secrets.exa-api-key = {

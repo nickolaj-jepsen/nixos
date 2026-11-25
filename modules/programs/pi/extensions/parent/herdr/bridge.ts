@@ -1,10 +1,27 @@
+import { randomUUID, createHash } from "node:crypto";
 import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAgentTracker, parseSnapshot } from "../chrome/agents.ts";
+import { createAgentTracker, parseSnapshot, type AgentLifecycle } from "../chrome/agents.ts";
 
 type Run = (args: string[]) => Promise<string>;
-
+export type AgentContext = { task?: string; model?: string; cwd?: string };
+type RecordState = AgentLifecycle &
+  AgentContext & {
+    parent: string;
+    sessionId: string;
+    startedAt: number;
+    updatedAt: number;
+    history: { state: string; at: number }[];
+  };
+type Terminal = {
+  address: string;
+  parent?: string;
+  state?: string;
+  labels?: Record<string, string>;
+};
+const cleanLabel = (value: string) =>
+  value.replace(/[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/g, " ").slice(0, 160);
 function alreadyRemoved(error: unknown): boolean {
   if (!error || typeof error !== "object" || !("stderr" in error)) return false;
   try {
@@ -21,30 +38,104 @@ export async function createHerdrBridge(options: {
   cwd: string;
   monitor: string;
   run: Run;
+  context?: (id: string, name: string) => AgentContext;
   onError: (error: unknown) => void;
 }) {
   const dir = await mkdtemp(join(tmpdir(), "pi-herdr-"));
+  const owner = randomUUID();
   const tracker = createAgentTracker(() => options.sessionId);
-  const children = new Map<string, { address: string; file: string }>();
+  const desired = new Map<string, RecordState>();
+  const children = new Map<
+    string,
+    { address: string; file: string; content?: string; labels?: string }
+  >();
   let queue = Promise.resolve();
   let closed = false;
-  let next = 0;
-
+  let lastError: string | undefined;
+  const report = (error: unknown) => {
+    lastError = error instanceof Error ? error.message : String(error);
+    options.onError(error);
+  };
+  const fileFor = (id: string) =>
+    join(dir, `${createHash("sha256").update(id).digest("hex")}.json`);
+  const kill = async (address: string) => {
+    try {
+      await options.run(["kill", address]);
+    } catch (error) {
+      if (!alreadyRemoved(error)) throw error;
+    }
+  };
   const remove = async (id: string) => {
     const child = children.get(id);
     if (!child) return;
-    // Kill only addresses we created; never resolve a user-controlled agent name.
     children.delete(id);
     try {
-      await options.run(["kill", child.address]);
+      await kill(child.address);
     } catch (error) {
-      // hc kill can return not_found when --rm wins the exit/lookup race.
-      if (!alreadyRemoved(error)) options.onError(error);
+      report(error);
     } finally {
       await rm(child.file, { force: true });
     }
   };
-
+  const sync = async () => {
+    if (closed) return;
+    for (const id of children.keys()) if (!desired.has(id)) await remove(id);
+    for (const [id, record] of desired) {
+      if (closed) return;
+      try {
+        Object.assign(record, options.context?.(id, record.name));
+        const child = children.get(id);
+        const file = child?.file ?? fileFor(id);
+        const content = JSON.stringify(record);
+        if (content !== child?.content) {
+          await writeFile(`${file}.tmp`, content, { mode: 0o600 });
+          await rename(`${file}.tmp`, file);
+        }
+        const labels = [
+          "fireproof.pi-agent-monitor=true",
+          `fireproof.pi-owner=${owner}`,
+          `fireproof.pi-agent-id=${id}`,
+          `fireproof.pi-session=${options.sessionId}`,
+          `fireproof.pi-agent-name=${cleanLabel(record.name)}`,
+          `fireproof.pi-agent-state=${record.state}`,
+        ];
+        if (child) {
+          if (child.labels !== labels.join("\n"))
+            await options.run(["label", child.address, ...labels]);
+          child.labels = labels.join("\n");
+          child.content = content;
+          continue;
+        }
+        const output = await options.run([
+          "run",
+          "--bg",
+          "--json",
+          "--no-notify",
+          "--rm",
+          "--parent",
+          options.parent,
+          "--cwd",
+          record.cwd || options.cwd,
+          ...labels.flatMap((label) => ["--label", label]),
+          "--",
+          process.execPath,
+          options.monitor,
+          file,
+          String(process.pid),
+        ]);
+        const address: unknown = JSON.parse(output).address;
+        if (typeof address !== "string" || !/^t[a-z0-9]+$/.test(address))
+          throw new Error("hc returned an invalid monitor address");
+        children.set(id, { address, file, content, labels: labels.join("\n") });
+      } catch (error) {
+        report(error);
+      }
+    }
+  };
+  const enqueue = (work: () => Promise<void>) => {
+    queue = queue.then(work).catch(report);
+    return queue;
+  };
   return {
     accept(value: unknown) {
       const snapshot = parseSnapshot(value);
@@ -53,60 +144,84 @@ export async function createHerdrBridge(options: {
         snapshot.type === "stopped"
           ? []
           : snapshot.agents.filter((a) => !a.closed || a.state === "working");
-      queue = queue
-        .then(async () => {
-          if (closed) return;
-          const ids = new Set(agents.map((a) => a.id));
-          for (const id of children.keys()) if (!ids.has(id)) await remove(id);
-          for (const agent of agents) {
-            if (closed) return;
-            const child = children.get(agent.id);
-            const file = child?.file ?? join(dir, `${++next}.json`);
-            await writeFile(
-              `${file}.tmp`,
-              JSON.stringify({ name: agent.name, state: agent.state }),
-              { mode: 0o600 },
-            );
-            await rename(`${file}.tmp`, file);
-            if (child) continue;
-            const output = await options.run([
-              "run",
-              "--bg",
-              "--json",
-              "--no-notify",
-              "--rm",
-              "--parent",
-              options.parent,
-              "--cwd",
-              options.cwd,
-              "--label",
-              "fireproof.pi-agent-monitor=true",
-              "--",
-              process.execPath,
-              options.monitor,
-              file,
-              String(process.pid),
-            ]);
-            const address: unknown = JSON.parse(output).address;
-            if (typeof address !== "string" || !/^t[a-z0-9]+$/.test(address))
-              throw new Error("hc returned an invalid monitor address");
-            children.set(agent.id, { address, file });
-          }
-        })
-        .catch(options.onError);
+      const ids = new Set(agents.map((a) => a.id));
+      for (const id of desired.keys()) if (!ids.has(id)) desired.delete(id);
+      for (const agent of agents) {
+        const old = desired.get(agent.id);
+        const now = Date.now();
+        const changed = old?.state !== agent.state;
+        desired.set(agent.id, {
+          ...old,
+          ...agent,
+          cwd: old?.cwd ?? options.cwd,
+          parent: options.parent,
+          sessionId: options.sessionId,
+          startedAt: old?.startedAt ?? now,
+          updatedAt: changed ? now : old!.updatedAt,
+          history: changed
+            ? [...(old?.history ?? []), { state: agent.state, at: now }].slice(-8)
+            : old!.history,
+        });
+      }
+      void enqueue(sync);
     },
-    /** Also used by tests; lifecycle callbacks never block the event bus. */
+    /** Reconcile live ownership, including launches whose CLI reply was lost. */
+    refresh() {
+      return enqueue(async () => {
+        if (closed) return;
+        const response: unknown = JSON.parse(
+          await options.run(["ls", "--json", "--label", `fireproof.pi-owner=${owner}`]),
+        );
+        if (
+          !response ||
+          typeof response !== "object" ||
+          !("terminals" in response) ||
+          !Array.isArray(response.terminals)
+        )
+          throw new Error("Invalid hc terminal list");
+        // `hc ls` is a compact summary even with --json: it omits labels.
+        // Fetch full records before deciding ownership or adopting a lost reply.
+        const records: Terminal[] = [];
+        for (const summary of response.terminals as Terminal[]) {
+          if (!summary || !/^t[a-z0-9]+$/.test(summary.address)) continue;
+          try {
+            records.push(JSON.parse(await options.run(["get", summary.address, "--json"])));
+          } catch (error) {
+            if (!alreadyRemoved(error)) throw error;
+          }
+        }
+        const live = records.filter(
+          (t) =>
+            /^t[a-z0-9]+$/.test(t.address) &&
+            t.parent === options.parent &&
+            t.state === "live" &&
+            t.labels?.["fireproof.pi-owner"] === owner,
+        );
+        const addresses = new Set(live.map((t) => t.address));
+        for (const [id, child] of children) if (!addresses.has(child.address)) children.delete(id);
+        for (const terminal of live) {
+          const id = terminal.labels?.["fireproof.pi-agent-id"];
+          if (!id || !desired.has(id)) {
+            await kill(terminal.address);
+            continue;
+          }
+          if (!children.has(id)) children.set(id, { address: terminal.address, file: fileFor(id) });
+          else if (children.get(id)!.address !== terminal.address) await kill(terminal.address);
+        }
+        lastError = undefined;
+        await sync();
+      });
+    },
     flush: () => queue,
+    status: () => ({ agents: desired.size, monitors: children.size, lastError }),
     async dispose() {
       closed = true;
       await queue;
-      // A monitor also exits when this file disappears or the Pi PID is gone.
-      // Remove files even if hc is unavailable during logout/restart.
       for (const id of children.keys()) {
         try {
           await remove(id);
         } catch (error) {
-          options.onError(error);
+          report(error);
         }
       }
       await rm(dir, { recursive: true, force: true });
