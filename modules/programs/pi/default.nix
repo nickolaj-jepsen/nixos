@@ -81,7 +81,10 @@ in {
     # The built plugin: newer agents flakes build it per system (`lib.pluginsFor pkgs`) and make
     # `lib.plugins.<name>.path` throw; older ones point `path` at the source.
     agentsPlugins = (inputs.agents.lib.pluginsFor or (_: inputs.agents.lib.plugins)) pkgs;
-    pluginPath = name: agentsPlugins.${name}.path;
+    pluginPath = name:
+      if config.fireproof.agents.live
+      then "${config.fireproof.agents.devCheckout}/apps/${name}/dist"
+      else agentsPlugins.${name}.path;
     # Validate against the pinned plugin's actual parser: unknown legacy keys
     # silently drop profiles at runtime, which could cause expensive inheritance.
     agentRoles = pkgs.runCommand "pi-agent-profiles" {nativeBuildInputs = [pkgs.nodejs];} ''
@@ -466,7 +469,7 @@ in {
 
       # A dir, not --skill flags, which children never see. One read-only link, so
       # `npx skills add` fails instead of slipping skills into the prompt.
-      home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" (config.fireproof.agents.skills // {agent-browser = agentBrowserSkill;});
+      home.file.".agents/skills".source = pkgs.linkFarm "agent-skills" (config.fireproof.agents.skills // config.fireproof.agents.liveSkills // {agent-browser = agentBrowserSkill;});
 
       home.file.".pi/agent/agents" = {
         source = agentRoles;

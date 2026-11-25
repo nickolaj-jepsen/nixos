@@ -6,11 +6,29 @@
     config,
     lib,
     ...
-  }: {
-    options.fireproof.agents.devCheckout = lib.mkOption {
-      type = lib.types.str;
-      default = "${config.home.homeDirectory}/dev/agents";
-      description = "Where nickolaj-jepsen/agents is checked out.";
+  }: let
+    cfg = config.fireproof.agents;
+  in {
+    options.fireproof.agents = {
+      devCheckout = lib.mkOption {
+        type = lib.types.str;
+        default = "${config.home.homeDirectory}/dev/agents";
+        description = "Where nickolaj-jepsen/agents is checked out.";
+      };
+
+      live = lib.mkEnableOption ''
+        loading agents' skills and plugins from devCheckout instead of the pinned input: a
+        skill edit applies at once, a plugin edit after `pnpm turbo run build` there. The
+        names still come from the pinned input, so adding or removing one needs a switch'';
+
+      # Claude Code and pi link these in place of the registry's store copies. The registry
+      # itself stays store paths: home-manager's skill options copy what they're given.
+      liveSkills = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        readOnly = true;
+        internal = true;
+        default = lib.optionalAttrs cfg.live (lib.mapAttrs (name: _: "${cfg.devCheckout}/skills/${name}") inputs.agents.lib.skills);
+      };
     };
 
     config.fireproof.agents.skills = inputs.agents.lib.skills;

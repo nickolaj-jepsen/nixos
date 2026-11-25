@@ -72,7 +72,7 @@
     skillGuard = pkgs.writeShellApplication {
       name = "claude-skill-guard";
       runtimeInputs = [pkgs.jq pkgs.gnugrep];
-      runtimeEnv.LOCAL_SKILLS = pkgs.writeText "claude-local-skills" (lib.concatLines (lib.attrNames ccfg.skills));
+      runtimeEnv.LOCAL_SKILLS = pkgs.writeText "claude-local-skills" (lib.concatLines skillNames);
       text = builtins.readFile ./skill-guard.sh;
     };
 
@@ -108,10 +108,15 @@
     # A plugin of nickolaj-jepsen/agents: validated and tested against the claude-code that
     # runs it, so a bump that breaks its API (or drops the keybinding action spellfix borrows)
     # fails the build.
-    mkToolMod = inputs.agents.lib.mkClaudePlugin {
-      inherit pkgs;
-      claude-code = ccfg.package;
-    };
+    mkToolMod = name:
+      if config.fireproof.agents.live
+      then "${config.fireproof.agents.devCheckout}/apps/${name}/dist"
+      else
+        inputs.agents.lib.mkClaudePlugin {
+          inherit pkgs;
+          claude-code = ccfg.package;
+        }
+        name;
     # Every plugin of agents with a Claude half. linear-issue's button is spliced into the
     # built-in you-should-know card by label; a card redesign only hides it, with a toast.
     claudePlugins = lib.attrNames (lib.filterAttrs (_: plugin: plugin.claude) inputs.agents.lib.plugins);
@@ -185,6 +190,10 @@
     # Work-owned MCP servers ride in their own plugin, which only claude-work
     # passes to the wrapper: the shared programs.mcp registry reaches every agent.
     jsonFormat = pkgs.formats.json {};
+
+    # fireproof.agents.live: agents' skills link straight to the checkout.
+    inherit (config.fireproof.agents) liveSkills;
+    skillNames = lib.attrNames config.fireproof.agents.skills;
     workMcpJson = jsonFormat.generate "claude-work-mcp.json" {
       mcpServers = lib.mapAttrs (name: server:
         hmLib.mcp.transformMcpServer {
@@ -225,7 +234,7 @@
     # Claude writes them, so each profile gets its own writable copy (below).
     mirroredNames =
       ["CLAUDE.md" "plugins" "sessions"]
-      ++ lib.optional (ccfg.skills != {}) "skills"
+      ++ lib.optional (skillNames != []) "skills"
       ++ lib.optional (ccfg.outputStyles != {}) "output-styles"
       ++ lib.concatMap (name: lib.optional (ccfg.${name} != {} || ccfg."${name}Dir" != null) name)
       ["agents" "commands" "hooks" "rules"];
@@ -240,6 +249,11 @@
 
     # Mutes warning about installMethod by placing the wrapped binary in ~/.local/bin
     home.file = lib.mkMerge [
+      (lib.mapAttrs' (name: dir:
+        lib.nameValuePair "${ccfg.configDir}/skills/${name}" {
+          source = hmLib.file.mkOutOfStoreSymlink dir;
+        })
+      liveSkills)
       {
         ".local/bin/claude".source = claudeEntry;
         # Bindings live in `keybindings` above.
@@ -280,7 +294,7 @@
       package = pkgs.claude-code;
       enableMcpIntegration = true;
       # The fireproof.agents.skills registry.
-      skills = config.fireproof.agents.skills;
+      skills = removeAttrs config.fireproof.agents.skills (lib.attrNames liveSkills);
 
       # The fireproof.agents.lspServers registry (agent-lsp.nix); its rust-analyzer
       # replaces the hand-installed rust-analyzer-lsp plugin.
@@ -446,7 +460,7 @@
         skillOverrides = let
           synced = state: names: lib.genAttrs (map (name: "anthropic-skills:${name}") names) (_: state);
         in
-          synced "off" (lib.attrNames ccfg.skills)
+          synced "off" skillNames
           // synced "off" [
             "built-in-browser"
             "computer-use"
