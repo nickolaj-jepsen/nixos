@@ -5,7 +5,7 @@
 # nixpkgs build says so in Settings → Updates. herdr-desktop carries its
 # herdr-core's store path, and herdr-core on PATH keeps `hc` beside it for
 # agents in any terminal.
-{
+{inputs, ...}: {
   flake.modules.homeManager.herdr = {
     config,
     lib,
@@ -57,10 +57,7 @@
       };
     };
     uiDefaults = json.generate "herdr-ui-defaults.json" {layout = "nested";};
-    uiFiles =
-      lib.filter
-      (source: !(lib.elem (baseNameOf source) [".gitignore" "gpui-kit.d.ts" "jsconfig.json"]))
-      (lib.filesystem.listFilesRecursive ./herdr-ui);
+    uiSource = inputs.agents.packages.${pkgs.stdenv.hostPlatform.system}.herdr-ui;
     mergeConfig = pkgs.writeShellApplication {
       name = "herdr-merge-config";
       runtimeInputs = [pkgs.jq];
@@ -170,18 +167,14 @@
           };
         };
 
-        # Personal UI sources live here, not in Herdr's shipped files. Deploy real
+        # UI sources live in the agents flake, not Herdr's shipped files. Deploy real
         # writable files: the app generates metadata alongside mods, and its layout
         # editor must be able to save. Live source edits reset on the next activation;
-        # make persistent changes in herdr-ui. Keep machine/session/click state out.
+        # make persistent changes in agents/apps/herdr-ui. Keep runtime state out.
         home.activation.herdrUi = lib.hm.dag.entryAfter ["linkGeneration"] ''
-          ${lib.concatMapStringsSep "\n" (source: let
-              relative = lib.removePrefix "${toString ./herdr-ui}/" (toString source);
-              target = "${config.xdg.configHome}/herdr-app/${relative}";
-            in ''
-              run ${lib.getExe' pkgs.coreutils "install"} -Dm644 ${source} ${lib.escapeShellArg target}
-            '')
-            uiFiles}
+          while IFS= read -r -d "" relative; do
+            run ${lib.getExe' pkgs.coreutils "install"} -Dm644 "${uiSource}/$relative" "${config.xdg.configHome}/herdr-app/$relative"
+          done < <(${lib.getExe' pkgs.findutils "find"} ${uiSource} -type f -printf '%P\0' | ${lib.getExe' pkgs.coreutils "sort"} -z)
           run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/shared.json"} ${uiDefaults} --defaults
         '';
 
