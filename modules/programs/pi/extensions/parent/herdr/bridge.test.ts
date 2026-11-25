@@ -49,9 +49,10 @@ async function fixture() {
         return JSON.stringify({ address });
       }
       if (args[0] === "ls") {
-        if (fail === "list") {
+        if (fail === "list" || fail === "partial") {
+          const result = fail === "list" ? "{}" : '{"terminals":[]}';
           fail = "";
-          return "{}";
+          return result;
         }
         // Actual hc ls --json omits labels; only get returns full records.
         return JSON.stringify({
@@ -62,7 +63,10 @@ async function fixture() {
           })),
         });
       }
-      if (args[0] === "get") return JSON.stringify(live.get(args[1]));
+      if (args[0] === "get") {
+        if (!live.has(args[1])) throw { stderr: '{"error":{"kind":"not_found"}}' };
+        return JSON.stringify(live.get(args[1]));
+      }
       if (args[0] === "label") {
         for (const label of args.slice(2)) {
           const [key, ...value] = label.split("=");
@@ -129,6 +133,9 @@ test("health check recreates a lost terminal without duplicating live children",
   try {
     f.bridge.accept(snapshot(1));
     await f.bridge.flush();
+    await f.bridge.refresh();
+    assert.equal(f.runs().length, 1);
+    f.fault("partial");
     await f.bridge.refresh();
     assert.equal(f.runs().length, 1);
     f.live.clear();
@@ -245,6 +252,10 @@ test("shutdown during launch cleans up the returned address", async () => {
           release = resolve;
         });
       }
+      if (args[0] === "get") {
+        const owner = calls[0].find((arg) => arg.startsWith("fireproof.pi-owner="))!.split("=")[1];
+        return JSON.stringify({ parent: "t6", labels: { "fireproof.pi-owner": owner } });
+      }
       return "{}";
     },
     onError: () => {},
@@ -254,5 +265,5 @@ test("shutdown during launch cleans up the returned address", async () => {
   const stopped = bridge.dispose();
   release('{"address":"t123"}');
   await stopped;
-  assert.deepEqual(calls[1], ["kill", "t123"]);
+  assert.deepEqual(calls.at(-1), ["kill", "t123"]);
 });

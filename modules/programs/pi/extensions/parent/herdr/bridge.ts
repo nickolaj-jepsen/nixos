@@ -60,6 +60,10 @@ export async function createHerdrBridge(options: {
     join(dir, `${createHash("sha256").update(id).digest("hex")}.json`);
   const kill = async (address: string) => {
     try {
+      // An old address is not permission to kill a terminal on a replaced core.
+      const terminal: Terminal = JSON.parse(await options.run(["get", address, "--json"]));
+      if (terminal?.parent !== options.parent || terminal.labels?.["fireproof.pi-owner"] !== owner)
+        return;
       await options.run(["kill", address]);
     } catch (error) {
       if (!alreadyRemoved(error)) throw error;
@@ -198,7 +202,27 @@ export async function createHerdrBridge(options: {
             t.labels?.["fireproof.pi-owner"] === owner,
         );
         const addresses = new Set(live.map((t) => t.address));
-        for (const [id, child] of children) if (!addresses.has(child.address)) children.delete(id);
+        for (const [id, child] of children) {
+          if (addresses.has(child.address)) continue;
+          // A partial list during core recovery is not proof a monitor died.
+          try {
+            const terminal: Terminal = JSON.parse(
+              await options.run(["get", child.address, "--json"]),
+            );
+            if (
+              terminal?.state === "live" &&
+              terminal.parent === options.parent &&
+              terminal.labels?.["fireproof.pi-owner"] === owner
+            ) {
+              live.push(terminal);
+              addresses.add(terminal.address);
+              continue;
+            }
+          } catch (error) {
+            if (!alreadyRemoved(error)) throw error;
+          }
+          children.delete(id);
+        }
         for (const terminal of live) {
           const id = terminal.labels?.["fireproof.pi-agent-id"];
           if (!id || !desired.has(id)) {

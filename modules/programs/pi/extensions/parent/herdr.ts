@@ -20,6 +20,17 @@ export default function herdr(pi: ExtensionAPI) {
     // work in an existing Herdr terminal whose environment predates the switch.
     if (!parent || ctx.mode !== "tui") return;
     const hc = process.env.PI_HERDR_HC || "hc";
+    // Availability is local: don't start a permanent retry loop when an SSH or
+    // container inherited the marker but has no core client installed.
+    try {
+      await exec(hc, ["--version"], { timeout: 5000 });
+    } catch {
+      ctx.ui.notify(
+        "Herdr child monitors disabled: hc is unavailable. Install it, then /reload.",
+        "warning",
+      );
+      return;
+    }
     context = createAgentContext(ctx.cwd);
     context.restore(ctx.sessionManager.getEntries());
     let warned = false;
