@@ -127,7 +127,7 @@
     # Plugins and skills for Claude Code and pi (overlay, lib.plugins, lib.skills). The
     # claude-code and pi-coding-agent they run against stay pinned in ./pkgs.
     agents.url = "github:nickolaj-jepsen/agents";
-    agents.inputs.nixpkgs.follows = "nixpkgs";
+    # Keep agents' build toolchain pinned: following ours changes plugin store paths and misses Cachix.
     agents.inputs.flake-parts.follows = "flake-parts";
     agents.inputs.treefmt-nix.follows = "treefmt-nix";
 

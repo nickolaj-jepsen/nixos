@@ -14,6 +14,7 @@
       [
         "https://attic.${config.fireproof.homelab.domain}/nixos"
         "https://nix-community.cachix.org"
+        "https://agents.cachix.org"
       ]
       ++ lib.optional cuda "https://cache.nixos-cuda.org";
 
@@ -21,6 +22,7 @@
       [
         "nixos:yGPW0JSJw+piW/f/7XwmwMdnzz2mUEA8b4Zcco80wkI="
         "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
+        "agents.cachix.org-1:k9+CaEjlEzDvRfdzFNIBtDxvBjgq0tmNYTrH/CHMlvU="
       ]
       ++ lib.optional cuda "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=";
   };
