@@ -5,10 +5,7 @@
     "version": "0.1.15"
   },
   "type": "column",
-  "padding": [
-    0,
-    8
-  ],
+  "padding": [0, 8],
   "gap": 0,
   "children": [
     {
@@ -43,10 +40,7 @@
             {
               "id": "sidebar-lists",
               "type": "column",
-              "padding": [
-                8,
-                0
-              ],
+              "padding": [8, 0],
               "children": [
                 {
                   "id": "spaces",
@@ -141,10 +135,7 @@
                   "hidden": true
                 }
               ],
-              "padding": [
-                8,
-                0
-              ],
+              "padding": [8, 0],
               "gap": 8
             }
           ],
@@ -172,13 +163,7 @@
     }
   ],
   "background": "canvas",
-  "terminal_padding": [
-    14,
-    12
-  ],
+  "terminal_padding": [14, 12],
   "titlebar": "none",
-  "traffic_lights": [
-    12,
-    16
-  ]
+  "traffic_lights": [12, 16]
 }

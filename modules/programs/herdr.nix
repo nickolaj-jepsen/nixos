@@ -39,7 +39,10 @@
       font = config.fireproof.theme.font.family;
     };
     uiDefaults = json.generate "herdr-ui-defaults.json" {layout = "nested";};
-    uiFiles = lib.filesystem.listFilesRecursive ./herdr-ui;
+    uiFiles =
+      lib.filter
+      (source: !(lib.elem (baseNameOf source) [".gitignore" "gpui-kit.d.ts" "jsconfig.json"]))
+      (lib.filesystem.listFilesRecursive ./herdr-ui);
     mergeConfig = pkgs.writeShellApplication {
       name = "herdr-merge-config";
       runtimeInputs = [pkgs.jq];
@@ -147,11 +150,12 @@
       # make persistent changes in herdr-ui. Keep machine/session/click state out.
       home.activation.herdrUi = lib.hm.dag.entryAfter ["linkGeneration"] ''
         ${lib.concatMapStringsSep "\n" (source: let
-          relative = lib.removePrefix "${toString ./herdr-ui}/" (toString source);
-          target = "${config.xdg.configHome}/herdr-app/${relative}";
-        in ''
-          run ${lib.getExe' pkgs.coreutils "install"} -Dm644 ${source} ${lib.escapeShellArg target}
-        '') uiFiles}
+            relative = lib.removePrefix "${toString ./herdr-ui}/" (toString source);
+            target = "${config.xdg.configHome}/herdr-app/${relative}";
+          in ''
+            run ${lib.getExe' pkgs.coreutils "install"} -Dm644 ${source} ${lib.escapeShellArg target}
+          '')
+          uiFiles}
         run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/shared.json"} ${uiDefaults} --defaults
       '';
 
