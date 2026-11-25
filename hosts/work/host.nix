@@ -4,6 +4,7 @@
     fireproof.trusted = true;
 
     fireproof.desktop.enable = true;
+    fireproof.desktop.umbriel.enable = true;
     fireproof.dev.enable = true;
     fireproof.dev.agent-hub.remotes = {
       "dev.ao" = {};
