@@ -73,7 +73,10 @@ in {
     parentPath = "${config.xdg.configHome}/pi/extensions/parent";
     # Every plugin loads in the main session. Durable agents get only the
     # headless-safe tool packages explicitly shared with their tool twin.
-    piPlugins = lib.filterAttrs (_: plugin: plugin.pi) inputs.agents.lib.plugins;
+    piPlugins = let
+      plugins = lib.filterAttrs (_: plugin: plugin.pi) inputs.agents.lib.plugins;
+    in
+      assert lib.assertMsg (plugins ? claude-peers) "Update the agents input to a revision containing claude-peers before using this Pi configuration."; plugins;
     pluginNames = lib.attrNames piPlugins;
     # The built plugin: newer agents flakes build it per system (`lib.pluginsFor pkgs`) and make
     # `lib.plugins.<name>.path` throw; older ones point `path` at the source.
@@ -264,13 +267,6 @@ in {
     };
   in {
     config = lib.mkIf config.fireproof.dev.pi.enable {
-      assertions = [
-        {
-          assertion = piPlugins ? claude-peers;
-          message = "Update the agents input to a revision containing claude-peers before using this Pi configuration.";
-        }
-      ];
-
       home.file.".pi/agent/APPEND_SYSTEM.md".text = rules;
       home.file.".pi/agent/themes/fireproof.json".source = theme;
 
