@@ -40,15 +40,18 @@ let
   # packing stock llama.cpp loads (PTQ1_0/PQ2_0 need the PrismML fork), and
   # builds before b11556 load it silently and emit garbage. The -mtp file
   # carries PrismML's draft head; draft flags are their CUDA preset's.
+  #
+  # Both entries share the file and are sized to the same ~9.7 GiB on the 4070,
+  # so they fail once the desktop holds more than ~2.0 GiB. With MTP: ~95 tok/s,
+  # ~28 MiB per 1k ctx, 80k the most that loaded. Without: ~48 tok/s but ~1 GiB
+  # smaller and ~23 MiB per 1k, 144k the most that loaded (desktop at 1.2 GiB).
   bonsai25 = {
     name = "Bonsai 2.5 27B";
     weights = {
       file = "Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf";
       url = "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF/resolve/main/Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf";
     };
-    # On the 4070: 8.8 GiB at 32k, ~28 MiB per 1k beyond, ~98 tok/s vs IQ2_XXS's
-    # ~69. 48k stays under the IQ2_XXS entry's 9.4 GiB; 64k (9.7 GiB) doesn't.
-    ctx = 49152;
+    ctx = 65536;
     args =
       kvQ4
       ++ mtp
@@ -58,6 +61,13 @@ let
         "--ubatch-size 256"
       ];
   };
+  bonsai25-long =
+    bonsai25
+    // {
+      name = "Bonsai 2.5 27B (long)";
+      ctx = 114688;
+      args = kvQ4 ++ ["--ubatch-size 256"];
+    };
 in {
   # desktop, RTX 5070 Ti. The desktop holds 1.1–1.6 GiB, and the model is capped
   # at ~13.7 GiB so the compositor keeps ~1 GiB of headroom: a failed display
@@ -95,6 +105,7 @@ in {
       args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
     };
     "bonsai-2.5-27b" = bonsai25;
+    "bonsai-2.5-27b-long" = bonsai25-long;
     "qwen3.5-4b" = qwen35-4b;
   };
 }
