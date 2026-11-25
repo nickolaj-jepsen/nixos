@@ -151,7 +151,7 @@ in {
       // lib.optionalAttrs config.fireproof.dev.ai-usage.enable {
         PI_AI_USAGE_COMMAND = lib.getExe pkgs.ai-usage;
       }
-      # fireproof.agents.updates: the bridge in core/agents-update.ts runs AGENTS_REFRESH
+      # fireproof.agents.updates: the upstream bridge runs AGENTS_REFRESH
       # before it reloads, so a published path becomes what this session loads. AGENTS_PROFILE
       # (the profile dir) is exported below, once the wrapper knows it.
       // lib.optionalAttrs updates.enable ({
@@ -212,7 +212,8 @@ in {
         map packagePath thirdPartyPackages
         ++ [parentPath]
         ++ map pluginPath pluginNames
-        ++ ["${extensions}/core"];
+        ++ ["${extensions}/core"]
+        ++ lib.optional updates.enable "${updates.package}/share/agents-updates/pi";
       # Empty on purpose: arrays replace wholesale, reverting `pi config` toggles.
       extensions = [];
     };

@@ -2,23 +2,9 @@
 # fireproof.agents.skills registry, and `fireproof.agents.updates` publishes an explicit
 # snapshot of a checkout on demand (`agents update NAME`) instead of linking one live. Third
 # party skills are registered by their feature leaves instead (e.g. gh-stack in git.nix).
-{inputs, ...}: let
-  mkTests = pkgs:
-    pkgs.runCommandLocal "agents-update-tests" {
-      nativeBuildInputs = [pkgs.python3 pkgs.git pkgs.coreutils pkgs.bash pkgs.gnused pkgs.gnugrep];
-    } ''
-      export HOME="$TMPDIR/home"
-      mkdir -p "$HOME"
-      cp ${./agents-update.py} agents-update.py
-      cp ${./agents-refresh.py} agents-refresh.py
-      cp ${./test_agents_update.py} test_agents_update.py
-      cp ${./test_agents_refresh.py} test_agents_refresh.py
-      python3 -m unittest discover -s . -p 'test_agents_*.py'
-      touch "$out"
-    '';
-in {
-  perSystem = {pkgs, ...}: {
-    checks.agents-updates = mkTests pkgs;
+{inputs, ...}: {
+  perSystem = {system, ...}: {
+    checks.agents-updates = inputs.agents.packages.${system}.agents-updates.tests;
   };
 
   flake.modules.homeManager.agent-skills = {
@@ -53,13 +39,6 @@ in {
         then "${claudePlugin name}"
         else null;
     });
-    # The scripts are plain stdlib Python; the wrappers choose the interpreter, so no generated
-    # bin (and no flake8 pass over vendored-looking code) is needed.
-    python = name: file:
-      pkgs.runCommandLocal "${name}.py" {} ''
-        test -e ${mkTests pkgs}
-        install -Dm644 ${file} $out
-      '';
     baseline = {
       revision = inputs.agents.rev or "";
       plugins = baselinePlugins;
@@ -118,18 +97,26 @@ in {
           description = "baselineFile's content, for the harness modules that load these paths.";
         };
 
+        package = lib.mkOption {
+          type = lib.types.package;
+          readOnly = true;
+          internal = true;
+          default = inputs.agents.packages.${pkgs.stdenv.hostPlatform.system}.agents-updates;
+          description = "Shared publication tooling and Pi bridge from the pinned agents input.";
+        };
+
         cli = lib.mkOption {
           type = lib.types.package;
           readOnly = true;
           internal = true;
           default = pkgs.writeShellApplication {
             name = "agents";
-            runtimeInputs = [pkgs.python3 pkgs.git pkgs.coreutils];
+            runtimeInputs = [updates.package];
             text = ''
               # The pinned baseline and where a snapshot is built from, baked in: `agents`
               # works from any shell, and an activation script needs no environment.
               ${envExports}
-              exec ${pkgs.python3.interpreter} ${python "agents-update" ./agents-update.py} "$@"
+              exec ${updates.package}/bin/agents "$@"
             '';
           };
           description = "The `agents` command: update, reset, status, check, resolve.";
@@ -139,13 +126,7 @@ in {
           type = lib.types.package;
           readOnly = true;
           internal = true;
-          default = pkgs.writeShellApplication {
-            name = "agents-refresh";
-            runtimeInputs = [pkgs.python3 pkgs.coreutils];
-            text = ''
-              exec ${pkgs.python3.interpreter} ${python "agents-refresh" ./agents-refresh.py} "$@"
-            '';
-          };
+          default = updates.package.refresh;
           description = ''
             Turns the published state into one profile's skill view and pi settings. pi's
             bridge runs it as AGENTS_REFRESH before it reloads.
