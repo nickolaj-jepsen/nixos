@@ -79,6 +79,8 @@ let
         };
       };
 
+      herdr-core.enable = cascade config.fireproof.desktop.enable "herdr-core and its `hc` CLI, so agents run in terminals that outlive the client and Herdr can reach this host as a machine";
+
       claude-code.work.enable =
         lib.mkEnableOption "claude-work wrapper sharing the personal claude-code config via ~/.claude-work";
 

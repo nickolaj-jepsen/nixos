@@ -10,6 +10,7 @@
     # headless: skip the heavy editor layer and the second agent
     fireproof.neovim.full.enable = false;
     fireproof.dev.pi.enable = true;
+    fireproof.herdr-core.enable = true; # reachable from Herdr as a machine
     fireproof.homelab.enable = true;
     fireproof.homelab.phoenix.enable = true;
     fireproof.networkd.enable = true;

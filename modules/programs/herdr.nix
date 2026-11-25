@@ -92,105 +92,107 @@
       '';
     };
   in {
-    config = lib.mkIf config.fireproof.desktop.enable {
-      home.packages = [
-        pkgs.unstable.herdr-desktop
-        pkgs.unstable.herdr-core
-      ];
+    config = lib.mkMerge [
+      (lib.mkIf config.fireproof.herdr-core.enable {
+        home.packages = [pkgs.unstable.herdr-core];
+      })
+      (lib.mkIf config.fireproof.desktop.enable {
+        home.packages = [pkgs.unstable.herdr-desktop];
 
-      # Link the whole mod so removed upstream files disappear on upgrades too.
-      # Walkthrough stores reports/preferences outside its source directory.
-      xdg.configFile."herdr-app/mods/walkthrough".source = "${walkthrough}/mods/walkthrough";
+        # Link the whole mod so removed upstream files disappear on upgrades too.
+        # Walkthrough stores reports/preferences outside its source directory.
+        xdg.configFile."herdr-app/mods/walkthrough".source = "${walkthrough}/mods/walkthrough";
 
-      # Only install the chat and Codex-filtered launcher, not upstream's
-      # replacements for the agents list, terminal menu or shipped layout.
-      xdg.configFile."herdr-app/mods/new-chat".source = "${pkgs.herdr-chat}/share/herdr-chat/mods/new-chat";
-      xdg.configFile."herdr-app/mods/chat" = {
-        source = "${pkgs.herdr-chat}/share/herdr-chat/mods/chat";
-        recursive = true;
-      };
-      xdg.configFile."herdr-app/mods/chat/config.json".source = json.generate "herdr-codex-chat.json" {
-        host = lib.getExe pkgs.herdr-chat;
-        node = lib.getExe pkgs.nodejs;
-        hc = lib.getExe' pkgs.unstable.herdr-core "hc";
-        codex = lib.getExe pkgs.unstable.codex;
-        version = pkgs.herdr-chat.version;
-        # Release-channel installs can download and run an upstream installer.
-        channel = "nix";
-      };
-
-      xdg.configFile."herdr-app/themes/fireproof.json".source = json.generate "herdr-fireproof.json" {
-        background = "#${c.bg}";
-        foreground = "#${c.fg}";
-        selection = "#${c.uiAlt}";
-        cursor = "#${c.fg}";
-        # Match Ghostty's normal and bright ANSI palettes.
-        ansi = map (color: "#${color}") [
-          c.black
-          c.redAlt
-          c.greenAlt
-          c.yellowAlt
-          c.blueAlt
-          c.magentaAlt
-          c.cyanAlt
-          c.fg
-          c.muted
-          c.red
-          c.green
-          c.yellow
-          c.blue
-          c.magenta
-          c.cyan
-          c.whiteAlt
-        ];
-        colors = {
-          # One Kitty-colored surface for panels, bars and terminals. The main
-          # layout already has 8px gutters; only their canvas is lighter.
-          surface = "#${c.bg}";
-          canvas = "#${c.bgAlt}";
-          chrome = "#${c.bg}";
-          popover = "#${c.bg}";
-          raised = "#${c.bg}";
-          hover = "#${c.bgAlt}";
-          selected = "#${c.ui}";
-          border = "#${c.bgAlt}";
-          input = "#${c.bg}";
-          muted = "#${c.fgAlt}";
-          dim = "#${c.muted}";
-          accent = "#${c.accent}";
-          accent_foreground = "#${c.black}";
-          solid = "#${c.fg}";
-          solid_foreground = "#${c.bg}";
-          working = "#${c.blue}";
-          blocked = "#${c.orange}";
-          done = "#${c.green}";
-          idle = "#${c.muted}";
-          unknown = "#${c.muted}";
+        # Only install the chat and Codex-filtered launcher, not upstream's
+        # replacements for the agents list, terminal menu or shipped layout.
+        xdg.configFile."herdr-app/mods/new-chat".source = "${pkgs.herdr-chat}/share/herdr-chat/mods/new-chat";
+        xdg.configFile."herdr-app/mods/chat" = {
+          source = "${pkgs.herdr-chat}/share/herdr-chat/mods/chat";
+          recursive = true;
         };
-      };
+        xdg.configFile."herdr-app/mods/chat/config.json".source = json.generate "herdr-codex-chat.json" {
+          host = lib.getExe pkgs.herdr-chat;
+          node = lib.getExe pkgs.nodejs;
+          hc = lib.getExe' pkgs.unstable.herdr-core "hc";
+          codex = lib.getExe pkgs.unstable.codex;
+          version = pkgs.herdr-chat.version;
+          # Release-channel installs can download and run an upstream installer.
+          channel = "nix";
+        };
 
-      # Personal UI sources live here, not in Herdr's shipped files. Deploy real
-      # writable files: the app generates metadata alongside mods, and its layout
-      # editor must be able to save. Live source edits reset on the next activation;
-      # make persistent changes in herdr-ui. Keep machine/session/click state out.
-      home.activation.herdrUi = lib.hm.dag.entryAfter ["linkGeneration"] ''
-        ${lib.concatMapStringsSep "\n" (source: let
-            relative = lib.removePrefix "${toString ./herdr-ui}/" (toString source);
-            target = "${config.xdg.configHome}/herdr-app/${relative}";
-          in ''
-            run ${lib.getExe' pkgs.coreutils "install"} -Dm644 ${source} ${lib.escapeShellArg target}
-          '')
-          uiFiles}
-        run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/shared.json"} ${uiDefaults} --defaults
-      '';
+        xdg.configFile."herdr-app/themes/fireproof.json".source = json.generate "herdr-fireproof.json" {
+          background = "#${c.bg}";
+          foreground = "#${c.fg}";
+          selection = "#${c.uiAlt}";
+          cursor = "#${c.fg}";
+          # Match Ghostty's normal and bright ANSI palettes.
+          ansi = map (color: "#${color}") [
+            c.black
+            c.redAlt
+            c.greenAlt
+            c.yellowAlt
+            c.blueAlt
+            c.magentaAlt
+            c.cyanAlt
+            c.fg
+            c.muted
+            c.red
+            c.green
+            c.yellow
+            c.blue
+            c.magenta
+            c.cyan
+            c.whiteAlt
+          ];
+          colors = {
+            # One Kitty-colored surface for panels, bars and terminals. The main
+            # layout already has 8px gutters; only their canvas is lighter.
+            surface = "#${c.bg}";
+            canvas = "#${c.bgAlt}";
+            chrome = "#${c.bg}";
+            popover = "#${c.bg}";
+            raised = "#${c.bg}";
+            hover = "#${c.bgAlt}";
+            selected = "#${c.ui}";
+            border = "#${c.bgAlt}";
+            input = "#${c.bg}";
+            muted = "#${c.fgAlt}";
+            dim = "#${c.muted}";
+            accent = "#${c.accent}";
+            accent_foreground = "#${c.black}";
+            solid = "#${c.fg}";
+            solid_foreground = "#${c.bg}";
+            working = "#${c.blue}";
+            blocked = "#${c.orange}";
+            done = "#${c.green}";
+            idle = "#${c.muted}";
+            unknown = "#${c.muted}";
+          };
+        };
 
-      # Herdr writes settings/keys from its UI; merge our entries into writable
-      # files. Shipped layouts are replaced on launch, so leave them alone.
-      home.activation.herdrTheme = lib.hm.dag.entryAfter ["linkGeneration"] ''
-        run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/settings.json"} ${settings}
-        run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/keys.json"} ${keys} --remove-gitview-keys
-        run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/programs.json"} ${programs}
-      '';
-    };
+        # Personal UI sources live here, not in Herdr's shipped files. Deploy real
+        # writable files: the app generates metadata alongside mods, and its layout
+        # editor must be able to save. Live source edits reset on the next activation;
+        # make persistent changes in herdr-ui. Keep machine/session/click state out.
+        home.activation.herdrUi = lib.hm.dag.entryAfter ["linkGeneration"] ''
+          ${lib.concatMapStringsSep "\n" (source: let
+              relative = lib.removePrefix "${toString ./herdr-ui}/" (toString source);
+              target = "${config.xdg.configHome}/herdr-app/${relative}";
+            in ''
+              run ${lib.getExe' pkgs.coreutils "install"} -Dm644 ${source} ${lib.escapeShellArg target}
+            '')
+            uiFiles}
+          run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/shared.json"} ${uiDefaults} --defaults
+        '';
+
+        # Herdr writes settings/keys from its UI; merge our entries into writable
+        # files. Shipped layouts are replaced on launch, so leave them alone.
+        home.activation.herdrTheme = lib.hm.dag.entryAfter ["linkGeneration"] ''
+          run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/settings.json"} ${settings}
+          run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/keys.json"} ${keys} --remove-gitview-keys
+          run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/programs.json"} ${programs}
+        '';
+      })
+    ];
   };
 }

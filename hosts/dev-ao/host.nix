@@ -21,6 +21,7 @@
     fireproof.work.enable = true;
     fireproof.work.sshKey.enable = true; # *.ao hops use the AO key here too
     fireproof.claude-code.work.enable = true;
+    fireproof.herdr-core.enable = true; # reachable from Herdr as a machine
   };
 
   homeManager = {
