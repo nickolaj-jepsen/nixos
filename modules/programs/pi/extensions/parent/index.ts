@@ -8,7 +8,6 @@
  * spellfix still underlines chrome's prompt.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import bg from "./bg.ts";
 import chrome from "./chrome.ts";
 import claudePeers from "./claude-peers.ts";
 import delegation from "./delegation.ts";
@@ -18,7 +17,6 @@ import { createServices, type Services } from "./services.ts";
 
 const FEATURES: [string, (pi: ExtensionAPI, services: Services) => void][] = [
   ["delegation", delegation],
-  ["bg", bg],
   ["chrome", chrome],
   ["claude-peers", claudePeers],
   ["notify", notify],

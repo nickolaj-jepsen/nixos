@@ -126,9 +126,7 @@
 
     # Plugins and skills for Claude Code and pi (overlay, lib.plugins, lib.skills). The
     # claude-code and pi-coding-agent they run against stay pinned in ./pkgs.
-    # Temporary: pi-agents-skills carries the pi-agents delegation migration; drop the
-    # branch and track main once it lands there.
-    agents.url = "github:nickolaj-jepsen/agents/pi-agents-skills";
+    agents.url = "github:nickolaj-jepsen/agents";
     agents.inputs.nixpkgs.follows = "nixpkgs";
     agents.inputs.flake-parts.follows = "flake-parts";
     agents.inputs.treefmt-nix.follows = "treefmt-nix";

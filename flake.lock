@@ -62,16 +62,15 @@
         ]
       },
       "locked": {
-        "lastModified": 1795559479,
-        "narHash": "sha256-fctXKN3KdRvfS6ip45gcjN2qz/c4fhyOokvMP2/IxOM=",
+        "lastModified": 1795566957,
+        "narHash": "sha256-g3kSCoI+MUg4x4s4j0YXOerZyfSHmOBycPPmbtf9QjA=",
         "owner": "nickolaj-jepsen",
         "repo": "agents",
-        "rev": "c192b9c267914d68c686ec75ea8c6dbe64808b4f",
+        "rev": "a06b4c2fce2d736fe2c2644dd1095b43b3f61997",
         "type": "github"
       },
       "original": {
         "owner": "nickolaj-jepsen",
-        "ref": "pi-agents-skills",
         "repo": "agents",
         "type": "github"
       }
