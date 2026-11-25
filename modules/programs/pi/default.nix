@@ -154,6 +154,8 @@ in {
       defaultProvider = "openai-codex";
       defaultModel = "gpt-6.1-sol";
       defaultThinkingLevel = "medium";
+      # Keyed provider/id; pi applies it on startup and on every model switch.
+      modelThinkingLevels."auto/deepseek-v4.1-flash" = "high";
       # A default outside the list starts on the first entry, so the default leads.
       enabledModels =
         [
