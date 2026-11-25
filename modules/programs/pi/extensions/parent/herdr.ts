@@ -32,7 +32,7 @@ export default function herdr(pi: ExtensionAPI) {
       return;
     }
     context = createAgentContext(ctx.cwd);
-    context.restore(ctx.sessionManager.getEntries());
+    context.restore(ctx.sessionManager.getBranch());
     let warned = false;
     bridge = await createHerdrBridge({
       parent,
@@ -64,6 +64,13 @@ export default function herdr(pi: ExtensionAPI) {
       });
     }, 5000);
     timer.unref();
+  });
+  pi.on("session_tree", (_event, ctx) => {
+    if (!bridge) return;
+    context = createAgentContext(ctx.cwd);
+    context.restore(ctx.sessionManager.getBranch());
+    request();
+    void bridge.refresh();
   });
   pi.on("tool_execution_start", (event) =>
     context?.start(event.toolCallId, event.toolName, event.args),

@@ -20,12 +20,13 @@ async function fixture() {
   >();
   let count = 0;
   let fail = "";
+  let hasContext = true;
   const bridge = await createHerdrBridge({
     parent: "t6",
     sessionId: "session",
     cwd: "/repo",
     monitor: "/monitor.mjs",
-    context: () => ({ task: "Verify the fix", model: "test-model" }),
+    context: () => (hasContext ? { task: "Verify the fix", model: "test-model" } : {}),
     run: async (args) => {
       calls.push(args);
       if (args[0] === "run") {
@@ -93,6 +94,9 @@ async function fixture() {
       fail = value;
     },
     runs: () => calls.filter((c) => c[0] === "run"),
+    clearContext: () => {
+      hasContext = false;
+    },
   };
 }
 
@@ -121,6 +125,11 @@ test("one terminal per agent, rich state file and updated sidebar labels", async
       record.history.map((h: { state: string }) => h.state),
       ["working", "idle"],
     );
+    f.clearContext();
+    await f.bridge.refresh();
+    const withoutContext = JSON.parse(await readFile(file, "utf8"));
+    assert.equal(withoutContext.task, undefined);
+    assert.equal(withoutContext.model, undefined);
     assert.deepEqual(f.errors, []);
   } finally {
     await f.bridge.dispose();

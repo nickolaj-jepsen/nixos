@@ -87,7 +87,14 @@ export async function createHerdrBridge(options: {
     for (const [id, record] of desired) {
       if (closed) return;
       try {
-        Object.assign(record, options.context?.(id, record.name));
+        if (options.context) {
+          const context = options.context(id, record.name);
+          // Navigating Pi's tree can remove the spawn call from the active
+          // branch. Don't keep showing context from an abandoned branch.
+          record.task = context.task;
+          record.model = context.model;
+          record.cwd = context.cwd || options.cwd;
+        }
         const child = children.get(id);
         const file = child?.file ?? fileFor(id);
         const content = JSON.stringify(record);
