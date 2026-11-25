@@ -107,10 +107,11 @@ in {
     systemd.services.nix-daemon.serviceConfig.Slice = "nix.slice";
 
     # Nix ≥2.30 builds here, not /tmp; zram absorbs overflow.
+    # size is only a cap: each agents-* plugin unpacks the shared ~5G pnpm store, so max-jobs of them overran 50% (ENOSPC).
     fileSystems."/nix/var/nix/builds" = lib.mkIf (ramBytes >= 32 * 1024 * 1024 * 1024) {
       device = "none";
       fsType = "tmpfs";
-      options = ["mode=0755" "size=50%"];
+      options = ["mode=0755" "size=100%"];
     };
   };
 
