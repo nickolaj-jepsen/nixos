@@ -62,11 +62,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795566957,
-        "narHash": "sha256-g3kSCoI+MUg4x4s4j0YXOerZyfSHmOBycPPmbtf9QjA=",
+        "lastModified": 1795568152,
+        "narHash": "sha256-TOlBcFB+au4agMg5nFrNnnBaR+7pXoVLJE1BJ4BmQfA=",
         "owner": "nickolaj-jepsen",
         "repo": "agents",
-        "rev": "a06b4c2fce2d736fe2c2644dd1095b43b3f61997",
+        "rev": "935ad0b639b353dedc2e82849bc995bfedf4885a",
         "type": "github"
       },
       "original": {

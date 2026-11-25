@@ -142,6 +142,7 @@ in {
       }
       // lib.optionalAttrs config.fireproof.desktop.enable {
         PI_HERDR_HC = lib.getExe' pkgs.unstable.herdr-core "hc";
+        PI_BG_HERDR_HC = lib.getExe' pkgs.unstable.herdr-core "hc";
       }
       // lib.optionalAttrs config.fireproof.dev.ai-usage.enable {
         PI_AI_USAGE_COMMAND = lib.getExe pkgs.ai-usage;
