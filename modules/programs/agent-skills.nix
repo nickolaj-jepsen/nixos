@@ -5,6 +5,7 @@
   flake.modules.homeManager.agent-skills = {
     config,
     lib,
+    pkgs,
     ...
   }: let
     cfg = config.fireproof.agents;
@@ -28,6 +29,29 @@
         readOnly = true;
         internal = true;
         default = lib.optionalAttrs cfg.live (lib.mapAttrs (name: _: "${cfg.devCheckout}/skills/${name}") inputs.agents.lib.skills);
+      };
+
+      # The launchers run `build` before loading the checkout's plugins, and the
+      # Claude Code SessionStart hook shows `check`'s warnings; null unless live.
+      liveSync = lib.mkOption {
+        type = lib.types.nullOr lib.types.package;
+        readOnly = true;
+        internal = true;
+        default =
+          if cfg.live
+          then
+            pkgs.writeShellApplication {
+              name = "agents-live";
+              runtimeInputs = [config.programs.direnv.package pkgs.git pkgs.jq pkgs.util-linux pkgs.coreutils];
+              runtimeEnv = {
+                CHECKOUT = cfg.devCheckout;
+                PINNED_REV = inputs.agents.rev;
+                SKILLS = toString (lib.attrNames inputs.agents.lib.skills);
+                PLUGINS = toString (lib.attrNames inputs.agents.lib.plugins);
+              };
+              text = builtins.readFile ./agents-live.sh;
+            }
+          else null;
       };
     };
 

@@ -251,6 +251,10 @@ in {
         ${merge "mcp.json" mcp}
         ${merge "models.json" models}
         ${launch}
+        ${lib.optionalString (config.fireproof.agents.liveSync != null) ''
+          ${lib.getExe config.fireproof.agents.liveSync} build || true
+          ${lib.getExe config.fireproof.agents.liveSync} check >&2
+        ''}
         exec ${lib.getExe pi} "$@"
       '';
     # The personal profile loads telemetry from core/. Its pi-agents event bridge

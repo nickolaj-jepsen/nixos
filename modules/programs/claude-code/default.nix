@@ -179,6 +179,7 @@
     claudeEntry = pkgs.writeShellScript "claude" ''
       ${lib.optionalString scratch tmpDir}
       if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
+      ${liveBuild}
       ${memoryArgs}
       ${tracingArgs {
         project = "claude-code";
@@ -192,7 +193,9 @@
     jsonFormat = pkgs.formats.json {};
 
     # fireproof.agents.live: agents' skills link straight to the checkout.
-    inherit (config.fireproof.agents) liveSkills;
+    inherit (config.fireproof.agents) liveSkills liveSync;
+    # Before the checkout's plugins load; the SessionStart hook reports a failure.
+    liveBuild = lib.optionalString (liveSync != null) "${lib.getExe liveSync} build || true";
     skillNames = lib.attrNames config.fireproof.agents.skills;
     workMcpJson = jsonFormat.generate "claude-work-mcp.json" {
       mcpServers = lib.mapAttrs (name: server:
@@ -216,6 +219,7 @@
         ${phoenix.clear}
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
+        ${liveBuild}
         ${memoryArgs}
         ${tracingArgs {
           project = "claude-work";
@@ -338,7 +342,16 @@
           ];
         in
           {
-            SessionStart = direnvHooks;
+            SessionStart =
+              direnvHooks
+              ++ lib.optional (liveSync != null) {
+                hooks = [
+                  {
+                    type = "command";
+                    command = "${lib.getExe liveSync} hook";
+                  }
+                ];
+              };
             CwdChanged = direnvHooks;
             WorktreeCreate = worktreeLifecycle;
             WorktreeRemove = worktreeLifecycle;
