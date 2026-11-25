@@ -32,16 +32,6 @@
         then "cmd-i"
         else "ctrl-alt-shift-p"
       } = "mod.open:new-chat";
-      global.${
-        if pkgs.stdenv.isDarwin
-        then "cmd-shift-g"
-        else "ctrl-alt-shift-g"
-      } = "mod.open:gitview-sidebar";
-      global.${
-        if pkgs.stdenv.isDarwin
-        then "cmd-g"
-        else "ctrl-alt-g"
-      } = "mod.open:gitview-tab";
     };
     settings = json.generate "herdr-theme-settings.json" {
       theme = "fireproof";
@@ -78,6 +68,13 @@
           jq -e 'type == "object"' "$file" >/dev/null
           if [ "''${3:-}" = "--defaults" ]; then
             jq --slurpfile defaults "$defaults" '$defaults[0] * .' "$file" > "$tmp"
+          elif [ "''${3:-}" = "--remove-gitview-keys" ]; then
+            # Settings merge rather than replace: retire only the removed mod's
+            # actions, preserving any replacement the person bound to those keys.
+            jq --slurpfile defaults "$defaults" '
+              (if (.global | type) == "object" then
+                .global |= with_entries(select(.value != "mod.open:gitview-sidebar" and .value != "mod.open:gitview-tab"))
+              else . end) * $defaults[0]' "$file" > "$tmp"
           else
             jq --slurpfile defaults "$defaults" '. * $defaults[0]' "$file" > "$tmp"
           fi
@@ -94,28 +91,6 @@
         pkgs.unstable.herdr-desktop
         pkgs.unstable.herdr-core
       ];
-
-      # Keep directories writable for metadata and image caches.
-      home.file =
-        lib.genAttrs (map (name: "${config.xdg.configHome}/herdr-app/mods/${name}") [
-          "gitview"
-          "gitview-diff"
-          "gitview-agents"
-          "gitview-ask"
-          "gitview-sidebar"
-          "gitview-tab"
-          "gitview-keys"
-          "gitview-mark"
-          "gitview-tracing"
-        ]) (path: {
-          source = "${pkgs.herdr-gitview}/share/herdr-gitview/mods/${baseNameOf path}";
-          recursive = true;
-        });
-      xdg.configFile."herdr-app/mods/gitview/config.json".source = json.generate "herdr-gitview-config.json" {
-        bin = lib.getExe pkgs.herdr-gitview;
-        herdr_app = lib.getExe pkgs.unstable.herdr-desktop;
-        hc = lib.getExe' pkgs.unstable.herdr-core "hc";
-      };
 
       # Link the whole mod so removed upstream files disappear on upgrades too.
       # Walkthrough stores reports/preferences outside its source directory.
@@ -207,7 +182,7 @@
       # files. Shipped layouts are replaced on launch, so leave them alone.
       home.activation.herdrTheme = lib.hm.dag.entryAfter ["linkGeneration"] ''
         run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/settings.json"} ${settings}
-        run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/keys.json"} ${keys}
+        run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/keys.json"} ${keys} --remove-gitview-keys
         run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/programs.json"} ${programs}
       '';
     };

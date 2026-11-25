@@ -120,10 +120,7 @@
                           "id": "changes",
                           "type": "block",
                           "content": {
-                            "mod": "gitview",
-                            "props": {
-                              "replaces": { "mod": "changes" }
-                            }
+                            "mod": "changes"
                           }
                         }
                       ],
