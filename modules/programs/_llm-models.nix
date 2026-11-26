@@ -68,6 +68,20 @@ let
       ctx = 114688;
       args = kvQ4 ++ ["--ubatch-size 256"];
     };
+  # RTX 5070 Ti: Prism PTQ1_0 + MTP measured ~135 tok/s at 32k and
+  # ~111 at 98k. 128k leaves ~3 GiB VRAM for the desktop; 192k leaves ~2.
+  bonsaiPrism =
+    bonsai25
+    // {
+      runtime = "prism";
+      weights = {
+        file = "Ternary-Bonsai-2.5-27B-PTQ1_0-mtp.gguf";
+        url = "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF/resolve/main/Ternary-Bonsai-2.5-27B-PTQ1_0-mtp.gguf";
+      };
+      ctx = 131072;
+      # Fail rather than silently serving on CPU if the CUDA backend cannot load.
+      args = bonsai25.args ++ ["--min-p 0" "--fit off" "--device CUDA0"];
+    };
 in {
   # desktop, RTX 5070 Ti. The desktop holds 1.1–1.6 GiB, and the model is capped
   # at ~13.7 GiB so the compositor keeps ~1 GiB of headroom: a failed display
@@ -81,6 +95,14 @@ in {
       ctx = 98304;
       args = kvQ4 ++ mtp ++ ["--ubatch-size 256"];
     };
+
+    "bonsai-2.5-27b" = bonsaiPrism;
+    "bonsai-2.5-27b-long" =
+      bonsaiPrism
+      // {
+        name = "Bonsai 2.5 27B (long)";
+        ctx = 196608;
+      };
 
     # Fast entry: models past ~300 tok/s failed a quarter of bash-tool tasks.
     "qwen3.5-4b" = qwen35-4b;

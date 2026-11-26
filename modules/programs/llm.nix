@@ -26,9 +26,14 @@
     # local model; a client-sent reasoning_effort still overrides this.
     #
     # ${PORT} is llama-swap's macro, not Nix's.
+    usesPrism = lib.any (m: (m.runtime or "stock") == "prism") (lib.attrValues models);
     serverCmd = m:
       lib.concatStringsSep "\n" ([
-          "${pkgs.llama-cpp-cuda}/bin/llama-server"
+          (
+            if (m.runtime or "stock") == "prism"
+            then "${pkgs.llama-cpp-prism}/bin/llama-server-prism"
+            else "${pkgs.llama-cpp-cuda}/bin/llama-server"
+          )
           "--model ${filePath m.weights}"
           "--host 127.0.0.1"
           "--port \${PORT}"
@@ -82,11 +87,13 @@
     };
   in {
     config = lib.mkIf (cfg.enable && pkgs.stdenv.isLinux) {
-      home.packages = [
-        # Pulled in by the service anyway; also gives llama-bench for retuning.
-        pkgs.llama-cpp-cuda
-        llm-fetch
-      ];
+      home.packages =
+        [
+          # Pulled in by the service anyway; also gives llama-bench for retuning.
+          pkgs.llama-cpp-cuda
+          llm-fetch
+        ]
+        ++ lib.optional usesPrism pkgs.llama-cpp-prism;
 
       systemd.user.services.llama-swap = {
         Unit = {
