@@ -18,6 +18,7 @@ Use the repository’s instructions and tools first. These are defaults.
 ## Git and worktrees
 
 - A one-commit change can go on the current branch, including main. For larger changes, or when another agent is editing related files, use a separate worktree and branch (harness worktree tool, else `wt new`).
+- For an existing branch, pass its name to the worktree tool or `wt new`, not `git worktree add`.
 - Leave others’ changes untouched. Stage only your own paths, never `-A`.
 - Commit as you go in logical steps. Use Conventional Commits by default, unless the repository specifies another format. Rebase rather than merging.
 - Push or open a PR only when asked.
