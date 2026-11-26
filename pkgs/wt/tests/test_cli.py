@@ -1053,6 +1053,44 @@ class GitHub(Base):
     def sha(self, ref: str) -> str:
         return self.git("rev-parse", ref).strip()
 
+    def test_new_on_an_existing_local_branch_checks_it_out(self) -> None:
+        self.git("switch", "-q", "-c", "feat/local")
+        self.write("b.txt", "local\n")
+        self.commit("local work")
+        self.git("switch", "-q", "main")
+        result = self.wt("new", "feat/local")
+        self.assertIn("existing branch", result.stderr)
+        path = result.stdout.strip()
+        self.assertEqual(self.current(cwd=path), "feat/local")
+        self.assertEqual(self.subject(cwd=path), "local work")
+        self.assertNotEqual(self.wt("new", "feat/local", "main", check=False).returncode, 0)
+
+    def test_new_on_an_origin_only_branch_tracks_it(self) -> None:
+        self.git("switch", "-q", "-c", "feat/theirs")
+        self.write("b.txt", "theirs\n")
+        self.commit("their work")
+        self.git("push", "-q", "origin", "feat/theirs")
+        self.git("switch", "-q", "main")
+        self.git("branch", "-q", "-D", "feat/theirs")
+        # Never fetched here: only origin knows the branch.
+        self.git("update-ref", "-d", "refs/remotes/origin/feat/theirs")
+        refused = self.wt("new", "feat/theirs", "main", check=False)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("origin/feat/theirs", refused.stderr)
+        path = self.new("feat/theirs")
+        self.assertEqual(self.current(cwd=str(path)), "feat/theirs")
+        self.assertEqual(self.subject(cwd=str(path)), "their work")
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "@{u}", cwd=str(path)).strip(), "origin/feat/theirs")
+
+    def test_new_ignores_a_stale_ref_to_a_branch_origin_deleted(self) -> None:
+        self.write("b.txt", "gone\n")
+        self.commit("gone work")
+        self.git("update-ref", "refs/remotes/origin/feat/gone", "HEAD")
+        self.git("reset", "-q", "--hard", "HEAD~")
+        path = self.new("feat/gone")
+        self.assertEqual(self.subject(cwd=str(path)), "base")
+        self.assertNotEqual(self.git("rev-parse", "--abbrev-ref", "@{u}", cwd=str(path), check=False).strip(), "origin/feat/gone")
+
     def test_pr_opens_and_keeps_the_branch_until_it_merges(self) -> None:
         path = self.feature("proposal")
         self.wt("land", "--pr", "proposal")

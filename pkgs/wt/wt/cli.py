@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Worktrees live in <root>/<repo>/<name> (root: WT_WORKTREE_ROOT, default ~/worktrees).\n"
             "\n"
-            "  wt new <name>     start work, or reopen a closed worktree as it was left\n"
+            "  wt new <name>     start work on a new or existing branch, or reopen a closed worktree\n"
             "  wt land [name]    put it in <default>, locally or through a PR, then close it\n"
             "  wt close [name]   commit what is uncommitted as a wip commit, remove the folder,\n"
             "                    and delete the branch once its work is in <default>\n"
@@ -41,10 +41,12 @@ def build_parser() -> argparse.ArgumentParser:
     new = _verb(
         sub,
         "new",
-        "Start a worktree, or reopen a closed one",
-        "Create a worktree on a new branch, or reopen a closed one, and print its path.",
-        "A new branch starts from <base>, by default origin/<default> (fetched when over a day old),\n"
-        "else <default>. An open name just prints its path. Reopening checks out the branch the\n"
+        "Start a worktree on a new or existing branch",
+        "Create a worktree on a branch, new or existing, or reopen a closed one, and print its path.",
+        "A name that is an existing branch, local or origin's (looked up there), is checked out as it is;\n"
+        "an origin-only one gets a local branch tracking it. Any other name is a new branch from\n"
+        "<base>, by default origin/<default> (fetched when over a day old), else <default>.\n"
+        "An open name just prints its path. Reopening checks out the branch the\n"
         "worktree was closed on and turns a wip commit at its tip back into uncommitted changes.\n"
         "Gitignored paths listed in the primary checkout's .worktreeinclude are copied in, except a\n"
         "nested node_modules whose folder is absent and holds nothing else in the primary checkout.\n"

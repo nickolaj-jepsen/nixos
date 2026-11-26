@@ -173,6 +173,29 @@ def refresh_origin_default(repo: Repo) -> None:
         info(f"fetch of origin/{repo.default} failed; basing on the local ref")
 
 
+def fetch_origin_branch(repo: Repo, branch: str) -> bool:
+    """Whether origin has `branch`, fetched into origin/<branch>; the local ref decides when origin is unreachable."""
+    ref = f"refs/remotes/origin/{branch}"
+    if run(["git", "--git-dir", repo.common, "remote", "get-url", "origin"], check=False).returncode != 0:
+        return False
+    proc = run(
+        ["timeout", "5", "git", "-C", repo.main, "fetch", "--quiet", "origin", f"+refs/heads/{branch}:{ref}"],
+        check=False,
+        # The missing-ref message is matched below, so it must not be translated.
+        env={"LC_ALL": "C"},
+    )
+    if proc.returncode == 0:
+        return True
+    if "couldn't find remote ref" in proc.stderr:
+        return False
+    known = git_ok(repo.main, "rev-parse", "--verify", "--quiet", ref)
+    info(
+        f"could not reach origin to look for '{branch}'; "
+        + (f"using the last fetched origin/{branch}" if known else "treating it as new")
+    )
+    return known
+
+
 def _base(repo: Repo, base: Optional[str]) -> str:
     if base:
         if not git_ok(repo.main, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}"):
@@ -226,15 +249,23 @@ def cmd_new(args: argparse.Namespace) -> None:
                     f"git -C '{repo.main}' worktree unlock '{item['path']}'"
                 )
             prune_registration(repo, item["path"])
+        remote = f"origin/{branch}"
         if branch_exists(repo, branch):
             if args.base:
                 die(f"branch '{branch}' already exists; a base applies only to a new branch")
-            info(f"reopening '{name}' on {branch}")
+            info(f"reopening '{name}' on {branch}" if entry else f"opening '{name}' on existing branch {branch}")
             run(["git", "-C", repo.main, "worktree", "add", "--quiet", path, branch])
             if inspect(f"'{name}'", lambda: is_wip(path, "HEAD")):
                 # The changes `close` committed come back as they were left, unstaged.
                 run(["git", "-C", path, "reset", "--quiet", "--mixed", "HEAD~"])
                 info("restored the uncommitted changes it was closed with")
+        elif fetch_origin_branch(repo, branch):
+            # Someone else's or a pushed branch: a new branch of the same name off <default> would
+            # hide its work and diverge from it on the next push.
+            if args.base:
+                die(f"branch '{remote}' already exists; a base applies only to a new branch")
+            info(f"opening '{name}' on {branch}, tracking {remote}")
+            run(["git", "-C", repo.main, "worktree", "add", "--quiet", "--track", "-b", branch, path, remote])
         else:
             base = _base(repo, args.base)
             info(f"creating '{name}' on new branch {branch} off {base}")
