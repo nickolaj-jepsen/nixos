@@ -10,34 +10,7 @@
     ccfg = config.programs.claude-code;
     hmLib = config.lib;
     homeDir = config.home.homeDirectory;
-    scratch = config.fireproof.dev.enable;
     phoenix = import ../_phoenix-client.nix {inherit config;};
-
-    # Agent temp is the repository's scratch root, aged out by `agent-notes reap`.
-    # Not a per-pid directory: Claude Code keys its
-    # scratchpad by session id under TMPDIR, so a resumed session finds it again.
-    # Falls back to the ambient TMPDIR when it cannot be created.
-    tmpDir = ''
-      if TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp --repo); then export TMPDIR; fi
-    '';
-
-    # One auto-memory per repository, shared by worktrees and both profiles. Flag
-    # settings, since autoMemoryDirectory must be absolute and is ignored in a
-    # checked-in .claude/settings.json. `global` is agent-notes' outside-git store.
-    # With updates on it rides in the launch settings file, so a session gets exactly one
-    # --settings (what a second one does to the first is not something to rely on).
-    memoryArgs = ''
-      memory_args=()
-      memory_settings=
-      if id=$(${lib.getExe pkgs.agent-notes} id 2>/dev/null) && [ "$id" != global ]; then
-        memory_settings=$(${lib.getExe pkgs.jq} -cn --arg dir "${config.xdg.dataHome}/agents/claude-memory/$id" '{autoMemoryDirectory: $dir}')
-      fi
-      ${
-        if updates.enable
-        then ''[ -z "$memory_settings" ] || export AGENTS_CLAUDE_EXTRA_SETTINGS="$memory_settings"''
-        else ''[ -z "$memory_settings" ] || memory_args=(--settings "$memory_settings")''
-      }
-    '';
 
     # Surfaces session state that settings.json can't pin (model, effort as
     # changed by /effort, fast mode), git state and the last response's
@@ -204,7 +177,7 @@
     };
 
     # `claude --settings` merges over the user's settings, so only what changes is passed:
-    # the effective plugin dirs (plus the memory directory memoryArgs exports). The pinned
+    # the effective plugin dirs. The pinned
     # dirs stay in settings.json for anything that does not go through this launcher.
     launchSettings = ''
       settings_args=()
@@ -212,9 +185,8 @@
         if agents_settings=$(${lib.getExe agentSettings} 2>/dev/null); then
           settings_args=(--settings "$agents_settings")
         else
-          # No resolved settings file: keep the session usable and its memory in place.
+          # No resolved settings file: keep the session usable.
           echo "agents updates: could not resolve the published paths; the pinned ones load" >&2
-          [ -z "$memory_settings" ] || memory_args=(--settings "$memory_settings")
         fi
       ''}
     '';
@@ -234,15 +206,13 @@
     # `claude plugin test` refuses any option before `plugin`, and the
     # home-manager wrapper always prepends --plugin-dir.
     claudeEntry = pkgs.writeShellScript "claude" ''
-      ${lib.optionalString scratch tmpDir}
       if [ "''${1:-}" = plugin ]; then exec -a "$0" ${lib.getExe ccfg.package} "$@"; fi
-      ${memoryArgs}
       ${launchSettings}
       ${tracingArgs {
         project = "claude-code";
         profileCheck = ''[ -z "''${CLAUDE_CONFIG_DIR:-}" ]'';
       }}
-      exec -a "$0" ${ccfg.finalPackage}/bin/claude "''${settings_args[@]}" "''${tracing_args[@]}" "''${memory_args[@]}" "$@"
+      exec -a "$0" ${ccfg.finalPackage}/bin/claude "''${settings_args[@]}" "''${tracing_args[@]}" "$@"
     '';
 
     # Work-owned MCP servers ride in their own plugin, which only claude-work
@@ -266,17 +236,15 @@
       name = "claude-work";
       runtimeInputs = [config.programs.claude-code.finalPackage];
       text = ''
-        ${lib.optionalString scratch tmpDir}
         ${phoenix.clear}
         export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.claude-work}"
         mkdir -p "$CLAUDE_CONFIG_DIR"
-        ${memoryArgs}
         ${launchSettings}
         ${tracingArgs {
           project = "claude-work";
           profileCheck = ''[ "$CLAUDE_CONFIG_DIR" = "$HOME/.claude-work" ]'';
         }}
-        exec ${ccfg.finalPackage}/bin/claude "''${settings_args[@]}" ${lib.escapeShellArgs workMcpArgs} "''${tracing_args[@]}" "''${memory_args[@]}" "$@"
+        exec ${ccfg.finalPackage}/bin/claude "''${settings_args[@]}" ${lib.escapeShellArgs workMcpArgs} "''${tracing_args[@]}" "$@"
       '';
     };
 
@@ -568,13 +536,9 @@
             "ao-skills@ao-agent-skills" = true;
           };
         permissions = {
-          # Each checkout's .agents/ links resolve here, which is outside
+          # Each checkout's .agents/store link resolves here, which is outside
           # the working directory and so prompts on every write through the link.
-          additionalDirectories = [
-            "${config.xdg.dataHome}/agents/store"
-            "${config.xdg.stateHome}/agents/tmp"
-            "${config.xdg.dataHome}/agents/claude-memory"
-          ];
+          additionalDirectories = ["${config.xdg.dataHome}/agents/store"];
           # Only commands that are frequent AND slow to classify earn a rule: in
           # auto mode an allow rule buys determinism, not safety. Omitted on
           # purpose — the built-in read-only set (ls/cat/head/tail/grep/find/wc/

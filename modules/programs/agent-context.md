@@ -5,8 +5,8 @@ Use the repository’s instructions and tools first. These are defaults.
 ## Environment and files
 
 - Manage persistent system and user configuration in `~/nixos` (NixOS, home-manager or nix-darwin), not through `apt`, global npm/pip installs or edits to `/etc`. For a one-off tool, use `nix run nixpkgs#<tool>` or `nix shell nixpkgs#<tool>`.
-- Put throwaway work in your scratchpad or a directory from `mktemp -d`. Other sessions share `$TMPDIR` and may share `.agents/tmp`; don’t use fixed names directly in either. Leave disposable files there.
-- Write persistent agent files and notes through `.agents/store`, the project store shared by all checkouts, not directly in `~`. Use `agent-notes root --ensure` to create the store or repair its links.
+- Put throwaway work in your scratchpad or a directory from `mktemp -d`. Leave disposable files there.
+- Write persistent agent files and notes through `.agents/store`, the project store shared by all checkouts, not directly in `~`.
 
 ## Tool preferences
 

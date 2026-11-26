@@ -69,8 +69,9 @@
       "application/x-zstd-compressed-tar"
     ];
   in {
-    # The same choice for the folder menus in pi and Claude Code, which read it from
-    # the session's environment; not gated on Linux, so a Mac's menus follow it too.
+    # The same choice for the folder menu in pi's parent extension, which reads it from
+    # the session's environment; not gated on Linux, so a Mac's menu follows it too.
+    # The agents' `open` plugin reads agents/open.json instead (modules/scripts).
     config = lib.mkMerge [
       (lib.mkIf config.fireproof.desktop.enable {
         home.sessionVariables.FIREPROOF_EDITOR = config.fireproof.desktop.editor;

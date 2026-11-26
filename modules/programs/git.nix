@@ -62,20 +62,13 @@
         core.untrackedCache = true;
         # Linux git has no builtin fsmonitor daemon.
         core.fsmonitor = pkgs.stdenv.hostPlatform.isDarwin;
-        # Clone, checkout and `git worktree add` all fire this. Config-based hooks
-        # run beside a repository's own post-checkout rather than replacing it,
-        # and the command is quiet and idempotent because git hands its exit
-        # status back to the checkout that ran it. Git older than 2.54 ignores
-        # the section; the agents' wrappers repair the links at startup.
-        hook.agent-notes = {
-          event = "post-checkout";
-          command = "${lib.getExe pkgs.agent-notes} init";
-        };
         alias.fixup = "!git log -n 50 --pretty=format:'%h %s' --no-merges | ${lib.getExe pkgs.fzf} | cut -c -7 | xargs -o git commit --fixup";
       };
       # pi's background tasks write their output into the checkout, and untracked
       # files there would ride into the wip commit `wt close` makes of a worktree.
-      # The agent-notes links are root-anchored, so a nested `.agents/` does not match.
+      # The four root-anchored `.agents/` links are retired (the notes plugin ignores
+      # `.agents/store` in each repository itself); drop these entries once old links
+      # are cleaned out of every checkout.
       ignores = ["**/.claude/settings.local.json" "**/.pi/tasks/" "/.agents/store" "/.agents/workflows" "/.agents/tmp" "/.agents/claude-memory"];
       includes = [
         {

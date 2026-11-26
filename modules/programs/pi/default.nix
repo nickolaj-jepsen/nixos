@@ -235,9 +235,8 @@ in {
         chmod 600 "$tmp"
         if cmp -s "$tmp" "$f"; then rm "$tmp"; else mv "$tmp" "$f"; fi
       '';
-    # Both profiles launch through this: the env and the scratch root are
-    # shared, while `dir` and the merged config are the profile's own. It exports
-    # `dir`, so the profile pi reads is the one the wrapper just merged into.
+    # Both profiles launch through this: the env is shared, while
+    # `dir` and the merged config are the profile's own. It exports `dir`, so the profile pi reads is the one the wrapper just merged into.
     mkWrapper = {
       name,
       dir,
@@ -249,8 +248,6 @@ in {
     }:
       pkgs.writeShellScriptBin name ''
         ${lib.concatLines (lib.mapAttrsToList (key: value: "export ${key}=${lib.escapeShellArg value}") env)}
-        # Agent temp is this session's directory, aged out by `agent-notes reap`.
-        ${lib.optionalString config.fireproof.dev.enable ''TMPDIR=$(${lib.getExe pkgs.agent-notes} tmp "$$") || TMPDIR="''${TMPDIR:-/tmp}"; export TMPDIR''}
         # Export it: pi reads the profile from the same variable, and merging into a
         # directory pi then ignores is how a "second profile" silently becomes the first.
         dir="${dir}"

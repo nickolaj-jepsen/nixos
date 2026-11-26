@@ -113,8 +113,6 @@
             # Build outputs point into /nix/store, which is never worth indexing.
             "**/result"
             "**/result-*"
-            # Agent session scratch: reaped by age, not worth searching.
-            "**/.agents/tmp"
           ];
           # The agent notes are a symlinked folder, `.agents/store`; `expanded` only
           # scans it once it is clicked open, so its files never showed in search or

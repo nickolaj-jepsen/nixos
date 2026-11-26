@@ -12,7 +12,7 @@
   }: let
     migrate = pkgs.writeShellApplication {
       name = "hm-migrate";
-      runtimeInputs = with pkgs; [coreutils findutils git jq python3 agent-notes];
+      runtimeInputs = with pkgs; [coreutils findutils git jq python3];
       runtimeEnv = {
         MIGRATIONS = builtins.path {
           path = ../../migrations;

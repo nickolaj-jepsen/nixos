@@ -48,7 +48,7 @@ export const storeNotes = (cwd: string): Note[] => {
   }
 };
 
-const OPENER = "agent-note-open";
+const OPENER = "editor-open";
 
 const executable = (path: string) => {
   try {

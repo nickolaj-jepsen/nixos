@@ -14,10 +14,6 @@
         inherit name runtimeInputs;
         text = builtins.readFile path;
       };
-    agent-note-open = makeScript {
-      path = ./agent-note-open.bash;
-      runtimeInputs = [pkgs.coreutils] ++ lib.optional config.fireproof.dev.enable editor-open;
-    };
     # The editor the desktop hands a path to, in its own argv: see editor-open.bash. It reads
     # PATH, so a host with no GUI editor opens nvim rather than pulling a GUI in.
     editor-open = pkgs.writeShellApplication {
@@ -35,6 +31,24 @@
         (builtins.readFile ./editor-open-bridge.bash);
     };
     kittyEditorLinks = config.fireproof.desktop.enable && config.fireproof.dev.enable && pkgs.stdenv.isLinux;
+    # The apps the agents' `open` and `notes` plugins get beyond their built-in table
+    # (apps/open/README.md): a note goes to the desktop's editor through editor-open, so a
+    # remote session reaches it over the ssh forward, and the editor is the folder default
+    # too. open.json names an app that is off the session's PATH by its absolute path.
+    openApps =
+      lib.optional config.fireproof.dev.enable {
+        id = "editor-open";
+        label = "Desktop editor";
+        command = lib.getExe editor-open;
+        file = ["--line" "{line}" "--" "{file}"];
+      }
+      ++ lib.optional config.fireproof.desktop.enable {
+        # The built-in app of this id, listed first so it is the default.
+        id =
+          if config.fireproof.desktop.editor == "vscode"
+          then "code"
+          else "zed";
+      };
     # Kitty matches the first rule, so notes come before general text files.
     kittyFileRule = match: opener: ''
       protocol file
@@ -57,12 +71,14 @@
     # there, and sshd on the far end could not bind the port under it.
     forwardHosts = lib.remove config.fireproof.hostname bridgeHosts;
   in {
+    xdg.configFile."agents/open.json" = lib.mkIf config.fireproof.dev.enable {
+      text = builtins.toJSON {apps = openApps;};
+    };
     xdg.configFile."kitty/open-actions.conf" = lib.mkIf kittyEditorLinks {
       text = lib.concatStringsSep "\n" (
-        map (path: kittyFileRule "path ${path}" (lib.getExe agent-note-open)) [
+        map (path: kittyFileRule "path ${path}" "${lib.getExe editor-open} --") [
           "${config.xdg.dataHome}/agents/store/*.md"
           "*/.agents/store/*.md"
-          "*/.agents/workflows/*.md"
         ]
         ++ [(kittyFileRule "mime text/*" "${lib.getExe editor-open} --")]
       );
@@ -145,7 +161,6 @@
         })
         pkgs.wt
       ]
-      ++ lib.optional config.fireproof.dev.enable agent-note-open
       # Every dev host: a remote shell without a GUI editor opens nvim.
       ++ lib.optional config.fireproof.dev.enable editor-open
       # systemd-only scripts (the systemd package isn't built on darwin).
