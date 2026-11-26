@@ -20,7 +20,7 @@
   }: let
     # Apps where Ctrl must stay Ctrl (SIGINT/readline). Add VS Code's id
     # ("^com\\.microsoft\\.VSCode$") if its integrated terminal losing Ctrl+C bites.
-    terminalBundles = ["^net\\.kovidgoyal\\.kitty$"];
+    terminalBundles = ["^net\\.kovidgoyal\\.kitty$" "^dev\\.herdr\\.app$"];
     unlessTerminal = [
       {
         type = "frontmost_application_unless";

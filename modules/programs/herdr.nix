@@ -21,23 +21,118 @@
       rev = "8d35fd16c225dfe68769a0e8fa85a103bcac013e";
       hash = "sha256-GsPw5aJb0YzMxfe3whXmc8yYSETk9MnILgxgahEoJqI=";
     };
-    keys = json.generate "herdr-mod-keys.json" {
-      global.${
-        if pkgs.stdenv.isDarwin
-        then "cmd-shift-k"
-        else "ctrl-alt-k"
-      } = "mod.open:walkthrough";
-      global.${
-        if pkgs.stdenv.isDarwin
-        then "cmd-i"
-        else "ctrl-alt-shift-p"
-      } = "mod.open:new-chat";
-      # The nested sidebar's Needs you list: show the agent waiting longest.
-      global.${
-        if pkgs.stdenv.isDarwin
-        then "cmd-shift-j"
-        else "ctrl-shift-j"
-      } = "nested-spaces.next-needs";
+    isDarwin = pkgs.stdenv.isDarwin;
+    appMod =
+      if isDarwin
+      then "cmd"
+      else "ctrl-shift";
+    paneMod =
+      if isDarwin
+      then "cmd-alt"
+      else "ctrl-alt";
+    # keys.json is the entire map, not an overlay on Herdr's defaults. Spaces
+    # take the familiar terminal-tab shortcuts; inner tabs stay palette-only.
+    keys = json.generate "herdr-keys.json" {
+      global =
+        {
+          "${appMod}-t" = "space.new";
+          "${appMod}-w" = "pane.close";
+          "ctrl-tab" = "space.next";
+          "ctrl-shift-tab" = "space.prev";
+          "${
+            if isDarwin
+            then "cmd-shift-]"
+            else "ctrl-shift-right"
+          }" = "space.next";
+          "${
+            if isDarwin
+            then "cmd-shift-["
+            else "ctrl-shift-left"
+          }" = "space.prev";
+          "f2" = "space.rename";
+
+          "${appMod}-enter" = "pane.split:right";
+          "${
+            if isDarwin
+            then "cmd-shift-d"
+            else "ctrl-shift-d"
+          }" = "pane.split:down";
+          "${
+            if isDarwin
+            then "cmd-shift-enter"
+            else "ctrl-shift-z"
+          }" = "pane.zoom";
+
+          "${
+            if isDarwin
+            then "cmd-shift-p"
+            else "ctrl-shift-p"
+          }" = "app.palette";
+          # GPUI recognizes two clean Shift taps within its one-second sequence
+          # timeout; Shift used with another key does not count as a tap.
+          "shift shift" = "app.palette";
+          "${
+            if isDarwin
+            then "cmd-p"
+            else "ctrl-shift-k"
+          }" = "mod.open:picker";
+          "${
+            if isDarwin
+            then "cmd-,"
+            else "ctrl-,"
+          }" = "app.settings";
+          "${appMod}-=" = "app.zoom_in";
+          "${appMod}-+" = "app.zoom_in";
+          "${appMod}--" = "app.zoom_out";
+          "${appMod}-0" = "app.zoom_reset";
+          "${appMod}-b" = "layout.toggle:sidebar";
+          "ctrl-shift-l" = "layout.switch";
+
+          "${
+            if isDarwin
+            then "cmd-shift-k"
+            else "ctrl-alt-k"
+          }" = "mod.open:walkthrough";
+          "${
+            if isDarwin
+            then "cmd-i"
+            else "ctrl-alt-shift-p"
+          }" = "mod.open:new-chat";
+          # The nested sidebar's Needs you list: show the agent waiting longest.
+          "${
+            if isDarwin
+            then "cmd-shift-j"
+            else "ctrl-shift-j"
+          }" = "nested-spaces.next-needs";
+        }
+        // builtins.listToAttrs (builtins.genList (i: {
+            name = "${appMod}-${toString (i + 1)}";
+            value = "space.select:${toString (i + 1)}";
+          })
+          9)
+        // builtins.listToAttrs (lib.concatMap (direction: [
+          {
+            name = "${paneMod}-${direction}";
+            value = "pane.go:${direction}";
+          }
+          {
+            name = "${paneMod}-shift-${direction}";
+            value = "pane.swap:${direction}";
+          }
+        ]) ["left" "right" "up" "down"]);
+      terminal =
+        {
+          "ctrl-shift-c" = "terminal.copy";
+          "ctrl-shift-v" = "terminal.paste";
+          "${appMod}-f" = "terminal.search";
+          # Do not restore the default Ctrl+V image-paste or hard-coded word
+          # navigation: the shell/TUI owns its input and negotiated key protocol.
+          "ctrl-enter" = "terminal";
+        }
+        // lib.optionalAttrs isDarwin {
+          "cmd-c" = "terminal.copy";
+          "cmd-v" = "terminal.paste";
+        };
     };
     settings = json.generate "herdr-theme-settings.json" {
       theme = "fireproof";
@@ -68,17 +163,12 @@
         mkdir -p "$(dirname "$file")"
         tmp=$(mktemp "$file.XXXXXX")
         trap 'rm -f "$tmp"' EXIT
-        if [ -f "$file" ]; then
+        if [ "''${3:-}" = "--replace" ]; then
+          cp "$defaults" "$tmp"
+        elif [ -f "$file" ]; then
           jq -e 'type == "object"' "$file" >/dev/null
           if [ "''${3:-}" = "--defaults" ]; then
             jq --slurpfile defaults "$defaults" '$defaults[0] * .' "$file" > "$tmp"
-          elif [ "''${3:-}" = "--remove-gitview-keys" ]; then
-            # Settings merge rather than replace: retire only the removed mod's
-            # actions, preserving any replacement the person bound to those keys.
-            jq --slurpfile defaults "$defaults" '
-              (if (.global | type) == "object" then
-                .global |= with_entries(select(.value != "mod.open:gitview-sidebar" and .value != "mod.open:gitview-tab"))
-              else . end) * $defaults[0]' "$file" > "$tmp"
           else
             jq --slurpfile defaults "$defaults" '. * $defaults[0]' "$file" > "$tmp"
           fi
@@ -181,11 +271,12 @@
           fi
         '';
 
-        # Herdr writes settings/keys from its UI; merge our entries into writable
-        # files. Shipped layouts are replaced on launch, so leave them alone.
+        # Herdr writes these files from its UI, so keep them writable. Settings
+        # and programs merge; keys are the complete declarative map. Replacing
+        # them also retires old default bindings (including inner-tab shortcuts).
         home.activation.herdrTheme = lib.hm.dag.entryAfter ["linkGeneration"] ''
           run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/settings.json"} ${settings}
-          run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/keys.json"} ${keys} --remove-gitview-keys
+          run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/keys.json"} ${keys} --replace
           run ${lib.getExe mergeConfig} ${lib.escapeShellArg "${config.xdg.configHome}/herdr-app/programs.json"} ${programs}
         '';
       })
